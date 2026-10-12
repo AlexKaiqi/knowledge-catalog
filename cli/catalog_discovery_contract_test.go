@@ -8,19 +8,17 @@ import (
 	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"strings"
 	"testing"
 
-	"kc/cli"
 	apphome "kc/home"
 	"kc/internal/testkit"
 )
 
-// Explicit acceptance: real Catalog Snapshot, Gitea Snapshot, OpenSearch and typed
+// Explicit acceptance: real Catalog Snapshot, lakeFS Snapshot, OpenSearch and typed
 // Client/Server. No read/search/consume grant is given to the discovery viewer.
-func TestCatalogDiscoveryActualServerPinsSelectedSourcesAndMasksBodies(t *testing.T) {
+func TestInventoryDiscoveryActualServerPinsSelectedSourcesAndMasksBodies(t *testing.T) {
 	endpoint := os.Getenv("KC_TEST_OPENSEARCH_URL")
 	if endpoint == "" {
 		t.Fatal("KC_TEST_OPENSEARCH_URL is required for this explicit contract")
@@ -28,29 +26,15 @@ func TestCatalogDiscoveryActualServerPinsSelectedSourcesAndMasksBodies(t *testin
 	t.Setenv("KC_REQUIRE_LIVE_ADAPTERS", "1")
 	t.Setenv("KC_DATASET", "")
 	t.Setenv("KC_CATALOG", "")
-	base, token, run := testkit.GiteaEndpoint(t)
-	t.Setenv("KC_GITEA_TOKEN", token)
+	live := testkit.NewLakeFSLive(t, os.Getenv("KC_SCENE_LIVE_LAKEFS_URL"), os.Getenv("KC_LAKEFS_CREDENTIAL"), os.Getenv("KC_SCENE_LIVE_LAKEFS_STORAGE"))
 	cfg, config := declaredDeployment(t, false)
-	cfg.Catalogs[0].DiscoverySetID = "published"
+	cfg.Registry.DiscoverySetID = "published"
 	cfg.Stores.Index = "opensearch"
 	cfg.Stores.OpenSearch.URL = endpoint
 	cfg.Stores.OpenSearch.PrimaryShards = 1
-	repos := []string{"kr://discovery/" + run + "/a", "kr://discovery/" + run + "/b", "kr://discovery/" + run + "/excluded"}
-	for i, id := range repos {
-		name := "discovery-" + run + "-" + string(rune('a'+i))
-		raw, _ := json.Marshal(map[string]any{"name": name, "private": true, "auto_init": true, "default_branch": "main"})
-		req, _ := http.NewRequest("POST", base+"/api/v1/user/repos", bytes.NewReader(raw))
-		req.Header.Set("Authorization", "token "+token)
-		req.Header.Set("Content-Type", "application/json")
-		response, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		_ = response.Body.Close()
-		if response.StatusCode != 201 {
-			t.Fatalf("fixture create status %d", response.StatusCode)
-		}
-		cfg.Repositories = append(cfg.Repositories, apphome.RepositoryBinding{ID: id, Driver: "gitea", DSN: base + "/kc/" + name})
+	repos := []string{live.NewRepo(), live.NewRepo(), live.NewRepo()}
+	for _, id := range repos {
+		cfg.Repositories = append(cfg.Repositories, apphome.RepositoryBinding{ID: id, Driver: "lakefs", DSN: live.DSN(id)})
 	}
 	writeDeployment(t, config, cfg)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", config))
@@ -63,8 +47,7 @@ func TestCatalogDiscoveryActualServerPinsSelectedSourcesAndMasksBodies(t *testin
 	defer handler.(interface{ Close() error }).Close()
 	admin := func(args ...string) kcRunResult { return kcRemote(t, server.URL, cfg.BootstrapPrincipal, args...) }
 	viewer := func(args ...string) kcRunResult { return kcRemote(t, server.URL, "viewer", args...) }
-	cat := cfg.Catalogs[0].ID
-	body(t, admin("catalog", "use", cat))
+
 	for i, repo := range repos {
 		body(t, admin("attach", "--repo", repo))
 		body(t, admin("writer", "put", "--repo", repo, "--command-id", "schema-"+repo, "--object", "schema/note", "--value", `{"entity":"Note","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
@@ -75,14 +58,13 @@ func TestCatalogDiscoveryActualServerPinsSelectedSourcesAndMasksBodies(t *testin
 	}
 	body(t, admin("dataset", "define", "--dataset", "published", "--revision", "1", "--source", repos[0], "--source", repos[1]))
 	body(t, admin("dataset", "define", "--dataset", "private", "--revision", "1", "--source", repos[2]))
-	body(t, admin("grant", "add", "--principal", "viewer", "--catalog", cat, "--action", "catalog.read"))
-	body(t, viewer("catalog", "use", cat))
+	body(t, admin("grant", "add", "--principal", "viewer", "--action", "inventory.read"))
 	show := asMap(t, body(t, viewer("show")))
 	if show["discoveryWorkspaceId"] != "published" {
 		t.Fatalf("missing configured entry %#v", show)
 	}
 	// Discovery SEARCH is HTTP-only: the CLI no longer carries a third search
-	// scope, but the typed body keeps the catalogDiscovery contract.
+	// scope, but the typed body keeps the inventoryDiscovery contract.
 	post := func(principal, path string, payload any) (int, map[string]any) {
 		t.Helper()
 		raw, _ := json.Marshal(payload)
@@ -101,14 +83,14 @@ func TestCatalogDiscoveryActualServerPinsSelectedSourcesAndMasksBodies(t *testin
 		return resp.StatusCode, out
 	}
 	// Discovery SEARCH requires the configured Workspace and its fixed pin; the
-	// Server only trusts the typed catalogDiscovery marker after matching them.
-	status, pin := post("viewer", "/catalog/v1/catalogs/"+url.PathEscape(cat)+"/datasets/published/resolve", map[string]any{"catalogDiscovery": true})
+	// Server only trusts the typed inventoryDiscovery marker after matching them.
+	status, pin := post("viewer", "/snapshot/v1/datasets/published/resolve", map[string]any{"inventoryDiscovery": true})
 	if status != 200 {
 		t.Fatalf("coordinate resolve required body grants %d %#v", status, pin)
 	}
 	search := func() map[string]any {
 		status, out := post("viewer", "/knowledge/v1/search", map[string]any{
-			"catalog": cat, "dataset": "published", "pin": pin, "catalogDiscovery": true, "query": "discovery phrase",
+			"dataset": "published", "pin": pin, "inventoryDiscovery": true, "query": "discovery phrase",
 		})
 		if status != http.StatusOK {
 			t.Fatalf("discovery search status %d %#v", status, out)
@@ -156,7 +138,7 @@ func TestCatalogDiscoveryActualServerPinsSelectedSourcesAndMasksBodies(t *testin
 	}{
 		{"private", pin, nil, "FORBIDDEN"}, {"published", nil, nil, "USAGE_INVALID"}, {"published", pin, map[string]any{"revision": 1, "sources": []any{}}, "USAGE_INVALID"},
 	} {
-		input := map[string]any{"catalog": cat, "dataset": tc.workspace, "pin": tc.pin, "catalogDiscovery": true, "query": "discovery phrase"}
+		input := map[string]any{"dataset": tc.workspace, "pin": tc.pin, "inventoryDiscovery": true, "query": "discovery phrase"}
 		if tc.definition != nil {
 			input["definition"] = tc.definition
 		}
@@ -169,7 +151,7 @@ func TestCatalogDiscoveryActualServerPinsSelectedSourcesAndMasksBodies(t *testin
 	// without a grant; discovery delivery stays masked (no bodies) and is
 	// pinned to the configured discovery Workspace.
 	status, out := post("stranger", "/knowledge/v1/search", map[string]any{
-		"catalog": cat, "dataset": "published", "pin": pin, "catalogDiscovery": true, "query": "discovery phrase",
+		"dataset": "published", "pin": pin, "inventoryDiscovery": true, "query": "discovery phrase",
 	})
 	if status != http.StatusOK || out["completeness"] != "complete" {
 		t.Fatalf("authenticated discovery of a public Catalog failed: %d %#v", status, out)
@@ -178,5 +160,5 @@ func TestCatalogDiscoveryActualServerPinsSelectedSourcesAndMasksBodies(t *testin
 	if strings.Contains(string(raw), "confidential") || strings.Contains(string(raw), "excludedbody") {
 		t.Fatalf("stranger discovery leaked Canonical body %s", raw)
 	}
-	t.Log("PASS selected discovery Workspace -> fixed SEARCH; catalog.read only; current body grants and scope boundaries")
+	t.Log("PASS selected discovery Workspace -> fixed SEARCH; inventory.read only; current body grants and scope boundaries")
 }

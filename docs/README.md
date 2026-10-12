@@ -1,6 +1,6 @@
 # 文档地图
 
-设计书按组件存放在 [`reviewed/`](reviewed/README.md)：架构总览与十一个组件/任务篇回答
+设计书按组件存放在 [`reviewed/`](reviewed/README.md)：架构总览、对象供给全景与组件/任务篇回答
 「解决什么问题、为什么这样划边界、关键取舍是什么」；验证、研究、规模与过程资料同目录存放，
 按原有角色作为唯一权威。文档主题所有权、关系与用例关联以 `docs/graph/` 为准。
 
@@ -111,9 +111,10 @@
 
 1. [`terminology.md`](reviewed/terminology.md)
 2. [`core-architecture.md`](reviewed/core-architecture.md)
-3. [`knowledge.md`](reviewed/knowledge.md)
-4. [`dataset.md`](reviewed/dataset.md)
-5. [`service.md`](reviewed/service.md)
+3. [`object-system.md`](reviewed/object-system.md)
+4. [`knowledge.md`](reviewed/knowledge.md)
+5. [`dataset.md`](reviewed/dataset.md)
+6. [`service.md`](reviewed/service.md)
 
 其余文档不能重定义它们的结论。边的类型见 `graph/relations/*.okf` 的 `relationType`。
 
@@ -124,7 +125,9 @@
 | 专题 | 文档 |
 |---|---|
 | 核心边界、介质替换与分层 | [`core-architecture.md`](reviewed/core-architecture.md) |
+| 对象供给全景、可供性、发布与发现任务 | [`object-system.md`](reviewed/object-system.md) |
 | 知识身份、Schema 与发布 | [`knowledge.md`](reviewed/knowledge.md) |
+| 对象能力合同与处理器分派 | [`object-interface.md`](reviewed/object-interface.md) |
 | Dataset 组合、固定版本与文件交付 | [`dataset.md`](reviewed/dataset.md) |
 | 访问声明与逻辑索引合同 | [`declarative-index.md`](reviewed/declarative-index.md) |
 | 投影对账、增量与恢复 | [`index-control.md`](reviewed/index-control.md) |

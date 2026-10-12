@@ -1,23 +1,23 @@
 package cli
 
 import (
-	"kc/catalog"
 	"kc/kernel"
+	"kc/snapshot/dataset"
 )
 
 // filterVirtualWorkspace narrows a resolved virtual tree to repositories the
 // caller may dereference. Authorization is evaluated once per repository even
 // when the same repository is mounted at several paths.
-func filterVirtualWorkspace(def catalog.KnowledgeSet, resolved catalog.ResolvedKnowledgeSet, mounts []catalog.VirtualMount, mayRead func(kernel.RepositoryID) (bool, error)) (catalog.KnowledgeSet, catalog.ResolvedKnowledgeSet, []catalog.VirtualMount, error) {
+func filterVirtualWorkspace(def dataset.KnowledgeSet, resolved dataset.ResolvedKnowledgeSet, mounts []dataset.VirtualMount, mayRead func(kernel.RepositoryID) (bool, error)) (dataset.KnowledgeSet, dataset.ResolvedKnowledgeSet, []dataset.VirtualMount, error) {
 	allowed := map[kernel.RepositoryID]bool{}
-	visibleMounts := make([]catalog.VirtualMount, 0, len(mounts))
+	visibleMounts := make([]dataset.VirtualMount, 0, len(mounts))
 	for _, mount := range mounts {
 		ok, known := allowed[mount.Repository]
 		if !known {
 			var err error
 			ok, err = mayRead(mount.Repository)
 			if err != nil {
-				return catalog.KnowledgeSet{}, catalog.ResolvedKnowledgeSet{}, nil, err
+				return dataset.KnowledgeSet{}, dataset.ResolvedKnowledgeSet{}, nil, err
 			}
 			allowed[mount.Repository] = ok
 		}
@@ -27,7 +27,7 @@ func filterVirtualWorkspace(def catalog.KnowledgeSet, resolved catalog.ResolvedK
 	}
 
 	visibleDef := def
-	visibleDef.Sources = make([]catalog.KnowledgeSetSource, 0, len(def.Sources))
+	visibleDef.Sources = make([]dataset.KnowledgeSetSource, 0, len(def.Sources))
 	visibleResolved := resolved
 	visibleResolved.Repositories = map[kernel.RepositoryID]kernel.CommitID{}
 	for _, src := range def.Sources {

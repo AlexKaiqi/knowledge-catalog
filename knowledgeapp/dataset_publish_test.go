@@ -3,7 +3,7 @@ package knowledgeapp
 import (
 	"context"
 	"errors"
-	"kc/catalog"
+	"kc/snapshot/dataset"
 	"reflect"
 	"testing"
 )
@@ -13,11 +13,11 @@ type publicationRegistry struct {
 	accepted int
 }
 
-func (r *publicationRegistry) PrepareKnowledgeSet(id string, rev int, sources []catalog.KnowledgeSetSource) (catalog.KnowledgeSet, error) {
+func (r *publicationRegistry) PrepareKnowledgeSet(id string, rev int, sources []dataset.KnowledgeSetSource) (dataset.KnowledgeSet, error) {
 	*r.events = append(*r.events, "freeze")
-	return catalog.KnowledgeSet{SetID: id, Revision: rev, Sources: sources}, nil
+	return dataset.KnowledgeSet{SetID: id, Revision: rev, Sources: sources}, nil
 }
-func (r *publicationRegistry) PublishKnowledgeSet(def catalog.KnowledgeSet) (catalog.KnowledgeSet, error) {
+func (r *publicationRegistry) PublishKnowledgeSet(def dataset.KnowledgeSet) (dataset.KnowledgeSet, error) {
 	*r.events = append(*r.events, "publish")
 	r.accepted = def.Revision
 	return def, nil
@@ -30,7 +30,7 @@ func TestDatasetPublicationSwitchesOnlyAfterCapabilitiesReady(t *testing.T) {
 			problem := errors.New("projection unavailable")
 			executor := DatasetPublisher{Registry: registry,
 				Authorize: func(context.Context, DatasetPublication) error { events = append(events, "authorize"); return nil },
-				Prepare: func(context.Context, catalog.KnowledgeSet) error {
+				Prepare: func(context.Context, dataset.KnowledgeSet) error {
 					events = append(events, "prepare")
 					if registry.accepted != 1 {
 						t.Fatal("switched before ready")
@@ -62,7 +62,7 @@ func TestDatasetPublicationSwitchesOnlyAfterCapabilitiesReady(t *testing.T) {
 func TestDatasetPublicationDeniedBeforeFreeze(t *testing.T) {
 	var events []string
 	denied := errors.New("denied")
-	executor := DatasetPublisher{Registry: &publicationRegistry{events: &events}, Authorize: func(context.Context, DatasetPublication) error { return denied }, Prepare: func(context.Context, catalog.KnowledgeSet) error { t.Fatal("prepared denied publication"); return nil }}
+	executor := DatasetPublisher{Registry: &publicationRegistry{events: &events}, Authorize: func(context.Context, DatasetPublication) error { return denied }, Prepare: func(context.Context, dataset.KnowledgeSet) error { t.Fatal("prepared denied publication"); return nil }}
 	if _, err := executor.Execute(context.Background(), DatasetPublication{}); !errors.Is(err, denied) || len(events) != 0 {
 		t.Fatalf("authorization order: %v %v", events, err)
 	}

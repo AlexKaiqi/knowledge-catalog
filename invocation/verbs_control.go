@@ -78,7 +78,7 @@ func VerbPreview(cx *Invocation) (any, error) {
 	if cx.Flag("dataset") == "" && cx.Flag("pin") == "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "governance preview create requires --dataset")
 	}
-	cat, err := PickCatalog(cx.WS, cx.Flags)
+	cat, err := PickDatasets(cx.WS, cx.Flags)
 	if err != nil {
 		return nil, err
 	}
@@ -189,20 +189,10 @@ func VerbMerge(cx *Invocation) (any, error) {
 	)
 }
 
-// PlaneFor binds the plane to the named Catalog, reusing the default plane when
-// no --catalog was given so the merge gate stays attached.
-func PlaneFor(ws *kchome.Home, flags map[string]invoke.FlagValue) (*controlplane.ControlPlane, error) {
-	cat, err := PickCatalog(ws, flags)
-	if err != nil {
-		return nil, err
-	}
-	if invoke.FlagString(flags, "catalog") == "" {
-		return ws.ControlPlane, nil
-	}
-	plane := controlplane.New(ws.Store, ws.Writer, cat)
-	plane.SetJournal(ws.Journal)
-	ws.AttachMergeGate(plane)
-	return plane, nil
+// PlaneFor binds the plane to the named Registry, reusing the default plane when
+// no registry was given so the merge gate stays attached.
+func PlaneFor(ws *kchome.Home, _ map[string]invoke.FlagValue) (*controlplane.ControlPlane, error) {
+	return ws.ControlPlane, nil
 }
 
 // ProposeOperations reads the change set for a PROPOSAL: a whole operations file,

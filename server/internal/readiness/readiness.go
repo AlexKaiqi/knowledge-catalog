@@ -11,7 +11,6 @@ import (
 	"kc/controlplane"
 	apphome "kc/home"
 	"kc/snapshot"
-	"kc/snapshot/commandlog"
 )
 
 type Result struct {
@@ -156,25 +155,29 @@ func Probe(home, surface string, providers Providers) Result {
 	if err != nil || stores.ValidateProfile() != nil {
 		return Result{Status: "not_ready", Surface: surface, ReasonCode: "HOME_CONFIGURATION_INVALID"}
 	}
-	// Validate local Catalog state without opening every attached Repository:
+	// Validate local Registry state without opening every attached Repository:
 	// one route's remote outage must not make unrelated routes globally unready.
 	file, err := apphome.ReadHome(home)
 	if err != nil {
 		return Result{Status: "not_ready", Surface: surface, ReasonCode: "HOME_DISCOVERY_FAILED"}
 	}
-	if _, _, err := apphome.OpenCatalogs(home, file, snapshot.NewRegistry()); err != nil {
-		return Result{Status: "not_ready", Surface: surface, ReasonCode: "CATALOG_STATE_UNAVAILABLE"}
+	sources := snapshot.NewRegistry()
+	defer sources.Close()
+	_, registry, err := apphome.OpenDatasets(home, file, sources)
+	if err != nil {
+		return Result{Status: "not_ready", Surface: surface, ReasonCode: "REGISTRY_STATE_UNAVAILABLE"}
 	}
+	defer registry.Close()
 	if surface == "search" {
 		if err := providers.SearchBackend(stores); err != nil {
 			return Result{Status: "not_ready", Surface: surface, ReasonCode: "SEARCH_BACKEND_UNAVAILABLE"}
 		}
 	}
 	if surface == "writer" {
-		if _, err := commandlog.New(commandlog.NewBoltStore(filepath.Join(home, "writer.db"))); err != nil {
+		if _, err := snapshot.NewCommandLedger(snapshot.NewBoltCommandStore(filepath.Join(home, "writer.db"))); err != nil {
 			return Result{Status: "not_ready", Surface: surface, ReasonCode: "COMMAND_LOG_UNAVAILABLE"}
 		}
-		if _, err := controlplane.NewFileControlState(filepath.Join(home, "control.json")).LoadBundle(); err != nil {
+		if _, err := controlplane.NewFileControlState(filepath.Join(home, "control.json"), file.Registry.ID).Load(); err != nil {
 			return Result{Status: "not_ready", Surface: surface, ReasonCode: "CONTROL_STATE_UNAVAILABLE"}
 		}
 		if err := EvidenceWriteProbe(home); err != nil {
@@ -186,7 +189,7 @@ func Probe(home, surface string, providers Providers) Result {
 
 // evidenceWriteProbe verifies every existing raw evidence target. For new
 // targets it exercises the same directory durability primitive without
-// appending a fake audit/access event or changing catalog state. HTTP probes
+// appending a fake audit/access event or changing registry state. HTTP probes
 // cache this result briefly, so fsync is not repeated for every poll.
 func EvidenceWriteProbe(home string) error {
 	for _, kind := range []string{"access", "feedback", "retrieval", "refine"} {
@@ -262,10 +265,10 @@ func Deployment(config apphome.DeploymentConfig, surface string, providers Provi
 		}
 	}
 	if surface == "writer" {
-		if _, err := commandlog.OpenBoltStore(filepath.Join(config.StateDir, "writer.db")); err != nil {
+		if _, err := snapshot.OpenBoltCommandStore(filepath.Join(config.StateDir, "writer.db")); err != nil {
 			return fail("COMMAND_LOG_UNAVAILABLE")
 		}
-		if _, err := controlplane.NewFileControlState(filepath.Join(config.StateDir, "control.json")).LoadBundle(); err != nil {
+		if _, err := controlplane.NewFileControlState(filepath.Join(config.StateDir, "control.json"), config.Registry.ID).Load(); err != nil {
 			return fail("CONTROL_STATE_UNAVAILABLE")
 		}
 		if err := EvidenceWriteProbe(config.StateDir); err != nil {

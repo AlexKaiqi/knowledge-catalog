@@ -1,7 +1,6 @@
 package cli_test
 
 import (
-	"encoding/json"
 	inv "kc/invocation"
 	serv "kc/server"
 	"net/http"
@@ -13,43 +12,35 @@ import (
 	"testing"
 
 	apphome "kc/home"
+	"kc/internal/testkit"
 )
 
 // Public CLI -> typed Client -> actual Server -> durable binding and Catalog.
 // The provider boundary rejects every mutation, and exposes controlled expiry.
 func TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding(t *testing.T) {
 	var mu sync.Mutex
-	token, backend := "external-original-secret", 41
+	token := "access:external-original-secret"
 	requests := 0
-	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	provider := testkit.NewLakeFSFakeWithInterceptor(t, func(w http.ResponseWriter, r *http.Request) bool {
 		mu.Lock()
 		defer mu.Unlock()
 		requests++
-		if r.Method != "GET" {
-			t.Errorf("external mutation %s", r.Method)
-			w.WriteHeader(405)
-			return
+		if r.Method != http.MethodGet {
+			t.Errorf("connection wrote external source: %s", r.Method)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return true
 		}
-		if r.Header.Get("Authorization") != "token "+token {
-			w.WriteHeader(401)
+		user, secret, ok := r.BasicAuth()
+		if !ok || user+":"+secret != token {
+			w.WriteHeader(http.StatusUnauthorized)
 			_, _ = w.Write([]byte(token))
-			return
+			return true
 		}
-		w.Header().Set("Content-Type", "application/json")
-		switch r.URL.Path {
-		case "/api/v1/repos/kaiqidong/existing":
-			_ = json.NewEncoder(w).Encode(map[string]any{"id": backend, "default_branch": "main", "empty": false})
-		case "/api/v1/repos/kaiqidong/existing/branches/main":
-			_ = json.NewEncoder(w).Encode(map[string]any{"name": "main", "commit": map[string]any{"id": "initial"}})
-		case "/api/v1/repos/kaiqidong/existing/git/commits/initial":
-			_ = json.NewEncoder(w).Encode(map[string]any{"sha": "initial"})
-		default:
-			w.WriteHeader(404)
-		}
-	}))
-	defer provider.Close()
+		return false
+	})
+	name := provider.NewRepo()
 	cfg, config := declaredDeployment(t, false)
-	cfg.Connections = &apphome.ConnectionPolicy{AllowedOrigins: []string{provider.URL}, CreatorActions: []string{"repository.connections.manage", "repository.metadata.read"}}
+	cfg.Connections = &apphome.ConnectionPolicy{AllowedOrigins: []string{provider.Origin()}, CreatorActions: []string{"repository.connections.manage", "repository.metadata.read"}}
 	writeDeployment(t, config, cfg)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", config))
 	var server *httptest.Server
@@ -77,8 +68,8 @@ func TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding(t *te
 	})
 	govern := func(args ...string) kcRunResult { return kcRemote(t, server.URL, cfg.BootstrapPrincipal, args...) }
 	provide := func(args ...string) kcRunResult { return kcRemote(t, server.URL, "kaiqidong", args...) }
-	cat, repo := cfg.Catalogs[0].ID, "kr://kaiqidong/existing"
-	body(t, govern("grant", "add", "--principal", "kaiqidong", "--catalog", cat, "--action", "catalog.repositories.connect"))
+	cat, repo := cfg.Registry.ID, "kr://kaiqidong/existing"
+	body(t, govern("grant", "add", "--principal", "kaiqidong", "--action", "repositories.connect"))
 	secretFile := filepath.Join(t.TempDir(), "credential")
 	putCredential := func(value string) {
 		t.Helper()
@@ -87,16 +78,16 @@ func TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding(t *te
 		}
 	}
 	putCredential(token)
-	connectURL := provider.URL + "/kaiqidong/existing"
+	connectURL := provider.DSN(name)
 	repositoryConnectExpect(t, server.URL, "other", cat, repo, connectURL, secretFile, "FORBIDDEN")
-	repositoryConnectExpect(t, server.URL, "kaiqidong", cat, repo, "http://unapproved.invalid/alice/private", secretFile, "FORBIDDEN")
+	repositoryConnectExpect(t, server.URL, "kaiqidong", cat, repo, "http://unapproved.invalid/private", secretFile, "FORBIDDEN")
 	mu.Lock()
 	if requests != 0 {
 		t.Error("unapproved provider was contacted")
 	}
 	mu.Unlock()
 	created := repositoryConnect(t, server.URL, "kaiqidong", cat, repo, connectURL, secretFile)
-	if created["status"] != "READY" || created["managementURL"] != connectURL || created["head"] != "initial" {
+	if created["status"] != "READY" || created["managementURL"] != connectURL || created["head"] != "c0" {
 		t.Fatalf("connection not reviewable %#v", created)
 	}
 	repositoryConnectionShow(t, server.URL, "kaiqidong", repo)
@@ -104,13 +95,13 @@ func TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding(t *te
 	repositoryConnectionShowExpect(t, server.URL, "other", repo, "FORBIDDEN")
 	repositoryConnectionCheckExpect(t, server.URL, "other", repo, "FORBIDDEN")
 	repositoryConnectionRotateExpect(t, server.URL, "other", repo, secretFile, "FORBIDDEN")
-	putCredential("wrong-secret")
+	putCredential("access:wrong-secret")
 	repositoryConnectionRotateExpect(t, server.URL, "kaiqidong", repo, secretFile, "PRECONDITION_FAILED")
 	repositoryConnectionCheck(t, server.URL, "kaiqidong", repo)
-	expectCode(t, provide("read", "--repo", repo, "--commit", "initial", "--object", "any"), "FORBIDDEN")
+	expectCode(t, provide("read", "--repo", repo, "--commit", "c0", "--object", "any"), "FORBIDDEN")
 	stop()
 	mu.Lock()
-	token = "external-rotated-secret"
+	token = "access:external-rotated-secret"
 	before := requests
 	mu.Unlock()
 	cfg.CacheDir = filepath.Join(t.TempDir(), "new-cache")
@@ -150,7 +141,7 @@ func TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding(t *te
 		if name == "access.jsonl" {
 			raw = append(raw, evidenceBytes(t, cfg.StateDir, "access")...)
 		}
-		for _, secret := range []string{"external-original-secret", "external-rotated-secret", "wrong-secret"} {
+		for _, secret := range []string{"external-original-secret", "external-rotated-secret", "access:wrong-secret"} {
 			if strings.Contains(string(raw), secret) {
 				t.Fatalf("credential leaked into %s", name)
 			}

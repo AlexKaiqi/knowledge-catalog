@@ -56,7 +56,7 @@ func postAny(t *testing.T, base, path string, body map[string]any) any {
 func TestWorkspaceReadHydratesStateBindingThroughTypedKnowledgeAPI(t *testing.T) {
 	home := testkit.TempDir(t)
 	repositoryID := "kr://acme/public/core"
-	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(home, "init"))
 	seedRepo(t, home, repositoryID)
 	var runtimeCalls atomic.Int32
 	stateRuntime := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -92,7 +92,7 @@ func TestWorkspaceReadHydratesStateBindingThroughTypedKnowledgeAPI(t *testing.T)
 	body(t, kc(home, "put", "--command-id", "binding-entity", "--repo", repositoryID,
 		"--object", "Service:orders", "--aspect", "properties", "--value", `{"name":"orders"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", repositoryID+"=refs/heads/main@"))
-	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--catalog", "kr://acme/catalog", "--dataset", "agent"))
+	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--dataset", "agent"))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read", "--repo", repositoryID))
 	commit := asMap(t, body(t, kc(home, "read", "--dataset", "agent", "--object", "Service:orders", "--aspect", "properties")).([]any)[0])["commit"].(string)
 
@@ -152,7 +152,7 @@ func TestWorkspaceReadHydratesStateBindingThroughTypedKnowledgeAPI(t *testing.T)
 func TestTypedKnowledgeReadForwardsTaihuCallerAuthentication(t *testing.T) {
 	home := testkit.TempDir(t)
 	repositoryID := "kr://acme/public/core"
-	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(home, "init"))
 	seedRepo(t, home, repositoryID)
 	stateRuntime := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer taihu-token" || r.Header.Get("X-Tai-Identity") != "signed.identity" {
@@ -176,7 +176,7 @@ func TestTypedKnowledgeReadForwardsTaihuCallerAuthentication(t *testing.T) {
 	body(t, kc(home, "put", "--command-id", "binding-entity", "--repo", repositoryID,
 		"--object", "Service:orders", "--aspect", "properties", "--value", `{"name":"orders"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", repositoryID+"=refs/heads/main@"))
-	body(t, kc(home, "allow", "--principal", "alice", "--cmd", "read-workspace", "--catalog", "kr://acme/catalog", "--dataset", "agent"))
+	body(t, kc(home, "allow", "--principal", "alice", "--cmd", "read-workspace", "--dataset", "agent"))
 	body(t, kc(home, "allow", "--principal", "alice", "--cmd", "read", "--repo", repositoryID))
 
 	lookup := serv.NewHTTPStateLookup(stateRuntime.Client())

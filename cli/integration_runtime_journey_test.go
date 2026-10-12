@@ -19,10 +19,10 @@ import (
 
 func TestIntegrationRuntimePublishesThroughAuthenticatedWriterHTTP(t *testing.T) {
 	home := testkit.TempDir(t)
-	const catalogID = "kr://runtime/catalog"
+
 	const repository = "kr://runtime/source"
 	const principal = "kaiqidong"
-	body(t, kc(home, "local", "init", "--catalog", catalogID))
+	body(t, kc(home, "local", "init"))
 	seedRepo(t, home, repository)
 	body(t, kc(home, "local", "grant", "bootstrap", "--principal", principal))
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})

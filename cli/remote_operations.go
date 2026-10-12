@@ -28,13 +28,13 @@ func runRemoteOperations(ctx context.Context, client *kcclient.Client, path stri
 			return nil, err
 		}
 		request := kcclient.AccessSpecDescribeRequest{
-			Catalog: flagString(flags, "catalog"), Dataset: flagString(flags, "dataset"),
+			Dataset:    flagString(flags, "dataset"),
 			Repository: flagString(flags, "repo"), Pin: remotePin(flags),
 		}
 		err := service.DescribeAccessSpec(ctx, request, options, &output)
 		return output, err
 	case "operations hook add", "operations gate add":
-		request := kcclient.PolicyBindingRequest{On: flagString(flags, "on"), Phase: flagString(flags, "phase"), Repository: flagString(flags, "repo"), Catalog: flagString(flags, "catalog"), Run: flagString(flags, "run"), URL: flagString(flags, "url"), Require: splitCmds(flagString(flags, "require"))}
+		request := kcclient.PolicyBindingRequest{On: flagString(flags, "on"), Phase: flagString(flags, "phase"), Repository: flagString(flags, "repo"), Run: flagString(flags, "run"), URL: flagString(flags, "url"), Require: splitCmds(flagString(flags, "require"))}
 		if path == "operations hook add" {
 			err := service.AddHook(ctx, request, options, &output)
 			return output, err

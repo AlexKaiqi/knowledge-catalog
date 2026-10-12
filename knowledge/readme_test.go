@@ -1,14 +1,16 @@
 package knowledge_test
 
 import (
+	"kc/internal/testkit"
 	"strings"
 	"testing"
 
+	"kc/internal/repofile"
 	"kc/knowledge"
 )
 
 func TestSystemRepositoryPublishesReadmeSchemaAndInstance(t *testing.T) {
-	repo := knowledge.NewSystemRepository()
+	repo := testkit.MakeSystemRepository(t)
 	head, err := repo.Head("")
 	if err != nil {
 		t.Fatal(err)
@@ -41,13 +43,14 @@ func TestSystemRepositoryPublishesReadmeSchemaAndInstance(t *testing.T) {
 		t.Fatal(err)
 	}
 	if string(raw) == "" {
-		t.Fatal("embedded README.md is empty")
+		t.Fatal("published README.md is empty")
 	}
 	schemaYAML, err := files.ReadKnowledgeFile("_schemas/readme.v1.aspect.yaml", head)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(schemaYAML), "entity: Readme") {
+	unit := repofile.Parse(string(schemaYAML))
+	if unit == nil || unit.Value.(map[string]any)["entity"] != "Readme" {
 		t.Fatalf("system schema file is missing: %s", schemaYAML)
 	}
 }

@@ -1,0 +1,29 @@
+---
+object_id: kc/capability/permissions
+aspect_name: entrypoints
+kind: Aspect
+path_hint: capabilities/permissions/entrypoints.yaml
+schema_ref: schema/system/capability-entrypoints/v1
+---
+{
+  "commands": [
+    {
+      "action": "admin.grants.manage",
+      "command": "kc grant add",
+      "description": "发放一条服务、仓或 Dataset 范围的授权规则",
+      "help": "kc help grant add"
+    },
+    {
+      "action": "admin.grants.read",
+      "command": "kc grant list",
+      "description": "列出授权规则",
+      "help": "kc help grant list"
+    },
+    {
+      "action": "admin.grants.manage",
+      "command": "kc grant remove",
+      "description": "撤销一条授权规则",
+      "help": "kc help grant remove"
+    }
+  ]
+}

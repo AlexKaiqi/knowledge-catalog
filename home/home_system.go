@@ -9,10 +9,10 @@ import (
 	"kc/snapshot"
 )
 
-// ensureSystemRepository is host bootstrap orchestration. Catalog Core sees
-// only a Repository ID; the application root mounts the immutable protocol
-// publication and verifies it against the binary trust root.
-func EnsureSystemRepository(home, catalogID string) (kernel.CommitID, error) {
+// ensureSystemRepository is host bootstrap orchestration. Registry Core sees
+// only a Repository ID; the application root verifies the published Snapshot
+// against the binary trust root.
+func EnsureSystemRepository(home string) (kernel.CommitID, error) {
 	ws, err := Open(home)
 	if err != nil {
 		return "", err
@@ -21,12 +21,9 @@ func EnsureSystemRepository(home, catalogID string) (kernel.CommitID, error) {
 
 	repo, exists := ws.Store.Get(knowledge.SystemRepositoryID)
 	if !exists {
-		return "", kernel.Fail(kernel.ErrTemporaryUnavailable, "built-in System Repository is not mounted")
+		return "", kernel.Fail(kernel.ErrTemporaryUnavailable, "published System Repository is not mounted")
 	}
-	cat, _, err := ws.UseCatalog(catalogID)
-	if err != nil {
-		return "", err
-	}
+	cat := ws.Datasets
 	if err := cat.RegisterRepository(knowledge.SystemRepositoryID); err != nil {
 		return "", err
 	}
@@ -42,16 +39,8 @@ func EnsureSystemRepository(home, catalogID string) (kernel.CommitID, error) {
 	if err != nil {
 		return "", err
 	}
-	for _, operation := range knowledge.SystemSchemaOperations() {
-		current, readErr := knowledgeRepo.Read(operation.Address.ObjectID, head)
-		if readErr != nil {
-			return "", readErr
-		}
-		if got, want := kernel.CanonicalDigest(current.Value), kernel.CanonicalDigest(operation.Value); got != want {
-			return "", kernel.Fail(kernel.ErrPreconditionFailed,
-				"system schema %s digest %s does not match built-in trust root %s",
-				operation.Address.ObjectID, got, want)
-		}
+	if err := verifySystemPublication(knowledgeRepo, repo, head); err != nil {
+		return "", err
 	}
 	return head, nil
 }
@@ -68,7 +57,7 @@ func SystemRepositoryStatus(commit kernel.CommitID) map[string]any {
 func PublishSystemRepository(home, driver, dsn, dir string) (map[string]any, error) {
 	driver = strings.TrimSpace(driver)
 	if driver == "" {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "system publish requires --driver gitea or lakefs")
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "system publish requires --driver lakefs")
 	}
 	driver = normalizeRepoDriver(driver)
 	authority, err := authorityFor(driver)
@@ -104,7 +93,7 @@ func PublishSystemRepository(home, driver, dsn, dir string) (map[string]any, err
 		// Reuse DSN only. Home-relative Dir must go through ResolveStoreDir(home),
 		// not from the current working directory.
 	}
-	if (driver == "gitea" || driver == "lakefs") && spec.DSN == "" {
+	if driver == "lakefs" && spec.DSN == "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "%s system publish requires --dsn", driver)
 	}
 	item, err := authority.prepare(stores, spec)
@@ -120,6 +109,7 @@ func PublishSystemRepository(home, driver, dsn, dir string) (map[string]any, err
 	if err != nil {
 		return nil, err
 	}
+	defer closeManagedSource(repo)
 	published, err := writer.PublishSystem(repo)
 	if err != nil {
 		return nil, err

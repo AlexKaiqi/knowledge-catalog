@@ -5,24 +5,23 @@ import (
 	"os"
 	"strings"
 
-	"kc/catalog"
 	"kc/invoke"
 	"kc/kernel"
+	"kc/snapshot/dataset"
 )
 
 const WorkspaceDefinitionFlag = "_workspace-definition"
 
 // TaskKnowledgeSetPin is a client-owned, portable task input. It keeps the
 // ResolvedKnowledgeSet fields intact and adds the unpublished recipe needed to
-// replay its membership and layout. It is never a Catalog registry object.
+// replay its membership and layout. It is never a Registry registry object.
 type TaskKnowledgeSetPin struct {
-	catalog.ResolvedKnowledgeSet
-	Catalog    string                `json:"catalog,omitempty"`
-	Definition *catalog.KnowledgeSet `json:"definition,omitempty"`
+	dataset.ResolvedKnowledgeSet
+	Definition *dataset.KnowledgeSet `json:"definition,omitempty"`
 }
 
-func SuppliedKnowledgeSet(flags map[string]invoke.FlagValue) *catalog.KnowledgeSet {
-	def, _ := flags[WorkspaceDefinitionFlag].(*catalog.KnowledgeSet)
+func SuppliedKnowledgeSet(flags map[string]invoke.FlagValue) *dataset.KnowledgeSet {
+	def, _ := flags[WorkspaceDefinitionFlag].(*dataset.KnowledgeSet)
 	return def
 }
 
@@ -40,14 +39,8 @@ func HoistTaskPinDefinition(flags map[string]invoke.FlagValue) error {
 		return nil
 	}
 	var saved TaskKnowledgeSetPin
-	if err := catalog.DecodeJSON([]byte(raw), &saved); err != nil {
+	if err := dataset.DecodeJSON([]byte(raw), &saved); err != nil {
 		return nil
-	}
-	if saved.Catalog != "" {
-		if selected := invoke.FlagString(flags, "catalog"); selected != "" && selected != saved.Catalog {
-			return kernel.Fail(kernel.ErrUsageInvalid, "--catalog does not match the Catalog saved in --pin")
-		}
-		flags["catalog"] = saved.Catalog
 	}
 	if saved.Definition == nil {
 		return nil
@@ -55,7 +48,7 @@ func HoistTaskPinDefinition(flags map[string]invoke.FlagValue) error {
 	if invoke.FlagString(flags, "dataset") != "" {
 		return kernel.Fail(kernel.ErrUsageInvalid, "choose a named --dataset or a temporary definition")
 	}
-	if err := catalog.ValidateKnowledgeSet(*saved.Definition); err != nil {
+	if err := dataset.ValidateKnowledgeSet(*saved.Definition); err != nil {
 		return err
 	}
 	flags[WorkspaceDefinitionFlag] = saved.Definition
@@ -78,7 +71,7 @@ func PrepareKnowledgePinContext(flags map[string]invoke.FlagValue) error {
 	if err := HoistTaskPinDefinition(flags); err != nil {
 		return err
 	}
-	var definition *catalog.KnowledgeSet
+	var definition *dataset.KnowledgeSet
 	if supplied := SuppliedKnowledgeSet(flags); supplied != nil {
 		definition = supplied
 	}
@@ -87,11 +80,11 @@ func PrepareKnowledgePinContext(flags map[string]invoke.FlagValue) error {
 		if err != nil {
 			return err
 		}
-		recipe, err := catalog.ParseKnowledgeSetRecipe(raw)
+		recipe, err := dataset.ParseKnowledgeSetRecipe(raw)
 		if err != nil {
 			return err
 		}
-		definition = &catalog.KnowledgeSet{Revision: 1, Sources: recipe.Sources()}
+		definition = &dataset.KnowledgeSet{Revision: 1, Sources: recipe.Sources()}
 	}
 	if raw := strings.TrimSpace(invoke.FlagString(flags, "pin")); raw != "" && definition == nil {
 		if !strings.HasPrefix(raw, "{") {
@@ -102,14 +95,8 @@ func PrepareKnowledgePinContext(flags map[string]invoke.FlagValue) error {
 			raw = string(content)
 		}
 		var saved TaskKnowledgeSetPin
-		if err := catalog.DecodeJSON([]byte(raw), &saved); err != nil {
+		if err := dataset.DecodeJSON([]byte(raw), &saved); err != nil {
 			return kernel.Fail(kernel.ErrUsageInvalid, "--pin is not a valid task pin: %v", err)
-		}
-		if saved.Catalog != "" {
-			if selected := invoke.FlagString(flags, "catalog"); selected != "" && selected != saved.Catalog {
-				return kernel.Fail(kernel.ErrUsageInvalid, "--catalog does not match the Catalog saved in --pin")
-			}
-			flags["catalog"] = saved.Catalog
 		}
 		if saved.Definition != nil {
 			if definition != nil && kernel.CanonicalDigest(definition) != kernel.CanonicalDigest(saved.Definition) {
@@ -135,7 +122,7 @@ func PrepareKnowledgePinContext(flags map[string]invoke.FlagValue) error {
 				return kernel.Fail(kernel.ErrUsageInvalid, "choose a named --dataset or a temporary definition")
 			}
 		}
-		if err := catalog.ValidateKnowledgeSet(*definition); err != nil {
+		if err := dataset.ValidateKnowledgeSet(*definition); err != nil {
 			return err
 		}
 		flags[WorkspaceDefinitionFlag] = definition

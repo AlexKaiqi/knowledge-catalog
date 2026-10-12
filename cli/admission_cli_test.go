@@ -52,7 +52,7 @@ func TestAdmissionCLIReportsCurrentGrantsAndExternalRequestRoute(t *testing.T) {
 		t.Fatalf("current grants are not scoped to the caller: %#v", result)
 	}
 	// Admission is caller-scoped; a Catalog operand is not part of its surface.
-	expectCode(t, kcRemote(t, server.URL, "kaiqidong", "admission", "show", "--catalog", "kr://acme/catalog"), "USAGE_INVALID")
+	expectCode(t, kcRemote(t, server.URL, "kaiqidong", "admission", "show", "--catalog", "retired"), "USAGE_INVALID")
 
 	req, err := http.NewRequest(http.MethodPost, server.URL+"/identity/v1/admission", nil)
 	if err != nil {

@@ -71,41 +71,25 @@ func TestRemoteKnowledgeReadUsesRepositoryBasisWithoutWorkspace(t *testing.T) {
 	}
 }
 
-func TestRemoteCatalogListDoesNotRequireCatalogID(t *testing.T) {
-	isolateLoginConfig(t)
-	seen := make(chan string, 1)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		seen <- r.URL.Path
-		_ = json.NewEncoder(w).Encode(map[string]any{"catalogs": []any{map[string]any{"id": "kr://acme/catalog"}}})
-	}))
-	t.Cleanup(server.Close)
-	result := Run([]string{"--server", server.URL, "--as", "agent:consumer", "catalog", "list"})
-	if result.Status != 0 {
-		t.Fatal(result.Stdout)
-	}
-	if path := <-seen; path != "/catalog/v1/catalogs" {
-		t.Fatalf("catalog list path = %s", path)
-	}
-}
-
-func TestRemoteCatalogShowInfersSingleCatalog(t *testing.T) {
+func TestRemoteInventoryDoesNotDiscoverOrSelectCatalog(t *testing.T) {
 	isolateLoginConfig(t)
 	var paths []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		paths = append(paths, r.URL.Path)
-		if r.URL.Path == "/catalog/v1/catalogs" {
-			_ = json.NewEncoder(w).Encode(map[string]any{"catalogs": []any{map[string]any{"id": "kr://acme/catalog"}}})
-			return
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"catalogId": "kr://acme/catalog"})
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"repositories": []any{}, "datasets": []any{}})
 	}))
 	t.Cleanup(server.Close)
 	result := Run([]string{"--server", server.URL, "--as", "agent:consumer", "show"})
 	if result.Status != 0 {
 		t.Fatal(result.Stdout)
 	}
-	if len(paths) != 2 || paths[0] != "/catalog/v1/catalogs" || paths[1] == "/catalog/v1/catalogs" || !strings.Contains(paths[1], "acme") {
-		t.Fatalf("catalog show inference paths = %v", paths)
+	if len(paths) != 1 || paths[0] != "/snapshot/v1/inventory" {
+		t.Fatalf("inventory performed retired discovery: %v", paths)
+	}
+	rejected := Run([]string{"--server", server.URL, "--as", "agent:consumer", "catalog", "list"})
+	if rejected.Status == 0 || !strings.Contains(rejected.Stdout, "USAGE_INVALID") || len(paths) != 1 {
+		t.Fatalf("retired listing reached HTTP: %#v %v", rejected, paths)
 	}
 }
 
@@ -117,7 +101,7 @@ func TestRemoteWorkspacePinStaysRemoved(t *testing.T) {
 	}
 }
 
-func TestRemoteCLIUsesBoundCatalogAndWorkspaceEnvironment(t *testing.T) {
+func TestRemoteCLIUsesRepositoryWithoutCatalogContext(t *testing.T) {
 	seen := make(chan map[string]any, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/catalog/v1/catalogs" {
@@ -140,20 +124,17 @@ func TestRemoteCLIUsesBoundCatalogAndWorkspaceEnvironment(t *testing.T) {
 	isolateLoginConfig(t)
 	t.Setenv("KC_SERVER_URL", server.URL)
 	t.Setenv("KC_AS", "agent:test")
-	if use := Run([]string{"catalog", "use", "kr://acme/catalog"}); use.Status != 0 {
-		t.Fatal(use.Stdout)
-	}
 	result := Run([]string{"read", "--repo", "kr://acme/core", "--object", "policy/A"})
 	if result.Status != 0 {
 		t.Fatal(result.Stdout)
 	}
 	request := <-seen
-	if request["catalog"] != "kr://acme/catalog" || request["repository"] != "kr://acme/core" {
-		t.Fatalf("typed request did not inherit bound catalog and repository: %#v", request)
+	if request["catalog"] != nil || request["repository"] != "kr://acme/core" {
+		t.Fatalf("typed request did not send only the explicit repository: %#v", request)
 	}
 }
 
-func TestRemoteGrantAddDoesNotInheritBoundWorkspace(t *testing.T) {
+func TestRemoteGrantAddDoesNotInheritRetiredCatalogOrBoundWorkspace(t *testing.T) {
 	seen := make(chan map[string]any, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/admin/v1/grants" {
@@ -173,12 +154,12 @@ func TestRemoteGrantAddDoesNotInheritBoundWorkspace(t *testing.T) {
 	t.Setenv("KC_CATALOG", "kr://acme/catalog")
 	t.Setenv("KC_WORKSPACE", "warehouse-agent")
 	result := Run([]string{"grant", "add", "--principal", "agent:dsh",
-		"--action", "catalog.read", "--catalog", "kr://acme/catalog"})
+		"--action", "inventory.read"})
 	if result.Status != 0 {
 		t.Fatal(result.Stdout)
 	}
 	request := <-seen
-	if request["catalog"] != "kr://acme/catalog" || request["principal"] != "agent:dsh" {
+	if request["catalog"] != nil || request["principal"] != "agent:dsh" {
 		t.Fatalf("grant request %#v", request)
 	}
 	if workspace, ok := request["workspace"]; ok && workspace != nil && workspace != "" {
@@ -209,15 +190,12 @@ func TestRemoteAccessDescribeSendsThePinnedWorkspace(t *testing.T) {
 	isolateLoginConfig(t)
 	t.Setenv("KC_SERVER_URL", server.URL)
 	t.Setenv("KC_AS", "service:bootstrap")
-	if use := Run([]string{"catalog", "use", "kr://acme/catalog"}); use.Status != 0 {
-		t.Fatal(use.Stdout)
-	}
 	result := Run([]string{"operations", "access-spec", "describe", "--dataset", "agent"})
 	if result.Status != 0 {
 		t.Fatal(result.Stdout)
 	}
 	request := <-seen
-	if request["catalog"] != "kr://acme/catalog" || request["dataset"] != "agent" {
+	if request["catalog"] != nil || request["dataset"] != "agent" {
 		t.Fatalf("access describe must send the named Dataset: %#v", request)
 	}
 	if _, ok := request["repository"]; ok {
@@ -370,7 +348,7 @@ func TestRetiredLocalGroupNeverRoutesThroughServerDefault(t *testing.T) {
 	t.Cleanup(server.Close)
 	t.Setenv("KC_SERVER_URL", server.URL)
 	home := t.TempDir()
-	result := Run([]string{"--home", home, "local", "init", "--catalog", "kr://local/catalog"})
+	result := Run([]string{"--home", home, "local", "init"})
 	if result.Status == 0 || !strings.Contains(result.Stdout, "USAGE_INVALID") {
 		t.Fatal(result.Stdout)
 	}

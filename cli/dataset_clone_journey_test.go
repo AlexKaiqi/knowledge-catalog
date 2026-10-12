@@ -28,8 +28,8 @@ func TestDatasetCloneJourney(t *testing.T) {
 	cfg := apphome.DeploymentConfig{
 		Version: 1, StateDir: filepath.Join(root, "state"), CacheDir: filepath.Join(root, "cache"),
 		Auth: "local", BootstrapPrincipal: "agent:operator", Stores: apphome.StoresFile{Index: "none"},
-		Catalogs:     []apphome.CatalogBinding{{ID: "kr://journey/catalog", Driver: "lakefs", DSN: lakefs.DSN(lakefs.NewRepo())}},
-		Repositories: []apphome.RepositoryBinding{{ID: repo, Driver: "lakefs", DSN: lakefs.DSN(lakefs.NewRepo())}},
+		Registry:     apphome.RegistryBinding{ID: "kr://kc/registry", Driver: "lakefs", DSN: lakefs.DSN(lakefs.NewRepo())},
+		Repositories: []apphome.RepositoryBinding{{ID: "kr://kc/system", Driver: "lakefs", DSN: lakefs.DSN(lakefs.NewRepo())}, {ID: repo, Driver: "lakefs", DSN: lakefs.DSN(lakefs.NewRepo())}},
 	}
 	if err := apphome.InitializeDeployment(cfg, func(dir, principal string) error {
 		return inv.WriteAllow(dir, inv.AllowFile{Rules: []inv.AllowRule{

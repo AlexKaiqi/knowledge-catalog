@@ -1,0 +1,15 @@
+---
+object_id: schema/system/capability-usage/v1
+path_hint: _schemas/capability-usage.v1.aspect.yaml
+---
+metaSchema: schema/meta/schema-definition/v1
+entity: Capability
+description: 系统自描述知识的usage切面。
+aspect: usage
+pattern: record
+additionalProperties: false
+fields:
+  body:
+    type: string
+    required: true
+    access: [text]

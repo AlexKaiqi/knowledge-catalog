@@ -30,8 +30,8 @@ func (s StoresFile) withDefaults() StoresFile {
 	if s.Layout.Repos == "" {
 		s.Layout.Repos = defaultReposDir
 	}
-	if s.Layout.Catalogs == "" {
-		s.Layout.Catalogs = defaultCatalogsDir
+	if s.Layout.Registry == "" {
+		s.Layout.Registry = defaultRegistryDir
 	}
 	if s.Layout.Projections == "" {
 		s.Layout.Projections = defaultProjectionsDir
@@ -105,7 +105,7 @@ func errUnsupportedDriver(kind, driver string) error {
 	if kind == "store" {
 		return fmt.Errorf("unknown store driver %s: use a configured repository or projection driver", driver)
 	}
-	return fmt.Errorf("unknown %s driver %s: snapshot repositories support gitea or lakefs", kind, driver)
+	return fmt.Errorf("unknown %s driver %s: snapshot repositories support lakefs", kind, driver)
 }
 
 // ResolveStoreDir joins a layout directory with --home unless it is absolute.

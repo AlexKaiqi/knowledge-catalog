@@ -12,12 +12,11 @@ import (
 	"strconv"
 	"strings"
 
-	"kc/catalog"
-	kcclient "kc/client"
 	"kc/index"
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/retrieval"
+	"kc/snapshot/dataset"
 )
 
 // Commit bodies legitimately carry whole-repository ChangeSets (a 53k object
@@ -76,11 +75,9 @@ func (f *httpFacade) registerServiceRoutes(mux *http.ServeMux) {
 	f.registerAdmissionSharingRoutes(mux)
 	f.registerConnectionRoutes(mux)
 	f.registerManagementRoutes(mux)
-	mux.HandleFunc("GET /identity/v1/auth", f.identityAuth)
 	mux.HandleFunc("POST /identity/v1/token", f.identityToken)
 	mux.HandleFunc("POST /identity/v1/authorize", f.identityAuthorize)
 	mux.HandleFunc("POST /identity/v1/authorize:poll", f.identityAuthorizePoll)
-	mux.HandleFunc("GET /identity/v1/whoami", f.identityWhoAmI)
 	mux.HandleFunc("POST /knowledge/v1/objects:read", f.knowledgeRead)
 	mux.HandleFunc("POST /knowledge/v1/objects:resolve", f.knowledgeResolve)
 	mux.HandleFunc("POST /knowledge/v1/search", f.knowledgeSearch)
@@ -94,47 +91,16 @@ func (f *httpFacade) registerServiceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /knowledge/v1/schemas:list", f.knowledgeSchemaPage)
 	mux.HandleFunc("POST /knowledge/v1/bindings:resolve", f.knowledgeBinding)
 	mux.HandleFunc("POST /knowledge/v1/resources:access", f.knowledgeResourceAccess)
-	mux.HandleFunc("POST /dataset-files/v1/mounts:list", f.workspaceFileMounts)
-	mux.HandleFunc("POST /dataset-files/v1/tree:list", f.workspaceFileDirectory)
-	mux.HandleFunc("POST /dataset-files/v1/file:read", f.workspaceFileRead)
 	mux.HandleFunc("POST /operations/v1/projections:sync", f.projectionSync)
 	mux.HandleFunc("POST /operations/v1/projections:notice", f.projectionNotify)
-}
-
-func (f *httpFacade) identityAuth(w http.ResponseWriter, _ *http.Request) {
-	local := f.options.localAssertion()
-	accepts := []string{"Authorization"}
-	if local {
-		accepts = []string{"X-Kc-As"}
-	}
-	invoke.WriteJSON(w, http.StatusOK, kcclient.AuthDiscovery{
-		Mode: f.options.AuthModeLabel(), LocalAssertion: local, Accepts: accepts,
-		BrowserLogin: f.browserLoginConfig(),
-	})
-}
-
-func (f *httpFacade) identityWhoAmI(w http.ResponseWriter, r *http.Request) {
-	identity, ok := f.serviceIdentity(w, r)
-	if !ok {
-		return
-	}
-	out := map[string]any{
-		"principal":  identity.Principal,
-		"onBehalfOf": identity.OnBehalfOf,
-	}
-	if identity.Login != "" {
-		out["login"] = identity.Login
-	}
-	invoke.WriteJSON(w, http.StatusOK, out)
 }
 
 // knowledgeDatasetIdentity is the shared dataset-channel identity envelope:
 // a named workspace, or an inline published pin/definition.
 type knowledgeDatasetIdentity struct {
-	Catalog    string                `json:"catalog,omitempty"`
 	Dataset    string                `json:"dataset,omitempty"`
 	Pin        json.RawMessage       `json:"pin,omitempty"`
-	Definition *catalog.KnowledgeSet `json:"definition,omitempty"`
+	Definition *dataset.KnowledgeSet `json:"definition,omitempty"`
 }
 
 // knowledgeScope is the full scope envelope of knowledge API requests: the
@@ -142,10 +108,9 @@ type knowledgeDatasetIdentity struct {
 // literals stay readable; embedded in every request struct, the JSON wire
 // contract is unchanged.
 type knowledgeScope struct {
-	Catalog    string                `json:"catalog,omitempty"`
 	Dataset    string                `json:"dataset,omitempty"`
 	Pin        json.RawMessage       `json:"pin,omitempty"`
-	Definition *catalog.KnowledgeSet `json:"definition,omitempty"`
+	Definition *dataset.KnowledgeSet `json:"definition,omitempty"`
 	Repository string                `json:"repository,omitempty"`
 	Commit     string                `json:"commit,omitempty"`
 	Ref        string                `json:"ref,omitempty"`
@@ -162,27 +127,27 @@ type knowledgeReadRequest struct {
 
 type KnowledgeSearchRequest struct {
 	knowledgeScope
-	CatalogDiscovery bool                    `json:"catalogDiscovery,omitempty"`
-	Query            string                  `json:"query,omitempty"`
-	Match            []string                `json:"match,omitempty"`
-	MatchMode        string                  `json:"matchMode,omitempty"`
-	Equal            []string                `json:"equal,omitempty"`
-	NotEqual         []string                `json:"notEqual,omitempty"`
-	In               []string                `json:"in,omitempty"`
-	Exists           []string                `json:"exists,omitempty"`
-	Missing          []string                `json:"missing,omitempty"`
-	Prefix           []string                `json:"prefix,omitempty"`
-	Contains         []string                `json:"contains,omitempty"`
-	GreaterThan      []string                `json:"greaterThan,omitempty"`
-	GreaterEqual     []string                `json:"greaterEqual,omitempty"`
-	LessThan         []string                `json:"lessThan,omitempty"`
-	LessEqual        []string                `json:"lessEqual,omitempty"`
-	Sort             []string                `json:"sort,omitempty"`
-	Limit            int                     `json:"limit,omitempty"`
-	Continuation     string                  `json:"continuation,omitempty"`
-	Expression       *retrieval.SearchExpr   `json:"expression,omitempty"`
-	Order            *retrieval.SearchClause `json:"order,omitempty"`
-	Recall           string                  `json:"recall,omitempty"`
+	InventoryDiscovery bool                    `json:"inventoryDiscovery,omitempty"`
+	Query              string                  `json:"query,omitempty"`
+	Match              []string                `json:"match,omitempty"`
+	MatchMode          string                  `json:"matchMode,omitempty"`
+	Equal              []string                `json:"equal,omitempty"`
+	NotEqual           []string                `json:"notEqual,omitempty"`
+	In                 []string                `json:"in,omitempty"`
+	Exists             []string                `json:"exists,omitempty"`
+	Missing            []string                `json:"missing,omitempty"`
+	Prefix             []string                `json:"prefix,omitempty"`
+	Contains           []string                `json:"contains,omitempty"`
+	GreaterThan        []string                `json:"greaterThan,omitempty"`
+	GreaterEqual       []string                `json:"greaterEqual,omitempty"`
+	LessThan           []string                `json:"lessThan,omitempty"`
+	LessEqual          []string                `json:"lessEqual,omitempty"`
+	Sort               []string                `json:"sort,omitempty"`
+	Limit              int                     `json:"limit,omitempty"`
+	Continuation       string                  `json:"continuation,omitempty"`
+	Expression         *retrieval.SearchExpr   `json:"expression,omitempty"`
+	Order              *retrieval.SearchClause `json:"order,omitempty"`
+	Recall             string                  `json:"recall,omitempty"`
 }
 
 type knowledgeRelationsRequest struct {
@@ -247,16 +212,17 @@ type knowledgeBindingRequest struct {
 
 type knowledgeResourceAccessRequest struct {
 	knowledgeScope
-	Object    string          `json:"object"`
-	Aspect    string          `json:"aspect,omitempty"`
-	Member    string          `json:"member,omitempty"`
-	Operation string          `json:"operation,omitempty"`
-	Input     json.RawMessage `json:"input,omitempty"`
+	Object         string          `json:"object"`
+	Aspect         string          `json:"aspect,omitempty"`
+	Member         string          `json:"member,omitempty"`
+	Operation      string          `json:"operation,omitempty"`
+	Input          json.RawMessage `json:"input,omitempty"`
+	Implementation string          `json:"implementation,omitempty"`
 }
 
 func (request KnowledgeSearchRequest) Flags() map[string]FlagValue {
 	flags := map[string]FlagValue{
-		"catalog": request.Catalog, "dataset": request.Dataset, "query": request.Query,
+		"dataset": request.Dataset, "query": request.Query,
 		"repo": request.Repository, "commit": request.Commit, "ref": request.Ref,
 		"match": request.Match, "match-mode": request.MatchMode, "eq": request.Equal,
 		"neq": request.NotEqual, "in": request.In, "exists": request.Exists,
@@ -269,8 +235,8 @@ func (request KnowledgeSearchRequest) Flags() map[string]FlagValue {
 	if request.Definition != nil {
 		flags[inv.WorkspaceDefinitionFlag] = request.Definition
 	}
-	if request.CatalogDiscovery {
-		flags[inv.CatalogDiscoveryFlag] = true
+	if request.InventoryDiscovery {
+		flags[inv.InventoryDiscoveryFlag] = true
 	}
 	if len(request.Pin) > 0 {
 		flags["pin"] = string(request.Pin)
@@ -306,10 +272,10 @@ type projectionSyncRequest struct {
 	Ref        string `json:"ref,omitempty"`
 }
 
-func knowledgeCoordinateFlags(catalog, workspace, repository, commit, ref string, pin json.RawMessage, definition ...*catalog.KnowledgeSet) map[string]FlagValue {
+func knowledgeCoordinateFlags(workspace, repository, commit, ref string, pin json.RawMessage, definition ...*dataset.KnowledgeSet) map[string]FlagValue {
 	flags := compactFlags(map[string]FlagValue{
-		"catalog": catalog, "dataset": workspace,
-		"repo": repository, "commit": commit, "ref": ref,
+		"dataset": workspace,
+		"repo":    repository, "commit": commit, "ref": ref,
 	})
 	if len(pin) > 0 {
 		flags["pin"] = string(pin)
@@ -321,7 +287,7 @@ func knowledgeCoordinateFlags(catalog, workspace, repository, commit, ref string
 }
 
 func (request knowledgeReadRequest) Flags() map[string]FlagValue {
-	flags := knowledgeCoordinateFlags(request.Catalog, request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
+	flags := knowledgeCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
 	if request.Object != "" {
 		flags["object"] = request.Object
 	}
@@ -378,7 +344,7 @@ func (f *httpFacade) knowledgeRerank(w http.ResponseWriter, r *http.Request) {
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	flags := compactFlags(map[string]FlagValue{"catalog": request.Catalog, "dataset": request.Dataset})
+	flags := compactFlags(map[string]FlagValue{"dataset": request.Dataset})
 	if request.Definition != nil {
 		flags[inv.WorkspaceDefinitionFlag] = request.Definition
 	}
@@ -425,7 +391,7 @@ func (f *httpFacade) knowledgeRelations(w http.ResponseWriter, r *http.Request) 
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	flags := knowledgeCoordinateFlags(request.Catalog, request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
+	flags := knowledgeCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
 	if request.Endpoint != "" {
 		flags["object"] = request.Endpoint
 	}
@@ -452,7 +418,7 @@ func (f *httpFacade) knowledgeTraverse(w http.ResponseWriter, r *http.Request) {
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	flags := knowledgeCoordinateFlags(request.Catalog, request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
+	flags := knowledgeCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
 	if request.Endpoint != "" {
 		flags["object"] = request.Endpoint
 	}
@@ -481,7 +447,7 @@ func (f *httpFacade) knowledgeTraverse(w http.ResponseWriter, r *http.Request) {
 }
 
 func (request knowledgeObjectRequest) Flags() map[string]FlagValue {
-	flags := knowledgeCoordinateFlags(request.Catalog, request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
+	flags := knowledgeCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
 	if request.Object != "" {
 		flags["object"] = request.Object
 	}
@@ -495,7 +461,7 @@ func (request knowledgeObjectRequest) Flags() map[string]FlagValue {
 }
 
 func (request knowledgeSchemaRequest) Flags() map[string]FlagValue {
-	flags := knowledgeCoordinateFlags(request.Catalog, request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
+	flags := knowledgeCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
 	if request.Object != "" {
 		flags["object"] = request.Object
 	}
@@ -503,7 +469,7 @@ func (request knowledgeSchemaRequest) Flags() map[string]FlagValue {
 }
 
 func (request knowledgeBindingRequest) Flags() map[string]FlagValue {
-	flags := knowledgeCoordinateFlags(request.Catalog, request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
+	flags := knowledgeCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
 	if request.Object != "" {
 		flags["object"] = request.Object
 	}
@@ -518,9 +484,10 @@ func (request knowledgeBindingRequest) Flags() map[string]FlagValue {
 
 func (request knowledgeResourceAccessRequest) Flags() map[string]FlagValue {
 	flags := compactFlags(map[string]FlagValue{
-		"catalog": request.Catalog, "dataset": request.Dataset, "object": request.Object,
+		"dataset": request.Dataset, "object": request.Object,
 		"repo": request.Repository, "commit": request.Commit, "ref": request.Ref,
 		"aspect": request.Aspect, "member": request.Member, "operation": request.Operation,
+		"implementation": request.Implementation,
 	})
 	if request.Definition != nil {
 		flags[inv.WorkspaceDefinitionFlag] = request.Definition
@@ -584,7 +551,7 @@ func (f *httpFacade) knowledgeResourceAccess(w http.ResponseWriter, r *http.Requ
 	}
 	handler := "knowledge-access"
 	run := inv.VerbResourceAccess
-	if strings.TrimSpace(request.Operation) != "" {
+	if strings.TrimSpace(request.Operation) != "" || strings.TrimSpace(request.Implementation) != "" {
 		handler = "knowledge-invoke"
 		run = inv.VerbResourceInvoke
 	}
@@ -631,34 +598,4 @@ func (f *httpFacade) projectionNotify(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	f.executeTyped(w, r, "operations-projection-notice", "projection.manage", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbIndexNotify}, flags)
-}
-
-func (f *httpFacade) workspaceFileMounts(w http.ResponseWriter, r *http.Request) {
-	var request workspaceFileMountsRequest
-	if !decodeServiceRequest(w, r, &request) {
-		return
-	}
-	f.withWorkspaceFiles(w, r, "file-mounts", request.workspaceFileCoordinate, false, func(view *workspaceFileView) (any, error) {
-		return workspaceFileMountsResponse{Pin: view.pin, Mounts: view.mounts}, nil
-	})
-}
-
-func (f *httpFacade) workspaceFileDirectory(w http.ResponseWriter, r *http.Request) {
-	var request workspaceFileDirectoryRequest
-	if !decodeServiceRequest(w, r, &request) {
-		return
-	}
-	f.withWorkspaceFiles(w, r, "file-list", request.workspaceFileCoordinate, true, func(view *workspaceFileView) (any, error) {
-		return view.list(request)
-	})
-}
-
-func (f *httpFacade) workspaceFileRead(w http.ResponseWriter, r *http.Request) {
-	var request workspaceFileReadRequest
-	if !decodeServiceRequest(w, r, &request) {
-		return
-	}
-	f.withWorkspaceFiles(w, r, "file-read", request.workspaceFileCoordinate, true, func(view *workspaceFileView) (any, error) {
-		return view.read(request)
-	})
 }

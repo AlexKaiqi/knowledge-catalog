@@ -3,12 +3,11 @@ package home
 import (
 	"encoding/json"
 	"errors"
+	"kc/internal/testkit"
 	"kc/kernel"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 )
@@ -35,87 +34,21 @@ func managedFixture(t *testing.T) (DeploymentConfig, *Home, *int) {
 
 func managedFixtureWithInterceptor(t *testing.T, intercept func(http.ResponseWriter, *http.Request) bool) (DeploymentConfig, *Home, *int) {
 	t.Helper()
-	t.Setenv("KC_GITEA_TOKEN", "test-token")
-	var mu sync.Mutex
-	objects := map[string]map[string]any{}
-	users := map[string]map[string]any{}
 	creates := new(int)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var mu sync.Mutex
+	fake := testkit.NewLakeFSFakeWithInterceptor(t, func(w http.ResponseWriter, r *http.Request) bool {
 		if intercept != nil && intercept(w, r) {
-			return
+			return true
 		}
-		mu.Lock()
-		defer mu.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		if r.URL.Path == "/api/v1/user" {
-			_ = json.NewEncoder(w).Encode(map[string]any{"login": "kc"})
-			return
-		}
-		if strings.HasPrefix(r.URL.Path, "/api/v1/users/") {
-			user := users[strings.TrimPrefix(r.URL.Path, "/api/v1/users/")]
-			if user == nil {
-				w.WriteHeader(404)
-				return
-			}
-			_ = json.NewEncoder(w).Encode(user)
-			return
-		}
-		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/admin/users" {
-			var body map[string]any
-			_ = json.NewDecoder(r.Body).Decode(&body)
-			name := body["username"].(string)
-			if users[name] != nil {
-				w.WriteHeader(422)
-				return
-			}
-			users[name] = map[string]any{"id": len(users) + 10, "login": name, "full_name": body["full_name"]}
-			w.WriteHeader(201)
-			_ = json.NewEncoder(w).Encode(users[name])
-			return
-		}
-		if r.Method == http.MethodPost && (r.URL.Path == "/api/v1/user/repos" || (strings.HasPrefix(r.URL.Path, "/api/v1/admin/users/") && strings.HasSuffix(r.URL.Path, "/repos"))) {
-			var body map[string]any
-			_ = json.NewDecoder(r.Body).Decode(&body)
-			name := body["name"].(string)
-			if objects[name] != nil {
-				w.WriteHeader(409)
-				return
-			}
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/repositories" {
+			mu.Lock()
 			*creates++
-			objects[name] = map[string]any{"id": *creates, "description": body["description"], "default_branch": "main", "empty": false}
-			w.WriteHeader(201)
-			_ = json.NewEncoder(w).Encode(objects[name])
-			return
+			mu.Unlock()
 		}
-		repoPath := strings.TrimPrefix(r.URL.Path, "/api/v1/repos/")
-		_, repoPath, _ = strings.Cut(repoPath, "/")
-		parts := strings.Split(repoPath, "/")
-		if len(parts) == 0 || objects[parts[0]] == nil {
-			w.WriteHeader(404)
-			return
-		}
-		if r.Method != http.MethodGet {
-			t.Errorf("unexpected managed source mutation %s %s", r.Method, r.URL.Path)
-			w.WriteHeader(405)
-			return
-		}
-		if len(parts) == 1 {
-			_ = json.NewEncoder(w).Encode(objects[parts[0]])
-			return
-		}
-		if parts[1] == "branches" && len(parts) == 3 && parts[2] == "main" {
-			_ = json.NewEncoder(w).Encode(map[string]any{"name": "main", "commit": map[string]any{"id": "initial-head"}})
-			return
-		}
-		if parts[1] == "commits" || (parts[1] == "git" && len(parts) > 2 && parts[2] == "commits") {
-			_ = json.NewEncoder(w).Encode(map[string]any{"sha": "initial-head"})
-			return
-		}
-		w.WriteHeader(404)
-	}))
-	t.Cleanup(server.Close)
+		return false
+	})
 	cfg := deploymentFixture(t)
-	cfg.ManagedRepositories = &ManagedRepositoryConfig{Driver: "gitea", DSN: server.URL + "/kc", CreatorActions: []string{"writer.commit", "knowledge.read"}}
+	cfg.ManagedRepositories = &ManagedRepositoryConfig{Driver: "lakefs", DSN: fake.Origin(), Root: "s3://kc-authority", PublicURL: "https://kc.example.test", CreatorActions: []string{"writer.commit", "knowledge.read"}}
 	if err := InitializeDeployment(cfg, func(dir, principal string) error {
 		return os.WriteFile(filepath.Join(dir, "allow.json"), []byte(`{"version":2,"rules":[]}`), 0600)
 	}); err != nil {
@@ -131,7 +64,7 @@ func managedFixtureWithInterceptor(t *testing.T, intercept func(http.ResponseWri
 
 func TestManagedRepositoryPersistsAllocationAndDoesNotRepeatGrant(t *testing.T) {
 	cfg, ws, creates := managedFixture(t)
-	req := ManagedRepositoryRequest{CatalogID: cfg.Catalogs[0].ID, RepositoryID: "kr://managed/source", CommandID: "create-one", Principal: "alice"}
+	req := ManagedRepositoryRequest{RepositoryID: "kr://managed/source", CommandID: "create-one", Principal: "alice"}
 	grants := 0
 	grant := func(g ManagedRepositoryGrant) error {
 		grants++
@@ -144,16 +77,16 @@ func TestManagedRepositoryPersistsAllocationAndDoesNotRepeatGrant(t *testing.T) 
 		return nil
 	}
 	result, err := ws.CreateManagedRepository(req, grant)
-	if err != nil || result.Status != "APPLIED" || result.Head != "initial-head" {
+	if err != nil || result.Status != "APPLIED" || result.Head != "c0" {
 		t.Fatalf("create: %#v %v", result, err)
 	}
-	if ws.Catalog.HasRepository(kernel.RepositoryID(req.RepositoryID)) {
+	if ws.Datasets.HasRepository(kernel.RepositoryID(req.RepositoryID)) {
 		t.Fatal("create must not register the repository in Catalog")
 	}
-	if err := ws.AttachRepository(req.CatalogID, kernel.RepositoryID(req.RepositoryID)); err != nil {
+	if err := ws.AttachRepository(kernel.RepositoryID(req.RepositoryID)); err != nil {
 		t.Fatal(err)
 	}
-	if !ws.Catalog.HasRepository(kernel.RepositoryID(req.RepositoryID)) {
+	if !ws.Datasets.HasRepository(kernel.RepositoryID(req.RepositoryID)) {
 		t.Fatal("attach must register the repository in Catalog")
 	}
 	if _, ok := ws.Store.Get(kernel.RepositoryID(req.RepositoryID)); !ok {
@@ -179,7 +112,7 @@ func TestManagedRepositoryPersistsAllocationAndDoesNotRepeatGrant(t *testing.T) 
 	}
 	defer reopened.Close()
 	result, err = reopened.CreateManagedRepository(req, grant)
-	if err != nil || result.Status != "REPLAYED" || result.Head != "initial-head" {
+	if err != nil || result.Status != "REPLAYED" || result.Head != "c0" {
 		t.Fatalf("durable replay: %#v %v", result, err)
 	}
 	if grants != 1 || *creates != 1 {
@@ -189,7 +122,7 @@ func TestManagedRepositoryPersistsAllocationAndDoesNotRepeatGrant(t *testing.T) 
 
 func TestManagedRepositoryResumesGrantFailureWithoutCreatingAnotherSource(t *testing.T) {
 	cfg, ws, creates := managedFixture(t)
-	req := ManagedRepositoryRequest{CatalogID: cfg.Catalogs[0].ID, RepositoryID: "kr://managed/retry", CommandID: "retry", Principal: "alice"}
+	req := ManagedRepositoryRequest{RepositoryID: "kr://managed/retry", CommandID: "retry", Principal: "alice"}
 	allocation := ""
 	if _, err := ws.CreateManagedRepository(req, func(g ManagedRepositoryGrant) error { allocation = g.AllocationID; return errors.New("grant failed") }); err == nil {
 		t.Fatal("grant failure returned success")

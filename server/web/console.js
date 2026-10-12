@@ -6,7 +6,7 @@
     SEARCH_BACKEND_UNAVAILABLE: "检索后端连不上",
     HOME_NOT_INITIALIZED: "部署尚未初始化",
     HOME_CONFIGURATION_INVALID: "部署配置无效",
-    CATALOG_STATE_UNAVAILABLE: "Catalog 状态读不到",
+    REGISTRY_STATE_UNAVAILABLE: "登记状态读不到",
     SNAPSHOT_UNAVAILABLE: "Snapshot 权威读不到",
     SURFACE_UNKNOWN: "未知分面",
     COMMAND_LOG_UNAVAILABLE: "Writer 账本读不到",
@@ -33,7 +33,7 @@
     log: {path: "/knowledge/v1/log:query", body: (repo, object) => ({repository: repo, object, limit: 20})},
   };
   let session = null, discovery = null, requestVersion = 0, loginVersion = 0, lastRoute = {page: "", id: "", face: ""};
-  let catalogs = [], repos = [], datasets = [], described = [], currentRepo = "";
+  let repos = [], datasets = [], described = [], currentRepo = "";
   let stores = null, searchReady = {}, schemaRows = [], searchFields = [], searchFieldRepo = "";
   const showError = (error) => { $("error").textContent = error.message || String(error); $("error").hidden = false; };
   const clearError = () => { $("error").hidden = true; $("error").textContent = ""; };
@@ -77,8 +77,7 @@
     return {page: "home", id: "", face: ""};
   }
   function repoHash(id, face) { return "#/repos/"+encodeURIComponent(id)+"/"+(face || "schema"); }
-  function catalogID() { return $("catalog").value; }
-  function catalogPath(suffix) { return "/catalog/v1/catalogs/"+encodeURIComponent(catalogID())+suffix; }
+  function snapshotPath(suffix) { return "/snapshot/v1"+suffix; }
   function setPage() {
     const {page, id} = route();
     $("page-home").hidden = page !== "home";
@@ -144,19 +143,6 @@
     $("verdict").textContent = text;
     searchReady = search.value || {};
   }
-  function fillCatalogs(items) {
-    const current = catalogID();
-    $("catalog").textContent = "";
-    catalogs = Array.isArray(items) ? items : [];
-    for (const item of catalogs) {
-      const option = document.createElement("option");
-      option.value = item.id;
-      option.textContent = item.id;
-      $("catalog").appendChild(option);
-    }
-    if (current && catalogs.some((item) => item.id === current)) $("catalog").value = current;
-    else if (catalogs[0]) $("catalog").value = catalogs[0].id;
-  }
   function addLine(parent, text) {
     const p = document.createElement("p");
     p.className = "muted";
@@ -170,7 +156,7 @@
   function renderRepoCards(rows) {
     $("repo-cards").textContent = "";
     $("repo-empty").hidden = rows.length > 0;
-    $("repo-empty").textContent = rows.length ? "" : "这个 Catalog 还没有登记成员仓。仓要先 attach，不是「没有数据」。";
+    $("repo-empty").textContent = rows.length ? "" : "这套服务 还没有登记成员仓。仓要先 attach，不是「没有数据」。";
     for (const row of rows) {
       const card = document.createElement("article");
       card.className = "card pick";
@@ -239,7 +225,7 @@
     const snapshot = stores && !stores.error ? (stores.snapshot || {}) : {};
     const authorities = Array.isArray(snapshot.authorities) ? snapshot.authorities : [];
     if (stores && stores.error) $("snapshot-summary").textContent = stores.error.code === "FORBIDDEN" ? "当前身份看不到存储绑定。改绑定仍走 ttyd 里的 kc。" : stores.error.message;
-    else $("snapshot-summary").textContent = (snapshot.driver || "未绑定") + (snapshot.profile ? " · "+snapshot.profile : "") + "。下面是 Catalog / 仓对着的权威入口，不是对象桶。";
+    else $("snapshot-summary").textContent = (snapshot.driver || "未绑定") + (snapshot.profile ? " · "+snapshot.profile : "") + "。下面是 登记表 / 仓对着的权威入口，不是对象桶。";
     $("authority-empty").hidden = authorities.length > 0;
     $("authority-table").hidden = authorities.length === 0;
     $("authority-list").textContent = "";
@@ -247,7 +233,7 @@
       const tr = document.createElement("tr");
       tr.innerHTML = "<td><code></code></td><td></td><td></td><td></td>";
       tr.children[0].querySelector("code").textContent = item.id || "";
-      tr.children[1].textContent = item.role === "catalog" ? "Catalog" : "成员仓";
+      tr.children[1].textContent = item.role === "registry" ? "登记表" : "成员仓";
       tr.children[2].textContent = item.driver || "";
       if (item.origin) {
         const link = document.createElement("a");
@@ -534,7 +520,7 @@
       row.index = error.code === "CAPABILITY_UNSATISFIED" ? "此部署尚未配置检索服务。" : "索引无法观察："+error.message;
     }
     try {
-      row.owned = await api("/catalog/v1/repositories/"+encodeURIComponent(id));
+      row.owned = await api("/snapshot/v1/connections/"+encodeURIComponent(id));
       const ready = row.owned.readiness || {};
       if (ready.publication === "PUBLISHED") {
         row.head = ready.publishedCommit || row.head;
@@ -545,10 +531,9 @@
     return row;
   }
   async function loadHome() {
-    if (!catalogID()) { renderRepoCards([]); renderDatasetCards([]); renderAccessWays(); return; }
     const [listed, listedDatasets] = await Promise.all([
-      api(catalogPath("/repositories")),
-      api(catalogPath("/datasets")),
+      api(snapshotPath("/repositories")),
+      api(snapshotPath("/datasets")),
     ]);
     repos = Array.isArray(listed.repositories) ? listed.repositories : [];
     datasets = Array.isArray(listedDatasets.datasets) ? listedDatasets.datasets : [];
@@ -617,8 +602,8 @@
     $("repo-pub").textContent = row.owned?.readiness?.publication === "PUBLISHED" ? "已发布" : (row.owned?.provisioningState === "READY" ? "可使用" : "观察中");
     const owned = row.owned;
     $("repo-identity").textContent = owned
-      ? [owned.store, owned.catalog, owned.owner].filter(Boolean).join(" · ")
-      : "Catalog 成员仓 "+id;
+      ? [owned.store, owned.owner].filter(Boolean).join(" · ")
+      : "已登记成员仓 "+id;
     const head = row.head || owned?.readiness?.publishedCommit || owned?.head || "";
     $("repo-head").textContent = shortCommit(head) || "尚无版本";
     $("repo-head-line").hidden = !head;
@@ -641,8 +626,7 @@
     if ((route().face || "schema") === "search") await ensureSearchFields();
   }
   async function loadDataset(id) {
-    if (!catalogID()) { renderItems(null); return; }
-    renderItems(await api(catalogPath("/datasets/"+encodeURIComponent(id))));
+    renderItems(await api(snapshotPath("/datasets/"+encodeURIComponent(id))));
   }
   function parseSearchQuery() {
     if (!currentRepo) throw new Error("先打开一座仓。");
@@ -689,9 +673,6 @@
       $("logout").hidden = false;
       $("login").hidden = true;
       $("app").hidden = false;
-      const listed = await api("/catalog/v1/catalogs");
-      if (version !== requestVersion) return;
-      fillCatalogs(listed.catalogs);
       await loadVerdict();
       if (version !== requestVersion) return;
       await loadStores();
@@ -724,7 +705,7 @@
     $("authorization").hidden = true; $("browser-login").disabled = false;
     $("logout").hidden = true; $("identity").textContent = "尚未登录";
     $("login").hidden = false; $("app").hidden = true;
-    catalogs = []; repos = []; datasets = []; described = []; stores = null; searchReady = {};
+    repos = []; datasets = []; described = []; stores = null; searchReady = {};
     renderRepoCards([]); renderDatasetCards([]); renderItems(null); renderPlaneCards(); renderAccessWays(); clearRepo();
     $("verdict").textContent = "登录后查看这台 kc serve。";
     requestVersion++;
@@ -739,10 +720,6 @@
     } catch (error) { if (version === loginVersion) showError(error); }
   });
   $("logout").addEventListener("click", () => { clearSession(); clearError(); });
-  $("catalog").addEventListener("change", () => {
-    if (route().page !== "home") location.hash = "#/";
-    load().catch(showError);
-  });
   $("schema-list-run").addEventListener("click", async () => {
     clearError();
     try { await runSchemaList(); } catch (error) { showError(error); }
@@ -761,12 +738,12 @@
   $("dataset-resolve").addEventListener("click", async () => {
     clearError();
     const {page, id} = route();
-    if (page !== "dataset" || !id || !catalogID()) return;
+    if (page !== "dataset" || !id) return;
     try {
-      renderPin(await api(catalogPath("/datasets/"+encodeURIComponent(id)+"/resolve"), {}));
+      renderPin(await api(snapshotPath("/datasets/"+encodeURIComponent(id)+"/resolve"), {}));
     } catch (error) {
       renderPin(null);
-      if (error.code === "FORBIDDEN") $("pin-meta").textContent = "当前身份不能解 pin（需要 dataset.resolve）。清单仍可按 catalog.read 看 items。";
+      if (error.code === "FORBIDDEN") $("pin-meta").textContent = "当前身份不能解 pin（需要 dataset.resolve）。清单仍可按 inventory.read 看 items。";
       else showError(error);
     }
   });

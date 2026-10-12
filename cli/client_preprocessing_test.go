@@ -8,15 +8,14 @@ import (
 	"reflect"
 	"testing"
 
-	"kc/catalog"
 	"kc/cli"
+	"kc/snapshot/dataset"
 )
 
 func TestKnowledgeSetOverlayProducesPortableRecipeOffline(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Error("preprocessing reached KC Server") }))
 	defer server.Close()
 	t.Setenv("KC_SERVER_URL", server.URL)
-	t.Setenv("DSH_TASK_ID", "unbound-task")
 	t.Setenv("KC_CONFIG_DIR", t.TempDir())
 	root := t.TempDir()
 	t.Setenv("KC_HOME", filepath.Join(root, "must-not-exist"))
@@ -43,7 +42,7 @@ func TestKnowledgeSetOverlayProducesPortableRecipeOffline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	recipe, err := catalog.ParseKnowledgeSetRecipe(raw)
+	recipe, err := dataset.ParseKnowledgeSetRecipe(raw)
 	if err != nil || recipe.Name != "incident" || len(recipe.Mounts) != 2 || recipe.Mounts[1].Selector != "refs/heads/release" {
 		t.Fatalf("portable recipe: %#v %v", recipe, err)
 	}

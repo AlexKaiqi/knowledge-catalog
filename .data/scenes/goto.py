@@ -49,14 +49,14 @@ def apply_target(target: str, *, probe: str | None = None) -> None:
         selected = ROOT / node["dir"] / declared[probe]
         validate_live_feature(selected)
     for state in chain:
-        if state["id"] == "catalog-initialized":
+        if state["id"] == "service-initialized":
             continue
         if not state.get("scene_construct"):
             raise GotoError(f"{state['id']} has no construct.feature")
         validate_live_feature(ROOT / state["dir"] / "_build" / "construct.feature")
     print(f"goto {node['id']}  ({node['dir']})")
     for state in chain:
-        if state["id"] == "catalog-initialized":
+        if state["id"] == "service-initialized":
             print(f"  skip {state['id']} (deployment already initialized)")
             continue
         start_runtime(state)
@@ -244,7 +244,6 @@ def argv_split(command: str) -> list[str]:
 
 
 def run_kc(args: list[str]) -> any:
-    catalog = os.environ.get("KC_CATALOG", "kr://acme/catalog")
     principal = os.environ.get("KC_AS", "admin")
     image = os.environ.get("KC_DEPLOY_CLI_IMAGE") or "kc-deploy-local-cli:local"
     network = os.environ.get("KC_ACCESSOR_NETWORK") or "kc-deploy-local_default"
@@ -258,8 +257,6 @@ def run_kc(args: list[str]) -> any:
         f"{REPO}:{REPO}:ro",
         "-e",
         "KC_SERVER_URL=http://kc-server:7380",
-        "-e",
-        f"KC_CATALOG={catalog}",
         "-e",
         f"KC_AS={principal}",
         "--entrypoint",

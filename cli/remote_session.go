@@ -113,18 +113,6 @@ func (a remoteSessionAuthenticator) AuthenticateRequest(ctx context.Context, _ k
 	return nil
 }
 
-func savedClientCatalog(server string) string {
-	raw, err := os.ReadFile(inv.ServerSessionPath(server, "catalog.json"))
-	if err != nil {
-		return ""
-	}
-	var state inv.ClientCatalogState
-	if json.Unmarshal(raw, &state) != nil {
-		return ""
-	}
-	return strings.TrimSpace(state.Catalog)
-}
-
 func persistClientServer(server string) error {
 	return inv.WriteJSONFile(filepath.Join(configDir(), "client.json"), clientEndpoint{Server: normalizeLoginServer(server)})
 }
@@ -244,14 +232,6 @@ func verifyTokenPrincipal(ctx context.Context, server, token string) (string, er
 
 func credentialHTTPClient() *http.Client {
 	return &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-}
-
-func persistClientCatalog(server, catalogID string) error {
-	catalogID = strings.TrimSpace(catalogID)
-	if catalogID == "" {
-		return kernel.Fail(kernel.ErrUsageInvalid, "catalog id is required")
-	}
-	return inv.WriteJSONFile(inv.ServerSessionPath(server, "catalog.json"), inv.ClientCatalogState{Catalog: catalogID})
 }
 
 func savedClientServer() string {

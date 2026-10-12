@@ -1,0 +1,15 @@
+---
+object_id: schema/system/usage-guide/v1
+path_hint: _schemas/usage-guide.v1.aspect.yaml
+---
+metaSchema: schema/meta/schema-definition/v1
+entity: UsageGuide
+description: 系统仓使用指南正文的切面声明。
+aspect: guide
+pattern: record
+additionalProperties: false
+fields:
+  body:
+    type: string
+    required: true
+    access: [text]

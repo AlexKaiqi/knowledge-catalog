@@ -3,7 +3,7 @@ package server
 import "net/http"
 
 // WriteStaticHTMLPage serves one embedded observation page. Rendering is a
-// fixed byte stream: no access decision, no Catalog mutation, and caching is
+// fixed byte stream: no access decision, no Registry mutation, and caching is
 // disabled so a stale page cannot outlive the server process.
 func WriteStaticHTMLPage(w http.ResponseWriter, body string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

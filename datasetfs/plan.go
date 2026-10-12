@@ -1,5 +1,5 @@
-// Package datasetfs projects one resolved Catalog knowledge set into host
-// filesystem mountpoints. It is an application adapter above Catalog and
+// Package datasetfs projects one resolved Dataset service knowledge set into host
+// filesystem mountpoints. It is an application adapter above Dataset service and
 // Snapshot: the package owns no repository, knowledge, or write semantics.
 package datasetfs
 

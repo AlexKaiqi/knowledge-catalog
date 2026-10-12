@@ -1,0 +1,18 @@
+---
+object_id: kc/relation/repositories.uses-mechanism.authorization
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: relations/repositories.uses-mechanism.authorization.yaml
+---
+relationId: kc/relation/repositories.uses-mechanism.authorization
+relationType: uses_mechanism
+direction: DIRECTED
+endpoints:
+  - role: from
+    objectRef:
+      repository: kr://kc/system
+      object: kc/capability/repositories
+  - role: to
+    objectRef:
+      repository: kr://kc/system
+      object: kc/mechanism/authorization

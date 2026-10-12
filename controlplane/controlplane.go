@@ -1,26 +1,26 @@
 package controlplane
 
 import (
-	"kc/catalog"
 	"kc/gate"
 	"kc/internal/journal"
 	"kc/kernel"
 	"kc/knowledge/writer"
 	"kc/snapshot"
+	"kc/snapshot/dataset"
 )
 
 type ControlPlane struct {
-	store   *snapshot.Registry
-	writer  *writer.Writer
-	catalog *catalog.Catalog
-	journal journal.Journal
+	store    snapshot.Registry
+	writer   *writer.Writer
+	datasets dataset.Service
+	journal  journal.Journal
 
 	mergeRequired func(repo kernel.RepositoryID) []string
 	mergeEvidence func(basisID string) []gate.Evidence
 }
 
-func New(store *snapshot.Registry, w *writer.Writer, cat *catalog.Catalog) *ControlPlane {
-	return &ControlPlane{store: store, writer: w, catalog: cat}
+func New(store snapshot.Registry, w *writer.Writer, cat dataset.Service) *ControlPlane {
+	return &ControlPlane{store: store, writer: w, datasets: cat}
 }
 
 func (cp *ControlPlane) SetJournal(j journal.Journal) { cp.journal = j }

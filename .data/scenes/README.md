@@ -26,7 +26,7 @@
 
 - 每条 `cliSurface` 命令必须在某个状态的 `When I run` 里出现，或该状态 `_meta.yaml` 点名的正式 go-test
 - `serve` / `kcfs` 不在 `cliSurface`，由 `TestSceneCatalogCoversPublicProductSurfaces` 另钉
-- 不要在场景目录放名为 `catalog.yaml` 的文件（那是产品 Catalog 登记表）
+- 不要在场景目录放名为 `catalog.yaml` 的文件（那是产品 登记空间 登记表）
 - 不要在场景根放 `sources.yaml`、`checklist.md`，也不要再手写一棵「覆盖对照」树。节点标签留在 `_meta.yaml`
 
 整体视图（给人 / Agent）：`python3 .data/scenes/tree.py` 或 `--json`。目录只形成共享前态树；probe 与独立 Go 旅程挂在最近的相关宿主上，后者仍由自己的 setup 和 Oracle 证明。`--check-states --json` 显示每个前态的实际 probe 消费路径；拒绝无 construct、无 fixture 说明和仅有一个下游 probe 的目录。该必要条件不能替代对实际依赖的代码审查。
@@ -90,9 +90,9 @@ python3 .data/scenes/tree.py --check-product
 
 具名 bundle 写在入口节点的 `_bundles.yaml`：声明从该既有状态开始的任务。执行器复用祖先夹具，用户步骤无需从初始化重复。
 
-Catalog 固定 `kr://scene/catalog`。业务知识仓 `kr://scene/knowledge`、关系仓 `kr://scene/graph` 只给后续 `attach` 和「已配置、尚未登记」的探用，**不**在 `catalog-initialized` 进入登记表。`Given deployment fixture` 不创建业务 Snapshot。知识集 `scene-set` 发布时只纳入指定实体/关系路径，不是整仓别名。树自包含，不读数仓目录。
+登记空间 固定 `kr://scene/catalog`。业务知识仓 `kr://scene/knowledge`、关系仓 `kr://scene/graph` 只给后续 `attach` 和「已配置、尚未登记」的探用，**不**在 `service-initialized` 进入登记表。`Given deployment fixture` 不创建业务 Snapshot。知识集 `scene-set` 发布时只纳入指定实体/关系路径，不是整仓别名。树自包含，不读数仓目录。
 
-**树脊（接入方）**：`catalog-initialized` → `source-repositories-configured` → `repository-attached`（服务验证既有 authority 并原子登记）→ `domain-schema-published` → `semantic-knowledge-published` →（声明式索引）`projection-synced`。`repository-attached` 是接入完成；后续 commit、put 是知识发布。此脊验证外部既有 Snapshot 接入；部署启动和 attach 不隐式创建它。初始化前态挂载的托管建仓 Go 旅程使用正式配置，验证已授权接入方显式 create 平台仓、立即发布以及重部署后继续操作，目标仓无需静态配置。
+**树脊（接入方）**：`service-initialized` → `source-repositories-configured` → `repository-attached`（服务验证既有 authority 并原子登记）→ `domain-schema-published` → `semantic-knowledge-published` →（声明式索引）`projection-synced`。`repository-attached` 是接入完成；后续 commit、put 是知识发布。此脊验证外部既有 Snapshot 接入；部署启动和 attach 不隐式创建它。初始化前态挂载的托管建仓 Go 旅程使用正式配置，验证已授权接入方显式 create 平台仓、立即发布以及重部署后继续操作，目标仓无需静态配置。
 
 树父是**构建前置**，不是权限蕴含：`knowledge-search-granted` 下的读授权用例复用已有检索条件，再验证额外授予 READ 后的变化；SEARCH 本身不授予 READ。
 
@@ -102,9 +102,9 @@ Catalog 固定 `kr://scene/catalog`。业务知识仓 `kr://scene/knowledge`、�
 
 1. 目录嵌套就是前态（只有一个父）。每个状态目录要有 `_meta.yaml`。公开命令必须落在某个 construct/probe 或点名的 go-test 里（测试钉闭集，不另抄清单）。
 2. 每个目录都必须有 `fixture` 和 `_build/construct.feature`，`surface` 为 `feature` 或 `both`。construct 只做进入共享前态所需的步骤，再观测后态。独立 Go 证据写在相关状态的 `evidence` 中。
-3. 夹具放在**构建或 probe 写入它的宿主节点**的 `_materials/`，不进 Catalog 登记表，不在场景根放 `materials:` 清单。
+3. 夹具放在**构建或 probe 写入它的宿主节点**的 `_materials/`，不进 登记空间 登记表，不在场景根放 `materials:` 清单。
 4. Domain Schema 草稿放在 `domain-schema-published/_materials/` 下按目标仓分目录：`drafts/` 属知识仓，`graph-drafts/` 属关系仓。construct 分别经 `kc writer commit --repo --dir` 发布并回读；引用 Schema 的实例必须在自己的目标仓找到该 Schema。实例与 note 用 `kc writer put --file $materials/…`，再 READ/browse 回读。不要用 `Given material` 代替这些公开命令。Gherkin 不出现 ChangeSet 文件。提交前对照用 `kc diff --repo --dir`，不是 construct 必经步骤。
-5. System Schema：跟踪源是 `knowledge/system/schemas/`（`go:embed` 信任根）。`catalog-initialized/_materials/system/` 是旅程可见副本，**禁止** Writer PUT 到 `kr://kc/system`。改协议 Schema 先改跟踪源，再让副本与 `TestSceneSystemSchemaMaterialsMatchEmbed` 对齐。
+5. System Schema：跟踪源是 `knowledge/system/_schemas/`（`go:embed` 信任根）。`service-initialized/_materials/system/` 是旅程可见副本，**禁止** Writer PUT 到 `kr://kc/system`。改协议 Schema 先改跟踪源，再让副本与 `TestSceneSystemSchemaMaterialsMatchEmbed` 对齐。
 6. 不要引用已删除的数仓黑盒套件。清河茶铺表/作业/语义/SQL 只写在走查叶 `_materials/`。接入方 Resource Access / Collector / Observer 的 Docker 与代码放在写入 origin 的节点 `_materials/accessor/`。
 7. 不要在仓库根加 `tests/scenarios/` 或把协议场景拷进 `cli/testdata/scenes`。
 8. 一条 feature 一个 Scenario。construct 与每个 probe 文件各一种失败风险。每条 probe 必须可以从本节点冻结前态单独执行；不得用文件排序传递写入、授权、登录会话或 HTTP 服务状态。有意连续的操作写在同一个用例里。
@@ -115,7 +115,7 @@ Catalog 固定 `kr://scene/catalog`。业务知识仓 `kr://scene/knowledge`、�
 
 执行器 DFS `.data/scenes/`，按套件选择受支持的构建节点，**复用父节点 construct 之后冻结的前态**（测试 TempDir，gitignore 的 `_results/` 只记本次是否绿，不当断言）。在副本上只跑本节点 construct，再冻结本节点。每条可执行 `_probes` 从该冻结状态取得独立环境；子状态也从同一冻结状态构建，不继承任何 probe 的结果。父前态尚未冻结时（单节点 `-run`），才从祖先 construct 链重建。
 
-`Given existing repository` 由执行器接到 lakeFS Snapshot adapter。Gherkin 不写介质名。默认 `make test` 运行 `TestProductScenes` 与 `TestMetricPermissionScenes`，使用进程内协议忠实假服务，不需要整套 lakeFS 部署：冻结和复制都必须隔离 lakeFS 物理仓，不能只拷指向同一远端的 home。HTTP 服务与客户端登录目录也按环境重新准备，不复用另一用例的 handler 或会话。OpenSearch 原生按逻辑仓标识投影，拷贝 home 不能隔离外部索引。测试执行器为每个环境提供独立物理索引与控制记录空间，仍由真实 OpenSearch 执行；复制环境重新绑定测试端点，关闭时只清理该环境自己的派生索引。需要已有投影时，在每条 probe 前重放构建链恢复基线；未构建投影的前态也不会继承其它用例的索引。场景仍顺序执行。独立 `make deploy-local-scenes` 在第一阶段部署拓扑运行同一棵树的 `TestLiveLakeFSSceneDFS`：真 Graveler + MinIO + PostgreSQL + OpenSearch，需先显式准备 local 测试栈。真 Graveler 不能按 commit id 分叉，所以 live DFS 的节点及各 probe 分别从祖先 construct 链重放，不克隆父 home。Catalog 组件夹具仍是 gitdir，不是生产 OpenSnapshotRegistry。
+`Given existing repository` 由执行器接到 lakeFS Snapshot adapter。Gherkin 不写介质名。默认 `make test` 运行 `TestProductScenes` 与 `TestMetricPermissionScenes`，使用进程内协议忠实假服务，不需要整套 lakeFS 部署：冻结和复制都必须隔离 lakeFS 物理仓，不能只拷指向同一远端的 home。HTTP 服务与客户端登录目录也按环境重新准备，不复用另一用例的 handler 或会话。OpenSearch 原生按逻辑仓标识投影，拷贝 home 不能隔离外部索引。测试执行器为每个环境提供独立物理索引与控制记录空间，仍由真实 OpenSearch 执行；复制环境重新绑定测试端点，关闭时只清理该环境自己的派生索引。需要已有投影时，在每条 probe 前重放构建链恢复基线；未构建投影的前态也不会继承其它用例的索引。场景仍顺序执行。独立 `make deploy-local-scenes` 在第一阶段部署拓扑运行同一棵树的 `TestLiveLakeFSSceneDFS`：真 Graveler + MinIO + PostgreSQL + OpenSearch，需先显式准备 local 测试栈。真 Graveler 不能按 commit id 分叉，所以 live DFS 的节点及各 probe 分别从祖先 construct 链重放，不克隆父 home。登记空间 组件夹具仍是 gitdir，不是生产 OpenSnapshotRegistry。
 
 两条写入脊不要并成一条：`knowledge-published` 挂在 `repository-attached` 上（普通 Canonical）；`semantic-knowledge-published` 挂在 Domain Schema 发表之后（语义实例）。调整前置时改目录嵌套；`depends_on` 由工具从目录生成。
 
@@ -134,7 +134,7 @@ make deploy-local-goto NODE=qinghe-knowledge-published PROBE=probe-publish-datas
 - `TestProductScenes` 跳过需要索引或动态 State 的节点。
 - `TestMetricPermissionScenes` 需要 OpenSearch（`make test` 复用 `KC_TEST_OPENSEARCH_URL`，未设置时自动启动一次性实例；手跑要自己设 URL），只运行当前夹具支持的索引节点；动态 State 与墙外走查由各自部署套件承接。
 - `TestLiveLakeFSSceneDFS` 在 `KC_SCENE_LIVE_LAKEFS_URL` 上 DFS 全树；部署拓扑由 `make deploy-local-scenes` 注入 lakeFS / OpenSearch。动态观察的独立 Go 测试需要 State runtime；不再建立参考 feature 或跳过的场景节点。
-- 走查 Server 用 `python3 .data/scenes/goto.py <id或目录>` 重放该节点祖先 construct。`catalog-initialized` 已由 `deploy-local-up` 初始化，脚本跳过它。`named-repositories-created` 分支需要托管 create 与墙外 compose，不进 `TestProductScenes`。
+- 走查 Server 用 `python3 .data/scenes/goto.py <id或目录>` 重放该节点祖先 construct。`service-initialized` 已由 `deploy-local-up` 初始化，脚本跳过它。`named-repositories-created` 分支需要托管 create 与墙外 compose，不进 `TestProductScenes`。
 - `Agent as` 任务块给人 / KC-AGENT-01，**不是**协议 Oracle；协议绿看 Then。
 - 定向 `go test` 只证明所选范围。默认 `make test` 只运行上述两组场景，不执行节点声明的独立 Go evidence；真实部署与完整合同组合分别由 `make deploy-local-scenes` 与 `make test-contracts` 承接，不能相互替代。
 
@@ -158,9 +158,9 @@ Given/When/Then 是可证伪观察。细合同的 `When I run` 通过 test-only 
 1. 一条场景独占一种失败风险。construct = 进入可复用前态；probe = 从该前态出发验证另一种风险（授权、冻结入口、隔离），可产生仅属于本用例的后态。
 2. 变化之后必须观测。回执不是终点：再用 `status` / `show` / `grant list` / `schema list` / `read` / `projection describe` / SEARCH 读后态。
 3. `Then the command succeeds` 只表示退出码 0 且 stdout 是 JSON，**不是后态**。禁止单独使用；`TestSceneFeaturesPinObservedState` 会红。
-4. 钉稳定字段：Catalog/仓/principal/action/夹具 Canonical/空数组/`archived`/`retired`。HEAD / `newCommit` 用 `nonempty`。产品库存必须 `home`、`namespace` 为 `absent`。
+4. 钉稳定字段：登记空间/仓/principal/action/夹具 Canonical/空数组/`archived`/`retired`。HEAD / `newCommit` 用 `nonempty`。产品库存必须 `home`、`namespace` 为 `absent`。
 5. 写入 construct 必须出现 `When I run kc writer commit|writer put`，并钉写入回执。System Schema 用 READ/list，不用 Writer。
-6. construct 只断言这一步允许改的七列（Snapshot / Catalog / pin / Canonical / ControlState / 投影）。失败路径钉错误码，不要再 dump 一遍成功态。
+6. construct 只断言这一步允许改的七列（Snapshot / 登记空间 / pin / Canonical / ControlState / 投影）。失败路径钉错误码，不要再 dump 一遍成功态。
 7. 表行必须以 `|` 开头和结尾，两列：路径、期望值。
 
 ```gherkin
@@ -176,13 +176,13 @@ Then the output has:
 | 步骤 | 作用 |
 |---|---|
 | `Given material <id>` | 已退出树脊。写入必须是 `kc writer`；执行器仍解析该步骤，但 `TestSceneWriteSpineUsesPublicWriter` 禁止 construct 再用它 |
-| `Given deployment fixture` | 构建细合同的空 Catalog 与 System 信任根前态；不是用户命令，不创建业务 Snapshot |
-| `Given existing repository <id>` | 墙外测试夹具提供既有 Snapshot binding，尚未入 Catalog；接入仍由公开 attach 完成 |
-| `Given configured catalog <id>` / `Given bootstrap principal <id>` | 多 Catalog / 首次部署授权的夹具前态；真实初始化和恢复另走正式配置入口 |
+| `Given deployment fixture` | 构建细合同的空 登记空间 与 System 信任根前态；不是用户命令，不创建业务 Snapshot |
+| `Given existing repository <id>` | 墙外测试夹具提供既有 Snapshot binding，尚未入 登记空间；接入仍由公开 attach 完成 |
+| `Given configured catalog <id>` / `Given bootstrap principal <id>` | 多 登记空间 / 首次部署授权的夹具前态；真实初始化和恢复另走正式配置入口 |
 | `Given local HTTP server` | 测试认证器上的 typed Server；后续带 `--server $server` 的命令走正式 Run |
 | `When I run \`kc ...\`` | 公开 argv 的应用合同；带 `--server` 时是正式 Client。`$materials` → 本节点 `_materials/`，`$home` → 本趟 home，`$server` → Given local HTTP，`$last.field` / `$previewId` → 上次成功 CLI JSON |
 | `When HTTP METHOD /path [as principal]` | 打刚才起的 HTTP |
-| `Then the output has` / `includes` | JSON 路径等于 / 数组包含 |
+| `Then the output has` / `includes` | JSON 路径等于 / 数组包含；`$grantId` 引用最近一次成功 `grant add` 的回执 ID，构建冻结后仍供隔离 probe 使用，也可用于后续 argv |
 | `Then error CODE` | 协议错误码 |
 | `Then 1 hit <object>` | CLI SEARCH 按 `objectId` 定位；HTTP SEARCH 命中 |
 | `Then 1 hit <object> with body stripped` / `with full canonical` | HTTP SEARCH 投递链（无 `knowledge.read` 时屏蔽正文） |
@@ -202,7 +202,7 @@ Then the output has:
 |---|---|
 | `TestSceneCatalogTreeFollowsLayersAndRoles` | 目录父与节点对不上；feature 节点无 construct；场景进 `cli/testdata` |
 | `TestSceneFeaturesPinObservedState` | 裸 `command succeeds`；`When I run` / HTTP 后无观测；material 不回读 |
-| `TestSceneSystemSchemaMaterialsMatchEmbed` | 旅程夹具与 `knowledge/system/schemas` 漂移 |
+| `TestSceneSystemSchemaMaterialsMatchEmbed` | 旅程夹具与 `knowledge/system/_schemas` 漂移 |
 | `TestSceneCatalogDoesNotRegisterMaterials` | 场景根出现 `catalog.yaml`；construct 用 `Given material` 代替 Writer |
 | `TestSceneCatalogCoversPublicProductSurfaces` | 公开命令没有 capability 挂载状态 |
 | `TestSceneFeaturesCoverPublicCLI` | 公开命令既无场景 `When I run`，也无该 capability 对应状态引用的具名正式 Go 测试调用 |
@@ -246,4 +246,4 @@ Then the output has:
 
 时间局部任务至少声明既有状态和本次目的，并证明同一主体可以依次取得所需材料、固定版本、完成操作和验证结果。部署接入、首次发布、既有知识修改、固定 pin 后的上游变化、治理失败恢复、撤权后的下一请求分别评估；不能把 operator 的 setup 插到消费者任务中替他取得权限。`dataset-cli-discovers-searches-reads.feature` 守卫要求所有消费命令带同一主体及 Server。
 
-重部署验收必须保存 Catalog Snapshot 权威、知识 Snapshot、授权/Gate、Writer receipt、ControlState 和原始证据，只替换进程工作缓存。缺耐久状态应失败关闭；清空派生投影可以触发重建。初始化前态上的部署恢复证据引用正式 Run/Server 测试，不把重新 init 的成功当作恢复。
+重部署验收必须保存 登记空间 Snapshot 权威、知识 Snapshot、授权/Gate、Writer receipt、ControlState 和原始证据，只替换进程工作缓存。缺耐久状态应失败关闭；清空派生投影可以触发重建。初始化前态上的部署恢复证据引用正式 Run/Server 测试，不把重新 init 的成功当作恢复。

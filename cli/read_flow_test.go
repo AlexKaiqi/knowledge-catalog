@@ -15,7 +15,7 @@ import (
 func TestCatalogRepoReadFlow(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "init"))
 	seedRepo(t, h, core)
 
 	c1 := asMap(t, asMap(t, body(t, kc(h, "put",
@@ -197,7 +197,7 @@ func TestCatalogRepoReadErrors(t *testing.T) {
 
 	expectMsg(t, kc(h, "read", "--repo", core, "--object", "a", "--ref", "refs/heads/main"), "no component fixture")
 
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "init"))
 	seedRepo(t, h, core)
 	c1 := asMap(t, asMap(t, body(t, kc(h, "put",
 		"--command-id", "seed",
@@ -219,7 +219,7 @@ func TestCatalogRepoReadErrors(t *testing.T) {
 func TestAspectBindingResolveThroughCLIAndWorkspace(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "init"))
 	seedRepo(t, h, core)
 	body(t, kc(h, "put", "--command-id", "binding-schema", "--repo", core,
 		"--object", "schema/service.health",
@@ -244,7 +244,7 @@ func TestWorkspaceSearchFailsClosedWhenAnyMemberCannotSatisfyQuery(t *testing.T)
 	h := testkit.TempDir(t)
 	searchable := "kr://acme/public/searchable"
 	opaque := "kr://acme/public/opaque"
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "init"))
 	seedRepo(t, h, searchable)
 	seedRepo(t, h, opaque)
 	body(t, kc(h, "put", "--command-id", "schema", "--repo", searchable, "--object", "schema/policy.body",
@@ -262,7 +262,7 @@ func TestWorkspaceSearchFailsClosedWhenAnyMemberCannotSatisfyQuery(t *testing.T)
 func TestWorkspaceSearchUnsatisfiedExplainsHowToRecover(t *testing.T) {
 	h := testkit.TempDir(t)
 	repo := "kr://acme/public/opaque"
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "init"))
 	seedRepo(t, h, repo)
 	body(t, kc(h, "put", "--command-id", "opaque", "--repo", repo,
 		"--object", "note/A", "--value", `{"body":"runbook"}`))
@@ -278,7 +278,7 @@ func TestWorkspaceSearchPublicContinuation(t *testing.T) {
 	h := testkit.TempDir(t)
 	one := "kr://acme/public/one"
 	two := "kr://acme/public/two"
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "init"))
 	values := [][]string{{"z", "a"}, {"y", "b"}}
 	for i, repo := range []string{one, two} {
 		seedRepo(t, h, repo)

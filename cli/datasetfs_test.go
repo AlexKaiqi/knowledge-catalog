@@ -33,15 +33,14 @@ func TestPrepareRemoteKnowledgeSetFSUsesGatewayAndKeepsFixedPin(t *testing.T) {
 	home := testkit.TempDir(t)
 	project := testkit.TempDir(t)
 	repository := "kr://acme/remote-docs"
-	catalogID := "kr://acme/catalog"
-	mustKnowledgeSetFSRun(t, home, "init", "--catalog", catalogID)
+	mustKnowledgeSetFSRun(t, home, "init")
 	mustKnowledgeSetFSRun(t, home, "repo-add", "--repo", repository, "--dsn", internalLakeFSRepoDSN(t))
 	mustKnowledgeSetFSRun(t, home, "register", "--repo", repository)
 	mustRawTreeWrite(t, home, repository, "remote-v1", "shared/README.md", "v1\n")
 	mustKnowledgeSetFSRun(t, home, "dataset", "define", "--dataset", "agent", "--revision", "1",
 		"--source", repository+"=refs/heads/main@knowledge@shared")
 	for _, args := range [][]string{
-		{"grant", "add", "--principal", "agent:test", "--action", "dataset.resolve", "--catalog", catalogID, "--dataset", "agent"},
+		{"grant", "add", "--principal", "agent:test", "--action", "dataset.resolve", "--dataset", "agent"},
 		{"grant", "add", "--principal", "agent:test", "--action", "file.read", "--repo", repository},
 	} {
 		if result := runWithTelemetryMode(append([]string{"--home", home}, args...), nil, true); result.Status != 0 {
@@ -51,7 +50,7 @@ func TestPrepareRemoteKnowledgeSetFSUsesGatewayAndKeepsFixedPin(t *testing.T) {
 	server := httptest.NewServer(httpHandler(home))
 	defer server.Close()
 	plan, manifest, closeClient, err := prepareKnowledgeSetFS(datasetFSConfig{
-		server: server.URL, catalogID: catalogID, dataset: "agent", root: project, principal: "agent:test",
+		server: server.URL, dataset: "agent", root: project, principal: "agent:test",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -76,7 +75,7 @@ func TestPrepareKnowledgeSetFSMakesOneTargetPerRecipePath(t *testing.T) {
 	project := testkit.TempDir(t)
 	one := "kr://acme/team/docs"
 	two := "kr://acme/org/policy"
-	mustKnowledgeSetFSRun(t, home, "init", "--catalog", "kr://acme/catalog")
+	mustKnowledgeSetFSRun(t, home, "init")
 	mustKnowledgeSetFSRun(t, home, "repo-add", "--repo", one, "--dsn", internalLakeFSRepoDSN(t))
 	mustKnowledgeSetFSRun(t, home, "register", "--repo", one)
 	mustKnowledgeSetFSRun(t, home, "repo-add", "--repo", two, "--dsn", internalLakeFSRepoDSN(t))

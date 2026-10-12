@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -16,6 +17,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	"kc/kernel"
+	"kc/snapshot"
 )
 
 // LakeFSFakeCredential is the access-key:secret the in-process fake accepts.
@@ -41,16 +45,44 @@ type lakefsFakeRepo struct {
 }
 
 type lakefsFakeCommit struct {
-	parent string
-	files  map[string][]byte
+	parent       string
+	files        map[string][]byte
+	committer    string
+	message      string
+	metadata     map[string]string
+	creationDate int64
 }
 
 // NewLakeFSFake starts one shared fake for a test (or scene cache).
 func NewLakeFSFake(t *testing.T) *LakeFSFake {
 	t.Helper()
+	f := StartLakeFSFake()
+	t.Cleanup(f.Close)
+	return f
+}
+
+// StartLakeFSFake supports package-wide component fixtures whose lifetime is
+// managed by TestMain. Per-test fixtures should use NewLakeFSFake.
+func StartLakeFSFake() *LakeFSFake {
+	return startLakeFSFake(nil)
+}
+
+// NewLakeFSFakeWithInterceptor exposes transport failure injection without
+// adding a second Snapshot fixture implementation.
+func NewLakeFSFakeWithInterceptor(t *testing.T, intercept func(http.ResponseWriter, *http.Request) bool) *LakeFSFake {
+	t.Helper()
+	f := startLakeFSFake(intercept)
+	t.Cleanup(f.Close)
+	return f
+}
+
+func startLakeFSFake(intercept func(http.ResponseWriter, *http.Request) bool) *LakeFSFake {
 	f := &LakeFSFake{repos: map[string]*lakefsFakeRepo{}}
-	f.server = httptest.NewServer(http.HandlerFunc(f.serveHTTP))
-	t.Cleanup(f.server.Close)
+	f.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if intercept == nil || !intercept(w, r) {
+			f.serveHTTP(w, r)
+		}
+	}))
 	return f
 }
 
@@ -78,16 +110,46 @@ func (f *LakeFSFake) Origin() string {
 // It is safe to call more than once.
 func (f *LakeFSFake) Close() {
 	f.mu.Lock()
-	defer f.mu.Unlock()
+	var server *httptest.Server
 	if !f.closed && f.server != nil {
 		f.closed = true
-		f.server.Close()
+		server = f.server
+	}
+	f.mu.Unlock()
+	// In-flight handlers need the same mutex to finish. Waiting for their
+	// completion while holding it deadlocks shutdown.
+	if server != nil {
+		server.Close()
 	}
 }
 
 // DSN is the KC lakeFS DSN for a physical repository on this fake.
 func (f *LakeFSFake) DSN(name string) string {
 	return strings.TrimRight(f.server.URL, "/") + "/" + name
+}
+
+// CommitFiles simulates an out-of-band source commit without granting a
+// deployed Home a mutation handle. The old immutable commit remains readable.
+func (f *LakeFSFake) CommitFiles(name string, expected kernel.CommitID, changes []snapshot.TreeChange) (kernel.CommitID, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	repo := f.repos[name]
+	if repo == nil || repo.branches["main"] != string(expected) {
+		return "", fmt.Errorf("lakeFS fixture source or expected HEAD does not match")
+	}
+	files := cloneByteMap(repo.commits[string(expected)].files)
+	for _, change := range changes {
+		if change.Remove {
+			delete(files, change.Path)
+		} else {
+			files[change.Path] = append([]byte(nil), change.Content...)
+		}
+	}
+	f.next++
+	id := "c" + strconv.Itoa(f.next)
+	repo.commits[id] = lakefsFakeCommit{parent: string(expected), files: files, committer: "kc", message: "external source update", creationDate: int64(f.next + 1)}
+	repo.branches["main"] = id
+	return kernel.CommitID(id), nil
 }
 
 // OwnsDSN reports whether dsn names a repository on this fake.
@@ -105,7 +167,7 @@ func (f *LakeFSFake) ForkStamps(dst string) error {
 		if walkErr != nil {
 			return walkErr
 		}
-		if d.IsDir() || d.Name() != "remote.yaml" {
+		if d.IsDir() || (d.Name() != "remote.yaml" && d.Name() != "registry-authority.yaml" && d.Name() != "catalog-authority.yaml") {
 			return nil
 		}
 		stamps = append(stamps, path)
@@ -119,7 +181,7 @@ func (f *LakeFSFake) ForkStamps(dst string) error {
 		if err != nil {
 			return err
 		}
-		id, dsn, ok := parseLakeFSStamp(raw)
+		_, dsn, ok := parseLakeFSStamp(raw)
 		if !ok {
 			continue
 		}
@@ -128,7 +190,7 @@ func (f *LakeFSFake) ForkStamps(dst string) error {
 		if err := f.cloneRepo(srcName, dstName); err != nil {
 			return err
 		}
-		rewritten := fmt.Sprintf("id: %s\ndriver: lakefs\ndsn: %s\n", id, f.DSN(dstName))
+		rewritten := strings.Replace(string(raw), dsn, f.DSN(dstName), 1)
 		if err := os.WriteFile(path, []byte(rewritten), 0o644); err != nil {
 			return err
 		}
@@ -150,7 +212,10 @@ func (f *LakeFSFake) cloneRepo(srcName, dstName string) error {
 		uploads:  map[string][]byte{},
 	}
 	for id, commit := range src.commits {
-		dst.commits[id] = lakefsFakeCommit{parent: commit.parent, files: cloneByteMap(commit.files)}
+		copy := commit
+		copy.files = cloneByteMap(commit.files)
+		copy.metadata = maps.Clone(commit.metadata)
+		dst.commits[id] = copy
 	}
 	for name, head := range src.branches {
 		dst.branches[name] = head
@@ -161,7 +226,7 @@ func (f *LakeFSFake) cloneRepo(srcName, dstName string) error {
 
 func newEmptyLakeFSRepo() *lakefsFakeRepo {
 	return &lakefsFakeRepo{
-		commits:  map[string]lakefsFakeCommit{"c0": {files: map[string][]byte{}}},
+		commits:  map[string]lakefsFakeCommit{"c0": {files: map[string][]byte{}, committer: "kc", message: "repository created", creationDate: 1}},
 		branches: map[string]string{"main": "c0"},
 		staged:   map[string]map[string]*[]byte{},
 		uploads:  map[string][]byte{},
@@ -425,6 +490,15 @@ func (f *LakeFSFake) commit(w http.ResponseWriter, r *http.Request, repo *lakefs
 		http.NotFound(w, r)
 		return
 	}
+	var body struct {
+		Message  string            `json:"message"`
+		Metadata map[string]string `json:"metadata"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid commit", http.StatusBadRequest)
+		return
+	}
+
 	files := cloneByteMap(repo.commits[parent].files)
 	for name, content := range repo.staged[branch] {
 		if content == nil {
@@ -435,13 +509,10 @@ func (f *LakeFSFake) commit(w http.ResponseWriter, r *http.Request, repo *lakefs
 	}
 	f.next++
 	id := "c" + strconv.Itoa(f.next)
-	repo.commits[id] = lakefsFakeCommit{parent: parent, files: files}
+	repo.commits[id] = lakefsFakeCommit{parent: parent, files: files, committer: "kc", message: body.Message, metadata: maps.Clone(body.Metadata), creationDate: int64(f.next + 1)}
 	repo.branches[branch] = id
 	delete(repo.staged, branch)
-	writeLakeFSJSON(w, http.StatusCreated, map[string]any{
-		"id": id, "parents": []string{parent}, "committer": "kc", "message": "update",
-		"creation_date": f.next, "meta_range_id": id,
-	})
+	writeLakeFSJSON(w, http.StatusCreated, lakeFSCommitResponse(id, repo.commits[id]))
 }
 
 func (f *LakeFSFake) getCommit(w http.ResponseWriter, repo *lakefsFakeRepo, raw string) {
@@ -451,10 +522,19 @@ func (f *LakeFSFake) getCommit(w http.ResponseWriter, repo *lakefsFakeRepo, raw 
 		http.Error(w, "missing commit", http.StatusNotFound)
 		return
 	}
-	writeLakeFSJSON(w, http.StatusOK, map[string]any{
-		"id": id, "parents": []string{commit.parent}, "committer": "kc", "message": "update",
-		"creation_date": 1, "meta_range_id": id,
-	})
+	writeLakeFSJSON(w, http.StatusOK, lakeFSCommitResponse(id, commit))
+}
+
+// Commit creation, point lookup and history expose one immutable record.
+func lakeFSCommitResponse(id string, commit lakefsFakeCommit) map[string]any {
+	parents := []string{}
+	if commit.parent != "" {
+		parents = append(parents, commit.parent)
+	}
+	return map[string]any{
+		"id": id, "parents": parents, "committer": commit.committer, "message": commit.message,
+		"metadata": commit.metadata, "creation_date": commit.creationDate, "meta_range_id": id,
+	}
 }
 
 func (f *LakeFSFake) serveRef(w http.ResponseWriter, r *http.Request, repoName string, repo *lakefsFakeRepo, tail string) {
@@ -545,10 +625,7 @@ func (f *LakeFSFake) log(w http.ResponseWriter, r *http.Request, repo *lakefsFak
 	ids, more, next := pageLakeFSStrings(ids, r.URL.Query())
 	results := make([]map[string]any, 0, len(ids))
 	for _, id := range ids {
-		results = append(results, map[string]any{
-			"id": id, "parents": []string{repo.commits[id].parent}, "committer": "kc", "message": "update",
-			"creation_date": 1, "meta_range_id": id,
-		})
+		results = append(results, lakeFSCommitResponse(id, repo.commits[id]))
 	}
 	writeLakeFSJSON(w, http.StatusOK, map[string]any{
 		"pagination": map[string]any{"has_more": more, "next_offset": next, "results": len(results), "max_per_page": lakeFSQueryAmount(r.URL.Query())},

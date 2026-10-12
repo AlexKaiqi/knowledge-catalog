@@ -1,36 +1,20 @@
 package invocation
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 
-	"kc/catalog"
 	kchome "kc/home"
 	"kc/internal/jsonfile"
 	"kc/invoke"
 	"kc/kernel"
+	"kc/snapshot/access"
+	"kc/snapshot/dataset"
 )
 
-type AllowRule struct {
-	ID        string   `json:"id"`
-	Principal string   `json:"principal"`
-	Actions   []string `json:"actions,omitempty"`
-	Cmds      []string `json:"cmds,omitempty"` // legacy on-read migration only
-	Repo      string   `json:"repo,omitempty"`
-	Catalog   string   `json:"catalog,omitempty"`
-	Ref       string   `json:"ref,omitempty"`
-	Object    string   `json:"object,omitempty"`
-	Aspect    string   `json:"aspect,omitempty"`
-	Dataset   string   `json:"dataset,omitempty"`
-	// ShareID and SharedBy distinguish delegated repository consumption from
-	// ordinary administrator rules; repository share revoke only matches these.
-	ShareID  string `json:"shareId,omitempty"`
-	SharedBy string `json:"sharedBy,omitempty"`
-}
+type AllowRule = access.Rule
 
 type AllowFile struct {
 	Version int         `json:"version"`
@@ -44,16 +28,7 @@ type AllowFile struct {
 	Admissions         map[string]AdmissionReceipt         `json:"admissions,omitempty"`
 }
 
-type AllowQuery struct {
-	Principal string
-	Action    string
-	Repo      string
-	Catalog   string
-	Ref       string
-	Object    string
-	Aspect    string
-	Dataset   string
-}
+type AllowQuery = access.Query
 
 const AllowVersion = 2
 
@@ -65,9 +40,9 @@ var legacyActions = map[string]string{
 	"read": "knowledge.read", "relations": "knowledge.relations", "describe-schema": "knowledge.schema.read",
 	"search": "knowledge.search", "log": "knowledge.history.read", "provenance": "knowledge.provenance",
 	"describe-index": "projection.read", "index-sync": "projection.manage", "index-notify": "projection.manage", "describe-access": "knowledge.access.describe",
-	"register":        "catalog.repositories.manage",
-	"archive-catalog": "catalog.manage", "archive-repo": "catalog.repositories.manage",
-	"read-workspace": "file.read", "read-catalog": "catalog.read", "audit": "audit.read",
+	"register":       "repositories.manage",
+	"archive-repo":   "repositories.manage",
+	"read-workspace": "file.read", "read-catalog": "inventory.read", "audit": "audit.read",
 	"vfs-read": "file.read", "vfs-list": "file.read", "vfs-write": "writer.commit",
 }
 
@@ -119,110 +94,19 @@ func appendUnique(items []string, value string) []string {
 	return append(items, value)
 }
 
-func (r *AllowRule) UnmarshalJSON(data []byte) error {
-	var keys map[string]json.RawMessage
-	if err := json.Unmarshal(data, &keys); err != nil {
-		return err
-	}
-	if _, ok := keys["kset"]; ok {
-		return fmt.Errorf("retired field kset")
-	}
-	type wire AllowRule
-	var parsed wire
-	if err := json.Unmarshal(data, &parsed); err != nil {
-		return err
-	}
-	*r = AllowRule(parsed)
-	for _, action := range r.Actions {
-		if strings.HasPrefix(action, "kset.") {
-			return fmt.Errorf("retired action %s", action)
-		}
-	}
-	r.Actions = migrateLegacyDatasetActions(r.Actions)
-	return nil
-}
-
 func migrateLegacyDatasetActions(actions []string) []string {
-	out := make([]string, 0, len(actions))
-	seen := map[string]struct{}{}
-	for _, action := range actions {
-		if action == "dataset.consume" {
-			action = "file.read"
-		}
-		if _, ok := seen[action]; ok {
-			continue
-		}
-		seen[action] = struct{}{}
-		out = append(out, action)
-	}
-	if len(out) == 0 {
-		return actions
-	}
-	return out
+	return access.NormalizeActions(actions)
 }
 
 func ValidateActions(actions []string) error {
-	if len(actions) == 0 {
-		return fmt.Errorf("grant add requires --action")
-	}
-	for _, action := range actions {
-		if !strings.Contains(action, ".") || strings.ContainsAny(action, " /?#") {
-			return fmt.Errorf("invalid semantic action %s", action)
-		}
-		if strings.HasPrefix(action, "kset.") || action == "dataset.consume" {
-			return fmt.Errorf("invalid semantic action %s", action)
-		}
-	}
-	return nil
-}
-
-func matchGlob(pat, value string) bool {
-	if pat == "" {
-		return true
-	}
-	ok, err := path.Match(pat, value)
-	return err == nil && ok
+	return access.ValidateActions(actions)
 }
 
 func MatchAllow(rules []AllowRule, q AllowQuery) (AllowRule, bool) {
-	for _, rule := range rules {
-		if rule.Principal != q.Principal {
-			continue
-		}
-		hit := false
-		for _, action := range rule.Actions {
-			if ActionMatches(action, q.Action) {
-				hit = true
-				break
-			}
-		}
-		if !hit {
-			continue
-		}
-		if rule.Repo != "" && rule.Repo != q.Repo {
-			continue
-		}
-		if rule.Catalog != "" && rule.Catalog != q.Catalog {
-			continue
-		}
-		if rule.Ref != "" && rule.Ref != q.Ref {
-			continue
-		}
-		if !matchGlob(rule.Object, q.Object) {
-			continue
-		}
-		if rule.Aspect != "" && rule.Aspect != q.Aspect {
-			continue
-		}
-		if rule.Dataset != "" && rule.Dataset != q.Dataset {
-			continue
-		}
-		return rule, true
-	}
-	return AllowRule{}, false
+	return access.Match(rules, q)
 }
 
-func PrincipalAllowed(home, as, cmd, repo, catalogID string, opened ...*kchome.Home) bool {
+func PrincipalAllowed(home, as, cmd, repo string, opened ...*kchome.Home) bool {
 	if as == "" {
 		return true
 	}
@@ -235,7 +119,6 @@ func PrincipalAllowed(home, as, cmd, repo, catalogID string, opened ...*kchome.H
 		Principal: as,
 		Action:    action,
 		Repo:      repo,
-		Catalog:   catalogID,
 	})
 	if ok {
 		return true
@@ -259,34 +142,15 @@ func RepositoryAuthenticatedAllowed(home, as, action, repo string, opened ...*kc
 	return file.Allows(repo, action)
 }
 
-func CatalogReadAllowed(home, as, catalogID string, opened ...*kchome.Home) bool {
-	if PrincipalAllowed(home, as, "catalog.read", "", catalogID) {
+func InventoryReadAllowed(home, as string, opened ...*kchome.Home) bool {
+	if PrincipalAllowed(home, as, "inventory.read", "", opened...) {
 		return true
 	}
-	if as == "" || catalogID == "" {
-		return false
-	}
-	var ws *kchome.Home
-	if len(opened) > 0 {
-		ws = opened[0]
-	}
-	if ws == nil || ws.Deployment == nil {
-		return false
-	}
-	return !ws.Deployment.CatalogIsPrivate(catalogID)
+	return as != "" && len(opened) > 0 && opened[0] != nil && opened[0].Deployment != nil
 }
 
 func ActionMatches(granted, requested string) bool {
-	if granted == "*" {
-		return true
-	}
-	if granted == requested {
-		return true
-	}
-	if strings.HasSuffix(granted, ".*") && strings.HasPrefix(requested, strings.TrimSuffix(granted, "*")) {
-		return true
-	}
-	return false
+	return access.ActionMatches(granted, requested)
 }
 
 func normalizeAction(value string) string {
@@ -303,50 +167,12 @@ func OwnerBypass(flags map[string]invoke.FlagValue) bool {
 	return invoke.FlagString(flags, "as") == ""
 }
 
-// DefaultAllowCatalog uses the home's first Catalog when --catalog is omitted.
-//
-// Args:
-//
-//	home: workspace directory.
-//	catalogID: explicit --catalog, or empty.
-//
-// Returns:
-//
-//	catalogID if set; otherwise Catalogs[0].ID; empty if the workspace has no catalog.
-func DefaultAllowCatalog(home, catalogID string) string {
-	if catalogID != "" {
-		return catalogID
-	}
-	if ws, err := kchome.ReadHome(home); err == nil && len(ws.Catalogs) > 0 {
-		return ws.Catalogs[0].ID
-	}
-	return ""
-}
-
-// AuthorizeCatalogInventory allows DiscoverCatalogs when the principal can
-// catalog.read at least one Catalog. The list body then hides the rest.
-func AuthorizeCatalogInventory(home string, flags map[string]invoke.FlagValue, observe invoke.AuthorizationObserver, opened ...*kchome.Home) (authErr error) {
+func AuthorizeInventory(home string, flags map[string]invoke.FlagValue, observe invoke.AuthorizationObserver, opened ...*kchome.Home) (authErr error) {
 	defer observeAuthorizationResult(observe, &authErr)()
-	if OwnerBypass(flags) {
+	if InventoryReadAllowed(home, invoke.FlagString(flags, "as"), opened...) {
 		return nil
 	}
-	var file kchome.HomeFile
-	var err error
-	if len(opened) > 0 && opened[0] != nil {
-		file = opened[0].File
-	} else {
-		file, err = kchome.ReadHome(home)
-	}
-	if err != nil {
-		return err
-	}
-	as := invoke.FlagString(flags, "as")
-	for _, item := range file.Catalogs {
-		if CatalogReadAllowed(home, as, item.ID, opened...) {
-			return nil
-		}
-	}
-	return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to catalog.read", as)
+	return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to inventory.read", invoke.FlagString(flags, "as"))
 }
 
 func Authorize(home, command string, flags map[string]invoke.FlagValue, observe invoke.AuthorizationObserver, opened ...*kchome.Home) (authErr error) {
@@ -386,16 +212,10 @@ func Authorize(home, command string, flags map[string]invoke.FlagValue, observe 
 	if err != nil {
 		return err
 	}
-	catalogID := invoke.FlagString(flags, "catalog")
-	if catalogID == "" {
-		catalogID = invoke.FlagString(flags, "_default-catalog")
-	}
-	catalogID = DefaultAllowCatalog(home, catalogID)
 	q := AllowQuery{
 		Principal: invoke.FlagString(flags, "as"),
 		Action:    action,
 		Repo:      invoke.FlagString(flags, "repo"),
-		Catalog:   catalogID,
 		Ref:       invoke.FlagString(flags, "ref"),
 		Object:    invoke.FlagString(flags, "object"),
 		Aspect:    invoke.FlagString(flags, "aspect"),
@@ -406,9 +226,9 @@ func Authorize(home, command string, flags map[string]invoke.FlagValue, observe 
 	if len(opened) > 0 {
 		ws = opened[0]
 	}
-	if IsCatalogDiscovery(flags) && (action == "dataset.resolve" || action == "knowledge.search") {
-		if !CatalogReadAllowed(home, q.Principal, q.Catalog, ws) {
-			return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to catalog.read", q.Principal)
+	if IsInventoryDiscovery(flags) && (action == "dataset.resolve" || action == "knowledge.search") {
+		if !InventoryReadAllowed(home, q.Principal, ws) {
+			return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to inventory.read", q.Principal)
 		}
 		return nil
 	}
@@ -422,7 +242,7 @@ func Authorize(home, command string, flags map[string]invoke.FlagValue, observe 
 		return err
 	}
 	if _, ok := MatchAllow(file.Rules, q); !ok {
-		if action == "catalog.read" && CatalogReadAllowed(home, q.Principal, q.Catalog, ws) {
+		if action == "inventory.read" && InventoryReadAllowed(home, q.Principal, ws) {
 			return nil
 		}
 		if RepositoryAuthenticatedAllowed(home, q.Principal, action, q.Repo, ws) {
@@ -439,14 +259,14 @@ var ErrNotWorkspaceKnowledge = fmt.Errorf("not workspace knowledge")
 // Dataset admits knowledge interpretation of listed files. It does not admit
 // --repo knowledge.* or writer.*, and it does not imply dataset.resolve.
 func AuthorizeWorkspaceKnowledge(rules []AllowRule, q AllowQuery, temporary ...bool) error {
-	var definition *catalog.KnowledgeSet
+	var definition *dataset.KnowledgeSet
 	if len(temporary) > 0 && temporary[0] {
-		definition = &catalog.KnowledgeSet{}
+		definition = &dataset.KnowledgeSet{}
 	}
 	return AuthorizeWorkspaceKnowledgeDefinition(rules, q, definition)
 }
 
-func workspaceScopeAllowed(rules []AllowRule, q AllowQuery, definition *catalog.KnowledgeSet) bool {
+func workspaceScopeAllowed(rules []AllowRule, q AllowQuery, definition *dataset.KnowledgeSet) bool {
 	if definition != nil {
 		// Temporary recipe labels never identify a published grant scope.
 		q.Dataset = ""
@@ -470,7 +290,7 @@ func workspaceScopeAllowed(rules []AllowRule, q AllowQuery, definition *catalog.
 	return true
 }
 
-func AuthorizeWorkspaceKnowledgeDefinition(rules []AllowRule, q AllowQuery, definition *catalog.KnowledgeSet) error {
+func AuthorizeWorkspaceKnowledgeDefinition(rules []AllowRule, q AllowQuery, definition *dataset.KnowledgeSet) error {
 	hasDefinition := definition != nil
 	if (q.Dataset == "" && !hasDefinition) || q.Repo != "" || !strings.HasPrefix(q.Action, "knowledge.") {
 		return ErrNotWorkspaceKnowledge
@@ -532,10 +352,6 @@ func AuthorizationFlags(cx *Invocation) map[string]invoke.FlagValue {
 	}
 }
 
-func NextRuleID(rules []AllowRule) string {
-	return fmt.Sprintf("alw_%d", len(rules)+1)
-}
-
 func SplitCmds(raw string) []string {
 	parts := strings.Split(raw, ",")
 	out := []string{}
@@ -552,7 +368,6 @@ func SplitCmds(raw string) []string {
 // must report its original decision without recreating any removed rule.
 type AdmissionReceipt struct {
 	Principal string   `json:"principal"`
-	Catalog   string   `json:"catalog"`
 	Actions   []string `json:"actions"`
 }
 

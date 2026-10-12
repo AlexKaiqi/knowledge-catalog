@@ -6,19 +6,18 @@ import (
 	"kc/invoke"
 	"testing"
 
-	"kc/catalog"
 	"kc/kernel"
 	"kc/snapshot"
+	"kc/snapshot/dataset"
 )
 
 func TestE2EReadPayloadHoistsDefinitionBeforeAuthorize(t *testing.T) {
 	home := t.TempDir()
-	catalogID := "kr://acme/temporary-label/catalog"
 	repositoryID := "kr://acme/temporary-label/source"
 	const label = "trusted"
 	const namedReader = "agent:named-reader"
 	if err := inv.WriteAllow(home, inv.AllowFile{Rules: []inv.AllowRule{
-		{ID: "1", Principal: namedReader, Actions: []string{"dataset.resolve", "file.read"}, Catalog: catalogID, Dataset: label},
+		{ID: "1", Principal: namedReader, Actions: []string{"dataset.resolve", "file.read"}, Dataset: label},
 		{ID: "2", Principal: namedReader, Actions: []string{"knowledge.read"}, Repo: repositoryID},
 	}}); err != nil {
 		t.Fatal(err)
@@ -28,14 +27,14 @@ func TestE2EReadPayloadHoistsDefinitionBeforeAuthorize(t *testing.T) {
 	pinWithDefinition := map[string]any{
 		"setId": label, "revision": 1,
 		"repositories": map[string]any{repositoryID: "fixed"},
-		"catalog":      catalogID, "definition": definition,
+		"definition":   definition,
 	}
 	body, err := json.Marshal(map[string]any{"pin": pinWithDefinition, "object": "Policy:label"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	var request knowledgeReadRequest
-	if err := catalog.DecodeJSON(body, &request); err != nil {
+	if err := dataset.DecodeJSON(body, &request); err != nil {
 		t.Fatal(err)
 	}
 	flags := request.Flags()
@@ -52,13 +51,12 @@ func TestE2EReadPayloadHoistsDefinitionBeforeAuthorize(t *testing.T) {
 }
 
 func TestHTTPKnowledgeReadFlagsExtractTemporaryDefinition(t *testing.T) {
-	catalogID := "kr://acme/temporary-label/catalog"
 	repositoryID := "kr://acme/temporary-label/source"
 	const label = "trusted"
 	pinWithDefinition := map[string]any{
 		"setId": label, "revision": 1,
 		"repositories": map[string]any{repositoryID: "fixed"},
-		"catalog":      catalogID,
+
 		"definition": map[string]any{
 			"setId": label, "revision": 1,
 			"sources": []map[string]any{{"repository": repositoryID, "selector": snapshot.DefaultRef}},
@@ -71,7 +69,7 @@ func TestHTTPKnowledgeReadFlagsExtractTemporaryDefinition(t *testing.T) {
 		t.Fatal(err)
 	}
 	var request knowledgeReadRequest
-	if err := catalog.DecodeJSON(body, &request); err != nil {
+	if err := dataset.DecodeJSON(body, &request); err != nil {
 		t.Fatal(err)
 	}
 	flags := request.Flags()
@@ -95,17 +93,16 @@ func mustRaw(t *testing.T, value any) json.RawMessage {
 
 func TestNamedReaderPublishedWorkspaceConsumeOnlyAdmitsComposition(t *testing.T) {
 	home := t.TempDir()
-	catalogID := "kr://acme/temporary-label/catalog"
 	repositoryID := "kr://acme/temporary-label/source"
 	const label = "trusted"
 	const namedReader = "agent:named-reader"
 	rules := []inv.AllowRule{
-		{ID: "1", Principal: namedReader, Actions: []string{"dataset.resolve", "file.read"}, Catalog: catalogID, Dataset: label},
+		{ID: "1", Principal: namedReader, Actions: []string{"dataset.resolve", "file.read"}, Dataset: label},
 	}
 	if err := inv.WriteAllow(home, inv.AllowFile{Rules: rules}); err != nil {
 		t.Fatal(err)
 	}
-	flags := map[string]FlagValue{"as": namedReader, "object": "Policy:label", "dataset": label, "catalog": catalogID}
+	flags := map[string]FlagValue{"as": namedReader, "object": "Policy:label", "dataset": label}
 	if err := inv.Authorize(home, "knowledge.read", flags, nil); err != nil {
 		t.Fatalf("consume must admit the composition gate: %v", err)
 	}
@@ -120,32 +117,31 @@ func TestNamedReaderPublishedWorkspaceConsumeOnlyAdmitsComposition(t *testing.T)
 
 func TestNamedReaderCannotUseTemporaryPinWithDefinition(t *testing.T) {
 	home := t.TempDir()
-	catalogID := "kr://acme/temporary-label/catalog"
 	repositoryID := "kr://acme/temporary-label/source"
 	const label = "trusted"
 	const namedReader = "agent:named-reader"
 	rules := []inv.AllowRule{
-		{ID: "1", Principal: namedReader, Actions: []string{"dataset.resolve", "file.read"}, Catalog: catalogID, Dataset: label},
+		{ID: "1", Principal: namedReader, Actions: []string{"dataset.resolve", "file.read"}, Dataset: label},
 		{ID: "2", Principal: namedReader, Actions: []string{"knowledge.read"}, Repo: repositoryID},
 	}
 	if err := inv.WriteAllow(home, inv.AllowFile{Rules: rules}); err != nil {
 		t.Fatal(err)
 	}
-	definition := &catalog.KnowledgeSet{
+	definition := &dataset.KnowledgeSet{
 		SetID:    label,
 		Revision: 1,
-		Sources:  []catalog.KnowledgeSetSource{{Repository: kernel.RepositoryID(repositoryID), Selector: snapshot.DefaultRef}},
+		Sources:  []dataset.KnowledgeSetSource{{Repository: kernel.RepositoryID(repositoryID), Selector: snapshot.DefaultRef}},
 	}
 	pin := inv.TaskKnowledgeSetPin{
-		ResolvedKnowledgeSet: catalog.ResolvedKnowledgeSet{SetID: label, Revision: 1, Repositories: map[kernel.RepositoryID]kernel.CommitID{kernel.RepositoryID(repositoryID): "fixed"}},
-		Catalog:              catalogID,
-		Definition:           definition,
+		ResolvedKnowledgeSet: dataset.ResolvedKnowledgeSet{SetID: label, Revision: 1, Repositories: map[kernel.RepositoryID]kernel.CommitID{kernel.RepositoryID(repositoryID): "fixed"}},
+
+		Definition: definition,
 	}
 	rawPin, err := json.Marshal(pin)
 	if err != nil {
 		t.Fatal(err)
 	}
-	flags := map[string]FlagValue{"as": namedReader, "object": "Policy:label", "pin": string(rawPin), "catalog": catalogID}
+	flags := map[string]FlagValue{"as": namedReader, "object": "Policy:label", "pin": string(rawPin)}
 	if err := inv.PrepareKnowledgePinContext(flags); err != nil {
 		t.Fatalf("prepare: %v", err)
 	}

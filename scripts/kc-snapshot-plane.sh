@@ -28,7 +28,7 @@ ONLINE_COMPOSE="${ROOT}/scripts/lakefs/compose.cos.yaml"
 ONLINE_TTYD_NAME="${KC_COS_TTYD_CONTAINER:-kc-cos-online-ttyd}"
 ONLINE_SERVE_PID="${ONLINE_HOME}/kc-serve.pid"
 
-CATALOG="${KC_CATALOG:-kr://acme/catalog}"
+REGISTRY_ID="${KC_REGISTRY_ID:-kr://acme/registry}"
 PRINCIPAL="${KC_AS:-admin}"
 KNOWLEDGE="${KC_KNOWLEDGE_REPO:-kr://acme/knowledge}"
 
@@ -229,7 +229,7 @@ export KC_LAKEFS_CREDENTIAL="${LAKEFS_ACCESS}:${LAKEFS_SECRET}"
 export KC_LAKEFS_PORT="${LAKEFS_PORT}"
 export KC_LAKEFS_ENCRYPT_KEY="${KC_LAKEFS_ENCRYPT_KEY}"
 export KC_AS="${PRINCIPAL}"
-export KC_CATALOG="${CATALOG}"
+export KC_REGISTRY_ID="${REGISTRY_ID}"
 export KC_SERVER_URL="http://127.0.0.1:${KC_LISTEN_PORT}"
 export KC_TTYD_URL="http://127.0.0.1:${TTYD_PORT}/"
 export PATH="${ONLINE_HOME}/bin:\$PATH"
@@ -268,7 +268,7 @@ start_online_ttyd() {
 source "${ONLINE_ENV}"
 PS1='kc-cos:\\w\\\$ '
 cd "${ONLINE_HOME}"
-echo "plane=online  KC_SERVER_URL=\$KC_SERVER_URL  catalog=\$KC_CATALOG"
+echo "plane=online  KC_SERVER_URL=\$KC_SERVER_URL  registry=\$KC_REGISTRY_ID"
 echo "example: kc schema list --repo kr://kc/system --as \$KC_AS"
 EOF
   docker run -d --name "$ONLINE_TTYD_NAME" \
@@ -335,9 +335,9 @@ EOF
   if [[ ! -f "${ONLINE_HOME}/deployment.json" ]]; then
     "$GO" run ./scripts/fixture-deployment \
       --root "$ONLINE_HOME" \
-      --catalog "$CATALOG" \
-      --catalog-driver lakefs \
-      --catalog-dsn "$(lakefs_base)/kc-catalog" \
+      --registry-id "$REGISTRY_ID" \
+      --registry-driver lakefs \
+      --registry-dsn "$(lakefs_base)/kc-catalog" \
       --principal "$PRINCIPAL" \
       --lakefs-repo "kr://kc/system=$(lakefs_base)/kc-system" \
       --lakefs-repo "${KNOWLEDGE}=$(lakefs_base)/kc-knowledge" >/dev/null

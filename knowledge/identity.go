@@ -3,7 +3,7 @@ package knowledge
 import "kc/kernel"
 
 // ObjectID is stable within one knowledge repository and independent of its
-// on-disk path. It belongs to layer ②; Snapshot and Catalog coordinates do not
+// on-disk path. It belongs to layer ②; Snapshot and Dataset service coordinates do not
 // carry it.
 type ObjectID string
 

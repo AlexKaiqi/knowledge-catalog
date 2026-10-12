@@ -280,7 +280,7 @@ func (r *Runtime) StartServer(ctx context.Context, name string, attrs ...attribu
 }
 
 func (r *Runtime) StartOperation(ctx context.Context, face, operation string) (context.Context, trace.Span, time.Time) {
-	face = enumValue(face, "other", "catalog", "knowledge", "writer", "projection", "vfs", "control", "hook", "gate", "other")
+	face = enumValue(face, "other", "snapshot", "knowledge", "writer", "projection", "vfs", "control", "hook", "gate", "other")
 	operation = bounded(operation, "other")
 	attrs := []attribute.KeyValue{attribute.String("kc.face", face), attribute.String("kc.operation", operation)}
 	r.opActive.Add(ctx, 1, metric.WithAttributes(attrs...))
@@ -290,7 +290,7 @@ func (r *Runtime) StartOperation(ctx context.Context, face, operation string) (c
 
 func (r *Runtime) EndOperation(ctx context.Context, span trace.Span, started time.Time, face, operation, outcome, errorType string) {
 	base := []attribute.KeyValue{
-		attribute.String("kc.face", enumValue(face, "other", "catalog", "knowledge", "writer", "projection", "vfs", "control", "hook", "gate", "other")),
+		attribute.String("kc.face", enumValue(face, "other", "snapshot", "knowledge", "writer", "projection", "vfs", "control", "hook", "gate", "other")),
 		attribute.String("kc.operation", bounded(operation, "other")),
 	}
 	durationAttrs := append(append([]attribute.KeyValue{}, base...),

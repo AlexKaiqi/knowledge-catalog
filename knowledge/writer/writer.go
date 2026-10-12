@@ -8,7 +8,6 @@ import (
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/snapshot"
-	"kc/snapshot/commandlog"
 )
 
 // Writer is the write face: one target, one Surface, one command_id.
@@ -21,8 +20,8 @@ import (
 //
 // Preview (not a Surface): Ingest, Reconcile. Confirm with Commit.
 type Writer struct {
-	store         *snapshot.Registry
-	commands      *commandlog.Ledger
+	store         snapshot.Registry
+	commands      snapshot.CommandLedger
 	journal       journal.Journal
 	author        string
 	requestID     string
@@ -30,10 +29,10 @@ type Writer struct {
 	systemPublish bool
 }
 
-func NewWriter(store *snapshot.Registry, commands *commandlog.Ledger) (*Writer, error) {
+func NewWriter(store snapshot.Registry, commands snapshot.CommandLedger) (*Writer, error) {
 	if commands == nil {
 		var err error
-		commands, err = commandlog.New(nil)
+		commands, err = snapshot.NewCommandLedger(nil)
 		if err != nil {
 			return nil, err
 		}
@@ -134,7 +133,7 @@ func (w *Writer) applySnapshot(commandID string, surface knowledge.Surface, cs k
 		cs.RuleID = w.ruleID
 	}
 	kind := string(surface)
-	entry, replayed, err := w.commands.Execute(commandID, digest, commandlog.Request{
+	entry, replayed, err := w.commands.Execute(commandID, digest, snapshot.CommandRequest{
 		Kind: kind, RepositoryID: string(cs.TargetRepository), TargetRef: cs.TargetRef,
 		BaseCommit: string(cs.BaseCommit), ExpectedTargetCommit: string(cs.ExpectedTargetCommit),
 		OperationCount: len(cs.Operations),

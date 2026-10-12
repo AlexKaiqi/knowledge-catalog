@@ -1,0 +1,18 @@
+---
+object_id: kc/relation/evidence.uses-mechanism.authorization
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: relations/evidence.uses-mechanism.authorization.yaml
+---
+relationId: kc/relation/evidence.uses-mechanism.authorization
+relationType: uses_mechanism
+direction: DIRECTED
+endpoints:
+  - role: from
+    objectRef:
+      repository: kr://kc/system
+      object: kc/capability/evidence
+  - role: to
+    objectRef:
+      repository: kr://kc/system
+      object: kc/mechanism/authorization

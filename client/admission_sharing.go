@@ -11,8 +11,11 @@ type AdmissionResult struct {
 type AdmissionGrant struct {
 	ID         string   `json:"id"`
 	Actions    []string `json:"actions"`
-	Catalog    string   `json:"catalog,omitempty"`
 	Repository string   `json:"repository,omitempty"`
+	Dataset    string   `json:"dataset,omitempty"`
+	Ref        string   `json:"ref,omitempty"`
+	Object     string   `json:"object,omitempty"`
+	Aspect     string   `json:"aspect,omitempty"`
 	SharedBy   string   `json:"sharedBy,omitempty"`
 }
 
@@ -44,14 +47,14 @@ func (s IdentityService) Admission(ctx context.Context, o RequestOptions, out an
 	return s.client.doJSON(ctx, "GET", "/identity/v1/admission", nil, o, out)
 }
 
-func (s CatalogService) RepositoryShares(ctx context.Context, repository string, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "GET", "/catalog/v1/repositories/"+resourceSegment(repository)+"/shares", nil, o, out)
+func (s SnapshotService) RepositoryShares(ctx context.Context, repository string, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "GET", "/snapshot/v1/connections/"+resourceSegment(repository)+"/shares", nil, o, out)
 }
 
-func (s CatalogService) ShareRepository(ctx context.Context, repository string, q RepositoryShareRequest, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "POST", "/catalog/v1/repositories/"+resourceSegment(repository)+"/shares", q, o, out)
+func (s SnapshotService) ShareRepository(ctx context.Context, repository string, q RepositoryShareRequest, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "POST", "/snapshot/v1/connections/"+resourceSegment(repository)+"/shares", q, o, out)
 }
 
-func (s CatalogService) RevokeRepositoryShare(ctx context.Context, repository, share string, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "DELETE", "/catalog/v1/repositories/"+resourceSegment(repository)+"/shares/"+resourceSegment(share), nil, o, out)
+func (s SnapshotService) RevokeRepositoryShare(ctx context.Context, repository, share string, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "DELETE", "/snapshot/v1/connections/"+resourceSegment(repository)+"/shares/"+resourceSegment(share), nil, o, out)
 }

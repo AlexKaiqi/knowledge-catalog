@@ -76,8 +76,19 @@ func SerializeWithSource(address knowledge.Address, pathHint, schemaRef string, 
 }
 
 func markdownAspectBody(address knowledge.Address, pathHint, schemaRef string, value any) (bool, string) {
-	if !knowledge.IsReadmeAddress(address, schemaRef) && !strings.HasSuffix(strings.ToLower(pathHint), ".md") {
-		return false, ""
+	if !knowledge.IsReadmeAddress(address, schemaRef) {
+		if !strings.HasSuffix(strings.ToLower(pathHint), ".md") {
+			return false, ""
+		}
+		// A path alone cannot reinterpret a scalar or discard other fields.
+		// Generic Markdown units explicitly carry the single body field.
+		record, ok := value.(map[string]any)
+		if !ok || len(record) != 1 {
+			return false, ""
+		}
+		if _, ok := record["body"].(string); !ok {
+			return false, ""
+		}
 	}
 	body, ok := knowledge.ReadmeBody(value)
 	if !ok {
@@ -148,7 +159,7 @@ func Parse(content string) *Unit {
 	body := strings.TrimSpace(strings.Join(lines[endIdx+1:], "\n"))
 	schemaRef := obj["schema_ref"]
 	var value any
-	if knowledge.IsReadmeSchema(schemaRef) {
+	if knowledge.IsReadmeSchema(schemaRef) || (obj["entity"] != "" && strings.HasSuffix(strings.ToLower(obj["path_hint"]), ".md")) {
 		value = map[string]any{"body": body}
 	} else if kernel.UnmarshalJSON([]byte(body), &value) != nil && looksLikeStructuredYAML(body) {
 		// Knowledge drafts are commonly authored as YAML. Decode the

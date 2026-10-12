@@ -5,8 +5,18 @@ LISTEN ?= 127.0.0.1:7380
 
 DOCS_LISTEN ?= 127.0.0.1:8766
 
-.PHONY: check-docs check-surface quality test test-component test-boundary test-e2e test-race test-cover test-plugin test-agent-e2e test-agent-metric-e2e test-agent-ux-e2e test-service-e2e test-taihu-live test-state-runtime-e2e test-kcfs-e2e test-adapters test-docker test-all system-gitea-up system-gitea-status system-gitea-down system-lakefs-up system-lakefs-status system-lakefs-down deploy-local-up deploy-local-status deploy-local-access deploy-local-smoke deploy-local-scenes deploy-local-goto deploy-local-down deploy-dev-up deploy-dev-status deploy-dev-access deploy-dev-smoke deploy-dev-down deploy-dev-reset kc typecheck serve docs-serve
+.PHONY: check-docs check-surface quality test test-component test-boundary test-e2e test-race test-cover test-server-web test-service-e2e test-taihu-live test-state-runtime-e2e test-kcfs-e2e test-adapters test-docker test-all system-lakefs-up system-lakefs-status system-lakefs-down deploy-local-up deploy-local-status deploy-local-access deploy-local-smoke deploy-local-scenes deploy-local-goto deploy-local-down deploy-dev-up deploy-dev-status deploy-dev-access deploy-dev-smoke deploy-dev-down deploy-dev-reset kc typecheck serve docs-serve
 .PHONY: test-lakefs test-contracts
+.PHONY: quality-webui test-webui
+
+quality-webui:
+	npm --prefix snapshot/console/webui run typecheck
+	npm --prefix snapshot/console/webui run lint:console
+
+test-webui: quality-webui
+	npm --prefix snapshot/console/webui run build
+	npm --prefix snapshot/console/webui test
+	$(GO) test ./snapshot/console ./cli ./server ./invocation -run 'TestDataset(Console|Management|UI)' -count=1
 
 check-docs:
 	$(GO) run ./scripts/check-docs
@@ -17,7 +27,8 @@ validation-inventory:
 
 check-validation:
 	python3 ./scripts/validation_test.py
-	$(GO) test -json -count=1 ./scripts/validation-inventory
+	python3 ./scripts/maintenance_test.py
+	$(GO) test -json -count=1 ./scripts/check-docs ./scripts/validation-inventory
 	$(GO) run ./scripts/validation-inventory --check
 
 .PHONY: check-observability
@@ -63,28 +74,8 @@ test-cover:
 	$(MAKE) check-surface
 	GO=$(GO) ./scripts/testsuite.sh coverage
 
-test-plugin:
-	node --test cli/web/repository.test.mjs cli/web/console.test.mjs
-	npm --prefix dsh-plugin ci --ignore-scripts --legacy-peer-deps
-	npm --prefix dsh-plugin run typecheck
-	npm --prefix dsh-plugin test
-	npm --prefix dsh-plugin run build
-	npm --prefix dsh-plugin run pack:check
-
-# Paid, real-model acceptance. Kept explicit instead of hiding model calls in
-# test/test-all; set DSH_EXECUTABLE when dsh is not on PATH.
-test-agent-e2e:
-	./dsh-plugin/scripts/e2e-agent-roles.sh
-
-# Paid companion: metric permission briefs from the protocol feature file.
-# Go Then remains the oracle; this only checks Agent trace and answer markers.
-test-agent-metric-e2e:
-	./dsh-plugin/scripts/e2e-agent-metric-permission.sh
-
-# Paid, real-model semantic acceptance for concept explanation, entry selection,
-# and failure guidance. This does not mutate a Catalog.
-test-agent-ux-e2e:
-	./dsh-plugin/scripts/e2e-agent-questions.sh
+test-server-web:
+	node --test server/web/repository.test.mjs server/web/console.test.mjs
 
 test-service-e2e:
 	GO=$(GO) ./scripts/testsuite.sh service-e2e
@@ -98,7 +89,7 @@ test-state-runtime-e2e:
 	GO=$(GO) ./scripts/testsuite.sh state-runtime
 
 # Real Linux FUSE acceptance. On macOS this runs inside Docker with /dev/fuse
-# and SYS_ADMIN, including the DSH MountController -> kcfs daemon lifecycle.
+# and SYS_ADMIN, including the native kcfs daemon lifecycle.
 test-kcfs-e2e:
 	GO=$(GO) ./scripts/testsuite.sh kcfs
 
@@ -111,16 +102,8 @@ test-docker:
 test-all:
 	$(MAKE) check-surface
 	GO=$(GO) ./scripts/testsuite.sh all
-	$(MAKE) test-plugin
+	$(MAKE) test-server-web
 
-system-gitea-up:
-	./scripts/system-gitea.sh up
-
-system-gitea-status:
-	./scripts/system-gitea.sh status
-
-system-gitea-down:
-	./scripts/system-gitea.sh down
 
 system-lakefs-up:
 	./scripts/system-lakefs.sh up
@@ -178,4 +161,3 @@ serve:
 
 typecheck:
 	$(GO) test -run '^$$' ./...
-	npm --prefix dsh-plugin run typecheck

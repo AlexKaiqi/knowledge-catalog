@@ -11,12 +11,12 @@ import (
 	"reflect"
 	"testing"
 
-	"kc/catalog"
 	"kc/client"
 	apphome "kc/home"
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/snapshot"
+	"kc/snapshot/dataset"
 )
 
 const (
@@ -112,7 +112,7 @@ func TestDatasetDirectoryDeliveryRepublishKeepsOldLayoutAndBytes(t *testing.T) {
 	f.assertRead(t, old.Pin, "reference/policies", "policy v1\n")
 	f.assertRead(t, old.Pin, "reference/guides", "guide v1\n")
 	for _, tc := range []struct {
-		pin   catalog.ResolvedKnowledgeSet
+		pin   dataset.ResolvedKnowledgeSet
 		mount string
 	}{{old.Pin, "handbook/rules"}, {current.Pin, "reference/policies"}} {
 		var out client.WorkspaceFileReadResponse
@@ -201,8 +201,8 @@ func newDirectoryDelivery(t *testing.T) *directoryDelivery {
 	f := &directoryDelivery{cfg: apphome.DeploymentConfig{
 		Version: 1, StateDir: filepath.Join(root, "state"), CacheDir: filepath.Join(root, "cache"),
 		Auth: "local", BootstrapPrincipal: "agent:publisher", Stores: apphome.StoresFile{Index: "none"},
-		Catalogs: []apphome.CatalogBinding{{ID: deliveryCatalog, Driver: "lakefs", DSN: lakefs.DSN(lakefs.NewRepo())}},
-		Repositories: []apphome.RepositoryBinding{
+		Registry: apphome.RegistryBinding{ID: deliveryCatalog, Driver: "lakefs", DSN: lakefs.DSN(lakefs.NewRepo())},
+		Repositories: []apphome.RepositoryBinding{{ID: "kr://kc/system", Driver: "lakefs", DSN: lakefs.DSN(lakefs.NewRepo())},
 			{ID: deliveryDocs, Driver: "lakefs", DSN: lakefs.DSN(lakefs.NewRepo())},
 			{ID: deliveryData, Driver: "lakefs", DSN: lakefs.DSN(lakefs.NewRepo())},
 		},
@@ -210,7 +210,7 @@ func newDirectoryDelivery(t *testing.T) *directoryDelivery {
 	if err := apphome.InitializeDeployment(f.cfg, func(dir, principal string) error {
 		return inv.WriteAllow(dir, inv.AllowFile{Rules: []inv.AllowRule{
 			{ID: "publisher", Principal: principal, Actions: []string{"*"}},
-			{ID: "delivery-reader", Principal: "agent:consumer", Actions: []string{"dataset.resolve", "file.read"}, Catalog: deliveryCatalog, Dataset: "delivery"},
+			{ID: "delivery-reader", Principal: "agent:consumer", Actions: []string{"dataset.resolve", "file.read"}, Dataset: "delivery"},
 		}})
 	}); err != nil {
 		t.Fatal(err)
@@ -253,7 +253,7 @@ func newDirectoryDelivery(t *testing.T) *directoryDelivery {
 	}
 	f.operator, f.reader = newClient("agent:publisher"), newClient("agent:consumer")
 	for _, repository := range []string{deliveryDocs, deliveryData} {
-		if err := f.operator.CatalogService().AttachRepository(context.Background(), deliveryCatalog,
+		if err := f.operator.SnapshotService().AttachRepository(context.Background(),
 			client.RepositoryAttachRequest{Repository: repository}, client.RequestOptions{}, nil); err != nil {
 			t.Fatal(err)
 		}
@@ -264,8 +264,8 @@ func newDirectoryDelivery(t *testing.T) *directoryDelivery {
 	return f
 }
 
-func directoryDeliverySources(paths ...string) []catalog.KnowledgeSetSource {
-	return []catalog.KnowledgeSetSource{
+func directoryDeliverySources(paths ...string) []dataset.KnowledgeSetSource {
+	return []dataset.KnowledgeSetSource{
 		{Repository: deliveryDocs, Selector: snapshot.DefaultRef, Path: &paths[0], SubPath: "handbook/policies"},
 		{Repository: deliveryDocs, Selector: snapshot.DefaultRef, Path: &paths[1], SubPath: "docs/guides"},
 		{Repository: deliveryData, Selector: snapshot.DefaultRef, Path: &paths[2], SubPath: "semantic/metrics"},
@@ -295,14 +295,14 @@ func (f *directoryDelivery) write(t *testing.T, repository, commandID string, ch
 	}
 }
 
-func (f *directoryDelivery) publish(revision int, sources []catalog.KnowledgeSetSource) error {
-	return f.operator.CatalogService().DefineKnowledgeSet(context.Background(), deliveryCatalog,
+func (f *directoryDelivery) publish(revision int, sources []dataset.KnowledgeSetSource) error {
+	return f.operator.SnapshotService().DefineKnowledgeSet(context.Background(),
 		client.KnowledgeSetRequest{Dataset: "delivery", Revision: revision, Sources: sources}, client.RequestOptions{}, nil)
 }
 
-func (f *directoryDelivery) coordinate(t *testing.T, pin *catalog.ResolvedKnowledgeSet) client.WorkspaceFileCoordinate {
+func (f *directoryDelivery) coordinate(t *testing.T, pin *dataset.ResolvedKnowledgeSet) client.WorkspaceFileCoordinate {
 	t.Helper()
-	coordinate := client.WorkspaceFileCoordinate{Catalog: deliveryCatalog, Dataset: "delivery", View: "repository"}
+	coordinate := client.WorkspaceFileCoordinate{Dataset: "delivery", View: "repository"}
 	if pin != nil {
 		raw, err := json.Marshal(pin)
 		if err != nil {
@@ -313,7 +313,7 @@ func (f *directoryDelivery) coordinate(t *testing.T, pin *catalog.ResolvedKnowle
 	return coordinate
 }
 
-func (f *directoryDelivery) mounts(t *testing.T, pin *catalog.ResolvedKnowledgeSet) client.WorkspaceFileMountsResponse {
+func (f *directoryDelivery) mounts(t *testing.T, pin *dataset.ResolvedKnowledgeSet) client.WorkspaceFileMountsResponse {
 	t.Helper()
 	var out client.WorkspaceFileMountsResponse
 	if err := f.reader.WorkspaceFilesService().Mounts(context.Background(), client.WorkspaceFileMountsRequest{
@@ -324,7 +324,7 @@ func (f *directoryDelivery) mounts(t *testing.T, pin *catalog.ResolvedKnowledgeS
 	return out
 }
 
-func (f *directoryDelivery) assertRead(t *testing.T, pin catalog.ResolvedKnowledgeSet, mount, content string) {
+func (f *directoryDelivery) assertRead(t *testing.T, pin dataset.ResolvedKnowledgeSet, mount, content string) {
 	t.Helper()
 	var out client.WorkspaceFileReadResponse
 	if err := f.reader.WorkspaceFilesService().Read(context.Background(), client.WorkspaceFileReadRequest{

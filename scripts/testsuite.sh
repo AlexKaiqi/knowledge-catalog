@@ -23,19 +23,18 @@ usage() {
     'groups:' \
     '  lakefs      default: product + index scenes using lakeFS HTTP fixtures and real OpenSearch' \
     '  local       alias for lakefs' \
-    '  contracts   explicit mixed-provider component + boundary + application contracts' \
+    '  contracts   explicit Snapshot/application component + boundary + application contracts' \
     '  component   component contracts against an ephemeral OpenSearch' \
     '  boundary    architecture, layering, terminology, and surface guards' \
     '  e2e         CLI/HTTP/Catalog journeys on ephemeral OpenSearch; every public kc verb required' \
     '  race        concurrency-sensitive local packages under the race detector' \
     '  coverage    short suite with an explicit statement-coverage floor' \
-    '  service-e2e authenticated provider/consumer journey on Gitea + OpenSearch' \
+    '  service-e2e authenticated provider/consumer journey with external identity + OpenSearch' \
     '  taihu-live  real Taihu introspection (KC_LIVE_TAIHU=1 + secrets)' \
-    '  gitea       live Gitea Snapshot + Knowledge contract' \
     '  opensearch  live OpenSearch projection/search contract' \
     '  state-runtime live resource-access/v1 State runtime contract in Docker' \
     '  kcfs        Docker Linux/FUSE host projection acceptance' \
-    '  adapters    gitea + opensearch' \
+    '  adapters    opensearch' \
     '  docker      adapters + State runtime + authenticated service roles + kcfs' \
     '  all         lakefs + live deployment scenes + contracts + docker' \
     '' \
@@ -61,7 +60,7 @@ run_component() {
   local package
   while IFS= read -r package; do
     case "$package" in
-      kc/catalog|kc/cli|kc/cmd/*|kc/internal/arch) ;;
+      kc/snapshot/dataset|kc/cli|kc/cmd/*|kc/internal/arch) ;;
       *) component_packages+=("$package") ;;
     esac
   done < <("$go_bin" list ./...)
@@ -77,11 +76,11 @@ run_e2e() {
     run_go_test -short -count=1 -timeout=60m -run "$KC_E2E_RUN" ./cli
     return
   fi
-  KC_ASSERT_E2E_COVERAGE=1 run_go_test -short -count=1 -timeout=60m ./cli ./catalog ./cmd/kc-integration
+  KC_ASSERT_E2E_COVERAGE=1 run_go_test -short -count=1 -timeout=60m ./cli ./snapshot/dataset ./cmd/kc-integration
 }
 
 run_race() {
-  run_go_test -short -race -count=1 -timeout=30m ./snapshot/commandlog ./hook ./knowledge/reader ./retrieval/cache ./index ./home ./cli
+  run_go_test -short -race -count=1 -timeout=30m ./snapshot ./hook ./knowledge/reader ./retrieval/cache ./index ./home ./cli
 }
 
 run_coverage() {
@@ -100,23 +99,6 @@ run_service_e2e() {
 
 run_taihu_live() {
   KC_LIVE_TAIHU=1 run_go_test -count=1 -timeout=2m -run TestLiveTaihuAuthentication ./cli
-}
-
-run_gitea() {
-  local contract_node
-  contract_node="$(command -v "${KC_NODE_BIN:-node}" || true)"
-  if [[ -z "$contract_node" ]] || [[ "$("$contract_node" -p 'process.versions.node.split(".")[0]')" != "24" ]]; then
-    printf '%s\n' 'FAIL: gitea consumer contracts require an installed Node 24; set KC_NODE_BIN to its executable' >&2
-    return 1
-  fi
-  if [[ ! -d dsh-plugin/node_modules ]]; then
-    printf '%s\n' 'FAIL: prepare the locked dsh-plugin dependencies before running the gitea consumer contracts' >&2
-    return 1
-  fi
-  PATH="$(dirname "$contract_node"):$PATH" npm --prefix dsh-plugin run build
-  KC_REQUIRE_LIVE_ADAPTERS=1 run_go_test -count=1 ./snapshot/gitea
-  KC_REQUIRE_LIVE_ADAPTERS=1 run_go_test -count=1 -run '^(TestLocalSystemPublishImportsBuiltinSchemasIntoLiveGitea|TestManagedRepositoryProviderOnLiveGitea|TestManagedProductHumanSelfServiceOnLiveGitea|TestRepositoryConnectionOnLiveGitea)$' ./cli
-  KC_NODE_BIN="$contract_node" KC_REQUIRE_LIVE_ADAPTERS=1 run_go_test -count=1 -tags=dsh_contract,catalog_discovery_contract -run '^(TestDSHConsumerUsesActualServerContract|TestCatalogDiscoveryActualServerPinsSelectedSourcesAndMasksBodies)$' ./cli
 }
 
 run_opensearch() {
@@ -144,7 +126,6 @@ run_contracts() {
 }
 
 run_adapters() {
-  run_gitea
   run_opensearch
 }
 
@@ -195,7 +176,7 @@ start_local_opensearch() {
 }
 
 case "$group" in
-  lakefs|component|e2e|contracts|race|coverage|all|gitea|adapters|docker) start_local_opensearch ;;
+  lakefs|component|e2e|contracts|race|coverage|all|adapters|docker) start_local_opensearch ;;
 esac
 
 case "$group" in
@@ -208,7 +189,6 @@ case "$group" in
   coverage) run_coverage ;;
   service-e2e) run_service_e2e ;;
   taihu-live) run_taihu_live ;;
-  gitea) run_gitea ;;
   opensearch) run_opensearch ;;
   state-runtime) run_state_runtime ;;
   kcfs) run_kcfs ;;

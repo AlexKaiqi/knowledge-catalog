@@ -57,6 +57,7 @@ type unitStat struct {
 type baseline struct {
 	GeneratedAt     string     `json:"generatedAt"`
 	Depth           int        `json:"depth"`
+	UnitPolicy      string     `json:"unitPolicy"`
 	PropagationCost float64    `json:"propagationCost"`
 	Units           []unitStat `json:"units"`
 }
@@ -76,7 +77,7 @@ func main() {
 	writeBase := flag.Bool("write-baseline", false, "write the computed snapshot to the baseline file and exit")
 	strict := flag.Bool("strict", false, "fail when propagation cost exceeds the baseline, a unit drifts by >=0.05 Instability, or a unit is missing from the baseline")
 	baselineFlag := flag.String("baseline", "", "baseline JSON path (default: scripts/coupling/baseline.json under the repo root)")
-	depth := flag.Int("depth", 1, "unit granularity: path segments after the module prefix (structural report only)")
+	depth := flag.Int("depth", 1, "unit granularity: path segments, with registered named subunits at depth 1 (structural report only)")
 	cochange := flag.Bool("cochange", false, "print normalized file/unit co-change rates from git history and exit")
 	cochangeMin := flag.Int("cochange-min", 4, "minimum shared commits for a co-change pair to be reported")
 	filesOf := flag.String("files", "", "print per-file LOC/churn and prefix clusters for one unit and exit")
@@ -126,7 +127,7 @@ func main() {
 	}
 
 	if *writeBase {
-		doc := baseline{GeneratedAt: time.Now().UTC().Format(time.RFC3339), Depth: *depth, PropagationCost: propagation, Units: stats}
+		doc := baseline{GeneratedAt: time.Now().UTC().Format(time.RFC3339), Depth: *depth, UnitPolicy: unitPolicySignature(*depth), PropagationCost: propagation, Units: stats}
 		raw, err := json.MarshalIndent(doc, "", "  ")
 		if err != nil {
 			fatal(err)
@@ -144,6 +145,13 @@ func main() {
 			fatal(fmt.Errorf("-strict requires a readable baseline: %v", err))
 		}
 		fmt.Printf("coupling: units=%d propagation=%.2f%% (no baseline: %v)\n", len(stats), propagation*100, err)
+		return
+	}
+	if err := comparableBaseline(base, *depth); err != nil {
+		if *strict {
+			fatal(err)
+		}
+		fmt.Printf("coupling: units=%d propagation=%.2f%% (no comparable baseline: %v)\n", len(stats), propagation*100, err)
 		return
 	}
 
@@ -276,18 +284,6 @@ func firstRune(s string) rune {
 	return 0
 }
 
-func unitAt(module, importPath string, depth int) (string, bool) {
-	rest, ok := strings.CutPrefix(importPath, module+"/")
-	if !ok {
-		return "", false
-	}
-	segs := strings.Split(rest, "/")
-	if len(segs) < depth {
-		depth = len(segs)
-	}
-	return strings.Join(segs[:depth], "/"), true
-}
-
 func compute(unitImports map[string]map[string]bool, prodLines, testLines map[string]int, decls map[string]*declStat, order []string) []unitStat {
 	fanIn := map[string]int{}
 	for _, u := range order {
@@ -373,6 +369,9 @@ func readBaseline(path string) (*baseline, error) {
 // strictCheck implements the ratchet: metrics may improve but must not get
 // worse, and the unit set may only grow via an explicit baseline tightening.
 func strictCheck(base *baseline, stats []unitStat, propagation float64) []string {
+	if err := comparableBaseline(base, 1); err != nil {
+		return []string{err.Error()}
+	}
 	var problems []string
 	if propagation > base.PropagationCost+1e-9 {
 		problems = append(problems, fmt.Sprintf("propagation cost %.2f%% exceeds baseline %.2f%%", propagation*100, base.PropagationCost*100))
@@ -387,7 +386,7 @@ func strictCheck(base *baseline, stats []unitStat, propagation float64) []string
 			problems = append(problems, fmt.Sprintf("unit %s is not in the baseline; tighten explicitly with -write-baseline", s.Unit))
 			continue
 		}
-		if math.Abs(s.Instability-prev) >= 0.05 {
+		if hasInstabilityDrift(s.Instability, prev) {
 			problems = append(problems, fmt.Sprintf("instability drift %s %.2f -> %.2f (>= 0.05)", s.Unit, prev, s.Instability))
 		}
 	}
@@ -402,11 +401,7 @@ func drift(base *baseline, stats []unitStat) []string {
 	var moved []string
 	for _, s := range stats {
 		if prev, ok := old[s.Unit]; ok {
-			d := s.Instability - prev
-			if d < 0 {
-				d = -d
-			}
-			if d >= 0.05 {
+			if hasInstabilityDrift(s.Instability, prev) {
 				moved = append(moved, fmt.Sprintf("%s %.2f->%.2f", s.Unit, prev, s.Instability))
 			}
 		}
@@ -467,7 +462,7 @@ func runCochange(root string, minSupport int) error {
 	for _, files := range commits {
 		units := map[string]bool{}
 		for _, f := range files {
-			units[strings.SplitN(f, "/", 2)[0]] = true
+			units[relativeUnit(f, 1)] = true
 		}
 		// Unit churn counts commits, not file touches: co-change rates compare
 		// commit support on both sides.

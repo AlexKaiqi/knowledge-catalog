@@ -115,7 +115,7 @@ func (PassThroughAuthenticator) AuthenticateRequest(_ context.Context, session S
 }
 
 // SessionStore keeps login state on the client. It is not a KC protocol store
-// and must never be implemented inside a Catalog or Repository.
+// and must never be implemented inside registration state or a Repository.
 type SessionStore interface {
 	Load(context.Context) (Session, bool, error)
 	Save(context.Context, Session) error

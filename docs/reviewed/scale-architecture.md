@@ -67,7 +67,7 @@
 
 - 不把源事件流登记为 Repository 或 Workspace 成员；
 - 不新增 APPEND/PATCH Surface；
-- 不让 Catalog 感知 `object_id`、Aspect 或 SQL 表；
+- 不让 Dataset 登记服务 感知 `object_id`、Aspect 或 SQL 表；
 - 不把 OpenSearch、对象清单、relation endpoint 表当成知识正文；
 - 不用定时 FULL scan 作为正常一致性通路；
 - 不承诺一个物理 Dolt database 永不分代。
@@ -139,7 +139,7 @@ Consumer
   -> SEARCH/RELATIONS 先走 exact-basis Retriever，再 ReadMany 回读 Canonical
 ```
 
-一个 Repository 对应一个 Dolt database。物理知识和语义知识仍按治理/写责任拆仓，由 Catalog 的 Workspace 组合，不因容量在 Catalog 内做覆盖或正文复制。
+一个 Repository 对应一个 Dolt database。物理知识和语义知识仍按治理/写责任拆仓，由 Dataset 登记服务 的 Workspace 组合，不因容量在 Dataset 登记服务 内做覆盖或正文复制。
 
 ---
 
@@ -147,7 +147,7 @@ Consumer
 
 ### 5.1 `snapshot.Store` 保持纯净
 
-`snapshot.Store` 仍只定义 commit/ref/CAS/archive。Catalog 继续只依赖这一层，不加入知识或 SQL 方法。
+`snapshot.Store` 仍只定义 commit/ref/CAS/archive。Dataset 登记服务 继续只依赖这一层，不加入知识或 SQL 方法。
 
 `snapshot/dolt` 保留为通用 layer ⓪ TreeStore 参考实现，但不再是 scale profile 的知识读写入口。
 
@@ -275,7 +275,7 @@ relation endpoints = 2 + 31 = 33
 
 ### 8.3 幂等账本
 
-规模路径使用按键的耐久事务账本，不能靠重写完整 JSON 历史保存幂等性。单条命令需要保留足够的请求身份、摘要、目标与预期版本依据，以区分尚未确定结果和已接受结果，并在重放时返回原 Receipt。具体字段和状态由 [`snapshot/commandlog`](../../snapshot/commandlog) 的公开类型拥有。
+规模路径使用按键的耐久事务账本，不能靠重写完整 JSON 历史保存幂等性。单条命令需要保留足够的请求身份、摘要、目标与预期版本依据，以区分尚未确定结果和已接受结果，并在重放时返回原 Receipt。具体字段和状态由 [`snapshot/commandlog`](../../snapshot/command_contract.go) 的公开类型拥有。
 
 不保存完整 Operations，也不在启动时把全部历史载入内存。取得命令执行权与保存完成结果都是单键事务。介质可采用 bbolt 或共享控制数据库；跨进程协调能力须按部署要求验证，不能从单机存储选择推断出来。
 
@@ -467,7 +467,7 @@ native layout 变化也通过新 generation 迁移，不在数千万行 active �
 | 全链资格先于容量承诺 | 按负载规范逐档校准，验证变化识别、编译、增量提交、暖重建与长期历史，并由实测确定分代线 | 局部优化或短历史测试不能证明持续运行能力 |
 | 恢复演练先于归档运行 | 演练 generation 切换、旧仓只读与恢复、显式旧 pin 读取，并核对授权、备份目标与容量告警 | 归档后仍需履行旧坐标的可读取承诺，不能把历史留存等同于在线恢复能力 |
 
-包拆分与命令装配属于实现方案，必须通过分层守卫；不能因迁移暂时困难而放宽 Writer、Catalog 或消费读取边界。
+包拆分与命令装配属于实现方案，必须通过分层守卫；不能因迁移暂时困难而放宽 Writer、Dataset 登记服务 或消费读取边界。
 
 ---
 
@@ -496,7 +496,7 @@ native layout 变化也通过新 generation 迁移，不在数千万行 active �
 
 - **S-01**：scale Dolt 以 `kc_units` 为唯一 Canonical，不再保存 `kc_files` 正文。
 - **S-02（废止）**：Dolt 不再维护 `kc_relation_endpoints` 或 `kc_objects.relation_type`；历史定位表只能在显式迁移流程中清理。接入与恢复只读验证已有 authority，不能顺带修改表或推进 ref；缺失或不兼容的知识能力必须明确报告。
-- **S-03**：规模能力位于 layer ② `knowledge/dolt`；`snapshot.Store` 和 Catalog 不认识知识语义。
+- **S-03**：规模能力位于 layer ② `knowledge/dolt`；`snapshot.Store` 和 Dataset 登记服务 不认识知识语义。
 - **S-04**：Gitea 保留文件 codec；Dolt/Gitea 共享 unit 代数和 conformance。
 - **S-05**：每个源事务/逻辑表变化立即 commit；不设置固定 batching interval。
 - **S-06**：signal 后 FULL scan 不算事件驱动；稳态必须 table-family targeted pull。

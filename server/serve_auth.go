@@ -29,6 +29,9 @@ type HTTPServerOptions struct {
 	// declared on that Binding's Domain Schema. Nil fails bound READs instead
 	// of returning a misleading null value.
 	StateLookup knowledgeserving.StateLookup
+	// ObjectInterfaces installs independent object capability handlers. Nil
+	// enables only the verified, published LiveAccess reference implementation.
+	ObjectInterfaces *knowledgeserving.InterfaceRegistry
 	// Embedder is an optional request-time query-vector provider for semantic
 	// recall. Nil keeps semantic recall fail-closed (CAPABILITY_UNSATISFIED).
 	Embedder retrieval.Embedder
@@ -70,7 +73,14 @@ func authenticateHTTPRequest(w http.ResponseWriter, r *http.Request, options HTT
 	if !options.Authenticated() {
 		return inv.HTTPIdentity{}, true
 	}
-	id, err := options.Authenticator.Authenticate(r.Context(), r.Header)
+	var id inv.HTTPIdentity
+	var err error
+	if options.AuthModeLabel() == "lakefs" {
+		err = validateLakeFSConsoleRequest(r)
+	}
+	if err == nil {
+		id, err = options.Authenticator.Authenticate(r.Context(), r.Header)
+	}
 	if err != nil {
 		status := http.StatusUnauthorized
 		if kernel.CodeOf(err) == kernel.ErrTemporaryUnavailable {

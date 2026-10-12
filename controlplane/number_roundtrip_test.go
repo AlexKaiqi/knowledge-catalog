@@ -28,13 +28,13 @@ func TestPersistedProposalPreviewRetainsExactCandidateNumbers(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(t.TempDir(), "control-state.json")
-	if err := controlplane.NewFileControlState(path).Save(controlplane.ControlState{
+	if err := controlplane.NewFileControlState(path, "kr://test/registry").Save(controlplane.ControlState{
 		Proposals: map[string]controlplane.Proposal{proposal.ProposalID: proposal},
 		Previews:  map[string]controlplane.Preview{preview.PreviewID: preview},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	restored, err := controlplane.NewFileControlState(path).Load()
+	restored, err := controlplane.NewFileControlState(path, "kr://test/registry").Load()
 	if err != nil {
 		t.Fatal(err)
 	}

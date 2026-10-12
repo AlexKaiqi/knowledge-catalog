@@ -1,0 +1,23 @@
+---
+object_id: kc/capability/explore-relations
+aspect_name: entrypoints
+kind: Aspect
+path_hint: capabilities/explore-relations/entrypoints.yaml
+schema_ref: schema/system/capability-entrypoints/v1
+---
+{
+  "commands": [
+    {
+      "action": "knowledge.relations",
+      "command": "kc relations",
+      "description": "列出连着对象的关系对象命中，不是邻接对象正文",
+      "help": "kc help relations"
+    },
+    {
+      "action": "knowledge.traverse",
+      "command": "kc traverse",
+      "description": "在固定范围内沿关系做有界邻域遍历，不是图查询语言",
+      "help": "kc help traverse"
+    }
+  ]
+}

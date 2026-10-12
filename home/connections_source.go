@@ -5,10 +5,10 @@ import (
 	"kc/snapshot"
 )
 
-// connectedSource restores a fixed Gitea authority without contacting it.
+// connectedSource restores a fixed lakeFS authority without contacting it.
 // Each operation reads the current private receipt, so credential rotation
 // reaches existing readers without replacing the authority in the registry.
-// Its optional capabilities match the supported Gitea adapter exactly.
+// Its optional capabilities match the supported lakeFS adapter exactly.
 type connectedSource struct {
 	dir string
 	id  kernel.RepositoryID

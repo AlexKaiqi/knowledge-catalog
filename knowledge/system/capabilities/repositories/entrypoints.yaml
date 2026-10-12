@@ -1,0 +1,29 @@
+---
+object_id: kc/capability/repositories
+aspect_name: entrypoints
+kind: Aspect
+path_hint: capabilities/repositories/entrypoints.yaml
+schema_ref: schema/system/capability-entrypoints/v1
+---
+{
+  "commands": [
+    {
+      "action": "repositories.manage",
+      "command": "kc attach",
+      "description": "把已连接 Repository 挂入服务登记空间",
+      "help": "kc help attach"
+    },
+    {
+      "action": "repositories.create",
+      "command": "kc create",
+      "description": "创建托管 Repository 或连接自有 Repository",
+      "help": "kc help create"
+    },
+    {
+      "action": "repositories.manage",
+      "command": "kc detach",
+      "description": "从服务登记空间 拿下 Repository",
+      "help": "kc help detach"
+    }
+  ]
+}

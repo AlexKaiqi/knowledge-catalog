@@ -1,0 +1,23 @@
+---
+object_id: kc/capability/resource-access
+aspect_name: entrypoints
+kind: Aspect
+path_hint: capabilities/resource-access/entrypoints.yaml
+schema_ref: schema/system/capability-entrypoints/v1
+---
+{
+  "commands": [
+    {
+      "action": "resource.access",
+      "command": "kc access",
+      "description": "按 Schema origin 与对象 ID 读取该 Aspect 的当前观察",
+      "help": "kc help access"
+    },
+    {
+      "action": "knowledge.binding.resolve",
+      "command": "kc binding show",
+      "description": "查看 Binding 声明",
+      "help": "kc help binding show"
+    }
+  ]
+}

@@ -10,7 +10,7 @@
 
 | 任务 | 入口与关注点 |
 |---|---|
-| 初始化并确认系统知识 | `catalog-initialized`：库存、System 可读与不可写、身份和独立授权 |
+| 初始化并确认系统知识 | `service-initialized`：库存、System 可读与不可写、身份和独立授权 |
 | 接入来源并发布知识 | `repository-attached`：接入与发权分开，Schema 和实例发布、固定版本回读 |
 | 发布供消费的 Dataset | `dataset-defined` 及其发布用例：范围、服务版切换、旧 pin 与撤权 |
 | 发现并读取知识 | `projection-synced`、`dataset-query-principals-granted`：同一主体完成查询与回读 |

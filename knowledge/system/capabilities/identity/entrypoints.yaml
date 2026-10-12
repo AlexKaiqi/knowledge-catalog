@@ -1,0 +1,35 @@
+---
+object_id: kc/capability/identity
+aspect_name: entrypoints
+kind: Aspect
+path_hint: capabilities/identity/entrypoints.yaml
+schema_ref: schema/system/capability-entrypoints/v1
+---
+{
+  "commands": [
+    {
+      "action": "identity.read",
+      "command": "kc admission show",
+      "description": "显示本人已有权限和外部申请入口",
+      "help": "kc help admission show"
+    },
+    {
+      "action": "identity.login",
+      "command": "kc login",
+      "description": "验证身份并保存当前 Server 的本机会话",
+      "help": "kc help login"
+    },
+    {
+      "action": "identity.logout",
+      "command": "kc logout",
+      "description": "清除当前 Server 的本机会话",
+      "help": "kc help logout"
+    },
+    {
+      "action": "identity.read",
+      "command": "kc whoami",
+      "description": "显示当前认证主体",
+      "help": "kc help whoami"
+    }
+  ]
+}

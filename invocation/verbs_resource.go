@@ -2,9 +2,7 @@ package invocation
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"kc/kernel"
 	knowledge "kc/knowledge"
 	reader "kc/knowledge/reader"
@@ -250,9 +248,9 @@ func RefineEventFromExecution(cx *Invocation, execution retrieval.RerankExecutio
 // VerbResourceAccess hydrates an Aspect Binding through the wall-side
 // resource-access/v1 runtime. ResourceDescriptor operations use invoke.
 func VerbResourceAccess(cx *Invocation) (any, error) {
-	if cx.Flag("operation") != "" || cx.Flag("input") != "" {
+	if cx.Flag("operation") != "" || cx.Flag("input") != "" || cx.Flag("implementation") != "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid,
-			"access hydrates a Binding with --aspect; use kc invoke for a ResourceDescriptor operation")
+			"access hydrates a Binding with --aspect; use kc invoke for an object Interface operation")
 	}
 	resolved, err := VerbResolveBinding(cx)
 	if err != nil {
@@ -300,11 +298,14 @@ func VerbResourceAccess(cx *Invocation) (any, error) {
 func VerbResourceInvoke(cx *Invocation) (any, error) {
 	if cx.Flag("aspect") != "" || cx.Flag("member") != "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid,
-			"invoke calls a ResourceDescriptor operation; use kc access --aspect for Binding hydration")
+			"invoke selects an Interface with --implementation; use kc access --aspect for Binding hydration")
 	}
 	operation, err := cx.Require("operation")
 	if err != nil {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "invoke requires --operation and --input")
+	}
+	if cx.Flag("implementation") != "" {
+		return InvokeObjectInterface(cx, operation)
 	}
 	return AccessResourceOperation(cx, operation)
 }
@@ -314,18 +315,9 @@ func AccessResourceOperation(cx *Invocation, operation string) (any, error) {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid,
 			"invoke calls a ResourceDescriptor operation; use kc access --aspect for Binding hydration")
 	}
-	rawInput, err := cx.Require("input")
+	input, err := invocationInput(cx)
 	if err != nil {
 		return nil, err
-	}
-	var input any
-	decoder := json.NewDecoder(strings.NewReader(rawInput))
-	decoder.UseNumber()
-	if err := decoder.Decode(&input); err != nil {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "--input must be one JSON value: %v", err)
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "--input must contain exactly one JSON value")
 	}
 
 	descriptor, err := PinnedResourceDescriptor(cx)
@@ -374,7 +366,7 @@ func AccessResourceOperation(cx *Invocation, operation string) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return accessor.AccessResource(cx.Context, ResourceOperationRequest{
+	result, err := accessor.AccessResource(cx.Context, ResourceOperationRequest{
 		Descriptor: ResourceDescriptorCoordinate{
 			ObjectID: descriptor.ObjectID, Repository: descriptor.Repository, Commit: descriptor.Commit,
 		},
@@ -384,6 +376,10 @@ func AccessResourceOperation(cx *Invocation, operation string) (any, error) {
 			TraceID: trace.TraceID, SpanID: trace.SpanID, ParentSpanID: trace.ParentSpanID,
 		},
 	})
+	if err != nil {
+		return nil, err
+	}
+	return ObservedAccessResult{Output: result, Knowledge: []observability.KnowledgeAccess{{KnowledgeRef: knowledge.PinnedKnowledgeRef{KnowledgeRef: knowledge.KnowledgeRef{Repository: descriptor.Repository, Object: descriptor.ObjectID}, Commit: descriptor.Commit}}}}, nil
 }
 
 func PinnedResourceDescriptor(cx *Invocation) (PinnedDescriptor, error) {

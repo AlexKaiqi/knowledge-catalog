@@ -1,0 +1,27 @@
+---
+object_id: kc/relation/use-object-interface.uses.object-interfaces
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: relations/use-object-interface.uses.object-interfaces.yaml
+---
+{
+  "relationId": "kc/relation/use-object-interface.uses.object-interfaces",
+  "relationType": "uses",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "from",
+      "objectRef": {
+        "repository": "kr://kc/system",
+        "object": "kc/guide/use-object-interface"
+      }
+    },
+    {
+      "role": "to",
+      "objectRef": {
+        "repository": "kr://kc/system",
+        "object": "kc/capability/object-interfaces"
+      }
+    }
+  ]
+}

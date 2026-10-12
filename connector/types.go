@@ -67,11 +67,11 @@ type Plan struct {
 
 // Checkpoint is connector-owned sync cursor. The kit never stores it.
 type Checkpoint struct {
-	ConnectorID         string          `json:"connectorId"`
-	Cursor              string          `json:"cursor,omitempty"`
-	LastCatalogCommit   kernel.CommitID `json:"lastCatalogCommit,omitempty"`
-	LastFullReconcileAt string          `json:"lastFullReconcileAt,omitempty"`
-	ProducedAt          string          `json:"producedAt,omitempty"`
+	ConnectorID            string          `json:"connectorId"`
+	Cursor                 string          `json:"cursor,omitempty"`
+	LastRegistrationCommit kernel.CommitID `json:"lastRegistrationCommit,omitempty"`
+	LastFullReconcileAt    string          `json:"lastFullReconcileAt,omitempty"`
+	ProducedAt             string          `json:"producedAt,omitempty"`
 }
 
 // Summary counts Preview outcomes.

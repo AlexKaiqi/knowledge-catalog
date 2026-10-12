@@ -1,6 +1,10 @@
 # cli/
 
-KC Client、KC Server 与部署管理的 **transport**：公开 argv、typed HTTP handler、授权与遥测。读取部署配置、恢复权威与耐久状态在 [`home/`](../home/README.md)；HTTP method+pattern 闭集在 [`httpsurface/`](../httpsurface/README.md)。协议实现仍在各自包。
+KC Client 与部署管理的 **transport**：公开 argv、远程 typed Client 调用、产品输出及 `serve`
+进程入口。typed HTTP handler 在 [`server/`](../server/README.md)，共享应用操作、授权与证据
+在 [`invocation/`](../invocation/README.md)。读取部署配置、恢复权威与耐久状态在
+[`home/`](../home/README.md)；HTTP method+pattern 闭集在 [`httpsurface/`](../httpsurface/README.md)。
+协议实现仍在各自包。
 
 应然设计见 [CLI 交互](../docs/reviewed/cli.md)。公开命令的操作语义（审查用）见 [`SURFACE.md`](SURFACE.md)。落地迁移记录见 [`REFACTOR.md`](REFACTOR.md)，HTTP 迁移记录见 [`HTTP_REFACTOR.md`](HTTP_REFACTOR.md)。路径权威仍是 `surface.go`；HTTP 路由分母是 `httpsurface.Patterns()`，与 mux 登记对账。
 
@@ -9,17 +13,18 @@ KC Client、KC Server 与部署管理的 **transport**：公开 argv、typed HTT
 | 表 | 文件 | 用途 |
 |---|---|---|
 | 分组 CLI | `surface.go` | 公开命令路径 → 内部操作名；产品命令经 `client/` 调 typed API |
-| 应用操作 | `command.go` | Server 与测试接缝共用的内部 handler 表；键通常是公开路径把空格换成连字符。知识面 argv 无 `knowledge` 前缀，操作名仍是 `knowledge-search` 等 |
-| HTTP namespace | `service_routes.go` | 显式登记 typed route；不解析 argv、不读 CLI 表、不读 `httpsurface` |
+| CLI 应用操作 | `command.go` | CLI 侧内部 handler 表，委托 `invocation/` 操作体；键通常是公开路径把空格换成连字符。知识面 argv 无 `knowledge` 前缀，操作名仍是 `knowledge-search` 等 |
+| HTTP namespace | `server/service_routes.go` | 显式登记 typed route；调用相同应用操作体，不解析 argv、不读 CLI 表；闭集由 `server/routes.go` 与 `httpsurface` 对账 |
 
 ```text
 surface.go  ──产品命令──►  remote_*.go  ──►  client/  ──►  HTTP
-command.go  ──应用/测试──►  verbs_*.go  ──►  home.Open / Writer / Reader / Index
-service_routes.go  ──typed HTTP──►  同一组应用操作（不经 CLI parser）
+command.go  ──应用/测试──►  invocation/verbs_*.go  ──►  typed application executor
+server/service_routes.go  ──typed HTTP──►  同一组应用操作（不经 CLI parser）
 httpsurface.Patterns()  ──测试对账──►  mux 已登记的 method+pattern
 ```
 
-`home_alias.go` 把 `home` 的类型和打开函数留在本包名字下，避免每个 verb 文件都写 import。
+`home_alias.go` 只保留 Store flag 转换，调用 `home.ApplyStoreFlags`；Home 类型与打开函数直接
+从 `home/` 使用，不再由本包重导出。
 
 ## 文件按簇
 
@@ -27,32 +32,35 @@ httpsurface.Patterns()  ──测试对账──►  mux 已登记的 method+pat
 
 ### CLI 传输
 
-`run.go` 入口；`parse.go` / `flags.go` / `flags_operand.go` / `flags_identity.go`
-把 argv 收成 flags；`surface.go` 解析分组路径；`help.go` 是帮助文本。
+`run.go` 入口；`parse.go` / `flags_operand.go` 把 argv 收成 flags；`surface.go` 解析分组路径；
+`help.go` 是帮助文本。共享 flag 读取与校验分别在 `invoke/flags.go`、
+`invocation/flags_hygiene.go`。
 
 ### 远程 Client
 
 `remote.go` 与 `remote_*.go` 把公开 CLI 编成 `client/` 调用。`remote_login.go`
-只管理本机登录态；`remote_task_context.go` 是 DSH 任务坐标，不是服务端 Session。
+只管理本机登录态；正式环境默认与按 Server 保存的会话由 Client 读取，不设服务端 Session。
 
-### 部署与应用过程（仍在本包）
+### 部署与应用过程
 
 | 文件 | 负责 |
 |---|---|
-| `home_alias.go` | `Home` 类型别名与打开函数 |
-| `home_audit.go` | stateDir 下的 `audit.jsonl` / `system.jsonl` 耐久过程账 |
-| `home_hookrun.go` | 动词 pre/post 出站 Hook |
+| `deployment.go` / `serve.go` | 显式部署管理与 Server 进程入口 |
+| `home_alias.go` | Store flag 转换 |
+| `invocation/home_audit.go` | stateDir 下的 `audit.jsonl` / `system.jsonl` 耐久过程账 |
+| `invocation/home_hookrun.go` | 动词 pre/post 出站 Hook |
 
-恢复独立 Catalog Snapshot 权威、耐久控制状态、预配置 Snapshot binding 和派生缓存见 `home/`。`serve` 不初始化；`catalog repo attach` 在服务端验证既有 authority 后原子登记。
+恢复独立登记 Snapshot 权威、耐久控制状态、预配置 Snapshot binding 和派生缓存见 `home/`。
+`serve` 不初始化；`attach --repo` 在服务端验证既有 authority 后原子登记。
 
 普通使用者运行 `kc create --name <显示名> [--store <允许池>]` 供给托管
 Repository，或运行 `kc create --url <地址> --credential-file <文件>` 连接获准来源上的自有
-Repository。当前 Catalog 来自 `catalog use`。LakeFS 上 `--name` 就是协议 `--repo`，与
+Repository。一套服务只有一个登记空间。LakeFS 上 `--name` 就是协议 `--repo`，与
 Graveler 仓库名相同；Server 仍生成恢复命令，产品 argv 不接收 `--catalog`、`--repo` 或
-`--command-id`。Gitea 中文名才生成逻辑坐标。低层显式坐标创建仍只服务 typed HTTP 与测试。
-create 只让 KC 能打开该 Repository，不登记 Catalog；用户随后显式 `attach --repo`。
+`--command-id`。Snapshot 只支持 lakeFS；低层显式坐标创建仍只服务 typed HTTP 与测试。
+create 只让 KC 能打开该 Repository，不登记来源成员；用户随后显式 `attach --repo`。
 
-管理 API 为 `POST/GET /catalog/v1/repositories`、`GET /catalog/v1/repositories/{repository}`。
+管理 API 为 `POST/GET /snapshot/v1/connections`、`GET /snapshot/v1/connections/{repository}`。
 普通创建与库存输出由 `ManagedRepositorySummary` 拥有，自动分配 command 留在服务内部；详情
 另含当前发布与检索准备状态 `RepositoryReadiness`。显式协议坐标创建仍保留
 `home.ManagedRepositoryResult` 的调用者 command 回执。`GET /repositories/{repository}` 只
@@ -62,46 +70,47 @@ create 只让 KC 能打开该 Repository，不登记 Catalog；用户随后显�
 
 ### 应用操作
 
-`verbs_*.go` 按 semantic action 登记内部操作。跨 Catalog / Knowledge / File
-Gateway 复用的 Workspace 流程单独放 `workspace_*.go`；`workspace_consume.go`
-只留 pin、Serving 与消费授权的共享上下文。
+本包 `verbs_*.go` 按 semantic action 登记内部操作，操作体在 `invocation/verbs_*.go`。
+跨 Dataset / Knowledge / File Gateway 复用的固定版本与消费上下文由
+`invocation/dataset_access.go`、`invocation/task_pin.go` 持有。
 
-公开文件入口只有 Workspace File Gateway / `kcfs`。宿主 git checkout / sync
-由 `catalog/worktree` 持有，不是产品 CLI。
+公开原始文件入口归 Snapshot Service；语义 Workspace File Gateway 与 `kcfs` 由应用装配。
+旧 `catalog/worktree` Git checkout / sync 已退役，不能作为 Snapshot 合同之外的入口。
 
-`search_request.go` 把 flags 编成 `SearchRequest`；真正的 Workspace SEARCH 在
-`workspace_search.go`。`allow.go` 是授权求值；命名知识集 SEARCH 要 `file.read`
+`invocation/request_shape.go` 把 flags 编成 `SearchRequest`，共享用例由 `knowledgeapp/` 执行。
+`invocation/allow.go` 是授权求值；命名知识集 SEARCH 要 `file.read`
 与 `knowledge.search`，正文走 `delivery/` 按仓 `knowledge.read` 屏蔽。访问证据不在这里。
 
-`AllowFile.initialGrants` 保存 allocation → 请求 digest 的一次策略应用回执，与初始仓级规则原子持久化。普通 `grant remove` 保留这份回执，create retry 不会重建已撤销规则。策略可明确授予仓级 `writer.receipt.read`；receipt 授权从耐久 command entry 取得真实 Repository/ref，不信任调用者指定的仓。托管创建的过程回执不进入 Catalog Snapshot 或 Writer command ledger。
+`AllowFile.initialGrants` 保存 allocation → 请求 digest 的一次策略应用回执，与初始仓级规则原子持久化。普通 `grant remove` 保留这份回执，create retry 不会重建已撤销规则。策略可明确授予仓级 `writer.receipt.read`；receipt 授权从耐久 command entry 取得真实 Repository/ref，不信任调用者指定的仓。托管创建的过程回执不进入登记 Snapshot 或 Writer command ledger。
 
 ### HTTP Server
 
 | 文件 | 负责 |
 |---|---|
-| `serve.go` | 进程生命周期与认证后的并发读写边界 |
-| `serve_facade.go` | `httpFacade`、`/health` `/livez` `/readyz` `/metrics` |
-| `service_routes.go` | 正式 namespace、typed DTO 与 handler |
-| `service_management_routes.go` | Admin / Governance / Operations / Catalog 写面 |
-| `auth.go` | 可注册 Authenticator 合同与 factory registry |
-| `serve_auth.go` | 请求入口认证、Gitea 身份验证与 admin 判定 |
-| `auth_gitea.go` / `auth_taihu.go` / `auth_service.go` | 具体认证器 |
-| `serve_request.go` / `serve_response.go` | 请求解码与统一错误信封 |
-| `serve_readiness.go` | 分 Surface readiness |
-| `serve_state.go` | `resource-access/v1` StateLookup HTTP adapter |
-| `serve_telemetry.go` | HTTP SERVER span 与 completion log |
-| `workspace_file_service.go` | 固定 pin 的只读 mount、单目录分页与 range read |
+| `cli/serve.go` | 进程生命周期；经 `server/` 装配 handler |
+| `server/serve_handler.go` / `server/service_invoke.go` | handler 装配与认证后的并发读写边界 |
+| `server/serve_facade.go` | `httpFacade`、`/health` `/livez` `/readyz` `/metrics` |
+| `server/service_routes.go` | 正式 namespace、typed DTO 与 handler |
+| `server/service_management_routes.go` | Admin / Governance / Operations / Snapshot 写面 |
+| `server/auth.go` | 可注册 Authenticator 合同与 factory registry |
+| `server/serve_auth.go` | 请求入口认证、Gitea 身份验证与 admin 判定 |
+| `server/auth_gitea.go` / `server/auth_taihu.go` / `server/auth_service.go` | 具体认证器 |
+| `invoke/http.go` / `invoke/http_write.go` | 请求解码与统一错误信封 |
+| `server/internal/readiness/` | 分 Surface readiness |
+| `server/serve_state.go` | 保留 StateLookup 公开别名；HTTP adapter 在 `knowledge/serving/state_lookup.go` |
+| `server/serve_telemetry.go` | HTTP SERVER span 与 completion log |
+| `server/dataset_file_service.go` | 固定 pin 的只读 mount、单目录分页与 range read |
 
 ### kcfs
 
-`workspacefs.go` / `workspacefs_daemon.go` / `workspacefs_help.go` 是本机挂载
-进程，经 Workspace File Gateway 读字节。不要和服务端 `workspace_file_service.go`
+`datasetfs.go` / `datasetfs_daemon.go` / `datasetfs_help.go` 是本机挂载
+进程，经 Workspace File Gateway 读字节。不要和服务端 `server/dataset_file_service.go`
 混读。
 
 ### 遥测与证据
 
-`telemetry.go` 与 `telemetry_*.go` 是应用操作上的 OTel 适配。
-`observability_access.go` / `observability_retrieval.go` 写访问账和检索证据，
+本包 `telemetry_*.go` 接入 CLI 调用观察，共享应用 OTel 适配在 `invocation/telemetry*.go`。
+`invocation/observability_access.go` / `invocation/observability_retrieval.go` 写访问账和检索证据，
 不是 `allow.json`。
 
 `kc serve --config` 只恢复；配置缺失不生成新部署。`dataset overlay` 是客户端临时配方合成，不保存 Server Home overlay。
@@ -116,10 +125,16 @@ Gateway 支撑的宿主挂载目录。
 |---|---|---|
 | `local` | `X-Kc-As` | `Authorization`、自报委托、空身份 |
 | `taihu` / `gitea` | `Authorization`（Taihu 可经已验证网关头） | 自报 `X-Kc-As` / `X-Kc-On-Behalf-Of`、空身份 |
+| `lakefs` | 原用户 `Authorization`，或同源组合控制台的原会话 Cookie | 自报身份、混合证明、缺失防跨站标记或非 JSON Cookie 写请求 |
 
-产品混装凭证返回 `FORBIDDEN`；缺少匹配凭证返回 `UNAUTHENTICATED`。进程内空 `HTTPServerOptions` / `HTTPHandler(home)` 是 local 测试接缝；正式部署必须显式选定模式。
+lakefs 模式直接向固定原后端验证调用方证明；不继承 Store 管理员角色。Cookie
+过滤、防跨站、账号映射与生命周期边界由 [`server/README.md`](../server/README.md) 维护。
+CLI 使用已签发 Bearer 的既有 token 模式，浏览器直接复用原登录。
 
-Taihu 资源方配置使用 `KC_SERVICE_CLIENT_SECRET` 作 introspection 应用密钥，`KC_TAIHU_HMAC_SECRET` 作网关 hex 验签密钥；两者不是调用方身份。`--auth-hmac-secret` / `--service-client-secret` 可以覆盖环境值，但不得把真实秘密作为 argv 字面量传入。精确配置见 `auth_taihu.go`、`auth_service.go` 与帮助文本。
+认证后的自报身份或委托返回 `FORBIDDEN`；缺少匹配凭证返回 `UNAUTHENTICATED`。
+lakefs 的多个或混合证明因身份歧义返回 `UNAUTHENTICATED`，Cookie 防跨站失败返回 `FORBIDDEN`。进程内空 `HTTPServerOptions` / `HTTPHandler(home)` 是 local 测试接缝；正式部署必须显式选定模式。
+
+Taihu 资源方配置使用 `KC_SERVICE_CLIENT_SECRET` 作 introspection 应用密钥，`KC_TAIHU_HMAC_SECRET` 作网关 hex 验签密钥；两者不是调用方身份。`--auth-hmac-secret` / `--service-client-secret` 可以覆盖环境值，但不得把真实秘密作为 argv 字面量传入。精确配置见 `server/auth_taihu.go`、`server/auth_service.go` 与帮助文本。
 
 已验证人类身份的 `principal` 是 `identity.CanonicalUsername` 接受的用户名，例如 `kaiqidong`；Gitea numeric ID、Taihu subject 和认证 issuer 只进入内部可信绑定，不作为公开身份或授权键。Taihu 有 actor 的委托保留 `agent:<id>`，`onBehalfOf` 为用户名；无用户且只有 client 时保留 `service:<client_id>`。Gitea/Taihu 认证器构造 `HTTPIdentity.User`，Server 在授权前通过 `identity/` 核对 `stateDir/identities.json`。同名不同 subject/provider/issuer、同 subject 改名均拒绝，不通过重新登录接管权限。网关必须提供 HMAC 签名、用户名与稳定 subject；裸 `X-Tai-User` 和未签名身份头不再是认证方式。
 
@@ -129,10 +144,9 @@ Taihu 资源方配置使用 `KC_SERVICE_CLIENT_SECRET` 作 introspection 应用�
 
 `kc login` 按入口优先级发现服务模式，再进行配对；已签发 Bearer 可通过 `KC_AUTH_TOKEN`
 提供。`--server` 只是覆盖入口，不是登录专属日常操作数。身份验证和本机持久化都成功后才
-返回 `{status:"authenticated", principal, …凭证事实}`，回执不重复 Server 地址。当前
-Catalog 另存于同一 Server 会话目录的 `catalog.json`，不写入 token 或 pin。
+返回 `{status:"authenticated", principal, …凭证事实}`，回执不重复 Server 地址。服务地址和可信身份构成客户端上下文；不保存 Catalog 选择。
 
-非秘密连接配置保存为 `$KC_CONFIG_DIR/client.json`（默认 `~/.config/kc`），会话位于该目录 `sessions/<Server摘要>/`，以原子替换和 0600 权限保存。地址优先级是 `--server`、`KC_SERVER_URL`、保存的客户端配置；旧单服务登录文件只作匹配 Server 的兼容读取。切换 Server 不发送旧服务凭证；请求不跟随携带凭证的 HTTP 重定向。CLI、文件网关和 DSH 使用同一会话，过期后按同一服务续期，注销不会修改任务 pin。local 身份来源对 Taihu Server 返回 `USAGE_INVALID`。
+非秘密连接配置保存为 `$KC_CONFIG_DIR/client.json`（默认 `~/.config/kc`），会话位于该目录 `sessions/<Server摘要>/`，以原子替换和 0600 权限保存。地址优先级是 `--server`、`KC_SERVER_URL`、保存的客户端配置；旧单服务登录文件只作匹配 Server 的兼容读取。切换 Server 不发送旧服务凭证；请求不跟随携带凭证的 HTTP 重定向。CLI 与文件网关使用同一会话，过期后按同一服务续期，注销不会修改已固定的文件视图。local 身份来源对 Taihu Server 返回 `USAGE_INVALID`。
 
 浏览器组织登录的无状态接口为 `POST /identity/v1/authorize`、`POST /identity/v1/authorize:poll` 和 `POST /identity/v1/token`。前两者只传送固定部署的 PAR 请求/状态；token 接口的严格输入由 `client.TokenRequest` 定义。它们不建立 Server Workspace session、不发权，不接受调用者指定上游、应用 ID 或应用秘密。
 
@@ -144,13 +158,24 @@ Resource Access 参考装配按 Domain Schema（或 ResourceDescriptor）上的 
 `admission.requestURL` 和当前持有 `admin.grants.manage` 的主体。KC 不保存申请或审批状态，
 也没有 POST admission 或 `admission request`。
 
-权限统一由 `kc grant add|list|remove` 管理。`grant add` 的 `--repo` 与 `--catalog` 二选一；
+权限统一由 `kc grant add|list|remove` 管理。`grant add` 可限定 `--repo` 或 `--dataset`；省略两者为全服务范围。
 Repository 是授权范围，不形成 `repo grant` 子树。底层 share/connection typed HTTP 可继续
 服务管理集成，但不属于产品 argv。
 
-已有自有 Gitea 来源通过 `kc create --url --credential-file` 连接。credential 只进入 typed
+`grant list` 无 action 时返回 `{rules: [...]}`，按明确的 principal、Repository、
+Dataset、ref、object、aspect 过滤，不暴露授权账本私有回执。
+提供 action 时保留既有显式规则求值（省略 principal 则问当前主体），需要全局
+`admin.grants.read`；scoped read 只能列举明确范围，不能求值全局规则。
+远程 CLI 通过同一受控库存获取规则后使用既有求值函数，不另设评价路由，
+结果不包含库存发现或仓默认消费声明，也不替代下一次产品请求的服务端授权。
+发权与撤权共用明确目标范围检查：撤权范围取自存储规则，不使用客户端默认范围。
+新 grant ID 为 opaque 值，原 ID 不迁移；重复 ID 撤权失败关闭，旧撤权 ID 不复用。
+`admission show` 保留显式规则的 Dataset/ref/object/aspect 限制，不能把受限规则
+展示成整个服务或仓的权限。`manage` 不隐含 `read`，自身或最后管理员撤权仍允许。
+
+已有自有 lakeFS 来源通过 `kc create --url --credential-file` 连接。credential 只进入 typed
 请求体和 Server 私有耐久账，不进入日志、trace 或公开结果。连接成功不等于 attach，也不发
 `knowledge.read`。
 
-知识消费只接受 `--repo` 或 `--dataset`；没有 Catalog 搜索范围，也不接受
+知识消费只接受 `--repo` 或 `--dataset`；没有 Catalog 选择范围，也不接受
 `--catalog`、`--source`、`--pin`。Writer、`diff` 与 `schema list` 拒绝 `--dataset`。

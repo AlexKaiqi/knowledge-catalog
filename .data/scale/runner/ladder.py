@@ -17,7 +17,7 @@ transport 腿汇总。粒度 caveat：Prometheus 抓取间隔（默认 5s）内�
 
 边界（与 CASES.md §3 一致，但 L1 只覆盖其中可 client-timer 的子集）：
 - 只绑定 env 配置指向的已部署 KC Server，不启动、不编排任何容器；
-- 只经公开 HTTP surface（/catalog/v1 /writer/v1 /knowledge/v1）与只读
+- 只经公开 HTTP surface（/snapshot/v1 /writer/v1 /knowledge/v1）与只读
   Prometheus query API（可选）；
 - closed-loop 串行（concurrency=1），到达模型扩展属于 L3（arrival-models）；
 - 发压端 CPU 采样只覆盖 runner 进程自身（os.times，含子进程），机器级
@@ -41,7 +41,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT.parent / "scenes"))
-from perf_tree import load_yaml  # 受限 YAML 子集解析器，与 scenes 工具同源
+from perf_tree import check_target, load_yaml  # 受限 YAML 子集解析器，与 scenes 工具同源
 from smoke import Client, quantile, quantiles_ms, rate
 
 DEFAULT_TRANSPORTS = ["staging", "bulk"]
@@ -261,8 +261,10 @@ class LadderRun:
         self.out = out_dir
         self.max_files = max_files
         target = env["target"]
+        target_errors = check_target(target)
+        if target_errors:
+            raise ValueError("; ".join(target_errors))
         self.client = Client(target["serverURL"], target["principal"])
-        self.catalog = target["catalog"]
         self.store = target.get("managedStore", "")
         self.prefix = target.get("repositoryPrefix", "kc-perf-")
         self.ladders = (env.get("profile") or {}).get("ladders") or {}
@@ -326,7 +328,7 @@ class LadderRun:
             "provider": {"managedStore": self.store, "medium": "lakeFS"},
             "基线": "BASELINE (no approved prior run; thresholds not re-registered)",
             "laddersDeclared": self.ladders,
-            "target": {"serverURL": self.client.base, "principal": principal, "catalog": self.catalog},
+            "target": {"serverURL": self.client.base, "principal": principal},
         }
         self.flush("manifest.json", manifest)
         print(f"bind: readyz=200 whoami={principal} ladder={self.upload_ladder} transports={self.transports}")
@@ -383,14 +385,14 @@ class LadderRun:
 
     def create_repository(self):
         name = f"{self.prefix}{self.runstamp}-{len(self.points):04d}"
-        _, status, resp = self.client.call("POST", "/catalog/v1/repositories", {"name": name, "store": self.store})
+        _, status, resp = self.client.call("POST", "/snapshot/v1/connections", {"name": name, "store": self.store})
         if status != 200:
             raise SystemExit(f"managed create failed: {resp}")
         self.repo = resp["repositoryId"]
         self.repo_seg = urllib.parse.quote(self.repo, safe="")
         _, status, _ = self.client.call(
             "POST",
-            f"/catalog/v1/catalogs/{urllib.parse.quote(self.catalog, safe='')}/repositories",
+            f"/snapshot/v1/repositories",
             {"repository": self.repo},
         )
         if status not in (200, 201, 202):
@@ -402,7 +404,7 @@ class LadderRun:
     def detach_repository(self):
         _, status, _ = self.client.call(
             "DELETE",
-            f"/catalog/v1/catalogs/{urllib.parse.quote(self.catalog, safe='')}/repositories/{self.repo_seg}")
+            f"/snapshot/v1/repositories/{self.repo_seg}")
         return status
 
     def put_schema(self):
@@ -626,6 +628,10 @@ def main():
     env = load_yaml(env_path.read_text(encoding="utf-8"))
     if not isinstance(env, dict) or "target" not in env:
         print("env config missing target section", file=sys.stderr)
+        return 2
+    target_errors = check_target(env["target"])
+    if target_errors:
+        print("; ".join(target_errors), file=sys.stderr)
         return 2
     scale = (env.get("profile") or {}).get("scale")
     if scale not in ["S0", "S1", "S2", "S3", "S4", "S5"]:

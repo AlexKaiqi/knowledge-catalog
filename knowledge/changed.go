@@ -35,7 +35,7 @@ type AddressPathsReader interface {
 
 // KnowledgeFileReader is a bounded tree read for convention paths such as
 // README.md and Schema files under _schemas/. It is not a Snapshot scan and
-// not a Catalog protocol type.
+// not a Dataset service protocol type.
 type KnowledgeFileReader interface {
 	ReadKnowledgeFile(rel string, commit kernel.CommitID) ([]byte, error)
 }

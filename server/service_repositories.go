@@ -15,7 +15,6 @@ import (
 // durable allocation command stays inside Home; explicit protocol creation
 // continues to return its caller-supplied command receipt.
 type ManagedRepositorySummary struct {
-	Catalog           string          `json:"catalog"`
 	RepositoryID      string          `json:"repositoryId"`
 	Status            string          `json:"status"`
 	Head              kernel.CommitID `json:"head"`
@@ -30,7 +29,7 @@ type ManagedRepositorySummary struct {
 
 func summarizeManagedRepository(item apphome.ManagedRepositoryResult) ManagedRepositorySummary {
 	return ManagedRepositorySummary{
-		Catalog: item.Catalog, RepositoryID: item.RepositoryID, Status: item.Status,
+		RepositoryID: item.RepositoryID, Status: item.Status,
 		Head: item.Head, Name: item.Name, Owner: item.Owner, Store: item.Store,
 		ManagementURL: item.ManagementURL, ManagementState: item.ManagementState,
 		ProviderURL: item.ProviderURL, ProvisioningState: item.ProvisioningState,
@@ -42,9 +41,9 @@ func (f *httpFacade) registerRepositoryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /assets/repository.js", f.repositoryScript)
 	mux.HandleFunc("GET /console", f.consolePage)
 	mux.HandleFunc("GET /assets/console.js", f.consoleScript)
-	mux.HandleFunc("POST /catalog/v1/repositories", f.namedRepositoryCreate)
-	mux.HandleFunc("GET /catalog/v1/repositories", f.myRepositories)
-	mux.HandleFunc("GET /catalog/v1/repositories/{repository}", f.ownedRepository)
+	mux.HandleFunc("POST /snapshot/v1/connections", f.namedRepositoryCreate)
+	mux.HandleFunc("GET /snapshot/v1/connections", f.myRepositories)
+	mux.HandleFunc("GET /snapshot/v1/connections/{repository}", f.ownedRepository)
 }
 
 func (f *httpFacade) namedRepositoryCreate(w http.ResponseWriter, r *http.Request) {
@@ -56,19 +55,15 @@ func (f *httpFacade) namedRepositoryCreate(w http.ResponseWriter, r *http.Reques
 		invoke.WriteJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "repository creation requires a name")))
 		return
 	}
-	f.executeTyped(w, r, "named-repository-create", "catalog.repositories.create", command{Stage: invoke.StageGoverned, Run: VerbCreateNamedRepository}, compactFlags(map[string]FlagValue{"name": input.Name, "store": input.Store, "catalog": input.Catalog}))
+	f.executeTyped(w, r, "named-repository-create", "repositories.create", command{Stage: invoke.StageGoverned, Run: VerbCreateNamedRepository}, compactFlags(map[string]FlagValue{"name": input.Name, "store": input.Store}))
 }
 
 func VerbCreateNamedRepository(cx *inv.Invocation) (any, error) {
 	if cx.WS == nil || cx.WS.Deployment == nil {
 		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "managed creation requires a declared deployment")
 	}
-	catalogID := cx.Flag("catalog")
-	if catalogID == "" && len(cx.WS.File.Catalogs) > 0 {
-		catalogID = cx.WS.File.Catalogs[0].ID
-	}
 	item, err := cx.WS.CreateNamedManagedRepository(apphome.ManagedRepositoryRequest{
-		CatalogID: catalogID, Principal: cx.Flag("as"), Name: cx.Flag("name"), Store: cx.Flag("store"),
+		Principal: cx.Flag("as"), Name: cx.Flag("name"), Store: cx.Flag("store"),
 		IdentityProvider: cx.Flag("_identity-provider"), IdentityIssuer: cx.Flag("_identity-issuer"), IdentitySubject: cx.Flag("_identity-subject"),
 	}, func(grant apphome.ManagedRepositoryGrant) error {
 		return inv.EnsureManagedRepositoryGrant(cx.Home, grant)
@@ -80,7 +75,7 @@ func VerbCreateNamedRepository(cx *inv.Invocation) (any, error) {
 }
 
 // Inventory is scoped to the verified principal and then filtered by current
-// metadata permissions. Finding one's allocations grants no Catalog discovery,
+// metadata permissions. Finding one's allocations grants no Registry discovery,
 // Knowledge read, write or share rights.
 func (f *httpFacade) myRepositories(w http.ResponseWriter, r *http.Request) {
 	f.executeTyped(w, r, "managed-repository-list", "identity.read", command{Stage: invoke.StageGoverned, Run: func(cx *inv.Invocation) (any, error) {
@@ -114,5 +109,5 @@ func (f *httpFacade) ownedRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 func authorizeRepositoryMetadata(cx *inv.Invocation, item apphome.ManagedRepositoryResult) error {
-	return inv.Authorize(cx.Home, "repository.metadata.read", map[string]FlagValue{"as": cx.Flag("as"), "repo": item.RepositoryID, "catalog": item.Catalog}, cx.Observation.Authorization)
+	return inv.Authorize(cx.Home, "repository.metadata.read", map[string]FlagValue{"as": cx.Flag("as"), "repo": item.RepositoryID}, cx.Observation.Authorization)
 }

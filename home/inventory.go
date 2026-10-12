@@ -14,7 +14,6 @@ type homeInventory struct {
 
 func (ws *Home) BindingFile() HomeFile {
 	file := ws.File
-	file.Catalogs = append([]HomeCatalog(nil), file.Catalogs...)
 	if ws.inventory == nil {
 		file.Repos = append([]HomeRepo(nil), file.Repos...)
 		return file

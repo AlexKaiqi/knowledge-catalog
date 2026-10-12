@@ -1,0 +1,18 @@
+---
+object_id: kc/relation/identity.uses-interface.cli
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: relations/identity.uses-interface.cli.yaml
+---
+relationId: kc/relation/identity.uses-interface.cli
+relationType: uses_interface
+direction: DIRECTED
+endpoints:
+  - role: from
+    objectRef:
+      repository: kr://kc/system
+      object: kc/capability/identity
+  - role: to
+    objectRef:
+      repository: kr://kc/system
+      object: kc/interface/cli

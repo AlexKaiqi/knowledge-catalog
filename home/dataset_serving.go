@@ -2,13 +2,13 @@ package home
 
 import (
 	"context"
-	"kc/catalog"
 	"kc/kernel"
 	"kc/knowledge"
+	"kc/snapshot/dataset"
 )
 
-// PrepareDataset is application assembly, not a Catalog knowledge dependency.
-func (ws *Home) PrepareDataset(ctx context.Context, def catalog.KnowledgeSet) error {
+// PrepareDataset is application assembly, not a Registry knowledge dependency.
+func (ws *Home) PrepareDataset(ctx context.Context, def dataset.KnowledgeSet) error {
 	if ws.Projection == nil || ws.Stores.Index == "none" {
 		return nil
 	}
@@ -29,11 +29,11 @@ func (ws *Home) PrepareDataset(ctx context.Context, def catalog.KnowledgeSet) er
 	return nil
 }
 
-// This independent recovery lane follows Catalog serving releases rather than
+// This independent recovery lane follows Registry serving releases rather than
 // mistaking Repository HEAD for the Dataset's accepted basis. Reconciliation
 // runs on startup and periodically even when no source notification was sent.
 type datasetProjectionConsumer struct {
-	catalogs   []*catalog.Catalog
+	datasets   dataset.Service
 	controller interface {
 		PrepareServingBasis(context.Context, knowledge.Repository, kernel.CommitID) error
 	}
@@ -42,10 +42,11 @@ type datasetProjectionConsumer struct {
 func (datasetProjectionConsumer) ID() string { return "dataset-serving/v1" }
 func (d datasetProjectionConsumer) Reconcile(ctx context.Context, repo knowledge.Repository, _ kernel.CommitID) error {
 	seen := map[kernel.CommitID]bool{}
-	for _, cat := range d.catalogs {
+	{
+		cat := d.datasets
 		state := cat.DumpState()
-		if state.Archived || !cat.HasRepository(repo.ID()) {
-			continue
+		if !cat.HasRepository(repo.ID()) {
+			return nil
 		}
 		for _, def := range state.KnowledgeSets {
 			if def.Retired {

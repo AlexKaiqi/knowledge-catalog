@@ -15,8 +15,7 @@ import uuid
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SELECTORS = ("KC_E2E_RUN", "KC_COVERAGE_MIN", "KC_REQUIRE_LIVE_ADAPTERS",
-             "KC_LIVE_TAIHU", "KC_OPENSEARCH_IMAGE", "KC_DOLT_DOCKER_IMAGE",
-             "KC_DOLT_FORCE_DOCKER", "GOFLAGS", "CGO_ENABLED", "GOOS", "GOARCH")
+             "KC_LIVE_TAIHU", "KC_OPENSEARCH_IMAGE", "GOFLAGS", "CGO_ENABLED", "GOOS", "GOARCH")
 
 
 def now():
@@ -152,10 +151,6 @@ def run(args):
     write_json(output / "manifest.json", report)
     env = dict(os.environ, KC_VALIDATION_RUN_ID=run_id, KC_VALIDATION_RUN_DIR=str(output),
                KC_VALIDATION_SOURCE_FINGERPRINT=source["fingerprint"], KC_VALIDATION_SCOPE=args.scope)
-    for name, directory in (("KC_ROLE_ARTIFACTS", "agent-roles"),
-                            ("KC_QUESTION_ARTIFACTS", "agent-questions"),
-                            ("KC_METRIC_ARTIFACTS", "agent-metric")):
-        env.setdefault(name, str(output / directory))
     events, exit_code, child, declared, interrupted = GoResults(), 1, None, [], False
     def interrupt(signum, _frame):
         raise RunInterrupted(signum)

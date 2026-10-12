@@ -14,7 +14,6 @@ type Event struct {
 	Phase       string `json:"phase"`
 	As          string `json:"as,omitempty"`
 	Repo        string `json:"repo,omitempty"`
-	Catalog     string `json:"catalog,omitempty"`
 	CommandID   string `json:"commandId,omitempty"`
 	Receipt     string `json:"receipt,omitempty"`
 	NewCommit   string `json:"newCommit,omitempty"`
@@ -40,7 +39,7 @@ func DispatchObserved(home, phase string, event Event, observe DispatchObserver)
 	if phase == PhasePost {
 		persistenceErr = FlushOutboxObserved(home, observe)
 	}
-	matched := file.Match(event.Action, phase, event.Repo, event.Catalog)
+	matched := file.Match(event.Action, phase, event.Repo)
 	for _, b := range matched {
 		transport := "other"
 		if b.Run != "" {

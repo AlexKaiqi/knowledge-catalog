@@ -347,13 +347,10 @@ func acyclicDepends(docs map[string]catalogEntry, rels []edge) error {
 }
 
 func validateMarkdownLinks(root string, docs map[string]catalogEntry) error {
-	var files []string
-	for _, doc := range docs {
-		if strings.HasSuffix(doc.Path, ".md") {
-			files = append(files, doc.Path)
-		}
+	files, err := markdownLinkFiles(root, docs)
+	if err != nil {
+		return err
 	}
-	sort.Strings(files)
 	var broken []string
 	for _, rel := range files {
 		raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
@@ -381,6 +378,50 @@ func validateMarkdownLinks(root string, docs map[string]catalogEntry) error {
 		return fmt.Errorf("broken local Markdown link:\n  %s", strings.Join(broken, "\n  "))
 	}
 	return nil
+}
+
+// markdownLinkFiles adds maintained source documents to the graph's link check.
+// Discovery does not register owners or relationships; those remain graph-only.
+func markdownLinkFiles(root string, docs map[string]catalogEntry) ([]string, error) {
+	root = filepath.Clean(root)
+	paths := map[string]struct{}{}
+	for _, doc := range docs {
+		if strings.HasSuffix(doc.Path, ".md") {
+			paths[doc.Path] = struct{}{}
+		}
+	}
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if path == root {
+				return nil
+			}
+			if strings.HasPrefix(d.Name(), ".") {
+				return filepath.SkipDir
+			}
+			switch d.Name() {
+			case "node_modules", "vendor", "dist", "dist-ssr", "build", "coverage", "test-results", "playwright-report":
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		rel := relPath(root, path)
+		if rel == "TASK.md" || d.Name() == "README.md" || strings.HasSuffix(d.Name(), "REFACTOR.md") {
+			paths[rel] = struct{}{}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	files := make([]string, 0, len(paths))
+	for path := range paths {
+		files = append(files, path)
+	}
+	sort.Strings(files)
+	return files, nil
 }
 
 func relPath(root, path string) string {

@@ -14,30 +14,40 @@ import (
 	kchome "kc/home"
 	"kc/internal/telemetry"
 	"kc/invoke"
+	"kc/kernel"
 	knowledgeserving "kc/knowledge/serving"
 )
 
 // executeApplicationOperation is the shared application-service boundary.
 // CLI resolves a grouped command before calling it; typed HTTP handlers pass
 // an explicit command value and never consult either CLI registry.
-func ExecuteApplicationOperation(ctx context.Context, name, action string, cmd Command, flags map[string]invoke.FlagValue, state knowledgeserving.StateLookup, opened *kchome.Home, home string, observation *invoke.ObservationTelemetry) (any, error) {
+func ExecuteApplicationOperation(ctx context.Context, name, action string, cmd Command, flags map[string]invoke.FlagValue, state knowledgeserving.StateLookup, opened *kchome.Home, home string, observation *invoke.ObservationTelemetry, interfaces ...*knowledgeserving.InterfaceRegistry) (any, error) {
+	if _, supplied := flags["catalog"]; supplied {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "Catalog selection is not supported; this service has one registry")
+	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	observation = invoke.NoObservationTelemetry(observation)
 	cx := &Invocation{Command: name, Home: home, WS: opened, Flags: flags, Context: ctx, State: state, Observation: observation}
-	if opened != nil && len(opened.File.Catalogs) > 0 && invoke.FlagString(flags, "catalog") == "" {
-		flags["_default-catalog"] = opened.File.Catalogs[0].ID
+	if len(interfaces) > 0 {
+		cx.ObjectInterfaces = interfaces[0]
 	}
 	if cmd.Stage == invoke.StageHome {
-		if observesCatalogInventory(name) {
-			if err := AuthorizeCatalogInventory(home, flags, observation.Authorization, opened); err != nil {
+		if observesInventory(name) {
+			if err := AuthorizeInventory(home, flags, observation.Authorization, opened); err != nil {
 				return nil, err
 			}
 			return cmd.Run(cx)
 		}
-		if err := Authorize(home, action, flags, observation.Authorization, opened); err != nil {
-			return nil, err
+		var authErr error
+		if action == "admin.grants.read" || action == "admin.grants.manage" {
+			authErr = AuthorizeGrantAdministration(cx, action)
+		} else {
+			authErr = Authorize(home, action, flags, observation.Authorization, opened)
+		}
+		if authErr != nil {
+			return nil, authErr
 		}
 		return cmd.Run(cx)
 	}
@@ -54,7 +64,7 @@ func ExecuteApplicationOperation(ctx context.Context, name, action string, cmd C
 	BindHomeTelemetry(observation.Runtime, ws, flags)
 	// Production serving has no implicit recipe adoption. Its read operations
 	// can borrow authority/index handles while keeping request stamps and the
-	// accepted Catalog state private. Component fixtures retain their legacy
+	// accepted Registry state private. Component fixtures retain their legacy
 	// adoption path and therefore cannot use this immutable request view.
 	if opened != nil && opened.Deployment != nil && TypedInvocationReadOnly(action) {
 		requestJournal, err := RequestHomeJournal(ws.Dir, action, flags)
@@ -79,7 +89,7 @@ func ExecuteApplicationOperation(ctx context.Context, name, action string, cmd C
 		ObserveHome(ws, action, flags)
 		return cmd.Run(cx)
 	}
-	// Bind the Catalog-scoped control state before authorization so verbs such
+	// Bind the Registry-scoped control state before authorization so verbs such
 	// as merge can derive their real repository/ref scope from the immutable
 	// proposal instead of making callers repeat (and potentially spoof) it.
 	if invoke.FlagString(flags, "repo") == "" {
@@ -87,7 +97,6 @@ func ExecuteApplicationOperation(ctx context.Context, name, action string, cmd C
 			return nil, err
 		}
 	}
-	ws.BindControl(cx.Flag("catalog"))
 	AuthorizationFlags := AuthorizationFlags(cx)
 	if err := Authorize(home, action, AuthorizationFlags, observation.Authorization, ws); err != nil {
 		return nil, err
@@ -98,14 +107,14 @@ func ExecuteApplicationOperation(ctx context.Context, name, action string, cmd C
 	})
 }
 
-func observesCatalogInventory(name string) bool {
-	return name == "catalog-list" || name == "operations-stores"
+func observesInventory(name string) bool {
+	return name == "operations-stores"
 }
 
 // invokeApplicationWithTelemetryAtHome is the typed-service application
 // boundary. Unlike the CLI dispatcher it receives an explicit operation and
 // therefore never consults the CLI command registry.
-func InvokeApplicationWithTelemetryAtHome(ctx context.Context, runtime *telemetry.Runtime, name, action string, op Command, flags map[string]invoke.FlagValue, state knowledgeserving.StateLookup, opened *kchome.Home) invoke.RunResult {
+func InvokeApplicationWithTelemetryAtHome(ctx context.Context, runtime *telemetry.Runtime, name, action string, op Command, flags map[string]invoke.FlagValue, state knowledgeserving.StateLookup, opened *kchome.Home, interfaces ...*knowledgeserving.InterfaceRegistry) invoke.RunResult {
 	if flags == nil {
 		flags = map[string]invoke.FlagValue{}
 	}
@@ -164,7 +173,7 @@ func InvokeApplicationWithTelemetryAtHome(ctx context.Context, runtime *telemetr
 	var result any
 	executed := false
 	if invokeErr == nil {
-		result, invokeErr = ExecuteApplicationOperation(ctx, name, action, op, flags, state, opened, home, observation)
+		result, invokeErr = ExecuteApplicationOperation(ctx, name, action, op, flags, state, opened, home, observation, interfaces...)
 		executed = true
 	}
 	domainElapsed := TelemetrySince(operationStarted.At)

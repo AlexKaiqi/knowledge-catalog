@@ -23,23 +23,14 @@ import (
 
 // This starts with no user account or per-repository binding. Deployment
 // policy is the only precondition; every user action crosses CLI -> Server.
-func TestManagedProductHumanSelfServiceOnLiveGitea(t *testing.T) {
-	managedHumanJourney(t, "gitea")
-}
-
 func TestManagedProductHumanSelfServiceOnLakeFS(t *testing.T) {
-	managedHumanJourney(t, "lakefs")
+	managedHumanJourney(t)
 }
 
-func managedHumanJourney(t *testing.T, driver string) {
+func managedHumanJourney(t *testing.T) {
 	isolateClientCredentials(t)
 	t.Setenv("KC_REQUIRE_LIVE_ADAPTERS", "1")
 	t.Setenv("KC_SERVER_URL", "")
-	base, token := "", ""
-	if driver == "gitea" {
-		base, token, _ = testkit.GiteaEndpoint(t)
-		t.Setenv("KC_GITEA_TOKEN", token)
-	}
 	cfg, path := declaredDeployment(t, false)
 	var guard sync.RWMutex
 	var current http.Handler
@@ -49,16 +40,12 @@ func managedHumanJourney(t *testing.T, driver string) {
 		current.ServeHTTP(w, r)
 	}))
 	defer server.Close()
-	pool := apphome.ManagedRepositoryConfig{Driver: driver, PublicURL: server.URL, CreatorActions: []string{"writer.preview", "writer.commit", "writer.receipt.read", "knowledge.read", "knowledge.provenance", "knowledge.schema.read", "dataset.resolve", "file.read", "repository.metadata.read", "repository.shares.manage"}, ShareActions: []string{"knowledge.read", "knowledge.provenance", "dataset.resolve", "file.read"}}
-	if driver == "gitea" {
-		pool.DSN = base + "/kc"
-	} else {
-		fake := testkit.NewLakeFSFake(t)
-		pool.DSN = fake.Origin()
-		pool.Root = "s3://kc-authority"
-		t.Setenv("KC_LAKEFS_CREDENTIAL", testkit.LakeFSFakeCredential)
-	}
-	cfg.ManagedStores = map[string]apphome.ManagedRepositoryConfig{driver: pool}
+	pool := apphome.ManagedRepositoryConfig{Driver: "lakefs", PublicURL: server.URL, CreatorActions: []string{"writer.preview", "writer.commit", "writer.receipt.read", "knowledge.read", "knowledge.provenance", "knowledge.schema.read", "dataset.resolve", "file.read", "repository.metadata.read", "repository.shares.manage"}, ShareActions: []string{"knowledge.read", "knowledge.provenance", "dataset.resolve", "file.read"}}
+	fake := testkit.NewLakeFSFake(t)
+	pool.DSN = fake.Origin()
+	pool.Root = "s3://kc-authority"
+	t.Setenv("KC_LAKEFS_CREDENTIAL", testkit.LakeFSFakeCredential)
+	cfg.ManagedStores = map[string]apphome.ManagedRepositoryConfig{"lakefs": pool}
 	cfg.Admission = &apphome.AdmissionConfig{RequestURL: "https://itsm.example/kc-access"}
 	writeDeployment(t, path, cfg)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", path))
@@ -67,8 +54,8 @@ func managedHumanJourney(t *testing.T, driver string) {
 		t.Fatal(err)
 	}
 	grants.Rules = append(grants.Rules, inv.AllowRule{
-		ID: "external-approval", Principal: "kaiqidong", Catalog: cfg.Catalogs[0].ID,
-		Actions: []string{"catalog.read", "catalog.repositories.create"},
+		ID: "external-approval", Principal: "kaiqidong",
+		Actions: []string{"inventory.read", "repositories.create"},
 	})
 	if err := inv.WriteAllow(cfg.StateDir, grants); err != nil {
 		t.Fatal(err)
@@ -95,7 +82,7 @@ func managedHumanJourney(t *testing.T, driver string) {
 	repositoryShareAdd := func(client *kcclient.Client, repository, principal, actions string) kcclient.RepositoryShare {
 		t.Helper()
 		var share kcclient.RepositoryShare
-		if err := client.CatalogService().ShareRepository(context.Background(), repository, kcclient.RepositoryShareRequest{
+		if err := client.SnapshotService().ShareRepository(context.Background(), repository, kcclient.RepositoryShareRequest{
 			Principal: principal, Actions: shareActions(actions),
 		}, kcclient.RequestOptions{}, &share); err != nil {
 			t.Fatal(err)
@@ -105,21 +92,21 @@ func managedHumanJourney(t *testing.T, driver string) {
 	repositoryShareList := func(client *kcclient.Client, repository string) kcclient.RepositoryShares {
 		t.Helper()
 		var listed kcclient.RepositoryShares
-		if err := client.CatalogService().RepositoryShares(context.Background(), repository, kcclient.RequestOptions{}, &listed); err != nil {
+		if err := client.SnapshotService().RepositoryShares(context.Background(), repository, kcclient.RequestOptions{}, &listed); err != nil {
 			t.Fatal(err)
 		}
 		return listed
 	}
 	repositoryShareRemove := func(client *kcclient.Client, repository, shareID string) {
 		t.Helper()
-		if err := client.CatalogService().RevokeRepositoryShare(context.Background(), repository, shareID, kcclient.RequestOptions{}, &struct{}{}); err != nil {
+		if err := client.SnapshotService().RevokeRepositoryShare(context.Background(), repository, shareID, kcclient.RequestOptions{}, &struct{}{}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	expectRepositoryShareCode := func(client *kcclient.Client, repository, principal, actions, code string) {
 		t.Helper()
 		var share kcclient.RepositoryShare
-		err := client.CatalogService().ShareRepository(context.Background(), repository, kcclient.RepositoryShareRequest{
+		err := client.SnapshotService().ShareRepository(context.Background(), repository, kcclient.RepositoryShareRequest{
 			Principal: principal, Actions: shareActions(actions),
 		}, kcclient.RequestOptions{}, &share)
 		if string(kernel.CodeOf(err)) != code {
@@ -129,14 +116,14 @@ func managedHumanJourney(t *testing.T, driver string) {
 	expectRepositorySharesCode := func(client *kcclient.Client, repository, code string) {
 		t.Helper()
 		var listed kcclient.RepositoryShares
-		err := client.CatalogService().RepositoryShares(context.Background(), repository, kcclient.RequestOptions{}, &listed)
+		err := client.SnapshotService().RepositoryShares(context.Background(), repository, kcclient.RequestOptions{}, &listed)
 		if string(kernel.CodeOf(err)) != code {
 			t.Fatalf("want error code %s, got %v", code, err)
 		}
 	}
 	expectRepositoryShareRevokeCode := func(client *kcclient.Client, repository, shareID, code string) {
 		t.Helper()
-		err := client.CatalogService().RevokeRepositoryShare(context.Background(), repository, shareID, kcclient.RequestOptions{}, &struct{}{})
+		err := client.SnapshotService().RevokeRepositoryShare(context.Background(), repository, shareID, kcclient.RequestOptions{}, &struct{}{})
 		if string(kernel.CodeOf(err)) != code {
 			t.Fatalf("want error code %s, got %v", code, err)
 		}
@@ -176,22 +163,6 @@ func managedHumanJourney(t *testing.T, driver string) {
 	resp.Body.Close()
 	if resp.StatusCode != 200 {
 		t.Fatalf("management page unavailable: %d", resp.StatusCode)
-	}
-	if driver == "gitea" {
-		request, _ := http.NewRequest(http.MethodGet, base+"/api/v1/users/kaiqidong", nil)
-		request.Header.Set("Authorization", "token "+token)
-		response, err := http.DefaultClient.Do(request)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var account struct {
-			Login string `json:"login"`
-		}
-		_ = json.NewDecoder(response.Body).Decode(&account)
-		response.Body.Close()
-		if response.StatusCode != 200 || account.Login != "kaiqidong" {
-			t.Fatalf("Snapshot account is not the KC username: %d %s", response.StatusCode, account.Login)
-		}
 	}
 	providerClient := productClient(t, server.URL, "kaiqidong")
 	mine := myRepositories(t, providerClient)

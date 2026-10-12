@@ -9,7 +9,6 @@ import (
 	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"testing"
 	"time"
 
@@ -22,12 +21,12 @@ import (
 
 func TestTypedRefineQueryDoesNotUseCurrentRequestTraceAsFilter(t *testing.T) {
 	home := testkit.TempDir(t)
-	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(home, "init"))
 	principal := "agent:audit"
 	if err := inv.WriteAllow(home, inv.AllowFile{Version: 2, Rules: []inv.AllowRule{
 		{ID: "audit", Principal: principal, Actions: []string{"audit.read"}},
-		{ID: "feedback", Principal: principal, Actions: []string{"feedback.write"}, Catalog: "kr://acme/catalog", Dataset: "agent"},
-		{ID: "workspace", Principal: principal, Actions: []string{"file.read"}, Catalog: "kr://acme/catalog", Dataset: "agent"},
+		{ID: "feedback", Principal: principal, Actions: []string{"feedback.write"}, Dataset: "agent"},
+		{ID: "workspace", Principal: principal, Actions: []string{"file.read"}, Dataset: "agent"},
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -107,14 +106,14 @@ func TestTypedRefineQueryDoesNotUseCurrentRequestTraceAsFilter(t *testing.T) {
 
 func TestTypedRetrievalEvidenceQueryAndTraining(t *testing.T) {
 	home := testkit.TempDir(t)
-	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(home, "init"))
 	agent, user := "agent:retrieval-audit", "user:retrieval-reviewer"
 	rules := []inv.AllowRule{}
 	for _, principal := range []string{agent, user} {
 		rules = append(rules,
 			inv.AllowRule{ID: principal + "-audit", Principal: principal, Actions: []string{"audit.read"}},
-			inv.AllowRule{ID: principal + "-feedback", Principal: principal, Actions: []string{"feedback.write"}, Catalog: "kr://acme/catalog", Dataset: "agent"},
-			inv.AllowRule{ID: principal + "-workspace", Principal: principal, Actions: []string{"file.read"}, Catalog: "kr://acme/catalog", Dataset: "agent"},
+			inv.AllowRule{ID: principal + "-feedback", Principal: principal, Actions: []string{"feedback.write"}, Dataset: "agent"},
+			inv.AllowRule{ID: principal + "-workspace", Principal: principal, Actions: []string{"file.read"}, Dataset: "agent"},
 		)
 	}
 	if err := inv.WriteAllow(home, inv.AllowFile{Version: 2, Rules: rules}); err != nil {
@@ -221,8 +220,8 @@ func TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing(t *testin
 	}{
 		{http.MethodGet, "/identity/v1/auth"},
 		{http.MethodGet, "/identity/v1/whoami"},
-		{http.MethodGet, "/catalog/v1/catalogs"},
-		{http.MethodPost, "/catalog/v1/catalogs/catalog/repositories:create"},
+		{http.MethodGet, "/snapshot/v1/inventory"},
+		{http.MethodPost, "/snapshot/v1/repositories:create"},
 		{http.MethodPost, "/knowledge/v1/objects:read"},
 		{http.MethodPost, "/knowledge/v1/objects:resolve"},
 		{http.MethodPost, "/knowledge/v1/log:query"},
@@ -230,7 +229,7 @@ func TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing(t *testin
 		{http.MethodPost, "/knowledge/v1/search:rerank"},
 		{http.MethodPost, "/knowledge/v1/rerank"},
 		{http.MethodPost, "/knowledge/v1/resources:access"},
-		{http.MethodPost, "/dataset-files/v1/tree:list"},
+		{http.MethodPost, "/snapshot/v1/files/tree:list"},
 		{http.MethodPost, "/writer/v1/repositories/repo/commits"},
 		{http.MethodPost, "/governance/v1/proposals"},
 		{http.MethodGet, "/admin/v1/grants"},
@@ -257,7 +256,7 @@ func TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing(t *testin
 
 	retired := []string{
 		"/v1/read", "/v1/init", "/knowledge/v1/list", "/vfs-read",
-		"/dataset-files/v1/files:write", "/local/v1/init",
+		"/snapshot/v1/files/files:write", "/local/v1/init",
 	}
 	for _, path := range retired {
 		request, err := http.NewRequest(http.MethodPost, server.URL+path, bytes.NewBufferString("{}"))
@@ -341,7 +340,7 @@ func TestTypedServiceRequestsRejectUnknownFieldsAndTrailingJSON(t *testing.T) {
 			t.Fatalf("%s status=%d body=%s", name, response.StatusCode, raw)
 		}
 	}
-	catalogResolve, err := http.NewRequest(http.MethodPost, server.URL+"/catalog/v1/catalogs/"+url.PathEscape("kr://acme/catalog")+"/datasets/agent/resolve",
+	catalogResolve, err := http.NewRequest(http.MethodPost, server.URL+"/snapshot/v1/datasets/agent/resolve",
 		bytes.NewBufferString(`{"object":"policy/A"}`))
 	if err != nil {
 		t.Fatal(err)
@@ -364,11 +363,11 @@ func TestXKcAsUsesTheSameAuthorizationRulesAsCLI(t *testing.T) {
 	home := testkit.TempDir(t)
 	repository := "kr://acme/public/http-auth"
 	workspace := "agent"
-	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(home, "init"))
 	seedRepo(t, home, repository)
 	body(t, kc(home, "put", "--command-id", "seed", "--repo", repository, "--object", "Policy:one", "--value", `{"body":"one"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "1", "--source", repository+"=refs/heads/main"))
-	body(t, kc(home, "allow", "--principal", "agent:http", "--cmd", "read-workspace", "--catalog", "kr://acme/catalog", "--dataset", workspace))
+	body(t, kc(home, "allow", "--principal", "agent:http", "--cmd", "read-workspace", "--dataset", workspace))
 	body(t, kc(home, "allow", "--principal", "agent:http", "--cmd", "read", "--repo", repository))
 
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
@@ -398,17 +397,16 @@ func TestXKcAsUsesTheSameAuthorizationRulesAsCLI(t *testing.T) {
 
 func TestKnowledgeResolveAndObjectLogOverHTTP(t *testing.T) {
 	home := testkit.TempDir(t)
-	catalogID := "kr://acme/catalog"
 	repository := "kr://acme/public/http-log"
 	workspace := "agent"
 	principal := "agent:http-log"
-	body(t, kc(home, "init", "--catalog", catalogID))
+	body(t, kc(home, "init"))
 	seedRepo(t, home, repository)
 	body(t, kc(home, "put", "--command-id", "v1", "--repo", repository, "--object", "Policy:page", "--value", `{"body":"one"}`))
 	body(t, kc(home, "put", "--command-id", "v2", "--repo", repository, "--object", "Policy:page", "--value", `{"body":"two"}`))
 	body(t, kc(home, "put", "--command-id", "io", "--repo", repository, "--object", "ETLTask:job", "--aspect", "io", "--value", `{"inputs":["a"]}`))
 	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "1", "--source", repository+"=refs/heads/main"))
-	body(t, kc(home, "allow", "--principal", principal, "--cmd", "read-workspace", "--catalog", catalogID, "--dataset", workspace))
+	body(t, kc(home, "allow", "--principal", principal, "--cmd", "read-workspace", "--dataset", workspace))
 	body(t, kc(home, "allow", "--principal", principal, "--cmd", "read", "--repo", repository))
 	body(t, kc(home, "allow", "--principal", principal, "--action", "knowledge.history.read", "--repo", repository))
 
@@ -419,7 +417,7 @@ func TestKnowledgeResolveAndObjectLogOverHTTP(t *testing.T) {
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
-	catalogPath := "/catalog/v1/catalogs/" + url.PathEscape(catalogID)
+	catalogPath := "/snapshot/v1"
 	status, payload, _ := httpSurfaceRequest(t, server, http.MethodPost, catalogPath+"/datasets/"+workspace+"/resolve",
 		map[string]any{"object": "Policy:page"}, principal)
 	if status != http.StatusBadRequest || asMap(t, asMap(t, payload)["error"])["code"] != "USAGE_INVALID" {
@@ -586,7 +584,7 @@ func TestKnowledgeResolveAndObjectLogOverHTTP(t *testing.T) {
 
 func TestHTTPAccessLogQueryFiltersAndPages(t *testing.T) {
 	home := testkit.TempDir(t)
-	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(home, "init"))
 	principal := "agent:audit"
 	if err := inv.WriteAllow(home, inv.AllowFile{Version: 2, Rules: []inv.AllowRule{
 		{ID: "audit", Principal: principal, Actions: []string{"audit.read"}},

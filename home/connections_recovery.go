@@ -38,14 +38,11 @@ func validateConnectionState(c DeploymentConfig, marker deploymentState, allowUp
 		}
 	}
 	for _, record := range records {
+		if record.legacyAuthority != "" && record.legacyAuthority != c.Registry.ID {
+			return kernel.Fail(kernel.ErrPreconditionFailed, "connection belongs to a different registry authority")
+		}
 		bindings.Repositories = append(bindings.Repositories, record.Binding)
-		found := false
-		for _, cat := range c.Catalogs {
-			found = found || cat.ID == record.Catalog
-		}
-		if !found {
-			return kernel.Fail(kernel.ErrPreconditionFailed, "connected Catalog binding is unavailable")
-		}
+
 	}
 	return bindings.Validate()
 }

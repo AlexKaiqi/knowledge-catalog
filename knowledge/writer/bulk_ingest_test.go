@@ -8,7 +8,6 @@ import (
 	"kc/knowledge"
 	"kc/knowledge/writer"
 	"kc/snapshot"
-	"kc/snapshot/commandlog"
 )
 
 // stagingOnlyStore hides the bulk capability of an otherwise capable store.
@@ -57,7 +56,7 @@ func TestBulkIngestRejectsMediumWithoutCapability(t *testing.T) {
 	if err := registry.Add(&stagingOnlyStore{Store: repo, tree: repo}); err != nil {
 		t.Fatal(err)
 	}
-	commands, err := commandlog.New(nil)
+	commands, err := snapshot.NewCommandLedger(nil)
 	if err != nil {
 		t.Fatal(err)
 	}

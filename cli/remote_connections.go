@@ -2,8 +2,7 @@ package cli
 
 import (
 	"io"
-	apphome "kc/home"
-	"net/url"
+	"kc/snapshot"
 	"os"
 	"strings"
 
@@ -11,19 +10,14 @@ import (
 )
 
 func repositoryIDFromConnectionURL(raw string) (string, error) {
-	parsed, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		return "", kernel.Fail(kernel.ErrUsageInvalid, "create --url requires an absolute repository URL")
+	endpoint, err := snapshot.ParseLakeFSDSN(strings.TrimSpace(raw))
+	if err != nil {
+		return "", err
 	}
-	name := strings.Trim(strings.TrimSuffix(parsed.Path, ".git"), "/")
-	if name == "" {
-		return "", kernel.Fail(kernel.ErrUsageInvalid, "create --url must identify a repository")
+	if !snapshot.ValidLakeFSName(endpoint.Repository) || snapshot.PlatformLakeFSName(endpoint.Repository) {
+		return "", kernel.Fail(kernel.ErrUsageInvalid, "create --url must identify a business Repository")
 	}
-	id := "kr://" + strings.ToLower(parsed.Hostname()) + "/" + name
-	if normalized, err := apphome.NormalizeCatalogID(id); err != nil || normalized != id {
-		return "", kernel.Fail(kernel.ErrUsageInvalid, "create --url cannot derive a valid Repository identity")
-	}
-	return id, nil
+	return endpoint.Repository, nil
 }
 
 func connectionCredentialFile(flags map[string]FlagValue) (string, error) {

@@ -47,20 +47,11 @@ func MatchedRuleID(home, command string, flags map[string]invoke.FlagValue) stri
 	if err != nil {
 		return ""
 	}
-	// Mirror Authorize: an explicit operand, then the Home's current Catalog,
-	// then the single default Catalog. A rule scoped to the current Catalog must
-	// still be named when the caller no longer repeats --catalog.
-	catalogID := invoke.FlagString(flags, "catalog")
-	if catalogID == "" {
-		catalogID = invoke.FlagString(flags, "_default-catalog")
-	}
-	catalogID = DefaultAllowCatalog(home, catalogID)
 	action := ActionOf(command, flags)
 	rule, ok := MatchAllow(file.Rules, AllowQuery{
 		Principal: invoke.FlagString(flags, "as"),
 		Action:    action,
 		Repo:      invoke.FlagString(flags, "repo"),
-		Catalog:   catalogID,
 		Ref:       invoke.FlagString(flags, "ref"),
 		Object:    invoke.FlagString(flags, "object"),
 		Aspect:    invoke.FlagString(flags, "aspect"),
@@ -101,7 +92,8 @@ func ObserveHome(ws *kchome.Home, command string, flags map[string]invoke.FlagVa
 	if ws.TreeWriter != nil {
 		ws.TreeWriter.SetStamp(as, req, rule)
 	}
-	for _, cat := range ws.Catalogs {
+	{
+		cat := ws.Datasets
 		if cat != nil {
 			cat.SetStamp(as, req, rule)
 		}

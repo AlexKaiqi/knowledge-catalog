@@ -5,11 +5,11 @@ import (
 	"errors"
 	"testing"
 
-	"kc/catalog"
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/snapshot"
+	"kc/snapshot/dataset"
 )
 
 type datasetBasisRecorder struct {
@@ -28,12 +28,12 @@ func TestDatasetRecoveryFollowsServingReleaseNotSourceHead(t *testing.T) {
 	if err := store.Add(s.Repo); err != nil {
 		t.Fatal(err)
 	}
-	cat, err := catalog.NewCatalog(store, testkit.MakeRegistry(t))
+	cat, err := dataset.NewService(store, testkit.MakeRegistry(t))
 	if err != nil {
 		t.Fatal(err)
 	}
 	testkit.RegisterMounted(t, cat, store)
-	if _, err := cat.DefineKnowledgeSet("active", 1, []catalog.KnowledgeSetSource{{Repository: s.RepositoryID, Selector: snapshot.DefaultRef}}); err != nil {
+	if _, err := cat.DefineKnowledgeSet("active", 1, []dataset.KnowledgeSetSource{{Repository: s.RepositoryID, Selector: snapshot.DefaultRef}}); err != nil {
 		t.Fatal(err)
 	}
 	latest, err := s.Repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID, Operations: testkit.PutEntity("next", map[string]any{"body": "next"}, "")})
@@ -41,7 +41,7 @@ func TestDatasetRecoveryFollowsServingReleaseNotSourceHead(t *testing.T) {
 		t.Fatal(err)
 	}
 	recorder := &datasetBasisRecorder{err: errors.New("provider unavailable")}
-	consumer := datasetProjectionConsumer{catalogs: []*catalog.Catalog{cat}, controller: recorder}
+	consumer := datasetProjectionConsumer{datasets: cat, controller: recorder}
 	if err := consumer.Reconcile(context.Background(), s.Repo, latest); err == nil {
 		t.Fatal("readiness failure was discarded")
 	}
@@ -52,7 +52,7 @@ func TestDatasetRecoveryFollowsServingReleaseNotSourceHead(t *testing.T) {
 	if len(recorder.commits) != 2 || recorder.commits[0] != s.RootCommitID || recorder.commits[1] != s.RootCommitID {
 		t.Fatalf("recovered HEAD instead of serving release: %v", recorder.commits)
 	}
-	if _, err := cat.DefineKnowledgeSet("active", 2, []catalog.KnowledgeSetSource{{Repository: s.RepositoryID, Selector: snapshot.DefaultRef}}); err != nil {
+	if _, err := cat.DefineKnowledgeSet("active", 2, []dataset.KnowledgeSetSource{{Repository: s.RepositoryID, Selector: snapshot.DefaultRef}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := consumer.Reconcile(context.Background(), s.Repo, latest); err != nil {

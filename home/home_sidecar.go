@@ -1,20 +1,18 @@
 package home
 
 import (
-	"kc/catalog"
 	"kc/controlplane"
 	"kc/gate"
 	"kc/index"
 	"kc/kernel"
 	"kc/knowledge/reader"
+	"kc/snapshot/dataset"
 )
 
 // Index AfterSnapshot and merge Gate are wired here, after Home assembly.
 
 func (ws *Home) wireSidecars() {
-	for _, cat := range ws.Catalogs {
-		ws.attachIndex(cat)
-	}
+	ws.attachIndex(ws.Datasets)
 	ws.AttachMergeGate(ws.ControlPlane)
 }
 
@@ -25,7 +23,7 @@ type indexHook struct {
 
 // Indexing is layer ③ over ②: a member attached as a plain snapshot has nothing
 // to index, so it advances without an index pass rather than failing the write.
-func (h *indexHook) AfterSnapshot(ev catalog.Snapshot) error {
+func (h *indexHook) AfterSnapshot(ev dataset.Snapshot) error {
 	repo, err := h.knowledge.Wrap(ev.Repository, kernel.ErrCapabilityUnsatisfied)
 	if err != nil {
 		if kernel.CodeOf(err) == kernel.ErrCapabilityUnsatisfied {
@@ -39,7 +37,7 @@ func (h *indexHook) AfterSnapshot(ev catalog.Snapshot) error {
 	return h.controller.Desire(repo.ID(), ev.To)
 }
 
-func (ws *Home) attachIndex(cat *catalog.Catalog) {
+func (ws *Home) attachIndex(cat dataset.Service) {
 	if ws.Projection == nil || cat == nil {
 		return
 	}
@@ -58,7 +56,7 @@ func (ws *Home) MergeRequired(repo kernel.RepositoryID) []string {
 	if err != nil {
 		return nil
 	}
-	return file.Required(gate.OnMerge, string(repo), "")
+	return file.Required(gate.OnMerge, string(repo))
 }
 
 func (ws *Home) mergeEvidence(basisID string) []gate.Evidence {
@@ -69,7 +67,8 @@ func (ws *Home) evidenceOn(basisID string, includeStructure bool) []gate.Evidenc
 	ws.controlMu.Lock()
 	defer ws.controlMu.Unlock()
 	out := []gate.Evidence{}
-	for _, st := range ws.Controls {
+	{
+		st := ws.Control
 		for _, report := range st.Validations {
 			if report.PreviewID != basisID {
 				continue

@@ -1,0 +1,18 @@
+---
+object_id: kc/relation/governance.uses-mechanism.governance
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: relations/governance.uses-mechanism.governance.yaml
+---
+relationId: kc/relation/governance.uses-mechanism.governance
+relationType: uses_mechanism
+direction: DIRECTED
+endpoints:
+  - role: from
+    objectRef:
+      repository: kr://kc/system
+      object: kc/capability/governance
+  - role: to
+    objectRef:
+      repository: kr://kc/system
+      object: kc/mechanism/governance

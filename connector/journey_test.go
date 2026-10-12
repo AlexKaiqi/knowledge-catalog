@@ -3,7 +3,6 @@ package connector_test
 import (
 	"testing"
 
-	"kc/catalog"
 	"kc/connector"
 	"kc/internal/testkit"
 	"kc/kernel"
@@ -11,6 +10,7 @@ import (
 	"kc/knowledge/reader"
 	"kc/knowledge/writer"
 	"kc/snapshot"
+	"kc/snapshot/dataset"
 )
 
 // TestConnectorChangeJourney is the generic J8 contract. The source client and
@@ -18,8 +18,8 @@ import (
 // complete preview -> Writer -> Workspace -> consumer path is exercised here.
 func TestConnectorChangeJourney(t *testing.T) {
 	s := testkit.NewSetup(t, "kr://acme/public/source-mirror")
-	cat := testkit.OpenCatalog(t, s.Store)
-	if _, err := cat.DefineKnowledgeSet("source-agent", 1, []catalog.KnowledgeSetSource{{
+	cat := testkit.OpenDatasets(t, s.Store)
+	if _, err := cat.DefineKnowledgeSet("source-agent", 1, []dataset.KnowledgeSetSource{{
 		Repository: s.RepositoryID,
 		Selector:   snapshot.DefaultRef,
 	}}); err != nil {
@@ -46,7 +46,7 @@ func TestConnectorChangeJourney(t *testing.T) {
 		ProducedAt: "2026-08-23T01:00:00Z",
 	})
 	first := mustConnectorCommit(t, s.Writer, "source-structure:S1", initial)
-	if _, err := cat.DefineKnowledgeSet("source-agent", 2, []catalog.KnowledgeSetSource{{
+	if _, err := cat.DefineKnowledgeSet("source-agent", 2, []dataset.KnowledgeSetSource{{
 		Repository: s.RepositoryID,
 		Selector:   snapshot.DefaultRef,
 	}}); err != nil {
@@ -88,7 +88,7 @@ func TestConnectorChangeJourney(t *testing.T) {
 	if replayed.Disposition != writer.DispositionReplayed || replayed.Result.CommitID != second.Result.CommitID {
 		t.Fatalf("replay = %#v", replayed)
 	}
-	if _, err := cat.DefineKnowledgeSet("source-agent", 3, []catalog.KnowledgeSetSource{{
+	if _, err := cat.DefineKnowledgeSet("source-agent", 3, []dataset.KnowledgeSetSource{{
 		Repository: s.RepositoryID,
 		Selector:   snapshot.DefaultRef,
 	}}); err != nil {
@@ -200,7 +200,7 @@ func mustConnectorCommit(t *testing.T, w *writer.Writer, commandID string, previ
 	return receipt
 }
 
-func mustResolve(t *testing.T, cat *catalog.Catalog, setID string) catalog.ResolvedKnowledgeSet {
+func mustResolve(t *testing.T, cat dataset.Service, setID string) dataset.ResolvedKnowledgeSet {
 	t.Helper()
 	resolved, err := cat.ResolveKnowledgeSet(setID)
 	if err != nil {

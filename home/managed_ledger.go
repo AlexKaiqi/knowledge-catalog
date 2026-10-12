@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	bolt "go.etcd.io/bbolt"
@@ -26,25 +25,22 @@ const (
 )
 
 type managedRecord struct {
-	Request             ManagedRepositoryRequest `json:"request"`
-	Digest              kernel.Digest            `json:"digest"`
-	AllocationID        string                   `json:"allocationId"`
-	Binding             RepositoryBinding        `json:"binding"`
-	BackendID           string                   `json:"backendId,omitempty"`
-	Head                kernel.CommitID          `json:"head,omitempty"`
-	Actions             []string                 `json:"actions"`
-	ShareActions        []string                 `json:"shareActions,omitempty"`
-	Phase               string                   `json:"phase"`
-	Name                string                   `json:"name,omitempty"`
-	Owner               string                   `json:"owner,omitempty"`
-	Store               string                   `json:"store,omitempty"`
-	ManagementURL       string                   `json:"managementURL,omitempty"`
-	ManagementState     string                   `json:"managementState,omitempty"`
-	ProviderURL         string                   `json:"providerURL,omitempty"`
-	AccountAllocationID string                   `json:"accountAllocationId,omitempty"`
-	AccountBackendID    string                   `json:"accountBackendId,omitempty"`
-	AccountEmailDomain  string                   `json:"accountEmailDomain,omitempty"`
-	AccountAuthSourceID int64                    `json:"accountAuthSourceId,omitempty"`
+	legacyAuthority string
+	Request         ManagedRepositoryRequest `json:"request"`
+	Digest          kernel.Digest            `json:"digest"`
+	AllocationID    string                   `json:"allocationId"`
+	Binding         RepositoryBinding        `json:"binding"`
+	BackendID       string                   `json:"backendId,omitempty"`
+	Head            kernel.CommitID          `json:"head,omitempty"`
+	Actions         []string                 `json:"actions"`
+	ShareActions    []string                 `json:"shareActions,omitempty"`
+	Phase           string                   `json:"phase"`
+	Name            string                   `json:"name,omitempty"`
+	Owner           string                   `json:"owner,omitempty"`
+	Store           string                   `json:"store,omitempty"`
+	ManagementURL   string                   `json:"managementURL,omitempty"`
+	ManagementState string                   `json:"managementState,omitempty"`
+	ProviderURL     string                   `json:"providerURL,omitempty"`
 }
 
 func managedRank(phase string) int {
@@ -121,9 +117,26 @@ func managedDB(dir string, write bool, fn func(*bolt.Tx) error) error {
 
 func decodeManagedRecord(raw []byte) (managedRecord, error) {
 	var record managedRecord
-	if json.Unmarshal(raw, &record) != nil || record.AllocationID == "" || record.Request.RepositoryID == "" || record.Request.CatalogID == "" || record.Request.CommandID == "" || record.Request.Principal == "" || record.Binding.ID != record.Request.RepositoryID || record.Digest != kernel.CanonicalDigest(record.Request) || managedRank(record.Phase) == 0 || validateCreatorActions(record.Actions) != nil || validateShareActions(record.ShareActions) != nil {
+	var envelope struct {
+		Request json.RawMessage `json:"request"`
+	}
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		return record, kernel.Fail(kernel.ErrPreconditionFailed, "managed allocation envelope is invalid")
+	}
+	requestFields, err := durableFields(envelope.Request)
+	if err != nil {
+		return record, err
+	}
+	var legacyAuthority string
+	if value, ok := requestFields["catalogid"]; ok {
+		if err := json.Unmarshal(value, &legacyAuthority); err != nil || legacyAuthority == "" {
+			return record, kernel.Fail(kernel.ErrPreconditionFailed, "legacy managed registry authority is invalid")
+		}
+	}
+	if json.Unmarshal(raw, &record) != nil || record.AllocationID == "" || record.Request.RepositoryID == "" || record.Request.CommandID == "" || record.Request.Principal == "" || record.Binding.ID != record.Request.RepositoryID || record.Digest != kernel.CanonicalDigest(envelope.Request) || managedRank(record.Phase) == 0 || validateCreatorActions(record.Actions) != nil || validateShareActions(record.ShareActions) != nil {
 		return record, kernel.Fail(kernel.ErrPreconditionFailed, "managed repository ledger contains an invalid allocation")
 	}
+	record.legacyAuthority = legacyAuthority
 	if _, err := hex.DecodeString(record.AllocationID); err != nil || len(record.AllocationID) != 32 {
 		return record, kernel.Fail(kernel.ErrPreconditionFailed, "managed allocation identity is invalid")
 	}
@@ -178,7 +191,10 @@ func reserveManaged(c DeploymentConfig, req ManagedRepositoryRequest, validateNe
 			if err != nil {
 				return err
 			}
-			if record.Digest != kernel.CanonicalDigest(req) {
+			if record.legacyAuthority != "" && record.legacyAuthority != c.Registry.ID {
+				return kernel.Fail(kernel.ErrPreconditionFailed, "managed allocation belongs to a different registry authority")
+			}
+			if kernel.CanonicalDigest(record.Request) != kernel.CanonicalDigest(req) {
 				return kernel.Fail(kernel.ErrIdempotencyConflict, "managed command was already reserved with another request")
 			}
 			return nil
@@ -214,27 +230,6 @@ func reserveManaged(c DeploymentConfig, req ManagedRepositoryRequest, validateNe
 		if record.ManagementURL != "" {
 			record.ManagementState = "READY"
 		}
-		if validManagedUsername(req.Principal) && driver.managedEnsureOwner != nil {
-			record.ProviderURL = binding.DSN
-			if pool.PublicURL == "" && pool.AuthSourceID == 0 && !driver.managedTrustedOwner(req, binding) {
-				record.ManagementState = "LOGIN_CONFIGURATION_REQUIRED"
-			}
-			record.AccountAllocationID, record.AccountEmailDomain, record.AccountAuthSourceID = allocation, pool.UserEmailDomain, pool.AuthSourceID
-			// An account allocation is shared by this user's repositories in
-			// this exact provider namespace, including an interrupted first repo.
-			if err := records.ForEach(func(_, raw []byte) error {
-				existing, err := decodeManagedRecord(raw)
-				if err != nil {
-					return err
-				}
-				if existing.Owner == record.Owner && existing.Binding.Driver == binding.Driver && existing.AccountAllocationID != "" && strings.TrimSuffix(existing.Binding.DSN, "/"+filepath.Base(existing.Binding.DSN)) == strings.TrimSuffix(binding.DSN, "/"+filepath.Base(binding.DSN)) {
-					record.AccountAllocationID, record.AccountBackendID = existing.AccountAllocationID, existing.AccountBackendID
-				}
-				return nil
-			}); err != nil {
-				return err
-			}
-		}
 		raw, err := json.Marshal(record)
 		if err != nil {
 			return err
@@ -254,12 +249,13 @@ func saveManaged(dir string, record managedRecord) error {
 		if err != nil {
 			return err
 		}
-		if old.AllocationID != record.AllocationID || old.Digest != record.Digest || old.AccountAllocationID != record.AccountAllocationID || (old.AccountBackendID != "" && old.AccountBackendID != record.AccountBackendID) || old.ManagementURL != record.ManagementURL || (old.BackendID != "" && (old.BackendID != record.BackendID || old.Head != record.Head)) {
+		if old.AllocationID != record.AllocationID || kernel.CanonicalDigest(old.Request) != kernel.CanonicalDigest(record.Request) || old.ManagementURL != record.ManagementURL || (old.BackendID != "" && (old.BackendID != record.BackendID || old.Head != record.Head)) {
 			return kernel.Fail(kernel.ErrPreconditionFailed, "managed allocation changed during provisioning")
 		}
 		if managedRank(old.Phase) > managedRank(record.Phase) {
 			return nil
 		}
+		record.Digest = kernel.CanonicalDigest(record.Request)
 		raw, err := json.Marshal(record)
 		if err != nil {
 			return err

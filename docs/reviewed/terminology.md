@@ -1,12 +1,12 @@
 # Knowledge Catalog 术语表
 
-日期：2026-09-18
+日期：2026-10-12
 
 状态：规范。公开文档、CLI 帮助、JSON 合同和 Go 导出注释使用这里的名称。
 
 ## Goal
 
-固定 Knowledge Catalog 的公开名词，使文档、CLI 帮助、JSON 合同和 Go 导出注释使用同一套名称，避免 Catalog / Repository / 知识集 / Server 被当成同义词，避免知识集和用户工作目录同名，也避免 Collector / Observer / Resource Access 被当成同一个接入进程。
+固定 Knowledge Catalog 的公开名词，使文档、CLI 帮助、JSON 合同和 Go 导出注释使用同一套名称，避免产品、登记空间、Repository、知识集与 Server 被当成同义词，避免知识集和用户工作目录同名，也避免 Collector / Observer / Resource Access 被当成同一个接入进程。
 
 ## Non-Goals
 
@@ -23,33 +23,31 @@
 ## 选定方案 / 被否决方案
 
 - 选定：一张规范名称表，Go 类型名作为实现锚点写在定义里。产品工作名是 Dataset；资源旗标 `--dataset`。
-- 否决：用 Catalog 指整套知识系统；用 CatalogClient/KnowledgeClient 当两个产品；按 Server 部署名改协议包名；用 Loom 当公开产品名。
+- 否决：Catalog 作为独立业务对象或同服务内的选择维度；按产品内部能力数量推导部署数量；用 Loom 当公开产品名。
 - 否决：用 Workspace 指知识集；用 selector 指整条配方。
 
 ## 接口契约 / 状态机
 
-权威就是本文表格。类型锚点：`catalog.KnowledgeSet`、`catalog.KnowledgeSetRecipe`、`snapshot` Ref/commit。CLI/HTTP 用词必须与本表一致。
+权威就是本文表格。类型锚点：`dataset.KnowledgeSet`、`dataset.KnowledgeSetRecipe`、`snapshot` Ref/commit。CLI/HTTP 用词必须与本表一致。
 
 ## 1. 产品与服务
 
 | 规范名称 | 含义 | 不要混用 |
 |---|---|---|
 | Knowledge Catalog | 整套产品与协议 | 不用 Catalog 单独指整套知识系统 |
-| Catalog | 一间共享组合空间及其登记状态 | 不是 Repository、文件仓或知识索引 |
-| Catalog Plane | Repository 发现、知识集组合、selector 解析和文件投影所在逻辑平面 | 不理解 Aspect、Schema、Binding |
-| Knowledge Plane | Schema、Entity、Aspect、Relation、READ、SEARCH 和 Writer 所在逻辑平面 | 不拥有 Catalog 生命周期；不存在无界公开 Knowledge LIST |
-| Catalog Server | Catalog Plane 的共享控制服务 | `catalog/` 是协议包，不等于部署进程 |
+| 登记空间 | 每套服务唯一的 Repository 登记与 Dataset 发布状态；不是独立可选择资源 | 不按团队、仓或客户端再创建空间 |
+| Dataset 服务 | 仓登记、文件组合、不可变发布历史与固定交付能力 | 不解释 Aspect、Schema、Binding |
+| Knowledge Plane | Schema、Entity、Aspect、Relation、READ、SEARCH 和 Writer 所在逻辑平面 | 不拥有登记状态；不存在无界公开 Knowledge LIST |
 | Knowledge Server | 固定知识集 basis 上的结构化知识消费服务 | OpenSearch 只是其内部 provider |
 | Knowledge Set File Gateway | 按固定 ResolvedKnowledgeSet 提供 path/tree/blob 的远程数据端口 | 不叫 Files API；不解释知识 |
 | Writer API | Knowledge Repository 的 PUT/REMOVE、COMMIT/PROPOSAL 写入口 | Connector 不直接写 Git 或 OpenSearch |
 | Governance API | Proposal、Preview、Validation、Gate 与 Merge 的治理入口 | 不是 Writer，也不是 Hook 执行器 |
 | Admin API | 服务端授权策略的管理入口 | 不包含本机 init、Store 配置或 authority attach |
 | Operations API | Projection、Hook、Gate 配置和审计/观测入口 | 不属于普通知识消费面 |
-| KC Client | 对外客户端产品 | CatalogClient、KnowledgeClient 是其 SDK 模块，不是两个产品 |
+| KC Client | 对外客户端产品 | Snapshot、Knowledge 是内部能力边界，不是两个产品 |
 
-`Server` 表示逻辑服务边界；这些边界可以先同进程部署。Go 包名仍使用
-`catalog`、`knowledge/reader`、`retrieval` 等协议名称，不能按部署名反向改写分层。
-Knowledge Reader Service 是 Knowledge Server 内部的②装配组件：它把 Catalog 交付的
+`Server` 表示逻辑服务边界；这些边界可以先同进程部署。文件组合由 `snapshot/dataset` 提供，底层存储与上层知识解释仍分别负责。
+Knowledge Reader Service 是 Knowledge Server 内部的②装配组件：它把 Dataset 交付的
 Snapshot 成员包装为知识读能力，并提供 exact-basis ReadMany；不是第三个对外 Server，也不持有 Knowledge object cache 的具体实现。
 Reader 可以持有应用注入的同版本 hydrate 端口（公开类型 `knowledge.Hydrator`），而完整正文缓存
 由上层 `retrieval/cache` 实现。hydrate 指按完整读取身份取得固定 authority basis 的知识与版本；
@@ -61,15 +59,24 @@ Reader 可以持有应用注入的同版本 hydrate 端口（公开类型 `knowl
 |---|---|
 | Repository | Snapshot authority 和治理边界。正式文字使用全称；`repo` 只用于 CLI flag、短变量和路径名。 |
 | Knowledge Repository | 内容通过 Writer 发布并遵守 Address/Schema/Aspect 合同；消费时由 Knowledge Reader 在固定 commit 上解释的 Repository。它不是 Adapter 实现的接口标记。 |
-| System Repository | 部署内置的保留 Knowledge Repository（参考 ID `kr://kc/system`）；发布 Meta Schema 和核心协议 Schema，不是业务知识集的隐式成员。读权走仓的已认证默认或 grant，不是按保留 ID 的授权特例。 |
-| README | 知识仓自描述 Markdown 知识对象（Address + `schema_ref`，字段 `body` 可 SEARCH）。仓根 `README.md` 是人写与 git 直推解释用的有界 `path_hint`，不是身份，也不是第二条检索代数。`catalog show` 的 `repositories` 不派生 title/summary。不是无 frontmatter 的 git 文件、不是对象 LIST、不是 Catalog 登记字段。 |
+| System Repository | 部署明确绑定的保留 Knowledge Repository（参考 ID `kr://kc/system`）；项目自描述目录经部署发布到实际仓，启动核对，运行时只读。分开解释产品自身的模型、操作入口和运行机制，另发布能力说明、使用指南、导航关系及基础 Schema，不是业务知识集的隐式成员；读权走仓的已认证默认或 grant。 |
+| Object（业务对象） | 领域中被独立指认、引用和供给的关注单元，例如图片资产、模块或外部表；其边界和身份延续由领域模型规定。它不是 Snapshot 的路径、文件或字节。 |
+| 对象知识表示 | 关于业务对象的版本化定义、组成、事实、说明、来源及使用合同；以既有 Repository 和知识标识定位，不增加第二套通用领域身份。 |
+| 知识记录 / 声明 | 知识表示的维护内容，以及可独立寻址的 Schema、Interface、Relation 等合同或关系记录；沿用现有 ObjectID / Address 技术寻址，存在标识不代表自动发布了一个业务供给。 |
+| 可供性（Affordance） | 与对象明确实现及操作关联的任务选择信息，说明用途、适用条件、效果、风险、成本及示例；属于版本化知识，不替代 Interface、不授予权限，也不证明实现可用。 |
+| Snapshot Store | 固定内容、不可变版本与条件推进的存储权威；lakeFS 实现此底座，不拥有业务 Object、Schema 或 Interface 的解释。 |
+| README | 知识仓自描述 Markdown 知识对象（Address + `schema_ref`，字段 `body` 可 SEARCH）。仓根 `README.md` 是人写与 git 直推解释用的有界 `path_hint`，不是身份，也不是第二条检索代数。`show` 的 `repositories` 不派生 title/summary。不是无 frontmatter 的 git 文件、不是对象 LIST、不是登记字段。 |
 | Meta Schema | 约束 Domain Schema 文档自身的协议合同；由二进制内置信任根校验，并在 System Repository 中发布同一内容。不是实例字段基类，Domain Schema 不从它继承可访问字段。 |
-| Domain Schema | 接入方定义、随目标 Knowledge Repository 版本化的 `schema/*` 对象；通过 `schema_ref` 约束实例 Address/value。 |
+| Domain Schema | 接入方定义、随目标 Knowledge Repository 版本化的 `schema/*` 合同记录；通过 `schema_ref` 约束实例 Address/value。 |
+| 对象 Interface | 根据对象处理逻辑共性定义实现要求、操作和结果保证的完整能力；知识合同与独立处理器共同提供系统可分派的能力。与 Writer/CLI 操作入口说明、Go interface 和 Hook 分别解释。 |
+| LiveAccess | 当前状态及已声明操作的对象 Interface；承接 ResourceDescriptor 与 State 的兼容访问，不隐式提供事件窗口或订阅。 |
+| Interface 实现声明 | 对象按能力要求提供的版本化普通知识单元，通常为 Aspect/Member；处理器由运行环境装配，声明可读不授予运行权限。 |
+| 声明式索引 | Schema 字段上的逻辑查询能力声明，是唯一书写形式；结构与查询合同分别校验，声明、物理能力、就绪与授权分别判断，固定版本保留当时解释。 |
 | Address | 一次写入或精确读取的知识单元身份（`object_id` 加可选 aspect / member）。种类是 Entity、Aspect、Relation、Member。这些种类不是四种 Domain Schema；关系记录的值形状另由 Domain Schema（如 `schema/core/relation/v1`）约束。 |
-| Plain Repository | 未按知识发布合同维护内容的普通 Repository；只解释组合阶梯（可 pin 无 Schema 的树），仍可被 Catalog 组合。VFS 不是它的理由，知识仓固定 commit 同样可挂。 |
-| Knowledge Set（知识集 / Dataset） | 命名、版本化的跨仓文件清单：成员是 `{repository, commit, path\|prefix}`，发布时冻 commit。短名 `dataset`。Go 协议类型是 `catalog.KnowledgeSet`。 |
-| KnowledgeSetRecipe | `.kc-dataset.yaml` 的便携序列化形态。它是文件 DTO，不是第二种知识集领域对象。Go 类型是 `catalog.KnowledgeSetRecipe`。 |
-| ResolvedKnowledgeSet | 一次 Resolve 的不可变结果：某版本文件清单、`{Repository → commit}`、setId、revision、PinID。Go 协议类型是 `catalog.ResolvedKnowledgeSet`。 |
+| Plain Repository | 未按知识发布合同维护内容的普通 Repository；只解释组合阶梯（可 pin 无 Schema 的树），仍可被 Dataset 组合。VFS 不是它的理由，知识仓固定 commit 同样可挂。 |
+| Knowledge Set（知识集 / Dataset） | 命名、版本化的跨仓文件清单：成员是 `{repository, commit, path\|prefix}`，发布时冻 commit。短名 `dataset`。Go 协议类型是 `dataset.KnowledgeSet`。 |
+| KnowledgeSetRecipe | `.kc-dataset.yaml` 的便携序列化形态。它是文件 DTO，不是第二种知识集领域对象。Go 类型是 `dataset.KnowledgeSetRecipe`。 |
+| ResolvedKnowledgeSet | 一次 Resolve 的不可变结果：某版本文件清单、`{Repository → commit}`、setId、revision、PinID。Go 协议类型是 `dataset.ResolvedKnowledgeSet`。 |
 | pin | `ResolvedKnowledgeSet` 的用户侧简称。文件名使用 `pin.json`，标识使用 `PinID`；不要再造 View。 |
 | SearchView | 一次 SEARCH 实际观察到的 Snapshot/Binding basis。它属于检索结果，不等于知识集；知识集范围由请求时的 ResolvedKnowledgeSet 编译，不写进索引文档。 |
 | 固定元信息 | 知识对象的协议坐标，不是业务正文：`repository`、`object_id`、`basis`、`schema_ref`。检索索引携带它们供 typed filter。知识集、Pin、allow 规则、当前 principal 以及未选定的仓级可见性分类都不是固定元信息。 |
@@ -79,21 +86,25 @@ Reader 可以持有应用注入的同版本 hydrate 端口（公开类型 `knowl
 | Semantic File View | 在固定 Repository commit 上由 Canonical Address 组装的只读 YAML/Markdown 消费投影；保留 `_kc` 坐标，可丢弃重建，不是 Canonical 或写入口。 |
 
 `knowledge/reader.KnowledgeSetPin` 是 Knowledge Plane 内部从
-`catalog.ResolvedKnowledgeSet` 投影出的读取 basis，不是另一个可持久化协议对象，也不
+`dataset.ResolvedKnowledgeSet` 投影出的读取 basis，不是另一个可持久化协议对象，也不
 替代 `ResolvedKnowledgeSet` 这个公开名称。
+
+既有公开类型中的 Entity、ObjectID 与历史文字中的“知识对象”用于知识寻址与组装。
+它们不等同于底层存储项，也不能据此把每份 Schema、README 或关系记录列为业务供给。
+业务 Object、知识表示与存储载体分别解释，不因此改写现有 wire 形状。
 
 ## 3. 动作
 
 | 动作 | 规范含义 |
 |---|---|
-| attach Repository | 把已经由 KC 连接的 Snapshot authority 登记进当前 Catalog。当前 CLI 是 `kc attach --repo`。不创建 Snapshot、不要求已发布，也不发权。 |
+| attach Repository | 把已经由 KC 连接的 Snapshot authority 登记进服务唯一的登记空间。当前 CLI 是 `kc attach --repo`。不创建 Snapshot、不要求已发布，也不发权。 |
 | open authority | 按部署 binding 只读打开既有 Snapshot；属于接入/恢复的内部步骤，不是独立用户接入命令。 |
-| register Repository | Catalog 内部承认成员的协议动作，由 attach 应用操作提交；没有独立公开 register 命令。 |
+| register Repository | 服务承认成员的登记动作，由 attach 应用操作提交；没有独立公开 register 命令。 |
 | resolve 知识集 | 把已发布 Dataset 的文件清单解成 ResolvedKnowledgeSet。产品 CLI 在 `search` / `read --dataset` 与 `kcfs` 挂载时内部完成。已发布版本不跟随 live 分支；要新数据就再发一版。 |
 | replay pin | HTTP 可用 ResolvedKnowledgeSet JSON 重放同一组坐标，同时按当前权限重新求值。产品 argv 不接受 `--pin`；精确历史重放抄回执里的 `--repo --commit`。 |
 | mount 知识集 | 把 Dataset 在挂载时冻结的清单投影为宿主只读文件系统。只使用 `kcfs mount --dataset`；`mount` 不再表示接入 Repository。 |
-| browse knowledge | 有界发现：可见 Catalog、知识集，以及单仓已发布实体名单（`schema/*`）。不是对象 LIST；空查询或 `*` 也不是 BROWSE。README 走 READ/SEARCH，不是库存列。 |
-| search knowledge | 按 Schema AccessHints 检索并在同一 basis 回读 Canonical。调用方信封是否含全文走权限交付链首段（[权限体系](permissions.md)），检索本身不裁剪。它不是文件 contains；普通文件使用 Knowledge Set File Gateway / `kcfs` + `rg`。 |
+| browse knowledge | 有界发现：可见来源、Dataset，以及单仓已发布实体名单（`schema/*`）。不是对象 LIST；空查询或 `*` 也不是 BROWSE。README 走 READ/SEARCH，不是库存列。 |
+| search knowledge | 按 Schema 字段访问声明编译的逻辑合同检索并在同一 basis 回读 Canonical。调用方信封是否含全文走权限交付链首段（[权限体系](permissions.md)），检索本身不裁剪。它不是文件 contains；普通文件使用 Knowledge Set File Gateway / `kcfs` + `rg`。 |
 | traverse knowledge | 在固定范围（Dataset 清单或单仓 pin）内沿类型化关系步骤做有界邻域遍历，返回按对象去重的到达集合与全部入选边。不是图查询语言，不枚举全部路径，也不承诺最短路径；范围外 frontier 止步并显式标记。 |
 | semantic recall | SEARCH 的语义召回策略（`semantic`/`hybrid`）：在候选资格内以派生向量投影召回近似窗口。不是第四个字段访问声明，也不扩权；融合策略另行裁决（[检索](retrieval.md)）。 |
 | scan Snapshot | Provider/维护方在固定 commit 上为重建、迁移、导出或验收顺序读取全部知识。公开消费面不提供该动作。 |
@@ -118,9 +129,9 @@ Reader 可以持有应用注入的同版本 hydrate 端口（公开类型 `knowl
 - 用 Collector 指 change notice 或访问地址；用 Observer 指 Writer 对账或访问地址；用 Resource Access 指采集或 notice。
 - 用「接入方」指上述任一进程：接入方是产品旅程角色，不是容器名。
 - 知识 Collector 与 OTel Collector 不得混称；遥测管线写全称 OTel Collector。
-- `Source Profile` / 源说明 / Catalog `title`+`summary` 信封：统一为 README 知识对象；库存只列身份。
+- `Source Profile` / 源说明 / 登记 `title`+`summary` 信封：统一为 README 知识对象；库存只列身份。
 - 无界 `LIST` 作为知识发现或 SEARCH 降级：自然语言发现使用 SEARCH；面向首次使用的
-  DISCOVER/BROWSE 必须有界、分页、声明 basis 并以 continuation 推进，内容是 Catalog/知识集
+  DISCOVER/BROWSE 必须有界、分页、声明 basis 并以 continuation 推进，内容是 来源/Dataset
   与该仓已发布实体名单，不是对象实例目录、也不是 Schema 正文或 DESCRIBE_SCHEMA；维护扫描只使用 `ScanSnapshotPage`，文件遍历使用按目录分页的 Gateway。
 
 ## 5. 一条完整链路
@@ -149,6 +160,6 @@ Source → Resource Access ← kc access / StateLookup （origin 访问地址）
 |---|---|---|
 | Collector | 对账外部当前态，把要进仓的差量发给 Writer（COMMIT/PROPOSAL）。 | 不发 change notice；不提供 origin 访问地址 |
 | Observer | 盯源变化，只发 change notice（定位 Binding/Address/source revision hint，不带正文）。公开入口是 `kc operations projection notice` / `POST /operations/v1/projections:notice`。 | 不对账进仓；不提供 origin 访问地址 |
-| Resource Access | 提供 Schema Canonical `origin` 上的 `resource-access/v1` 访问地址；`kc access` / StateLookup 按 origin + 实体 ID 取值。 | 不写仓；不发 notice |
+| Resource Access | 提供 LiveAccess 实现或历史 Schema Canonical `origin` 上的资源访问运行入口；按固定声明与对象身份取值或调用操作。 | 不写仓；不发 notice |
 | Connector | Collector 对账用的 Address helper（`connector.Preview`）。 | 不连源、不持 Writer、不是 Observer、不是 Resource Access |
 | invalidate-and-pull | Observer 通知后，平台按固定 Binding 向 Resource Access 拉取。投影控制文档也称 notify-and-pull，同一机制。 | 通知成功不等于投影完整，更不等于知识已更新 |

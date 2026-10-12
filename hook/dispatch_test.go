@@ -86,7 +86,7 @@ func TestPostHTTPOutboxOnFailure(t *testing.T) {
 	if err := hook.Write(home, file); err != nil {
 		t.Fatal(err)
 	}
-	if err := hook.Post(home, hook.Event{Action: "dataset.manage", Catalog: "kr://acme/catalog", SetID: "G1"}); err != nil {
+	if err := hook.Post(home, hook.Event{Action: "dataset.manage", SetID: "G1"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(hook.OutboxPath(home)); err != nil {

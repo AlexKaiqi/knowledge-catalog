@@ -1,0 +1,21 @@
+---
+object_id: documentation/object-interface
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/object-interface.okf
+---
+{
+  "id": "object-interface",
+  "path": "docs/reviewed/object-interface.md",
+  "title": "对象 Interface：独立能力合同与处理分派",
+  "class": "decision",
+  "lifecycle": "active",
+  "audience": [
+    "architect",
+    "contributor"
+  ],
+  "ownerTopics": [
+    "object-interface-contracts",
+    "object-interface-dispatch"
+  ]
+}

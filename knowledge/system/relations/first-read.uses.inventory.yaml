@@ -1,0 +1,18 @@
+---
+object_id: kc/relation/first-read.uses.inventory
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: relations/first-read.uses.inventory.yaml
+---
+relationId: kc/relation/first-read.uses.inventory
+relationType: uses
+direction: DIRECTED
+endpoints:
+  - role: from
+    objectRef:
+      repository: kr://kc/system
+      object: kc/guide/first-read
+  - role: to
+    objectRef:
+      repository: kr://kc/system
+      object: kc/capability/inventory

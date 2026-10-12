@@ -7,26 +7,26 @@ import (
 	"strconv"
 	"strings"
 
-	"kc/catalog"
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/observability"
+	"kc/snapshot/dataset"
 )
 
 func resourceSegment(value string) string { return url.PathEscape(value) }
 
-type CatalogService struct{ client *Client }
+type SnapshotService struct{ client *Client }
 
-func (c *Client) CatalogService() CatalogService { return CatalogService{client: c} }
+func (c *Client) SnapshotService() SnapshotService { return SnapshotService{client: c} }
 
 type KnowledgeSetRequest struct {
 	Dataset  string                       `json:"dataset"`
 	Revision int                          `json:"revision"`
-	Sources  []catalog.KnowledgeSetSource `json:"sources"`
+	Sources  []dataset.KnowledgeSetSource `json:"sources"`
 }
 type KnowledgeSetResolveRequest struct {
-	Pin              json.RawMessage `json:"pin,omitempty"`
-	CatalogDiscovery bool            `json:"catalogDiscovery,omitempty"`
+	Pin                json.RawMessage `json:"pin,omitempty"`
+	InventoryDiscovery bool            `json:"inventoryDiscovery,omitempty"`
 }
 type RepositoryAttachRequest struct {
 	Repository string `json:"repository"`
@@ -36,61 +36,61 @@ type RepositoryCreateRequest struct {
 	CommandID  string `json:"commandId"`
 }
 
-func (s CatalogService) Catalogs(ctx context.Context, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "GET", "/catalog/v1/catalogs", nil, o, out)
+func (s SnapshotService) Show(ctx context.Context, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "GET", "/snapshot/v1/inventory", nil, o, out)
 }
-
-func (s CatalogService) Show(ctx context.Context, catalogID string, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "GET", "/catalog/v1/catalogs/"+resourceSegment(catalogID), nil, o, out)
-}
-func (s CatalogService) Audit(ctx context.Context, catalogID string, limit int, o RequestOptions, out any) error {
-	path := "/catalog/v1/catalogs/" + resourceSegment(catalogID) + "/audit"
+func (s SnapshotService) Audit(ctx context.Context, limit int, continuation string, o RequestOptions, out any) error {
+	query := url.Values{}
 	if limit > 0 {
-		path += "?limit=" + strconv.Itoa(limit)
+		query.Set("limit", strconv.Itoa(limit))
+	}
+	if continuation != "" {
+		query.Set("continuation", continuation)
+	}
+	path := "/snapshot/v1/audit"
+	if len(query) > 0 {
+		path += "?" + query.Encode()
 	}
 	return s.client.doJSON(ctx, "GET", path, nil, o, out)
 }
-func (s CatalogService) Archive(ctx context.Context, catalogID string, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "POST", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/archive", struct{}{}, o, out)
+func (s SnapshotService) Repositories(ctx context.Context, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "GET", "/snapshot/v1/repositories", nil, o, out)
 }
-func (s CatalogService) Repositories(ctx context.Context, catalogID string, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "GET", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/repositories", nil, o, out)
+func (s SnapshotService) AttachRepository(ctx context.Context, q RepositoryAttachRequest, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "POST", "/snapshot/v1/repositories", q, o, out)
 }
-func (s CatalogService) AttachRepository(ctx context.Context, catalogID string, q RepositoryAttachRequest, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "POST", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/repositories", q, o, out)
-}
-func (s CatalogService) CreateRepository(ctx context.Context, catalogID string, q RepositoryCreateRequest, o RequestOptions, out any) error {
-	if strings.TrimSpace(catalogID) == "" || strings.TrimSpace(q.Repository) == "" || strings.TrimSpace(q.CommandID) == "" {
-		return kernel.Fail(kernel.ErrUsageInvalid, "repository creation requires explicit catalog, repository, and commandId")
+func (s SnapshotService) CreateRepository(ctx context.Context, q RepositoryCreateRequest, o RequestOptions, out any) error {
+	if strings.TrimSpace(q.Repository) == "" || strings.TrimSpace(q.CommandID) == "" {
+		return kernel.Fail(kernel.ErrUsageInvalid, "repository creation requires explicit repository and commandId")
 	}
-	return s.client.doJSON(ctx, "POST", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/repositories:create", q, o, out)
+	return s.client.doJSON(ctx, "POST", "/snapshot/v1/repositories:create", q, o, out)
 }
-func (s CatalogService) ArchiveRepository(ctx context.Context, catalogID, repository string, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "POST", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/repositories/"+resourceSegment(repository)+"/archive", struct{}{}, o, out)
+func (s SnapshotService) ArchiveRepository(ctx context.Context, repository string, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "POST", "/snapshot/v1/repositories/"+resourceSegment(repository)+"/archive", struct{}{}, o, out)
 }
-func (s CatalogService) DetachRepository(ctx context.Context, catalogID, repository string, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "DELETE", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/repositories/"+resourceSegment(repository), nil, o, out)
+func (s SnapshotService) DetachRepository(ctx context.Context, repository string, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "DELETE", "/snapshot/v1/repositories/"+resourceSegment(repository), nil, o, out)
 }
-func (s CatalogService) KnowledgeSets(ctx context.Context, catalogID string, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "GET", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/datasets", nil, o, out)
+func (s SnapshotService) KnowledgeSets(ctx context.Context, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "GET", "/snapshot/v1/datasets", nil, o, out)
 }
-func (s CatalogService) DefineKnowledgeSet(ctx context.Context, catalogID string, q KnowledgeSetRequest, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "POST", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/datasets", q, o, out)
+func (s SnapshotService) DefineKnowledgeSet(ctx context.Context, q KnowledgeSetRequest, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "POST", "/snapshot/v1/datasets", q, o, out)
 }
-func (s CatalogService) ResolveDefinition(ctx context.Context, catalogID string, q KnowledgeSetRequest, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "POST", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/datasets:resolve", q, o, out)
+func (s SnapshotService) ResolveDefinition(ctx context.Context, q KnowledgeSetRequest, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "POST", "/snapshot/v1/datasets:resolve", q, o, out)
 }
-func (s CatalogService) KnowledgeSet(ctx context.Context, catalogID, setID string, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "GET", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/datasets/"+resourceSegment(setID), nil, o, out)
+func (s SnapshotService) KnowledgeSet(ctx context.Context, setID string, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "GET", "/snapshot/v1/datasets/"+resourceSegment(setID), nil, o, out)
 }
-func (s CatalogService) RetireKnowledgeSet(ctx context.Context, catalogID, workspace string, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "POST", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/datasets/"+resourceSegment(workspace)+"/retire", struct{}{}, o, out)
+func (s SnapshotService) RetireKnowledgeSet(ctx context.Context, workspace string, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "POST", "/snapshot/v1/datasets/"+resourceSegment(workspace)+"/retire", struct{}{}, o, out)
 }
-func (s CatalogService) ResolveKnowledgeSet(ctx context.Context, catalogID, setID string, q KnowledgeSetResolveRequest, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "POST", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/datasets/"+resourceSegment(setID)+"/resolve", q, o, out)
+func (s SnapshotService) ResolveKnowledgeSet(ctx context.Context, setID string, q KnowledgeSetResolveRequest, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "POST", "/snapshot/v1/datasets/"+resourceSegment(setID)+"/resolve", q, o, out)
 }
-func (s CatalogService) CheckKnowledgeSet(ctx context.Context, catalogID, setID string, q KnowledgeSetResolveRequest, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "POST", "/catalog/v1/catalogs/"+resourceSegment(catalogID)+"/datasets/"+resourceSegment(setID)+"/check", q, o, out)
+func (s SnapshotService) CheckKnowledgeSet(ctx context.Context, setID string, q KnowledgeSetResolveRequest, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "POST", "/snapshot/v1/datasets/"+resourceSegment(setID)+"/check", q, o, out)
 }
 
 type WriterService struct{ client *Client }
@@ -102,7 +102,6 @@ type CommitRequest struct {
 	ChangeSet knowledge.ChangeSet `json:"changeSet"`
 }
 type ProposalRequest struct {
-	Catalog      string                        `json:"catalog,omitempty"`
 	Repository   string                        `json:"repository,omitempty"`
 	ProposalID   string                        `json:"proposalId"`
 	CandidateRef string                        `json:"candidateRef"`
@@ -137,17 +136,14 @@ type PreviewRequest struct {
 	Proposal string          `json:"proposal"`
 }
 type ValidateRequest struct {
-	Catalog string `json:"catalog,omitempty"`
 	Preview string `json:"preview"`
 }
 type ValidationRequest struct {
-	Catalog string `json:"catalog,omitempty"`
 	Preview string `json:"preview"`
 	Suite   string `json:"suite"`
 	Outcome string `json:"outcome"`
 }
 type MergeRequest struct {
-	Catalog    string `json:"catalog,omitempty"`
 	Proposal   string `json:"proposal"`
 	Preview    string `json:"preview"`
 	Validation string `json:"validation,omitempty"`
@@ -177,7 +173,6 @@ type GrantRequest struct {
 	Principal  string   `json:"principal"`
 	Actions    []string `json:"actions"`
 	Repository string   `json:"repository,omitempty"`
-	Catalog    string   `json:"catalog,omitempty"`
 	Ref        string   `json:"ref,omitempty"`
 	Object     string   `json:"object,omitempty"`
 	Aspect     string   `json:"aspect,omitempty"`
@@ -188,7 +183,29 @@ func (s AdminService) AddGrant(ctx context.Context, q GrantRequest, o RequestOpt
 	return s.client.doJSON(ctx, "POST", "/admin/v1/grants", q, o, out)
 }
 func (s AdminService) Grants(ctx context.Context, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "GET", "/admin/v1/grants", nil, o, out)
+	return s.GrantsMatching(ctx, GrantRequest{}, o, out)
+}
+
+// GrantsMatching reuses grant coordinates for inventory filters. Actions may
+// contain one requested semantic action; this remains a list, not evaluation.
+func (s AdminService) GrantsMatching(ctx context.Context, q GrantRequest, o RequestOptions, out any) error {
+	if len(q.Actions) > 1 {
+		return kernel.Fail(kernel.ErrUsageInvalid, "grant inventory accepts at most one action filter")
+	}
+	query := url.Values{}
+	for key, value := range map[string]string{"principal": q.Principal, "repository": q.Repository, "dataset": q.Dataset, "ref": q.Ref, "object": q.Object, "aspect": q.Aspect} {
+		if value != "" {
+			query.Set(key, value)
+		}
+	}
+	if len(q.Actions) == 1 {
+		query.Set("action", q.Actions[0])
+	}
+	path := "/admin/v1/grants"
+	if len(query) != 0 {
+		path += "?" + query.Encode()
+	}
+	return s.client.doJSON(ctx, "GET", path, nil, o, out)
 }
 func (s AdminService) RemoveGrant(ctx context.Context, id string, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "DELETE", "/admin/v1/grants/"+resourceSegment(id), nil, o, out)
@@ -198,7 +215,6 @@ type PolicyBindingRequest struct {
 	On         string   `json:"on"`
 	Phase      string   `json:"phase,omitempty"`
 	Repository string   `json:"repository,omitempty"`
-	Catalog    string   `json:"catalog,omitempty"`
 	Run        string   `json:"run,omitempty"`
 	URL        string   `json:"url,omitempty"`
 	Require    []string `json:"require,omitempty"`

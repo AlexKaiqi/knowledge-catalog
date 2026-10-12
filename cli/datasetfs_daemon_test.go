@@ -59,7 +59,7 @@ func TestKnowledgeSetFSRequiresServer(t *testing.T) {
 }
 
 func TestResolvedKnowledgeSetPinStripsClientCatalog(t *testing.T) {
-	raw := json.RawMessage(`{"catalog":"kr://acme/catalog","setId":"agent","revision":1,"pinId":"pin-1","repositories":{"kr://acme/source":"c1"}}`)
+	raw := json.RawMessage(`{"setId":"agent","revision":1,"pinId":"pin-1","repositories":{"kr://acme/source":"c1"}}`)
 	stripped, err := resolvedKnowledgeSetPin(raw)
 	if err != nil {
 		t.Fatal(err)

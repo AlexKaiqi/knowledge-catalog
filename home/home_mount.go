@@ -49,15 +49,16 @@ type repoAddRequest struct {
 }
 
 // attachRepository resolves the driver, opens the store, and adds it to the live
-// Store Directory. It does not touch the Catalog: attaching is ⓪, registering is ①.
+// Store Directory. It does not touch the Registry: attaching is ⓪, registering is ①.
 func (ws *Home) attachRepository(spec repoAddRequest) (snapshot.Store, error) {
 	repositoryID := spec.ID
 	if repositoryID == string(knowledge.SystemRepositoryID) {
-		return nil, kernel.Fail(kernel.ErrForbidden, "%s is the immutable built-in System Repository", repositoryID)
+		return nil, kernel.Fail(kernel.ErrForbidden, "%s is the immutable platform System Repository", repositoryID)
 	}
-	for _, item := range ws.File.Catalogs {
+	{
+		item := ws.File.Registry
 		if repositoryID == item.ID {
-			return nil, fmt.Errorf("%s is reserved for a Catalog registry", repositoryID)
+			return nil, fmt.Errorf("%s is reserved for the registry authority", repositoryID)
 		}
 	}
 	for _, r := range ws.File.Repos {
@@ -142,7 +143,7 @@ func ensureRepositoryPointer(pointer, target string) error {
 }
 
 // AddRepository attaches a Snapshot Repository (⓪). Admitting it into a
-// The fixture is not automatically admitted to a Catalog; product admission uses `catalog repo attach`.
+// The fixture is not automatically admitted to a Registry; product admission uses `registry repo attach`.
 func AddRepository(ws *Home, repositoryID, driver, dsn, dir, link string) (kernel.CommitID, error) {
 	spec := repoAddRequest{ID: repositoryID, Driver: driver, DSN: dsn, Dir: dir, Link: link}
 	repo, err := ws.attachRepository(spec)

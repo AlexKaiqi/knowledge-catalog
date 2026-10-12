@@ -3,49 +3,46 @@ package home
 import (
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 
+	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/snapshot"
 )
 
 func TestConnectionReadOnlyRotationRecoveryAndAuthorityBinding(t *testing.T) {
 	var mu sync.Mutex
-	token, backend, requests := "original-secret", 42, 0
-	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	token := "access:original-secret"
+	requests := 0
+	replaced := false
+	provider := testkit.NewLakeFSFakeWithInterceptor(t, func(w http.ResponseWriter, r *http.Request) bool {
 		mu.Lock()
 		defer mu.Unlock()
 		requests++
-		if r.Method != "GET" {
+		if r.Method != http.MethodGet {
 			t.Errorf("connection wrote external source: %s", r.Method)
-			w.WriteHeader(405)
-			return
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return true
 		}
-		if r.Header.Get("Authorization") != "token "+token {
-			w.WriteHeader(401)
+		user, secret, ok := r.BasicAuth()
+		if !ok || user+":"+secret != token {
+			w.WriteHeader(http.StatusUnauthorized)
 			_, _ = w.Write([]byte(token))
-			return
+			return true
 		}
-		w.Header().Set("Content-Type", "application/json")
-		switch r.URL.Path {
-		case "/api/v1/repos/alice/existing":
-			_ = json.NewEncoder(w).Encode(map[string]any{"id": backend, "default_branch": "main", "empty": false})
-		case "/api/v1/repos/alice/existing/branches/main":
-			_ = json.NewEncoder(w).Encode(map[string]any{"name": "main", "commit": map[string]any{"id": "initial"}})
-		case "/api/v1/repos/alice/existing/git/commits/initial":
-			_ = json.NewEncoder(w).Encode(map[string]any{"sha": "initial"})
-		default:
-			w.WriteHeader(404)
+		if replaced && strings.Contains(r.URL.Path, "/commits/c0") {
+			w.WriteHeader(http.StatusNotFound)
+			return true
 		}
-	}))
-	defer provider.Close()
+		return false
+	})
+	name := provider.NewRepo()
 	cfg := deploymentFixture(t)
-	cfg.Connections = &ConnectionPolicy{AllowedOrigins: []string{provider.URL}, CreatorActions: []string{"repository.connections.manage", "repository.metadata.read", "knowledge.read"}}
+	cfg.Connections = &ConnectionPolicy{AllowedOrigins: []string{provider.Origin()}, CreatorActions: []string{"repository.connections.manage", "repository.metadata.read", "knowledge.read"}}
 	if err := InitializeDeployment(cfg, func(dir, _ string) error {
 		return os.WriteFile(filepath.Join(dir, "allow.json"), []byte(`{"version":2,"rules":[]}`), 0600)
 	}); err != nil {
@@ -56,7 +53,7 @@ func TestConnectionReadOnlyRotationRecoveryAndAuthorityBinding(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer ws.Close()
-	req := ConnectionRequest{Catalog: cfg.Catalogs[0].ID, Repository: "kr://alice/existing", Driver: "gitea", URL: provider.URL + "/alice/existing", Principal: "alice", Credential: token}
+	req := ConnectionRequest{Repository: "kr://alice/existing", Driver: "lakefs", URL: provider.DSN(name), Principal: "alice", Credential: token}
 	grants := 0
 	grant := func(g RepositoryInitialGrant) error {
 		grants++
@@ -66,16 +63,16 @@ func TestConnectionReadOnlyRotationRecoveryAndAuthorityBinding(t *testing.T) {
 		return nil
 	}
 	connected, err := ws.ConnectRepository(req, grant)
-	if err != nil || connected.Head != "initial" || connected.Status != "READY" {
+	if err != nil || connected.Head != "c0" || connected.Status != "READY" {
 		t.Fatalf("connect %#v %v", connected, err)
 	}
-	if ws.Catalog.HasRepository(kernel.RepositoryID(req.Repository)) {
+	if ws.Datasets.HasRepository(kernel.RepositoryID(req.Repository)) {
 		t.Fatal("connect must not register the repository in Catalog")
 	}
-	if err := ws.AttachRepository(req.Catalog, kernel.RepositoryID(req.Repository)); err != nil {
+	if err := ws.AttachRepository(kernel.RepositoryID(req.Repository)); err != nil {
 		t.Fatal(err)
 	}
-	if !ws.Catalog.HasRepository(kernel.RepositoryID(req.Repository)) {
+	if !ws.Datasets.HasRepository(kernel.RepositoryID(req.Repository)) {
 		t.Fatal("attach must register the repository in Catalog")
 	}
 	raw, _ := json.Marshal(connected)
@@ -92,7 +89,7 @@ func TestConnectionReadOnlyRotationRecoveryAndAuthorityBinding(t *testing.T) {
 	if _, err := ws.GetConnection("bob", req.Repository); kernel.CodeOf(err) != kernel.ErrForbidden {
 		t.Fatalf("another owner %v", err)
 	}
-	if _, err := ws.RotateConnectionCredential("alice", req.Repository, "bad-secret"); err == nil || strings.Contains(err.Error(), token) {
+	if _, err := ws.RotateConnectionCredential("alice", req.Repository, "access:bad-secret"); err == nil || strings.Contains(err.Error(), token) {
 		t.Fatalf("bad credential unsafe result %v", err)
 	}
 	if _, err := ws.CheckConnection("alice", req.Repository); err != nil {
@@ -100,7 +97,7 @@ func TestConnectionReadOnlyRotationRecoveryAndAuthorityBinding(t *testing.T) {
 	}
 	_ = ws.Close()
 	mu.Lock()
-	token = "replacement-secret"
+	token = "access:replacement-secret"
 	before := requests
 	mu.Unlock()
 	cfg.CacheDir = filepath.Join(t.TempDir(), "replacement-cache")
@@ -119,7 +116,7 @@ func TestConnectionReadOnlyRotationRecoveryAndAuthorityBinding(t *testing.T) {
 	}
 	source, _ := recovered.Store.Get(kernel.RepositoryID(req.Repository))
 	if _, ok := source.(snapshot.TreeStore); !ok {
-		t.Fatal("Gitea literal tree capability lost")
+		t.Fatal("lakeFS literal tree capability lost")
 	}
 	if _, err := source.Head(snapshot.DefaultRef); err == nil {
 		t.Fatal("expired credential still reads")
@@ -127,11 +124,11 @@ func TestConnectionReadOnlyRotationRecoveryAndAuthorityBinding(t *testing.T) {
 	if _, err := recovered.RotateConnectionCredential("alice", req.Repository, token); err != nil {
 		t.Fatalf("recovery rotation %v", err)
 	}
-	if head, err := source.Head(snapshot.DefaultRef); err != nil || head != "initial" {
+	if head, err := source.Head(snapshot.DefaultRef); err != nil || head != "c0" {
 		t.Fatalf("existing handle did not use rotated credential %s %v", head, err)
 	}
 	mu.Lock()
-	backend = 99
+	replaced = true
 	mu.Unlock()
 	if _, err := recovered.CheckConnection("alice", req.Repository); err == nil {
 		t.Fatal("same URL different authority accepted")
@@ -149,17 +146,17 @@ func TestConnectionReadOnlyRotationRecoveryAndAuthorityBinding(t *testing.T) {
 
 func TestConnectionPolicyRejectsUnapprovedOriginsAndPrivileges(t *testing.T) {
 	cfg := deploymentFixture(t)
-	cfg.Connections = &ConnectionPolicy{AllowedOrigins: []string{"https://gitea.example"}, CreatorActions: []string{"repository.connections.manage"}}
+	cfg.Connections = &ConnectionPolicy{AllowedOrigins: []string{"https://lakefs.example"}, CreatorActions: []string{"repository.connections.manage"}}
 	if err := cfg.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	for _, origin := range []string{"file:///etc", "https://user:secret@gitea.example", "https://gitea.example?q=secret"} {
+	for _, origin := range []string{"file:///etc", "https://user:secret@lakefs.example", "https://lakefs.example?q=secret"} {
 		cfg.Connections.AllowedOrigins = []string{origin}
 		if err := cfg.Validate(); err == nil {
 			t.Errorf("accepted origin %s", origin)
 		}
 	}
-	cfg.Connections.AllowedOrigins = []string{"https://gitea.example"}
+	cfg.Connections.AllowedOrigins = []string{"https://lakefs.example"}
 	cfg.Connections.CreatorActions = []string{"admin.grants.manage"}
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("privilege escalation accepted")

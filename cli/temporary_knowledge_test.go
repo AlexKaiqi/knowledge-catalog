@@ -15,10 +15,10 @@ import (
 // --repo --commit from a prior hit; consumers do not manage pin files.
 func TestProductRepoCommitFreezesKnowledgeAndCurrentPermissions(t *testing.T) {
 	home := testkit.TempDir(t)
-	cat := "kr://acme/temporary"
+
 	repo := "kr://acme/temporary-source"
 	admin, consumer := "agent:admin", "agent:consumer"
-	body(t, kc(home, "local", "init", "--catalog", cat))
+	body(t, kc(home, "local", "init"))
 	seedRepo(t, home, repo)
 	body(t, kc(home, "local", "grant", "bootstrap", "--principal", admin))
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
@@ -33,7 +33,7 @@ func TestProductRepoCommitFreezesKnowledgeAndCurrentPermissions(t *testing.T) {
 		return kcRunResultFrom(cli.Run(all), publicCommandPath(all))
 	}
 	govern := func(args ...string) kcRunResult { return invoke(admin, args...) }
-	body(t, govern("grant", "add", "--principal", consumer, "--action", "catalog.read,dataset.resolve,file.read", "--catalog", cat))
+	body(t, govern("grant", "add", "--principal", consumer, "--action", "inventory.read,dataset.resolve,file.read"))
 	grant := asMap(t, body(t, govern("grant", "add", "--principal", consumer, "--action", "knowledge.read,knowledge.provenance,knowledge.history.read,knowledge.search", "--repo", repo)))
 	body(t, govern("writer", "put", "--command-id", "temp-schema", "--repo", repo, "--object", "schema/note", "--value", `{"entity":"Note","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
 	first := publishedCommit(t, asMap(t, body(t, govern("writer", "put", "--command-id", "temp-first", "--repo", repo, "--object", "note/one", "--schema-ref", "schema/note", "--value", `{"body":"first"}`))))
@@ -42,7 +42,6 @@ func TestProductRepoCommitFreezesKnowledgeAndCurrentPermissions(t *testing.T) {
 		body(t, govern("operations", "projection", "sync", "--repo", repo))
 	}
 	before := asMap(t, body(t, govern("show")))
-	body(t, invoke(consumer, "catalog", "use", cat))
 	body(t, govern("writer", "put", "--command-id", "temp-second", "--repo", repo, "--object", "note/one", "--schema-ref", "schema/note", "--value", `{"body":"second"}`))
 	if searchAvailable {
 		body(t, govern("operations", "projection", "sync", "--repo", repo))

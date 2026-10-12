@@ -9,65 +9,36 @@ import (
 	"strconv"
 	"strings"
 
-	"kc/catalog"
 	kcclient "kc/client"
 	"kc/kernel"
 	"kc/knowledge"
+	"kc/snapshot/dataset"
 )
 
 func runRemoteCLI(ctx context.Context, server, path string, flags map[string]FlagValue) RunResult {
 	if _, explicitHome := flags["home"]; explicitHome {
 		return inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid, "--server and --home are mutually exclusive"))
 	}
-	// A DSH task binds one Catalog/knowledge set through its process environment.
-	// Catalog is safe to inherit for inventory commands. The knowledge set is only
-	// the consumer default; it must not leak into grants, writes, or Catalog
-	// management.
-	bindRemoteTaskEnvironment(path, flags)
+	bindRemoteEnvironment(path, flags)
 	if path == "login" || path == "logout" {
 		return runRemoteLogin(ctx, server, path, flags)
 	}
-	if path == "catalog use" {
-		catalogID, err := requireRemoteFlag(flags, "catalog")
-		if err != nil {
-			return inv.ErrorResult(err)
-		}
-		client, err := newRemoteSessionClient(ctx, server, flags)
-		if err != nil {
-			return inv.ErrorResult(err)
-		}
-		options := kcclient.RequestOptions{RequestID: flagString(flags, "request-id")}
-		if err := verifyRemoteCatalogUse(ctx, client.CatalogService(), catalogID, options); err != nil {
-			return inv.ErrorResult(err)
-		}
-		if err := persistClientCatalog(server, catalogID); err != nil {
-			return inv.ErrorResult(err)
-		}
-		return RunResult{Status: 0, Stdout: jsonOut(map[string]any{"catalogId": catalogID})}
-	}
+
 	client, err := newRemoteSessionClient(ctx, server, flags)
 	if err != nil {
 		return inv.ErrorResult(err)
 	}
 	options := kcclient.RequestOptions{RequestID: flagString(flags, "request-id")}
-	output, err := runRemoteRequest(ctx, client, server, path, flags, options)
+	output, err := runRemoteRequest(ctx, client, path, flags, options)
 	if err != nil {
 		return inv.ErrorResult(err)
 	}
 	return RunResult{Status: 0, Stdout: jsonOut(output)}
 }
 
-func bindRemoteTaskEnvironment(path string, flags map[string]FlagValue) {
-	if catalogSearchRequested(path, flags) {
-		return
-	}
+func bindRemoteEnvironment(path string, flags map[string]FlagValue) {
 	if strings.HasPrefix(path, "grant ") {
 		return
-	}
-	if path != "create" && strings.TrimSpace(flagString(flags, "catalog")) == "" {
-		if value := savedClientCatalog(inv.RemoteServerURL(flags)); value != "" {
-			flags["catalog"] = value
-		}
 	}
 	for _, name := range []string{"repo", "pin", "source", "file", "dataset-file", "dataset", "file-source"} {
 		if name == "file-source" {
@@ -113,7 +84,7 @@ func remoteIntFlag(flags map[string]FlagValue, name string) (int, error) {
 	return value, nil
 }
 
-func remoteKnowledgeSetSources(flags map[string]FlagValue) ([]catalog.KnowledgeSetSource, error) {
+func remoteKnowledgeSetSources(flags map[string]FlagValue) ([]dataset.KnowledgeSetSource, error) {
 	if flagString(flags, "from-repo") != "" {
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "remote Workspace definition does not read a server repository recipe; submit explicit sources")
 	}
@@ -130,13 +101,13 @@ func remoteKnowledgeSetSources(flags map[string]FlagValue) ([]catalog.KnowledgeS
 		if err != nil {
 			return nil, err
 		}
-		recipe, err := catalog.ParseKnowledgeSetRecipe(raw)
+		recipe, err := dataset.ParseKnowledgeSetRecipe(raw)
 		if err != nil {
 			return nil, err
 		}
 		return recipe.Sources(), nil
 	}
-	var sources []catalog.KnowledgeSetSource
+	var sources []dataset.KnowledgeSetSource
 	if items := flagStrings(flags, "source"); len(items) > 0 {
 		sources, err = inv.WorkspaceSourcesFrom(items)
 		if err != nil {
@@ -216,7 +187,7 @@ func remoteProposalRequest(flags map[string]FlagValue) (kcclient.ProposalRequest
 	if err != nil {
 		return kcclient.ProposalRequest{}, err
 	}
-	return kcclient.ProposalRequest{Catalog: flagString(flags, "catalog"), Repository: flagString(flags, "repo"), ProposalID: flagString(flags, "proposal-id"), CandidateRef: flagString(flags, "candidate"), TargetRef: flagString(flags, "target"), BaseCommit: flagString(flags, "base"), Operations: operations, Message: flagString(flags, "message"), Provenance: inv.OriginFrom(flags)}, nil
+	return kcclient.ProposalRequest{Repository: flagString(flags, "repo"), ProposalID: flagString(flags, "proposal-id"), CandidateRef: flagString(flags, "candidate"), TargetRef: flagString(flags, "target"), BaseCommit: flagString(flags, "base"), Operations: operations, Message: flagString(flags, "message"), Provenance: inv.OriginFrom(flags)}, nil
 }
 
 // remoteTokenAuthenticator sends only the credential. The server derives the
@@ -291,7 +262,7 @@ func remotePin(flags map[string]FlagValue) json.RawMessage {
 		}
 	}
 	var saved taskKnowledgeSetPin
-	if catalog.DecodeJSON([]byte(raw), &saved) == nil && saved.Definition != nil {
+	if dataset.DecodeJSON([]byte(raw), &saved) == nil && saved.Definition != nil {
 		flags[workspaceDefinitionFlag] = saved.Definition
 		if pin, err := json.Marshal(saved.ResolvedKnowledgeSet); err == nil {
 			return pin

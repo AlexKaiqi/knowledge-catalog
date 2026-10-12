@@ -1,6 +1,7 @@
 """Evidence integrity tests; no external services or product test suite."""
 import importlib.util
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -12,6 +13,24 @@ SCRIPT = pathlib.Path(__file__).with_name("validation.py")
 
 
 class ValidationEvidenceTest(unittest.TestCase):
+    def test_run_records_active_selectors_without_retired_dolt_configuration(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            (root / ".gitignore").write_text("results/\n")
+            output = root / "results"
+            env = dict(os.environ, KC_E2E_RUN="TestSelected", KC_DOLT_DOCKER_IMAGE="retired:fixture",
+                       KC_DOLT_FORCE_DOCKER="1")
+            result = subprocess.run([sys.executable, str(SCRIPT), "run", "--root", str(root),
+                                     "--scope", "selector-fixture", "--output", str(output),
+                                     "--", sys.executable, "-c", "print('selected')"],
+                                    env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            report = json.loads(next(output.glob("*/report.json")).read_text())
+            self.assertEqual(report["environment"]["KC_E2E_RUN"], "TestSelected")
+            self.assertNotIn("KC_DOLT_DOCKER_IMAGE", report["environment"])
+            self.assertNotIn("KC_DOLT_FORCE_DOCKER", report["environment"])
+
     def assert_invalid_evidence_fails_runner(self, source, status):
         with tempfile.TemporaryDirectory() as temp:
             root = pathlib.Path(temp)

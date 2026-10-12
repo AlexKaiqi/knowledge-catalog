@@ -400,6 +400,14 @@ def text_metrics(model):
     return "\n".join(lines)
 
 
+def check_target(target):
+    """A Server fixes the unique inventory; retired selectors must fail loudly."""
+    if not isinstance(target, dict):
+        return ["target must be a mapping"]
+    return [f"target.{name} is retired; a Server has one inventory"
+            for name in target if str(name).casefold() in ("catalog", "catalogid", "catalogs")]
+
+
 def check_env(path: Path):
     errors = []
     doc = load_yaml_file(path)
@@ -408,7 +416,11 @@ def check_env(path: Path):
     for key in ("run", "target", "profile", "load", "limits", "cleanup"):
         if key not in doc:
             errors.append(f"missing section {key}")
-    target = doc.get("target") or {}
+    target = doc.get("target")
+    target_errors = check_target(target)
+    errors.extend(target_errors)
+    if not isinstance(target, dict):
+        target = {}
     profile = doc.get("profile") or {}
     load = doc.get("load") or {}
     cleanup = doc.get("cleanup") or {}

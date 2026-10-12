@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"kc/catalog"
 	kcclient "kc/client"
 	"kc/kernel"
+	"kc/snapshot/dataset"
 )
 
 // kc dataset clone materializes the current serving version of one published
@@ -30,7 +30,7 @@ const (
 	cloneMaxDepth  = 512
 )
 
-func runRemoteDatasetClone(ctx context.Context, client *kcclient.Client, catalogID string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
+func runRemoteDatasetClone(ctx context.Context, client *kcclient.Client, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
 	setID := strings.TrimSpace(flagString(flags, "dataset"))
 	if setID == "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "dataset clone requires <dataset> <dir>")
@@ -42,7 +42,7 @@ func runRemoteDatasetClone(ctx context.Context, client *kcclient.Client, catalog
 	if err := cloneTargetAcceptable(dir); err != nil {
 		return nil, err
 	}
-	coordinate, pin, err := cloneCoordinate(ctx, client, catalogID, setID, options)
+	coordinate, pin, err := cloneCoordinate(ctx, client, setID, options)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +59,6 @@ func runRemoteDatasetClone(ctx context.Context, client *kcclient.Client, catalog
 	}
 	return map[string]any{
 		"dataset":     setID,
-		"catalog":     catalogID,
 		"ref":         pin.Ref,
 		"revision":    pin.Revision,
 		"pinId":       pin.PinID,
@@ -75,16 +74,16 @@ func runRemoteDatasetClone(ctx context.Context, client *kcclient.Client, catalog
 // as the pin every subsequent gateway call replays. Product argv does not
 // carry --pin (docs/reviewed/cli.md): clone consumes the current serving version, and
 // historical review goes through the server-side task pin, not this verb.
-func cloneCoordinate(ctx context.Context, client *kcclient.Client, catalogID, setID string, options kcclient.RequestOptions) (kcclient.WorkspaceFileCoordinate, catalog.ResolvedKnowledgeSet, error) {
-	var pin catalog.ResolvedKnowledgeSet
-	if err := client.CatalogService().ResolveKnowledgeSet(ctx, catalogID, setID, kcclient.KnowledgeSetResolveRequest{}, options, &pin); err != nil {
-		return kcclient.WorkspaceFileCoordinate{}, catalog.ResolvedKnowledgeSet{}, err
+func cloneCoordinate(ctx context.Context, client *kcclient.Client, setID string, options kcclient.RequestOptions) (kcclient.WorkspaceFileCoordinate, dataset.ResolvedKnowledgeSet, error) {
+	var pin dataset.ResolvedKnowledgeSet
+	if err := client.SnapshotService().ResolveKnowledgeSet(ctx, setID, kcclient.KnowledgeSetResolveRequest{}, options, &pin); err != nil {
+		return kcclient.WorkspaceFileCoordinate{}, dataset.ResolvedKnowledgeSet{}, err
 	}
 	marshaled, err := json.Marshal(pin)
 	if err != nil {
-		return kcclient.WorkspaceFileCoordinate{}, catalog.ResolvedKnowledgeSet{}, err
+		return kcclient.WorkspaceFileCoordinate{}, dataset.ResolvedKnowledgeSet{}, err
 	}
-	coordinate := kcclient.WorkspaceFileCoordinate{Catalog: catalogID, Dataset: setID, View: "repository", Pin: marshaled}
+	coordinate := kcclient.WorkspaceFileCoordinate{Dataset: setID, View: "repository", Pin: marshaled}
 	return coordinate, pin, nil
 }
 
@@ -127,7 +126,7 @@ func cloneSourceSummary(ctx context.Context, client *kcclient.Client, coordinate
 	}
 	fileEntries := 0
 	for _, item := range out.Pin.Items {
-		if item.Kind == catalog.DatasetItemFile {
+		if item.Kind == dataset.DatasetItemFile {
 			fileEntries++
 		}
 	}

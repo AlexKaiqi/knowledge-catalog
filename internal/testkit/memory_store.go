@@ -235,10 +235,11 @@ func (s *memoryStore) ReadDirectory(request snapshot.DirectoryRequest) (snapshot
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	start := sort.SearchStrings(names, request.Continuation)
-	if start < len(names) && names[start] == request.Continuation {
-		start++
+	cursor, err := snapshot.DecodeDirectoryCursor(request.Continuation, request.Commit, directory)
+	if err != nil {
+		return snapshot.DirectoryPage{}, err
 	}
+	start := sort.Search(len(names), func(i int) bool { return names[i] > cursor.Position })
 	limit := request.Limit
 	if limit <= 0 || limit > 1000 {
 		limit = 100
@@ -252,7 +253,8 @@ func (s *memoryStore) ReadDirectory(request snapshot.DirectoryRequest) (snapshot
 		page.Entries = append(page.Entries, snapshot.DirectoryEntry{Name: name, Kind: kinds[name]})
 	}
 	if !page.Exhausted {
-		page.Continuation = names[end-1]
+		cursor.Position = names[end-1]
+		page.Continuation = snapshot.EncodeDirectoryCursor(cursor)
 	}
 	return page, nil
 }

@@ -4,11 +4,11 @@ import (
 	"context"
 	"testing"
 
-	"kc/catalog"
 	"kc/client"
 	apphome "kc/home"
 	"kc/kernel"
 	"kc/snapshot"
+	"kc/snapshot/dataset"
 )
 
 // dataset.md 场景覆盖补全：U1 同名文件映射到不同目标、U2 来源版本不可用时
@@ -25,7 +25,7 @@ func TestDatasetFileDeliveryMapsSameNameFilesToDistinctTargets(t *testing.T) {
 	f.write(t, deliveryDocs, "docs-v2", []snapshot.TreeChange{
 		{Path: "inbox/report.md", Content: []byte("docs report\n")},
 	})
-	sources := []catalog.KnowledgeSetSource{
+	sources := []dataset.KnowledgeSetSource{
 		{Repository: deliveryData, Selector: snapshot.DefaultRef, File: "inbox/report.md", Target: "combined/data-report.md"},
 		{Repository: deliveryDocs, Selector: snapshot.DefaultRef, File: "inbox/report.md", Target: "combined/docs-report.md"},
 	}
@@ -42,7 +42,7 @@ func TestDatasetFileDeliveryMapsSameNameFilesToDistinctTargets(t *testing.T) {
 	f.assertDeliveredRead(t, opened.Pin, "combined/docs-report.md", "docs report\n")
 	sources0, sources1 := 0, 0
 	for _, item := range opened.Pin.Items {
-		if item.Kind != catalog.DatasetItemFile {
+		if item.Kind != dataset.DatasetItemFile {
 			continue
 		}
 		switch item.Repository {
@@ -90,7 +90,7 @@ func TestDatasetRetireRejectsConsumptionAndPreservesSources(t *testing.T) {
 	headDocs, headData, readDocs, readData := sourceReaders(t, f)
 	f.assertRead(t, accepted.Pin, "reference/policies", "policy v1\n")
 
-	if err := f.operator.CatalogService().RetireKnowledgeSet(context.Background(), deliveryCatalog, "delivery", client.RequestOptions{}, nil); err != nil {
+	if err := f.operator.SnapshotService().RetireKnowledgeSet(context.Background(), "delivery", client.RequestOptions{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	var retiredMounts client.WorkspaceFileMountsResponse
@@ -128,10 +128,10 @@ func TestDatasetRetireRejectsConsumptionAndPreservesSources(t *testing.T) {
 	if err != nil || string(content) != "metric v1\n" {
 		t.Fatalf("retirement must keep source bytes: %q err=%v", content, err)
 	}
-	sources := []catalog.KnowledgeSetSource{
+	sources := []dataset.KnowledgeSetSource{
 		{Repository: deliveryDocs, Selector: snapshot.DefaultRef, Path: ptr("archive/policy"), SubPath: "handbook/policies"},
 	}
-	if err := f.operator.CatalogService().DefineKnowledgeSet(context.Background(), deliveryCatalog,
+	if err := f.operator.SnapshotService().DefineKnowledgeSet(context.Background(),
 		client.KnowledgeSetRequest{Dataset: "delivery-archive", Revision: 1, Sources: sources}, client.RequestOptions{}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +166,7 @@ func TestDatasetConcurrentPublishersCannotOverwriteOrRollBack(t *testing.T) {
 	}
 	sourcesA := directoryDeliverySources("reference/policies", "reference/guides", "data/metrics")
 	metrics := "semantic/metrics"
-	sourcesB := []catalog.KnowledgeSetSource{
+	sourcesB := []dataset.KnowledgeSetSource{
 		{Repository: deliveryData, Selector: snapshot.DefaultRef, Path: &metrics, SubPath: "semantic/metrics"},
 		{Repository: deliveryDocs, Selector: snapshot.DefaultRef, File: "docs/guides/README.md", Target: "guide.md"},
 	}
@@ -197,7 +197,7 @@ func TestDatasetConcurrentPublishersCannotOverwriteOrRollBack(t *testing.T) {
 	}
 	files := 0
 	for _, item := range current.Pin.Items {
-		if item.Kind == catalog.DatasetItemFile {
+		if item.Kind == dataset.DatasetItemFile {
 			files++
 		}
 	}
@@ -234,8 +234,8 @@ type attempt struct {
 	err   error
 }
 
-func publishRevision(label string, publisher *client.Client, sources []catalog.KnowledgeSetSource, out chan<- attempt) {
-	err := publisher.CatalogService().DefineKnowledgeSet(context.Background(), deliveryCatalog,
+func publishRevision(label string, publisher *client.Client, sources []dataset.KnowledgeSetSource, out chan<- attempt) {
+	err := publisher.SnapshotService().DefineKnowledgeSet(context.Background(),
 		client.KnowledgeSetRequest{Dataset: "delivery", Revision: 2, Sources: sources}, client.RequestOptions{}, nil)
 	out <- attempt{label: label, err: err}
 }
@@ -248,7 +248,7 @@ func TestDeliveredReferenceDoesNotPullUnselectedFile(t *testing.T) {
 		{Path: "semantic/metrics/README.md", Content: []byte("metric v2, see details.md\n")},
 		{Path: "semantic/metrics/details.md", Content: []byte("internal details\n")},
 	})
-	sources := []catalog.KnowledgeSetSource{
+	sources := []dataset.KnowledgeSetSource{
 		{Repository: deliveryData, Selector: snapshot.DefaultRef, File: "semantic/metrics/README.md", Target: "picked/README.md"},
 	}
 	if err := f.publish(2, sources); err != nil {
@@ -276,7 +276,7 @@ func TestDatasetDeliveryWithoutKnowledgeLayerKeepsPlainBytes(t *testing.T) {
 		{Path: "plain/notes.md", Content: []byte(payload)},
 	})
 	plain := "plain"
-	sources := []catalog.KnowledgeSetSource{
+	sources := []dataset.KnowledgeSetSource{
 		{Repository: deliveryData, Selector: snapshot.DefaultRef, Path: &plain, SubPath: "plain"},
 	}
 	if err := f.publish(2, sources); err != nil {
@@ -300,7 +300,7 @@ func TestDatasetDeliveryWithoutKnowledgeLayerKeepsPlainBytes(t *testing.T) {
 		t.Fatalf("mount read must name the frozen source commit: %#v", plainRead.Mount)
 	}
 	for _, item := range opened.Pin.Items {
-		if item.Kind != catalog.DatasetItemFile && item.Prefix != "plain" {
+		if item.Kind != dataset.DatasetItemFile && item.Prefix != "plain" {
 			continue
 		}
 		if item.Commit == "" {

@@ -33,7 +33,7 @@ func (ws *Home) managedRequestForOwner(req ManagedRepositoryRequest) (ManagedRep
 		original := req
 		original.Principal = record.Request.Principal
 		original.IdentityProvider, original.IdentityIssuer, original.IdentitySubject = record.Request.IdentityProvider, record.Request.IdentityIssuer, record.Request.IdentitySubject
-		if kernel.CanonicalDigest(original) != record.Digest {
+		if kernel.CanonicalDigest(original) != kernel.CanonicalDigest(record.Request) {
 			return req, kernel.Fail(kernel.ErrIdempotencyConflict, "migrated owner retry changed the original managed request")
 		}
 		return original, nil

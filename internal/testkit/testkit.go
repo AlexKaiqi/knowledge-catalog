@@ -5,13 +5,11 @@ import (
 	"fmt"
 	"kc/retrieval"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"testing"
 
-	"kc/catalog"
 	"kc/internal/repofile"
 	"kc/kernel"
 	"kc/knowledge"
@@ -19,8 +17,7 @@ import (
 	"kc/knowledge/reader"
 	"kc/knowledge/writer"
 	"kc/snapshot"
-	"kc/snapshot/commandlog"
-	"kc/snapshot/treewriter"
+	"kc/snapshot/dataset"
 )
 
 func TempDir(t *testing.T) string {
@@ -89,6 +86,10 @@ func (r *KnowledgeRepository) ApplyKnowledgeCommit(cs knowledge.ChangeSet) (kern
 
 func (r *KnowledgeRepository) ReadFile(path string, commit kernel.CommitID) ([]byte, error) {
 	return r.raw.(snapshot.TreeStore).ReadFile(path, commit)
+}
+
+func (r *KnowledgeRepository) ReadKnowledgeFile(path string, commit kernel.CommitID) ([]byte, error) {
+	return r.Repository.(knowledge.KnowledgeFileReader).ReadKnowledgeFile(path, commit)
 }
 
 func (r *KnowledgeRepository) ListFiles(commit kernel.CommitID) ([]string, error) {
@@ -270,9 +271,9 @@ func testKnowledgeTree(raw snapshot.Store, commit kernel.CommitID) (*repofile.Tr
 
 type Setup struct {
 	Repo         *KnowledgeRepository
-	Store        *snapshot.Registry
+	Store        snapshot.Registry
 	Writer       *writer.Writer
-	TreeWriter   *treewriter.Writer
+	TreeWriter   snapshot.RawWriter
 	Reader       *reader.Reader
 	RepositoryID kernel.RepositoryID
 	RootCommitID kernel.CommitID
@@ -288,7 +289,7 @@ func NewSetup(t *testing.T, repositoryID string) Setup {
 	if err := store.Add(repo); err != nil {
 		t.Fatal(err)
 	}
-	commands, err := commandlog.New(nil)
+	commands, err := snapshot.NewCommandLedger(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,7 +297,7 @@ func NewSetup(t *testing.T, repositoryID string) Setup {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tw, err := treewriter.New(store, commands)
+	tw, err := snapshot.NewRawWriter(store, commands)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -315,18 +316,18 @@ func NewSetup(t *testing.T, repositoryID string) Setup {
 	}
 }
 
-func MakeRegistry(t *testing.T) *catalog.Registry {
+func MakeRegistry(t *testing.T) dataset.Registry {
 	t.Helper()
-	registry, err := catalog.NewRegistry(filepath.Join(TempDir(t), "catalog"), "kr://acme/catalog")
+	registry, err := dataset.CreateSnapshotRegistry(MakeTreeStore(t, "kr://acme/registry-authority"), "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	return registry
 }
 
-func OpenCatalog(t *testing.T, store *snapshot.Registry) *catalog.Catalog {
+func OpenDatasets(t *testing.T, store snapshot.Registry) dataset.Service {
 	t.Helper()
-	cat, err := catalog.NewCatalog(store, MakeRegistry(t))
+	cat, err := dataset.NewService(store, MakeRegistry(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -334,7 +335,7 @@ func OpenCatalog(t *testing.T, store *snapshot.Registry) *catalog.Catalog {
 	return cat
 }
 
-func RegisterMounted(t *testing.T, cat *catalog.Catalog, store *snapshot.Registry) {
+func RegisterMounted(t *testing.T, cat dataset.Service, store snapshot.Registry) {
 	t.Helper()
 	for _, id := range store.IDs() {
 		if err := cat.RegisterRepository(id); err != nil {
@@ -384,7 +385,7 @@ func CommitChange(repoID kernel.RepositoryID, base kernel.CommitID, objectID str
 	}
 }
 
-func KnowledgeSetPin(resolved catalog.ResolvedKnowledgeSet) reader.KnowledgeSetPin {
+func KnowledgeSetPin(resolved dataset.ResolvedKnowledgeSet) reader.KnowledgeSetPin {
 	items := make([]reader.DatasetItem, 0, len(resolved.Items))
 	for _, item := range resolved.Items {
 		items = append(items, reader.DatasetItem{
@@ -400,7 +401,7 @@ func KnowledgeSetPin(resolved catalog.ResolvedKnowledgeSet) reader.KnowledgeSetP
 	}
 }
 
-func OpenKnowledgeSet(cat *catalog.Catalog, setID string) (*reader.Serving, error) {
+func OpenKnowledgeSet(cat dataset.Service, setID string) (*reader.Serving, error) {
 	resolved, err := cat.ResolveKnowledgeSet(setID)
 	if err != nil {
 		return nil, err
@@ -408,7 +409,7 @@ func OpenKnowledgeSet(cat *catalog.Catalog, setID string) (*reader.Serving, erro
 	return reader.Open(reader.Lookup(cat.Require), KnowledgeSetPin(resolved)), nil
 }
 
-func FederatedRead(cat *catalog.Catalog, setID string, objectID knowledge.ObjectID) ([]reader.FederatedValue, error) {
+func FederatedRead(cat dataset.Service, setID string, objectID knowledge.ObjectID) ([]reader.FederatedValue, error) {
 	serving, err := OpenKnowledgeSet(cat, setID)
 	if err != nil {
 		return nil, err
@@ -416,7 +417,7 @@ func FederatedRead(cat *catalog.Catalog, setID string, objectID knowledge.Object
 	return serving.Read(objectID, nil)
 }
 
-func PlanAccess(cat *catalog.Catalog, setID string) (retrieval.AccessPlan, error) {
+func PlanAccess(cat dataset.Service, setID string) (retrieval.AccessPlan, error) {
 	resolved, err := cat.ResolveKnowledgeSet(setID)
 	if err != nil {
 		return retrieval.AccessPlan{}, err

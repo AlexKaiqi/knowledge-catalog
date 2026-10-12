@@ -1,10 +1,16 @@
 # HTTP 路由重构记录
 
-这是此前 HTTP 路径审查与迁移的记录。当前路径由正式注册表与 `service_routes.go` / `service_management_routes.go` / `serve_facade.go` 的 `HandleFunc` 登记对账。
+2026-10-12 收敛：一套服务只有一个登记空间，独立 Catalog 与 list/use/archive 已删除。`show` 与 `registry audit` 保留库存和登记历史；Dataset、仓登记与文件 API 归 `/snapshot/v1`，请求和授权规则没有 Catalog qualifier。下文 Catalog 选择及旧路径仅是历史迁移记录，不能恢复为当前合同。
+
+这是此前 HTTP 路径审查与迁移的记录。当前路径由 `httpsurface.Patterns()`、`server/routes.go`
+与 `server/service_routes.go` / `server/service_management_routes.go` / `server/serve_facade.go`
+的 `HandleFunc` 登记对账。
 
 与 [`REFACTOR.md`](REFACTOR.md)（CLI）配套：同一套尺子打 **typed HTTP**。两面独立注册（`API-01`），对齐的是操作与 action，不是把 argv 抄进 URL。
 
 本文保留此前 URL 迁移的对照与取舍；下文“现行/目标”和 HA–HD 指当时阶段，不是新的实施清单。当前 method+pattern 以 `httpsurface.Patterns()` 和正式 mux 合同测试为准，不能根据旧计数或别名过渡步骤恢复退役路径。CLI 应然设计见 [CLI 交互](../docs/reviewed/cli.md)；落地对照见 [`REFACTOR.md`](REFACTOR.md)。
+
+下文插件迁移对象属于历史记录；本仓库 DSH 宿主集成已退役，不再拥有当前路由或验证入口。
 
 重构前曾统计 **67** 条；迁移后的分母由注册表与 `TestEveryPublicHTTPRouteIsRegisteredWithOnlyItsDeclaredMethod` 对账，本文不替代该合同。
 

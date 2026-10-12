@@ -34,14 +34,16 @@ type ResourceDescriptorCoordinate struct {
 	Commit     kernel.CommitID     `json:"commit"`
 }
 type ResourceOperationRequest struct {
-	Descriptor ResourceDescriptorCoordinate `json:"descriptor"`
-	Runtime    string                       `json:"runtime"`
-	Protocol   string                       `json:"protocol"`
-	Origin     string                       `json:"-"`
-	Operation  string                       `json:"operation"`
-	Call       string                       `json:"call"`
-	Input      any                          `json:"input"`
-	Identity   StateRuntimeIdentity         `json:"identity"`
+	Descriptor        ResourceDescriptorCoordinate `json:"descriptor"`
+	Implementation    *knowledge.Address           `json:"implementation,omitempty"`
+	DeclarationDigest kernel.Digest                `json:"declarationDigest,omitempty"`
+	Runtime           string                       `json:"runtime"`
+	Protocol          string                       `json:"protocol"`
+	Origin            string                       `json:"-"`
+	Operation         string                       `json:"operation"`
+	Call              string                       `json:"call"`
+	Input             any                          `json:"input"`
+	Identity          StateRuntimeIdentity         `json:"identity"`
 }
 type ResourceOperationAccessor interface {
 	AccessResource(context.Context, ResourceOperationRequest) (any, error)

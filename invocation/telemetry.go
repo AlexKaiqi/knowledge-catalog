@@ -91,12 +91,12 @@ func TelemetryFace(command string) string {
 		return "projection"
 	case strings.HasPrefix(command, "knowledge-") || command == "rerank" || command == "search-rerank":
 		return "knowledge"
-	case strings.HasPrefix(command, "workspace-") || strings.HasPrefix(command, "catalog-") ||
+	case strings.HasPrefix(command, "workspace-") || strings.HasPrefix(command, "registry-") || strings.HasPrefix(command, "inventory-") ||
 		strings.HasPrefix(command, "dataset-") || command == "pin" || command == "pin-check" ||
-		command == "pin-source" || command == "local-repository-attach" || command == "local-catalog-attach" ||
+		command == "pin-source" || command == "local-repository-attach" ||
 		command == "named-repository-create" || command == "create" || command == "attach" ||
 		command == "detach" || command == "show":
-		return "catalog"
+		return "snapshot"
 	case strings.HasPrefix(command, "file-"):
 		return "vfs"
 	case strings.HasPrefix(command, "governance-") || strings.HasPrefix(command, "admin-") ||

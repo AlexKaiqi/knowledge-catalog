@@ -57,7 +57,7 @@ const (
 	// ErrSchemaIncompatible: an existing schema/* identity was changed in a way that can invalidate published instances or queries.
 	ErrSchemaIncompatible ErrorCode = "SCHEMA_INCOMPATIBLE"
 
-	// ErrTargetRepositoryDenied: write target is not this Snapshot, or Catalog id used as --repo.
+	// ErrTargetRepositoryDenied: write target is not this Snapshot.
 	ErrTargetRepositoryDenied ErrorCode = "TARGET_REPOSITORY_DENIED"
 
 	// ErrKnowledgeRefUnresolved: version exists; object or event is missing there.
@@ -90,9 +90,6 @@ const (
 	// ErrUnauthenticated: the HTTP facade could not establish a trusted
 	// principal. Authorization is evaluated only after authentication succeeds.
 	ErrUnauthenticated ErrorCode = "UNAUTHENTICATED"
-
-	// ErrCatalogArchived: catalog is archived; dataset define / register are closed.
-	ErrCatalogArchived ErrorCode = "CATALOG_ARCHIVED"
 
 	// ErrRepositoryArchived: repository is archived; COMMIT/PROPOSE are closed.
 	ErrRepositoryArchived ErrorCode = "REPOSITORY_ARCHIVED"

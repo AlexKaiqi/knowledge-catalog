@@ -14,7 +14,7 @@ import (
 
 	"kc/internal/treepath"
 	"kc/kernel"
-	"kc/snapshot"
+	"kc/snapshot/internal/storecontract"
 )
 
 const (
@@ -62,14 +62,6 @@ type Repository struct {
 	verifiedFIFO []kernel.CommitID
 }
 
-var (
-	_ snapshot.Store           = (*Repository)(nil)
-	_ snapshot.TreeStore       = (*Repository)(nil)
-	_ snapshot.DirectoryReader = (*Repository)(nil)
-	_ snapshot.HistoryStore    = (*Repository)(nil)
-	_ snapshot.ChangeStore     = (*Repository)(nil)
-)
-
 // OpenExisting attaches an initialized lakeFS repository. Published branches
 // must be writable only by KC's service identity: the adapter serializes
 // publication with an atomic hidden lock branch before using hard_reset.
@@ -98,7 +90,7 @@ func OpenExisting(id kernel.RepositoryID, dsn, credential string) (*Repository, 
 	if info.DefaultBranch != "" {
 		r.branch = info.DefaultBranch
 	}
-	if _, err := r.Head(snapshot.DefaultRef); err != nil {
+	if _, err := r.Head(storecontract.DefaultRef); err != nil {
 		return nil, err
 	}
 	return r, nil
@@ -108,7 +100,7 @@ func (r *Repository) ID() kernel.RepositoryID { return r.id }
 
 func (r *Repository) branchName(ref string) (string, bool) {
 	switch {
-	case ref == "" || ref == "HEAD" || ref == snapshot.DefaultRef:
+	case ref == "" || ref == "HEAD" || ref == storecontract.DefaultRef:
 		return r.branch, true
 	case strings.HasPrefix(ref, "refs/heads/"):
 		name := strings.TrimPrefix(ref, "refs/heads/")
@@ -152,14 +144,14 @@ func (r *Repository) getBranch(name string) (kernel.CommitID, bool, error) {
 func (r *Repository) Head(ref string) (kernel.CommitID, error) {
 	name, ok := r.branchName(ref)
 	if !ok {
-		return "", kernel.Fail(kernel.ErrVersionUnresolved, "ref %s does not exist", snapshot.RefOrDefault(ref))
+		return "", kernel.Fail(kernel.ErrVersionUnresolved, "ref %s does not exist", storecontract.RefOrDefault(ref))
 	}
 	commit, found, err := r.getBranch(name)
 	if err != nil {
 		return "", err
 	}
 	if !found {
-		return "", kernel.Fail(kernel.ErrVersionUnresolved, "ref %s does not exist", snapshot.RefOrDefault(ref))
+		return "", kernel.Fail(kernel.ErrVersionUnresolved, "ref %s does not exist", storecontract.RefOrDefault(ref))
 	}
 	return commit, nil
 }
@@ -392,7 +384,7 @@ func (r *Repository) Archive() error {
 	if r.Archived() {
 		return nil
 	}
-	head, err := r.Head(snapshot.DefaultRef)
+	head, err := r.Head(storecontract.DefaultRef)
 	if err != nil {
 		return err
 	}
@@ -496,9 +488,9 @@ func decodeDirectoryContinuation(token string) (directoryContinuation, error) {
 	return out, nil
 }
 
-func (r *Repository) ReadDirectory(request snapshot.DirectoryRequest) (snapshot.DirectoryPage, error) {
+func (r *Repository) ReadDirectory(request storecontract.DirectoryRequest) (storecontract.DirectoryPage, error) {
 	if !r.HasCommit(request.Commit) {
-		return snapshot.DirectoryPage{}, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s does not exist", request.Commit)
+		return storecontract.DirectoryPage{}, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s does not exist", request.Commit)
 	}
 	directory := strings.Trim(strings.TrimSpace(request.Directory), "/")
 	prefix := ""
@@ -509,19 +501,19 @@ func (r *Repository) ReadDirectory(request snapshot.DirectoryRequest) (snapshot.
 	if request.Continuation != "" {
 		token, err := decodeDirectoryContinuation(request.Continuation)
 		if err != nil {
-			return snapshot.DirectoryPage{}, err
+			return storecontract.DirectoryPage{}, err
 		}
 		if token.Directory != directory {
-			return snapshot.DirectoryPage{}, kernel.Fail(kernel.ErrPreconditionFailed,
+			return storecontract.DirectoryPage{}, kernel.Fail(kernel.ErrPreconditionFailed,
 				"directory continuation belongs to directory %q, not %q", token.Directory, directory)
 		}
 		after = token.After
 	}
 	page, err := r.listObjects(request.Commit, prefix, "/", request.Limit, after)
 	if err != nil {
-		return snapshot.DirectoryPage{}, err
+		return storecontract.DirectoryPage{}, err
 	}
-	out := snapshot.DirectoryPage{
+	out := storecontract.DirectoryPage{
 		Continuation: "",
 		Exhausted:    !page.Pagination.HasMore,
 		Generation:   string(request.Commit),
@@ -538,7 +530,7 @@ func (r *Repository) ReadDirectory(request snapshot.DirectoryRequest) (snapshot.
 		if item.PathType == "common_prefix" {
 			kind = "directory"
 		}
-		out.Entries = append(out.Entries, snapshot.DirectoryEntry{Name: name, Kind: kind})
+		out.Entries = append(out.Entries, storecontract.DirectoryEntry{Name: name, Kind: kind})
 	}
 	sort.Slice(out.Entries, func(i, j int) bool { return out.Entries[i].Name < out.Entries[j].Name })
 	return out, nil

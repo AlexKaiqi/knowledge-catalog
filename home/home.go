@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"sync"
 
-	"kc/catalog"
 	"kc/controlplane"
 	"kc/index"
 	"kc/internal/journal"
@@ -15,12 +14,11 @@ import (
 	"kc/knowledge/writer"
 	readcache "kc/retrieval/cache"
 	"kc/snapshot"
-	"kc/snapshot/commandlog"
-	"kc/snapshot/treewriter"
+	"kc/snapshot/dataset"
 )
 
 // Assembling the live object graph for one command: mount the members, build the
-// Catalogs, then hang Writer / Reader / ControlPlane / index off them. This is
+// registry, then hang Writer / Reader / ControlPlane / index off them. This is
 // the only place that knows the wiring order, and it changes when the set of
 // collaborators changes.
 //
@@ -35,21 +33,17 @@ type Home struct {
 	controlMu    sync.Mutex
 	Deployment   *DeploymentConfig
 	Dir          string
-	Store        *snapshot.Registry
-	Commands     *commandlog.Ledger
+	Store        snapshot.Registry
+	Commands     snapshot.CommandLedger
 	Writer       *writer.Writer
-	TreeWriter   *treewriter.Writer
+	TreeWriter   snapshot.RawWriter
 	Reader       *reader.Reader
-	Catalogs     map[string]*catalog.Catalog
-	Registries   map[string]*catalog.Registry
-	Catalog      *catalog.Catalog
-	Registry     *catalog.Registry
+	Datasets     dataset.Service
+	Registry     dataset.Registry
 	ControlPlane *controlplane.ControlPlane
 	ControlStore *controlplane.FileControlState
 	File         HomeFile
 	Control      controlplane.ControlState
-	Controls     map[string]controlplane.ControlState
-	controlID    string
 	Journal      journal.Journal
 	Index        *index.Index
 	Projection   *index.Controller
@@ -63,8 +57,8 @@ func Open(home string) (*Home, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(file.Catalogs) == 0 {
-		return nil, fmt.Errorf("no catalog fixture at %s; production requires kc deployment init --config (fixture %s)", home, home)
+	if file.Registry.ID == "" {
+		return nil, fmt.Errorf("no registry fixture at %s; production requires kc deployment init --config (fixture %s)", home, home)
 	}
 	stores, err := ReadStores(home)
 	if err != nil {
@@ -77,24 +71,23 @@ func Open(home string) (*Home, error) {
 	if err != nil {
 		return nil, err
 	}
-	catalogs, registries, err := OpenCatalogs(home, file, store)
+	datasets, registry, err := OpenDatasets(home, file, store)
 	if err != nil {
 		return nil, err
 	}
-	return assemble(home, file, stores, store, catalogs, registries, false)
+	return assemble(home, file, stores, store, datasets, registry, false)
 }
 
-func assemble(home string, file HomeFile, stores StoresFile, store *snapshot.Registry, catalogs map[string]*catalog.Catalog, registries map[string]*catalog.Registry, recovering bool) (*Home, error) {
-	defaultID := file.Catalogs[0].ID
-	var ledgerStore commandlog.Store = commandlog.NewBoltStore(filepath.Join(home, "writer.db"))
+func assemble(home string, file HomeFile, stores StoresFile, store snapshot.Registry, datasets dataset.Service, registry dataset.Registry, recovering bool) (*Home, error) {
+	var ledgerStore snapshot.CommandStore = snapshot.NewBoltCommandStore(filepath.Join(home, "writer.db"))
 	if recovering {
-		existing, err := commandlog.OpenBoltStore(filepath.Join(home, "writer.db"))
+		existing, err := snapshot.OpenBoltCommandStore(filepath.Join(home, "writer.db"))
 		if err != nil {
 			return nil, err
 		}
 		ledgerStore = existing
 	}
-	commands, err := commandlog.New(ledgerStore)
+	commands, err := snapshot.NewCommandLedger(ledgerStore)
 	if err != nil {
 		return nil, err
 	}
@@ -102,24 +95,22 @@ func assemble(home string, file HomeFile, stores StoresFile, store *snapshot.Reg
 	if err != nil {
 		return nil, err
 	}
-	tw, err := treewriter.New(store, commands)
+	tw, err := snapshot.NewRawWriter(store, commands)
 	if err != nil {
 		return nil, err
 	}
-	controlStore := controlplane.NewFileControlState(filepath.Join(home, "control.json"))
-	bundle, err := loadControlBundle(controlStore, defaultID)
+	controlStore := controlplane.NewFileControlState(filepath.Join(home, "control.json"), file.Registry.ID)
+	control, err := controlStore.Load()
 	if err != nil {
 		return nil, err
 	}
 	sys := journal.NewFile(systemJournalPath(home))
 	w.SetJournal(sys)
-	tw.SetJournal(sys)
+	tw.SetObserver(rawWriteObserver(sys))
 	rd := reader.NewReader(store)
 	rd.SetJournal(sys)
-	for _, cat := range catalogs {
-		cat.SetJournal(sys)
-	}
-	plane := controlplane.New(store, w, catalogs[defaultID])
+	datasets.SetObserver(datasetObserver(sys))
+	plane := controlplane.New(store, w, datasets)
 	plane.SetJournal(sys)
 	idxDir, err := ResolveStoreDir(home, stores.Layout.Projections, defaultProjectionsDir)
 	if err != nil {
@@ -133,16 +124,12 @@ func assemble(home string, file HomeFile, stores StoresFile, store *snapshot.Reg
 		Writer:       w,
 		TreeWriter:   tw,
 		Reader:       rd,
-		Catalogs:     catalogs,
-		Registries:   registries,
-		Catalog:      catalogs[defaultID],
-		Registry:     registries[defaultID],
+		Datasets:     datasets,
+		Registry:     registry,
 		ControlPlane: plane,
 		ControlStore: controlStore,
 		File:         file,
-		Control:      bundle[defaultID],
-		Controls:     bundle,
-		controlID:    defaultID,
+		Control:      control,
 		Journal:      sys,
 		Index:        index.NewIndexEngine(idxDir, indexOpener(file, stores)),
 		Stores:       stores,
@@ -173,11 +160,7 @@ func assemble(home string, file HomeFile, stores StoresFile, store *snapshot.Reg
 		})
 		ws.Projection = controller
 		if projection != nil {
-			var servingCatalogs []*catalog.Catalog
-			for _, cat := range catalogs {
-				servingCatalogs = append(servingCatalogs, cat)
-			}
-			if err := controller.RegisterConsumer(datasetProjectionConsumer{catalogs: servingCatalogs, controller: controller}); err != nil {
+			if err := controller.RegisterConsumer(datasetProjectionConsumer{datasets: datasets, controller: controller}); err != nil {
 				return nil, err
 			}
 		}
@@ -193,79 +176,75 @@ func assemble(home string, file HomeFile, stores StoresFile, store *snapshot.Reg
 
 // openMembers opens every discovered Repository. One bad member fails the command:
 // a partially attached Store Directory would silently answer Workspace reads with fewer sources.
-func openMembers(home string, file HomeFile, stores StoresFile) (*snapshot.Registry, error) {
+func openMembers(home string, file HomeFile, stores StoresFile) (snapshot.Registry, error) {
 	store := snapshot.NewRegistry()
-	var system snapshot.Store
+	openedAll := false
+	defer func() {
+		if !openedAll {
+			_ = store.Close()
+		}
+	}()
 	for _, repo := range file.Repos {
 		if repo.DSN != "" {
-			if err := snapshot.RejectConfiguredSecret(repo.Driver, repo.DSN, "KC_GITEA_TOKEN"); err != nil {
+			if err := snapshot.RejectConfiguredSecret(repo.Driver, repo.DSN, snapshot.LakeFSCredentialEnv); err != nil {
 				return nil, fmt.Errorf("repository %s: %w", repo.ID, err)
 			}
 		}
-		opened, err := openAttachedRepository(home, repo, stores)
+		var opened snapshot.Store
+		var err error
+		if repo.ID == string(knowledge.SystemRepositoryID) {
+			opened, err = openExistingAuthority(repo)
+		} else {
+			opened, err = openAttachedRepository(home, repo, stores)
+		}
 		if err != nil {
 			return nil, err
 		}
 		if repo.ID == string(knowledge.SystemRepositoryID) {
-			system = opened
-			continue
+			opened, err = readOnlySystemAuthority(opened)
+			if err != nil {
+				return nil, err
+			}
 		}
 		if err := store.Add(opened); err != nil {
+			closeManagedSource(opened)
 			return nil, err
 		}
 	}
-	if system == nil {
-		system = knowledge.NewSystemRepository()
+	system, ok := store.Get(knowledge.SystemRepositoryID)
+	if !ok {
+		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "component fixture requires a published System Repository")
 	}
-	if err := store.Add(system); err != nil {
+	if err := verifySystemAuthority(system); err != nil {
 		return nil, err
 	}
+	openedAll = true
 	return store, nil
 }
 
-// OpenCatalogs builds every Catalog over the same Store, so a Repository registered in
-// two Catalogs is one attached Store, not two.
-func OpenCatalogs(home string, file HomeFile, store *snapshot.Registry) (map[string]*catalog.Catalog, map[string]*catalog.Registry, error) {
-	catalogs := map[string]*catalog.Catalog{}
-	registries := map[string]*catalog.Registry{}
-	for _, item := range file.Catalogs {
-		registry, err := catalog.NewRegistry(filepath.Join(home, item.Dir), item.ID)
-		if err != nil {
-			return nil, nil, err
-		}
-		cat, err := catalog.NewCatalog(store, registry)
-		if err != nil {
-			return nil, nil, err
-		}
-		// The built-in protocol publication is a deployment invariant, not a
-		// user-attached business Repository. Registering here also migrates an
-		// existing Home on its first open after upgrade.
-		if !cat.Archived() {
-			if err := cat.RegisterRepository(knowledge.SystemRepositoryID); err != nil {
-				return nil, nil, err
-			}
-		}
-		catalogs[item.ID] = cat
-		registries[item.ID] = registry
-	}
-	return catalogs, registries, nil
-}
-
-// loadControlBundle reads per-Catalog ControlState. The "" key is from before
-// control state was keyed by Catalog; it belongs to the default one.
-func loadControlBundle(store *controlplane.FileControlState, defaultID string) (map[string]controlplane.ControlState, error) {
-	bundle, err := store.LoadBundle()
+func OpenDatasets(home string, file HomeFile, store snapshot.Registry) (dataset.Service, dataset.Registry, error) {
+	item := file.Registry
+	binding, err := readFixtureRegistryBinding(filepath.Join(home, item.Dir))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	if legacy, ok := bundle[""]; ok {
-		delete(bundle, "")
-		bundle[defaultID] = legacy
+	if binding.ID != item.ID {
+		return nil, nil, kernel.Fail(kernel.ErrPreconditionFailed, "component registry pointer changed identity")
 	}
-	if _, ok := bundle[defaultID]; !ok {
-		bundle[defaultID] = controlplane.ControlState{}
+	registry, err := openRegistry(binding)
+	if err != nil {
+		return nil, nil, err
 	}
-	return bundle, nil
+	datasets, err := dataset.NewService(store, registry)
+	if err != nil {
+		_ = registry.Close()
+		return nil, nil, err
+	}
+	if err := datasets.RegisterRepository(knowledge.SystemRepositoryID); err != nil {
+		_ = registry.Close()
+		return nil, nil, err
+	}
+	return datasets, registry, nil
 }
 
 // Close releases projection engines and member store adapters opened for this process.
@@ -293,8 +272,8 @@ func (ws *Home) Close() error {
 				first = err
 			}
 		}
-		for _, registry := range ws.Registries {
-			if err := registry.Close(); err != nil && first == nil {
+		if ws.Registry != nil {
+			if err := ws.Registry.Close(); err != nil && first == nil {
 				first = err
 			}
 		}
@@ -306,108 +285,28 @@ func (ws *Home) Close() error {
 func PersistControl(ws *Home) error {
 	ws.controlMu.Lock()
 	defer ws.controlMu.Unlock()
-	if ws.Controls == nil {
-		ws.Controls = map[string]controlplane.ControlState{}
-	}
-	ws.Controls[ws.controlID] = ws.Control
-	return ws.ControlStore.SaveBundle(ws.Controls)
+	return ws.ControlStore.Save(ws.Control)
 }
 
-// BindControl points Control at one Catalog's slice of control.json, filling in
-// the maps so verbs can assign without nil checks. The serve facade runs verbs
-// concurrently (HTTP requests and the projection worker share one Home), so the
-// control binding is serialized; it is process state, never persisted alone.
-func (ws *Home) BindControl(catalogID string) {
-	ws.controlMu.Lock()
-	defer ws.controlMu.Unlock()
-	if catalogID == "" {
-		catalogID = ws.File.Catalogs[0].ID
-	}
-	st, ok := ws.Controls[catalogID]
-	if !ok {
-		st = controlplane.ControlState{}
-	}
-	if st.Proposals == nil {
-		st.Proposals = map[string]controlplane.Proposal{}
-	}
-	if st.Previews == nil {
-		st.Previews = map[string]controlplane.Preview{}
-	}
-	if st.Validations == nil {
-		st.Validations = map[string]controlplane.ValidationReport{}
-	}
-	ws.Controls[catalogID] = st
-	ws.Control = st
-	ws.controlID = catalogID
-}
-
-func (ws *Home) UseCatalog(catalogID string) (*catalog.Catalog, *catalog.Registry, error) {
-	if catalogID == "" {
-		return ws.Catalog, ws.Registry, nil
-	}
-	cat, ok := ws.Catalogs[catalogID]
-	if !ok {
-		return nil, nil, fmt.Errorf("unknown catalog %s", catalogID)
-	}
-	return cat, ws.Registries[catalogID], nil
-}
-
-// AddCatalog creates a second Catalog in an open home. It normalizes the id here
-// rather than in the verb so `catalog-add acme/x` and `init --catalog acme/x`
-// cannot disagree about whether the stored id carries the kr:// scheme. Returns
-// the id as stored.
-func AddCatalog(ws *Home, catalogID string) (string, error) {
-	catalogID, err := NormalizeCatalogID(catalogID)
-	if err != nil {
-		return "", err
-	}
-	for _, item := range ws.File.Catalogs {
-		if item.ID == catalogID {
-			return "", fmt.Errorf("catalog already exists: %s", catalogID)
-		}
-	}
-	// One id cannot name both a registry and a Knowledge Repository, or discovery
-	// could not tell which kind of directory it found.
-	for _, r := range ws.File.Repos {
-		if r.ID == catalogID {
-			return "", fmt.Errorf("%s is already a member repository", catalogID)
-		}
-	}
-	dir := catalogDirOf(ws.Stores, catalogID)
-	registry, err := catalog.NewRegistry(filepath.Join(ws.Dir, dir), catalogID)
-	if err != nil {
-		return "", err
-	}
-	cat, err := catalog.NewCatalog(ws.Store, registry)
-	if err != nil {
-		return "", err
-	}
-	cat.SetJournal(ws.Journal)
-	cat.SetStamp(ws.Writer.Stamp())
-	ws.attachIndex(cat)
-	if err := cat.RecordCreated(); err != nil {
-		return "", err
-	}
-	ws.File.Catalogs = append(ws.File.Catalogs, HomeCatalog{ID: catalogID, Dir: dir})
-	sortCatalogs(ws.File.Catalogs)
-	ws.Catalogs[catalogID] = cat
-	ws.Registries[catalogID] = registry
-	return catalogID, nil
-}
-
-// recordCatalogCreated writes the first commit of a brand-new registry. It uses
-// a throwaway Store because no member is attached yet at init time.
-func recordCatalogCreated(dir, catalogID string, j journal.Journal) error {
-	registry, err := catalog.NewRegistry(dir, catalogID)
+func recordRegistryCreated(dir string, j journal.Journal, binding RegistryBinding) error {
+	binding, err := fixtureRegistryBinding(binding)
 	if err != nil {
 		return err
 	}
-	cat, err := catalog.NewCatalog(snapshot.NewRegistry(), registry)
+	registry, err := createRegistry(binding)
 	if err != nil {
 		return err
 	}
-	cat.SetJournal(j)
-	return cat.RecordCreated()
+	defer registry.Close()
+	datasets, err := dataset.NewService(snapshot.NewRegistry(), registry)
+	if err != nil {
+		return err
+	}
+	datasets.SetObserver(datasetObserver(j))
+	if err := datasets.RecordCreated(); err != nil {
+		return err
+	}
+	return writeFixtureRegistryBinding(dir, binding)
 }
 
 func systemJournalPath(dir string) string { return filepath.Join(dir, "system.jsonl") }

@@ -2,7 +2,7 @@ package knowledge
 
 // Domain Schema parsing, instance validation and compatibility. This is the
 // protocol interpretation shared by Writer and Reader; the System Repository
-// that publishes the Meta Schema lives in system_repository.go.
+// publication source and trust root live in system_publication.go.
 
 import (
 	"encoding/json"
@@ -20,7 +20,7 @@ import (
 
 const (
 	// SystemRepositoryID is the deployment-managed protocol Repository.
-	// Catalog only sees it as another Repository ID; its knowledge meaning is
+	// Dataset service only sees it as another Repository ID; its knowledge meaning is
 	// owned at layer ② and wired by the application root. Read authorization
 	// uses the same authenticated default as any other declared Repository.
 	SystemRepositoryID kernel.RepositoryID = "kr://kc/system"
@@ -34,7 +34,7 @@ const (
 	// Identity is the entity in frontmatter; the conventional path_hint is
 	// RepositoryReadmePath. Path is not identity.
 	ReadmeAspect = "readme"
-	// RepositoryReadmePath is the bounded tree path Catalog inventory reads.
+	// RepositoryReadmePath is the bounded tree path Dataset service inventory reads.
 	RepositoryReadmePath = "README.md"
 	// CanonicalSchemaDir is the single Canonical tree directory for schema/*
 	// files. Identity remains the schema/* object_id; this path_hint sorts
@@ -363,9 +363,10 @@ func ValidateSchemaInstance(address Address, value any, schema SchemaDefinition)
 	return nil
 }
 
-// BreakingSchemaChanges returns deterministic reasons why reusing the same
-// schema object ID would narrow or change its published contract. A provider
-// must publish a new major schema identity for any returned change.
+// BreakingSchemaChanges returns deterministic value-structure compatibility
+// breaks. A provider must publish a new major identity for any returned change.
+// Field access is a versioned query declaration: narrowing or removing it
+// changes AccessSpec, not the structural validity of the stored values.
 func BreakingSchemaChanges(previous, next SchemaDefinition) []string {
 	changes := []string{}
 	if previous.MetaSchema != next.MetaSchema {
@@ -405,9 +406,6 @@ func BreakingSchemaChanges(previous, next SchemaDefinition) []string {
 		}
 		if !oldField.Required && newField.Required {
 			changes = append(changes, "field "+name+" became required")
-		}
-		if !stringSetContains(newField.Access, oldField.Access) {
-			changes = append(changes, "field "+name+" access was narrowed")
 		}
 		if refTypesNarrowed(oldField.RefTypes, newField.RefTypes) {
 			changes = append(changes, "field "+name+" refTypes were narrowed")

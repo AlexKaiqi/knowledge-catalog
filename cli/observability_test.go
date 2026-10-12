@@ -27,12 +27,12 @@ func (a staticHTTPAuthenticator) Authenticate(context.Context, http.Header) (inv
 func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 	home := testkit.TempDir(t)
 	repoID := "kr://acme/public/semantics"
-	catalogID := "kr://acme/catalog"
+
 	setID := "finance-board"
 	agent := "agent:finance-analyst-v3"
 	user := "user:kaiqidong"
 
-	body(t, kc(home, "init", "--catalog", catalogID))
+	body(t, kc(home, "init"))
 	seedRepo(t, home, repoID)
 	body(t, kc(home, "put", "--command-id", "schema", "--repo", repoID,
 		"--object", "schema/metric.definition",
@@ -41,13 +41,10 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 		"--object", "Metric:gmv", "--value", `{"description":"governed gross merchandise value"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", setID, "--revision", "1",
 		"--source", repoID+"=refs/heads/main"))
-	body(t, kc(home, "allow", "--principal", agent, "--cmd", "read-workspace",
-		"--catalog", catalogID, "--dataset", setID))
+	body(t, kc(home, "allow", "--principal", agent, "--cmd", "read-workspace", "--dataset", setID))
 	body(t, kc(home, "allow", "--principal", agent, "--cmd", "read", "--repo", repoID))
-	body(t, kc(home, "allow", "--principal", agent, "--action", "knowledge.search",
-		"--catalog", catalogID, "--dataset", setID))
-	body(t, kc(home, "allow", "--principal", agent, "--cmd", "feedback.write",
-		"--catalog", catalogID, "--dataset", setID))
+	body(t, kc(home, "allow", "--principal", agent, "--action", "knowledge.search", "--dataset", setID))
+	body(t, kc(home, "allow", "--principal", agent, "--cmd", "feedback.write", "--dataset", setID))
 	identity := []string{"--as", agent, "--on-behalf-of", user, "--request-id", "req-42",
 		"--trace-id", "trace-42"}
 	readArgs := append([]string{"read", "--dataset", setID, "--object", "Metric:gmv", "--span-id", "span-read"}, identity...)
@@ -145,7 +142,7 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 func TestKnowledgeReadFailsClosedWhenAccessEvidenceCannotPersist(t *testing.T) {
 	home := testkit.TempDir(t)
 	repoID := "kr://acme/public/audited"
-	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(home, "init"))
 	seedRepo(t, home, repoID)
 	body(t, kc(home, "put", "--command-id", "seed", "--repo", repoID,
 		"--object", "Policy:audit", "--value", `{"body":"must be observed"}`))
@@ -162,7 +159,7 @@ func TestKnowledgeReadFailsClosedWhenAccessEvidenceCannotPersist(t *testing.T) {
 func TestKnowledgeSearchFailsClosedWhenRetrievalEvidenceCannotPersist(t *testing.T) {
 	home := testkit.TempDir(t)
 	repoID := "kr://acme/public/retrieval-audited"
-	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(home, "init"))
 	seedRepo(t, home, repoID)
 	body(t, kc(home, "put", "--command-id", "schema", "--repo", repoID,
 		"--object", "schema/runbook.search", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
@@ -184,14 +181,13 @@ func TestHTTPPassesAbstractDelegationAndTraceContext(t *testing.T) {
 	repoID := "kr://acme/public/http-observe"
 	setID := "http-observe"
 	agent, user := "agent:http", "user:delegator"
-	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(home, "init"))
 	seedRepo(t, home, repoID)
 	body(t, kc(home, "put", "--command-id", "seed", "--repo", repoID,
 		"--object", "Policy:http", "--value", `{"body":"observable"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", setID, "--revision", "1",
 		"--source", repoID+"=refs/heads/main"))
-	body(t, kc(home, "allow", "--principal", agent, "--cmd", "read-workspace",
-		"--catalog", "kr://acme/catalog", "--dataset", setID))
+	body(t, kc(home, "allow", "--principal", agent, "--cmd", "read-workspace", "--dataset", setID))
 	body(t, kc(home, "allow", "--principal", agent, "--cmd", "read", "--repo", repoID))
 
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{Authenticator: staticHTTPAuthenticator{identity: inv.HTTPIdentity{Principal: agent, OnBehalfOf: user, Provider: "test", Subject: agent}}})

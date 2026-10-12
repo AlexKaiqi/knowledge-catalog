@@ -24,24 +24,10 @@ func declaredDeployment(t *testing.T, source bool) (apphome.DeploymentConfig, st
 	root := t.TempDir()
 	t.Setenv("KC_LAKEFS_CREDENTIAL", testkit.LakeFSFakeCredential)
 	fake := testkit.NewLakeFSFake(t)
-	cfg := apphome.DeploymentConfig{Version: 1, StateDir: filepath.Join(root, "durable"), CacheDir: filepath.Join(root, "instance"), Auth: "local", BootstrapPrincipal: "agent:operator", Catalogs: []apphome.CatalogBinding{{ID: "kr://recover/catalog", Driver: "lakefs", DSN: fake.DSN(fake.NewRepo())}}, RepositoryAccess: []apphome.RepositoryAccess{apphome.SystemRepositoryAccess()}}
+	cfg := apphome.DeploymentConfig{Version: 1, StateDir: filepath.Join(root, "durable"), CacheDir: filepath.Join(root, "instance"), Auth: "local", BootstrapPrincipal: "agent:operator", Repositories: []apphome.RepositoryBinding{{ID: "kr://kc/system", Driver: "lakefs", DSN: fake.DSN(fake.NewRepo())}}, Registry: apphome.RegistryBinding{ID: "kr://kc/registry", Driver: "lakefs", DSN: fake.DSN(fake.NewRepo())}, RepositoryAccess: []apphome.RepositoryAccess{apphome.SystemRepositoryAccess()}}
 	if source {
-		fixture := filepath.Join(root, "provisioning")
-		if _, _, err := apphome.InitHome(fixture, "kr://fixture/catalog"); err != nil {
-			t.Fatal(err)
-		}
-		ws, err := apphome.Open(fixture)
-		if err != nil {
-			t.Fatal(err)
-		}
 		sourceDSN := fake.DSN(fake.NewRepo())
-		if _, err := apphome.AddRepository(ws, "kr://recover/source", "lakefs", sourceDSN, "", ""); err != nil {
-			t.Fatal(err)
-		}
-		if err := ws.Close(); err != nil {
-			t.Fatal(err)
-		}
-		cfg.Repositories = []apphome.RepositoryBinding{{ID: "kr://recover/source", Driver: "lakefs", DSN: sourceDSN}}
+		cfg.Repositories = append(cfg.Repositories, apphome.RepositoryBinding{ID: "kr://recover/source", Driver: "lakefs", DSN: sourceDSN})
 	}
 	path := filepath.Join(root, "deployment.json")
 	writeDeployment(t, path, cfg)
@@ -197,8 +183,8 @@ func TestDeploymentSystemPublishUsesDeclaredBinding(t *testing.T) {
 	writeDeployment(t, path, cfg)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", path))
 	first := asMap(t, body(t, deploymentCommand(t, "deployment", "system", "publish", "--config", path)))
-	if first["seeded"] != true {
-		t.Fatalf("system publication not explicit: %#v", first)
+	if first["seeded"] != false {
+		t.Fatalf("deployment init did not publish system: %#v", first)
 	}
 	second := asMap(t, body(t, deploymentCommand(t, "deployment", "system", "publish", "--config", path)))
 	if second["seeded"] != false || second["commit"] != first["commit"] {
@@ -211,7 +197,7 @@ func TestDeploymentReadinessRequiresCatalogAuthority(t *testing.T) {
 	root := t.TempDir()
 	fake := testkit.NewLakeFSFake(t)
 	t.Setenv("KC_LAKEFS_CREDENTIAL", testkit.LakeFSFakeCredential)
-	cfg := apphome.DeploymentConfig{Version: 1, StateDir: filepath.Join(root, "durable"), CacheDir: filepath.Join(root, "instance"), Auth: "local", BootstrapPrincipal: "agent:operator", Catalogs: []apphome.CatalogBinding{{ID: "kr://recover/catalog", Driver: "lakefs", DSN: fake.DSN(fake.NewRepo())}}, RepositoryAccess: []apphome.RepositoryAccess{apphome.SystemRepositoryAccess()}}
+	cfg := apphome.DeploymentConfig{Version: 1, StateDir: filepath.Join(root, "durable"), CacheDir: filepath.Join(root, "instance"), Auth: "local", BootstrapPrincipal: "agent:operator", Repositories: []apphome.RepositoryBinding{{ID: "kr://kc/system", Driver: "lakefs", DSN: fake.DSN(fake.NewRepo())}}, Registry: apphome.RegistryBinding{ID: "kr://kc/registry", Driver: "lakefs", DSN: fake.DSN(fake.NewRepo())}, RepositoryAccess: []apphome.RepositoryAccess{apphome.SystemRepositoryAccess()}}
 	path := filepath.Join(root, "deployment.json")
 	writeDeployment(t, path, cfg)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", path))
@@ -233,7 +219,7 @@ func TestDeploymentReadinessRequiresCatalogAuthority(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result["reasonCode"] != "CATALOG_STATE_UNAVAILABLE" {
+	if result["reasonCode"] != "REGISTRY_STATE_UNAVAILABLE" {
 		t.Fatalf("wrong dependency: %#v", result)
 	}
 }

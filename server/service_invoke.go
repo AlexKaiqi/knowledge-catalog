@@ -16,9 +16,16 @@ import (
 	"strings"
 
 	"kc/kernel"
+	snapshotservice "kc/snapshot/service"
 )
 
 func (f *httpFacade) executeTyped(w http.ResponseWriter, r *http.Request, name, action string, operation inv.Command, flags map[string]FlagValue) {
+	for name := range r.URL.Query() {
+		if strings.EqualFold(name, "catalog") {
+			invoke.WriteInvoke(w, inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid, "Catalog selection is not supported; this service has one registry")))
+			return
+		}
+	}
 	identity, ok := f.serviceIdentity(w, r)
 	if !ok {
 		return
@@ -45,7 +52,7 @@ func (f *httpFacade) executeTyped(w http.ResponseWriter, r *http.Request, name, 
 		invoke.WriteInvoke(w, inv.ErrorResult(err))
 		return
 	}
-	if err := inv.PrepareCatalogDiscovery(opened, action, flags); err != nil {
+	if err := inv.PrepareInventoryDiscovery(opened, action, flags); err != nil {
 		invoke.WriteInvoke(w, inv.ErrorResult(err))
 		return
 	}
@@ -53,7 +60,7 @@ func (f *httpFacade) executeTyped(w http.ResponseWriter, r *http.Request, name, 
 	if !f.options.localAssertion() {
 		ctx = knowledgeserving.ContextWithCallerCredentials(ctx, knowledgeserving.CallerCredentialsFromHeader(r.Header))
 	}
-	invoke.WriteInvoke(w, inv.InvokeApplicationWithTelemetryAtHome(ctx, f.runtime, name, action, operation, flags, observeStateLookup(f.options.StateLookup, f.runtime), opened))
+	invoke.WriteInvoke(w, inv.InvokeApplicationWithTelemetryAtHome(ctx, f.runtime, name, action, operation, flags, observeStateLookup(f.options.StateLookup, f.runtime), opened, f.options.ObjectInterfaces))
 }
 
 // lockTypedInvocation decides the invocation lock from the facade's serving
@@ -62,7 +69,7 @@ func (f *httpFacade) executeTyped(w http.ResponseWriter, r *http.Request, name, 
 // journal), so independent fixed-basis reads may share the read lock.
 // Component/fixture serving retains the legacy adoption path where every
 // invocation installs its request journal on the shared Home (observeHome →
-// SetJournal fans out to Writer, Reader, ControlPlane and Catalogs);
+// SetJournal fans out to Writer, Reader, ControlPlane and registry);
 // concurrent reads there would race on that shared state and could observe
 // another request's stamp, so fixture-mode reads serialize with mutations.
 // This is a process-safety boundary, not a Repository locking protocol;
@@ -77,45 +84,22 @@ func (f *httpFacade) lockTypedInvocation(action string) func() {
 }
 
 func (f *httpFacade) serviceIdentity(w http.ResponseWriter, r *http.Request) (inv.HTTPIdentity, bool) {
-	as := strings.TrimSpace(r.Header.Get("X-Kc-As"))
-	authorization := strings.TrimSpace(r.Header.Get("Authorization"))
-	onBehalf := strings.TrimSpace(r.Header.Get("X-Kc-On-Behalf-Of"))
-	mode := f.options.AuthModeLabel()
-	if f.options.localAssertion() {
-		if authorization != "" {
-			invoke.WriteJSON(w, http.StatusUnauthorized, kernel.FaultJSON(kernel.Fail(kernel.ErrUnauthenticated,
-				"this Server is --auth local; it does not accept Authorization (pairing mismatch)")))
-			return inv.HTTPIdentity{}, false
-		}
-		if onBehalf != "" {
-			writeHTTPForbidden(w, "onBehalfOf requires a trusted authenticator")
-			return inv.HTTPIdentity{}, false
-		}
-		if as == "" {
-			invoke.WriteJSON(w, http.StatusUnauthorized, kernel.FaultJSON(kernel.Fail(kernel.ErrUnauthenticated,
-				"this Server is --auth local; send X-Kc-As only")))
-			return inv.HTTPIdentity{}, false
-		}
-		identity := inv.HTTPIdentity{Principal: as}
-		recordHTTPIdentity(f.runtime, r.Context(), f.options, identity)
-		return identity, true
+	caller, err := snapshotservice.AuthenticateRequest(r, f.snapshotIdentityOptions())
+	if err == nil {
+		recordHTTPIdentity(f.runtime, r.Context(), f.options, caller)
+		return caller, true
 	}
-	if as != "" && authorization == "" {
-		invoke.WriteJSON(w, http.StatusUnauthorized, kernel.FaultJSON(kernel.Fail(kernel.ErrUnauthenticated,
-			"this Server is --auth %s; send Authorization only (X-Kc-As is a pairing mismatch)", mode)))
-		return inv.HTTPIdentity{}, false
+	status := http.StatusUnauthorized
+	switch kernel.CodeOf(err) {
+	case kernel.ErrTemporaryUnavailable, kernel.ErrPreconditionFailed:
+		status = http.StatusServiceUnavailable
+	case kernel.ErrForbidden:
+		status = http.StatusForbidden
+	default:
+		w.Header().Set("WWW-Authenticate", `Bearer realm="kc"`)
 	}
-	if !f.options.Authenticated() {
-		invoke.WriteJSON(w, http.StatusUnauthorized, kernel.FaultJSON(kernel.Fail(kernel.ErrUnauthenticated,
-			"this Server is --auth %s; authentication is not configured", mode)))
-		return inv.HTTPIdentity{}, false
-	}
-	identity, ok := authenticateHTTPRequest(w, r, f.options)
-	if !ok || !f.validateIdentityHeaders(w, r, identity) {
-		return inv.HTTPIdentity{}, false
-	}
-	recordHTTPIdentity(f.runtime, r.Context(), f.options, identity)
-	return identity, true
+	invoke.WriteJSON(w, status, kernel.FaultJSON(err))
+	return inv.HTTPIdentity{}, false
 }
 
 // requestJSONStream returns the request body as a bounded JSON stream,

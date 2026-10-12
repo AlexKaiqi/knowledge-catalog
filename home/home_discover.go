@@ -6,31 +6,29 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
-	"strings"
 
-	"kc/catalog"
 	"kc/internal/journal"
 )
 
 // What is in this --home, found by scanning. There is deliberately no manifest
-// listing catalogs and repositories: the directories are the truth, so a hand-copied or
+// listing registry and repositories: the directories are the truth, so a hand-copied or
 // half-deleted home cannot disagree with a registry file about what exists.
 //
-// A Catalog is identified by catalog.yaml at HEAD (or the kc.catalogId stamp
-// before the first commit); a Knowledge Repository by git config kc.repositoryId.
+// Registry and Repository directories hold only explicit remote authority
+// pointers; accepted Registry content remains in its lakeFS Snapshot.
 // That is why `.kc/workspace.json` is not part of the current layout.
 //
 // This file changes when the on-disk layout changes. Repository adapter
 // selection is in home_mount.go; assembling the live object graph is in home.go.
 
 type HomeFile struct {
-	Catalogs    []HomeCatalog `json:"catalogs"`
-	Repos       []HomeRepo    `json:"repos"`
-	IndexDriver string        `json:"indexDriver,omitempty"`
-	IndexURL    string        `json:"indexURL,omitempty"`
+	Registry    HomeRegistry `json:"registry"`
+	Repos       []HomeRepo   `json:"repos"`
+	IndexDriver string       `json:"indexDriver,omitempty"`
+	IndexURL    string       `json:"indexURL,omitempty"`
 }
 
-type HomeCatalog struct {
+type HomeRegistry struct {
 	ID  string `json:"id"`
 	Dir string `json:"dir"`
 }
@@ -57,12 +55,11 @@ func Ready(home string) bool {
 	return false
 }
 
-func catalogDirOf(stores StoresFile, catalogID string) string {
-	root := stores.Layout.Catalogs
-	if root == "" {
-		root = defaultCatalogsDir
+func registryDir(stores StoresFile) string {
+	if stores.Layout.Registry != "" {
+		return stores.Layout.Registry
 	}
-	return filepath.ToSlash(filepath.Join(root, EncodeRepoDir(catalogID)))
+	return defaultRegistryDir
 }
 
 func homeRel(home, abs string) string {
@@ -73,11 +70,6 @@ func homeRel(home, abs string) string {
 	return filepath.ToSlash(rel)
 }
 
-func isGitDir(abs string) bool {
-	_, err := os.Stat(filepath.Join(abs, ".git"))
-	return err == nil
-}
-
 var unsafeRepoChars = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 
 // EncodeRepoDir maps a kr:// id to one directory name. Lossy on purpose: the
@@ -86,50 +78,18 @@ func EncodeRepoDir(repositoryID string) string {
 	return unsafeRepoChars.ReplaceAllString(repositoryID, "_")
 }
 
-// NormalizeCatalogID accepts kr://<org>/<name> or <org>/<name>.
-func NormalizeCatalogID(raw string) (string, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return "", fmt.Errorf("catalog id is required")
+// InitHome creates an explicit component registry; production uses deployment init.
+func InitHome(home string, binding RegistryBinding) (HomeFile, bool, error) {
+	id, err := NormalizeRepositoryID(binding.ID)
+	if err != nil || id != binding.ID {
+		return HomeFile{}, false, fmt.Errorf("registry requires an exact Snapshot Repository identity")
 	}
-	if strings.Contains(raw, "://") {
-		if !strings.HasPrefix(raw, "kr://") {
-			return "", fmt.Errorf("catalog id must use kr://, got %s", raw)
-		}
-		rest := strings.TrimPrefix(raw, "kr://")
-		if rest == "" || strings.HasSuffix(rest, "/") || !strings.Contains(rest, "/") {
-			return "", fmt.Errorf("catalog id must be kr://<org>/<name>, got %s", raw)
-		}
-		return raw, nil
-	}
-	if !strings.Contains(raw, "/") {
-		return "", fmt.Errorf("catalog id must be kr://<org>/<name> or <org>/<name>, got %q", raw)
-	}
-	return "kr://" + raw, nil
-}
-
-func InitHome(home, catalogID string) (HomeFile, bool, error) {
 	stores := DefaultStores()
-	repoRoot, err := ResolveStoreDir(home, stores.Layout.Repos, defaultReposDir)
-	if err != nil {
-		return HomeFile{}, false, err
-	}
-	if err := os.MkdirAll(repoRoot, 0o755); err != nil {
-		return HomeFile{}, false, err
-	}
-	catRoot, err := ResolveStoreDir(home, stores.Layout.Catalogs, defaultCatalogsDir)
-	if err != nil {
-		return HomeFile{}, false, err
-	}
-	if err := os.MkdirAll(catRoot, 0o755); err != nil {
-		return HomeFile{}, false, err
-	}
-	createdHome := false
-	if !Ready(home) {
+	created := !Ready(home)
+	if created {
 		if err := WriteStores(home, stores); err != nil {
 			return HomeFile{}, false, err
 		}
-		createdHome = true
 	}
 	stores, err = ReadStores(home)
 	if err != nil {
@@ -139,43 +99,21 @@ func InitHome(home, catalogID string) (HomeFile, bool, error) {
 	if err != nil {
 		return HomeFile{}, false, err
 	}
-	if catalogID != "" {
-		catalogID, err = NormalizeCatalogID(catalogID)
-		if err != nil {
-			return HomeFile{}, false, err
+	if file.Registry.ID != "" {
+		if file.Registry.ID != id {
+			return HomeFile{}, false, fmt.Errorf("this home already has registry %s", file.Registry.ID)
 		}
-	} else if createdHome || len(file.Catalogs) == 0 {
-		catalogID = catalog.DefaultCatalogID
-	} else {
 		return file, false, nil
 	}
-	if hasCatalog(file, catalogID) {
-		return file, false, nil
-	}
-	// Re-running init with a different id in a populated home is a typo, not a
-	// request for a second Catalog. catalog-add is the explicit verb for that.
-	if !createdHome && len(file.Catalogs) > 0 {
-		return HomeFile{}, false, fmt.Errorf("this home already has catalog %s; requested %s. Use catalog-add, or a different --home", file.Catalogs[0].ID, catalogID)
-	}
-	dirRel := catalogDirOf(stores, catalogID)
-	catalogAbs, err := ResolveStoreDir(home, dirRel, dirRel)
+	abs, err := ResolveStoreDir(home, registryDir(stores), defaultRegistryDir)
 	if err != nil {
 		return HomeFile{}, false, err
 	}
-	if err := recordCatalogCreated(catalogAbs, catalogID, journal.NewFile(systemJournalPath(home))); err != nil {
+	if err := recordRegistryCreated(abs, journal.NewFile(systemJournalPath(home)), binding); err != nil {
 		return HomeFile{}, false, err
 	}
 	file, err = ReadHome(home)
 	return file, true, err
-}
-
-func hasCatalog(file HomeFile, catalogID string) bool {
-	for _, item := range file.Catalogs {
-		if item.ID == catalogID {
-			return true
-		}
-	}
-	return false
 }
 
 func ReadHome(home string) (HomeFile, error) {
@@ -189,99 +127,27 @@ func ReadHome(home string) (HomeFile, error) {
 	return discoverHome(home, stores)
 }
 
-func addCatalogDir(home, abs string, byID map[string]HomeCatalog) {
-	if !isGitDir(abs) {
-		return
-	}
-	id, err := catalog.PeekID(abs)
-	if err != nil || id == "" {
-		id, err = catalog.PeekStamp(abs)
-		if err != nil || id == "" {
-			return
-		}
-	}
-	if _, ok := byID[id]; ok {
-		return
-	}
-	byID[id] = HomeCatalog{ID: id, Dir: homeRel(home, abs)}
-}
-
-func scanCatalogRoot(home, rootAbs string, byID map[string]HomeCatalog) {
-	entries, err := os.ReadDir(rootAbs)
-	if err != nil {
-		return
-	}
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		addCatalogDir(home, filepath.Join(rootAbs, e.Name()), byID)
-	}
-}
-
-func sortCatalogs(catalogs []HomeCatalog) {
-	sort.Slice(catalogs, func(i, j int) bool {
-		return catalogs[i].ID < catalogs[j].ID
-	})
-}
-
-// discoverHome walks the configured roots, keyed by the id stamped in each
-// directory.
+// discoverHome reads the one registry pointer and discovers source pointers.
 func discoverHome(home string, stores StoresFile) (HomeFile, error) {
-	byID := map[string]HomeCatalog{}
-	catalogAbs := discoverCatalogs(home, stores, byID)
-	reposByID := discoverRepos(home, stores, catalogAbs)
-
-	catalogs := make([]HomeCatalog, 0, len(byID))
-	for _, c := range byID {
-		catalogs = append(catalogs, c)
+	abs, err := ResolveStoreDir(home, registryDir(stores), defaultRegistryDir)
+	if err != nil {
+		return HomeFile{}, err
 	}
-	sortCatalogs(catalogs)
-	repos := make([]HomeRepo, 0, len(reposByID))
+	out := HomeFile{}
+	if binding, err := readFixtureRegistryBinding(abs); err == nil {
+		out.Registry = HomeRegistry{ID: binding.ID, Dir: homeRel(home, abs)}
+	} else if !os.IsNotExist(err) {
+		return HomeFile{}, err
+	}
+	reposByID := discoverRepos(home, stores, map[string]bool{abs: true})
 	for _, r := range reposByID {
-		repos = append(repos, r)
+		out.Repos = append(out.Repos, r)
 	}
-	sort.Slice(repos, func(i, j int) bool { return repos[i].ID < repos[j].ID })
-
-	out := HomeFile{Catalogs: catalogs, Repos: repos}
+	sort.Slice(out.Repos, func(i, j int) bool { return out.Repos[i].ID < out.Repos[j].ID })
 	return out, nil
 }
 
-// discoverCatalogs fills byID and returns the absolute dirs it claimed, so Repository
-// discovery can skip them: a registry Git is not a Knowledge Repository.
-func discoverCatalogs(home string, stores StoresFile, byID map[string]HomeCatalog) map[string]bool {
-	seen := map[string]bool{}
-	scan := func(dir, fallback string) {
-		abs, err := ResolveStoreDir(home, dir, fallback)
-		if err != nil || seen[abs] {
-			return
-		}
-		seen[abs] = true
-		scanCatalogRoot(home, abs, byID)
-	}
-	scan(stores.Layout.Catalogs, defaultCatalogsDir)
-	scan(defaultCatalogsDir, defaultCatalogsDir)
-	scan(legacyCatalogsDir, legacyCatalogsDir)
-	// Single-catalog layouts point at the registry dir itself, not a parent root.
-	if stores.Layout.Catalog != "" {
-		if abs, err := ResolveStoreDir(home, stores.Layout.Catalog, stores.Layout.Catalog); err == nil {
-			addCatalogDir(home, abs, byID)
-		}
-	}
-	if abs, err := ResolveStoreDir(home, legacyCatalogDir, legacyCatalogDir); err == nil {
-		addCatalogDir(home, abs, byID)
-	}
-
-	claimed := map[string]bool{}
-	for _, c := range byID {
-		if abs, err := ResolveStoreDir(home, c.Dir, c.Dir); err == nil {
-			claimed[abs] = true
-		}
-	}
-	return claimed
-}
-
-func discoverRepos(home string, stores StoresFile, catalogAbs map[string]bool) map[string]HomeRepo {
+func discoverRepos(home string, stores StoresFile, registryAbs map[string]bool) map[string]HomeRepo {
 	found := map[string]HomeRepo{}
 	seen := map[string]bool{}
 	scan := func(dir, fallback string) {
@@ -293,11 +159,11 @@ func discoverRepos(home string, stores StoresFile, catalogAbs map[string]bool) m
 		entries, _ := os.ReadDir(root)
 		for _, e := range entries {
 			isRepositoryEntry := e.IsDir() || e.Type()&os.ModeSymlink != 0
-			if !isRepositoryEntry || e.Name() == "_catalog" || e.Name() == "_catalogs" {
+			if !isRepositoryEntry {
 				continue
 			}
 			abs := filepath.Join(root, e.Name())
-			if catalogAbs[abs] {
+			if registryAbs[abs] {
 				continue
 			}
 			item, ok := peekRepoDir(home, abs)
@@ -315,10 +181,9 @@ func discoverRepos(home string, stores StoresFile, catalogAbs map[string]bool) m
 	return found
 }
 
-// peekRepoDir reads the id a directory stamped on itself. Gitea and lakeFS
-// keep a remote stamp only.
+// peekRepoDir reads the id a directory stamped on itself. lakeFS keeps a remote stamp only.
 func peekRepoDir(home, abs string) (HomeRepo, bool) {
-	if _, err := catalog.PeekID(abs); err == nil {
+	if _, err := readFixtureRegistryBinding(abs); err == nil {
 		return HomeRepo{}, false
 	}
 	return discoverAuthority(home, abs)

@@ -75,10 +75,10 @@ func TestHTTPDatasetSemanticRecallServesMemberVectorWindows(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-only")
 
 	home := testkit.TempDir(t)
-	catalog := "kr://acme/catalog"
+
 	repository := "kr://acme/public/semantic-http"
 	workspace := "agent"
-	body(t, kc(home, "init", "--catalog", catalog))
+	body(t, kc(home, "init"))
 	body(t, kc(home, "store-set", "--index", "opensearch"))
 	body(t, kc(home, "store-set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repository)
@@ -89,7 +89,7 @@ func TestHTTPDatasetSemanticRecallServesMemberVectorWindows(t *testing.T) {
 	body(t, kc(home, "put", "--command-id", "semantic-p2", "--repo", repository,
 		"--object", "runbook/deploy", "--schema-ref", "schema/runbook.semantic", "--value", `{"body":"deployment checklist"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "1", "--source", repository+"=refs/heads/main@"))
-	body(t, kc(home, "allow", "--principal", "agent:semantic-http", "--cmd", "read-workspace", "--catalog", catalog, "--dataset", workspace))
+	body(t, kc(home, "allow", "--principal", "agent:semantic-http", "--cmd", "read-workspace", "--dataset", workspace))
 	body(t, kc(home, "allow", "--principal", "agent:semantic-http", "--action", "knowledge.read,knowledge.search", "--repo", repository))
 	syncIndexes(t, home, repository)
 

@@ -1,7 +1,6 @@
 package home
 
 import (
-	"kc/catalog"
 	"kc/internal/journal"
 	"kc/knowledge/reader"
 )
@@ -22,16 +21,12 @@ func (ws *Home) ReadView(j journal.Journal) *Home {
 		Commands:     ws.Commands,
 		Writer:       ws.Writer,
 		TreeWriter:   ws.TreeWriter,
-		Catalog:      ws.Catalog,
-		Catalogs:     make(map[string]*catalog.Catalog, len(ws.Catalogs)),
-		Registries:   ws.Registries,
+		Datasets:     ws.Datasets,
 		Registry:     ws.Registry,
 		ControlPlane: ws.ControlPlane,
 		ControlStore: ws.ControlStore,
 		File:         ws.BindingFile(),
 		Control:      ws.Control,
-		Controls:     ws.Controls,
-		controlID:    ws.controlID,
 		Journal:      j,
 		Index:        ws.Index,
 		Projection:   ws.Projection,
@@ -42,12 +37,8 @@ func (ws *Home) ReadView(j journal.Journal) *Home {
 	view.Reader = reader.NewReader(ws.Store)
 	view.Reader.SetJournal(j)
 	view.Reader.SetHydrator(ws.Hydrator)
-	for id, original := range ws.Catalogs {
-		scoped := original.ReadView(j)
-		view.Catalogs[id] = scoped
-		if original == ws.Catalog {
-			view.Catalog = scoped
-		}
+	if ws.Datasets != nil {
+		view.Datasets = ws.Datasets.ReadView(datasetObserver(j))
 	}
 	return view
 }

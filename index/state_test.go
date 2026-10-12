@@ -120,7 +120,7 @@ func stateProjectionFixture(t *testing.T) (knowledge.Repository, kernel.CommitID
 }
 
 func TestRequiresStateTreatsSystemRepositoryAsSnapshotOnly(t *testing.T) {
-	repo := knowledge.NewSystemRepository()
+	repo := testkit.MakeSystemRepository(t)
 	commit, err := repo.Head(snapshot.DefaultRef)
 	if err != nil {
 		t.Fatal(err)

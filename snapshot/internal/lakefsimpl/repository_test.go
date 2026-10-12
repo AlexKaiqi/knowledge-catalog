@@ -3,24 +3,7 @@ package lakefsimpl
 import (
 	"strings"
 	"testing"
-
-	"kc/snapshot"
 )
-
-func TestRepositoryDeclaresReplaceableSnapshotCapabilities(t *testing.T) {
-	var repo any = (*Repository)(nil)
-	for name, ok := range map[string]bool{
-		"store":     implements[snapshot.Store](repo),
-		"tree":      implements[snapshot.TreeStore](repo),
-		"directory": implements[snapshot.DirectoryReader](repo),
-		"history":   implements[snapshot.HistoryStore](repo),
-		"changes":   implements[snapshot.ChangeStore](repo),
-	} {
-		if !ok {
-			t.Fatalf("LakeFS provider is missing %s capability", name)
-		}
-	}
-}
 
 func TestParseDSNRejectsCredentialsAndKeepsDeploymentPrefix(t *testing.T) {
 	endpoint, err := ParseDSN("https://lake.example.test/platform/knowledge")
@@ -65,9 +48,4 @@ func TestEncodeLakeFSBranchKeepsMainAndFlattensCandidates(t *testing.T) {
 	if got := encodeLakeFSBranch("candidates/PR-scene"); got != "candidates--PR-scene" {
 		t.Fatalf("candidate=%q", got)
 	}
-}
-
-func implements[T any](value any) bool {
-	_, ok := value.(T)
-	return ok
 }

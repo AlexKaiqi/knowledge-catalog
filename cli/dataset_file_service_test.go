@@ -11,17 +11,16 @@ import (
 	"strings"
 	"testing"
 
-	"kc/catalog"
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/snapshot"
+	"kc/snapshot/dataset"
 )
 
 func TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange(t *testing.T) {
 	home := t.TempDir()
 	projectRepo := "kr://acme/docs"
-	catalogID := "kr://acme/catalog"
-	mustKnowledgeSetFSRun(t, home, "init", "--catalog", catalogID)
+	mustKnowledgeSetFSRun(t, home, "init")
 	mustKnowledgeSetFSRun(t, home, "repo-add", "--repo", projectRepo, "--dsn", internalLakeFSRepoDSN(t))
 	mustKnowledgeSetFSRun(t, home, "register", "--repo", projectRepo)
 	mustRawTreeWrite(t, home, projectRepo, "files", "shared/a.txt", "alpha")
@@ -29,7 +28,7 @@ func TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange(t *testing.T)
 	mustKnowledgeSetFSRun(t, home, "dataset", "define", "--dataset", "agent", "--revision", "1",
 		"--source", projectRepo+"=refs/heads/main@knowledge@shared")
 	for _, args := range [][]string{
-		{"grant", "add", "--principal", "agent:test", "--action", "dataset.resolve", "--catalog", catalogID, "--dataset", "agent"},
+		{"grant", "add", "--principal", "agent:test", "--action", "dataset.resolve", "--dataset", "agent"},
 		{"grant", "add", "--principal", "agent:test", "--action", "file.read", "--repo", projectRepo},
 	} {
 		if result := runWithTelemetryMode(append([]string{"--home", home}, args...), nil, true); result.Status != 0 {
@@ -43,31 +42,31 @@ func TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange(t *testing.T)
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
-	mounts := postWorkspaceFiles(t, server.URL+"/dataset-files/v1/mounts:list", map[string]any{
-		"catalog": catalogID, "dataset": "agent",
+	mounts := postWorkspaceFiles(t, server.URL+"/snapshot/v1/files/mounts:list", map[string]any{
+		"dataset": "agent",
 	})
 	pin := mounts["pin"]
 	mountList := mounts["mounts"].([]any)
 	if len(mountList) != 1 || mountList[0].(map[string]any)["path"] != "knowledge" {
 		t.Fatalf("mounts = %#v", mounts)
 	}
-	first := postWorkspaceFiles(t, server.URL+"/dataset-files/v1/tree:list", map[string]any{
-		"catalog": catalogID, "dataset": "agent", "pin": pin, "mountPath": "knowledge", "limit": 1,
+	first := postWorkspaceFiles(t, server.URL+"/snapshot/v1/files/tree:list", map[string]any{
+		"dataset": "agent", "pin": pin, "mountPath": "knowledge", "limit": 1,
 	})
 	entries := first["entries"].([]any)
 	if len(entries) != 1 || entries[0].(map[string]any)["name"] != "a.txt" || first["continuation"] == nil {
 		t.Fatalf("first directory page = %#v", first)
 	}
-	second := postWorkspaceFiles(t, server.URL+"/dataset-files/v1/tree:list", map[string]any{
-		"catalog": catalogID, "dataset": "agent", "pin": pin, "mountPath": "knowledge", "limit": 1,
+	second := postWorkspaceFiles(t, server.URL+"/snapshot/v1/files/tree:list", map[string]any{
+		"dataset": "agent", "pin": pin, "mountPath": "knowledge", "limit": 1,
 		"continuation": first["continuation"],
 	})
 	secondEntry := second["entries"].([]any)[0].(map[string]any)
 	if secondEntry["name"] != "nested" || secondEntry["kind"] != "directory" || second["exhausted"] != true {
 		t.Fatalf("second directory page = %#v", second)
 	}
-	read := postWorkspaceFiles(t, server.URL+"/dataset-files/v1/file:read", map[string]any{
-		"catalog": catalogID, "dataset": "agent", "pin": pin, "mountPath": "knowledge", "file": "a.txt", "offset": 1, "length": 3,
+	read := postWorkspaceFiles(t, server.URL+"/snapshot/v1/files/file:read", map[string]any{
+		"dataset": "agent", "pin": pin, "mountPath": "knowledge", "file": "a.txt", "offset": 1, "length": 3,
 	})
 	content, err := io.ReadAll(bytes.NewReader(mustDecodeBase64(t, read["content"].(string))))
 	if err != nil || string(content) != "lph" || read["eof"] != false {
@@ -75,15 +74,15 @@ func TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange(t *testing.T)
 	}
 
 	// A directory continuation is bound to its mount commit and directory.
-	bad := serviceRequest(t, server.URL+"/dataset-files/v1/tree:list", map[string]any{
-		"catalog": catalogID, "dataset": "agent", "pin": pin, "mountPath": "knowledge", "directory": "nested", "limit": 1,
+	bad := serviceRequest(t, server.URL+"/snapshot/v1/files/tree:list", map[string]any{
+		"dataset": "agent", "pin": pin, "mountPath": "knowledge", "directory": "nested", "limit": 1,
 		"continuation": first["continuation"],
 	})
 	if bad.Code != http.StatusConflict {
 		t.Fatalf("continuation replay status = %d body %s", bad.Code, bad.Body.String())
 	}
 
-	var resolved catalog.ResolvedKnowledgeSet
+	var resolved dataset.ResolvedKnowledgeSet
 	raw, _ := json.Marshal(pin)
 	if err := json.Unmarshal(raw, &resolved); err != nil || resolved.PinID == "" {
 		t.Fatalf("invalid returned pin: %#v %v", pin, err)
@@ -105,8 +104,7 @@ func TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange(t *testing.T)
 func TestWorkspaceFileGatewayBuildsSemanticYAMLViewWithoutRepositoryMountPaths(t *testing.T) {
 	home := t.TempDir()
 	repository := "kr://acme/semantic"
-	catalogID := "kr://acme/catalog"
-	mustKnowledgeSetFSRun(t, home, "init", "--catalog", catalogID)
+	mustKnowledgeSetFSRun(t, home, "init")
 	mustKnowledgeSetFSRun(t, home, "repo-add", "--repo", repository, "--dsn", internalLakeFSRepoDSN(t))
 	mustKnowledgeSetFSRun(t, home, "register", "--repo", repository)
 	opened, err := apphome.Open(home)
@@ -134,7 +132,7 @@ func TestWorkspaceFileGatewayBuildsSemanticYAMLViewWithoutRepositoryMountPaths(t
 	mustKnowledgeSetFSRun(t, home, "dataset", "define", "--dataset", "sales", "--revision", "1",
 		"--source", repository+"=refs/heads/main")
 	for _, args := range [][]string{
-		{"grant", "add", "--principal", "agent:test", "--action", "dataset.resolve", "--catalog", catalogID, "--dataset", "sales"},
+		{"grant", "add", "--principal", "agent:test", "--action", "dataset.resolve", "--dataset", "sales"},
 		{"grant", "add", "--principal", "agent:test", "--action", "file.read", "--repo", repository},
 	} {
 		if result := runWithTelemetryMode(append([]string{"--home", home}, args...), nil, true); result.Status != 0 {
@@ -148,16 +146,16 @@ func TestWorkspaceFileGatewayBuildsSemanticYAMLViewWithoutRepositoryMountPaths(t
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
-	mounts := postWorkspaceFiles(t, server.URL+"/dataset-files/v1/mounts:list", map[string]any{
-		"catalog": catalogID, "dataset": "sales", "view": "semantic",
+	mounts := postWorkspaceFiles(t, server.URL+"/snapshot/v1/files/mounts:list", map[string]any{
+		"dataset": "sales", "view": "semantic",
 	})
 	pin := mounts["pin"]
 	mount := mounts["mounts"].([]any)[0].(map[string]any)
 	if mount["path"] != "knowledge/semantic" || mount["subPath"] != inv.SemanticFileViewV1 {
 		t.Fatalf("semantic mounts = %#v", mounts)
 	}
-	metrics := postWorkspaceFiles(t, server.URL+"/dataset-files/v1/tree:list", map[string]any{
-		"catalog": catalogID, "dataset": "sales", "view": "semantic", "pin": pin,
+	metrics := postWorkspaceFiles(t, server.URL+"/snapshot/v1/files/tree:list", map[string]any{
+		"dataset": "sales", "view": "semantic", "pin": pin,
 		"mountPath": "knowledge/semantic", "directory": "metrics",
 	})
 	entries := metrics["entries"].([]any)
@@ -165,8 +163,8 @@ func TestWorkspaceFileGatewayBuildsSemanticYAMLViewWithoutRepositoryMountPaths(t
 		t.Fatalf("metric entries = %#v", metrics)
 	}
 	file := entries[0].(map[string]any)["name"].(string)
-	read := postWorkspaceFiles(t, server.URL+"/dataset-files/v1/file:read", map[string]any{
-		"catalog": catalogID, "dataset": "sales", "view": "semantic", "pin": pin,
+	read := postWorkspaceFiles(t, server.URL+"/snapshot/v1/files/file:read", map[string]any{
+		"dataset": "sales", "view": "semantic", "pin": pin,
 		"mountPath": "knowledge/semantic", "file": "metrics/" + file,
 	})
 	content := string(mustDecodeBase64(t, read["content"].(string)))

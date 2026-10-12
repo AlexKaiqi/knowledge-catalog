@@ -3,8 +3,8 @@ package cli
 import (
 	"testing"
 
-	"kc/catalog"
 	"kc/kernel"
+	"kc/snapshot/dataset"
 )
 
 // TestDatasetFSProjectionRejectsPerFileEntries keeps the kcfs projection from
@@ -13,9 +13,9 @@ import (
 func TestDatasetFSProjectionRejectsPerFileEntries(t *testing.T) {
 	projection := datasetFSProjection{
 		dataset: "delivery",
-		resolved: catalog.ResolvedKnowledgeSet{
-			SetID: "delivery", PinID: "p", Items: []catalog.DatasetItem{
-				{Kind: catalog.DatasetItemFile, Target: "a.txt", File: "a.txt"},
+		resolved: dataset.ResolvedKnowledgeSet{
+			SetID: "delivery", PinID: "p", Items: []dataset.DatasetItem{
+				{Kind: dataset.DatasetItemFile, Target: "a.txt", File: "a.txt"},
 			},
 		},
 	}

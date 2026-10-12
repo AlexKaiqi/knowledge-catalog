@@ -19,14 +19,15 @@ func TestSceneReplayFailureReportIdentifiesCurrentStep(t *testing.T) {
 	const modeEnv = "KC_SCENE_REPORT_FAILURE_CASE"
 	const dirEnv = "KC_SCENE_REPORT_FAILURE_DIR"
 	if mode := os.Getenv(modeEnv); mode != "" {
-		probe := "When I run `kc show`\nThen the output has:\n  | catalogId | kr://scene/catalog |\n"
+		probe := "When I run `kc show`\nThen the output has:\n  | catalogId | absent |\n"
 		root, child, doc, cache := sceneIsolationFixture(t,
 			"Given deployment fixture\nGiven existing repository kr://scene/knowledge\n"+probe,
 			map[string]string{"first": probe, "second": probe}, []string{"first", "second"}, probe)
-		failAt := 3 // construct and first probe succeed; second probe replay fails
+		const repositoriesPerConstruct = 3     // independent Catalog, actual System, then business authority
+		failAt := 3 * repositoriesPerConstruct // second probe's business replay fails
 		node := root
 		if mode == "ancestor" {
-			failAt = 1
+			failAt = repositoriesPerConstruct // ancestor's business prerequisite fails
 			node = child
 		}
 		cache.replay = true
@@ -118,7 +119,7 @@ Then the output has:
 When I run `+"`kc writer put --command-id baseline --repo kr://scene/knowledge --object note/hello --file $materials/baseline.json`"+`
 Then the output has:
   | disposition | APPLIED |
-When I run `+"`kc grant add --principal reader --action catalog.read --catalog kr://scene/catalog`"+`
+When I run `+"`kc grant add --principal reader --action inventory.read`"+`
 Then the output has:
   | principal | reader |
 `, map[string]string{
@@ -165,7 +166,7 @@ Then the output has:
   | value.text | baseline |
 When I run ` + "`kc show --as reader`" + `
 Then the output has:
-  | catalogId | kr://scene/catalog |
+  | catalogId | absent |
 `
 
 func TestSceneProbesIsolateHTTPAndClientSessions(t *testing.T) {
@@ -187,11 +188,11 @@ When HTTP GET /identity/v1/whoami as reader
 Then whoami is reader
 When I run ` + "`kc show --as reader --server $server`" + `
 Then the output has:
-  | catalogId | kr://scene/catalog |
+  | catalogId | absent |
 `
 			root, child, doc, cache := sceneIsolationFixture(t, `
 Given deployment fixture
-When I run `+"`kc grant add --principal reader --action catalog.read --catalog kr://scene/catalog`"+`
+When I run `+"`kc grant add --principal reader --action inventory.read`"+`
 Then the output has:
   | principal | reader |
 Given local HTTP server

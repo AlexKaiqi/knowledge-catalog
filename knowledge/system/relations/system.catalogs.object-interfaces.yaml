@@ -1,0 +1,27 @@
+---
+object_id: kc/relation/system.catalogs.object-interfaces
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: relations/system.catalogs.object-interfaces.yaml
+---
+{
+  "relationId": "kc/relation/system.catalogs.object-interfaces",
+  "relationType": "catalogs",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "from",
+      "objectRef": {
+        "repository": "kr://kc/system",
+        "object": "kc/system"
+      }
+    },
+    {
+      "role": "to",
+      "objectRef": {
+        "repository": "kr://kc/system",
+        "object": "kc/capability/object-interfaces"
+      }
+    }
+  ]
+}

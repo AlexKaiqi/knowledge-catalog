@@ -116,3 +116,23 @@ go run ./cmd/kc -- operations projection sync --repo kr://acme/public/core --ref
 - 结果一律 Approximate：`retrieval.MarkApproximate` 强制 partial completeness，并披露近似来源
   （k-NN 排名窗口、embedding 模型身份）；投影侧候选带 `semantic-vector` lane 的
   `approximate` guarantee 证据。窗口是单次有界 top-K，不分页不续传。
+
+
+## 声明式索引
+
+Schema 字段 `access` 是唯一书写形式；`AccessSpecFromReport` 将固定 Repository/Commit 下的
+Schema 报告编译为逻辑查询合同。`PlanAccess` 先采用 Dataset 的版本与范围，再通过有界
+Schema locator 读取声明。不解释普通对象正文中的查询样式数据。
+
+```yaml
+entity: Article
+aspect: body
+fields:
+  text: {type: string, access: [text]}
+  publishedAt: {type: timestamp, access: [filter, sort]}
+```
+
+字段身份仍是 `(Schema, Aspect, path)`；未知访问词或复合值的未定义标量能力由 Schema
+校验拒绝。access 可以增加、收窄或移除，不改变值结构的兼容性判断。旧 pin 保留原合同；
+`AccessDigest` 覆盖逻辑字段、类型和访问能力，变化触发投影重建，普通内容更新保持增量。
+提供方能力、物理就绪、范围/授权和同依据回读分别证明，声明不代替任何一项。

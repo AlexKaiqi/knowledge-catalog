@@ -24,7 +24,6 @@ type ConnectionPolicy struct {
 }
 
 type ConnectionRequest struct {
-	Catalog    string
 	Repository string
 	Driver     string
 	URL        string
@@ -33,7 +32,6 @@ type ConnectionRequest struct {
 }
 
 type ConnectionResult struct {
-	Catalog       string          `json:"catalog"`
 	RepositoryID  string          `json:"repositoryId"`
 	Driver        string          `json:"driver"`
 	Owner         string          `json:"owner"`
@@ -52,19 +50,11 @@ func validConnectionURL(raw string) (*url.URL, error) {
 }
 
 func connectionOrigin(raw string) (string, error) {
-	u, err := validConnectionURL(raw)
+	endpoint, err := snapshot.ParseLakeFSDSN(raw)
 	if err != nil {
 		return "", err
 	}
-	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
-	if len(parts) < 2 || parts[len(parts)-2] == "" || parts[len(parts)-1] == "" {
-		return "", kernel.Fail(kernel.ErrUsageInvalid, "connection URL requires an existing owner/repository")
-	}
-	u.Path = strings.Join(parts[:len(parts)-2], "/")
-	if u.Path != "" {
-		u.Path = "/" + u.Path
-	}
-	return strings.TrimRight(u.String(), "/"), nil
+	return endpoint.Origin, nil
 }
 
 func validateConnectionActions(actions []string) error {
@@ -122,7 +112,7 @@ func validateConnectionCredential(credential string) error {
 }
 
 func connectionResult(r connectionRecord) ConnectionResult {
-	return ConnectionResult{Catalog: r.Catalog, RepositoryID: r.Binding.ID, Driver: r.Binding.Driver, Owner: r.Owner, ManagementURL: r.Binding.DSN, Status: r.Phase, Revision: r.Revision, Head: r.InitialHead}
+	return ConnectionResult{RepositoryID: r.Binding.ID, Driver: r.Binding.Driver, Owner: r.Owner, ManagementURL: r.Binding.DSN, Status: r.Phase, Revision: r.Revision, Head: r.InitialHead}
 }
 
 // Connection errors deliberately exclude provider bodies and private inputs.
@@ -131,7 +121,7 @@ func connectionFailure(err error) error {
 		return nil
 	}
 	code := kernel.CodeOf(err)
-	if code == "" {
+	if code == "" || code == kernel.ErrUnauthenticated {
 		code = kernel.ErrPreconditionFailed
 	}
 	return kernel.Fail(code, "connected authority could not be verified; check its availability, identity, and credential")
@@ -165,10 +155,10 @@ func (ws *Home) ConnectRepository(req ConnectionRequest, grant func(RepositoryIn
 	if ws == nil || ws.Deployment == nil || ws.readOnly {
 		return result, kernel.Fail(kernel.ErrPreconditionFailed, "connections require a writable deployment")
 	}
-	if req.Driver != "gitea" {
-		return result, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "self-service connections currently support existing Gitea repositories")
+	if req.Driver != "lakefs" {
+		return result, kernel.Fail(kernel.ErrUsageInvalid, "Snapshot repository connections require driver lakefs")
 	}
-	id, err := NormalizeCatalogID(req.Repository)
+	id, err := NormalizeRepositoryID(req.Repository)
 	if err != nil || id != req.Repository || req.Repository == string(knowledge.SystemRepositoryID) || req.Principal == "" {
 		return result, kernel.Fail(kernel.ErrUsageInvalid, "connection requires a valid repository and principal")
 	}
@@ -189,11 +179,7 @@ func (ws *Home) ConnectRepository(req ConnectionRequest, grant func(RepositoryIn
 	if err := ValidateDeploymentState(*ws.Deployment); err != nil {
 		return result, err
 	}
-	cat, _, err := ws.UseCatalog(req.Catalog)
-	if err != nil {
-		return result, err
-	}
-	if err := ws.Registries[req.Catalog].CheckAuthority(); err != nil {
+	if err := ws.Registry.CheckAuthority(); err != nil {
 		return result, err
 	}
 	record, credential, readErr := readConnection(ws.Dir, req.Repository)
@@ -201,7 +187,7 @@ func (ws *Home) ConnectRepository(req ConnectionRequest, grant func(RepositoryIn
 		if record.Owner != req.Principal {
 			return result, kernel.Fail(kernel.ErrForbidden, "connection belongs to another principal")
 		}
-		if record.Catalog != req.Catalog || record.Binding.DSN != req.URL || record.Binding.Driver != req.Driver {
+		if record.Binding.DSN != req.URL || record.Binding.Driver != req.Driver {
 			return result, kernel.Fail(kernel.ErrPreconditionFailed, "existing connection has a fixed authority; use its original coordinates")
 		}
 		if credential != req.Credential {
@@ -216,14 +202,11 @@ func (ws *Home) ConnectRepository(req ConnectionRequest, grant func(RepositoryIn
 		if grant == nil {
 			return result, kernel.Fail(kernel.ErrPreconditionFailed, "connection initial policy callback is required")
 		}
-		if cat.Archived() {
-			return result, kernel.Fail(kernel.ErrCatalogArchived, "Catalog is archived")
-		}
 		if _, exists := ws.Store.Get(kernel.RepositoryID(req.Repository)); exists {
 			return result, kernel.Fail(kernel.ErrPreconditionFailed, "repository already has an authority binding")
 		}
-		for catalogID, existing := range ws.Catalogs {
-			if catalogID == req.Repository || existing.HasRepository(kernel.RepositoryID(req.Repository)) {
+		{
+			if ws.Deployment.Registry.ID == req.Repository || ws.Datasets.HasRepository(kernel.RepositoryID(req.Repository)) {
 				return result, kernel.Fail(kernel.ErrPreconditionFailed, "repository identity is already in use")
 			}
 		}
@@ -242,7 +225,7 @@ func (ws *Home) ConnectRepository(req ConnectionRequest, grant func(RepositoryIn
 		if _, err := rand.Read(nonce[:]); err != nil {
 			return result, err
 		}
-		record = connectionRecord{AllocationID: hex.EncodeToString(nonce[:]), Owner: req.Principal, Catalog: req.Catalog, Binding: binding, BackendID: backend, InitialHead: head, Actions: append([]string(nil), policy.CreatorActions...), ShareActions: append([]string(nil), policy.ShareActions...), Phase: "CONNECTED"}
+		record = connectionRecord{AllocationID: hex.EncodeToString(nonce[:]), Owner: req.Principal, Binding: binding, BackendID: backend, InitialHead: head, Actions: append([]string(nil), policy.CreatorActions...), ShareActions: append([]string(nil), policy.ShareActions...), Phase: "CONNECTED"}
 		credential = req.Credential
 		if err := saveConnection(ws.Dir, &record, credential, 0); err != nil {
 			return result, err
@@ -256,9 +239,6 @@ func (ws *Home) ConnectRepository(req ConnectionRequest, grant func(RepositoryIn
 	ws.inventory.mu.Lock()
 	ws.inventory.bindings[record.Binding.ID] = record.Binding.homeRepo()
 	ws.inventory.mu.Unlock()
-	if cat.Archived() {
-		return result, kernel.Fail(kernel.ErrCatalogArchived, "Catalog is archived")
-	}
 	if grant == nil {
 		return result, kernel.Fail(kernel.ErrPreconditionFailed, "connection initial policy callback is required")
 	}

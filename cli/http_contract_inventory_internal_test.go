@@ -43,34 +43,35 @@ var httpOnlyRouteEvidence = []httpRouteEvidence{
 	{http.MethodGet, "/assets/console.js", "TestConsolePageLoadsWithoutExposingAuthority"},
 	{http.MethodGet, "/ui/", "TestDatasetUILoadsBuildHintWithoutExposingAuthority"},
 	{http.MethodGet, "/operations/v1/stores", "TestStoresObservationOmitsSecretsAndHomeLayout"},
-	{http.MethodGet, "/catalog/v1/repositories", "TestManagedProductHumanSelfServiceOnLiveGitea"},
-	{http.MethodGet, "/catalog/v1/catalogs/catalog-A/repositories", "TestCatalogViewsChecksAndKnowledgeResolve"},
-	{http.MethodPost, "/catalog/v1/catalogs/catalog-A/repositories:create", "TestManagedRepositoryCreateUsesTypedClientWithoutCatalogDiscovery"},
-	{http.MethodGet, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fnotes", "TestManagedProductHumanSelfServiceOnLiveGitea"},
+	{http.MethodGet, "/snapshot/v1/connections", "TestManagedProductHumanSelfServiceOnLakeFS"},
+	{http.MethodGet, "/snapshot/v1/repositories", "TestCatalogViewsChecksAndKnowledgeResolve"},
+	{http.MethodPost, "/snapshot/v1/repositories:create", "TestManagedRepositoryCreateUsesTypedClientWithoutInventoryDiscovery"},
+	{http.MethodGet, "/snapshot/v1/connections/kr:%2F%2Fkaiqidong%2Fnotes", "TestManagedProductHumanSelfServiceOnLakeFS"},
 	{http.MethodGet, "/identity/v1/admission", "TestAdmissionCLIReportsCurrentGrantsAndExternalRequestRoute"},
-	{http.MethodGet, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fnotes/shares", "TestManagedProductHumanSelfServiceOnLiveGitea"},
-	{http.MethodPost, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fnotes/shares", "TestManagedProductHumanSelfServiceOnLiveGitea"},
-	{http.MethodDelete, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fnotes/shares/share-one", "TestManagedProductHumanSelfServiceOnLiveGitea"},
-	{http.MethodPost, "/catalog/v1/catalogs/catalog-A/repositories:connect", "TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding"},
-	{http.MethodGet, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fexisting/connection", "TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding"},
-	{http.MethodPost, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fexisting/connection:check", "TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding"},
-	{http.MethodPost, "/catalog/v1/repositories/kr:%2F%2Fkaiqidong%2Fexisting/connection:rotate", "TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding"},
-	{http.MethodPost, "/catalog/v1/catalogs/catalog-A/repositories/repo-A/archive", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
-	{http.MethodGet, "/catalog/v1/catalogs/catalog-A/datasets", "TestCatalogViewsChecksAndKnowledgeResolve"},
-	{http.MethodGet, "/catalog/v1/catalogs/catalog-A/datasets/agent", "TestCatalogViewsChecksAndKnowledgeResolve"},
-	{http.MethodPost, "/catalog/v1/catalogs/catalog-A/datasets:resolve", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
+	{http.MethodPut, "/admin/v1/grants/target", "TestGrantHTTPUpdatePreservesTheApplicationLedger"},
+	{http.MethodGet, "/snapshot/v1/connections/kr:%2F%2Fkaiqidong%2Fnotes/shares", "TestManagedProductHumanSelfServiceOnLakeFS"},
+	{http.MethodPost, "/snapshot/v1/connections/kr:%2F%2Fkaiqidong%2Fnotes/shares", "TestManagedProductHumanSelfServiceOnLakeFS"},
+	{http.MethodDelete, "/snapshot/v1/connections/kr:%2F%2Fkaiqidong%2Fnotes/shares/share-one", "TestManagedProductHumanSelfServiceOnLakeFS"},
+	{http.MethodPost, "/snapshot/v1/connections:connect", "TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding"},
+	{http.MethodGet, "/snapshot/v1/connections/kr:%2F%2Fkaiqidong%2Fexisting/connection", "TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding"},
+	{http.MethodPost, "/snapshot/v1/connections/kr:%2F%2Fkaiqidong%2Fexisting/connection:check", "TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding"},
+	{http.MethodPost, "/snapshot/v1/connections/kr:%2F%2Fkaiqidong%2Fexisting/connection:rotate", "TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding"},
+	{http.MethodPost, "/snapshot/v1/repositories/repo-A/archive", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
+	{http.MethodGet, "/snapshot/v1/datasets", "TestCatalogViewsChecksAndKnowledgeResolve"},
+	{http.MethodGet, "/snapshot/v1/datasets/agent", "TestCatalogViewsChecksAndKnowledgeResolve"},
+	{http.MethodPost, "/snapshot/v1/datasets:resolve", "TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses"},
 	{http.MethodPost, "/knowledge/v1/search:rerank", "TestHTTPSearchRerankPreservesRetrievalEvidenceAndUsesOneFixedView"},
 	{http.MethodPost, "/knowledge/v1/rerank", "TestHTTPRerankReadsAuthorizedCanonicalCandidatesAndProjectsModelFields"},
 	{http.MethodPost, "/operations/v1/retrieval-log:query", "TestTypedRetrievalEvidenceQueryAndTraining"},
 	{http.MethodPost, "/operations/v1/retrieval-training:query", "TestTypedRetrievalEvidenceQueryAndTraining"},
 	{http.MethodPost, "/operations/v1/refine-log:query", "TestRerankEvidenceFeedbackAndTrainingSampleJourney"},
 	{http.MethodPost, "/operations/v1/rerank-training:query", "TestRerankEvidenceFeedbackAndTrainingSampleJourney"},
-	{http.MethodPost, "/dataset-files/v1/mounts:list", "TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange"},
-	{http.MethodPost, "/dataset-files/v1/tree:list", "TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange"},
-	{http.MethodPost, "/dataset-files/v1/file:read", "TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange"},
+	{http.MethodPost, "/snapshot/v1/files/mounts:list", "TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange"},
+	{http.MethodPost, "/snapshot/v1/files/tree:list", "TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange"},
+	{http.MethodPost, "/snapshot/v1/files/file:read", "TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange"},
 }
 
-var registeredRoutePattern = regexp.MustCompile(`mux\.HandleFunc\("((?:GET|POST|PUT|PATCH|DELETE) [^"]+)"`)
+var registeredRoutePattern = regexp.MustCompile(`mux\.Handle(?:Func)?\("((?:GET|POST|PUT|PATCH|DELETE) [^"]+)"`)
 
 // TestEveryPublicHTTPRouteHasOwnedProtocolEvidence makes the production route
 // registry the denominator. A new route must be owned either by a remote CLI
@@ -78,7 +79,7 @@ var registeredRoutePattern = regexp.MustCompile(`mux\.HandleFunc\("((?:GET|POST|
 // HTTP/host journey. Domain semantics stay in their application-level journeys.
 func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 	registered := productionHTTPRoutePatterns(t)
-	if len(registered) != 88 {
+	if len(registered) != 87 {
 		t.Fatalf("public HTTP route count changed to %d; add protocol evidence for the new surface", len(registered))
 	}
 	want := httpsurface.Patterns()
@@ -90,8 +91,8 @@ func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 			t.Fatalf("HTTP registry drifted from production mux at %d: registry %q mux %q", i, want[i], registered[i])
 		}
 	}
-	if len(remoteDispatchRoutes) != 48 || len(httpOnlyRouteEvidence) != 41 {
-		t.Fatalf("HTTP evidence partition changed: remote=%d direct-journey=%d, want 48+41", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
+	if len(remoteDispatchRoutes) != 46 || len(httpOnlyRouteEvidence) != 42 {
+		t.Fatalf("HTTP evidence partition changed: remote=%d direct-journey=%d, want 46+42", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
 	}
 	tests := httpEvidenceTestFunctions(t)
 
@@ -138,28 +139,30 @@ func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 func productionHTTPRoutePatterns(t *testing.T) []string {
 	t.Helper()
 	var routes []string
-	// B6 起 production mux 归 server 所有；注册表扫描 ../server，
-	// evidence owners（remote CLI 传输测试与旅程测试）仍在 cli。
-	files, err := os.ReadDir("../server")
-	if err != nil {
-		t.Fatal(err)
-	}
+	// Both the KC application and Snapshot Store module register production routes.
 	seen := map[string]string{}
-	for _, file := range files {
-		name := file.Name()
-		if file.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			continue
-		}
-		raw, err := os.ReadFile(filepath.Join("../server", name))
+	for _, dir := range []string{"../server", "../snapshot/service"} {
+		files, err := os.ReadDir(dir)
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, match := range registeredRoutePattern.FindAllStringSubmatch(string(raw), -1) {
-			if prior, duplicate := seen[match[1]]; duplicate {
-				t.Fatalf("duplicate production HTTP registration %s in %s and %s", match[1], prior, name)
+		for _, file := range files {
+			name := file.Name()
+			if file.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+				continue
 			}
-			seen[match[1]] = name
-			routes = append(routes, match[1])
+			path := filepath.Join(dir, name)
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, match := range registeredRoutePattern.FindAllStringSubmatch(string(raw), -1) {
+				if prior, duplicate := seen[match[1]]; duplicate {
+					t.Fatalf("duplicate production HTTP registration %s in %s and %s", match[1], prior, path)
+				}
+				seen[match[1]] = path
+				routes = append(routes, match[1])
+			}
 		}
 	}
 	sort.Strings(routes)
@@ -168,9 +171,8 @@ func productionHTTPRoutePatterns(t *testing.T) []string {
 
 func httpEvidenceTestFunctions(t *testing.T) map[string]bool {
 	t.Helper()
-	// Evidence owners live in both cli (remote CLI transport, cli journeys)
-	// and server (HTTP-only journeys) test files since B6.
-	const evidenceDirs = ". ../server"
+	// Evidence owners include CLI journeys and each production HTTP handler's tests.
+	const evidenceDirs = ". ../server ../snapshot/service ../snapshot/console"
 	names := map[string]bool{}
 	for _, dir := range strings.Fields(evidenceDirs) {
 		collectEvidenceTestNames(t, dir, names)

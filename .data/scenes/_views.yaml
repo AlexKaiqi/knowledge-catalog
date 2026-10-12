@@ -5,6 +5,7 @@ product_documents:
       U1: 现有非法声明用例同时含未知 type 与 access，尚未分别证明两类声明都会被拒绝且 HEAD 不变；缺字段用例未单独钉 HEAD 不变，场景成功回读也未同时核对写回执 commit 与 schema_ref；同批成功分支尚未分别回读 Schema 与实例并断言二者属于同一 commit。
       U3: breaking 迁移分支仍待决策；局部兼容性与重建测试不证明完整演进旅程。
       U7: 尚无现行场景绑定与执行证据。
+      U8: 已覆盖认证读取、文件交付、help 同源与出版物漂移拒绝；尚未执行真实 Agent 从任务说明自主选择能力和处理就绪或授权失败的语义验收。
   dataset:
     section: 方向性用例
     gaps:

@@ -34,7 +34,7 @@ func (ws *Home) CreateNamedManagedRepository(req ManagedRepositoryRequest, grant
 			if err != nil {
 				return ManagedRepositoryResult{}, err
 			}
-			if owner == req.Principal && record.Request.CatalogID == req.CatalogID && record.Request.Name == req.Name && (req.Store == "" || req.Store == record.Store) {
+			if owner == req.Principal && record.Request.Name == req.Name && (req.Store == "" || req.Store == record.Store) {
 				if previous != nil {
 					return ManagedRepositoryResult{}, kernel.Fail(kernel.ErrUsageInvalid, "multiple allocations contain this name; use the original repository and command")
 				}
@@ -59,7 +59,7 @@ func (ws *Home) CreateNamedManagedRepository(req ManagedRepositoryRequest, grant
 		return ManagedRepositoryResult{}, err
 	}
 	req.Store = store
-	digest := sha256.Sum256([]byte(kernel.CanonicalDigest(struct{ Catalog, Principal, Name, Store string }{req.CatalogID, req.Principal, req.Name, req.Store})))
+	digest := sha256.Sum256([]byte(kernel.CanonicalDigest(struct{ Principal, Name, Store string }{req.Principal, req.Name, req.Store})))
 	identity := hex.EncodeToString(digest[:])
 	req.RepositoryID, err = namedManagedRepositoryID(req, pool, identity)
 	if err != nil {
@@ -70,13 +70,10 @@ func (ws *Home) CreateNamedManagedRepository(req ManagedRepositoryRequest, grant
 }
 
 func namedManagedRepositoryID(req ManagedRepositoryRequest, pool ManagedRepositoryConfig, identity string) (string, error) {
-	if pool.Driver == "lakefs" {
-		return managedLakeFSName(req.Name, req.Principal, identity)
+	if pool.Driver != "lakefs" {
+		return "", kernel.Fail(kernel.ErrUsageInvalid, "managed Snapshot provisioning requires lakefs")
 	}
-	if strings.TrimSpace(req.Principal) == "" || strings.TrimSpace(identity) == "" {
-		return "", kernel.Fail(kernel.ErrUsageInvalid, "named managed create requires a principal")
-	}
-	return "kr://" + req.Principal + "/repo-" + identity, nil
+	return managedLakeFSName(req.Name, req.Principal, identity)
 }
 
 func (ws *Home) ListManagedRepositories(principal string) ([]ManagedRepositoryResult, error) {
@@ -141,7 +138,7 @@ func managedResult(record managedRecord) ManagedRepositoryResult {
 	if store == "" {
 		store = record.Binding.Driver
 	}
-	return ManagedRepositoryResult{Catalog: record.Request.CatalogID, RepositoryID: record.Request.RepositoryID, CommandID: record.Request.CommandID, Status: "REPLAYED", Head: record.Head, Name: record.Name, Owner: owner, Store: store, ManagementURL: record.ManagementURL, ManagementState: record.ManagementState, ProviderURL: record.ProviderURL, ProvisioningState: record.Phase}
+	return ManagedRepositoryResult{RepositoryID: record.Request.RepositoryID, CommandID: record.Request.CommandID, Status: "REPLAYED", Head: record.Head, Name: record.Name, Owner: owner, Store: store, ManagementURL: record.ManagementURL, ManagementState: record.ManagementState, ProviderURL: record.ProviderURL, ProvisioningState: record.Phase}
 }
 
 func selectManagedPool(c DeploymentConfig, name string) (ManagedRepositoryConfig, string, error) {

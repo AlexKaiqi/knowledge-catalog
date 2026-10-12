@@ -22,9 +22,9 @@ func TestManagedRepositoryCreatePublicArgv(t *testing.T) {
 		case r.Method == http.MethodGet && r.URL.Path == "/catalog/v1/catalogs":
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{"catalogs": []map[string]string{{"id": catalogID}}})
-		case r.Method == http.MethodPost && r.URL.EscapedPath() == "/catalog/v1/repositories":
+		case r.Method == http.MethodPost && r.URL.EscapedPath() == "/snapshot/v1/connections":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"catalog":"kr://managed/catalog","repositoryId":"kr://managed/source","status":"APPLIED","head":"initial"}`))
+			_, _ = w.Write([]byte(`{"repositoryId":"kr://managed/source","status":"APPLIED","head":"initial"}`))
 		default:
 			http.NotFound(w, r)
 		}

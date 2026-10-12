@@ -16,6 +16,7 @@ path_hint: docs/graph/documents/cli.okf
     "contributor"
   ],
   "ownerTopics": [
+    "system-cli-entrypoint-publication",
     "product-cli-argv-help-and-operands"
   ]
 }

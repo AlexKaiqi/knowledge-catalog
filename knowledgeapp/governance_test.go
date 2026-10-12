@@ -6,14 +6,14 @@ import (
 	"testing"
 	"time"
 
-	"kc/catalog"
 	"kc/controlplane"
 	"kc/kernel"
+	"kc/snapshot/dataset"
 )
 
 type governanceRecorder struct {
 	proposeInput controlplane.ProposeInput
-	workspace    catalog.ResolvedKnowledgeSet
+	workspace    dataset.ResolvedKnowledgeSet
 	proposal     controlplane.Proposal
 	preview      controlplane.Preview
 	validation   controlplane.ValidationReport
@@ -27,7 +27,7 @@ func (r *governanceRecorder) Propose(input controlplane.ProposeInput) (controlpl
 	return controlplane.Proposal{ProposalID: input.ProposalID}, nil
 }
 
-func (r *governanceRecorder) CreatePreviewAt(workspace catalog.ResolvedKnowledgeSet, proposal controlplane.Proposal) (controlplane.Preview, error) {
+func (r *governanceRecorder) CreatePreviewAt(workspace dataset.ResolvedKnowledgeSet, proposal controlplane.Proposal) (controlplane.Preview, error) {
 	r.workspace, r.proposal = workspace, proposal
 	return controlplane.Preview{PreviewID: "preview-1"}, nil
 }
@@ -73,7 +73,7 @@ func TestGovernanceExecutorsPreserveTypedRequestsAndPersistence(t *testing.T) {
 		t.Fatalf("proposal request was not preserved: %#v %v", proposal, err)
 	}
 
-	workspace := catalog.ResolvedKnowledgeSet{SetID: "workspace-1", PinID: "pin-1"}
+	workspace := dataset.ResolvedKnowledgeSet{SetID: "workspace-1", PinID: "pin-1"}
 	preview, err := (PreviewExecutor{
 		Control: recorder,
 		Save: func(preview controlplane.Preview) error {

@@ -40,16 +40,15 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	consumerAuth := basicAuthorization(consumerLogin, consumerPassword)
 
 	home := testkit.TempDir(t)
-	catalogID := "kr://service/catalog"
 	repositoryID := "kr://service/public/runbooks"
 	setID := "agent"
-	body(t, kc(home, "local", "init", "--catalog", catalogID))
+	body(t, kc(home, "local", "init"))
 	body(t, kc(home, "local", "store", "set", "--repository", "lakefs", "--index", "opensearch"))
 	body(t, kc(home, "local", "store", "set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repositoryID)
 	body(t, kc(home, "grant", "add", "--principal", providerLogin, "--action", "writer.commit,projection.manage", "--repo", repositoryID))
-	body(t, kc(home, "grant", "add", "--principal", providerLogin, "--action", "dataset.manage", "--catalog", catalogID, "--dataset", setID))
-	body(t, kc(home, "grant", "add", "--principal", consumerLogin, "--action", "file.read,dataset.resolve", "--catalog", catalogID, "--dataset", setID))
+	body(t, kc(home, "grant", "add", "--principal", providerLogin, "--action", "dataset.manage", "--dataset", setID))
+	body(t, kc(home, "grant", "add", "--principal", consumerLogin, "--action", "file.read,dataset.resolve", "--dataset", setID))
 	body(t, kc(home, "grant", "add", "--principal", consumerLogin, "--action", "knowledge.read,knowledge.search", "--repo", repositoryID))
 
 	authenticator, err := serv.NewGiteaAuthenticator(giteaURL, http.DefaultClient)
@@ -106,13 +105,13 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	// the consumer pin then freezes exactly that published basis and never
 	// follows live branches (V-01). The define goes through the server API so
 	// the running service retains the published revision.
-	liveServiceOK(t, server, "/catalog/v1/catalogs/"+url.PathEscape(catalogID)+"/datasets", map[string]any{
+	liveServiceOK(t, server, "/snapshot/v1/datasets", map[string]any{
 		"dataset": setID, "revision": 1,
 		"sources": []map[string]any{{"repository": repositoryID, "selector": "refs/heads/main"}},
 	}, providerAuth)
 	liveServiceOK(t, server, "/operations/v1/projections:sync", map[string]any{"repository": repositoryID, "commit": firstCommit}, providerAuth)
 
-	catalogPath := "/catalog/v1/catalogs/" + url.PathEscape(catalogID)
+	catalogPath := "/snapshot/v1"
 	pin := asMap(t, liveServiceOK(t, server, catalogPath+"/datasets/"+url.PathEscape(setID)+"/resolve", map[string]any{}, consumerAuth))
 	if asMap(t, pin["repositories"])[repositoryID] != firstCommit {
 		t.Fatalf("consumer pin did not freeze first publish: %#v", pin)
@@ -122,13 +121,13 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 		t.Fatal(err)
 	}
 	search := asMap(t, liveServiceOK(t, server, "/knowledge/v1/search", map[string]any{
-		"catalog": catalogID, "dataset": setID, "pin": json.RawMessage(pinJSON), "query": "冻结窗口",
+		"dataset": setID, "pin": json.RawMessage(pinJSON), "query": "冻结窗口",
 	}, consumerAuth))
 	if search["completeness"] != "complete" || len(search["hits"].([]any)) != 1 {
 		t.Fatalf("consumer search: %#v", search)
 	}
 	values := liveServiceOK(t, server, "/knowledge/v1/objects:read", map[string]any{
-		"catalog": catalogID, "dataset": setID, "pin": json.RawMessage(pinJSON), "object": "runbook/payment-oncall",
+		"dataset": setID, "pin": json.RawMessage(pinJSON), "object": "runbook/payment-oncall",
 	}, consumerAuth).([]any)
 	if len(values) != 1 || asMap(t, values[0])["commit"] != firstCommit {
 		t.Fatalf("consumer read: %#v", values)
@@ -142,7 +141,7 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	liveServiceOK(t, server, "/operations/v1/projections:sync", map[string]any{"repository": repositoryID, "commit": secondCommit}, providerAuth)
 	// dataset.md（组合发布）: upstream advance requires a new revision; the
 	// provider publishes v2 and only then does latest resolve to it.
-	liveServiceOK(t, server, "/catalog/v1/catalogs/"+url.PathEscape(catalogID)+"/datasets", map[string]any{
+	liveServiceOK(t, server, "/snapshot/v1/datasets", map[string]any{
 		"dataset": setID, "revision": 2,
 		"sources": []map[string]any{{"repository": repositoryID, "selector": "refs/heads/main"}},
 	}, providerAuth)
@@ -151,7 +150,7 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 		t.Fatalf("new resolve did not advance: old=%s new=%#v", firstCommit, newPin)
 	}
 	oldSearch := asMap(t, liveServiceOK(t, server, "/knowledge/v1/search", map[string]any{
-		"catalog": catalogID, "dataset": setID, "pin": json.RawMessage(pinJSON), "query": "容量水位",
+		"dataset": setID, "pin": json.RawMessage(pinJSON), "query": "容量水位",
 	}, consumerAuth))
 	if len(oldSearch["hits"].([]any)) != 0 {
 		t.Fatalf("old pin observed the new publish: %#v", oldSearch)

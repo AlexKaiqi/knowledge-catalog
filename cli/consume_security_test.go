@@ -29,7 +29,7 @@ func TestAllowedRepoReadFailsClosedWhenPolicyCannotBeRead(t *testing.T) {
 func TestDatasetFileReadDoesNotImplyRepoKnowledge(t *testing.T) {
 	rules := []inv.AllowRule{{
 		ID: "ws", Principal: "bot", Actions: []string{"file.read"},
-		Catalog: "kr://acme/catalog", Dataset: "agent",
+		Dataset: "agent",
 	}}
 	if _, ok := inv.MatchAllow(rules, inv.AllowQuery{
 		Principal: "bot", Action: "knowledge.read", Repo: "kr://acme/public/core",
@@ -43,13 +43,13 @@ func TestDatasetFileReadDoesNotImplyRepoKnowledge(t *testing.T) {
 	}
 	if _, ok := inv.MatchAllow(rules, inv.AllowQuery{
 		Principal: "bot", Action: "dataset.resolve",
-		Catalog: "kr://acme/catalog", Dataset: "agent",
+		Dataset: "agent",
 	}); ok {
 		t.Fatal("dataset file.read must not imply dataset.resolve")
 	}
 	if _, ok := inv.MatchAllow(rules, inv.AllowQuery{
 		Principal: "bot", Action: "file.read",
-		Catalog: "kr://acme/catalog", Dataset: "agent",
+		Dataset: "agent",
 	}); !ok {
 		t.Fatal("file.read must still match itself on the dataset")
 	}
@@ -58,7 +58,7 @@ func TestDatasetFileReadDoesNotImplyRepoKnowledge(t *testing.T) {
 func TestKnowledgeSetConsumeDoesNotImplyKnowledgeActions(t *testing.T) {
 	rules := []inv.AllowRule{{
 		ID: "ws", Principal: "bot", Actions: []string{"file.read"},
-		Catalog: "kr://acme/catalog", Dataset: "agent",
+		Dataset: "agent",
 	}}
 	if _, ok := inv.MatchAllow(rules, inv.AllowQuery{
 		Principal: "bot", Action: "knowledge.read", Repo: "kr://acme/public/core",
@@ -67,19 +67,19 @@ func TestKnowledgeSetConsumeDoesNotImplyKnowledgeActions(t *testing.T) {
 	}
 	if _, ok := inv.MatchAllow(rules, inv.AllowQuery{
 		Principal: "bot", Action: "knowledge.search",
-		Catalog: "kr://acme/catalog", Dataset: "agent",
+		Dataset: "agent",
 	}); ok {
 		t.Fatal("file.read must not grant knowledge.search")
 	}
 	if _, ok := inv.MatchAllow(rules, inv.AllowQuery{
 		Principal: "bot", Action: "dataset.consume",
-		Catalog: "kr://acme/catalog", Dataset: "agent",
+		Dataset: "agent",
 	}); ok {
 		t.Fatal("dataset.consume is not a live alias")
 	}
 	if _, ok := inv.MatchAllow(rules, inv.AllowQuery{
 		Principal: "bot", Action: "file.read",
-		Catalog: "kr://acme/catalog", Dataset: "agent",
+		Dataset: "agent",
 	}); !ok {
 		t.Fatal("file.read must still match itself")
 	}
@@ -89,8 +89,8 @@ func TestReadAllowRejectsRetiredKsetFieldAndActions(t *testing.T) {
 	homeDir := t.TempDir()
 	path := filepath.Join(homeDir, "allow.json")
 	for _, body := range []string{
-		`{"version":2,"rules":[{"id":"old","principal":"bot","actions":["file.read"],"catalog":"kr://acme/catalog","kset":"agent"}]}`,
-		`{"version":2,"rules":[{"id":"old","principal":"bot","actions":["kset.consume"],"catalog":"kr://acme/catalog","dataset":"agent"}]}`,
+		`{"version":2,"rules":[{"id":"old","principal":"bot","actions":["file.read"],"kset":"agent"}]}`,
+		`{"version":2,"rules":[{"id":"old","principal":"bot","actions":["kset.consume"],"dataset":"agent"}]}`,
 	} {
 		if err := os.WriteFile(path, []byte(body+"\n"), 0o600); err != nil {
 			t.Fatal(err)
@@ -122,7 +122,7 @@ func TestWriterPutPathHintIsStored(t *testing.T) {
 		}
 	}
 	core := "kr://acme/public/core"
-	run("local", "init", "--catalog", "kr://acme/catalog")
+	run("local", "init")
 	coreDSN := internalLakeFSRepoDSN(t)
 	run("local", "repository", "attach", "--repo", core, "--dsn", coreDSN)
 	run("attach", "--repo", core, "--dsn", coreDSN)
@@ -162,27 +162,25 @@ func TestWriterPutPathHintIsStored(t *testing.T) {
 }
 
 func TestAuthorizeKnowledgeSetKnowledgeSeparatesConsumeFromSearch(t *testing.T) {
-	catalogID := "kr://acme/catalog"
 	workspace := "agent"
 	repo := "kr://acme/public/core"
 	consume := inv.AllowRule{
 		ID: "ws", Principal: "bot", Actions: []string{"file.read"},
-		Catalog: catalogID, Dataset: workspace,
+		Dataset: workspace,
 	}
 	searchRepo := inv.AllowRule{
 		ID: "search", Principal: "bot", Actions: []string{"knowledge.search"}, Repo: repo,
 	}
 	catalogRead := inv.AllowRule{
-		ID: "cat", Principal: "bot", Actions: []string{"catalog.read"}, Catalog: catalogID,
-	}
+		ID: "cat", Principal: "bot", Actions: []string{"inventory.read"}}
 	searchQ := inv.AllowQuery{
-		Principal: "bot", Action: "knowledge.search", Catalog: catalogID, Dataset: workspace,
+		Principal: "bot", Action: "knowledge.search", Dataset: workspace,
 	}
 	if err := inv.AuthorizeWorkspaceKnowledge([]inv.AllowRule{consume}, searchQ); err != nil {
 		t.Fatalf("dataset file.read must admit pin knowledge.search: %v", err)
 	}
 	if err := inv.AuthorizeWorkspaceKnowledge([]inv.AllowRule{catalogRead, searchRepo}, searchQ); kernel.CodeOf(err) != kernel.ErrForbidden {
-		t.Fatalf("catalog.read must not skip named-dataset file.read: %v", err)
+		t.Fatalf("inventory.read must not skip named-dataset file.read: %v", err)
 	}
 	readQ := searchQ
 	readQ.Action = "knowledge.read"
@@ -203,7 +201,7 @@ func TestDeliverSearchHitStripsSearchOnlyGrant(t *testing.T) {
 	}}); err != nil {
 		t.Fatal(err)
 	}
-	flags := map[string]FlagValue{"as": "taihu:alice", "dataset": "scene-set", "catalog": "kr://scene/catalog"}
+	flags := map[string]FlagValue{"as": "taihu:alice", "dataset": "scene-set"}
 	hit := retrieval.KnowledgeHit{Knowledge: knowledge.KnowledgeValue{
 		KnowledgeRef: knowledge.KnowledgeRef{Repository: "kr://scene/knowledge", Object: "metric/gmv"},
 		Repository:   "kr://scene/knowledge",
@@ -222,11 +220,11 @@ func TestDeliverSearchHitStripsSearchOnlyGrant(t *testing.T) {
 func TestDeliverSearchHitKeepsDatasetFileReadBody(t *testing.T) {
 	homeDir := t.TempDir()
 	if err := writeAllow(homeDir, inv.AllowFile{Rules: []inv.AllowRule{
-		{ID: "c", Principal: "taihu:alice", Actions: []string{"file.read"}, Catalog: "kr://scene/catalog", Dataset: "scene-set"},
+		{ID: "c", Principal: "taihu:alice", Actions: []string{"file.read"}, Dataset: "scene-set"},
 	}}); err != nil {
 		t.Fatal(err)
 	}
-	flags := map[string]FlagValue{"as": "taihu:alice", "dataset": "scene-set", "catalog": "kr://scene/catalog"}
+	flags := map[string]FlagValue{"as": "taihu:alice", "dataset": "scene-set"}
 	hit := retrieval.KnowledgeHit{Knowledge: knowledge.KnowledgeValue{
 		KnowledgeRef: knowledge.KnowledgeRef{Repository: "kr://scene/knowledge", Object: "metric/gmv"},
 		Repository:   "kr://scene/knowledge",

@@ -22,7 +22,7 @@ func TestHelp(t *testing.T) {
 			t.Fatal(needle)
 		}
 	}
-	for _, leak := range []string{"kc login", "kc show", "writer put", "--repo", "--server", "catalog audit", "resolve", "governance preview"} {
+	for _, leak := range []string{"kc login", "kc show", "writer put", "--repo", "--server", "registry audit", "resolve", "governance preview"} {
 		if strings.Contains(result.Stdout, leak) {
 			t.Fatalf("root help disclosed command detail %q", leak)
 		}

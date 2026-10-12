@@ -1,7 +1,10 @@
 package controlplane
 
 import (
+	"encoding/json"
+	"kc/kernel"
 	"os"
+	"strings"
 
 	"kc/internal/jsonfile"
 )
@@ -18,19 +21,13 @@ var EmptyControlState = ControlState{
 	Validations: map[string]ValidationReport{},
 }
 
-type ControlBundle struct {
-	Catalogs    map[string]ControlState     `json:"catalogs"`
-	Proposals   map[string]Proposal         `json:"proposals,omitempty"`
-	Previews    map[string]Preview          `json:"previews,omitempty"`
-	Validations map[string]ValidationReport `json:"validations,omitempty"`
-}
-
 type FileControlState struct {
-	file string
+	file        string
+	authorityID string
 }
 
-func NewFileControlState(file string) *FileControlState {
-	return &FileControlState{file: file}
+func NewFileControlState(file, authorityID string) *FileControlState {
+	return &FileControlState{file: file, authorityID: authorityID}
 }
 
 func normalizeState(raw ControlState) ControlState {
@@ -46,43 +43,48 @@ func normalizeState(raw ControlState) ControlState {
 	return raw
 }
 
-func (s *FileControlState) LoadBundle() (map[string]ControlState, error) {
-	if _, err := os.Stat(s.file); os.IsNotExist(err) {
-		return map[string]ControlState{}, nil
-	}
-	var raw ControlBundle
-	if err := jsonfile.Read(s.file, &raw); err != nil {
-		return nil, err
-	}
-	out := map[string]ControlState{}
-	for id, st := range raw.Catalogs {
-		out[id] = normalizeState(st)
-	}
-	if len(out) == 0 && (len(raw.Proposals) > 0 || len(raw.Previews) > 0 || len(raw.Validations) > 0) {
-		out[""] = normalizeState(ControlState{Proposals: raw.Proposals, Previews: raw.Previews, Validations: raw.Validations})
-	}
-	return out, nil
-}
-
+// Load recovers the unique service control state. A legacy single-space bundle
+// is read without writes; multiple spaces cannot be merged implicitly.
 func (s *FileControlState) Load() (ControlState, error) {
-	all, err := s.LoadBundle()
-	if err != nil {
+	if _, err := os.Stat(s.file); os.IsNotExist(err) {
+		return normalizeState(ControlState{}), nil
+	}
+	var raw map[string]json.RawMessage
+	if err := jsonfile.Read(s.file, &raw); err != nil {
 		return ControlState{}, err
 	}
-	if st, ok := all[""]; ok {
-		return st, nil
+	var legacy json.RawMessage
+	for field, value := range raw {
+		if strings.EqualFold(field, "catalogs") {
+			if len(raw) != 1 {
+				return ControlState{}, kernel.Fail(kernel.ErrPreconditionFailed, "mixed legacy and service control state requires an explicit migration")
+			}
+			legacy = value
+		}
 	}
-	return EmptyControlState, nil
+	if legacy != nil {
+		var states map[string]ControlState
+		if err := json.Unmarshal(legacy, &states); err != nil {
+			return ControlState{}, err
+		}
+		if len(states) > 1 {
+			return ControlState{}, kernel.Fail(kernel.ErrPreconditionFailed, "multiple legacy registration spaces require an explicit migration")
+		}
+		for id, state := range states {
+			if id != "" && id != s.authorityID {
+				return ControlState{}, kernel.Fail(kernel.ErrPreconditionFailed, "legacy control authority identity does not match the configured registry")
+			}
+			return normalizeState(state), nil
+		}
+		return normalizeState(ControlState{}), nil
+	}
+	var state ControlState
+	if err := jsonfile.Read(s.file, &state); err != nil {
+		return ControlState{}, err
+	}
+	return normalizeState(state), nil
 }
 
 func (s *FileControlState) Save(state ControlState) error {
-	return s.SaveBundle(map[string]ControlState{"": normalizeState(state)})
-}
-
-func (s *FileControlState) SaveBundle(states map[string]ControlState) error {
-	copied := map[string]ControlState{}
-	for id, st := range states {
-		copied[id] = normalizeState(st)
-	}
-	return jsonfile.Write(s.file, ControlBundle{Catalogs: copied})
+	return jsonfile.Write(s.file, normalizeState(state))
 }

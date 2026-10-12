@@ -49,6 +49,9 @@ func runServe(flags map[string]FlagValue) RunResult {
 	identityLine := "client must send X-Kc-As only"
 	if options.Authenticated() {
 		identityLine = "client must send Authorization only; X-Kc-As disabled"
+		if authMode == "lakefs" {
+			identityLine = "client must send Authorization or native session Cookie with X-Kc-Console: 1 and JSON mutations; X-Kc-As disabled"
+		}
 	}
 	stateRuntime := "disabled"
 	if options.StateLookup != nil {
@@ -65,7 +68,7 @@ func runServe(flags map[string]FlagValue) RunResult {
 	if options.Embedder != nil {
 		embeddingRuntime = strings.TrimSpace(os.Getenv("KC_EMBEDDING_MODEL"))
 	}
-	_, _ = fmt.Fprintf(os.Stdout, "kc service\n  config  %s\n  listen  http://%s\n  console http://%s/console\n  auth    %s\n  state   %s\n  rerank  %s\n  embed   %s\n  APIs    /catalog/v1 /knowledge/v1 /dataset-files/v1 /writer/v1 /governance/v1 /identity/v1 /admin/v1 /operations/v1\n  as      %s\n  corr    header X-Kc-Request-Id\n", flagString(flags, "config"), listen, listen, authMode, stateRuntime, rerankRuntime, embeddingRuntime, identityLine)
+	_, _ = fmt.Fprintf(os.Stdout, "kc service\n  config  %s\n  listen  http://%s\n  console http://%s/console\n  auth    %s\n  state   %s\n  rerank  %s\n  embed   %s\n  APIs    /snapshot/v1 /knowledge/v1 /writer/v1 /governance/v1 /identity/v1 /admin/v1 /operations/v1\n  as      %s\n  corr    header X-Kc-Request-Id\n", flagString(flags, "config"), listen, listen, authMode, stateRuntime, rerankRuntime, embeddingRuntime, identityLine)
 	handler, err := server.HTTPHandlerFromConfig(flagString(flags, "config"), options)
 	if err != nil {
 		return inv.ErrorResult(err)

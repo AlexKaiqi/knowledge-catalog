@@ -15,7 +15,7 @@ import (
 // U2：只修改一个切面，兄弟切面保持原值，对象身份不变。
 func TestAspectModificationKeepsSiblingAndIdentity(t *testing.T) {
 	h := testkit.TempDir(t)
-	kc(h, "init", "--catalog", "kr://acme/catalog")
+	kc(h, "init")
 	seedRepo(t, h, "kr://acme/public/core")
 	body(t, kc(h, "put", "--command-id", "def-v1", "--repo", "kr://acme/public/core",
 		"--object", "Policy:P-103", "--aspect", "definition", "--value", `{"text":"v1"}`))
@@ -46,7 +46,7 @@ func TestAspectModificationKeepsSiblingAndIdentity(t *testing.T) {
 // U5：同一命令身份携带另一份内容必须被拒绝；响应丢失后经回执恢复已接受事实。
 func TestLostResponseRecoversFromReceiptAndRefusesContentSwap(t *testing.T) {
 	h := testkit.TempDir(t)
-	kc(h, "init", "--catalog", "kr://acme/catalog")
+	kc(h, "init")
 	seedRepo(t, h, "kr://acme/public/core")
 	accepted := asMap(t, body(t, kc(h, "put", "--command-id", "sync-1", "--repo", "kr://acme/public/core",
 		"--object", "policy/A", "--value", `{"v":1}`)))
@@ -84,7 +84,7 @@ func TestLostResponseRecoversFromReceiptAndRefusesContentSwap(t *testing.T) {
 // 关系对象保留端点坐标与存储来源。
 func TestCrossRepositoryRelationPublishKeepsEndpointRepoUntouched(t *testing.T) {
 	h := testkit.TempDir(t)
-	kc(h, "init", "--catalog", "kr://acme/catalog")
+	kc(h, "init")
 	seedRepo(t, h, "kr://acme/public/core")
 	seedRepo(t, h, "kr://acme/other/teams")
 	otherHead := body(t, kc(h, "writer", "head", "--repo", "kr://acme/other/teams"))

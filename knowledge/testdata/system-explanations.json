@@ -1,0 +1,342 @@
+{
+  "kc/concept/address": {
+    "path": "concepts/address/definition.md",
+    "bases": [
+      {
+        "owner": "docs/graph/documents/knowledge.okf",
+        "topic": "knowledge-repository-layout-and-consumer-file-view",
+        "term": "Address",
+        "source": "knowledge/address.go",
+        "symbol": "Address"
+      }
+    ]
+  },
+  "kc/concept/aspect": {
+    "path": "concepts/aspect/definition.md",
+    "bases": [
+      {
+        "owner": "docs/graph/documents/knowledge.okf",
+        "topic": "knowledge-repository-layout-and-consumer-file-view",
+        "term": "Aspect",
+        "source": "knowledge/address.go",
+        "symbol": "KindAspect"
+      }
+    ]
+  },
+  "kc/concept/dataset": {
+    "path": "concepts/dataset/definition.md",
+    "bases": [
+      {
+        "owner": "docs/graph/documents/dataset.okf",
+        "topic": "repository-registration-and-dataset-composition-and-pin",
+        "term": "Dataset",
+        "source": "snapshot/dataset/definition.go",
+        "symbol": "KnowledgeSet"
+      }
+    ]
+  },
+  "kc/concept/index-declaration": {
+    "path": "concepts/index-declaration/definition.md",
+    "bases": [
+      {
+        "owner": "docs/graph/documents/declarative-index.okf",
+        "topic": "aspect-addressing-and-access-spec",
+        "term": "索引声明",
+        "source": "knowledge/schema.go",
+        "symbol": "SchemaFieldDefinition"
+      }
+    ]
+  },
+  "kc/concept/member": {
+    "path": "concepts/member/definition.md",
+    "bases": [
+      {
+        "owner": "docs/graph/documents/knowledge.okf",
+        "topic": "knowledge-repository-layout-and-consumer-file-view",
+        "term": "Member",
+        "source": "knowledge/address.go",
+        "symbol": "KindMember"
+      }
+    ]
+  },
+  "kc/concept/meta-schema": {
+    "path": "concepts/meta-schema/definition.md",
+    "bases": [
+      {
+        "owner": "docs/graph/documents/knowledge.okf",
+        "topic": "system-and-domain-schema-lifecycle",
+        "term": "Meta Schema",
+        "source": "knowledge/schema.go",
+        "symbol": "MetaSchemaV1"
+      }
+    ]
+  },
+  "kc/concept/object": {
+    "path": "concepts/object/definition.md",
+    "bases": [
+      {
+        "owner": "docs/graph/documents/core-architecture.okf",
+        "topic": "knowledge-identity",
+        "term": "对象",
+        "source": "knowledge/identity.go",
+        "symbol": "ObjectID"
+      }
+    ]
+  },
+  "kc/concept/object-interface": {
+    "path": "concepts/object-interface/definition.md",
+    "bases": [
+      {
+        "owner": "docs/graph/documents/object-interface.okf",
+        "topic": "object-interface-contracts",
+        "term": "Interface",
+        "source": "knowledge/object_interface.go",
+        "symbol": "InterfaceDefinition"
+      }
+    ]
+  },
+  "kc/concept/pin": {
+    "path": "concepts/pin/definition.md",
+    "bases": [
+      {
+        "owner": "docs/graph/documents/dataset.okf",
+        "topic": "repository-registration-and-dataset-composition-and-pin",
+        "term": "固定",
+        "source": "snapshot/dataset/resolve.go",
+        "symbol": "ResolvedKnowledgeSet"
+      }
+    ]
+  },
+  "kc/concept/provenance": {
+    "path": "concepts/provenance/definition.md",
+    "bases": [
+      {
+        "owner": "docs/graph/documents/core-architecture.okf",
+        "topic": "version-and-provenance",
+        "term": "来源",
+        "source": "knowledge/provenance.go",
+        "symbol": "ProvenanceEnvelope"
+      }
+    ]
+  },
+  "kc/concept/relation": {
+    "path": "concepts/relation/definition.md",
+    "bases": [
+      {
+        "owner": "docs/graph/documents/knowledge.okf",
+        "topic": "knowledge-repository-layout-and-consumer-file-view",
+        "term": "Relation",
+        "source": "knowledge/relation.go",
+        "symbol": "CanonicalRelation"
+      }
+    ]
+  },
+  "kc/concept/repository": {
+    "path": "concepts/repository/definition.md",
+    "bases": [
+      {
+        "owner": "docs/graph/documents/terminology.okf",
+        "topic": "public-vocabulary",
+        "term": "Repository",
+        "source": "knowledge/repository.go",
+        "symbol": "Repository"
+      }
+    ]
+  },
+  "kc/concept/schema": {
+    "path": "concepts/schema/definition.md",
+    "bases": [
+      {
+        "owner": "docs/graph/documents/knowledge.okf",
+        "topic": "system-and-domain-schema-lifecycle",
+        "term": "Schema",
+        "source": "knowledge/schema.go",
+        "symbol": "SchemaDefinition"
+      }
+    ]
+  },
+  "kc/concept/system-repository": {
+    "path": "concepts/system-repository/definition.md",
+    "bases": [
+      {
+        "owner": "docs/graph/documents/knowledge.okf",
+        "topic": "system-self-description-publication",
+        "term": "系统仓",
+        "source": "knowledge/schema.go",
+        "symbol": "SystemRepositoryID"
+      }
+    ]
+  },
+  "kc/concept/version": {
+    "path": "concepts/version/definition.md",
+    "bases": [
+      {
+        "owner": "docs/graph/documents/core-architecture.okf",
+        "topic": "version-and-provenance",
+        "term": "不可变版本",
+        "source": "kernel/identity.go",
+        "symbol": "CommitID"
+      }
+    ]
+  },
+  "kc/interface/cli": {
+    "path": "interfaces/cli/definition.md",
+    "bases": [
+      {
+        "owner": "docs/graph/documents/cli.okf",
+        "topic": "product-cli-argv-help-and-operands",
+        "term": "CLI",
+        "source": "cli/run.go",
+        "symbol": "Run"
+      }
+    ]
+  },
+  "kc/interface/writer": {
+    "path": "interfaces/writer/definition.md",
+    "bases": [
+      {
+        "owner": "docs/graph/documents/core-architecture.okf",
+        "topic": "write-and-read-semantics",
+        "term": "Writer",
+        "source": "knowledge/writer/writer.go",
+        "symbol": "Writer"
+      }
+    ]
+  },
+  "kc/mechanism/audit": {
+    "path": "mechanisms/audit/definition.md",
+    "bases": [
+      {
+        "owner": "docs/graph/documents/service.okf",
+        "topic": "versioned-access-evidence-and-agent-feedback",
+        "term": "访问证据",
+        "source": "observability/access.go",
+        "symbol": "AccessEvent"
+      }
+    ]
+  },
+  "kc/mechanism/authorization": {
+    "path": "mechanisms/authorization/definition.md",
+    "bases": [
+      {
+        "owner": "docs/graph/documents/permissions.okf",
+        "topic": "authentication-authorization-and-repository-security",
+        "term": "主体",
+        "source": "kernel/identity_context.go",
+        "symbol": "IdentityContext"
+      },
+      {
+        "owner": "docs/graph/documents/permissions.okf",
+        "topic": "authentication-authorization-and-repository-security",
+        "term": "授权",
+        "source": "invocation/allow.go",
+        "symbol": "AllowRule"
+      }
+    ]
+  },
+  "kc/mechanism/dynamic-access": {
+    "path": "mechanisms/dynamic-access/definition.md",
+    "bases": [
+      {
+        "owner": "docs/graph/documents/resource-access.okf",
+        "topic": "binding-and-observation-semantics",
+        "term": "声明",
+        "source": "knowledge/binding.go",
+        "symbol": "BindingDeclaration"
+      },
+      {
+        "owner": "docs/graph/documents/resource-access.okf",
+        "topic": "binding-and-observation-semantics",
+        "term": "观察",
+        "source": "knowledge/observation.go",
+        "symbol": "UnitObservation"
+      },
+      {
+        "owner": "docs/graph/documents/resource-access.okf",
+        "topic": "resource-access-collector-observer-boundary",
+        "term": "Resource Access",
+        "source": "knowledge/origin.go",
+        "symbol": "ResourceAccessEndpoint"
+      }
+    ]
+  },
+  "kc/mechanism/governance": {
+    "path": "mechanisms/governance/definition.md",
+    "bases": [
+      {
+        "owner": "docs/graph/documents/hooks-and-gates.okf",
+        "topic": "merge-evidence-gates",
+        "term": "提案",
+        "source": "controlplane/proposal.go",
+        "symbol": "Proposal"
+      },
+      {
+        "owner": "docs/graph/documents/hooks-and-gates.okf",
+        "topic": "merge-evidence-gates",
+        "term": "Gate",
+        "source": "gate/check.go",
+        "symbol": "Check"
+      }
+    ]
+  },
+  "kc/mechanism/hook": {
+    "path": "mechanisms/hook/definition.md",
+    "bases": [
+      {
+        "owner": "docs/graph/documents/hooks-and-gates.okf",
+        "topic": "outbound-action-extension",
+        "term": "Hook",
+        "source": "hook/store.go",
+        "symbol": "Binding"
+      }
+    ]
+  },
+  "kc/mechanism/object-interface-dispatch": {
+    "path": "mechanisms/object-interface-dispatch/definition.md",
+    "bases": [
+      {
+        "owner": "docs/graph/documents/object-interface.okf",
+        "topic": "object-interface-dispatch",
+        "term": "分派",
+        "source": "knowledge/serving/object_interface_registry.go",
+        "symbol": "InterfaceRegistry"
+      }
+    ]
+  },
+  "kc/mechanism/projection": {
+    "path": "mechanisms/projection/definition.md",
+    "bases": [
+      {
+        "owner": "docs/graph/documents/index-control.okf",
+        "topic": "snapshot-and-state-projection-control",
+        "term": "投影",
+        "source": "index/plan.go",
+        "symbol": "ProjectionSpec"
+      }
+    ]
+  },
+  "kc/mechanism/snapshot": {
+    "path": "mechanisms/snapshot/definition.md",
+    "bases": [
+      {
+        "owner": "docs/graph/documents/core-architecture.okf",
+        "topic": "snapshot-authority-and-derived-media",
+        "term": "Snapshot",
+        "source": "snapshot/store.go",
+        "symbol": "Store"
+      }
+    ]
+  },
+  "kc/concept/registration": {
+    "path": "concepts/registration/definition.md",
+    "bases": [
+      {
+        "owner": "docs/graph/documents/core-architecture.okf",
+        "topic": "layer-ownership-and-import-direction",
+        "term": "登记空间",
+        "source": "snapshot/dataset/contract.go",
+        "symbol": "Service"
+      }
+    ]
+  }
+}

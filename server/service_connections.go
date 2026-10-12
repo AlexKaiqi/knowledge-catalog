@@ -10,10 +10,10 @@ import (
 )
 
 func (f *httpFacade) registerConnectionRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /catalog/v1/catalogs/{catalog}/repositories:connect", f.repositoryConnect)
-	mux.HandleFunc("GET /catalog/v1/repositories/{repository}/connection", f.repositoryConnectionShow)
-	mux.HandleFunc("POST /catalog/v1/repositories/{repository}/connection:check", f.repositoryConnectionCheck)
-	mux.HandleFunc("POST /catalog/v1/repositories/{repository}/connection:rotate", f.repositoryConnectionRotate)
+	mux.HandleFunc("POST /snapshot/v1/connections:connect", f.repositoryConnect)
+	mux.HandleFunc("GET /snapshot/v1/connections/{repository}/connection", f.repositoryConnectionShow)
+	mux.HandleFunc("POST /snapshot/v1/connections/{repository}/connection:check", f.repositoryConnectionCheck)
+	mux.HandleFunc("POST /snapshot/v1/connections/{repository}/connection:rotate", f.repositoryConnectionRotate)
 }
 
 func (f *httpFacade) repositoryConnect(w http.ResponseWriter, r *http.Request) {
@@ -23,26 +23,26 @@ func (f *httpFacade) repositoryConnect(w http.ResponseWriter, r *http.Request) {
 	}
 	// Keep secrets in this lexical request scope. Flags feed authorization,
 	// telemetry and hooks and must contain only the public coordinates.
-	f.executeTyped(w, r, "catalog-repo-connect", "catalog.repositories.connect", inv.Command{Stage: invoke.StageGoverned, Run: func(cx *inv.Invocation) (any, error) {
-		return cx.WS.ConnectRepository(apphome.ConnectionRequest{Catalog: cx.Flag("catalog"), Repository: q.Repository, Driver: q.Driver, URL: q.URL, Credential: q.Credential, Principal: cx.Flag("as")}, func(g apphome.RepositoryInitialGrant) error { return inv.EnsureManagedRepositoryGrant(cx.Home, g) })
-	}}, map[string]FlagValue{"catalog": r.PathValue("catalog"), "repo": q.Repository})
+	f.executeTyped(w, r, "repository-connect", "repositories.connect", inv.Command{Stage: invoke.StageGoverned, Run: func(cx *inv.Invocation) (any, error) {
+		return cx.WS.ConnectRepository(apphome.ConnectionRequest{Repository: q.Repository, Driver: q.Driver, URL: q.URL, Credential: q.Credential, Principal: cx.Flag("as")}, func(g apphome.RepositoryInitialGrant) error { return inv.EnsureManagedRepositoryGrant(cx.Home, g) })
+	}}, map[string]FlagValue{"repo": q.Repository})
 }
 func (f *httpFacade) repositoryConnectionShow(w http.ResponseWriter, r *http.Request) {
-	f.executeTyped(w, r, "catalog-repo-connection-show", "repository.connections.manage", inv.Command{Stage: invoke.StageGoverned, Run: func(cx *inv.Invocation) (any, error) { return cx.WS.GetConnection(cx.Flag("as"), cx.Flag("repo")) }}, map[string]FlagValue{"repo": r.PathValue("repository")})
+	f.executeTyped(w, r, "repository-connection-show", "repository.connections.manage", inv.Command{Stage: invoke.StageGoverned, Run: func(cx *inv.Invocation) (any, error) { return cx.WS.GetConnection(cx.Flag("as"), cx.Flag("repo")) }}, map[string]FlagValue{"repo": r.PathValue("repository")})
 }
 func (f *httpFacade) repositoryConnectionCheck(w http.ResponseWriter, r *http.Request) {
 	var q struct{}
 	if !decodeServiceRequest(w, r, &q) {
 		return
 	}
-	f.executeTyped(w, r, "catalog-repo-connection-check", "repository.connections.manage", inv.Command{Stage: invoke.StageGoverned, Run: func(cx *inv.Invocation) (any, error) { return cx.WS.CheckConnection(cx.Flag("as"), cx.Flag("repo")) }}, map[string]FlagValue{"repo": r.PathValue("repository")})
+	f.executeTyped(w, r, "repository-connection-check", "repository.connections.manage", inv.Command{Stage: invoke.StageGoverned, Run: func(cx *inv.Invocation) (any, error) { return cx.WS.CheckConnection(cx.Flag("as"), cx.Flag("repo")) }}, map[string]FlagValue{"repo": r.PathValue("repository")})
 }
 func (f *httpFacade) repositoryConnectionRotate(w http.ResponseWriter, r *http.Request) {
 	var q kcclient.ConnectionRotationRequest
 	if !decodeServiceRequest(w, r, &q) {
 		return
 	}
-	f.executeTyped(w, r, "catalog-repo-connection-rotate", "repository.connections.manage", inv.Command{Stage: invoke.StageGoverned, Run: func(cx *inv.Invocation) (any, error) {
+	f.executeTyped(w, r, "repository-connection-rotate", "repository.connections.manage", inv.Command{Stage: invoke.StageGoverned, Run: func(cx *inv.Invocation) (any, error) {
 		return cx.WS.RotateConnectionCredential(cx.Flag("as"), cx.Flag("repo"), q.Credential)
 	}}, map[string]FlagValue{"repo": r.PathValue("repository")})
 }

@@ -18,18 +18,27 @@ var mutatingOn = map[string]bool{
 	"writer.commit": true, "governance.proposal.create": true,
 	"governance.preview.create": true, "governance.validate": true,
 	"governance.validation.record": true, "governance.merge": true,
-	"dataset.manage": true, "catalog.repositories.manage": true,
-	"catalog.manage": true,
+	"dataset.manage": true, "repositories.manage": true,
 }
 
 type Binding struct {
-	ID      string `json:"id"`
-	On      string `json:"on"`
-	Phase   string `json:"phase"`
-	Repo    string `json:"repo,omitempty"`
-	Catalog string `json:"catalog,omitempty"`
-	Run     string `json:"run,omitempty"`
-	URL     string `json:"url,omitempty"`
+	ID    string `json:"id"`
+	On    string `json:"on"`
+	Phase string `json:"phase"`
+	Repo  string `json:"repo,omitempty"`
+	Run   string `json:"run,omitempty"`
+	URL   string `json:"url,omitempty"`
+}
+
+// UnmarshalJSON rejects the retired selector rather than widening its scope.
+func (b *Binding) UnmarshalJSON(body []byte) error {
+	type wire Binding
+	var parsed wire
+	if err := jsonfile.UnmarshalWithoutFields(body, &parsed, "catalog"); err != nil {
+		return kernel.Fail(kernel.ErrUsageInvalid, "%v", err)
+	}
+	*b = Binding(parsed)
+	return nil
 }
 
 type File struct {
@@ -95,16 +104,13 @@ func ValidateBinding(b Binding) error {
 	return nil
 }
 
-func (f File) Match(on, phase, repo, catalog string) []Binding {
+func (f File) Match(on, phase, repo string) []Binding {
 	out := []Binding{}
 	for _, b := range f.Bindings {
 		if b.On != on || b.Phase != phase {
 			continue
 		}
 		if b.Repo != "" && b.Repo != repo {
-			continue
-		}
-		if b.Catalog != "" && b.Catalog != catalog {
 			continue
 		}
 		out = append(out, b)

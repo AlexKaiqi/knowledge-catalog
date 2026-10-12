@@ -8,7 +8,6 @@ import (
 	"kc/internal/repofile"
 	"kc/kernel"
 	"kc/snapshot"
-	"kc/snapshot/commandlog"
 )
 
 type LocatorRebuildReceipt struct {
@@ -41,7 +40,7 @@ func (w *Writer) RebuildTreeLocators(commandID string, repository kernel.Reposit
 		"operation": "rebuild-knowledge-locators", "repository": repository,
 		"targetRef": targetRef, "expected": expected,
 	}))
-	entry, replayed, err := w.commands.Execute(commandID, digest, commandlog.Request{
+	entry, replayed, err := w.commands.Execute(commandID, digest, snapshot.CommandRequest{
 		Kind: "KNOWLEDGE_LOCATOR_REBUILD", RepositoryID: string(repository),
 		TargetRef: targetRef, BaseCommit: string(expected), ExpectedTargetCommit: string(expected),
 	}, func() (any, error) {

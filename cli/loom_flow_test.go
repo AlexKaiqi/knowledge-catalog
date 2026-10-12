@@ -15,7 +15,7 @@ import (
 
 func TestLoomRepoAddDirDoesNotStampExternalGit(t *testing.T) {
 	h := testkit.TempDir(t)
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "init"))
 	alice := "kr://acme/personals/alice"
 	failed := kc(h, "repo-add", "--repo", alice, "--driver", "filegit")
 	expectCode(t, failed, "USAGE_INVALID")
@@ -25,7 +25,7 @@ func TestLoomRepoAddDirDoesNotStampExternalGit(t *testing.T) {
 func TestLoomPublishedDatasetFreezesUntilRepublish(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "init"))
 	seedRepo(t, h, core)
 	body(t, kc(h, "put", "--command-id", "v1", "--repo", core, "--object", "policy/A", "--value", `{"body":"first"}`))
 	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
@@ -56,14 +56,14 @@ func TestCatalogInventoryDoesNotHideReposWithoutKnowledgeRead(t *testing.T) {
 	h := testkit.TempDir(t)
 	pub := "kr://acme/public/core"
 	secret := "kr://acme/restricted/classif"
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "init"))
 	seedRepo(t, h, pub)
 	seedRepo(t, h, secret)
 	body(t, kc(h, "put", "--command-id", "secret-body", "--repo", secret,
 		"--object", "policy/secret", "--value", `{"body":"classified"}`))
 	body(t, kc(h, "dataset", "define", "--dataset", "company", "--revision", "1", "--source", pub+"=refs/heads/main"))
 	body(t, kc(h, "dataset", "define", "--dataset", "classif", "--revision", "1", "--source", secret+"=refs/heads/main"))
-	body(t, kc(h, "allow", "--principal", "bot", "--action", "catalog.read", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "allow", "--principal", "bot", "--action", "inventory.read"))
 
 	state := asMap(t, body(t, kc(h, "show", "--as", "bot")))
 	repos := businessRepositories(state)
@@ -72,14 +72,14 @@ func TestCatalogInventoryDoesNotHideReposWithoutKnowledgeRead(t *testing.T) {
 		seen[id.(string)] = true
 	}
 	if !seen[pub] || !seen[secret] || len(repos) != 2 {
-		t.Fatalf("catalog.read must discover every registered repository: %#v", state)
+		t.Fatalf("inventory.read must discover every registered repository: %#v", state)
 	}
 	setIDs := map[string]bool{}
 	for _, raw := range state["datasets"].([]any) {
 		setIDs[asMap(t, raw)["id"].(string)] = true
 	}
 	if !setIDs["company"] || !setIDs["classif"] {
-		t.Fatalf("catalog.read must list named knowledge sets: %#v", state)
+		t.Fatalf("inventory.read must list named knowledge sets: %#v", state)
 	}
 	expectCode(t, kc(h, "read", "--as", "bot", "--repo", secret, "--object", "policy/secret"), "FORBIDDEN")
 }
@@ -88,7 +88,7 @@ func TestLoomRecipeTravelsWithAuthoritySnapshot(t *testing.T) {
 	h := testkit.TempDir(t)
 	alice := "kr://acme/personals/alice"
 	semantic := "kr://acme/public/semantic"
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "init"))
 	aliceDSN := lakeFSRepoDSN(t)
 	seedRepo(t, h, alice, "--dsn", aliceDSN)
 	seedRepo(t, h, semantic)
@@ -130,7 +130,7 @@ func TestLoomRecipeTravelsWithAuthoritySnapshot(t *testing.T) {
 	}
 
 	bob := testkit.TempDir(t)
-	body(t, kc(bob, "init", "--catalog", "kr://bob/catalog"))
+	body(t, kc(bob, "init"))
 	seedRepo(t, bob, alice, "--dsn", aliceDSN)
 	seedRepo(t, bob, semantic)
 	body(t, kc(bob, "dataset", "define", "--from-repo", alice))
@@ -154,7 +154,7 @@ func TestLoomRecipeTravelsWithAuthoritySnapshot(t *testing.T) {
 func TestLoomDefineKnowledgeSetFromFile(t *testing.T) {
 	h := testkit.TempDir(t)
 	alice := "kr://acme/personals/alice"
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "init"))
 	seedRepo(t, h, alice)
 	body(t, kc(h, "put", "--command-id", "alice-note", "--repo", alice, "--object", "note/x", "--value", `{"text":"seed"}`))
 	file := filepath.Join(t.TempDir(), ".kc-dataset.yaml")
@@ -186,7 +186,7 @@ func TestLoomOverlayAndBaseRev(t *testing.T) {
 	alice := "kr://acme/personals/alice"
 	semantic := "kr://acme/public/semantic"
 	scratch := "kr://acme/personals/scratch"
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "init"))
 	seedRepo(t, h, alice)
 	seedRepo(t, h, semantic)
 	seedRepo(t, h, scratch)
@@ -216,7 +216,7 @@ mounts:
 	if len(scratchRead) != 1 {
 		t.Fatalf("resolve must see overlay mounts: %#v", scratchRead)
 	}
-	state := asMap(t, body(t, kc(h, "catalog-show")))
+	state := asMap(t, body(t, kc(h, "show")))
 	var notes map[string]any
 	for _, raw := range state["datasets"].([]any) {
 		item := asMap(t, raw)

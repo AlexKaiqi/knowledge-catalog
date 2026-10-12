@@ -16,7 +16,7 @@ const (
 )
 
 // RepositoryAccess is a deployment-declared default for authenticated
-// principals on one Repository. It is not a Catalog visibility flag, not a
+// principals on one Repository. It is not a Registry visibility flag, not a
 // SEARCH filter key, and not a grant to a synthetic principal.
 type RepositoryAccess struct {
 	ID                   string   `json:"id" yaml:"id"`
@@ -32,7 +32,7 @@ type RepositoryAccessFile struct {
 }
 
 // AuthenticatedRepositoryActions is the closed consume-side set a Repository
-// may grant to every authenticated principal. Write, grant, Catalog manage
+// may grant to every authenticated principal. Write, grant, Registry manage
 // and knowledge-set administer stay on explicit allow rules.
 func AuthenticatedRepositoryActions() []string {
 	return []string{
@@ -152,7 +152,7 @@ func ValidateAuthenticatedActions(actions []string) error {
 func validateRepositoryAccess(items []RepositoryAccess) error {
 	seen := map[string]bool{}
 	for _, item := range items {
-		id, err := NormalizeCatalogID(item.ID)
+		id, err := NormalizeRepositoryID(item.ID)
 		if err != nil || id != item.ID {
 			return kernel.Fail(kernel.ErrUsageInvalid, "repositoryAccess has invalid identity %q", item.ID)
 		}

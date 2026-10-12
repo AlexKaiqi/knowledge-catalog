@@ -25,7 +25,7 @@ func TestRunWithTelemetryCreatesCLIRootSpan(t *testing.T) {
 	home := filepath.Join(root, "durable")
 	t.Setenv("KC_LAKEFS_CREDENTIAL", testkit.LakeFSFakeCredential)
 	telemetryFake := testkit.NewLakeFSFake(t)
-	cfg := kchome.DeploymentConfig{Version: 1, StateDir: home, CacheDir: filepath.Join(root, "cache"), Auth: "local", BootstrapPrincipal: "agent:operator", Catalogs: []kchome.CatalogBinding{{ID: "kr://acme/catalog", Driver: "lakefs", DSN: telemetryFake.DSN(telemetryFake.NewRepo())}}}
+	cfg := kchome.DeploymentConfig{Version: 1, StateDir: home, CacheDir: filepath.Join(root, "cache"), Auth: "local", BootstrapPrincipal: "agent:operator", Repositories: []kchome.RepositoryBinding{{ID: "kr://kc/system", Driver: "lakefs", DSN: telemetryFake.DSN(telemetryFake.NewRepo())}}, Registry: kchome.RegistryBinding{ID: "kr://kc/registry", Driver: "lakefs", DSN: telemetryFake.DSN(telemetryFake.NewRepo())}}
 	raw, err := json.Marshal(cfg)
 	if err != nil {
 		t.Fatal(err)

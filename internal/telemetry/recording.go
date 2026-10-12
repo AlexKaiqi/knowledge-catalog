@@ -19,7 +19,7 @@ func (r *Runtime) RecordHTTP(ctx context.Context, started time.Time, method, rou
 	attrs := []attribute.KeyValue{
 		attribute.String("http.request.method", enumValue(method, "OTHER", "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "OTHER")),
 		attribute.String("http.route", enumValue(route, "unmatched", "/", "/health", "/livez", "/readyz", "/readyz/{surface}", "/metrics",
-			"/catalog/v1/{operation}", "/knowledge/v1/{operation}", "/dataset-files/v1/{operation}", "/writer/v1/{operation}",
+			"/snapshot/v1/{operation}", "/knowledge/v1/{operation}", "/writer/v1/{operation}",
 			"/governance/v1/{operation}", "/identity/v1/{operation}", "/admin/v1/{operation}", "/operations/v1/{operation}", "unmatched")),
 		attribute.Int("http.response.status_code", status),
 		attribute.String("kc.propagation.outcome", enumValue(propagationOutcome, "invalid", "accepted", "generated", "legacy", "invalid", "conflict")),
@@ -85,7 +85,7 @@ func (r *Runtime) RecordWorkspaceResolve(ctx context.Context, outcome string, el
 }
 
 func (r *Runtime) StartSnapshot(ctx context.Context, store, operation string) (context.Context, trace.Span, time.Time) {
-	store = enumValue(store, "other", "lakefs", "gitea", "other")
+	store = enumValue(store, "other", "lakefs", "other")
 	operation = enumValue(operation, "other", "resolve_ref", "read", "read_many", "list_page", "history", "diff", "commit", "compare_and_swap", "other")
 	attrs := []attribute.KeyValue{
 		attribute.String("kc.snapshot.store", store),
@@ -97,7 +97,7 @@ func (r *Runtime) StartSnapshot(ctx context.Context, store, operation string) (c
 }
 
 func (r *Runtime) EndSnapshot(ctx context.Context, span trace.Span, started time.Time, store, operation, outcome, errorType string, bytes int64) {
-	store = enumValue(store, "other", "lakefs", "gitea", "other")
+	store = enumValue(store, "other", "lakefs", "other")
 	operation = enumValue(operation, "other", "resolve_ref", "read", "read_many", "list_page", "history", "diff", "commit", "compare_and_swap", "other")
 	outcome = enumValue(outcome, "error", "ok", "partial", "unresolved", "denied", "invalid", "conflict", "error")
 	base := []attribute.KeyValue{

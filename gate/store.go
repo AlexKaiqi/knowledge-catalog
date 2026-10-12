@@ -13,8 +13,18 @@ type Rule struct {
 	ID      string   `json:"id"`
 	On      string   `json:"on"`
 	Repo    string   `json:"repo,omitempty"`
-	Catalog string   `json:"catalog,omitempty"`
 	Require []string `json:"require"`
+}
+
+// UnmarshalJSON rejects the retired selector rather than widening its scope.
+func (r *Rule) UnmarshalJSON(body []byte) error {
+	type wire Rule
+	var parsed wire
+	if err := jsonfile.UnmarshalWithoutFields(body, &parsed, "catalog"); err != nil {
+		return kernel.Fail(kernel.ErrUsageInvalid, "%v", err)
+	}
+	*r = Rule(parsed)
+	return nil
 }
 
 type File struct {
@@ -49,7 +59,7 @@ func NextID(rules []Rule) string {
 	return fmt.Sprintf("gt_%d", len(rules)+1)
 }
 
-func (f File) Required(on, repo, catalog string) []string {
+func (f File) Required(on, repo string) []string {
 	seen := map[string]bool{}
 	out := []string{}
 	for _, rule := range f.Rules {

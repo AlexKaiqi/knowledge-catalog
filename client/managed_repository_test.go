@@ -14,7 +14,7 @@ import (
 
 func TestManagedRepositoryCreatePreservesTypedRequestAndCorrelation(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/catalog/v1/catalogs/catalog-A/repositories:create" {
+		if r.Method != http.MethodPost || r.URL.Path != "/snapshot/v1/repositories:create" {
 			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
 		if r.Header.Get("X-Kc-As") != "agent:creator" || r.Header.Get("X-Kc-Request-Id") != "request-A" {
@@ -39,7 +39,7 @@ func TestManagedRepositoryCreatePreservesTypedRequestAndCorrelation(t *testing.T
 		t.Fatal(err)
 	}
 	var result map[string]any
-	err = kc.CatalogService().CreateRepository(context.Background(), "catalog-A", client.RepositoryCreateRequest{Repository: "repo-A", CommandID: "create-A"}, client.RequestOptions{RequestID: "request-A"}, &result)
+	err = kc.SnapshotService().CreateRepository(context.Background(), client.RepositoryCreateRequest{Repository: "repo-A", CommandID: "create-A"}, client.RequestOptions{RequestID: "request-A"}, &result)
 	if err != nil || result["status"] != "REPLAYED" || result["repositoryId"] != "repo-A" {
 		t.Fatalf("create result=%#v err=%v", result, err)
 	}
@@ -54,14 +54,12 @@ func TestManagedRepositoryCreateRequiresExplicitCoordinatesBeforeTransport(t *te
 		t.Fatal(err)
 	}
 	for _, input := range []struct {
-		catalog string
 		request client.RepositoryCreateRequest
 	}{
-		{"", client.RepositoryCreateRequest{Repository: "repo-A", CommandID: "create-A"}},
-		{"catalog-A", client.RepositoryCreateRequest{CommandID: "create-A"}},
-		{"catalog-A", client.RepositoryCreateRequest{Repository: "repo-A"}},
+		{client.RepositoryCreateRequest{CommandID: "create-A"}},
+		{client.RepositoryCreateRequest{Repository: "repo-A"}},
 	} {
-		if err := kc.CatalogService().CreateRepository(context.Background(), input.catalog, input.request, client.RequestOptions{}, nil); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
+		if err := kc.SnapshotService().CreateRepository(context.Background(), input.request, client.RequestOptions{}, nil); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
 			t.Errorf("missing input reached transport: %v", err)
 		}
 	}

@@ -19,7 +19,7 @@ docs/*.visual-check.*.png
 docs/*.visual-check.html
 docs/*.visual-check.json
 
-# CLI workspace (FileGit repos + Catalog/Writer state)
+# Local Catalog/Writer state
 .kc/
 .kc-home/
 
@@ -30,7 +30,12 @@ docs/*.visual-check.json
 # Generated inventories and source-bound validation runs; never acceptance oracles.
 /.validation/
 
-# Dataset console build output (source in webui/). The directory must exist
+# Snapshot Store console build output (source in snapshot/console/webui/).
+# The directory must exist
 # for go:embed; only the placeholder is tracked.
-cli/webapp/*
-!cli/webapp/.gitkeep
+snapshot/console/webapp/*
+!snapshot/console/webapp/.gitkeep
+
+# Historical generated location; never source.
+cli/webapp/
+server/webapp/

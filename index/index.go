@@ -9,7 +9,7 @@ import (
 )
 
 // Index sits above one Repository (K-19): derived, discardable, never Canonical.
-// Independent of Writer / Reader / Catalog. Subscribe via catalog.Hook (Sink).
+// Independent of Writer / Reader / Dataset service. Subscribe via dataset.Hook (Sink).
 // Live key is repository id (commit empty). Pin key is (repository, basisCommit).
 type Index struct {
 	dir  string
@@ -36,7 +36,7 @@ func NewIndexEngine(dir string, opener EngineOpener) *Index {
 }
 
 // AfterSnapshot applies a member snapshot to the working projection.
-// Catalog never imports this package; CLI / tests wrap Catalog.Hook.
+// Dataset service never imports this package; CLI / tests wrap dataset.Hook.
 func (idx *Index) AfterSnapshot(repo knowledge.Repository, from, to kernel.CommitID, objectIDs []knowledge.ObjectID) error {
 	if idx == nil || repo == nil {
 		return nil

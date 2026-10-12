@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"kc/index/opensearch"
+	"kc/kernel"
 )
 
 func applyDSN(file *StoresFile, driver, dsn string) error {
@@ -49,7 +50,7 @@ func ApplyStoreFlags(file StoresFile, flags map[string]string) (StoresFile, erro
 		if touched && !storeEndpointTouched(flags) {
 			return validateStores(file)
 		}
-		return StoresFile{}, fmt.Errorf("store-set requires --driver opensearch|gitea|lakefs (or --profile / --repository / --index none|opensearch / layout dirs)")
+		return StoresFile{}, fmt.Errorf("store-set requires --driver opensearch|lakefs (or --profile / --repository / --index none|opensearch / layout dirs)")
 	}
 	if strings.EqualFold(strings.TrimSpace(driver), "mysql") {
 		return StoresFile{}, errUnsupportedDriver("store", "mysql")
@@ -102,8 +103,8 @@ func applyStoreSelections(file *StoresFile, flags map[string]string) (bool, erro
 		file.Layout.Repos = v
 		touched = true
 	}
-	if v := flagString(flags, "catalogs-dir"); v != "" {
-		file.Layout.Catalogs = v
+	if v := flagString(flags, "registry-dir"); v != "" {
+		file.Layout.Registry = v
 		touched = true
 	}
 	if v := flagString(flags, "projections-dir"); v != "" {
@@ -171,14 +172,12 @@ func applyStoreDriver(file *StoresFile, driver string, endpoint storeEndpoint) e
 	if err := rejectNonRepository(normalized); err != nil {
 		return err
 	}
-	if normalized != "filegit" {
-		if _, ok := authorityDrivers[normalized]; !ok {
-			return fmt.Errorf("unknown store driver %s", driver)
-		}
-	}
 	authority, err := authorityFor(normalized)
 	if err != nil {
-		return err
+		if kernel.CodeOf(err) == kernel.ErrUsageInvalid {
+			return err
+		}
+		return fmt.Errorf("unknown store driver %s", driver)
 	}
 	if authority.configure == nil {
 		return fmt.Errorf("repository driver %s cannot configure a profile", normalized)

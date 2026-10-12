@@ -2,10 +2,29 @@ package jsonfile
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
+
+// UnmarshalWithoutFields prevents retired selectors from silently becoming
+// unscoped rules while leaving each caller's remaining format unchanged.
+func UnmarshalWithoutFields(body []byte, dest any, retired ...string) error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(body, &fields); err != nil {
+		return err
+	}
+	for _, name := range retired {
+		for field := range fields {
+			if strings.EqualFold(field, name) {
+				return fmt.Errorf("retired field %s", name)
+			}
+		}
+	}
+	return json.Unmarshal(body, dest)
+}
 
 func Write(path string, value any) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

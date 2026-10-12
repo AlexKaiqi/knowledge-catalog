@@ -2,15 +2,35 @@ package cli
 
 import (
 	"context"
-	"fmt"
 	kchome "kc/home"
 	"kc/internal/telemetry"
+	"kc/internal/testkit"
 	inv "kc/invocation"
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/snapshot"
 	"strings"
+	"sync"
 )
+
+var componentSystemFixture struct {
+	sync.Mutex
+	source *testkit.LakeFSFake
+}
+
+func componentSystemDSN() string {
+	componentSystemFixture.Lock()
+	defer componentSystemFixture.Unlock()
+	if componentSystemFixture.source == nil {
+		componentSystemFixture.source = testkit.StartLakeFSFake()
+	}
+	return componentSystemFixture.source.DSN(componentSystemFixture.source.NewRepo())
+}
+
+func CloseComponentFixturesForTest() {
+	if componentSystemFixture.source != nil {
+		componentSystemFixture.source.Close()
+	}
+}
 
 // fixtureHomeOperations are Go test setup helpers, never product commands.
 func fixtureHomeOperation(argv []string, runtime *telemetry.Runtime) (RunResult, bool) {
@@ -25,7 +45,6 @@ func fixtureHomeOperation(argv []string, runtime *telemetry.Runtime) (RunResult,
 		"local store set":         {Stage: stageOpen, Run: verbStoreSet},
 		"local grant bootstrap":   {Stage: stageHome, Run: verbBootstrapGrant},
 		"local system publish":    {Stage: stageHome, Run: verbSystemPublish},
-		"local catalog attach":    {Stage: stageOpen, Run: verbCatalogAdd},
 		"local repository attach": {Stage: stageOpen, Run: verbRepoAdd},
 		"local dataset overlay":   {Stage: stageOpen, Run: inv.VerbOverlay},
 	}
@@ -78,54 +97,31 @@ func verbBootstrapGrant(cx *invocation) (any, error) {
 // useful to table consumers and documents the command's result shape.
 
 func verbInit(cx *invocation) (any, error) {
-	if cx.Flag("namespace") != "" {
-		return nil, fmt.Errorf("init takes --catalog <id> (kr://acme/catalog or acme/catalog), not --namespace")
+	if cx.Flag("catalog") != "" || cx.Flag("namespace") != "" {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "init has one registration space; catalog selection is retired")
 	}
-	catalogID := cx.Flag("catalog")
-	file, _, err := kchome.InitHome(cx.Home, catalogID)
+	file, _, err := kchome.InitHome(cx.Home, kchome.RegistryBinding{ID: "kr://kc/registry", Driver: "lakefs", DSN: componentSystemDSN()})
 	if err != nil {
 		return nil, err
 	}
-	id := catalogID
-	if id != "" {
-		id, err = kchome.NormalizeCatalogID(id)
-		if err != nil {
+	bound := false
+	for _, repo := range file.Repos {
+		bound = bound || repo.ID == string(knowledge.SystemRepositoryID)
+	}
+	if !bound {
+		driver, dsn := cx.Flag("driver"), cx.Flag("dsn")
+		if driver == "" && dsn == "" {
+			driver, dsn = "lakefs", componentSystemDSN()
+		}
+		if _, err := kchome.PublishSystemRepository(cx.Home, driver, dsn, ""); err != nil {
 			return nil, err
 		}
-	} else if len(file.Catalogs) > 0 {
-		id = file.Catalogs[0].ID
 	}
-	systemCommit, err := kchome.EnsureSystemRepository(cx.Home, id)
+	systemCommit, err := kchome.EnsureSystemRepository(cx.Home)
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"catalog": id, "system": inv.SystemRepositoryStatus(systemCommit)}, nil
-}
-
-func verbCatalogAdd(cx *invocation) (any, error) {
-	catalogID, err := cx.Require("catalog")
-	if err != nil {
-		return nil, err
-	}
-	stored, err := kchome.AddCatalog(cx.WS, catalogID)
-	if err != nil {
-		return nil, err
-	}
-	if repo, ok := cx.WS.Store.Get(knowledge.SystemRepositoryID); ok {
-		cat, _, useErr := cx.WS.UseCatalog(stored)
-		if useErr != nil {
-			return nil, useErr
-		}
-		if err := cat.RegisterRepository(knowledge.SystemRepositoryID); err != nil {
-			return nil, err
-		}
-		head, err := repo.Head(snapshot.DefaultRef)
-		if err != nil {
-			return nil, err
-		}
-		return map[string]any{"catalog": stored, "system": inv.SystemRepositoryStatus(head)}, nil
-	}
-	return map[string]any{"catalog": stored}, nil
+	return map[string]any{"system": inv.SystemRepositoryStatus(systemCommit)}, nil
 }
 
 func verbStoreSet(cx *invocation) (any, error) {
@@ -175,11 +171,7 @@ func verbRepoAdd(cx *invocation) (any, error) {
 
 func verbStatus(cx *invocation) (any, error) {
 	ws := cx.WS
-	cat, reg, err := ws.UseCatalog(cx.Flag("catalog"))
-	if err != nil {
-		return nil, err
-	}
-	state := cat.DumpState()
+	state := ws.Datasets.DumpState()
 	repos := make([]map[string]any, 0, len(ws.File.Repos))
 	for _, r := range ws.File.Repos {
 		item := map[string]any{"id": r.ID, "dir": r.Dir}
@@ -197,31 +189,17 @@ func verbStatus(cx *invocation) (any, error) {
 		}
 		repos = append(repos, item)
 	}
-	catalogs := make([]map[string]any, 0, len(ws.File.Catalogs))
-	for _, item := range ws.File.Catalogs {
-		row := map[string]any{"id": item.ID, "dir": item.Dir}
-		if r := ws.Registries[item.ID]; r != nil {
-			if head, err := r.Head(); err == nil {
-				row["head"] = head
-			}
-		}
-		catalogs = append(catalogs, row)
-	}
-	catalogHead, err := reg.Head()
+	registryHead, err := ws.Registry.Head()
 	if err != nil {
 		return nil, err
 	}
+
 	return map[string]any{
-		"repos":    repos,
-		"stores":   kchome.PublicStores(ws.Stores),
-		"catalogs": catalogs,
-		"catalog": map[string]any{
-			"repositoryId": reg.CatalogID(),
-			"head":         catalogHead,
-		},
+		"repos":        repos,
+		"stores":       kchome.PublicStores(ws.Stores),
+		"registry":     map[string]any{"head": registryHead},
 		"datasets":     inv.PublicKnowledgeSets(state.KnowledgeSets),
 		"repositories": state.Repositories,
-		"archived":     state.Archived,
 	}, nil
 }
 

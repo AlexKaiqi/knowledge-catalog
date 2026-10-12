@@ -80,7 +80,7 @@ jobs:
           path: .validation/runs/
           include-hidden-files: true
 
-  plugin:
+  server-web:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -91,12 +91,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: dsh-plugin/package-lock.json
-      - run: python3 scripts/validation.py run --scope ci:plugin -- make test-plugin
+      - run: python3 scripts/validation.py run --scope ci:server-web -- make test-server-web
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: validation-plugin
+          name: validation-server-web
           path: .validation/runs/
           include-hidden-files: true

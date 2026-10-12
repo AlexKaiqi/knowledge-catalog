@@ -1,0 +1,35 @@
+---
+object_id: kc/capability/evidence
+aspect_name: entrypoints
+kind: Aspect
+path_hint: capabilities/evidence/entrypoints.yaml
+schema_ref: schema/system/capability-entrypoints/v1
+---
+{
+  "commands": [
+    {
+      "action": "audit.read",
+      "command": "kc operations audit access",
+      "description": "查看访问账",
+      "help": "kc help operations audit access"
+    },
+    {
+      "action": "audit.read",
+      "command": "kc operations audit hitmap",
+      "description": "按对象汇总检索命中，不是访问事件账",
+      "help": "kc help operations audit hitmap"
+    },
+    {
+      "action": "audit.read",
+      "command": "kc operations audit trace",
+      "description": "查看请求追踪",
+      "help": "kc help operations audit trace"
+    },
+    {
+      "action": "feedback.write",
+      "command": "kc operations feedback record",
+      "description": "记录检索反馈",
+      "help": "kc help operations feedback record"
+    }
+  ]
+}

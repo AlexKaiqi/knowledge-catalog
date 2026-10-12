@@ -1,0 +1,16 @@
+---
+object_id: schema/implements.live-access/v1
+path_hint: _schemas/implements.live-access.v1.aspect.yaml
+---
+metaSchema: schema/meta/schema-definition/v1
+entity: Object
+description: 对象实现 LiveAccess 的访问入口及操作映射。
+aspect: interfaces
+pattern: keyed_collection
+additionalProperties: false
+fields:
+  interfaceRef: {type: string, required: true, access: [filter]}
+  runtime: {type: string, required: true}
+  protocol: {type: string, required: true}
+  origin: {type: string, required: true}
+  operations: {type: object, required: true}

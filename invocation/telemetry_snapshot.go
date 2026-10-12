@@ -15,7 +15,7 @@ import (
 
 // Snapshot I/O is observed by wrapping the Registry member. Wrappers keep the
 // inner method set: a Store-only member stays Store-only, and UnitLocator is
-// not invented. Knowledge, Catalog, and Writer keep ordinary type assertions.
+// not invented. Knowledge, Registry, and Writer keep ordinary type assertions.
 
 type observedSnapshot struct {
 	inner   snapshot.Store
@@ -85,7 +85,7 @@ func ObserveSnapshotStore(store snapshot.Store, runtime *telemetry.Runtime, fall
 func SnapshotStoreKind(store any, fallback string) string {
 	type driverNamer interface{ SnapshotDriver() string }
 	if namer, ok := store.(driverNamer); ok {
-		return boundedTelemetryValue(namer.SnapshotDriver(), "other", "lakefs", "gitea")
+		return boundedTelemetryValue(namer.SnapshotDriver(), "other", "lakefs")
 	}
 	name := fmt.Sprintf("%T", store)
 	switch {
@@ -93,10 +93,8 @@ func SnapshotStoreKind(store any, fallback string) string {
 		return "other"
 	case strings.Contains(name, "lakefs"):
 		return "lakefs"
-	case strings.Contains(name, "gitea"):
-		return "gitea"
 	}
-	return boundedTelemetryValue(fallback, "other", "lakefs", "gitea")
+	return boundedTelemetryValue(fallback, "other", "lakefs")
 }
 
 func BindHomeTelemetry(runtime *telemetry.Runtime, ws *kchome.Home, flags map[string]invoke.FlagValue) {

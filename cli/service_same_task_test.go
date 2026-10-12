@@ -15,16 +15,16 @@ import (
 // 一致拒绝。
 func TestSameTaskViaCLIAndHTTPYieldsSameDomainResult(t *testing.T) {
 	home := testkit.TempDir(t)
-	catalogID := "kr://acme/catalog"
+
 	repository := "kr://acme/public/parity"
 	workspace := "agent"
 	principal := "agent:parity"
-	body(t, kc(home, "init", "--catalog", catalogID))
+	body(t, kc(home, "init"))
 	seedRepo(t, home, repository)
 	body(t, kc(home, "put", "--command-id", "v1", "--repo", repository, "--object", "Policy:one", "--value", `{"body":"one"}`))
 	body(t, kc(home, "put", "--command-id", "v2", "--repo", repository, "--object", "Policy:one", "--value", `{"body":"two"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "1", "--source", repository+"=refs/heads/main"))
-	body(t, kc(home, "allow", "--principal", principal, "--cmd", "read-workspace", "--catalog", catalogID, "--dataset", workspace))
+	body(t, kc(home, "allow", "--principal", principal, "--cmd", "read-workspace", "--dataset", workspace))
 
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {

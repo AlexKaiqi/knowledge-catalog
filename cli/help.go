@@ -11,8 +11,8 @@ import (
 const rootHelp = `kc — Knowledge Catalog CLI
 
 身份        登录并查看当前身份与已有权限
-组合        选择 Catalog、查看和挂接 Repository、发权
-知识        列出实体、搜索和读取知识
+组合        查看登记空间、挂接 Repository、发权
+知识        发现对象类型、搜索和读取知识
 发布        把目录里的最终样子发布到一个 Repository
 治理（进阶）校验并合入 Proposal
 运维        投影、Hook、Gate 与审计
@@ -22,11 +22,9 @@ const rootHelp = `kc — Knowledge Catalog CLI
 命令帮助：kc help <组> [<动词>]
 `
 
-const consumeHelp = `kc help consume — 进入 Catalog 并读取知识
+const consumeHelp = `kc help consume — 连接服务并读取知识
 
   kc login
-  kc catalog list
-  kc catalog use <id>                 # 只有一间可见时可省
   kc show
   kc schema list --repo <id>
   kc read --repo <id> --object <object-id>
@@ -52,13 +50,11 @@ const writeHelp = `kc help write — 创建并发布一个 Repository
 
 const composeHelp = `kc help compose — 组合 Repository 并发权
 
-  kc catalog list
-  kc catalog use <id>
   kc show
   kc attach --repo <id>
   kc dataset define <id> --revision <n> --source <repo>[=<selector>][@path[@subPath]]
   # 逐文件交付：--file-source <repo>@<来源文件>@<交付路径>
-  kc grant add --catalog <id> --dataset <id> --principal <user> \
+  kc grant add --dataset <id> --principal <user> \
     --action file.read
   kc grant add --repo <id> --principal <user> --action <actions>
   kc dataset clone <id> <dir>   # 把交付目录树物化成本地目录
@@ -88,16 +84,8 @@ var helpEntries = map[string]helpEntry{
 		Description: "显示本人已有权限和外部申请入口",
 		Usage:       `kc admission show`,
 	},
-	"catalog list": {
-		Description: "列出可见 Catalog",
-		Usage:       `kc catalog list`,
-	},
-	"catalog use": {
-		Description: "选择当前 Catalog",
-		Usage:       `kc catalog use <id>`,
-	},
 	"show": {
-		Description: "显示当前 Catalog 的 Repository 与知识集",
+		Description: "显示服务的 Repository 与 Dataset 库存",
 		Usage:       `kc show`,
 	},
 	"create": {
@@ -108,28 +96,28 @@ var helpEntries = map[string]helpEntry{
   例：kc create --name table-meta`,
 	},
 	"attach": {
-		Description: "把已连接 Repository 挂入当前 Catalog",
+		Description: "把已连接 Repository 挂入服务登记空间",
 		Usage:       `kc attach --repo <id>`,
 	},
 	"detach": {
-		Description: "从当前 Catalog 拿下 Repository",
+		Description: "从服务登记空间 拿下 Repository",
 		Usage:       `kc detach --repo <id>`,
 	},
 	"grant add": {
-		Description: "发放一条仓、Catalog 或 Dataset 范围的授权规则",
-		Usage: `kc grant add --principal <id> --action <action[,action...]> (--repo <id> | --catalog <id> [--dataset <id>])
+		Description: "发放一条服务、仓或 Dataset 范围的授权规则",
+		Usage: `kc grant add --principal <id> --action <action[,action...]> [--repo <id>] [--dataset <id>]
   --action 是 knowledge.read 这种带点的名字，逗号分隔。不能发 '*'（那是 deployment init 的 bootstrap）。
-  Dataset 消费权用 --catalog 加 --dataset，动作是 file.read。
+  Dataset 消费权用 --dataset，动作是 file.read。
   值里有空格或 * 必须加单引号，否则 shell 会把 * 展开成当前目录的文件名。
   重复发放会新增一条规则，不是幂等。撤销抄本条回执或 grant list 的 id。
   例：kc grant add --repo kr://scene/knowledge --principal healzhou --action knowledge.read,knowledge.search
-  例：kc grant add --catalog kr://scene/catalog --dataset scene-set --principal healzhou --action file.read`,
+  例：kc grant add --dataset scene-set --principal healzhou --action file.read`,
 	},
 	"grant list": {
 		Description: "列出授权规则",
-		Usage: `kc grant list [--principal <id>] [--action <action>] [--repo <id>] [--catalog <id>]
-  不带 principal+action 时列出规则，可按 --repo 或 --catalog 过滤，不是整份 allow 文件。
-  两者都给时是一次评价，不是列表。
+		Usage: `kc grant list [--principal <id>] [--action <action>] [--repo <id>] [--dataset <id>]
+  不带 action 时列出显式规则，可按 --principal、--repo 或 --dataset 过滤，不是整份 allow 文件。
+  带 action 时是显式规则求值，省略 principal 则问当前主体；需要全局 admin.grants.read，不包含默认消费声明。
   例：kc grant list --repo kr://scene/knowledge
   例：kc grant list --repo kr://scene/knowledge --principal healzhou --action knowledge.read`,
 	},
@@ -138,18 +126,15 @@ var helpEntries = map[string]helpEntry{
 		Usage: `kc grant remove --id <rule-id>
   --id 来自 grant add 回执或 grant list，不是场景执行器占位符。`,
 	},
-	"catalog audit": {
-		Description: "查看 Catalog 登记表历史",
-		Usage:       `kc catalog audit [--limit <n>] [--continuation <cursor>]`,
-	},
-	"catalog archive": {
-		Description: "归档当前 Catalog",
-		Usage:       `kc catalog archive`,
+	"registry audit": {
+		Description: "查看服务登记历史",
+		Usage:       `kc registry audit [--limit <n>] [--continuation <cursor>]`,
 	},
 	"deployment init": {
 		Description: "初始化部署",
 		Usage: `kc deployment init --config <deployment.yaml>
-  --config 是部署文件路径，不是 Catalog id。
+  --config 是部署文件路径，不是登记空间标识。
+  配置必须绑定实际 system 仓；初始化发布系统知识，启动只核对。
   例：kc deployment init --config deployment.yaml`,
 	},
 	"deployment status": {
@@ -158,7 +143,7 @@ var helpEntries = map[string]helpEntry{
   例：kc deployment status --config deployment.yaml`,
 	},
 	"deployment system publish": {
-		Description: "把 System Schema 写入绑定仓",
+		Description: "把系统知识出版物写入绑定仓",
 		Usage: `kc deployment system publish --config <deployment.yaml>
   例：kc deployment system publish --config deployment.yaml`,
 	},
@@ -293,11 +278,11 @@ var helpEntries = map[string]helpEntry{
   例：kc dataset overlay --file recipe.yaml --overlay overlay.yaml`,
 	},
 	"schema list": {
-		Description: "列出一个 Repository 已发布的实体，不是对象目录或合同正文",
+		Description: "列出一个 Repository 已发布的对象类型，不是对象实例目录或合同正文",
 		Usage:       `kc schema list --repo <id> [--limit <n>] [--continuation <cursor>]`,
 	},
 	"search": {
-		Description: "在固定仓或 Dataset 上按 Schema AccessHints 检索知识，列出匹配对象，不是文件 contains",
+		Description: "在固定仓或 Dataset 上按 Schema 字段的查询声明检索知识，列出匹配对象",
 		Usage: `kc search (--repo <id> | --dataset <id>) --query <text>
   --query 是 MATCH 关键字，不是文件 glob，也不是「搜 * 等于浏览」。可过滤字段先 schema list / schema describe。
   精确条件用 --eq path=value；路径有歧义时写成 schema::aspect::path。
@@ -314,7 +299,7 @@ var helpEntries = map[string]helpEntry{
   --object 是知识对象 id，不是文件路径。读 README 加 --aspect readme。回执带 commit。
   例：kc read --repo kr://scene/knowledge --object metric/gmv
   例：kc read --dataset scene-set --object metric/gmv
-  例：kc read --repo kr://kc/system --object schema/core/readme/v1 --aspect readme`,
+  例：kc read --repo kr://kc/system --object kc/concept/object --aspect definition`,
 	},
 	"serve": {
 		Description: "启动 typed API Server；浏览器打开根路径会 404",
@@ -369,22 +354,25 @@ var helpEntries = map[string]helpEntry{
 	"binding show": {
 		Description: "查看 Binding 声明",
 		Usage: `kc binding show (--repo <id> | --dataset <id>) --object <object-id> --aspect <name>
-  查看该实体 Aspect 的 Bound State 声明（Schema origin），不读墙外值。
+  查看该对象 Aspect 的 Bound State 声明（Schema origin），不读墙外值。
   例：kc binding show --repo kr://scene/knowledge --object table/orders --aspect stats
   例：kc binding show --dataset scene-set --object table/orders --aspect stats`,
 	},
 	"access": {
-		Description: "按 Schema origin 与实体 ID 读取该 Aspect 的当前观察",
+		Description: "按 Schema origin 与对象 ID 读取该 Aspect 的当前观察",
 		Usage: `kc access (--repo <id> | --dataset <id>) --object <object-id> --aspect <name>
-  访问路径在 Domain Schema frontmatter 的 origin。协议坐标是 origin + 实体 object_id，返回该 Aspect。
+  访问路径在 Domain Schema frontmatter 的 origin。协议坐标是 origin + 对象 object_id，返回该 Aspect。
   不要加 --operation（那是 invoke）。
   例：kc access --repo kr://scene/knowledge --object table/orders --aspect stats
   例：kc access --dataset scene-set --object table/orders --aspect stats`,
 	},
 	"invoke": {
-		Description: "调用 ResourceDescriptor 操作",
-		Usage: `kc invoke (--repo <id> | --dataset <id>) --object <object-id> --operation <name> --input <json>
-  --input 是一个 JSON 对象，用单引号包住。
+		Description: "调用对象声明的 Interface 能力或兼容的 ResourceDescriptor 操作",
+		Usage: `kc invoke (--repo <id> | --dataset <id>) --object <object-id> --implementation <member-key> --operation <name> --input <json>
+  --implementation 选择 interfaces 切面中的一个实现；合同、实现 Schema 和处理器按固定版本匹配。
+  --input 是一个 JSON 值，用单引号包住。LiveAccess 的 read 返回当前值及独立观察依据，invoke 调用允许的源操作。
+  例：kc invoke --repo kr://scene/knowledge --object table/orders --implementation live --operation read --input '{}'
+  省略 --implementation 时兼容旧 ResourceDescriptor：
   例：kc invoke --repo kr://scene/knowledge --object handle/orders --operation preview --input '{}'
   例：kc invoke --dataset scene-set --object handle/orders --operation preview --input '{}'`,
 	},
@@ -439,8 +427,8 @@ var complexLeafOperands = []string{
 var helpGroups = map[string][]string{
 	"identity":    {"login", "logout", "whoami", "admission show"},
 	"admission":   {"admission show"},
-	"composition": {"catalog list", "catalog use", "show", "create", "attach", "detach", "grant add", "grant list", "grant remove", "dataset define", "dataset clone", "dataset retire", "dataset overlay"},
-	"catalog":     {"catalog list", "catalog use", "catalog audit", "catalog archive"},
+	"composition": {"show", "create", "attach", "detach", "grant add", "grant list", "grant remove", "dataset define", "dataset clone", "dataset retire", "dataset overlay"},
+	"registry":    {"registry audit"},
 	"dataset":     {"dataset define", "dataset clone", "dataset retire", "dataset overlay"},
 	"grant":       {"grant add", "grant list", "grant remove"},
 	"knowledge":   {"schema list", "search", "read", "resolve", "relations", "traverse", "provenance", "log", "schema describe", "binding show", "access", "invoke"},

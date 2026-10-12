@@ -2,7 +2,7 @@
 """Scale scene smoke runner: drive the performance scene tree end to end.
 
 这不是压测 runner，而是 scenes/ 用例树的**可运行性验证**（SMOKE）：
-- 只经公开 HTTP surface 施压（writer / knowledge / operations / catalog）；
+- 只经公开 HTTP surface 施压（writer / knowledge / operations / snapshot）；
 - 只绑定 env 配置指向的已部署 KC Server，不启动、不编排任何容器；
 - 以远小于资格档的量级阶梯执行 upload / object-size / read / browse /
   index-update 五族探针，验证链路跑通、计数对账、指标计算与判读正确。
@@ -23,7 +23,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT.parent / "scenes"))
-from perf_tree import load_yaml  # 受限 YAML 子集解析器，与 scenes 工具同源
+from perf_tree import check_target, load_yaml  # 受限 YAML 子集解析器，与 scenes 工具同源
 
 SCALES = ["S0", "S1", "S2", "S3", "S4", "S5"]
 
@@ -138,10 +138,12 @@ class SmokeRun:
     def __init__(self, env, out_dir: Path):
         self.env = env
         self.out = out_dir
-        self.out.mkdir(parents=True, exist_ok=True)
         target = env["target"]
+        target_errors = check_target(target)
+        if target_errors:
+            raise ValueError("; ".join(target_errors))
+        self.out.mkdir(parents=True, exist_ok=True)
         self.client = Client(target["serverURL"], target["principal"])
-        self.catalog = target["catalog"]
         self.store = target.get("managedStore", "")
         self.prefix = target.get("repositoryPrefix", "kc-perf-")
         self.ladders = (env.get("profile") or {}).get("ladders") or {}
@@ -179,7 +181,7 @@ class SmokeRun:
         manifest = {
             "kind": "scale-scene-smoke",
             "startedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "target": {"serverURL": self.client.base, "principal": principal, "catalog": self.catalog},
+            "target": {"serverURL": self.client.base, "principal": principal},
             "versions": versions,
             "profile": self.env.get("profile", {}),
             "ladders": self.ladders,
@@ -187,21 +189,21 @@ class SmokeRun:
             "scope": "upload/object-size/read/browse/index-update smoke subset; not qualification",
         }
         self.flush("manifest.json", manifest)
-        print(f"bind: readyz=200 whoami={principal} catalog={self.catalog}")
+        print(f"bind: readyz=200 whoami={principal}")
 
     # ---- 构造：建仓（scale-repository-empty）
     def create_repository(self):
         self.runstamp = time.strftime('%Y%m%dT%H%M%S', time.gmtime())
         name = f"{self.prefix}{self.runstamp}"
-        _, status, resp = self.client.call("POST", "/catalog/v1/repositories", {"name": name, "store": self.store})
+        _, status, resp = self.client.call("POST", "/snapshot/v1/connections", {"name": name, "store": self.store})
         if status != 200:
             raise SystemExit(f"managed create failed: {resp}")
         self.repo = resp["repositoryId"]
         self.repo_seg = self.client.repo_seg(self.repo)
-        # 托管建仓不自动登记 Catalog：按场景树 construct 显式 attach（scale-repository-empty）
+        # 托管建仓不自动登记来源：按场景树 construct 显式 attach（scale-repository-empty）
         _, status, attach = self.client.call(
             "POST",
-            f"/catalog/v1/catalogs/{urllib.parse.quote(self.catalog, safe='')}/repositories",
+            f"/snapshot/v1/repositories",
             {"repository": self.repo},
         )
         if status not in (200, 201, 202):
@@ -522,7 +524,7 @@ class SmokeRun:
             self.note("cleanup", "WARN", f"scratchRepositories={mode}; scratch repo retained: {self.repo}")
             return
         _, status, _ = self.client.call(
-            "DELETE", f"/catalog/v1/catalogs/{urllib.parse.quote(self.catalog, safe='')}/repositories/{self.repo_seg}")
+            "DELETE", f"/snapshot/v1/repositories/{self.repo_seg}")
         self.note("cleanup", "OK" if status in (200, 202, 204) else "WARN",
                   f"detach scratch repo -> {status}（介质侧物理仓留在部署方，公开面无物理删除）")
 
@@ -620,6 +622,10 @@ def main():
     env = load_yaml(env_path.read_text(encoding="utf-8"))
     if not isinstance(env, dict) or "target" not in env:
         print("env config missing target section", file=sys.stderr)
+        return 2
+    target_errors = check_target(env["target"])
+    if target_errors:
+        print("; ".join(target_errors), file=sys.stderr)
         return 2
     scale = (env.get("profile") or {}).get("scale")
     if scale not in SCALES:

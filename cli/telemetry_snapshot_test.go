@@ -64,7 +64,7 @@ func TestObserveSnapshotStoreDoesNotInventTreeCapability(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
-	store := observeSnapshotStore(&registryLikeStore{id: "kr://plain"}, runtime, "gitea")
+	store := observeSnapshotStore(&registryLikeStore{id: "kr://plain"}, runtime, "lakefs")
 	if _, ok := snapshot.TreeStoreOf(store); ok {
 		t.Fatal("store-only member gained TreeStore")
 	}
@@ -78,11 +78,11 @@ func TestObserveSnapshotStoreDoesNotInventTreeCapability(t *testing.T) {
 
 func TestTelemetryFaceMapsCreateAndGrants(t *testing.T) {
 	cases := map[string]string{
-		"named-repository-create": "catalog",
-		"create":                  "catalog",
-		"attach":                  "catalog",
-		"pin":                     "catalog",
-		"dataset-define":          "catalog",
+		"named-repository-create": "snapshot",
+		"create":                  "snapshot",
+		"attach":                  "snapshot",
+		"pin":                     "snapshot",
+		"dataset-define":          "snapshot",
 		"admin-grant-list":        "control",
 		"grant-add":               "control",
 		"knowledge-read":          "knowledge",

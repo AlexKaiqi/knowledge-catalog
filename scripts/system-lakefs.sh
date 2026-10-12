@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start lakeFS + MinIO, bind Catalog / System / knowledge Snapshot authorities,
+# Start lakeFS + MinIO, bind registry / System / knowledge Snapshot authorities,
 # initialize a KC deployment, and print the env a server can reuse.
 set -euo pipefail
 
@@ -13,7 +13,7 @@ HOME_DIR="${KC_HOME:-/tmp/kc-system-lakefs}"
 GO="${GO:-go}"
 ENV_FILE="${HOME_DIR}/system-lakefs.env"
 DEPLOYMENT_CONFIG="${HOME_DIR}/deployment.json"
-CATALOG="${KC_CATALOG:-kr://acme/catalog}"
+REGISTRY_ID="${KC_REGISTRY_ID:-kr://acme/registry}"
 PRINCIPAL="${KC_AS:-admin}"
 KNOWLEDGE="${KC_KNOWLEDGE_REPO:-kr://acme/knowledge}"
 LAKEFS_ACCESS="${KC_LAKEFS_ACCESS_KEY:-AKIAKOSLOCALEXAMPLE}"
@@ -129,7 +129,7 @@ export KC_MINIO_USER="$MINIO_USER"
 export KC_MINIO_PASSWORD="$MINIO_PASSWORD"
 export KC_LAKEFS_ENCRYPT_KEY="${KC_LAKEFS_ENCRYPT_KEY:-kc-system-lakefs-encrypt-key}"
 export KC_AS="$PRINCIPAL"
-export KC_CATALOG="$CATALOG"
+export KC_REGISTRY_ID="$REGISTRY_ID"
 export KC_SERVER_URL="http://127.0.0.1:${KC_LISTEN_PORT}"
 export KC_TTYD_URL="http://127.0.0.1:${TTYD_PORT}/"
 export KC_SNAPSHOT_PLANE=local
@@ -142,9 +142,9 @@ ensure_deployment() {
   if [[ ! -f "$DEPLOYMENT_CONFIG" ]]; then
     "$GO" run ./scripts/fixture-deployment \
       --root "$HOME_DIR" \
-      --catalog "$CATALOG" \
-      --catalog-driver lakefs \
-      --catalog-dsn "$(lakefs_base)/kc-catalog" \
+      --registry-id "$REGISTRY_ID" \
+      --registry-driver lakefs \
+      --registry-dsn "$(lakefs_base)/kc-catalog" \
       --principal "$PRINCIPAL" \
       --lakefs-repo "kr://kc/system=$(lakefs_base)/kc-system" \
       --lakefs-repo "${KNOWLEDGE}=$(lakefs_base)/kc-knowledge" >/dev/null
@@ -167,7 +167,7 @@ write_bashrc() {
 source "${ENV_FILE}"
 PS1='kc-lakefs:\\w\\\$ '
 cd "${HOME_DIR}"
-echo "KC_SERVER_URL=\$KC_SERVER_URL  catalog=\$KC_CATALOG"
+echo "KC_SERVER_URL=\$KC_SERVER_URL  registry=\$KC_REGISTRY_ID"
 echo "example: kc schema list --repo kr://kc/system --as \$KC_AS"
 EOF
 }
@@ -253,7 +253,7 @@ LakeFS Snapshot is ready.
   KC typed API   http://127.0.0.1:${KC_LISTEN_PORT}   (browser / is 404)
   ttyd (kc CLI)  http://127.0.0.1:${TTYD_PORT}/
 
-Catalog / System / knowledge repositories are independent lakeFS repos.
+Registry / System / knowledge repositories are independent lakeFS repos.
 Credential is injected as KC_LAKEFS_CREDENTIAL; it is not in the DSN.
 
 Stop with: ./scripts/system-lakefs.sh down

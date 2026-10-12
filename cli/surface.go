@@ -1,5 +1,7 @@
 package cli
 
+//go:generate go test -run ^TestSystemCLIEntrypoints$ -update-system-entrypoints
+
 import (
 	"fmt"
 	"strings"
@@ -22,10 +24,10 @@ var cliSurface = map[string]commandSurface{
 	"deployment system publish":       {"deployment-system-publish", "deployment.system.publish"},
 	"deployment identity migrate":     {"deployment-identity-migrate", "deployment.identity.migrate"},
 	"dataset overlay":                 {"dataset-overlay", "dataset.overlay"},
-	"attach":                          {"attach", "catalog.repositories.manage"},
-	"create":                          {"create", "catalog.repositories.create"},
-	"detach":                          {"detach", "catalog.repositories.manage"},
-	"show":                            {"show", "catalog.read"},
+	"attach":                          {"attach", "repositories.manage"},
+	"create":                          {"create", "repositories.create"},
+	"detach":                          {"detach", "repositories.manage"},
+	"show":                            {"show", "inventory.read"},
 	"login":                           {"login", "identity.login"},
 	"logout":                          {"logout", "identity.logout"},
 	"whoami":                          {"whoami", "identity.read"},
@@ -33,10 +35,7 @@ var cliSurface = map[string]commandSurface{
 	"grant add":                       {"grant-add", "admin.grants.manage"},
 	"grant remove":                    {"grant-remove", "admin.grants.manage"},
 	"grant list":                      {"grant-list", "admin.grants.read"},
-	"catalog list":                    {"catalog-list", "catalog.read"},
-	"catalog use":                     {"catalog-use", "catalog.read"},
-	"catalog audit":                   {"catalog-audit", "catalog.audit.read"},
-	"catalog archive":                 {"catalog-archive", "catalog.manage"},
+	"registry audit":                  {"registry-audit", "registry.audit.read"},
 	"dataset define":                  {"dataset-define", "dataset.manage"},
 	"dataset clone":                   {"dataset-clone", "file.read"},
 	"dataset retire":                  {"dataset-retire", "dataset.manage"},

@@ -1,0 +1,18 @@
+---
+object_id: kc/relation/deployment.uses-mechanism.snapshot
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: relations/deployment.uses-mechanism.snapshot.yaml
+---
+relationId: kc/relation/deployment.uses-mechanism.snapshot
+relationType: uses_mechanism
+direction: DIRECTED
+endpoints:
+  - role: from
+    objectRef:
+      repository: kr://kc/system
+      object: kc/capability/deployment
+  - role: to
+    objectRef:
+      repository: kr://kc/system
+      object: kc/mechanism/snapshot

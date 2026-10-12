@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	inv "kc/invocation"
 	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
@@ -33,17 +34,15 @@ var remoteDispatchRoutes = []remoteDispatchRouteCase{
 	{path: "binding show", method: http.MethodPost, target: "/knowledge/v1/bindings:resolve"},
 	{path: "access", method: http.MethodPost, target: "/knowledge/v1/resources:access"},
 	{path: "invoke", method: http.MethodPost, target: "/knowledge/v1/resources:access"},
-	{path: "catalog list", method: http.MethodGet, target: "/catalog/v1/catalogs"},
-	{path: "show", method: http.MethodGet, target: "/catalog/v1/catalogs/catalog-A"},
-	{path: "catalog audit", method: http.MethodGet, target: "/catalog/v1/catalogs/catalog-A/audit?limit=2"},
-	{path: "catalog archive", method: http.MethodPost, target: "/catalog/v1/catalogs/catalog-A/archive"},
-	{path: "attach", method: http.MethodPost, target: "/catalog/v1/catalogs/catalog-A/repositories"},
-	{path: "create", method: http.MethodPost, target: "/catalog/v1/repositories"},
-	{path: "detach", method: http.MethodDelete, target: "/catalog/v1/catalogs/catalog-A/repositories/repo-A"},
-	{path: "dataset define", method: http.MethodPost, target: "/catalog/v1/catalogs/catalog-A/datasets"},
-	{path: "dataset retire", method: http.MethodPost, target: "/catalog/v1/catalogs/catalog-A/datasets/agent/retire"},
-	{path: "pin", method: http.MethodPost, target: "/catalog/v1/catalogs/catalog-A/datasets/agent/resolve"},
-	{path: "pin check", method: http.MethodPost, target: "/catalog/v1/catalogs/catalog-A/datasets/agent/check"},
+	{path: "show", method: http.MethodGet, target: "/snapshot/v1/inventory"},
+	{path: "registry audit", method: http.MethodGet, target: "/snapshot/v1/audit?limit=2"},
+	{path: "attach", method: http.MethodPost, target: "/snapshot/v1/repositories"},
+	{path: "create", method: http.MethodPost, target: "/snapshot/v1/connections"},
+	{path: "detach", method: http.MethodDelete, target: "/snapshot/v1/repositories/repo-A"},
+	{path: "dataset define", method: http.MethodPost, target: "/snapshot/v1/datasets"},
+	{path: "dataset retire", method: http.MethodPost, target: "/snapshot/v1/datasets/agent/retire"},
+	{path: "pin", method: http.MethodPost, target: "/snapshot/v1/datasets/agent/resolve"},
+	{path: "pin check", method: http.MethodPost, target: "/snapshot/v1/datasets/agent/check"},
 	{path: "writer put", method: http.MethodPost, target: "/writer/v1/repositories/repo-A/commits"},
 	{path: "writer head", method: http.MethodGet, target: "/writer/v1/repositories/repo-A/head?ref=refs%2Fheads%2Fmain"},
 	{path: "writer receipt", method: http.MethodGet, target: "/writer/v1/receipts/command-A"},
@@ -53,7 +52,7 @@ var remoteDispatchRoutes = []remoteDispatchRouteCase{
 	{path: "governance validation record", method: http.MethodPost, target: "/governance/v1/validations"},
 	{path: "governance proposal merge", method: http.MethodPost, target: "/governance/v1/proposals:merge"},
 	{path: "grant add", method: http.MethodPost, target: "/admin/v1/grants"},
-	{path: "grant list", method: http.MethodGet, target: "/admin/v1/grants"},
+	{path: "grant list", method: http.MethodGet, target: "/admin/v1/grants?action=knowledge.read&principal=user%3Aalice"},
 	{path: "grant remove", method: http.MethodDelete, target: "/admin/v1/grants/rule-A"},
 	{path: "operations projection sync", method: http.MethodPost, target: "/operations/v1/projections:sync"},
 	{path: "operations projection notice", method: http.MethodPost, target: "/operations/v1/projections:notice"},
@@ -89,6 +88,10 @@ func TestRemoteTypedDispatchRoutesSupportedOperations(t *testing.T) {
 				}
 				capturedBody, _ = io.ReadAll(request.Body)
 				w.Header().Set("Content-Type", "application/json")
+				if test.path == "grant list" {
+					_ = json.NewEncoder(w).Encode(map[string]any{"rules": []inv.AllowRule{{ID: "rule-A", Principal: "user:alice", Repo: "repo-A", Actions: []string{"knowledge.read"}}}})
+					return
+				}
 				_ = json.NewEncoder(w).Encode(map[string]any{"target": test.target})
 			}))
 			t.Cleanup(server.Close)
@@ -103,9 +106,6 @@ func TestRemoteTypedDispatchRoutesSupportedOperations(t *testing.T) {
 			flags := remoteDispatchTestFlags()
 			if test.path == "create" {
 				flags = map[string]FlagValue{"name": "repo-A"}
-				if err := persistClientCatalog(server.URL, "catalog-A"); err != nil {
-					t.Fatal(err)
-				}
 			}
 			if test.path == "traverse" {
 				flags["max-hops"] = "2"
@@ -125,14 +125,19 @@ func TestRemoteTypedDispatchRoutesSupportedOperations(t *testing.T) {
 				delete(flags, "aspect")
 				delete(flags, "member")
 			}
-			output, err := runRemoteRequest(context.Background(), client, server.URL, test.path, flags, kcclient.RequestOptions{})
+			output, err := runRemoteRequest(context.Background(), client, test.path, flags, kcclient.RequestOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
 			if test.path == "pin" {
-				pin, ok := output.(taskKnowledgeSetPin)
-				if !ok || pin.Catalog != "catalog-A" {
+				_, ok := output.(taskKnowledgeSetPin)
+				if !ok {
 					t.Fatalf("response = %#v", output)
+				}
+			} else if test.path == "grant list" {
+				body, ok := output.(map[string]any)
+				if !ok || body["allow"] != true || body["ruleId"] != "rule-A" {
+					t.Fatalf("legacy grant question response = %#v", output)
 				}
 			} else {
 				body, ok := output.(map[string]any)
@@ -173,7 +178,7 @@ func TestRemoteTypedDispatchRoutesSupportedOperations(t *testing.T) {
 
 func remoteDispatchTestFlags() map[string]FlagValue {
 	return map[string]FlagValue{
-		"catalog": "catalog-A", "dataset": "agent", "repo": "repo-A",
+		"dataset": "agent", "repo": "repo-A",
 		"object": "policy/A", "aspect": "body", "member": "en", "operation": "query", "input": `{"sql":"select 1"}`,
 		"query": "runbook", "limit": "2", "revision": "1",
 		"source":     []string{"repo-A=refs/heads/main@"},

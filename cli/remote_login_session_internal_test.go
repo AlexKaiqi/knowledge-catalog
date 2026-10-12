@@ -61,23 +61,19 @@ func loginTestServer(t *testing.T, principal string, request func(*http.Request)
 	return server
 }
 
-func TestCatalogUsePersistsClientCatalog(t *testing.T) {
+func TestRetiredCatalogUseDoesNotPersistClientContext(t *testing.T) {
 	isolateLoginConfig(t)
 	server := loginTestServer(t, "alice", nil)
 	result := Run([]string{"login", "--mode", "token", "--server", server.URL, "--token", "secret"})
 	if result.Status != 0 {
 		t.Fatal(result.Stdout)
 	}
-	use := Run([]string{"catalog", "use", "kr://acme/catalog", "--server", server.URL})
-	if use.Status != 0 || !strings.Contains(use.Stdout, "kr://acme/catalog") {
+	use := Run([]string{"catalog", "use", "old", "--server", server.URL})
+	if use.Status == 0 || !strings.Contains(use.Stdout, "USAGE_INVALID") {
 		t.Fatal(use.Stdout)
 	}
-	raw, err := os.ReadFile(inv.ServerSessionPath(server.URL, "catalog.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(raw), "kr://acme/catalog") {
-		t.Fatalf("catalog use did not persist: %s", raw)
+	if _, err := os.Stat(inv.ServerSessionPath(server.URL, "catalog.json")); !os.IsNotExist(err) {
+		t.Fatalf("retired selection created context: %v", err)
 	}
 }
 
@@ -358,7 +354,7 @@ func TestTaihuTokenExchangeRequiresClientSecretAndSurfacesError(t *testing.T) {
 func TestEmbeddedExplicitHomeIgnoresClientDefaultsWithoutChangingProductBoundary(t *testing.T) {
 	isolateLoginConfig(t)
 	home := t.TempDir()
-	if result := RunEmbeddedForTest([]string{"--home", home, "local", "init", "--catalog", "kr://fixture/catalog"}, nil); result.Status != 0 {
+	if result := RunEmbeddedForTest([]string{"--home", home, "local", "init"}, nil); result.Status != 0 {
 		t.Fatal(result.Stdout)
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {

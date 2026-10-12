@@ -1,6 +1,7 @@
 package knowledge_test
 
 import (
+	"kc/internal/testkit"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -15,7 +16,7 @@ import (
 )
 
 func TestSystemRepositoryPublishesTrustedMetaSchema(t *testing.T) {
-	repo := knowledge.NewSystemRepository()
+	repo := testkit.MakeSystemRepository(t)
 	if repo.ID() != knowledge.SystemRepositoryID {
 		t.Fatalf("system repository id %s", repo.ID())
 	}
@@ -132,17 +133,11 @@ func mustRead(t *testing.T, path string) string {
 	return string(raw)
 }
 
-func TestSystemRepositoryIsImmutable(t *testing.T) {
-	repo := knowledge.NewSystemRepository()
+func TestSystemRepositoryHistory(t *testing.T) {
+	repo := testkit.MakeSystemRepository(t)
 	head, err := repo.Head(snapshot.DefaultRef)
 	if err != nil {
 		t.Fatal(err)
-	}
-	if err := repo.CreateRef("refs/heads/other", head); kernel.CodeOf(err) != kernel.ErrForbidden {
-		t.Fatalf("CreateRef error %v", err)
-	}
-	if err := repo.Archive(); kernel.CodeOf(err) != kernel.ErrForbidden {
-		t.Fatalf("Archive error %v", err)
 	}
 	revisions, err := repo.Log(knowledge.MetaSchemaV1, head, knowledge.ObjectLogQuery{})
 	if err != nil || len(revisions) != 1 {
@@ -151,5 +146,20 @@ func TestSystemRepositoryIsImmutable(t *testing.T) {
 	after, err := repo.Log(knowledge.MetaSchemaV1, head, knowledge.ObjectLogQuery{After: revisions[0].Commit})
 	if err != nil || len(after) != 0 {
 		t.Fatalf("After must exhaust the single system revision: %#v err=%v", after, err)
+	}
+}
+
+func TestSchemaCompatibilitySeparatesAccessFromValueStructure(t *testing.T) {
+	previous := knowledge.SchemaDefinition{ObjectID: "schema/article", Entity: "Article", Pattern: "record", Fields: []knowledge.SchemaFieldDefinition{{Path: "body", Type: "string", Access: []string{"text", "filter"}}}}
+	for _, access := range [][]string{{"filter"}, {}} {
+		next := previous
+		next.Fields = []knowledge.SchemaFieldDefinition{{Path: "body", Type: "string", Access: access}}
+		if changes := knowledge.BreakingSchemaChanges(previous, next); len(changes) > 0 {
+			t.Fatalf("access-only change is not a value break: %v", changes)
+		}
+		next.Fields[0].Type = "integer"
+		if changes := knowledge.BreakingSchemaChanges(previous, next); len(changes) == 0 {
+			t.Fatal("removing query access must not permit a value type change")
+		}
 	}
 }

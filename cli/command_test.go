@@ -31,10 +31,6 @@ func TestProductCLIRefactorDefinesTheExactPublicSurface(t *testing.T) {
 		"admission show",
 		"attach",
 		"binding show",
-		"catalog archive",
-		"catalog audit",
-		"catalog list",
-		"catalog use",
 		"create",
 		"dataset clone",
 		"dataset define",
@@ -74,6 +70,7 @@ func TestProductCLIRefactorDefinesTheExactPublicSurface(t *testing.T) {
 		"operations projection sync",
 		"provenance",
 		"read",
+		"registry audit",
 		"relations",
 		"resolve",
 		"schema describe",
@@ -317,13 +314,13 @@ func TestGroupedHelpAndIdentityRequiresServer(t *testing.T) {
 	}
 }
 
-func TestGroupedCatalogViewsUseCatalogServices(t *testing.T) {
+func TestGroupedCatalogViewsUseSnapshotServices(t *testing.T) {
 	home := t.TempDir()
-	if result := RunEmbeddedForTest([]string{"--home", home, "local", "init", "--catalog", "kr://acme/catalog"}, nil); result.Status != 0 {
+	if result := RunEmbeddedForTest([]string{"--home", home, "local", "init"}, nil); result.Status != 0 {
 		t.Fatal(result.Stdout)
 	}
 	for _, path := range [][]string{
-		{"catalog", "list"},
+		{"registry", "audit"},
 		{"show"},
 	} {
 		args := append([]string{"--home", home}, path...)

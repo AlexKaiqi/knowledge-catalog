@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"kc/catalog"
 	"kc/index"
 	"kc/internal/testkit"
 	"kc/kernel"
@@ -19,6 +18,7 @@ import (
 	"kc/knowledge/reader"
 	"kc/retrieval"
 	"kc/snapshot"
+	"kc/snapshot/dataset"
 )
 
 type workspaceBudgetEngine struct {
@@ -76,7 +76,7 @@ func workspaceBudgetFixture(t *testing.T, members, objects int, superset bool) (
 		return engine, nil
 	})
 	t.Cleanup(func() { _ = idx.Close() })
-	sources := []catalog.KnowledgeSetSource{}
+	sources := []dataset.KnowledgeSetSource{}
 	for member := 0; member < members; member++ {
 		id := kernel.RepositoryID(fmt.Sprintf("kr://acme/public/member-%03d", member))
 		repo := testkit.MakeRepository(t, string(id))
@@ -100,9 +100,9 @@ func workspaceBudgetFixture(t *testing.T, members, objects int, superset bool) (
 		if _, err := idx.Rebuild(repo, commit); err != nil {
 			t.Fatal(err)
 		}
-		sources = append(sources, catalog.KnowledgeSetSource{Repository: id, Selector: snapshot.DefaultRef})
+		sources = append(sources, dataset.KnowledgeSetSource{Repository: id, Selector: snapshot.DefaultRef})
 	}
-	cat, err := catalog.NewCatalog(registry, testkit.MakeRegistry(t))
+	cat, err := dataset.NewService(registry, testkit.MakeRegistry(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,13 +112,13 @@ func workspaceBudgetFixture(t *testing.T, members, objects int, superset bool) (
 	}
 	// Seed registry state once: this test exercises consumption, not 101 separate
 	// registry publications. Every knowledge body above still crosses Writer.
-	cat.LoadState(catalog.CatalogState{CatalogID: "kr://acme/catalog", Repositories: repositories, KnowledgeSets: []catalog.KnowledgeSet{{SetID: "budget", Revision: 1, Sources: sources}}})
+	cat.LoadState(dataset.State{Repositories: repositories, KnowledgeSets: []dataset.KnowledgeSet{{SetID: "budget", Revision: 1, Sources: sources}}})
 	dir := t.TempDir()
-	if err := writeAllow(dir, inv.AllowFile{Rules: []inv.AllowRule{{ID: "budget-reader", Principal: "agent:budget", Actions: []string{"file.read"}, Catalog: "kr://acme/catalog", Dataset: "budget"}}}); err != nil {
+	if err := writeAllow(dir, inv.AllowFile{Rules: []inv.AllowRule{{ID: "budget-reader", Principal: "agent:budget", Actions: []string{"file.read"}, Dataset: "budget"}}}); err != nil {
 		t.Fatal(err)
 	}
-	ws := &apphome.Home{Dir: dir, Store: registry, Reader: reader.NewReader(registry), Index: idx, Catalog: cat, Catalogs: map[string]*catalog.Catalog{"kr://acme/catalog": cat}, File: apphome.HomeFile{Catalogs: []apphome.HomeCatalog{{ID: "kr://acme/catalog"}}}}
-	cx := &invocation{Home: dir, WS: ws, Flags: map[string]FlagValue{"dataset": "budget", "catalog": "kr://acme/catalog", "as": "agent:budget"}}
+	ws := &apphome.Home{Dir: dir, Store: registry, Reader: reader.NewReader(registry), Index: idx, Datasets: cat}
+	cx := &invocation{Home: dir, WS: ws, Flags: map[string]FlagValue{"dataset": "budget", "as": "agent:budget"}}
 	run := func(budget index.SearchBudget, token string) (retrieval.SearchResult, error) {
 		ctx, cancel := index.WithSearchBudget(context.Background(), budget)
 		defer cancel()

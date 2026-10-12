@@ -1,38 +1,17 @@
 package cli_test
 
 import (
-	apphome "kc/home"
-	"kc/internal/testkit"
 	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 )
 
-func TestDeploymentAddsCatalogExplicitlyAndRecoversIsolation(t *testing.T) {
+func TestDeploymentSingleRegistryRecoversAllDatasetHistory(t *testing.T) {
 	cfg, path := declaredDeployment(t, false)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", path))
-	first := cfg.Catalogs[0].ID
-	cfg.Catalogs[0].Private = true
-	second := "kr://recover/restricted"
-	restrictedFake := testkit.NewLakeFSFake(t)
-	cfg.Catalogs = append(cfg.Catalogs, apphome.CatalogBinding{ID: second, Driver: "lakefs", DSN: restrictedFake.DSN(restrictedFake.NewRepo())})
-	writeDeployment(t, path, cfg)
-	if h, err := serv.HTTPHandlerFromConfig(path, serv.HTTPServerOptions{}); err == nil {
-		_ = h.(interface{ Close() error }).Close()
-		t.Fatal("new Catalog configuration was initialized by Server startup")
-	}
-	before, err := os.ReadFile(filepath.Join(cfg.StateDir, "allow.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	body(t, deploymentCommand(t, "deployment", "init", "--config", path))
-	if after, err := os.ReadFile(filepath.Join(cfg.StateDir, "allow.json")); err != nil || !reflect.DeepEqual(before, after) {
-		t.Fatalf("adding a Catalog rewrote existing grants: %v", err)
-	}
 	start := func() (*httptest.Server, http.Handler) {
 		h, err := serv.HTTPHandlerFromConfig(path, serv.HTTPServerOptions{})
 		if err != nil {
@@ -52,40 +31,27 @@ func TestDeploymentAddsCatalogExplicitlyAndRecoversIsolation(t *testing.T) {
 			stop(server, h)
 		}
 	})
-	call := func(args ...string) kcRunResult { return kcRemote(t, server.URL, "agent:operator", args...) }
-	expectCode(t, call("dataset", "define", "public-task", "--revision", "1", "--source", "kr://kc/system"), "USAGE_INVALID")
-	body(t, call("catalog", "use", first))
-	body(t, call("dataset", "define", "public-task", "--revision", "1", "--source", "kr://kc/system"))
-	body(t, call("catalog", "use", second))
-	body(t, call("dataset", "define", "restricted-task", "--revision", "1", "--source", "kr://kc/system"))
-	body(t, call("grant", "add", "--principal", "agent:restricted", "--action", "catalog.read", "--catalog", second))
-	states := map[string]any{}
-	for id, workspace := range map[string]string{first: "public-task", second: "restricted-task"} {
-		body(t, call("catalog", "use", id))
-		state := asMap(t, body(t, call("show")))
-		workspaces := state["datasets"].([]any)
-		if len(workspaces) != 1 || asMap(t, workspaces[0])["id"] != workspace {
-			t.Fatalf("Catalog %s contains another Catalog's workspace: %#v", id, state)
+	call := func(args ...string) kcRunResult { return kcRemote(t, server.URL, cfg.BootstrapPrincipal, args...) }
+	for _, name := range []string{"public-task", "restricted-task"} {
+		for _, revision := range []string{"1", "2"} {
+			body(t, call("dataset", "define", name, "--revision", revision, "--source", "kr://kc/system"))
 		}
-		states[id] = state
 	}
+	before := body(t, call("show"))
+	audit := body(t, call("registry", "audit"))
+	expectCode(t, call("catalog", "list"), "USAGE_INVALID")
+	expectCode(t, call("catalog", "use", "old"), "USAGE_INVALID")
+	expectCode(t, call("show", "--catalog", "old"), "USAGE_INVALID")
 	stop(server, h)
 	server = nil
 	if err := os.RemoveAll(cfg.CacheDir); err != nil {
 		t.Fatal(err)
 	}
 	server, h = start()
-	for _, id := range []string{first, second} {
-		body(t, call("catalog", "use", id))
-		if got := body(t, call("show")); !reflect.DeepEqual(states[id], got) {
-			t.Fatalf("Catalog %s did not recover its own state", id)
-		}
+	if got := body(t, call("show")); !reflect.DeepEqual(before, got) {
+		t.Fatalf("registry did not recover all Datasets: %#v != %#v", before, got)
 	}
-	visible := asMap(t, body(t, kcRemote(t, server.URL, "agent:restricted", "catalog", "list")))["catalogs"].([]any)
-	if len(visible) != 1 || asMap(t, visible[0])["id"] != second {
-		t.Fatalf("Catalog discovery crossed grant scope: %#v", visible)
+	if got := body(t, call("registry", "audit")); !reflect.DeepEqual(audit, got) {
+		t.Fatalf("registry history changed during recovery: %#v != %#v", audit, got)
 	}
-	expectCode(t, kcRemote(t, server.URL, "agent:restricted", "catalog", "use", first), "FORBIDDEN")
-	body(t, kcRemote(t, server.URL, "agent:restricted", "catalog", "use", second))
-	body(t, kcRemote(t, server.URL, "agent:restricted", "show"))
 }

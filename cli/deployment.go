@@ -7,10 +7,10 @@ import (
 	"os"
 	"strings"
 
-	"kc/catalog"
 	kchome "kc/home"
 	"kc/internal/telemetry"
 	"kc/kernel"
+	"kc/snapshot/dataset"
 )
 
 func runClientOperationWithTelemetry(ctx context.Context, runtime *telemetry.Runtime, path, command string, flags map[string]FlagValue) RunResult {
@@ -80,7 +80,7 @@ func runClientOperation(path string, flags map[string]FlagValue) (any, error) {
 			if err != nil {
 				return nil, err
 			}
-			return map[string]any{"initialized": true, "catalogs": deploymentCatalogIDs(config)}, nil
+			return map[string]any{"initialized": true}, nil
 		case "deployment system publish":
 			return kchome.PublishDeploymentSystem(config)
 		case "deployment status":
@@ -89,19 +89,11 @@ func runClientOperation(path string, flags map[string]FlagValue) (any, error) {
 				return nil, err
 			}
 			defer opened.Close()
-			catalogs := make([]map[string]any, 0, len(config.Catalogs))
-			for _, binding := range config.Catalogs {
-				cat, registry, err := opened.UseCatalog(binding.ID)
-				if err != nil {
-					return nil, err
-				}
-				head, err := registry.Head()
-				if err != nil {
-					return nil, err
-				}
-				catalogs = append(catalogs, map[string]any{"id": binding.ID, "head": head, "archived": cat.Archived(), "repositories": cat.Repositories()})
+			head, err := opened.Registry.Head()
+			if err != nil {
+				return nil, err
 			}
-			return map[string]any{"status": "ready", "catalogs": catalogs}, nil
+			return map[string]any{"status": "ready", "registry": map[string]any{"head": head}, "repositories": opened.Datasets.Repositories()}, nil
 		}
 	}
 	if path == "dataset overlay" {
@@ -112,14 +104,6 @@ func runClientOperation(path string, flags map[string]FlagValue) (any, error) {
 
 func verbClientOperation(cx *invocation) (any, error) {
 	return runClientOperation(strings.ReplaceAll(cx.Command, "-", " "), cx.Flags)
-}
-
-func deploymentCatalogIDs(config kchome.DeploymentConfig) []string {
-	ids := make([]string, 0, len(config.Catalogs))
-	for _, binding := range config.Catalogs {
-		ids = append(ids, binding.ID)
-	}
-	return ids
 }
 
 func clientKnowledgeSetOverlay(flags map[string]FlagValue) (any, error) {
@@ -138,7 +122,7 @@ func clientKnowledgeSetOverlay(flags map[string]FlagValue) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	recipe, err := catalog.ParseKnowledgeSetRecipe(raw)
+	recipe, err := dataset.ParseKnowledgeSetRecipe(raw)
 	if err != nil {
 		return nil, err
 	}
@@ -146,20 +130,20 @@ func clientKnowledgeSetOverlay(flags map[string]FlagValue) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	overlay, err := catalog.ParseKnowledgeSetOverlay(raw)
+	overlay, err := dataset.ParseKnowledgeSetOverlay(raw)
 	if err != nil {
 		return nil, err
 	}
-	definition, err := catalog.MergeOverlay(catalog.KnowledgeSet{SetID: recipe.Name, Revision: 1, Sources: recipe.Sources()}, overlay)
+	definition, err := dataset.MergeOverlay(dataset.KnowledgeSet{SetID: recipe.Name, Revision: 1, Sources: recipe.Sources()}, overlay)
 	if err != nil {
 		return nil, err
 	}
 	if out := flagString(flags, "out"); out != "" {
-		merged, ok := catalog.RecipeFromKnowledgeSet(definition)
+		merged, ok := dataset.RecipeFromKnowledgeSet(definition)
 		if !ok {
 			return nil, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "overlay does not produce a portable recipe")
 		}
-		body, err := catalog.FormatKnowledgeSetRecipe(merged)
+		body, err := dataset.FormatKnowledgeSetRecipe(merged)
 		if err != nil {
 			return nil, err
 		}

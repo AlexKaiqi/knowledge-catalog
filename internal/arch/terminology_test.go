@@ -18,7 +18,7 @@ func TestPublicTerminologyHasNoRetiredWorkspaceAliases(t *testing.T) {
 		}
 		if d.IsDir() {
 			switch d.Name() {
-			case ".git", ".data", ".venv", ".kc", "node_modules":
+			case ".validation", ".session_tmps", ".git", ".data", ".venv", ".kc", "node_modules":
 				return filepath.SkipDir
 			}
 			return nil
@@ -72,7 +72,7 @@ func TestKnowledgeSetSurfaceHasNoWorkspaceProtocolKeys(t *testing.T) {
 		}
 		if d.IsDir() {
 			switch d.Name() {
-			case ".git", ".venv", ".kc", "node_modules":
+			case ".validation", ".session_tmps", ".git", ".venv", ".kc", "node_modules":
 				return filepath.SkipDir
 			}
 			return nil

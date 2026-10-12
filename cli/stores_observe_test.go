@@ -13,14 +13,14 @@ import (
 func TestStoresObservationOmitsSecretsAndHomeLayout(t *testing.T) {
 	t.Setenv("KC_TEST_OPENSEARCH_URL", "")
 	home := testkit.TempDir(t)
-	catalogID := "kr://acme/stores/catalog"
+
 	repositoryID := "kr://acme/stores/repository"
 	principal := "agent:stores-observe"
-	body(t, kc(home, "local", "init", "--catalog", catalogID))
+	body(t, kc(home, "local", "init"))
 	repositoryDSN := lakeFSRepoDSN(t)
 	body(t, kc(home, "local", "repository", "attach", "--repo", repositoryID, "--dsn", repositoryDSN))
 	body(t, kc(home, "store-set", "--index", "opensearch", "--driver", "opensearch", "--url", "http://127.0.0.1:9200"))
-	body(t, kc(home, "grant", "add", "--principal", principal, "--action", "catalog.read", "--catalog", catalogID))
+	body(t, kc(home, "grant", "add", "--principal", principal, "--action", "inventory.read"))
 
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {

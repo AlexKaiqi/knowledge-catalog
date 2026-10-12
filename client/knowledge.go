@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 
-	"kc/catalog"
 	"kc/knowledge"
 	"kc/retrieval"
+	"kc/snapshot/dataset"
 )
 
 type KnowledgeService struct{ client *Client }
@@ -16,10 +16,9 @@ func (c *Client) KnowledgeService() KnowledgeService { return KnowledgeService{c
 // KnowledgeDatasetIdentity is the shared dataset-channel identity envelope:
 // a named workspace, or an inline published pin/definition.
 type KnowledgeDatasetIdentity struct {
-	Catalog    string                `json:"catalog,omitempty"`
 	Dataset    string                `json:"dataset,omitempty"`
 	Pin        json.RawMessage       `json:"pin,omitempty"`
-	Definition *catalog.KnowledgeSet `json:"definition,omitempty"`
+	Definition *dataset.KnowledgeSet `json:"definition,omitempty"`
 }
 
 // KnowledgeRepoPin is the shared repository-channel basis envelope: one
@@ -35,10 +34,9 @@ type KnowledgeRepoPin struct {
 // stay readable; embedded in every request struct, the JSON wire contract is
 // unchanged.
 type KnowledgeScope struct {
-	Catalog    string                `json:"catalog,omitempty"`
 	Dataset    string                `json:"dataset,omitempty"`
 	Pin        json.RawMessage       `json:"pin,omitempty"`
-	Definition *catalog.KnowledgeSet `json:"definition,omitempty"`
+	Definition *dataset.KnowledgeSet `json:"definition,omitempty"`
 	Repository string                `json:"repository,omitempty"`
 	Commit     string                `json:"commit,omitempty"`
 	Ref        string                `json:"ref,omitempty"`
@@ -55,27 +53,27 @@ type KnowledgeReadRequest struct {
 
 type KnowledgeSearchRequest struct {
 	KnowledgeScope
-	CatalogDiscovery bool                    `json:"catalogDiscovery,omitempty"`
-	Query            string                  `json:"query,omitempty"`
-	Match            []string                `json:"match,omitempty"`
-	MatchMode        string                  `json:"matchMode,omitempty"`
-	Equal            []string                `json:"equal,omitempty"`
-	NotEqual         []string                `json:"notEqual,omitempty"`
-	In               []string                `json:"in,omitempty"`
-	Exists           []string                `json:"exists,omitempty"`
-	Missing          []string                `json:"missing,omitempty"`
-	Prefix           []string                `json:"prefix,omitempty"`
-	Contains         []string                `json:"contains,omitempty"`
-	GreaterThan      []string                `json:"greaterThan,omitempty"`
-	GreaterEqual     []string                `json:"greaterEqual,omitempty"`
-	LessThan         []string                `json:"lessThan,omitempty"`
-	LessEqual        []string                `json:"lessEqual,omitempty"`
-	Sort             []string                `json:"sort,omitempty"`
-	Limit            int                     `json:"limit,omitempty"`
-	Continuation     string                  `json:"continuation,omitempty"`
-	Expression       *retrieval.SearchExpr   `json:"expression,omitempty"`
-	Order            *retrieval.SearchClause `json:"order,omitempty"`
-	Recall           string                  `json:"recall,omitempty"`
+	InventoryDiscovery bool                    `json:"inventoryDiscovery,omitempty"`
+	Query              string                  `json:"query,omitempty"`
+	Match              []string                `json:"match,omitempty"`
+	MatchMode          string                  `json:"matchMode,omitempty"`
+	Equal              []string                `json:"equal,omitempty"`
+	NotEqual           []string                `json:"notEqual,omitempty"`
+	In                 []string                `json:"in,omitempty"`
+	Exists             []string                `json:"exists,omitempty"`
+	Missing            []string                `json:"missing,omitempty"`
+	Prefix             []string                `json:"prefix,omitempty"`
+	Contains           []string                `json:"contains,omitempty"`
+	GreaterThan        []string                `json:"greaterThan,omitempty"`
+	GreaterEqual       []string                `json:"greaterEqual,omitempty"`
+	LessThan           []string                `json:"lessThan,omitempty"`
+	LessEqual          []string                `json:"lessEqual,omitempty"`
+	Sort               []string                `json:"sort,omitempty"`
+	Limit              int                     `json:"limit,omitempty"`
+	Continuation       string                  `json:"continuation,omitempty"`
+	Expression         *retrieval.SearchExpr   `json:"expression,omitempty"`
+	Order              *retrieval.SearchClause `json:"order,omitempty"`
+	Recall             string                  `json:"recall,omitempty"`
 }
 
 type KnowledgeRelationsRequest struct {
@@ -140,17 +138,18 @@ type KnowledgeBindingRequest struct {
 	Member string `json:"member,omitempty"`
 }
 
-// KnowledgeResourceAccessRequest invokes a stable ResourceDescriptor operation
-// or hydrates one pinned Binding through the Knowledge Server's configured
-// resource-access/v1 runtime. Input remains raw JSON so number precision and
-// provider-specific object shapes survive the client hop unchanged.
+// KnowledgeResourceAccessRequest selects an object Interface implementation,
+// invokes a compatible ResourceDescriptor operation, or hydrates a pinned
+// Binding. Input remains raw JSON across the client hop; handlers are installed
+// at the Server, not shipped by the consumer.
 type KnowledgeResourceAccessRequest struct {
 	KnowledgeScope
-	Object    string          `json:"object"`
-	Aspect    string          `json:"aspect,omitempty"`
-	Member    string          `json:"member,omitempty"`
-	Operation string          `json:"operation,omitempty"`
-	Input     json.RawMessage `json:"input,omitempty"`
+	Object         string          `json:"object"`
+	Aspect         string          `json:"aspect,omitempty"`
+	Member         string          `json:"member,omitempty"`
+	Operation      string          `json:"operation,omitempty"`
+	Input          json.RawMessage `json:"input,omitempty"`
+	Implementation string          `json:"implementation,omitempty"`
 }
 
 // KnowledgeSchemaPageRequest discovers Domain Schemas at one fixed

@@ -22,7 +22,7 @@ func TestManagedProductCreateNeedsOnlyName(t *testing.T) {
 			return
 		}
 		calls++
-		if r.Method != http.MethodPost || r.URL.Path != "/catalog/v1/repositories" {
+		if r.Method != http.MethodPost || r.URL.Path != "/snapshot/v1/connections" {
 			t.Errorf("unexpected discovery or route: %s %s", r.Method, r.URL.Path)
 			return
 		}
@@ -45,9 +45,9 @@ func TestManagedProductCreateNeedsOnlyName(t *testing.T) {
 	}
 }
 
-func TestManagedProductMyRepositoriesAvoidsCatalogDiscovery(t *testing.T) {
+func TestManagedProductMyRepositoriesAvoidsInventoryDiscovery(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet || r.URL.Path != "/catalog/v1/repositories" {
+		if r.Method != http.MethodGet || r.URL.Path != "/snapshot/v1/connections" {
 			t.Errorf("requires broad Catalog discovery: %s %s", r.Method, r.URL.Path)
 		}
 		_, _ = w.Write([]byte(`{"repositories":[{"repositoryId":"kr://kaiqidong/one","managementURL":"https://kc.example/repositories/one"}]}`))
@@ -61,7 +61,7 @@ func TestManagedProductMyRepositoriesAvoidsCatalogDiscovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out map[string]any
-	if err := client.CatalogService().MyRepositories(context.Background(), kcclient.RequestOptions{}, &out); err != nil {
+	if err := client.SnapshotService().MyRepositories(context.Background(), kcclient.RequestOptions{}, &out); err != nil {
 		t.Fatal(err)
 	}
 	raw, _ := json.Marshal(out)

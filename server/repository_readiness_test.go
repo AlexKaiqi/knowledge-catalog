@@ -78,7 +78,7 @@ func repositoryReadinessFixture(t *testing.T) (*inv.Invocation, kchome.ManagedRe
 		t.Fatal(err)
 	}
 	cx := &inv.Invocation{Home: dir, WS: &kchome.Home{Reader: reader.NewReader(store), Index: idx}, Flags: map[string]invoke.FlagValue{"as": "kaiqidong"}, Observation: &invoke.ObservationTelemetry{}}
-	return cx, kchome.ManagedRepositoryResult{RepositoryID: string(repo.ID()), Catalog: "kr://platform/catalog"}, eng
+	return cx, kchome.ManagedRepositoryResult{RepositoryID: string(repo.ID())}, eng
 }
 
 func TestRepositoryReadinessVerifiesFixedProjectionAndLifecycle(t *testing.T) {

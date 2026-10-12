@@ -31,7 +31,7 @@
 | --- | --- |
 | 连通 | `serverURL` 可达且 readiness 通过；observability URL（如填）只读可达 |
 | 身份 | `principal` 存在，登录成功，`whoami` 一致；所需 grants 覆盖本 run 探针声明面 |
-| 目标 | `catalog` 可见；`setupAllowCreate=false` 时既有空仓已就位且为空 |
+| 目标 | 唯一登记空间可见；`setupAllowCreate=false` 时既有空仓已就位且为空 |
 | 版本 | 被测 revision/版本、介质与索引引擎版本、OS/资源限制记录入 manifest；不可得项标 `absent` |
 | 档位 | `profile.scale` / `profile.history` 与 `profile.ladders` 覆盖值留档；与历史基线口径冲突时显式声明 |
 | 隔离 | scratch 前缀无残留仓；证据目录可写且为空 run |

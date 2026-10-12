@@ -1,0 +1,18 @@
+---
+object_id: kc/relation/first-read.uses.search-knowledge
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: relations/first-read.uses.search-knowledge.yaml
+---
+relationId: kc/relation/first-read.uses.search-knowledge
+relationType: uses
+direction: DIRECTED
+endpoints:
+  - role: from
+    objectRef:
+      repository: kr://kc/system
+      object: kc/guide/first-read
+  - role: to
+    objectRef:
+      repository: kr://kc/system
+      object: kc/capability/search-knowledge

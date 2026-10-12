@@ -4,8 +4,8 @@ import (
 	inv "kc/invocation"
 	"testing"
 
-	"kc/catalog"
 	"kc/snapshot"
+	"kc/snapshot/dataset"
 )
 
 func TestKnowledgeSetSourcesFromDefaultsPublishedSelector(t *testing.T) {
@@ -47,19 +47,18 @@ func TestKnowledgeSetSourcesFromDefaultsPublishedSelector(t *testing.T) {
 }
 
 func TestPublicCatalogViewHidesSelectors(t *testing.T) {
-	view := inv.PublicCatalogView(catalog.CatalogState{
-		CatalogID:    "kr://acme/catalog",
+	view := inv.InventoryView(dataset.State{
 		Repositories: []string{"kr://acme/public/core", "kr://kc/system"},
-		KnowledgeSets: []catalog.KnowledgeSet{{
+		KnowledgeSets: []dataset.KnowledgeSet{{
 			SetID:    "oncall",
 			Revision: 1,
-			Sources: []catalog.KnowledgeSetSource{
-				{Repository: "kr://acme/public/core", Selector: snapshot.DefaultRef, Path: catalog.MountPath("knowledge")},
+			Sources: []dataset.KnowledgeSetSource{
+				{Repository: "kr://acme/public/core", Selector: snapshot.DefaultRef, Path: dataset.MountPath("knowledge")},
 				{Repository: "kr://acme/public/core", Selector: snapshot.DefaultRef},
 			},
 		}},
 	})
-	if view["catalogId"] != "kr://acme/catalog" {
+	if _, present := view["catalogId"]; present {
 		t.Fatalf("%#v", view)
 	}
 	workspaces := view["datasets"].([]map[string]any)

@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"kc/catalog"
 	"kc/internal/journal"
 	"kc/invoke"
 	"kc/knowledge/writer"
+	"kc/snapshot/dataset"
 )
 
 func auditPath(home string) string  { return filepath.Join(home, "audit.jsonl") }
@@ -86,7 +86,7 @@ func ReadTrail(home, layer, cmd string, limit int) ([]journal.Event, error) {
 	return journal.Filter(journal.Merge(sets...), layer, cmd, limit), nil
 }
 
-func CatalogLogEntries(commits []catalog.CatalogCommit, cmd string, limit int) []map[string]any {
+func RegistryLogEntries(commits []dataset.Commit, cmd string, limit int) []map[string]any {
 	out := make([]map[string]any, 0, len(commits))
 	for _, c := range commits {
 		if cmd != "" {
@@ -154,14 +154,17 @@ func auditOmitResult(command string) bool {
 func auditRefs(command string, flags map[string]invoke.FlagValue, result any) map[string]any {
 	refs := map[string]any{}
 	for _, name := range []string{
-		"repo", "catalog", "object", "command-id", "dataset",
-		"proposal", "preview", "proposal-id", "aspect", "trace-id",
+		"repo", "object", "command-id", "dataset",
+		"proposal", "preview", "proposal-id", "aspect", "trace-id", "implementation",
 	} {
 		if v := invoke.FlagString(flags, name); v != "" {
 			refs[name] = v
 		}
 	}
 	if result != nil && !auditOmitResult(command) {
+		for key, value := range objectInterfaceAuditRefs(result) {
+			refs[key] = value
+		}
 		switch v := result.(type) {
 		case writer.CommitReceipt:
 			refs["disposition"] = string(v.Disposition)
@@ -171,7 +174,7 @@ func auditRefs(command string, flags map[string]invoke.FlagValue, result any) ma
 		default:
 			raw := asRefMap(result)
 			for _, k := range []string{
-				"catalog", "repositoryId", "head", "setId", "commitId",
+				"repositoryId", "head", "setId", "commitId",
 				"id", "disposition", "commandId", "proposalId", "previewId", "reportId",
 				"dataset", "retired", "archived",
 			} {

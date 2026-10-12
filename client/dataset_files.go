@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	"kc/catalog"
 	"kc/snapshot"
+	"kc/snapshot/dataset"
 )
 
 type WorkspaceFilesService struct{ client *Client }
@@ -15,7 +15,6 @@ func (c *Client) WorkspaceFilesService() WorkspaceFilesService {
 }
 
 type WorkspaceFileCoordinate struct {
-	Catalog string          `json:"catalog,omitempty"`
 	Dataset string          `json:"dataset"`
 	Pin     json.RawMessage `json:"pin,omitempty"`
 	View    string          `json:"view,omitempty"`
@@ -49,26 +48,26 @@ type WorkspaceFileReadRequest struct {
 }
 
 type WorkspaceFileMountsResponse struct {
-	Pin    catalog.ResolvedKnowledgeSet `json:"pin"`
-	Mounts []catalog.VirtualMount       `json:"mounts"`
+	Pin    dataset.ResolvedKnowledgeSet `json:"pin"`
+	Mounts []dataset.VirtualMount       `json:"mounts"`
 }
 
 type WorkspaceFileDirectoryResponse struct {
-	Pin          catalog.ResolvedKnowledgeSet `json:"pin"`
-	Mount        catalog.VirtualMount         `json:"mount"`
+	Pin          dataset.ResolvedKnowledgeSet `json:"pin"`
+	Mount        dataset.VirtualMount         `json:"mount"`
 	Entries      []snapshot.DirectoryEntry    `json:"entries"`
 	Continuation string                       `json:"continuation,omitempty"`
 	Exhausted    bool                         `json:"exhausted"`
 }
 
 type WorkspaceFileReadResponse struct {
-	Pin   catalog.ResolvedKnowledgeSet `json:"pin"`
-	Mount catalog.VirtualMount         `json:"mount"`
+	Pin   dataset.ResolvedKnowledgeSet `json:"pin"`
+	Mount dataset.VirtualMount         `json:"mount"`
 	File  string                       `json:"file"`
 	// Path echoes the delivered path when the request addressed the composed
 	// tree; Item carries the per-file entry that served the bytes.
 	Path       string               `json:"path,omitempty"`
-	Item       *catalog.DatasetItem `json:"item,omitempty"`
+	Item       *dataset.DatasetItem `json:"item,omitempty"`
 	Offset     int64                `json:"offset"`
 	TotalBytes int64                `json:"totalBytes"`
 	EOF        bool                 `json:"eof"`
@@ -76,13 +75,13 @@ type WorkspaceFileReadResponse struct {
 }
 
 func (s WorkspaceFilesService) Mounts(ctx context.Context, request WorkspaceFileMountsRequest, options RequestOptions, output any) error {
-	return s.client.doJSON(ctx, "POST", "/dataset-files/v1/mounts:list", request, options, output)
+	return s.client.doJSON(ctx, "POST", "/snapshot/v1/files/mounts:list", request, options, output)
 }
 
 func (s WorkspaceFilesService) Directory(ctx context.Context, request WorkspaceFileDirectoryRequest, options RequestOptions, output any) error {
-	return s.client.doJSON(ctx, "POST", "/dataset-files/v1/tree:list", request, options, output)
+	return s.client.doJSON(ctx, "POST", "/snapshot/v1/files/tree:list", request, options, output)
 }
 
 func (s WorkspaceFilesService) Read(ctx context.Context, request WorkspaceFileReadRequest, options RequestOptions, output any) error {
-	return s.client.doJSON(ctx, "POST", "/dataset-files/v1/file:read", request, options, output)
+	return s.client.doJSON(ctx, "POST", "/snapshot/v1/files/file:read", request, options, output)
 }

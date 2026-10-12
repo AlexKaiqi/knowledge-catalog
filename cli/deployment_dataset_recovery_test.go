@@ -11,9 +11,9 @@ import (
 	"strings"
 	"testing"
 
-	"kc/catalog"
 	kcclient "kc/client"
 	serv "kc/server"
+	"kc/snapshot/dataset"
 )
 
 // DATASET-02（mvp-acceptance.md 服务版采用）：真实部署入口上的发布管线恢复。
@@ -59,8 +59,8 @@ func TestDatasetPublishingRecoveryKeepsAcceptedVersion(t *testing.T) {
 		}
 		return c
 	}
-	coordinate := func(pin *catalog.ResolvedKnowledgeSet) kcclient.WorkspaceFileCoordinate {
-		c := kcclient.WorkspaceFileCoordinate{Catalog: "kr://recover/catalog", Dataset: "incident", View: "repository"}
+	coordinate := func(pin *dataset.ResolvedKnowledgeSet) kcclient.WorkspaceFileCoordinate {
+		c := kcclient.WorkspaceFileCoordinate{Dataset: "incident", View: "repository"}
 		if pin != nil {
 			raw, err := json.Marshal(pin)
 			if err != nil {
@@ -75,7 +75,7 @@ func TestDatasetPublishingRecoveryKeepsAcceptedVersion(t *testing.T) {
 	// accepted version must return IDENTICAL bytes across a failed prepare,
 	// instance replacement and a later version advance.
 	baseline := map[string]string{}
-	assertDelivered := func(c *kcclient.Client, pin *catalog.ResolvedKnowledgeSet, file, marker string) {
+	assertDelivered := func(c *kcclient.Client, pin *dataset.ResolvedKnowledgeSet, file, marker string) {
 		t.Helper()
 		var out kcclient.WorkspaceFileReadResponse
 		if err := c.WorkspaceFilesService().Read(context.Background(), kcclient.WorkspaceFileReadRequest{
@@ -101,10 +101,10 @@ func TestDatasetPublishingRecoveryKeepsAcceptedVersion(t *testing.T) {
 	writeSourceTree(t, materials, "note/recover.md", "durable\n")
 	body(t, call("writer", "commit", "--command-id", "recovery-write", "--repo", "kr://recover/source", "--dir", materials))
 	body(t, call("dataset", "define", "incident", "--revision", "1", "--source", "kr://recover/source@notes@note"))
-	body(t, call("grant", "add", "--principal", "agent:reader", "--action", "dataset.resolve", "--catalog", "kr://recover/catalog", "--dataset", "incident"))
-	body(t, call("grant", "add", "--principal", "agent:reader", "--action", "file.read", "--catalog", "kr://recover/catalog", "--dataset", "incident"))
+	body(t, call("grant", "add", "--principal", "agent:reader", "--action", "dataset.resolve", "--dataset", "incident"))
+	body(t, call("grant", "add", "--principal", "agent:reader", "--action", "file.read", "--dataset", "incident"))
 	reader := readerClient()
-	accepted := &catalog.ResolvedKnowledgeSet{}
+	accepted := &dataset.ResolvedKnowledgeSet{}
 	{
 		var mounts kcclient.WorkspaceFileMountsResponse
 		if err := reader.WorkspaceFilesService().Mounts(context.Background(), kcclient.WorkspaceFileMountsRequest{

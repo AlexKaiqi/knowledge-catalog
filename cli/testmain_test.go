@@ -4,13 +4,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
+	"kc/cli"
 	"kc/internal/testkit"
 )
 
 func TestMain(m *testing.M) {
+	if strings.TrimSpace(os.Getenv("KC_SCENE_LIVE_LAKEFS_URL")) == "" {
+		_ = os.Setenv("KC_LAKEFS_CREDENTIAL", testkit.LakeFSFakeCredential)
+	}
 	// Product tests and embedded-home tests share one process. Ambient Client
 	// coordinates must not turn `kc --home` into a remote call, and a developer
 	// Taihu session in ~/.config/kc must not collide with --as test principals.
@@ -24,6 +29,7 @@ func TestMain(m *testing.M) {
 	}
 	_ = os.Setenv("KC_CONFIG_DIR", config)
 	code := m.Run()
+	cli.CloseComponentFixturesForTest()
 	// This package-wide directory protects the developer's real login, but it
 	// must remain read-only to individual tests. Session-mutating tests need
 	// their own t.Setenv(KC_CONFIG_DIR, t.TempDir()) so defaults cannot leak.
@@ -76,6 +82,28 @@ func TestMain(m *testing.M) {
 		}
 	}
 	os.Exit(code)
+}
+
+func TestCLIFixtureSetupPreservesLiveLakeFSCredentials(t *testing.T) {
+	const probe = "KC_TEST_LIVE_CREDENTIAL_PROBE"
+	const expected = "KC_TEST_LIVE_CREDENTIAL_EXPECTED"
+	if os.Getenv(probe) == "1" {
+		if got, want := os.Getenv("KC_LAKEFS_CREDENTIAL"), os.Getenv(expected); got != want {
+			t.Fatal("CLI fixture setup replaced the live deployment credential")
+		}
+		return
+	}
+	for name, credential := range map[string]string{"configured": "live-access:live-secret", "missing": ""} {
+		t.Run(name, func(t *testing.T) {
+			cmd := exec.Command(os.Args[0], "-test.run=^TestCLIFixtureSetupPreservesLiveLakeFSCredentials$", "-test.count=1")
+			cmd.Env = append(os.Environ(), probe+"=1", expected+"="+credential,
+				"KC_SCENE_LIVE_LAKEFS_URL=https://lakefs.example", "KC_LAKEFS_CREDENTIAL="+credential,
+				"KC_ASSERT_E2E_COVERAGE=", "KC_COMMAND_COVERAGE_REPORT=")
+			if output, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("live deployment credential isolation: %v\n%s", err, output)
+			}
+		})
+	}
 }
 
 func commandsWithoutCalls(report commandCoverageReport) []string {

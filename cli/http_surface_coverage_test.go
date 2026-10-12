@@ -22,15 +22,15 @@ type publicHTTPRoute struct {
 	Pattern string
 }
 
-var routeRegistration = regexp.MustCompile(`mux\.HandleFunc\("(GET|POST|PUT|PATCH|DELETE) ([^"]+)"`)
+var routeRegistration = regexp.MustCompile(`mux\.Handle(?:Func)?\("(GET|POST|PUT|PATCH|DELETE) ([^"]+)"`)
 
 // TestEveryPublicHTTPRouteIsRegisteredWithOnlyItsDeclaredMethod derives the
 // denominator from the production registration sites. It deliberately does
 // not share the CLI command table: HTTP is an independent typed protocol.
 func TestEveryPublicHTTPRouteIsRegisteredWithOnlyItsDeclaredMethod(t *testing.T) {
 	routes := registeredHTTPRoutes(t)
-	if len(routes) != 88 {
-		t.Fatalf("public HTTP route count changed from the reviewed 88 to %d; review the new protocol surface", len(routes))
+	if len(routes) != 87 {
+		t.Fatalf("public HTTP route count changed from the reviewed 87 to %d; review the new protocol surface", len(routes))
 	}
 
 	handler := serv.HTTPHandlerWithOptions(testkit.TempDir(t), serv.HTTPServerOptions{})
@@ -97,10 +97,9 @@ func TestEveryPublicHTTPRouteIsRegisteredWithOnlyItsDeclaredMethod(t *testing.T)
 // routes have their richer fixed-pin/read scenario in workspace_file_service_test.go.
 func TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses(t *testing.T) {
 	home := testkit.TempDir(t)
-	catalogID := "kr://acme/http-only/catalog"
 	repositoryID := "kr://acme/http-only/repository"
 	principal := "agent:http-only"
-	body(t, kc(home, "local", "init", "--catalog", catalogID))
+	body(t, kc(home, "local", "init"))
 	repositoryDSN := lakeFSRepoDSN(t)
 	body(t, kc(home, "local", "repository", "attach", "--repo", repositoryID, "--dsn", repositoryDSN))
 	body(t, kc(home, "attach", "--repo", repositoryID, "--dsn", repositoryDSN))
@@ -109,9 +108,9 @@ func TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses(t *testing.T) {
 	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1",
 		"--source", repositoryID+"=refs/heads/main@knowledge"))
 	body(t, kc(home, "grant", "add", "--principal", principal,
-		"--action", "catalog.read,dataset.resolve", "--catalog", catalogID))
+		"--action", "inventory.read,dataset.resolve"))
 	body(t, kc(home, "grant", "add", "--principal", principal,
-		"--action", "file.read", "--catalog", catalogID, "--dataset", "agent"))
+		"--action", "file.read", "--dataset", "agent"))
 	body(t, kc(home, "grant", "add", "--principal", principal,
 		"--action", "knowledge.read,governance.proposal.create", "--repo", repositoryID))
 
@@ -175,16 +174,21 @@ func TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses(t *testing.T) {
 	if status != http.StatusOK || asMap(t, discoveredAny)["mode"] != "local" {
 		t.Fatalf("GET /identity/v1/auth with X-Kc-As returned %d %#v", status, discoveredAny)
 	}
-	status, catalogs, _ := httpSurfaceRequest(t, server, http.MethodGet, "/catalog/v1/catalogs", nil, principal)
-	listed := asMap(t, catalogs)["catalogs"].([]any)
-	if status != http.StatusOK || len(listed) != 1 || asMap(t, listed[0])["id"] != catalogID {
-		t.Fatalf("GET /catalog/v1/catalogs returned %d %#v", status, catalogs)
+	status, inventory, _ := httpSurfaceRequest(t, server, http.MethodGet, "/snapshot/v1/inventory", nil, principal)
+	view := asMap(t, inventory)
+	if status != http.StatusOK || !hasRepository(view, repositoryID) {
+		t.Fatalf("GET inventory: %d %#v", status, inventory)
 	}
-	if _, ok := asMap(t, listed[0])["dir"]; ok {
-		t.Fatalf("catalog inventory must not leak host paths: %#v", listed[0])
+	if _, present := view["catalogId"]; present {
+		t.Fatalf("inventory exposes retired identity: %#v", view)
+	}
+	for _, raw := range view["repositories"].([]any) {
+		if asMap(t, raw)["dir"] != nil {
+			t.Fatalf("inventory leaks host paths: %#v", raw)
+		}
 	}
 
-	catalogPath := "/catalog/v1/catalogs/" + url.PathEscape(catalogID)
+	catalogPath := "/snapshot/v1"
 	status, resolved, _ := httpSurfaceRequest(t, server, http.MethodPost, catalogPath+"/datasets:resolve", map[string]any{
 		"dataset": "adhoc", "revision": 1,
 		"sources": []map[string]any{{"repository": repositoryID, "selector": "refs/heads/main"}},
@@ -233,22 +237,24 @@ func httpSurfaceRequest(t *testing.T, server *httptest.Server, method, path stri
 func registeredHTTPRoutes(t *testing.T) []publicHTTPRoute {
 	t.Helper()
 	routes := []publicHTTPRoute{}
-	// B6 起 production mux 归 server 所有；注册表扫描 ../server。
-	files, err := os.ReadDir("../server")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, file := range files {
-		name := file.Name()
-		if file.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			continue
-		}
-		raw, err := os.ReadFile(filepath.Join("../server", name))
+	// The KC application composes its own routes with Snapshot Store's service.
+	for _, dir := range []string{"../server", "../snapshot/service"} {
+		files, err := os.ReadDir(dir)
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, match := range routeRegistration.FindAllStringSubmatch(string(raw), -1) {
-			routes = append(routes, publicHTTPRoute{Method: match[1], Pattern: match[2]})
+		for _, file := range files {
+			name := file.Name()
+			if file.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+				continue
+			}
+			raw, err := os.ReadFile(filepath.Join(dir, name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, match := range routeRegistration.FindAllStringSubmatch(string(raw), -1) {
+				routes = append(routes, publicHTTPRoute{Method: match[1], Pattern: match[2]})
+			}
 		}
 	}
 	sort.Slice(routes, func(i, j int) bool {
@@ -262,7 +268,6 @@ func registeredHTTPRoutes(t *testing.T) []publicHTTPRoute {
 
 func concreteHTTPPath(pattern string) string {
 	replacer := strings.NewReplacer(
-		"{catalog}", "kr:%2F%2Facme%2Fcatalog",
 		"{repository}", "kr:%2F%2Facme%2Frepository",
 		"{dataset}", "agent",
 		"{command}", "command-1",
@@ -282,7 +287,7 @@ func allowedHTTPPath(path string) bool {
 		}
 	}
 	for _, namespace := range []string{
-		"/identity/v1/", "/catalog/v1/", "/knowledge/v1/", "/dataset-files/v1/",
+		"/identity/v1/", "/snapshot/v1/", "/knowledge/v1/", "/snapshot/v1/files/",
 		"/writer/v1/", "/governance/v1/", "/admin/v1/", "/operations/v1/",
 	} {
 		if strings.HasPrefix(path, namespace) {

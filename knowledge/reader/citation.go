@@ -6,7 +6,7 @@ import (
 )
 
 // GroundingCitation is a consume-side projection of a READ result (D12 / B.1).
-// Not a write surface, not GET_PROVENANCE, not a Catalog object.
+// Not a write surface, not GET_PROVENANCE, not a Dataset service object.
 
 type GroundingCitation struct {
 	KnowledgeRef      knowledge.KnowledgeRef `json:"knowledgeRef"`

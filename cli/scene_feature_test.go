@@ -10,10 +10,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,6 +23,7 @@ import (
 
 	"kc/internal/testkit"
 	"kc/kernel"
+	"kc/knowledge"
 )
 
 type sceneFeature struct {
@@ -182,40 +181,44 @@ func TestMetricPermissionSceneFileParses(t *testing.T) {
 	}
 }
 
-func TestMetricPermissionAgentCompanionStaysOnTheFeature(t *testing.T) {
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller")
+func TestMetricPermissionAgentBriefsStayOnSceneMaterials(t *testing.T) {
+	nodes := map[string]sceneTreeNode{}
+	for _, node := range discoverConstructableNodes(t) {
+		nodes[node.ID] = node
 	}
-	root := filepath.Clean(filepath.Join(filepath.Dir(file), ".."))
-	raw, err := os.ReadFile(filepath.Join(root, "dsh-plugin", "scripts", "agent-scenarios.json"))
-	if err != nil {
-		t.Fatal(err)
+	schemaNode, schemaOK := nodes["domain-schema-published"]
+	instanceNode, instanceOK := nodes["semantic-knowledge-published"]
+	if !schemaOK || !instanceOK {
+		t.Fatal("metric briefs require the schema and semantic knowledge scene states")
 	}
-	var catalog struct {
-		ExtendedCompanions []struct {
-			ID   string `json:"id"`
-			Spec string `json:"spec"`
-		} `json:"extendedCompanions"`
-	}
-	if err := json.Unmarshal(raw, &catalog); err != nil {
-		t.Fatal(err)
-	}
-	var spec string
-	for _, companion := range catalog.ExtendedCompanions {
-		if companion.ID == "KC-AGENT-01" {
-			spec = companion.Spec
+	read := func(path string) string {
+		t.Helper()
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
 		}
+		for _, retired := range []string{"kr://dw/", "warehouse-agent", ".data/data-warehouse"} {
+			if strings.Contains(string(raw), retired) {
+				t.Fatalf("%s points at the retired warehouse suite: %s", path, retired)
+			}
+		}
+		return string(raw)
 	}
-	if spec != ".data/scenes" {
-		t.Fatalf("KC-AGENT-01 spec=%q", spec)
+	schema := read(filepath.Join(schemaNode.Dir, "_materials", "drafts", "schema.metric.definition.yaml"))
+	instance := read(filepath.Join(instanceNode.Dir, "_materials", "metric.gmv.json"))
+	construct := read(instanceNode.Construct)
+	if !strings.Contains(schema, "kr://scene/knowledge") || !strings.Contains(construct, "kr://scene/knowledge") {
+		t.Fatal("metric schema and construct must target the scene knowledge repository")
 	}
-	if _, err := os.Stat(filepath.Join(root, spec, "catalog-initialized", "_meta.yaml")); err != nil {
+	if !strings.Contains(schema, "access: [text, filter]") {
+		t.Fatal("metric schema lost the scene AccessHints witness")
+	}
+	var value map[string]any
+	if err := json.Unmarshal([]byte(instance), &value); err != nil {
 		t.Fatal(err)
 	}
-	out, err := exec.Command("python3", filepath.Join(root, "dsh-plugin", "scripts", "e2e_agent_metric_permission.py"), "--check-only").CombinedOutput()
-	if err != nil {
-		t.Fatalf("Agent companion scene references: %v\n%s", err, out)
+	if value["measureKey"] != "unique-measure-token-zz9" {
+		t.Fatal("metric instance lost the non-indexed Canonical witness")
 	}
 }
 
@@ -300,14 +303,14 @@ func TestSceneExecutorReusesParentConstructHome(t *testing.T) {
 	var root, child sceneTreeNode
 	for _, node := range discoverConstructableNodes(t) {
 		switch node.ID {
-		case "catalog-initialized":
+		case "service-initialized":
 			root = node
 		case "source-repositories-configured":
 			child = node
 		}
 	}
 	if root.ID == "" || child.ID == "" {
-		t.Fatal("catalog-initialized / source-repositories-configured missing")
+		t.Fatal("service-initialized / source-repositories-configured missing")
 	}
 	runSceneNode(t, doc, root, cache)
 	runSceneNode(t, doc, child, cache)
@@ -336,10 +339,10 @@ func TestSceneExistingRepositoryFixtureUsesLakeFS(t *testing.T) {
 	frozen := cache.frozen[published.ID]
 	cache.mu.Unlock()
 	stamps := sceneRemoteStamps(t, frozen.dir)
-	if len(stamps) != 2 {
-		t.Fatalf("frozen existing-repository stamps=%d want knowledge and graph: %#v", len(stamps), stamps)
+	if len(stamps) != 3 {
+		t.Fatalf("frozen existing-repository stamps=%d want system, knowledge and graph: %#v", len(stamps), stamps)
 	}
-	wantRepositories := map[string]bool{"kr://scene/knowledge": true, "kr://scene/graph": true}
+	wantRepositories := map[string]bool{string(knowledge.SystemRepositoryID): true, "kr://scene/knowledge": true, "kr://scene/graph": true}
 	for _, stamp := range stamps {
 		if !wantRepositories[stamp.id] || stamp.driver != "lakefs" || !cache.lakefs.OwnsDSN(stamp.dsn) {
 			t.Fatalf("unexpected existing repository stamp: %#v", stamp)
@@ -350,8 +353,26 @@ func TestSceneExistingRepositoryFixtureUsesLakeFS(t *testing.T) {
 	homeB, _ := cache.cloneParent(t, attached)
 	stampsA := sceneRemoteStamps(t, homeA)
 	stampsB := sceneRemoteStamps(t, homeB)
-	if len(stampsA) != 2 || len(stampsB) != 2 {
+	if len(stampsA) != 3 || len(stampsB) != 3 {
 		t.Fatalf("cloned stamps A=%#v B=%#v", stampsA, stampsB)
+	}
+	// Catalog authority pointers must fork too; copying a consumer home must
+	// never allow its registry writes to advance another clone or the parent.
+	openedA, err := kchome.Open(homeA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer openedA.Close()
+	if err := openedA.Datasets.RegisterRepository("kr://scene/knowledge"); err != nil {
+		t.Fatal(err)
+	}
+	openedB, err := kchome.Open(homeB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer openedB.Close()
+	if openedB.Datasets.HasRepository("kr://scene/knowledge") {
+		t.Fatal("cloned Catalog authorities share a mutable registry")
 	}
 	seenDSNs := map[string]bool{}
 	for _, group := range [][]sceneRemoteStamp{stamps, stampsA, stampsB} {
@@ -368,13 +389,13 @@ func TestSceneRunWritesLatestResult(t *testing.T) {
 	doc := loadSceneCatalog(t)
 	var node sceneTreeNode
 	for _, candidate := range discoverConstructableNodes(t) {
-		if candidate.ID == "catalog-initialized" {
+		if candidate.ID == "service-initialized" {
 			node = candidate
 			break
 		}
 	}
 	if node.ID == "" {
-		t.Fatal("catalog-initialized is not constructable")
+		t.Fatal("service-initialized is not constructable")
 	}
 	runSceneNode(t, doc, node, newSceneHomeCache(t))
 	raw, err := os.ReadFile(filepath.Join(node.Dir, "_results", "latest.json"))
@@ -385,7 +406,7 @@ func TestSceneRunWritesLatestResult(t *testing.T) {
 	if err := json.Unmarshal(raw, &report); err != nil {
 		t.Fatal(err)
 	}
-	if !report.OK || report.State != "catalog-initialized" {
+	if !report.OK || report.State != "service-initialized" {
 		t.Fatalf("result = %#v", report)
 	}
 	if report.ElapsedMS < 0 {
@@ -854,15 +875,15 @@ func TestSceneExpandScenePath(t *testing.T) {
 
 func TestSceneJSONExpect(t *testing.T) {
 	root := map[string]any{
-		"catalog": "kr://scene/catalog",
-		"repos":   []any{},
-		"system":  map[string]any{"repositoryId": "kr://kc/system", "commit": "abc"},
+		"authorityId": "kr://scene/registry",
+		"repos":       []any{},
+		"system":      map[string]any{"repositoryId": "kr://kc/system", "commit": "abc"},
 		"repositories": []any{
 			map[string]any{"id": "kr://kc/system"},
 			"kr://scene/knowledge",
 		},
 	}
-	if err := matchJSONExpect(root, "catalog", "kr://scene/catalog"); err != nil {
+	if err := matchJSONExpect(root, "authorityId", "kr://scene/registry"); err != nil {
 		t.Fatal(err)
 	}
 	if err := matchJSONExpect(root, "repos", "[]"); err != nil {
@@ -1038,11 +1059,29 @@ func (w *sceneWorld) run(step sceneStep) {
 	case "http-server":
 		w.startHTTPServer()
 	case "deployment-fixture":
-		if _, _, err := kchome.InitHome(w.home, "kr://scene/catalog"); err != nil {
+		var fake sceneLakeFS
+		if w.cache != nil {
+			fake = w.cache.lakefs
+		}
+		if fake == nil {
+			fake = testkit.NewLakeFSFake(w.t)
+		}
+		w.t.Setenv("KC_LAKEFS_CREDENTIAL", fake.Credential())
+		file, _, err := kchome.InitHome(w.home, kchome.RegistryBinding{ID: "kr://scene/catalog", Driver: "lakefs", DSN: fake.DSN(fake.NewRepo())})
+		if err != nil {
 			w.t.Fatal(err)
 		}
+		bound := false
+		for _, repo := range file.Repos {
+			bound = bound || repo.ID == string(knowledge.SystemRepositoryID)
+		}
+		if !bound {
+			if _, err := kchome.PublishSystemRepository(w.home, "lakefs", fake.DSN(fake.NewRepo()), ""); err != nil {
+				w.t.Fatal(err)
+			}
+		}
 		w.bindProjection()
-		if _, err := kchome.EnsureSystemRepository(w.home, "kr://scene/catalog"); err != nil {
+		if _, err := kchome.EnsureSystemRepository(w.home); err != nil {
 			w.t.Fatal(err)
 		}
 		if w.cache != nil {
@@ -1062,15 +1101,6 @@ func (w *sceneWorld) run(step sceneStep) {
 			if _, err := kchome.AddRepository(ws, step.object, "lakefs", w.cache.lakefs.DSN(name), "", ""); err != nil {
 				w.t.Fatal(err)
 			}
-		}
-	case "catalog-fixture":
-		ws, err := kchome.Open(w.home)
-		if err != nil {
-			w.t.Fatal(err)
-		}
-		defer ws.Close()
-		if _, err := kchome.AddCatalog(ws, step.object); err != nil {
-			w.t.Fatal(err)
 		}
 	case "bootstrap-fixture":
 		allow, err := inv.ReadAllow(w.home)
@@ -1168,7 +1198,7 @@ func (w *sceneWorld) expandArg(arg, materials string) (string, error) {
 		}
 		return fmt.Sprint(got), nil
 	}
-	for _, key := range []string{"previewId", "proposalId", "reportId", "pinId", "pinFile"} {
+	for _, key := range []string{"previewId", "proposalId", "reportId", "pinId", "pinFile", "grantId"} {
 		token := "$" + key
 		if !strings.Contains(expanded, token) {
 			continue
@@ -1194,6 +1224,11 @@ func (w *sceneWorld) captureCLI() {
 	row, ok := payload.(map[string]any)
 	if !ok {
 		return
+	}
+	if w.cli.operation == "grant add" || w.cli.operation == "admin grant add" {
+		if id, ok := row["id"].(string); ok && id != "" {
+			w.ids["grantId"] = id
+		}
 	}
 	for _, key := range []string{"previewId", "proposalId", "reportId", "pinId"} {
 		if v, exists := row[key]; exists && fmt.Sprint(v) != "" {
@@ -1263,7 +1298,7 @@ func (w *sceneWorld) thenOutputIncludes(step sceneStep) {
 // so a Then table can pin a returned path against this trip's home.
 func (w *sceneWorld) expandExpected(value string) string {
 	value = strings.ReplaceAll(value, "$home", w.home)
-	for _, key := range []string{"previewId", "proposalId", "reportId", "pinId", "pinFile"} {
+	for _, key := range []string{"previewId", "proposalId", "reportId", "pinId", "pinFile", "grantId"} {
 		token := "$" + key
 		if !strings.Contains(value, token) {
 			continue
@@ -1891,9 +1926,7 @@ func classifySceneStep(line int, keyword, rest string, table [][]string) (sceneS
 	case strings.HasPrefix(rest, "existing repository "):
 		step.kind = "repository-fixture"
 		step.object = strings.TrimSpace(strings.TrimPrefix(rest, "existing repository "))
-	case strings.HasPrefix(rest, "configured catalog "):
-		step.kind = "catalog-fixture"
-		step.object = strings.TrimSpace(strings.TrimPrefix(rest, "configured catalog "))
+
 	case strings.HasPrefix(rest, "bootstrap principal "):
 		step.kind = "bootstrap-fixture"
 		step.principal = strings.TrimSpace(strings.TrimPrefix(rest, "bootstrap principal "))

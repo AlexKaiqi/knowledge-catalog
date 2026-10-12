@@ -22,7 +22,7 @@ func TestAdmissionAndSharingHaveTypedSelfServiceRoutes(t *testing.T) {
 		want int
 	}{
 		{"/identity/v1/admission", http.StatusOK},
-		{"/catalog/v1/repositories/kr:%2F%2Fowner%2Fone/shares", http.StatusForbidden},
+		{"/snapshot/v1/connections/kr:%2F%2Fowner%2Fone/shares", http.StatusForbidden},
 	} {
 		r := httptest.NewRequest(http.MethodGet, tc.path, nil)
 		r.Header.Set("X-Kc-As", "kaiqidong")
@@ -37,6 +37,7 @@ func TestAdmissionAndSharingHaveTypedSelfServiceRoutes(t *testing.T) {
 func admissionTestFacade(dir string, policy *apphome.AdmissionConfig) http.Handler {
 	f := &httpFacade{home: dir, readHome: &Home{Dir: dir, Deployment: &apphome.DeploymentConfig{Admission: policy}}, options: HTTPServerOptions{AuthMode: "local"}}
 	mux := http.NewServeMux()
+	f.snapshotStoreService().Register(mux)
 	f.registerAdmissionSharingRoutes(mux)
 	return mux
 }
@@ -112,7 +113,7 @@ func TestRepositoryShareCannotWidenConsumptionAndRevokeIsScoped(t *testing.T) {
 	file := inv.AllowFile{Version: inv.AllowVersion, Rules: []inv.AllowRule{
 		{ID: "owner", Principal: "kaiqidong", Repo: repo, Actions: []string{"repository.shares.manage", "knowledge.read"}},
 		{ID: "limited", Principal: "kaiqidong", Repo: repo, Object: "public/*", Actions: []string{"knowledge.search"}},
-		{ID: "someone-admin", Principal: "someone", Catalog: "kr://other/catalog", Actions: []string{"*"}},
+		{ID: "someone-admin", Principal: "someone", Actions: []string{"*"}},
 	}}
 	if err := inv.WriteAllow(dir, file); err != nil {
 		t.Fatal(err)
@@ -126,7 +127,7 @@ func TestRepositoryShareCannotWidenConsumptionAndRevokeIsScoped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !inv.PrincipalAllowed(dir, "bob", "knowledge.read", repo, "") || inv.PrincipalAllowed(dir, "bob", "knowledge.read", other, "") || inv.PrincipalAllowed(dir, "bob", "repository.shares.manage", repo, "") {
+	if !inv.PrincipalAllowed(dir, "bob", "knowledge.read", repo) || inv.PrincipalAllowed(dir, "bob", "knowledge.read", other) || inv.PrincipalAllowed(dir, "bob", "repository.shares.manage", repo) {
 		t.Fatal("recipient rights are not limited to shared repo/action")
 	}
 	file, _ = inv.ReadAllow(dir)
@@ -144,7 +145,7 @@ func TestRepositoryShareCannotWidenConsumptionAndRevokeIsScoped(t *testing.T) {
 	if _, err := removeRepositoryShare(cx); err != nil {
 		t.Fatal(err)
 	}
-	if inv.PrincipalAllowed(dir, "bob", "knowledge.read", repo, "") || !inv.PrincipalAllowed(dir, "bob", "knowledge.read", other, "") || !inv.PrincipalAllowed(dir, "someone", "admin.grants.manage", "", "kr://other/catalog") {
+	if inv.PrincipalAllowed(dir, "bob", "knowledge.read", repo) || !inv.PrincipalAllowed(dir, "bob", "knowledge.read", other) || !inv.PrincipalAllowed(dir, "someone", "admin.grants.manage", "") {
 		t.Fatal("share revocation touched unrelated rights or retained share")
 	}
 	file, _ = inv.ReadAllow(dir)

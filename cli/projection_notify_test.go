@@ -16,7 +16,7 @@ import (
 
 func TestProjectionNotifyHTTPRejectsObservationBody(t *testing.T) {
 	home := testkit.TempDir(t)
-	body(t, kc(home, "local", "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(home, "local", "init"))
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
@@ -67,7 +67,7 @@ func TestProjectionNotifyPullsBoundStateWithoutChangingHEAD(t *testing.T) {
 	}
 	home := testkit.TempDir(t)
 	repositoryID := "kr://acme/public/core"
-	body(t, kc(home, "local", "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(home, "local", "init"))
 	body(t, kc(home, "local", "store", "set", "--index", "opensearch"))
 	body(t, kc(home, "local", "store", "set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repositoryID)

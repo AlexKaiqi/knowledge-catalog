@@ -122,11 +122,8 @@ func mergeLayout(primary, fallback LayoutFile) LayoutFile {
 	if primary.Repos == "" {
 		primary.Repos = fallback.Repos
 	}
-	if primary.Catalog == "" {
-		primary.Catalog = fallback.Catalog
-	}
-	if primary.Catalogs == "" {
-		primary.Catalogs = fallback.Catalogs
+	if primary.Registry == "" {
+		primary.Registry = fallback.Registry
 	}
 	if primary.Projections == "" {
 		primary.Projections = fallback.Projections

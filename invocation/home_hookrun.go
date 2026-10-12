@@ -9,7 +9,6 @@ import (
 	"kc/invoke"
 	"kc/knowledge/writer"
 	"kc/snapshot"
-	"kc/snapshot/treewriter"
 )
 
 func writerReplayed(ws *kchome.Home, flags map[string]invoke.FlagValue) bool {
@@ -22,18 +21,10 @@ func writerReplayed(ws *kchome.Home, flags map[string]invoke.FlagValue) bool {
 }
 
 func hookEvent(ws *kchome.Home, command string, flags map[string]invoke.FlagValue) hook.Event {
-	catalogID := invoke.FlagString(flags, "catalog")
-	if catalogID == "" {
-		catalogID = invoke.FlagString(flags, "_default-catalog")
-	}
-	if catalogID == "" && ws != nil && len(ws.File.Catalogs) == 1 {
-		catalogID = ws.File.Catalogs[0].ID
-	}
 	return hook.Event{
 		Action:    command,
 		As:        invoke.FlagString(flags, "as"),
 		Repo:      invoke.FlagString(flags, "repo"),
-		Catalog:   catalogID,
 		SetID:     invoke.FlagString(flags, "dataset"),
 		CommandID: invoke.FlagString(flags, "command-id"),
 	}
@@ -90,11 +81,6 @@ func fillHookResult(event *hook.Event, result any) {
 	case snapshot.Receipt:
 		event.Receipt = v.ReceiptRef
 		event.Disposition = v.Disposition
-		event.NewCommit = string(v.Result.NewCommit)
-		event.CommandID = v.CommandID
-	case treewriter.Receipt:
-		event.Receipt = v.ReceiptRef
-		event.Disposition = string(v.Disposition)
 		event.NewCommit = string(v.Result.NewCommit)
 		event.CommandID = v.CommandID
 	default:

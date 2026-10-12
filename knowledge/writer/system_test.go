@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"kc/internal/repofile"
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/knowledge"
@@ -20,7 +21,7 @@ func TestPublishSystemSeedsEmptyTreeAndRefusesOverwrite(t *testing.T) {
 		t.Fatalf("wrong code: %v", err)
 	}
 
-	native := knowledge.NewSystemRepository()
+	native := testkit.MakeNativeSystemRepository(t)
 	verified, err := writer.PublishSystem(native)
 	if err != nil {
 		t.Fatal(err)
@@ -30,7 +31,7 @@ func TestPublishSystemSeedsEmptyTreeAndRefusesOverwrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	if verified.Seeded || verified.Commit != head {
-		t.Fatalf("built-in System Repository must verify without writing: %#v", verified)
+		t.Fatalf("published native System Repository must verify without writing: %#v", verified)
 	}
 
 	repo := testkit.MakeRepository(t, string(knowledge.SystemRepositoryID))
@@ -63,19 +64,40 @@ func TestPublishSystemSeedsEmptyTreeAndRefusesOverwrite(t *testing.T) {
 	}
 	path := ""
 	hasReadme := false
+	expectedFiles := map[string]bool{}
+	for _, operation := range knowledge.SystemPublicationOperations() {
+		expectedFiles[operation.PathHint] = false
+	}
 	for _, file := range files {
 		if strings.HasPrefix(file, ".kc/") {
 			continue
 		}
+		if _, exists := expectedFiles[file]; !exists {
+			t.Fatalf("unexpected file in system publication: %s", file)
+		}
+		expectedFiles[file] = true
 		if file == knowledge.RepositoryReadmePath {
 			hasReadme = true
 			continue
 		}
-		if !strings.HasPrefix(file, knowledge.CanonicalSchemaDir+"/") {
+		raw, err := tree.ReadFile(file, seeded.Commit)
+		if err != nil {
+			t.Fatal(err)
+		}
+		unit := repofile.Parse(string(raw))
+		if unit == nil {
+			t.Fatalf("published file is not a knowledge unit: %s", file)
+		}
+		if knowledge.IsSchemaObject(unit.ObjectID) && !strings.HasPrefix(file, knowledge.CanonicalSchemaDir+"/") {
 			t.Fatalf("system publication must use the _schemas/ tree, got %s", file)
 		}
 		if strings.Contains(file, "schema-definition") {
 			path = file
+		}
+	}
+	for file, present := range expectedFiles {
+		if !present {
+			t.Errorf("system publication omitted %s", file)
 		}
 	}
 	if !hasReadme {
@@ -106,6 +128,47 @@ func TestPublishSystemSeedsEmptyTreeAndRefusesOverwrite(t *testing.T) {
 	}
 }
 
+func TestPublishSystemRejectsSelfDescriptionDrift(t *testing.T) {
+	for _, tc := range []struct {
+		name, path, before, after string
+		remove                    bool
+	}{
+		{"readme", "README.md", "Knowledge Catalog", "Altered Catalog", false},
+		{"concept", "concepts/object/definition.md", "具有独立身份", "没有独立身份", false},
+		{"entrypoint", "capabilities/read-knowledge/entrypoints.yaml", "kc read", "kc invented", false},
+		{"schema binding", "capabilities/read-knowledge/definition.md", "capability-definition/v1", "capability-usage/v1", false},
+		{"missing guide", "guides/first-publication/guide.md", "", "", true},
+		{"missing relation", "relations/first-publication.uses.publish-knowledge.yaml", "", "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := testkit.MakeRepository(t, string(knowledge.SystemRepositoryID))
+			published, err := writer.PublishSystem(repo.Snapshot())
+			if err != nil {
+				t.Fatal(err)
+			}
+			tree, _ := snapshot.TreeStoreOf(repo.Snapshot())
+			raw, err := tree.ReadFile(tc.path, published.Commit)
+			if err != nil {
+				t.Fatal(err)
+			}
+			altered := bytes.Replace(raw, []byte(tc.before), []byte(tc.after), 1)
+			if !tc.remove && bytes.Equal(altered, raw) {
+				t.Fatal("tamper signal did not change the publication")
+			}
+			commit, err := tree.ApplyTreeCommit(snapshot.TreeChangeSet{TargetRepository: knowledge.SystemRepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: published.Commit, ExpectedTargetCommit: published.Commit, Changes: []snapshot.TreeChange{{Path: tc.path, Content: altered, Remove: tc.remove}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := writer.PublishSystem(repo.Snapshot()); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
+				t.Fatalf("publication drift was accepted: %v", err)
+			}
+			if head, _ := repo.Head(snapshot.DefaultRef); head != commit {
+				t.Fatal("verification overwrote occupied publication")
+			}
+		})
+	}
+}
+
 func TestRuntimeWriterRefusesSystemRepository(t *testing.T) {
 	w, err := writer.NewWriter(snapshot.NewRegistry(), nil)
 	if err != nil {
@@ -118,5 +181,28 @@ func TestRuntimeWriterRefusesSystemRepository(t *testing.T) {
 	})
 	if kernel.CodeOf(err) != kernel.ErrForbidden {
 		t.Fatalf("runtime Writer must refuse System Repository: %v", err)
+	}
+}
+
+func TestPublishSystemRejectsUnexpectedFiles(t *testing.T) {
+	for _, seeded := range []bool{false, true} {
+		repo := testkit.MakeRepository(t, string(knowledge.SystemRepositoryID))
+		if seeded {
+			if _, err := writer.PublishSystem(repo.Snapshot()); err != nil {
+				t.Fatal(err)
+			}
+		}
+		tree, _ := snapshot.TreeStoreOf(repo.Snapshot())
+		base, _ := repo.Head(snapshot.DefaultRef)
+		commit, err := tree.ApplyTreeCommit(snapshot.TreeChangeSet{TargetRepository: knowledge.SystemRepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: base, ExpectedTargetCommit: base, Changes: []snapshot.TreeChange{{Path: "foreign.txt", Content: []byte("unrecognized publication")}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := writer.PublishSystem(repo.Snapshot()); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
+			t.Fatalf("occupied publication accepted extra files (seeded=%v): %v", seeded, err)
+		}
+		if head, _ := repo.Head(snapshot.DefaultRef); head != commit {
+			t.Fatal("occupied publication was overwritten")
+		}
 	}
 }

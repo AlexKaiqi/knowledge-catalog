@@ -115,23 +115,13 @@ func dispatchCLI(argv []string, runtime *telemetry.Runtime, allowEmbedded bool) 
 	if _, ok := parsed.Flags["config"]; ok {
 		return inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid, "--config is only valid for deployment operations and kc serve"))
 	}
-	if publicPath == "catalog repo attach" {
-		for _, name := range []string{"dir", "driver", "dsn"} {
-			if _, ok := parsed.Flags[name]; ok {
-				return inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid, "catalog repo attach uses a configured Snapshot binding; --%s belongs in deployment configuration", name))
-			}
-		}
-	}
-	if _, explicitHome := parsed.Flags["home"]; allowEmbedded && explicitHome {
+	if allowEmbedded {
 		if _, explicitServer := parsed.Flags["server"]; !explicitServer {
 			// An explicitly embedded fixture owns its Home. Client defaults and
-			// task context belong to the separate product transport; an explicit
+			// saved sessions belong to the separate product transport; an explicit
 			// --server still takes the normal mutually-exclusive validation path.
 			return encodeCLIProduct(publicPath, parsed.Flags, invokeWithTelemetry(context.Background(), runtime, surface.Handler, parsed.Flags))
 		}
-	}
-	if err := inheritTaskContext(publicPath, parsed.Flags); err != nil {
-		return inv.ErrorResult(err)
 	}
 	if server := inv.RemoteServerURL(parsed.Flags); server != "" {
 		return encodeCLIProduct(publicPath, parsed.Flags, runRemoteCLI(context.Background(), server, publicPath, parsed.Flags))
@@ -160,8 +150,6 @@ func applyPositionals(command string, flags map[string]FlagValue, args []string)
 	switch command {
 	case "help", "--help", "-h":
 		return assign("topic")
-	case "catalog-use":
-		return assign("catalog")
 	case "attach", "detach":
 		return assign("repo")
 	case "dataset-retire", "dataset-define":
@@ -189,8 +177,8 @@ func applyPositionals(command string, flags map[string]FlagValue, args []string)
 }
 
 func rejectPublicSurfaceFlags(publicPath string, flags map[string]FlagValue) error {
-	if _, explicitCatalog := flags["catalog"]; explicitCatalog && publicPath != "catalog use" && publicPath != "grant add" && publicPath != "grant list" {
-		return kernel.Fail(kernel.ErrUsageInvalid, "%s rejects --catalog; select the current Catalog with kc catalog use", publicPath)
+	if _, explicitCatalog := flags["catalog"]; explicitCatalog {
+		return kernel.Fail(kernel.ErrUsageInvalid, "%s rejects --catalog; one service has one registration space", publicPath)
 	}
 	if _, ok := flags["pin"]; ok {
 		return kernel.Fail(kernel.ErrUsageInvalid, "%s rejects --pin; pass --dataset or --repo", publicPath)

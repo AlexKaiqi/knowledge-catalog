@@ -13,7 +13,7 @@ import (
 func TestStoreConfigRejectsSecrets(t *testing.T) {
 	t.Setenv("KC_TEST_OPENSEARCH_URL", "")
 	h := testkit.TempDir(t)
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "init"))
 	listed := asMap(t, body(t, kc(h, "store-ls")))
 	if listed["repository"] != "lakefs" || listed["index"] != "none" || listed["profile"] != "local" {
 		t.Fatalf("%#v", listed)
@@ -52,13 +52,10 @@ func TestStoreConfigRejectsSecrets(t *testing.T) {
 	expectMsg(t, kc(h, "store-set", "--driver", "mysql"), "unknown store driver mysql")
 	expectMsg(t, kc(h, "store-set", "--driver", "elasticsearch", "--url", "http://127.0.0.1:9200"), "unknown store driver elasticsearch")
 	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/public/mysql-not-repo", "--driver", "mysql"), "unknown repository driver mysql")
-	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/public/gitea-no-dsn", "--driver", "gitea"), "requires --dsn")
-	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/public/gitea-secret", "--driver", "gitea", "--dsn", "http://u:p@127.0.0.1:3001/kc/core"), "must not contain secrets")
-	body(t, kc(h, "store-set", "--repository", "gitea"))
-	if asMap(t, body(t, kc(h, "store-ls")))["repository"] != "gitea" {
-		t.Fatal("store-set --repository gitea")
-	}
-
+	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/public/gitea-retired", "--driver", "gitea"), "no longer supported")
+	expectMsg(t, kc(h, "store-set", "--repository", "gitea"), "no longer supported")
+	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/public/lakefs-no-dsn", "--driver", "lakefs"), "requires --dsn")
+	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/public/lakefs-secret", "--driver", "lakefs", "--dsn", "http://u:p@127.0.0.1:8000/core"), "must not contain secrets")
 	body(t, kc(h, "store-set", "--profile", "scale"))
 	scaleListed := asMap(t, body(t, kc(h, "store-ls")))
 	if scaleListed["profile"] != "scale" || scaleListed["repository"] != "lakefs" || scaleListed["index"] != "opensearch" || scaleListed["cache"] != nil {
@@ -79,7 +76,7 @@ func TestStoreConfigRejectsSecrets(t *testing.T) {
 func TestLocalStoreConfig(t *testing.T) {
 	t.Setenv("KC_TEST_OPENSEARCH_URL", "")
 	h := testkit.TempDir(t)
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "init"))
 	engines, err := os.ReadFile(filepath.Join(h, "stores.yaml"))
 	if err != nil {
 		t.Fatal(err)
@@ -98,12 +95,12 @@ func TestLocalStoreConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, needle := range []string{"repos: repos", "projections: projections", "catalogs: catalogs", "checkouts: checkouts"} {
+	for _, needle := range []string{"repos: repos", "projections: projections", "registry: registry", "checkouts: checkouts"} {
 		if !strings.Contains(string(layout), needle) {
 			t.Fatalf("missing %q in %s", needle, layout)
 		}
 	}
-	if strings.Contains(string(layout), "catalog:") && !strings.Contains(string(layout), "catalogs:") {
+	if strings.Contains(string(layout), "catalog:") || strings.Contains(string(layout), "catalogs:") {
 		t.Fatalf("layout still uses singular catalog path: %s", layout)
 	}
 	if strings.Contains(string(layout), "_catalog") {
@@ -122,10 +119,10 @@ func TestLocalStoreConfig(t *testing.T) {
 	}
 	st := asMap(t, body(t, kc(h, "status")))
 	repos := st["repos"].([]any)
-	if len(repos) != 1 {
+	if len(repos) != 2 {
 		t.Fatalf("%#v", st["repos"])
 	}
-	item := asMap(t, repos[0])
+	item := statusRepo(t, st, "kr://acme/public/core")
 	if item["driver"] != "lakefs" || !strings.Contains(fmt.Sprint(item["dir"]), "repos/") {
 		t.Fatalf("%#v", item)
 	}
@@ -135,7 +132,7 @@ func TestLocalProfileHasNoSearchProjection(t *testing.T) {
 	t.Setenv("KC_TEST_OPENSEARCH_URL", "")
 	h := testkit.TempDir(t)
 	repo := "kr://acme/public/local-only"
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "init"))
 	seedRepo(t, h, repo)
 	body(t, kc(h, "put", "--command-id", "local-1", "--repo", repo,
 		"--object", "runbook/local", "--value", `{"body":"exact read stays available"}`))
@@ -151,33 +148,34 @@ func TestLocalProfileHasNoSearchProjection(t *testing.T) {
 	expectMsg(t, failed, "search projection is not available")
 }
 
-func TestHomeLayoutDiscoversFromDisk(t *testing.T) {
+func TestHomeLayoutDiscoversSingleRegistryFromDisk(t *testing.T) {
 	h := testkit.TempDir(t)
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "init"))
 	if _, err := os.Stat(filepath.Join(h, "workspace.json")); err == nil {
 		t.Fatal("init must not write workspace.json")
 	}
-	if _, err := os.Stat(filepath.Join(h, "catalogs", "kr_acme_catalog", ".git")); err != nil {
+	if _, err := os.Stat(filepath.Join(h, "registry", "registry-authority.yaml")); err != nil {
 		t.Fatal(err)
 	}
 	seedRepo(t, h, "kr://acme/public/core")
-	if _, err := os.Stat(filepath.Join(h, "repos", "kr_acme_public_core")); err != nil {
-		t.Fatal(err)
+	before := asMap(t, body(t, kc(h, "status")))
+	head := fmt.Sprint(asMap(t, before["registry"])["head"])
+	if head == "" {
+		t.Fatal("registry has no initialized authority head", before)
 	}
-	body(t, kc(h, "catalog-add", "--catalog", "kr://acme/docs/catalog"))
-	if _, err := os.Stat(filepath.Join(h, "catalogs", "kr_acme_docs_catalog", ".git")); err != nil {
-		t.Fatal(err)
+	expectCode(t, kc(h, "catalog-add"), "USAGE_INVALID")
+	after := asMap(t, body(t, kc(h, "status")))
+	if got := fmt.Sprint(asMap(t, after["registry"])["head"]); got != head {
+		t.Fatalf("reopening replaced authority head: %s != %s", got, head)
 	}
-	listed := asMap(t, body(t, kc(h, "store-ls")))
-	layout := asMap(t, listed["layout"])
-	if layout["catalogs"] != "catalogs" || layout["catalog"] != nil {
-		t.Fatalf("layout %#v", layout)
+	if !hasRepository(after, "kr://acme/public/core") {
+		t.Fatal("reopening lost registered source", after)
 	}
 }
 
 func TestStoreConfigMigratesLegacyJSON(t *testing.T) {
 	h := testkit.TempDir(t)
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "init"))
 	if err := os.Remove(filepath.Join(h, "stores.yaml")); err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +202,7 @@ func TestStoreConfigMigratesLegacyJSON(t *testing.T) {
 
 func TestStoreConfigRejectsRetiredFileGit(t *testing.T) {
 	h := testkit.TempDir(t)
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "init"))
 	if err := os.WriteFile(filepath.Join(h, "stores.yaml"), []byte("repository: filegit\nindex: none\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +216,7 @@ func TestScaleProfileRepoAddLakeFS(t *testing.T) {
 		t.Skip("live lakeFS repo-add belongs to the adapter suite")
 	}
 	h := testkit.TempDir(t)
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "init"))
 	body(t, kc(h, "store-set", "--profile", "scale"))
 	fake := testkit.NewLakeFSFake(t)
 	t.Setenv("KC_LAKEFS_CREDENTIAL", testkit.LakeFSFakeCredential)
@@ -227,7 +225,7 @@ func TestScaleProfileRepoAddLakeFS(t *testing.T) {
 		t.Fatalf("scale lakeFS repo-add %#v", added)
 	}
 	st := asMap(t, body(t, kc(h, "status")))
-	item := asMap(t, st["repos"].([]any)[0])
+	item := statusRepo(t, st, "kr://acme/public/core")
 	if item["driver"] != "lakefs" {
 		t.Fatalf("driver %#v", item)
 	}

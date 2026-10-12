@@ -9,11 +9,11 @@ import (
 	"kc/knowledge"
 )
 
-// MemberLookup mounts a Snapshot by id. Catalog.Require is the usual implementation.
+// MemberLookup mounts a Snapshot by id. dataset.Service.Require is the usual implementation.
 type MemberLookup func(kernel.RepositoryID) (knowledge.Repository, error)
 
 // KnowledgeSetPin is a consumer read basis: one ResolveKnowledgeSet result, frozen for the command.
-// Catalog produces the coordinates; this package reads object_id at those commits.
+// Dataset service produces the coordinates; this package reads object_id at those commits.
 
 type KnowledgeSetPin struct {
 	SetID        string                                  `json:"setId"`
@@ -22,7 +22,7 @@ type KnowledgeSetPin struct {
 	Items        []DatasetItem                           `json:"items,omitempty"`
 }
 
-// DatasetItem is the consumer copy of a Catalog file pointer. Serving uses it
+// DatasetItem is the consumer copy of a Dataset service file pointer. Serving uses it
 // to skip objects whose unit paths are outside the published list.
 type DatasetItem struct {
 	Target     string              `json:"target"`
@@ -101,7 +101,7 @@ func Open(lookup MemberLookup, pin KnowledgeSetPin) *Serving {
 }
 
 // WholeRepositoryItems publishes every path in the named repositories. Product
-// Dataset pins come from Catalog freeze; empty Items is not a whole-repo alias.
+// Dataset pins come from Dataset service freeze; empty Items is not a whole-repo alias.
 func WholeRepositoryItems(repos map[kernel.RepositoryID]kernel.CommitID) []DatasetItem {
 	ids := make([]kernel.RepositoryID, 0, len(repos))
 	for id := range repos {

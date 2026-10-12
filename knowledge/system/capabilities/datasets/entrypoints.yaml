@@ -1,0 +1,35 @@
+---
+object_id: kc/capability/datasets
+aspect_name: entrypoints
+kind: Aspect
+path_hint: capabilities/datasets/entrypoints.yaml
+schema_ref: schema/system/capability-entrypoints/v1
+---
+{
+  "commands": [
+    {
+      "action": "file.read",
+      "command": "kc dataset clone",
+      "description": "把已发布 Dataset 的交付目录树物化成普通本地目录",
+      "help": "kc help dataset clone"
+    },
+    {
+      "action": "dataset.manage",
+      "command": "kc dataset define",
+      "description": "定义可复用的多 Repository 配方（目录映射与逐文件交付）",
+      "help": "kc help dataset define"
+    },
+    {
+      "action": "dataset.overlay",
+      "command": "kc dataset overlay",
+      "description": "只在本机合成一份不发表的配方",
+      "help": "kc help dataset overlay"
+    },
+    {
+      "action": "dataset.manage",
+      "command": "kc dataset retire",
+      "description": "退役命名配方",
+      "help": "kc help dataset retire"
+    }
+  ]
+}

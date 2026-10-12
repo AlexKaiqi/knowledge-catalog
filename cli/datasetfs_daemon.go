@@ -25,7 +25,7 @@ type daemonMountResult struct {
 
 // daemonMountKnowledgeSetFS is the synchronous host-controller boundary: it
 // returns only after the child has mounted every path and emitted its fixed
-// manifest. DSH can therefore veto session creation without racing an
+// manifest. A host can therefore reject a failed mount without racing an
 // asynchronous stdout listener.
 func daemonMountKnowledgeSetFS(argv []string, stdout, stderr io.Writer) int {
 	// Reject shape errors in the synchronous controller before starting a

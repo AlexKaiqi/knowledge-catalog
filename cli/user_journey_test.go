@@ -14,9 +14,9 @@ func TestUserJourneyAttachExistingRepository(t *testing.T) {
 	sourceHome := testkit.TempDir(t)
 	repoID := "kr://acme/teams/platform"
 	authorityDSN := lakeFSRepoDSN(t)
-	body(t, kc(sourceHome, "init", "--catalog", "kr://acme/source-catalog"))
+	body(t, kc(sourceHome, "init"))
 	seedRepo(t, sourceHome, repoID, "--dsn", authorityDSN)
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "init"))
 	seedRepo(t, h, repoID, "--dsn", authorityDSN)
 	state := asMap(t, body(t, kc(h, "show")))
 	repositories := businessRepositories(state)
@@ -32,10 +32,10 @@ func TestUserJourneyAttachExistingRepository(t *testing.T) {
 // vocabulary; Workspace is the only composition and permission scope.
 func TestUserJourneyManageAgentAccess(t *testing.T) {
 	h := testkit.TempDir(t)
-	catalogID := "kr://acme/catalog"
+
 	repoID := "kr://acme/public/runbooks"
 	setID := "oncall-agent"
-	body(t, kc(h, "init", "--catalog", catalogID))
+	body(t, kc(h, "init"))
 	seedRepo(t, h, repoID)
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", repoID,
 		"--object", "runbook/payments", "--value", `{"text":"freeze traffic"}`))
@@ -43,7 +43,7 @@ func TestUserJourneyManageAgentAccess(t *testing.T) {
 		"--source", repoID+"=refs/heads/main"))
 
 	workspaceRule := asMap(t, body(t, kc(h, "allow", "--principal", "agent",
-		"--cmd", "read-workspace", "--catalog", catalogID, "--dataset", setID)))
+		"--cmd", "read-workspace", "--dataset", setID)))
 	if workspaceRule["dataset"] != setID {
 		t.Fatalf("--dataset scope was not stored on the rule: %#v", workspaceRule)
 	}
@@ -82,9 +82,9 @@ func TestUserJourneyManageAgentAccess(t *testing.T) {
 // knowledge, while kc allow controls who may consume a Repository/Workspace.
 func TestUserJourneyKnowledgeGrantDoesNotAuthorizeAccess(t *testing.T) {
 	h := testkit.TempDir(t)
-	catalogID := "kr://acme/catalog"
+
 	repoID := "kr://acme/public/warehouse"
-	body(t, kc(h, "init", "--catalog", catalogID))
+	body(t, kc(h, "init"))
 	seedRepo(t, h, repoID)
 	body(t, kc(h, "put", "--command-id", "structure", "--repo", repoID,
 		"--object", "Table:payments", "--aspect", "structure", "--value", `{"columns":["id"]}`))
@@ -98,8 +98,7 @@ func TestUserJourneyKnowledgeGrantDoesNotAuthorizeAccess(t *testing.T) {
 		"--object", "Table:payments"), "FORBIDDEN")
 	expectCode(t, kc(h, "allowed", "--principal", "bob", "--cmd", "read", "--repo", repoID), "FORBIDDEN")
 
-	body(t, kc(h, "allow", "--principal", "bob", "--cmd", "read-workspace",
-		"--catalog", catalogID, "--dataset", "warehouse"))
+	body(t, kc(h, "allow", "--principal", "bob", "--cmd", "read-workspace", "--dataset", "warehouse"))
 	values := body(t, kc(h, "read", "--as", "bob", "--dataset", "warehouse",
 		"--object", "Table:payments")).([]any)
 	if len(values) != 1 {
@@ -132,7 +131,7 @@ func TestUserJourneyUpstreamUpdateDoesNotRewriteReferencingRepository(t *testing
 	h := testkit.TempDir(t)
 	upstream := "kr://acme/public/handbook"
 	personal := "kr://acme/personals/alice"
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "init"))
 	seedRepo(t, h, upstream)
 	seedRepo(t, h, personal)
 	upV1 := asMap(t, asMap(t, body(t, kc(h, "put", "--command-id", "up-v1", "--repo", upstream,

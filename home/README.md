@@ -1,12 +1,17 @@
 # home/
 
-部署装配入口：按声明配置连接独立 Catalog Snapshot 权威和已有知识 Snapshot，把 Writer / Reader / ControlPlane / Index 装配到 Server。具体 Gitea/LakeFS adapter 只允许在 `authority_drivers.go` 被 import（A-01）；`index/opensearch` 只允许在 stores 族与就绪端口绑定（`readiness_ports.go`：`NewSearchBackendProbe` 把具体索引探测绑定成端口函数，CAP-ORG-01 B7）。Dolt adapter 已退役删除。本包不得 import `cli`、`client` 或 `httpsurface`。
+部署装配入口：按声明配置连接独立登记表 Snapshot 权威和已有知识 Snapshot，把 Writer / Reader / ControlPlane / Index 装配到 Server。Snapshot 后端只经 `kc/snapshot` 公开构造与能力契约接入；lakeFS 实现归私有 `snapshot/internal/lakefsimpl`（A-01）；`index/opensearch` 只允许在 stores 族与就绪端口绑定（`readiness_ports.go`：`NewSearchBackendProbe` 把具体索引探测绑定成端口函数，CAP-ORG-01 B7）。Dolt adapter 已退役删除。本包不得 import `cli`、`client` 或 `httpsurface`。
 
 业务 CLI 经 Server 和显式 principal。`kc deployment init --config` 显式初始化；`kc serve --config` 与 `OpenDeployment` 仅恢复。没有公开 `local` 命令或由实例目录扫描得到的部署清单。
 
 ## 声明配置
 
-`ReadDeployment` 接受单个 YAML 或 JSON 文档，拒绝未知字段。`DeploymentConfig` 是配置合同；部署工具负责版本化和分发配置，凭证通过环境或 Git credential helper 注入。
+`ReadDeployment` 接受单个 YAML 或 JSON 文档，拒绝未知字段。`DeploymentConfig` 是配置合同；部署工具负责版本化和分发配置，服务凭证通过环境注入；用户显式连接凭证遵守下文的私有耐久账合同。
+
+`auth` 接受 `local`、`taihu`、`gitea` 或 `lakefs`。统一原 lakeFS 控制台登录时显式
+配置 `auth: lakefs`、`authURL: <原 lakeFS origin>`；Server 以调用者会话验证身份，
+Snapshot 服务凭证仍私有。Cookie 防跨站边界、用户名绑定与原 API 秒精度身份回收限制见
+[`server/README.md`](../server/README.md)。登录不自动授予 登记表/Dataset 动作。
 
 ```yaml
 version: 1
@@ -15,12 +20,15 @@ listen: 127.0.0.1:7380
 bootstrapPrincipal: agent:operator
 stateDir: /srv/kc-state
 cacheDir: /var/cache/kc
-catalogs:
-  - id: kr://acme/catalog
-    driver: lakefs
-    dsn: https://lakefs.example/kc-catalog
-    ref: refs/heads/main
+registry:
+  id: kr://acme/registry
+  driver: lakefs
+  dsn: https://lakefs.example/kc-catalog
+  ref: refs/heads/main
 repositories:
+  - id: kr://kc/system
+    driver: lakefs
+    dsn: https://lakefs.example/kc-system
   - id: kr://acme/knowledge
     driver: lakefs
     dsn: https://lakefs.example/acme-knowledge
@@ -28,11 +36,11 @@ stores:
   index: none
 ```
 
-`stateDir` 必须挂载独立持久卷；`cacheDir` 可随实例删除。两者是绝对且不互相嵌套的目录。Catalog 使用独立 Snapshot repository（与知识仓同类介质、不同 identity）；初始化只写入登记表 YAML，不把 Catalog 变成 Knowledge Repository。`file://` 或实例盘上的 Git remote 不能充当生产 Catalog 权威。
+`stateDir` 必须挂载独立持久卷；`cacheDir` 可随实例删除。两者是绝对且不互相嵌套的目录。登记表 使用独立 Snapshot repository（与知识仓同类介质、不同 identity）；初始化只写入登记表 YAML，不把 登记表 变成 Knowledge Repository。`file://` 或实例盘上的 Git remote 不能充当生产 登记表 权威。
 
 `stores` 在部署配置中仅接受 `index` 与 `opensearch`；夹具的 `profile`、默认 `repository` driver 与 `layout` 不得混入部署配置。每个来源声明自己的 driver，实例路径由 `stateDir` / `cacheDir` 唯一决定。
 
-`managedRepositories` 是可选的平台仓供给策略，与静态 `repositories` 并列。客户端调用 `catalog repo create --catalog <id> --repo <id> --command-id <id>`，不传 driver、地址、凭证或 grants。
+`managedRepositories` 是可选的平台仓供给策略，与静态 `repositories` 并列。客户端调用 `create --name <name>`，不传 driver、地址、凭证或 grants。
 
 ```yaml
 managedRepositories:
@@ -43,18 +51,12 @@ managedRepositories:
   creatorActions: [writer.preview, writer.commit, writer.receipt.read, repository.metadata.read, knowledge.read, knowledge.provenance]
 ```
 
-LakeFS 使用部署声明的 URL `dsn`、S3 兼容对象存储 `root` 前缀与服务凭证；Gitea 使用部署声明的 URL `dsn` 与服务凭证，客户端不接触凭证。创建动作不要求目标仓预先出现在 repositories。`creatorActions` 必须显式选择 `validateCreatorActions` 允许的窄动作，包含可选的仓元数据、自己的回执、分享、评审和仓维护能力；没有默认发权，不允许全局管理员、Catalog 管理或投影写权限。创建者获得的普通 grant 可以撤销。重复创建请求返回原结果，重启与重试不得补回已撤销权限。新仓 binding、创建身份与分阶段进度保存在 `stateDir/managed.db`；RESERVED → OWNED → REGISTERED → READY 逐步记录分配、拥有来源、Catalog 准入与创建完成。已完成结果保留初始 HEAD，重复请求不把它替换成当前 HEAD；Catalog 仍只保存 Git 成员与配方。
+LakeFS 使用部署声明的 URL `dsn`、S3 兼容对象存储 `root` 前缀与服务凭证，客户端不接触服务凭证。Snapshot 存储只支持 lakeFS；旧 Gitea/filegit 存储配置明确拒绝。创建动作不要求目标仓预先出现在 repositories。`creatorActions` 必须显式选择 `validateCreatorActions` 允许的窄动作，包含可选的仓元数据、自己的回执、分享、评审和仓维护能力；没有默认发权，不允许全局管理员、登记表 管理或投影写权限。创建者获得的普通 grant 可以撤销。重复创建请求返回原结果，重启与重试不得补回已撤销权限。新仓 binding、创建身份与分阶段进度保存在 `stateDir/managed.db`；RESERVED → OWNED → REGISTERED → READY 逐步记录分配、拥有来源、登记表 准入与创建完成。已完成结果保留初始 HEAD，重复请求不把它替换成当前 HEAD；登记表 仍只保存来源登记与配方。
 
-用户自助选择由 `managedStores` 声明的命名池；它与旧 `managedRepositories` 单池配置互斥。只有一个池时自动选择，多个时要求用户的 `--store`。`--name` 接受可读名称。LakeFS 上 `--name`（合法 Graveler slug）就是协议仓 ID，与 lakeFS 仓库名相同，不另造 `repo-<hash>`。Gitea 在中文名或非 slug 名上仍用 `kr://<用户>/repo-<digest>`。同一人重复提交相同名称与 Store 恢复原结果。恢复命令仍由账本生成，不改仓名。新的规范人类用户名请求供给同名 Store 账号或隔离空间；旧持久分配和机器主体保持原有恢复身份。
+用户自助选择由 `managedStores` 声明的命名池；它与旧 `managedRepositories` 单池配置互斥。只有一个池时自动选择，多个时要求用户的 `--store`。`--name` 接受可读名称。LakeFS 上 `--name`（合法 Graveler slug）就是协议仓 ID，与 lakeFS 仓库名相同，不另造 `repo-<hash>`。同一人重复提交相同名称与 Store 恢复原结果。恢复命令仍由账本生成，不改仓名。既有持久分配和机器主体保持原有恢复身份。
 
 ```yaml
 managedStores:
-  gitea:
-    driver: gitea
-    dsn: https://gitea.example/platform
-    publicURL: https://kc.example
-    creatorActions: [writer.preview, writer.commit, writer.receipt.read, knowledge.read, knowledge.schema.read, repository.metadata.read, repository.shares.manage, dataset.resolve, file.read]
-    shareActions: [knowledge.read, dataset.resolve, file.read]
   lakefs:
     driver: lakefs
     dsn: https://lakefs.example
@@ -63,13 +65,11 @@ managedStores:
     creatorActions: [writer.preview, writer.commit, writer.receipt.read, knowledge.read, knowledge.schema.read, repository.metadata.read]
 ```
 
-Gitea 从配置 URL 取已批准服务地址，物理仓在用户同名账号下建立；账号占用必须通过本分配标记或同一可信 Gitea issuer/数字 subject 验证，不按名字收养。共享 SSO 可用 `authSourceId` 指向部署预先配置的认证源；没有共享 SSO 或可信既有账号时，原生网页登录未准备。配置 `publicURL` 可由 KC 管理页提供统一入口，真实 Gitea 页保留在 `providerURL`，`managementState` 明确区分管理入口准备状态。
+LakeFS 业务仓的 Graveler 名、协议 `--repo` 和管理入口最后一段都是 `--name`（必须能写成 lakeFS 允许的 `[a-z0-9-]{3,63}`），不含 owner；对象前缀是 `{root}/{name}`（例如 `s3://kc-authority/tianqiong/table-meta`）。`kc-` 只留给平台仓 `kc-catalog` / `kc-system`。allocation 只做账本令牌，不出现在仓名或对象前缀里。创建进度 READY 不表示远端当前健康，管理详情会另外查询当前发布和检索状态。
 
-托管 Gitea 恢复时仅装配耐久绑定的延迟句柄，已保存的管理地址不依赖远端在线；每次实际读写重新验证原 backend、allocation 和初始 commit。静态源和 Catalog 的恢复仍遵守既有合同。LakeFS 业务仓的 Graveler 名、协议 `--repo` 和管理入口最后一段都是 `--name`（必须能写成 lakeFS 允许的 `[a-z0-9-]{3,63}`），不含 owner；对象前缀是 `{root}/{name}`（例如 `s3://kc-authority/tianqiong/table-meta`）。`kc-` 只留给平台仓 `kc-catalog` / `kc-system`。allocation 只做账本令牌，不出现在仓名或对象前缀里。创建进度 READY 不表示远端当前健康，管理详情会另外查询当前发布和检索状态。
+`ManagedRepositoryResult` 的名称、owner、Store、管理地址和分配进度来自耐久账。`ListManagedRepositories`/`GetOwnedManagedRepository` 只选择本人控制记录；HTTP 应用再检查当前 `repository.metadata.read`，不会为导航授予 登记表 全局发现或知识正文读权。
 
-`ManagedRepositoryResult` 的名称、owner、Store、管理地址和分配进度来自耐久账。`ListManagedRepositories`/`GetOwnedManagedRepository` 只选择本人控制记录；HTTP 应用再检查当前 `repository.metadata.read`，不会为导航授予 Catalog 全局发现或知识正文读权。
-
-`catalogs` 可声明 `private: true`：此时已认证主体仍要该 Catalog 的 `catalog.read` grant 才能看见库存。默认公开发现不等于 `knowledge.read`。
+一套服务只有一份登记状态。部署认证后的主体可以发现库存；成员正文仍需逐仓或 Dataset 消费授权。配置不接受 `catalogs`、`private` 或请求 登记表 选择。
 
 `repositoryAccess` 按仓声明已认证默认可读动作（consume 侧闭集）。未列出的仓仍要 grant。这不是仓类型，也不放行写。System Repository 选用同一声明；授权器不按保留 ID 短路。
 
@@ -79,27 +79,29 @@ repositoryAccess:
     authenticatedActions: [knowledge.read, knowledge.schema.read, knowledge.search, knowledge.history.read, knowledge.provenance, knowledge.relations, knowledge.access.describe, file.read, projection.read]
 ```
 
-`repositories` 只是运营者批准的连接绑定，不代表 Catalog 成员关系。`catalog repo attach --repo <id>` 使用静态绑定或已供给托管仓的耐久绑定，只读检查已有 Snapshot，再通过一次 Catalog Snapshot 提交完成接入；托管仓可据此加入另一 Catalog。没有单独手工 register，也没有持久化的第二份 attached 状态。已有但不兼容的 authority 状态必须报错，不能在接入或恢复时迁移。
+`repositories` 只是运营者批准的连接绑定，不代表 登记表 成员关系。`attach --repo <id>` 使用静态绑定或已供给托管仓的耐久绑定，只读检查已有 Snapshot，再通过一次 登记表 Snapshot 提交完成接入；重复准入不创建新仓或重新发权。没有单独手工 register，也没有持久化的第二份 attached 状态。已有但不兼容的 authority 状态必须报错，不能在接入或恢复时迁移。
 
-System 的二进制信任根默认以不可变内置发布提供。若要在外部 Snapshot 发布，将 `kr://kc/system` 加到 `repositories` 后显式执行 `kc deployment system publish --config`；该操作使用 System Writer，来源绑定仍只存在于配置中。
+`repositories` 必须显式绑定 `kr://kc/system` 的实际 LakeFS Snapshot。`kc deployment init --config` 将随版本交付的 `knowledge/system` 出版源经 System Writer 发布到空仓，然后登记到 登记表；相同出版物只核对，不产生新提交。已初始化部署重新 init 只核对既有 system 内容，缺失或漂移须恢复权威。`kc deployment system publish --config` 保留为显式发布/核对入口，同样不覆盖已有不同版本。
+
+`OpenDeployment` / `kc serve` 只打开并核对实际 system 仓。运行时知识与文件读取全部来自该 Snapshot，引用修改、归档和字面文件写入均拒绝；不存在内置仓或来源失败时的回退。二进制携带出版源和校验信任根，不充当运行时仓。
 
 ## 权威与恢复
 
 | 内容 | 所有者与存储 | 实例替换 |
 |---|---|---|
-| Catalog 身份、成员、Workspace 配方、归档与历史 | 配置指定的独立 Catalog Snapshot 权威 | 重新打开该 Snapshot；写成功以 ref CAS 为准 |
+| 登记权威、成员、Dataset 发布配方与历史 | 配置指定的独立登记表 Snapshot 权威 | 重新打开该 Snapshot；写成功以 ref CAS 为准 |
 | Snapshot 内容、版本与候选分支 | 静态连接或托管仓记录指定的 authority | 只读打开；不得初始化、stamp 或迁移 |
 | 托管仓连接、创建请求与分阶段进度 | `stateDir/managed.db`；Snapshot 仍在托管 authority | 恢复新仓连接及原创建结果，不改静态配置、不补发已撤销 grant |
 | grants、hooks、gates | `stateDir` 内应用数据 | 持久卷保留，不从 bootstrap 配置重建 |
 | 可信用户名绑定 | `stateDir/identities.json`；初始化回执记录其存在 | 绑定用户名与 provider/issuer/subject；缺失失败，不重新接管同名账号 |
 | Writer command-id 回执、提案、Preview、验证记录 | `stateDir` 内账本和 control state | 保持幂等重放与维护流程连续性 |
 | 过程证据、访问证据、待投递 outbox | `stateDir` | 保留；队列清空后允许删除空 outbox 文件 |
-| Catalog 工作副本、投影与 checkout | `cacheDir`；检索投影也可由配置的外部 provider 保存 | 可丢弃并按明确版本重建 |
+| 派生投影与正文缓存 | `cacheDir`；检索投影也可由配置的外部 provider 保存 | 可丢弃并按明确版本重建；登记表 发布权威始终是 Snapshot |
 | endpoint、driver、路径、认证模式、首个管理员 | 声明配置 | 由部署系统恢复；bootstrap 只在显式首次初始化使用 |
-| 部署 token、password | 外部凭证提供方 | 重新注入，不能写入配置或 Catalog |
+| 部署 token、password | 外部凭证提供方 | 重新注入，不能写入配置或 登记表 |
 | 用户授权的逐仓连接 credential 与固定绑定 | 模式 0600 的 `stateDir/connections.db`，秘密独立 bucket | 依赖原持久卷和初始化回执，恢复管理面后可显式轮换 |
 
-`InitializeDeployment` 将初始控制数据写入 staging 后一次 rename 安装，已初始化的数据不能被第二次 init 清空。 若 Catalog Snapshot 权威已有登记而持久卷或标记丢失，init 也必须拒绝重新发放 bootstrap 权限，要求恢复原卷。`deployment-state.json` 记录已初始化 Catalog 身份的回执，区分新增配置与已丢失的权威 ref；它不保存成员清单或来源连接配置。已初始化 Catalog 的权威丢失时 init 同样拒绝重建空 Catalog。首次初始化跨 Catalog Snapshot 和持久卷时不提供分布式事务：若在权威发布后、初始状态安装前中断，会保守拒绝再次初始化，需要核对并处理未完成的部署，不能把它当成空治理状态。`ValidateDeploymentState` 拒绝缺失的持久化策略、账本或控制文件；Server 在请求前再次检查，不能把卷故障解释为“没有 gate”。Catalog 接入的原子性只涵盖一次 Catalog 提交，不宣称来源与 Catalog 的跨仓事务或持续在线保证。
+`InitializeDeployment` 将初始控制数据写入 staging 后一次 rename 安装，已初始化的数据不能被第二次 init 清空。 若登记表 Snapshot 权威已有登记而持久卷或标记丢失，init 也必须拒绝重新发放 bootstrap 权限，要求恢复原卷。`deployment-state.json` 记录唯一 registryAuthority 回执，拒绝切换权威或重建已丢失的权威 ref；它不保存成员清单或来源连接配置。已初始化登记表的权威丢失时 init 同样拒绝重建空登记表。首次初始化跨登记表 Snapshot 和持久卷时不提供分布式事务：若在权威发布后、初始状态安装前中断，会保守拒绝再次初始化，需要核对并处理未完成的部署，不能把它当成空治理状态。`ValidateDeploymentState` 拒绝缺失的持久化策略、账本或控制文件；Server 在请求前再次检查，不能把卷故障解释为“没有 gate”。来源接入的原子性只涵盖一次登记表提交，不宣称来源与 登记表 的跨仓事务或持续在线保证。
 
 ## 装配与夹具
 
@@ -108,20 +110,20 @@ System 的二进制信任根默认以不可变内置发布提供。若要在外�
 | 文件 | 职责 |
 |---|---|
 | `deployment.go` / `deployment_runtime.go` | 声明解析、初始化、恢复、只读接入与持久状态检查 |
-| `catalog_authority.go` | 独立 Catalog Snapshot 容器的打开/创建；不进入知识 Store |
-| `home.go` | Store、Catalog、Writer、Reader、ControlPlane、Index 的共同装配 |
+| `registry_authority.go` | 独立登记表 Snapshot 容器的打开/创建；不进入知识 Store |
+| `home.go` | Store、登记表、Writer、Reader、ControlPlane、Index 的共同装配 |
 | `managed.go` / `managed_ledger.go` | 显式托管仓创建、耐久分配账和只读恢复；重试不重新发权 |
 | `authority_drivers.go` | 唯一具体 Snapshot adapter 选择点；创建与只读打开分离 |
 | `home_sidecar.go` | AfterSnapshot → Index、Merge Gate |
 | `home_system.go` | System Writer 发布与内置信任根校验 |
-| `journal.go` | Writer / Reader / Catalog / ControlPlane 的过程账 |
-| `read_view.go` | 正式部署请求的独立 Reader、过程账上下文和 Catalog 已接受状态视图 |
+| `journal.go` | Writer / Reader / 登记表 / ControlPlane 的过程账 |
+| `read_view.go` | 正式部署请求的独立 Reader、过程账上下文和 登记表 已接受状态视图 |
 | `home_discover.go` / `home_mount.go` | 组件夹具的显式创建与目录发现；不用于生产恢复 |
 | `stores*.go` | 运行时 provider 配置及旧组件夹具布局 |
 
-`Open`、`InitHome`、`AddRepository` 留给显式组件装配和测试夹具；不能用它们实现生产 `attach` 或 Server 恢复。配置绑定新增 Catalog 后显式 `deployment init`，启动过程本身不登记 System 或业务来源，不隐式收养工作区配方。
+`Open`、`InitHome`、`AddRepository` 留给显式组件装配和测试夹具；不能用它们实现生产 `attach` 或 Server 恢复。初始化必须显式调用 `deployment init`，启动过程本身不登记 System 或业务来源，不隐式收养工作区配方。
 
-正式部署的并行读取通过 `ReadView` 隔离每个请求的 Reader、过程账身份和 Catalog 已接受状态，不修改进程共享的 journal 或 Writer stamp。视图借用 Store、Writer、命令账本与 Index，保留回执查询能力，调用方不得关闭共享资源。Catalog 视图不重新加载 Snapshot 权威、不订阅 Snapshot 事件，也不能持久化变更。只有保证读取不会隐式收养配方的正式部署路径使用该视图；组件夹具的显式装配语义保持独立。
+正式部署的并行读取通过 `ReadView` 隔离每个请求的 Reader、过程账身份和 登记表 已接受状态，不修改进程共享的 journal 或 Writer stamp。视图借用 Store、Writer、命令账本与 Index，保留回执查询能力，调用方不得关闭共享资源。登记表 视图不重新加载 Snapshot 权威、不订阅 Snapshot 事件，也不能持久化变更。只有保证读取不会隐式收养配方的正式部署路径使用该视图；组件夹具的显式装配语义保持独立。
 
 ## 首次准入与受限分享
 
@@ -136,22 +138,22 @@ System 的二进制信任根默认以不可变内置发布提供。若要在外�
 
 ## 自有 Snapshot 连接
 
-`connections` 显式开放已有 Gitea 仓的自助接入。`allowedOrigins` 是部署批准的 provider origin（可含 Gitea 部署前缀），不能带凭证、查询或 fragment。用户不能据此探测任意网络地址。当前该入口只接受 Gitea。
+`connections` 显式开放已有 lakeFS 仓的自助接入。`allowedOrigins` 是部署批准的 lakeFS origin，不能带凭证、查询或 fragment。用户不能据此探测任意网络地址。该入口只接受 lakeFS；旧 Gitea/filegit driver 明确拒绝。
 
 ```yaml
 connections:
-  allowedOrigins: [https://git.example.org]
+  allowedOrigins: [https://lakefs.example.org]
   creatorActions: [repository.connections.manage, repository.metadata.read, writer.preview, writer.commit, knowledge.read]
   shareActions: [knowledge.read, dataset.resolve, file.read]
 ```
 
-`catalog.repositories.connect` 授予指定 Catalog 的连接准入。`ConnectRepository` 只读验证已存在的非空 Snapshot，不建仓、不初始化分支、不写 stamp。固定 provider repository ID 与初始 commit 和逻辑 identity 一起进入 Server 私有 `connections.db`；Catalog 只登记 identity。`creatorActions` 必须显式包含 `repository.connections.manage`，其余动作沿用窄创建动作白名单。初始 grant 使用稳定 allocation 回执只应用一次，重放连接不能补回撤销的权限。`shareActions` 在连接时冻结；分享仍要求发起人当前拥有相应整仓能力。
+`repositories.connect` 授予服务的连接准入。`ConnectRepository` 只读验证已存在的非空 Snapshot，不建仓、不初始化分支、不写 stamp。固定 lakeFS 仓库名与初始 commit 和逻辑 identity 一起进入 Server 私有 `connections.db`；登记表 只登记 identity。`creatorActions` 必须显式包含 `repository.connections.manage`，其余动作沿用窄创建动作白名单。初始 grant 使用稳定 allocation 回执只应用一次，重放连接不能补回撤销的权限。`shareActions` 在连接时冻结；分享仍要求发起人当前拥有相应整仓能力。
 
 `GetConnection` 返回 owner、管理 URL、初始 HEAD、状态与 revision，不返回凭证；`CheckConnection` 只读验证并报告当前 HEAD；`RotateConnectionCredential` 只接受新凭证，先验证同 provider identity 与初始 commit，成功才原子替换秘密。三个管理动作都要求当前仓级管理权以及 durable owner 相符；知道一个仓的 identity 不意味着可以替换它的凭证。旧绑定和可用凭证在失败时保留。
 
-用户显式授权的逐仓 credential 是部署凭证环境注入规则的窄例外：仅在模式 `0600` 的私有 `connections.db` credential bucket 保存，和公开 binding 分开，只有具体 adapter 打开时读取。它不进入配置、Catalog、知识对象、日志、trace 或客户端 pin。备份必须包括该私有账本及初始化回执；回执存在后账本缺失或损坏会失败，不重新创建空账。
+用户显式授权的逐仓 credential 是部署凭证环境注入规则的窄例外：仅在模式 `0600` 的私有 `connections.db` credential bucket 保存，和公开 binding 分开，只有具体 adapter 打开时读取。它不进入配置、登记表、知识对象、日志、trace 或客户端 pin。备份必须包括该私有账本及初始化回执；回执存在后账本缺失或损坏会失败，不重新创建空账。
 
-恢复只装配固定 Gitea authority 的延迟句柄，不要求外部服务或旧 credential 先可用。普通 Snapshot 操作按当前 credential 和固定身份验证，失败关闭；管理面仍可查询和轮换。该句柄精确保留 Gitea 的 Store、TreeStore、DirectoryReader、HistoryStore 能力，不模拟额外的知识能力。启动不会因此写入外部仓，也不自动更换 authority。
+恢复通过公开 Snapshot 构造器打开固定 lakeFS authority，核验仓库绑定和初始 commit；服务、身份或凭证无法核验时失败关闭。普通 Snapshot 操作使用当前 credential，管理查询与轮换继续遵守当前仓级权限和 durable owner。恢复不写入外部仓，也不自动更换 authority；上层只消费 Store 与明确可选能力合同。
 
 ## 同版本正文缓存与预热配置
 
@@ -178,8 +180,10 @@ stores:
 没有 OpenSearch 也可以工作。Cache `Stats()` 和 Controller `ConsumerTargets()` 提供装配侧观测，
 不新增公开知识查询字段或运维路由。缓存 miss 始终可同版本回源；旧 pin 不跟随预热到新版本。
 
-## Catalog 发现入口
+## 库存发现入口
 
-`CatalogBinding.discoveryWorkspaceId` 可指向本 Catalog 中一条普通、管理员维护的 KnowledgeSet。配置只选择发现入口，不创建或更改配方，也不自动收集全部已登记来源。`catalog show` 返回该 identity；入口未配置时，Catalog 范围搜索明确返回能力缺失。
+`RegistryBinding.discoveryWorkspaceId` 可指向本服务中一条普通、管理员维护的 KnowledgeSet。配置只选择发现入口，不创建或更改配方，也不自动收集全部已登记来源。`show` 返回该 identity；入口未配置时，库存范围搜索明确返回能力缺失。
 
-`search --catalog <id>` 由 Client 执行 show → 普通 ResolveKnowledgeSet → 固定 pin SEARCH。已有 typed Resolve 与 Search 请求的 `catalogDiscovery: true` 只表达发现语境，Server 必须校验它匹配本部署配置的精确 Catalog/Workspace，禁止混入临时 definition 或单仓坐标，SEARCH 必须携带固定 pin。通过该验证后的准入只看当前 `catalog.read`；没有 `file.read` 或逐仓 `knowledge.search` 不裁掉 discovery 成员。正文仍通过现有交付链按当前逐仓 `knowledge.read` 屏蔽；其他 Workspace、READ、Schema、文件、rerank 等动作不使用这条例外。
+库存发现入口 由 Client 执行 show → 普通 ResolveKnowledgeSet → 固定 pin SEARCH。已有 typed Resolve 与 Search 请求的 `inventoryDiscovery: true` 只表达发现语境，Server 必须校验它匹配本部署配置的精确发现 Dataset，禁止混入临时 definition 或单仓坐标，SEARCH 必须携带固定 pin。通过该验证后的准入只看当前 `inventory.read`；没有 `file.read` 或逐仓 `knowledge.search` 不裁掉 discovery 成员。正文仍通过现有交付链按当前逐仓 `knowledge.read` 屏蔽；其他 Workspace、READ、Schema、文件、rerank 等动作不使用这条例外。
+
+旧单空间耐久回执可以只读恢复：原 deployment marker 必须恰含一个权威并与唯一 `registry.id` 一致；混合格式、多权威和重复别名拒绝。历史 managed allocation 按原 request 字节验证摘要，原 allocation、初始政策与 READY 回执不因公共选择字段退出而重算；重放不会补权或改写记录。未完成创建由显式重试迁到新格式，显式 `deployment init` 才写新版 marker。旧连接记录同样严格核对原登记权威。

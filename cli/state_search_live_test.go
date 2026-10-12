@@ -23,7 +23,7 @@ func TestLiveHTTPDynamicStateSearchJourney(t *testing.T) {
 	}
 	home := testkit.TempDir(t)
 	repositoryID := "kr://docker/public/services"
-	body(t, kc(home, "init", "--catalog", "kr://docker/catalog"))
+	body(t, kc(home, "init"))
 	body(t, kc(home, "store-set", "--index", "opensearch"))
 	body(t, kc(home, "store-set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repositoryID)
@@ -33,7 +33,7 @@ func TestLiveHTTPDynamicStateSearchJourney(t *testing.T) {
 	body(t, kc(home, "put", "--command-id", "state-entity", "--repo", repositoryID,
 		"--object", "Service:orders", "--aspect", "properties", "--value", `{"name":"orders"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", repositoryID+"=refs/heads/main@"))
-	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--catalog", "kr://docker/catalog", "--dataset", "agent"))
+	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--dataset", "agent"))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read,search", "--repo", repositoryID))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "projection.manage", "--repo", repositoryID))
 	before := asMap(t, body(t, kc(home, "writer", "head", "--repo", repositoryID)))["commit"]

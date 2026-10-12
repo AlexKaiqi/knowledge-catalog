@@ -10,7 +10,7 @@ steps:
     surface: operations
     action: verify-readiness
     params:
-      checks: "serverURL 可达且 ready；principal 存在且 grants 满足本 run 声明；catalog 可见"
+      checks: "serverURL 可达且 ready；principal 存在且 grants 满足本 run 声明；唯一登记库存可见"
       failMode: "任一不满足即 bind 失败，不进入测量"
   record:
     surface: runner

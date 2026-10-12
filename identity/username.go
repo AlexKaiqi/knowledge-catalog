@@ -1,5 +1,5 @@
 // Package identity owns the service's stable username and external identity
-// binding. It is independent of Catalog membership and authorization grants.
+// binding. It is independent of Dataset service membership and authorization grants.
 package identity
 
 import (

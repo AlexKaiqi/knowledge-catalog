@@ -25,20 +25,12 @@ func readmeSchemaJSON(t *testing.T) string {
 
 func TestCatalogShowRepositoriesStayIdentityAndReadmeIsKnowledge(t *testing.T) {
 	home := testkit.TempDir(t)
-	catalogID := "kr://acme/catalog"
 	repo := "kr://acme/payments"
-	body(t, kc(home, "init", "--catalog", catalogID))
+	body(t, kc(home, "init"))
 	seedRepo(t, home, repo)
 
-	catalogs := asMap(t, body(t, kc(home, "catalog", "list")))
-	listedCatalogs := catalogs["catalogs"].([]any)
-	if len(listedCatalogs) != 1 || asMap(t, listedCatalogs[0])["id"] != catalogID {
-		t.Fatalf("catalog list must stay Catalog ids: %#v", catalogs)
-	}
-	if _, ok := asMap(t, listedCatalogs[0])["repositories"]; ok {
-		t.Fatalf("catalog list must not include repository inventory: %#v", listedCatalogs[0])
-	}
-
+	retired := kc(home, "catalog", "list")
+	expectCode(t, retired, "USAGE_INVALID")
 	before := asMap(t, body(t, kc(home, "show")))
 	for _, item := range before["repositories"].([]any) {
 		if _, ok := item.(string); ok {

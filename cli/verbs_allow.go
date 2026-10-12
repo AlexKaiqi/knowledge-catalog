@@ -4,7 +4,7 @@ import (
 	inv "kc/invocation"
 )
 
-// Grant operations. A grant is over stable semantic actions on a Repository or Catalog,
+// Grant operations. A grant is over stable semantic actions on a Repository or the service registration space,
 // evaluated against .kc/allow.json. Table-level GRANT is knowledge, enforced by
 // the source system, and never lands here. See docs/reviewed/permissions.md.
 //

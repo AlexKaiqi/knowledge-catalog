@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"kc/controlplane"
 	apphome "kc/home"
 	"kc/internal/testkit"
 	"kc/kernel"
@@ -42,7 +41,7 @@ func TestHTTPCachedReadRechecksRevocationAndKeepsOldBasis(t *testing.T) {
 	rd.SetHydrator(cache)
 	dir := t.TempDir()
 	ws := &Home{Dir: dir, Store: registry, Reader: rd, Hydrator: cache, ReadCache: cache,
-		File: apphome.HomeFile{Catalogs: []apphome.HomeCatalog{{ID: "kr://acme/catalog"}}}, Controls: map[string]controlplane.ControlState{}}
+		File: apphome.HomeFile{Registry: apphome.HomeRegistry{ID: "kr://acme/catalog"}}}
 	facade := &httpFacade{home: dir, readHome: ws, options: HTTPServerOptions{AuthMode: "local"}}
 	mux := http.NewServeMux()
 	facade.registerServiceRoutes(mux)

@@ -15,10 +15,10 @@ import (
 	"strings"
 	"syscall"
 
-	"kc/catalog"
 	kcclient "kc/client"
 	"kc/datasetfs"
 	"kc/kernel"
+	"kc/snapshot/dataset"
 	"path"
 	"sort"
 )
@@ -26,7 +26,6 @@ import (
 type datasetFSConfig struct {
 	home      string
 	server    string
-	catalogID string
 	dataset   string
 	root      string
 	principal string
@@ -45,7 +44,7 @@ type datasetFSMount struct {
 type datasetFSManifest struct {
 	SetID    string                       `json:"setId"`
 	PinID    string                       `json:"pinId"`
-	Pin      catalog.ResolvedKnowledgeSet `json:"pin"`
+	Pin      dataset.ResolvedKnowledgeSet `json:"pin"`
 	Root     string                       `json:"root"`
 	ReadOnly bool                         `json:"readOnly"`
 	Mounts   []datasetFSMount             `json:"mounts"`
@@ -60,13 +59,13 @@ type datasetFSProjection struct {
 	dataset    string
 	flags      map[string]FlagValue
 	homeState  *apphome.Home
-	catalog    *catalog.Catalog
-	definition catalog.KnowledgeSet
-	resolved   catalog.ResolvedKnowledgeSet
-	mounts     []catalog.VirtualMount
+	datasets   dataset.Service
+	definition dataset.KnowledgeSet
+	resolved   dataset.ResolvedKnowledgeSet
+	mounts     []dataset.VirtualMount
 }
 
-func (p datasetFSProjection) recordKnowledgeSetFSRead(mount catalog.VirtualMount, relative string, data []byte, readErr error) ([]byte, error) {
+func (p datasetFSProjection) recordKnowledgeSetFSRead(mount dataset.VirtualMount, relative string, data []byte, readErr error) ([]byte, error) {
 	virtualPath := path.Join(mount.Path, relative)
 	result := map[string]any{"path": virtualPath, "repository": mount.Repository, "commit": mount.Commit}
 	readFlags := make(map[string]FlagValue, len(p.flags)+2)
@@ -87,7 +86,7 @@ func (p datasetFSProjection) build() (datasetfs.Plan, datasetFSManifest, error) 
 	// capability. Fail loudly instead of silently shrinking the delivered
 	// tree; use the file gateway or `kc dataset clone` for such datasets.
 	for _, item := range p.resolved.Items {
-		if item.Kind == catalog.DatasetItemFile {
+		if item.Kind == dataset.DatasetItemFile {
 			return datasetfs.Plan{}, datasetFSManifest{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
 				"dataset %s publishes per-file entries that the file-system projection does not deliver yet; use the file gateway or kc dataset clone", p.dataset)
 		}
@@ -218,7 +217,6 @@ func parseKnowledgeSetFSConfig(mode string, argv []string, stderr io.Writer) (da
 	set.SetOutput(stderr)
 	config := datasetFSConfig{}
 	set.StringVar(&config.server, "server", inv.RemoteServerURL(nil), "KC service URL for remote lazy reads")
-	set.StringVar(&config.catalogID, "catalog", "", "Catalog id (defaults to the home's first Catalog)")
 	set.StringVar(&config.dataset, "dataset", "", "knowledge set id")
 	set.StringVar(&config.root, "root", "", "existing user project root")
 	set.StringVar(&config.principal, "as", "", "principal used for Workspace and repository read grants")
@@ -283,9 +281,6 @@ func prepareEmbeddedKnowledgeSetFS(config datasetFSConfig) (datasetfs.Plan, data
 		"home":    home,
 		"dataset": config.dataset,
 	}
-	if config.catalogID != "" {
-		flags["catalog"] = config.catalogID
-	}
 	if config.principal != "" {
 		flags["as"] = config.principal
 	}
@@ -306,7 +301,7 @@ func prepareEmbeddedKnowledgeSetFS(config datasetFSConfig) (datasetfs.Plan, data
 			closeHome()
 		}
 	}()
-	cat, err := inv.PickCatalog(ws, flags)
+	cat, err := inv.PickDatasets(ws, flags)
 	if err != nil {
 		return datasetfs.Plan{}, datasetFSManifest{}, func() {}, err
 	}
@@ -318,7 +313,7 @@ func prepareEmbeddedKnowledgeSetFS(config datasetFSConfig) (datasetfs.Plan, data
 	if err != nil {
 		return datasetfs.Plan{}, datasetFSManifest{}, func() {}, err
 	}
-	mounts, err := catalog.ListVirtualMountsAt(def, resolved)
+	mounts, err := dataset.ListVirtualMountsAt(def, resolved)
 	if err != nil {
 		return datasetfs.Plan{}, datasetFSManifest{}, func() {}, err
 	}
@@ -330,7 +325,7 @@ func prepareEmbeddedKnowledgeSetFS(config datasetFSConfig) (datasetfs.Plan, data
 	}
 	projection := datasetFSProjection{
 		home: home, root: root, dataset: config.dataset, flags: flags,
-		homeState: ws, catalog: cat, definition: visibleDef, resolved: visibleResolved,
+		homeState: ws, datasets: cat, definition: visibleDef, resolved: visibleResolved,
 		mounts: visibleMounts,
 	}
 	plan, manifest, err := projection.build()
@@ -351,7 +346,7 @@ func prepareRemoteKnowledgeSetFS(config datasetFSConfig, root string) (datasetfs
 	if err != nil {
 		return datasetfs.Plan{}, datasetFSManifest{}, func() {}, err
 	}
-	coordinate := kcclient.WorkspaceFileCoordinate{Catalog: config.catalogID, Dataset: config.dataset, View: config.view}
+	coordinate := kcclient.WorkspaceFileCoordinate{Dataset: config.dataset, View: config.view}
 	if strings.TrimSpace(config.pin) != "" {
 		pin, err := datasetFSPin(config.pin)
 		if err != nil {
@@ -373,7 +368,7 @@ func prepareRemoteKnowledgeSetFS(config datasetFSConfig, root string) (datasetfs
 	// Per-file entries are not projected into the host filesystem yet; fail
 	// loudly instead of silently shrinking the delivered tree.
 	for _, item := range response.Pin.Items {
-		if item.Kind == catalog.DatasetItemFile {
+		if item.Kind == dataset.DatasetItemFile {
 			return datasetfs.Plan{}, datasetFSManifest{}, func() {}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
 				"dataset %s publishes per-file entries that the file-system projection does not deliver yet; use the file gateway or kc dataset clone", config.dataset)
 		}
@@ -410,14 +405,14 @@ func prepareRemoteKnowledgeSetFS(config datasetFSConfig, root string) (datasetfs
 }
 
 // resolvedKnowledgeSetPin projects a client task pin onto the Gateway
-// contract. pin --out keeps catalog/definition for the client; File Gateway
+// contract. pin --out keeps definition for the client; File Gateway
 // DecodeJSON rejects unknown fields on ResolvedKnowledgeSet.
 func resolvedKnowledgeSetPin(raw json.RawMessage) (json.RawMessage, error) {
 	if len(raw) == 0 {
 		return raw, nil
 	}
 	var saved taskKnowledgeSetPin
-	if err := catalog.DecodeJSON(raw, &saved); err != nil {
+	if err := dataset.DecodeJSON(raw, &saved); err != nil {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "--pin is not a KC task pin")
 	}
 	stripped, err := json.Marshal(saved.ResolvedKnowledgeSet)
@@ -445,7 +440,7 @@ func datasetFSPin(value string) (json.RawMessage, error) {
 	return json.RawMessage(raw), nil
 }
 
-func readRemoteDirectory(ctx context.Context, client *kcclient.Client, coordinate kcclient.WorkspaceFileCoordinate, mount catalog.VirtualMount, directory, pinID string) ([]datasetfs.DirectoryEntry, error) {
+func readRemoteDirectory(ctx context.Context, client *kcclient.Client, coordinate kcclient.WorkspaceFileCoordinate, mount dataset.VirtualMount, directory, pinID string) ([]datasetfs.DirectoryEntry, error) {
 	entries := []datasetfs.DirectoryEntry{}
 	continuation := ""
 	for {
@@ -472,7 +467,7 @@ func readRemoteDirectory(ctx context.Context, client *kcclient.Client, coordinat
 	}
 }
 
-func readRemoteFile(ctx context.Context, client *kcclient.Client, coordinate kcclient.WorkspaceFileCoordinate, mount catalog.VirtualMount, file, pinID string) ([]byte, error) {
+func readRemoteFile(ctx context.Context, client *kcclient.Client, coordinate kcclient.WorkspaceFileCoordinate, mount dataset.VirtualMount, file, pinID string) ([]byte, error) {
 	content := []byte{}
 	var offset int64
 	for {

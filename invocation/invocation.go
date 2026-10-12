@@ -27,13 +27,14 @@ import (
 // struct and its readers are the execution contract shared by the CLI front
 // end and the typed service surface.
 type Invocation struct {
-	Command     string
-	Home        string
-	Flags       map[string]invoke.FlagValue
-	WS          *home.Home
-	Context     context.Context
-	State       knowledgeserving.StateLookup
-	Observation *invoke.ObservationTelemetry
+	Command          string
+	Home             string
+	Flags            map[string]invoke.FlagValue
+	WS               *home.Home
+	Context          context.Context
+	State            knowledgeserving.StateLookup
+	ObjectInterfaces *knowledgeserving.InterfaceRegistry
+	Observation      *invoke.ObservationTelemetry
 }
 
 // Flag reads the flag's effective string value.
@@ -85,10 +86,10 @@ func (cx *Invocation) RequirePreview(flag string) (controlplane.Preview, error) 
 	return preview, nil
 }
 
-// BindingScope groups the --on / --repo / --catalog selectors used by the
+// BindingScope groups the --on / --repo / registry selectors used by the
 // policy verbs.
 func (cx *Invocation) BindingScope() invoke.BindingScope {
-	return invoke.BindingScope{On: cx.Flag("on"), Repo: cx.Flag("repo"), Catalog: cx.Flag("catalog")}
+	return invoke.BindingScope{On: cx.Flag("on"), Repo: cx.Flag("repo")}
 }
 
 // KnowledgeRef builds a knowledge ref from the --object flag under the given

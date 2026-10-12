@@ -3,7 +3,6 @@ package invocation
 import (
 	knowledgeserving "kc/knowledge/serving"
 
-	"kc/catalog"
 	"kc/index"
 	"kc/invoke"
 	"kc/kernel"
@@ -11,6 +10,7 @@ import (
 	knowledgeapp "kc/knowledgeapp"
 	"kc/retrieval"
 	"kc/snapshot"
+	"kc/snapshot/dataset"
 )
 
 func VerbSearch(cx *Invocation) (any, error) {
@@ -145,15 +145,15 @@ func ChangeNoticeFromFlags(flags map[string]invoke.FlagValue) (index.ChangeNotic
 // VerbDescribeAccess reports one logical AccessSpec per pinned member, or the
 // single AccessSpec of one Repository's published basis.
 func VerbDescribeAccess(cx *Invocation) (any, error) {
-	cat, err := PickCatalog(cx.WS, cx.Flags)
+	cat, err := PickDatasets(cx.WS, cx.Flags)
 	if err != nil {
 		return nil, err
 	}
-	var resolved catalog.ResolvedKnowledgeSet
+	var resolved dataset.ResolvedKnowledgeSet
 	if repository := invoke.FlagString(cx.Flags, "repo"); repository != "" && invoke.FlagString(cx.Flags, "dataset") == "" {
-		resolved, err = cat.ResolveDefinition(catalog.KnowledgeSet{
+		resolved, err = cat.ResolveDefinition(dataset.KnowledgeSet{
 			Revision: 1,
-			Sources:  []catalog.KnowledgeSetSource{{Repository: kernel.RepositoryID(repository), Selector: snapshot.DefaultRef}},
+			Sources:  []dataset.KnowledgeSetSource{{Repository: kernel.RepositoryID(repository), Selector: snapshot.DefaultRef}},
 		})
 	} else {
 		setID, workspaceErr := cx.SetID()

@@ -65,9 +65,9 @@ func TestHTTPExpressionSearchAllAnySortContinuationAndValidation(t *testing.T) {
 	}
 	home := testkit.TempDir(t)
 	repository := "kr://acme/public/search-expression"
-	catalog := "kr://acme/catalog"
+
 	workspace := "agent"
-	body(t, kc(home, "init", "--catalog", catalog))
+	body(t, kc(home, "init"))
 	body(t, kc(home, "store-set", "--index", "opensearch"))
 	body(t, kc(home, "store-set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repository)
@@ -85,7 +85,7 @@ func TestHTTPExpressionSearchAllAnySortContinuationAndValidation(t *testing.T) {
 			"--object", item.id, "--schema-ref", "schema/runbook.search", "--value", item.value))
 	}
 	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "1", "--source", repository+"=refs/heads/main@"))
-	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--catalog", catalog, "--dataset", workspace))
+	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--dataset", workspace))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "knowledge.read,knowledge.search", "--repo", repository))
 	syncIndexes(t, home, repository)
 
@@ -103,7 +103,7 @@ func TestHTTPExpressionSearchAllAnySortContinuationAndValidation(t *testing.T) {
 		map[string]any{"any": []any{payment, database}}, paymentsTeam,
 	}}
 	base := map[string]any{
-		"catalog": catalog, "dataset": workspace, "expression": expression,
+		"dataset": workspace, "expression": expression,
 		"order": map[string]any{"op": "SORT", "path": "severity", "order": "asc"}, "limit": 1,
 	}
 

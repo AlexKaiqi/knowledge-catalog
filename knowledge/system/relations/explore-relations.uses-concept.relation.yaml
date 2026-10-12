@@ -1,0 +1,18 @@
+---
+object_id: kc/relation/explore-relations.uses-concept.relation
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: relations/explore-relations.uses-concept.relation.yaml
+---
+relationId: kc/relation/explore-relations.uses-concept.relation
+relationType: uses_concept
+direction: DIRECTED
+endpoints:
+  - role: from
+    objectRef:
+      repository: kr://kc/system
+      object: kc/capability/explore-relations
+  - role: to
+    objectRef:
+      repository: kr://kc/system
+      object: kc/concept/relation

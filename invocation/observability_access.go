@@ -67,7 +67,7 @@ func knowledgeAccessCommand(command string, flags map[string]invoke.FlagValue) b
 	switch command {
 	case "pin", "knowledge-resolve", "knowledge-binding-show", "knowledge-read",
 		"knowledge-relations", "knowledge-traverse", "knowledge-search", "rerank", "search-rerank", "knowledge-provenance",
-		"knowledge-schema-describe", "operations-access-spec-describe", "knowledge-log":
+		"knowledge-schema-describe", "operations-access-spec-describe", "knowledge-log", "knowledge-invoke":
 		return true
 	default:
 		return false
@@ -140,6 +140,9 @@ func requestedKnowledge(flags map[string]invoke.FlagValue) (observability.Knowle
 	var address *knowledge.Address
 	if parsed, err := AddressFrom(flags); err == nil {
 		address = &parsed
+	}
+	if implementation := invoke.FlagString(flags, "implementation"); implementation != "" {
+		address = &knowledge.Address{Kind: knowledge.KindMember, ObjectID: ref.Object, AspectName: knowledge.ObjectInterfacesAspect, MemberKey: implementation}
 	}
 	return observability.KnowledgeAccess{KnowledgeRef: ref, Address: address}, true
 }

@@ -28,14 +28,14 @@ func TestPublicHTTPEntryOmitsSecretsAndKeepsAuthorityOrigin(t *testing.T) {
 
 func TestObservePublicStoresOmitsLayoutAndSecretEnvNames(t *testing.T) {
 	stores := StoresFile{
-		Layout:     kchome.LayoutFile{Repos: "/tmp/secret-home/repos", Catalogs: "/tmp/secret-home/catalogs"},
+		Layout:     kchome.LayoutFile{Repos: "/tmp/secret-home/repos", Registry: "/tmp/secret-home/registry"},
 		Profile:    "scale",
 		Repository: "lakefs",
 		Index:      "opensearch",
 		OpenSearch: opensearch.Config{URL: "https://os.example:9200", User: "elastic", Password: "hunter2"},
 	}
 	view := ObservePublicStores(stores, HomeFile{
-		Catalogs: []kchome.HomeCatalog{{ID: "kr://acme/catalog", Dir: "catalogs/acme"}},
+		Registry: kchome.HomeRegistry{ID: "kr://acme/catalog", Dir: "catalogs/acme"},
 		Repos:    []kchome.HomeRepo{{ID: "kr://acme/core", Dir: "repos/acme", Driver: "lakefs", DSN: "http://127.0.0.1:18000/acme-core"}},
 	}, nil, []StoreBinding{{ID: "kr://acme/extra", Driver: "lakefs", DSN: "http://user:secret@127.0.0.1:18000/extra"}})
 	raw, err := json.Marshal(view)
@@ -86,9 +86,9 @@ func TestObservePublicStoresPublishesBrowserOrigins(t *testing.T) {
 		Profile: "local", Repository: "lakefs", Index: "opensearch",
 		OpenSearch: opensearch.Config{URL: "http://opensearch:9200"},
 	}, HomeFile{
-		Catalogs: []kchome.HomeCatalog{{ID: "kr://acme/catalog"}},
+		Registry: kchome.HomeRegistry{ID: "kr://acme/catalog"},
 		Repos:    []kchome.HomeRepo{{ID: "kr://acme/core", Driver: "lakefs", DSN: "http://lakefs:8000/table-meta"}},
-	}, []StoreBinding{{ID: "kr://acme/catalog", Driver: "lakefs", DSN: "http://lakefs:8000/kc-catalog"}}, nil)
+	}, &StoreBinding{ID: "kr://acme/catalog", Driver: "lakefs", DSN: "http://lakefs:8000/kc-catalog"}, nil)
 	raw, err := json.Marshal(view)
 	if err != nil {
 		t.Fatal(err)

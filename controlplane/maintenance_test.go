@@ -5,20 +5,20 @@ import (
 	"testing"
 	"time"
 
-	"kc/catalog"
 	"kc/controlplane"
 	"kc/gate"
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/knowledge/writer"
+	"kc/snapshot/dataset"
 )
 
 type loop struct {
 	testkit.Setup
 	SupportRepo *testkit.KnowledgeRepository
-	Catalog     *catalog.Catalog
-	Definition  catalog.KnowledgeSet
+	Datasets    dataset.Service
+	Definition  dataset.KnowledgeSet
 	CP          *controlplane.ControlPlane
 }
 
@@ -29,8 +29,8 @@ func setupLoop(t *testing.T) loop {
 	if err := base.Store.Add(support); err != nil {
 		t.Fatal(err)
 	}
-	cat := testkit.OpenCatalog(t, base.Store)
-	def, err := cat.DefineKnowledgeSet("maintenance", 1, []catalog.KnowledgeSetSource{
+	cat := testkit.OpenDatasets(t, base.Store)
+	def, err := cat.DefineKnowledgeSet("maintenance", 1, []dataset.KnowledgeSetSource{
 		{Repository: base.RepositoryID, Selector: "refs/heads/main"},
 		{Repository: support.ID(), Selector: "refs/heads/main"},
 	})
@@ -40,7 +40,7 @@ func setupLoop(t *testing.T) loop {
 	return loop{
 		Setup:       base,
 		SupportRepo: support,
-		Catalog:     cat,
+		Datasets:    cat,
 		Definition:  def,
 		CP:          controlplane.New(base.Store, base.Writer, cat),
 	}
@@ -100,7 +100,7 @@ func TestT9ValidationBasisAndMovedCandidate(t *testing.T) {
 	if len(preview1.Repositories) != 2 {
 		t.Fatal(preview1.Repositories)
 	}
-	live, err := s.Catalog.ResolveKnowledgeSet("maintenance")
+	live, err := s.Datasets.ResolveKnowledgeSet("maintenance")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,13 +202,13 @@ func TestT9MergeDoesNotNeedPromote(t *testing.T) {
 	if testkit.MustHead(t, s.Repo, "refs/heads/main") != merged {
 		t.Fatal("main not merged")
 	}
-	if _, err := s.Catalog.DefineKnowledgeSet("maintenance", 2, []catalog.KnowledgeSetSource{
+	if _, err := s.Datasets.DefineKnowledgeSet("maintenance", 2, []dataset.KnowledgeSetSource{
 		{Repository: s.RepositoryID, Selector: "refs/heads/main"},
 		{Repository: s.SupportRepo.ID(), Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	got, err := testkit.FederatedRead(s.Catalog, "maintenance", "a")
+	got, err := testkit.FederatedRead(s.Datasets, "maintenance", "a")
 	if err != nil || len(got) == 0 {
 		t.Fatal(got, err)
 	}

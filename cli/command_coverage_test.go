@@ -42,7 +42,7 @@ func TestRequiredAssertedBoundariesFollowSemanticRisk(t *testing.T) {
 		want   int
 	}{
 		{"knowledge.read", 1},
-		{"catalog.audit.read", 1},
+		{"registry.audit.read", 1},
 		{"catalog.manage", 2},
 		{"operations.hooks.manage", 2},
 		{"governance.proposal.create", 2},
@@ -52,9 +52,9 @@ func TestRequiredAssertedBoundariesFollowSemanticRisk(t *testing.T) {
 		{"deployment.identity.migrate", 2},
 		{"identity.admission.request", 2},
 		{"repository.shares.manage", 2},
-		{"catalog.repositories.manage", 2},
-		{"catalog.repositories.create", 2},
-		{"catalog.repositories.connect", 2},
+		{"repositories.manage", 2},
+		{"repositories.create", 2},
+		{"repositories.connect", 2},
 		{"deployment.system.publish", 2},
 		{"dataset.overlay", 2},
 		{"feedback.write", 2},
@@ -99,7 +99,7 @@ func TestCommandCoverageReportUsesTheCompletePublicSurface(t *testing.T) {
 func TestCommandSpecificUsageBoundaries(t *testing.T) {
 	home := testkit.TempDir(t)
 	repositoryID := "kr://acme/public/boundaries"
-	body(t, kc(home, "local", "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(home, "local", "init"))
 	seedRepo(t, home, repositoryID)
 
 	cases := []struct {
@@ -124,7 +124,7 @@ func TestCommandSpecificUsageBoundaries(t *testing.T) {
 		{"log rejects member coordinates", []string{"log", "--repo", repositoryID, "--object", "policy/x", "--member", "user:bob"}},
 		{"provenance rejects aspect coordinates", []string{"provenance", "--repo", repositoryID, "--object", "policy/x", "--aspect", "io"}},
 		{"provenance rejects member coordinates", []string{"provenance", "--repo", repositoryID, "--object", "policy/x", "--member", "user:bob"}},
-		{"catalog audit rejects an oversized page", []string{"catalog", "audit", "--limit", "201"}},
+		{"catalog audit rejects an oversized page", []string{"registry", "audit", "--limit", "201"}},
 		{"hitmap rejects an oversized page", []string{"operations", "audit", "hitmap", "--limit", "201"}},
 		{"access log rejects an oversized page", []string{"operations", "audit", "access", "--limit", "201"}},
 		{"schema browse rejects an oversized page", []string{"schema", "list", "--repo", repositoryID, "--limit", "201"}},
@@ -228,14 +228,14 @@ func credentialPairingStub(t *testing.T, mode string) *httptest.Server {
 
 func TestReadOnlyCommandAuthorizationAndIdentityBoundaries(t *testing.T) {
 	home := testkit.TempDir(t)
-	body(t, kc(home, "local", "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(home, "local", "init"))
 	for _, tc := range []struct {
 		name string
 		args []string
 		code string
 	}{
 		{"show does not enumerate for an unauthorized principal", []string{"show", "--as", "untrusted"}, "FORBIDDEN"},
-		{"catalog list does not enumerate for an unauthorized principal", []string{"catalog", "list", "--as", "untrusted"}, "FORBIDDEN"},
+		{"retired Catalog listing is rejected", []string{"catalog", "list", "--as", "untrusted"}, "USAGE_INVALID"},
 		{"retired repository list is rejected", []string{"catalog", "repo", "list", "--as", "untrusted"}, "USAGE_INVALID"},
 		{"retired workspace list is rejected", []string{"workspace", "list", "--as", "untrusted"}, "USAGE_INVALID"},
 		{"retired workspace define is rejected", []string{"workspace", "define", "--as", "untrusted"}, "USAGE_INVALID"},
@@ -256,7 +256,7 @@ func TestReadOnlyCommandAuthorizationAndIdentityBoundaries(t *testing.T) {
 func TestMutatingCommandsRejectInvalidStateTargetsAndAuthorization(t *testing.T) {
 	home := testkit.TempDir(t)
 	repositoryID := "kr://acme/public/mutation-boundaries"
-	body(t, kc(home, "local", "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(home, "local", "init"))
 	seedRepo(t, home, repositoryID)
 	body(t, kc(home, "dataset", "define", "--dataset", "coverage", "--revision", "1",
 		"--source", repositoryID+"=refs/heads/main@knowledge"))
@@ -268,7 +268,7 @@ func TestMutatingCommandsRejectInvalidStateTargetsAndAuthorization(t *testing.T)
 	}{
 		{"grant add rejects a non-semantic action", []string{"grant", "add", "--principal", "agent:x", "--action", "invalid", "--repo", repositoryID}, "USAGE_INVALID"},
 		{"grant remove rejects an unknown rule", []string{"grant", "remove", "--id", "alw_missing"}, "USAGE_INVALID"},
-		{"catalog archive rejects an unauthorized principal", []string{"catalog", "archive", "--as", "untrusted"}, "FORBIDDEN"},
+		{"retired Catalog archive is rejected", []string{"catalog", "archive", "--as", "untrusted"}, "USAGE_INVALID"},
 		{"repository archive rejects an unknown target", []string{"detach", "--repo", "kr://missing/repository"}, "KNOWLEDGE_SET_INVALID"},
 		{"dataset retire rejects an unknown target", []string{"dataset", "retire", "--dataset", "missing"}, "KNOWLEDGE_SET_INVALID"},
 		{"preview create rejects an unknown proposal", []string{"governance", "preview", "create", "--proposal", "PR-missing", "--dataset", "coverage"}, "USAGE_INVALID"},
@@ -293,6 +293,6 @@ func TestMutatingCommandsRejectInvalidStateTargetsAndAuthorization(t *testing.T)
 
 func TestCatalogArchiveRejectsAnUnknownExplicitTarget(t *testing.T) {
 	home := testkit.TempDir(t)
-	body(t, kc(home, "local", "init", "--catalog", "kr://acme/archive-boundary"))
-	expectCode(t, kc(home, "catalog", "archive", "--catalog", "kr://missing/catalog"), "USAGE_INVALID")
+	body(t, kc(home, "local", "init"))
+	expectCode(t, kc(home, "catalog", "archive"), "USAGE_INVALID")
 }

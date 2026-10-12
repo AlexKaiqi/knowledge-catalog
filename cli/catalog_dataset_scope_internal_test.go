@@ -11,9 +11,9 @@ import (
 	"kc/kernel"
 )
 
-// A selected Catalog is client context. An explicit Dataset must still reach
+// An explicit Dataset must reach
 // the Dataset search contract, including its ordinary authorization failures,
-// without requiring or requesting the Catalog's discovery Workspace.
+// without requiring or requesting the inventory discovery Dataset.
 func TestDatasetSearchKeepsExplicitScopeWithSelectedCatalog(t *testing.T) {
 	for _, status := range []int{http.StatusOK, http.StatusForbidden} {
 		t.Run(http.StatusText(status), func(t *testing.T) {
@@ -47,9 +47,6 @@ func TestDatasetSearchKeepsExplicitScopeWithSelectedCatalog(t *testing.T) {
 				_ = json.NewEncoder(w).Encode(map[string]any{"hits": []any{}})
 			}))
 			defer server.Close()
-			if err := persistClientCatalog(server.URL, "kr://scene/catalog"); err != nil {
-				t.Fatal(err)
-			}
 			result := Run([]string{"search", "--dataset", "scene-set", "--query", "merchandise", "--server", server.URL, "--as", "reader"})
 			if status == http.StatusOK && result.Status != 0 {
 				t.Fatalf("explicit Dataset search required Catalog discovery: %s; requests=%v", result.Stdout, paths)
@@ -60,7 +57,7 @@ func TestDatasetSearchKeepsExplicitScopeWithSelectedCatalog(t *testing.T) {
 			if len(paths) != 1 || paths[0] != "POST /knowledge/v1/search" {
 				t.Fatalf("explicit Dataset triggered additional discovery or resolution requests: %v", paths)
 			}
-			if search.Catalog != "kr://scene/catalog" || search.Dataset != "scene-set" || search.Query != "merchandise" || search.CatalogDiscovery || len(search.Pin) != 0 || search.Definition != nil {
+			if search.Dataset != "scene-set" || search.Query != "merchandise" || search.InventoryDiscovery || len(search.Pin) != 0 || search.Definition != nil {
 				t.Fatalf("explicit Dataset search scope changed: %#v", search)
 			}
 		})

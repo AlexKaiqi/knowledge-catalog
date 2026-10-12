@@ -10,11 +10,8 @@ func PublicStores(file StoresFile) map[string]any {
 	secrets := authoritySecretEnvs()
 	secrets["opensearch"] = opensearch.EnvPassword + " or " + opensearch.EnvAPIKey
 	layout := map[string]any{
-		"repos": file.Layout.Repos, "catalogs": file.Layout.Catalogs,
+		"repos": file.Layout.Repos, "registry": file.Layout.Registry,
 		"projections": file.Layout.Projections, "checkouts": file.Layout.Checkouts,
-	}
-	if file.Layout.Catalog != "" {
-		layout["catalog"] = file.Layout.Catalog
 	}
 	out := map[string]any{
 		"layout": layout, "profile": file.Profile, "repository": file.Repository, "index": file.Index,

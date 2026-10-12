@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"kc/controlplane"
 	apphome "kc/home"
 	"kc/index"
 	"kc/internal/testkit"
@@ -69,7 +68,7 @@ func TestHTTPSearchCancellationReachesProvider(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	ws := &Home{Dir: dir, Store: registry, Reader: reader.NewReader(registry), Index: idx, File: apphome.HomeFile{Catalogs: []apphome.HomeCatalog{{ID: "kr://acme/catalog"}}}, Controls: map[string]controlplane.ControlState{}}
+	ws := &Home{Dir: dir, Store: registry, Reader: reader.NewReader(registry), Index: idx, File: apphome.HomeFile{Registry: apphome.HomeRegistry{ID: "kr://acme/catalog"}}}
 	if err := inv.WriteAllow(dir, inv.AllowFile{Version: inv.AllowVersion, Rules: []inv.AllowRule{{ID: "search", Principal: "reader", Repo: string(repo.ID()), Actions: []string{"knowledge.search"}}}}); err != nil {
 		t.Fatal(err)
 	}

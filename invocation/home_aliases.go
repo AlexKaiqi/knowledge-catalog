@@ -22,5 +22,3 @@ var StoresPath = kchome.StoresPath
 var Ready = kchome.Ready
 
 var PersistControl = kchome.PersistControl
-
-var OpenCatalogs = kchome.OpenCatalogs

@@ -9,7 +9,7 @@ import (
 
 const systemPublishCommandPrefix = "kc.system.publish:"
 
-// PublishResult is one attempt to place the built-in System Schema onto a
+// PublishResult is one attempt to place the system publication source onto a
 // Snapshot authority identified as kr://kc/system.
 type PublishResult struct {
 	Commit kernel.CommitID
@@ -23,7 +23,7 @@ const (
 	systemPublicationMatch
 )
 
-// PublishSystem writes the binary System Schema objects onto an empty
+// PublishSystem writes the complete binary system publication onto an empty
 // Snapshot authority whose ID is kr://kc/system. Occupied authorities are
 // verified against the built-in trust root and never overwritten.
 func PublishSystem(store snapshot.Store) (PublishResult, error) {
@@ -36,7 +36,7 @@ func PublishSystem(store snapshot.Store) (PublishResult, error) {
 	if err != nil {
 		return PublishResult{}, err
 	}
-	state, err := inspectSystemPublication(store, head, knowledge.SystemSchemaOperations())
+	state, err := inspectSystemPublication(store, head, operations)
 	if err != nil {
 		return PublishResult{}, err
 	}
@@ -60,7 +60,7 @@ func PublishSystem(store snapshot.Store) (PublishResult, error) {
 		BaseCommit:           head,
 		ExpectedTargetCommit: head,
 		Operations:           operations,
-		Message:              "Publish built-in System Schema",
+		Message:              "Publish system knowledge",
 	})
 	if err != nil {
 		return PublishResult{}, err
@@ -69,6 +69,25 @@ func PublishSystem(store snapshot.Store) (PublishResult, error) {
 }
 
 func inspectSystemPublication(store snapshot.Store, head kernel.CommitID, operations []knowledge.Operation) (systemPublication, error) {
+	state, err := inspectSystemUnits(store, head, operations)
+	if err != nil {
+		return 0, err
+	}
+	tree, ok := snapshot.TreeReaderOf(store)
+	if !ok {
+		return 0, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "System publication requires literal file reads")
+	}
+	expected := operations
+	if state == systemPublicationEmpty {
+		expected = nil
+	}
+	if err := repofile.AssertPublicationFiles(tree, head, expected); err != nil {
+		return 0, err
+	}
+	return state, nil
+}
+
+func inspectSystemUnits(store snapshot.Store, head kernel.CommitID, operations []knowledge.Operation) (systemPublication, error) {
 	if native, ok := store.(knowledge.NativeRepository); ok {
 		return inspectNativeSystemPublication(native, head, operations)
 	}
@@ -81,30 +100,35 @@ func inspectSystemPublication(store snapshot.Store, head kernel.CommitID, operat
 	if err != nil {
 		return 0, err
 	}
-	return inspectSystemValues(head, operations, func(objectID knowledge.ObjectID) (any, error) {
-		units := index.ObjectUnits(objectID)
-		if len(units) == 0 {
-			return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved,
-				"system object %s is missing at commit %s", objectID, head)
+	return inspectSystemValues(head, operations, func(address knowledge.Address) (any, error) {
+		for _, unit := range index.ObjectUnits(address.ObjectID) {
+			if knowledge.AddressKey(unit.Address) == knowledge.AddressKey(address) {
+				return knowledge.Operation{Op: knowledge.OpPut, Address: unit.Address, PathHint: unit.PathHint, SchemaRef: unit.SchemaRef, Value: unit.Value}, nil
+			}
 		}
-		return repofile.Assemble(units)
+		return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved,
+			"system address %s is missing at commit %s", knowledge.AddressKey(address), head)
 	})
 }
 
 func inspectNativeSystemPublication(native knowledge.NativeRepository, head kernel.CommitID, operations []knowledge.Operation) (systemPublication, error) {
-	return inspectSystemValues(head, operations, func(objectID knowledge.ObjectID) (any, error) {
-		current, err := native.Read(objectID, head)
+	return inspectSystemValues(head, operations, func(address knowledge.Address) (any, error) {
+		current, err := native.ReadAddress(address, head)
 		if err != nil {
 			return nil, err
 		}
-		return current.Value, nil
+		resolved, err := native.ResolveAddress(address, head)
+		if err != nil {
+			return nil, err
+		}
+		return knowledge.Operation{Op: knowledge.OpPut, Address: current.Address, PathHint: resolved.PathHint, SchemaRef: resolved.SchemaRef, Value: current.Value}, nil
 	})
 }
 
-func inspectSystemValues(head kernel.CommitID, operations []knowledge.Operation, value func(knowledge.ObjectID) (any, error)) (systemPublication, error) {
+func inspectSystemValues(head kernel.CommitID, operations []knowledge.Operation, value func(knowledge.Address) (any, error)) (systemPublication, error) {
 	missing := 0
 	for _, operation := range operations {
-		current, err := value(operation.Address.ObjectID)
+		current, err := value(operation.Address)
 		if err != nil {
 			if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
 				missing++
@@ -112,11 +136,11 @@ func inspectSystemValues(head kernel.CommitID, operations []knowledge.Operation,
 			}
 			return 0, err
 		}
-		got, want := kernel.CanonicalDigest(current), kernel.CanonicalDigest(operation.Value)
+		got, want := kernel.CanonicalDigest(current), kernel.CanonicalDigest(operation)
 		if got != want {
 			return 0, kernel.Fail(kernel.ErrPreconditionFailed,
-				"system schema %s digest %s does not match built-in trust root %s",
-				operation.Address.ObjectID, got, want)
+				"system address %s digest %s does not match the binary publication %s",
+				knowledge.AddressKey(operation.Address), got, want)
 		}
 	}
 	switch missing {

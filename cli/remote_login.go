@@ -84,8 +84,8 @@ func verbLogin(cx *invocation) (any, error) {
 			mode = "local"
 		case "taihu":
 			mode = "taihu"
-		case "gitea":
-			return nil, kernel.Fail(kernel.ErrUsageInvalid, "this Server is --auth gitea; use --mode token with a Bearer token")
+		case "gitea", "lakefs":
+			return nil, kernel.Fail(kernel.ErrUsageInvalid, "this Server is --auth %s; use --mode token with a Bearer token", discovery.Mode)
 		default:
 			return nil, kernel.Fail(kernel.ErrUsageInvalid, "this Server reported unknown auth mode %q", discovery.Mode)
 		}

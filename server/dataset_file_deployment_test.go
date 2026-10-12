@@ -13,12 +13,15 @@ import (
 	"testing"
 	"time"
 
-	"kc/catalog"
 	apphome "kc/home"
+	"kc/identity"
 	"kc/internal/telemetry"
 	"kc/internal/testkit"
+	"kc/kernel"
 	"kc/knowledge"
 	"kc/snapshot"
+	"kc/snapshot/dataset"
+	snapshotservice "kc/snapshot/service"
 )
 
 // docs/reviewed/service.md and KS-02: the file gateway must
@@ -29,11 +32,11 @@ func declaredFileGateway(t *testing.T) (apphome.DeploymentConfig, string) {
 	root := t.TempDir()
 	t.Setenv("KC_LAKEFS_CREDENTIAL", testkit.LakeFSFakeCredential)
 	fake := testkit.NewLakeFSFake(t)
-	cfg := apphome.DeploymentConfig{Version: 1, StateDir: filepath.Join(root, "durable"), CacheDir: filepath.Join(root, "cache"), Auth: "local", BootstrapPrincipal: "agent:operator", Catalogs: []apphome.CatalogBinding{{ID: "kr://files/catalog", Driver: "lakefs", DSN: fake.DSN(fake.NewRepo())}}}
+	cfg := apphome.DeploymentConfig{Version: 1, StateDir: filepath.Join(root, "durable"), CacheDir: filepath.Join(root, "cache"), Auth: "local", BootstrapPrincipal: "agent:operator", Repositories: []apphome.RepositoryBinding{{ID: "kr://kc/system", Driver: "lakefs", DSN: fake.DSN(fake.NewRepo())}}, Registry: apphome.RegistryBinding{ID: "kr://files/catalog", Driver: "lakefs", DSN: fake.DSN(fake.NewRepo())}}
 	if err := apphome.InitializeDeployment(cfg, func(dir, principal string) error {
 		return inv.WriteAllow(dir, inv.AllowFile{Rules: []inv.AllowRule{
 			{ID: "operator", Principal: principal, Actions: []string{"*"}},
-			{ID: "file-reader", Principal: "agent:reader", Actions: []string{"dataset.resolve", "file.read"}, Catalog: cfg.Catalogs[0].ID, Dataset: "protocol"},
+			{ID: "file-reader", Principal: "agent:reader", Actions: []string{"dataset.resolve", "file.read"}, Dataset: "protocol"},
 		}})
 	}); err != nil {
 		t.Fatal(err)
@@ -42,11 +45,11 @@ func declaredFileGateway(t *testing.T) (apphome.DeploymentConfig, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cat, _, err := opened.UseCatalog(cfg.Catalogs[0].ID)
+	cat, err := inv.PickDatasets(opened, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := cat.DefineKnowledgeSet("protocol", 1, []catalog.KnowledgeSetSource{{Repository: knowledge.SystemRepositoryID, Selector: snapshot.DefaultRef}}); err != nil {
+	if _, err := cat.DefineKnowledgeSet("protocol", 1, []dataset.KnowledgeSetSource{{Repository: knowledge.SystemRepositoryID, Selector: snapshot.DefaultRef}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := opened.Close(); err != nil {
@@ -88,18 +91,23 @@ func TestWorkspaceFileGatewayRestoresDeclaredDeployment(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer handler.(interface{ Close() error }).Close()
-	var fixedPin catalog.ResolvedKnowledgeSet
+	var fixedPin dataset.ResolvedKnowledgeSet
 	for _, explicit := range []bool{false, true} {
-		name := "default Catalog"
+		name := "service Dataset"
 		if explicit {
-			name = "explicit Catalog"
+			name = "reject removed Catalog selector"
 		}
 		t.Run(name, func(t *testing.T) {
 			coordinate := map[string]any{"dataset": "protocol", "view": "semantic"}
 			if explicit {
-				coordinate["catalog"] = cfg.Catalogs[0].ID
+				coordinate["catalog"] = cfg.Registry.ID
+				response := fileGatewayRequest(t, handler, "agent:reader", "/snapshot/v1/files/mounts:list", coordinate)
+				if response.Code != http.StatusBadRequest {
+					t.Fatalf("removed selector accepted: %d %s", response.Code, response.Body.String())
+				}
+				return
 			}
-			mountResponse := fileGatewayRequest(t, handler, "agent:reader", "/dataset-files/v1/mounts:list", coordinate)
+			mountResponse := fileGatewayRequest(t, handler, "agent:reader", "/snapshot/v1/files/mounts:list", coordinate)
 			if mountResponse.Code != http.StatusOK {
 				t.Fatalf("mounts: %d %s", mountResponse.Code, mountResponse.Body.String())
 			}
@@ -112,7 +120,7 @@ func TestWorkspaceFileGatewayRestoresDeclaredDeployment(t *testing.T) {
 			}
 			fixedPin = mounts.Pin
 			coordinate["pin"], coordinate["mountPath"], coordinate["directory"] = mounts.Pin, mounts.Mounts[0].Path, "_meta"
-			listing := fileGatewayRequest(t, handler, "agent:reader", "/dataset-files/v1/tree:list", coordinate)
+			listing := fileGatewayRequest(t, handler, "agent:reader", "/snapshot/v1/files/tree:list", coordinate)
 			if listing.Code != http.StatusOK {
 				t.Fatalf("listing: %d %s", listing.Code, listing.Body.String())
 			}
@@ -125,7 +133,7 @@ func TestWorkspaceFileGatewayRestoresDeclaredDeployment(t *testing.T) {
 			}
 			delete(coordinate, "directory")
 			coordinate["file"] = "_meta/repository.yaml"
-			read := fileGatewayRequest(t, handler, "agent:reader", "/dataset-files/v1/file:read", coordinate)
+			read := fileGatewayRequest(t, handler, "agent:reader", "/snapshot/v1/files/file:read", coordinate)
 			if read.Code != http.StatusOK {
 				t.Fatalf("read: %d %s", read.Code, read.Body.String())
 			}
@@ -145,7 +153,7 @@ func TestWorkspaceFileGatewayRestoresDeclaredDeployment(t *testing.T) {
 	if revoked.Code != http.StatusOK {
 		t.Fatalf("revoke: %d %s", revoked.Code, revoked.Body.String())
 	}
-	denied := fileGatewayRequest(t, handler, "agent:reader", "/dataset-files/v1/file:read", map[string]any{
+	denied := fileGatewayRequest(t, handler, "agent:reader", "/snapshot/v1/files/file:read", map[string]any{
 		"dataset": "protocol", "view": "semantic", "pin": fixedPin, "mountPath": "knowledge/system", "file": "_meta/repository.yaml",
 	})
 	if denied.Code != http.StatusForbidden {
@@ -158,12 +166,101 @@ func TestWorkspaceFileGatewayRestoresDeclaredDeployment(t *testing.T) {
 	}
 }
 
+func TestWorkspaceFileGatewayDeliversSystemKnowledgeTree(t *testing.T) {
+	cfg, configPath := declaredFileGateway(t)
+	opened, err := apphome.OpenDeployment(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cat, err := inv.PickDatasets(opened, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = cat.DefineKnowledgeSet("protocol", 2, []dataset.KnowledgeSetSource{{Repository: knowledge.SystemRepositoryID, Selector: snapshot.DefaultRef, Path: dataset.MountPath("knowledge/system")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := opened.Close(); err != nil {
+		t.Fatal(err)
+	}
+	handler, err := HTTPHandlerFromConfig(configPath, HTTPServerOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer handler.(interface{ Close() error }).Close()
+	coordinate := map[string]any{"dataset": "protocol", "view": "repository"}
+	response := fileGatewayRequest(t, handler, "agent:reader", "/snapshot/v1/files/mounts:list", coordinate)
+	if response.Code != http.StatusOK {
+		t.Fatalf("mounts: %d %s", response.Code, response.Body.String())
+	}
+	var mounts workspaceFileMountsResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &mounts); err != nil {
+		t.Fatal(err)
+	}
+	if len(mounts.Mounts) != 1 || mounts.Mounts[0].Repository != knowledge.SystemRepositoryID {
+		t.Fatalf("system mount: %#v", mounts)
+	}
+	coordinate["pin"], coordinate["mountPath"], coordinate["directory"] = mounts.Pin, mounts.Mounts[0].Path, "concepts/object"
+	listing := fileGatewayRequest(t, handler, "agent:reader", "/snapshot/v1/files/tree:list", coordinate)
+	if listing.Code != http.StatusOK {
+		t.Fatalf("listing: %d %s", listing.Code, listing.Body.String())
+	}
+	var page workspaceFileDirectoryResponse
+	if err := json.Unmarshal(listing.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	if page.Pin.PinID != mounts.Pin.PinID || len(page.Entries) != 1 || page.Entries[0].Name != "definition.md" {
+		t.Fatalf("concept directory: %#v", page)
+	}
+	delete(coordinate, "directory")
+	opened, err = apphome.OpenDeployment(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer opened.Close()
+	source, err := opened.Store.Require(knowledge.SystemRepositoryID, kernel.ErrCapabilityUnsatisfied)
+	if err != nil {
+		t.Fatal(err)
+	}
+	system, ok := snapshot.TreeReaderOf(source)
+	if !ok {
+		t.Fatal("system authority lacks literal file reads")
+	}
+	commit, err := source.Head(snapshot.DefaultRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range []string{"README.md", "concepts/object/definition.md", "interfaces/writer/definition.md", "mechanisms/governance/definition.md", "mechanisms/hook/definition.md", "capabilities/read-knowledge/entrypoints.yaml", "guides/first-publication/guide.md"} {
+		coordinate["file"] = file
+		read := fileGatewayRequest(t, handler, "agent:reader", "/snapshot/v1/files/file:read", coordinate)
+		if read.Code != http.StatusOK {
+			t.Fatalf("read %s: %d %s", file, read.Code, read.Body.String())
+		}
+		var value workspaceFileReadResponse
+		if err := json.Unmarshal(read.Body.Bytes(), &value); err != nil {
+			t.Fatal(err)
+		}
+		want, err := system.ReadFile(file, commit)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if value.Pin.PinID != mounts.Pin.PinID || !bytes.Equal(value.Content, want) {
+			t.Fatalf("%s did not preserve the publication bytes and pin", file)
+		}
+	}
+}
+
 type fileGatewayCloseProbe struct {
-	*knowledge.SystemRepository
+	snapshot.Store
+	snapshot.TreeReader
+	snapshot.DirectoryReader
 	closed atomic.Int32
 }
 
-func (p *fileGatewayCloseProbe) Close() error { p.closed.Add(1); return nil }
+func (p *fileGatewayCloseProbe) Close() error {
+	p.closed.Add(1)
+	return p.Store.(interface{ Close() error }).Close()
+}
 
 func TestWorkspaceFileGatewayBorrowsHomeUntilConcurrentReadsFinish(t *testing.T) {
 	cfg, _ := declaredFileGateway(t)
@@ -171,8 +268,9 @@ func TestWorkspaceFileGatewayBorrowsHomeUntilConcurrentReadsFinish(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	probe := &fileGatewayCloseProbe{SystemRepository: knowledge.NewSystemRepository()}
-	opened.Store = snapshot.NewRegistry()
+	source, _ := opened.Store.Get(knowledge.SystemRepositoryID)
+	probe := &fileGatewayCloseProbe{Store: source, TreeReader: source.(snapshot.TreeReader), DirectoryReader: source.(snapshot.DirectoryReader)}
+	opened.Store.Delete(knowledge.SystemRepositoryID)
 	if err := opened.Store.Add(probe); err != nil {
 		t.Fatal(err)
 	}
@@ -183,33 +281,57 @@ func TestWorkspaceFileGatewayBorrowsHomeUntilConcurrentReadsFinish(t *testing.T)
 	defer runtime.Shutdown(context.Background())
 	facade := &httpFacade{home: cfg.StateDir, readHome: opened, deployment: &cfg, runtime: runtime}
 	defer facade.closeReadHome()
-	coordinate := workspaceFileCoordinate{Dataset: "protocol", View: "semantic"}
+	coordinate := snapshotservice.FileCoordinate{Dataset: "protocol", View: "semantic"}
+	raw, err := json.Marshal(coordinate)
+	if err != nil {
+		t.Fatal(err)
+	}
 	request := func() *http.Request {
-		r := httptest.NewRequest(http.MethodPost, "/dataset-files/v1/mounts:list", nil)
+		r := httptest.NewRequest(http.MethodPost, "/snapshot/v1/files/mounts:list", bytes.NewReader(raw))
+		r.Header.Set("Content-Type", "application/json")
 		r.Header.Set("X-Kc-As", "agent:reader")
 		return r
 	}
-	first := httptest.NewRecorder()
-	facade.withWorkspaceFiles(first, request(), "file-mounts", coordinate, false, func(view *workspaceFileView) (any, error) {
-		if view.opened != opened {
-			t.Error("file request did not borrow the facade Home")
+	acquire := func(ctx context.Context, caller identity.HTTPIdentity, operation string) (snapshotservice.Resources, func(), error) {
+		resources, release, err := facade.acquireSnapshotResources(ctx, caller, operation)
+		if err == nil && resources.Sources != opened.Store {
+			t.Error("file request did not borrow the facade-owned source authorities")
 		}
-		return workspaceFileMountsResponse{Pin: view.pin, Mounts: view.mounts}, nil
+		return resources, release, err
+	}
+	handler := snapshotservice.NewHandler(snapshotservice.Config{
+		Identity: facade.snapshotIdentityOptions(), Observe: facade.observeSnapshotOperation, Acquire: acquire,
 	})
+	first := httptest.NewRecorder()
+	handler.ServeHTTP(first, request())
 	if first.Code != http.StatusOK || probe.closed.Load() != 0 {
 		t.Fatalf("request closed shared Home: status=%d closeCount=%d body=%s", first.Code, probe.closed.Load(), first.Body.String())
+	}
+	var firstMounts snapshotservice.FileMountsResponse
+	if err := json.Unmarshal(first.Body.Bytes(), &firstMounts); err != nil {
+		t.Fatal(err)
+	}
+	if firstMounts.Pin.PinID == "" || len(firstMounts.Mounts) != 1 || firstMounts.Mounts[0].Repository != knowledge.SystemRepositoryID {
+		t.Fatalf("module HTTP request did not open its fixed semantic file view: %#v", firstMounts)
 	}
 	entered := make(chan struct{}, 2)
 	release := make(chan struct{})
 	finished := make(chan *httptest.ResponseRecorder, 2)
+	concurrentHandler := snapshotservice.NewHandler(snapshotservice.Config{
+		Identity: facade.snapshotIdentityOptions(), Observe: facade.observeSnapshotOperation,
+		Acquire: func(ctx context.Context, caller identity.HTTPIdentity, operation string) (snapshotservice.Resources, func(), error) {
+			resources, unlock, err := acquire(ctx, caller, operation)
+			if err == nil {
+				entered <- struct{}{}
+				<-release
+			}
+			return resources, unlock, err
+		},
+	})
 	for range 2 {
 		go func() {
 			response := httptest.NewRecorder()
-			facade.withWorkspaceFiles(response, request(), "file-mounts", coordinate, false, func(view *workspaceFileView) (any, error) {
-				entered <- struct{}{}
-				<-release
-				return workspaceFileMountsResponse{Pin: view.pin, Mounts: view.mounts}, nil
-			})
+			concurrentHandler.ServeHTTP(response, request())
 			finished <- response
 		}()
 	}

@@ -7,7 +7,7 @@ package snapshot
 
 import (
 	"kc/kernel"
-	"sync"
+	"kc/snapshot/internal/storecontract"
 )
 
 // Store is the layer ⓪ authority contract. It exposes version coordinates and
@@ -57,24 +57,10 @@ type DirectoryReader interface {
 	ReadDirectory(DirectoryRequest) (DirectoryPage, error)
 }
 
-type DirectoryRequest struct {
-	Commit       kernel.CommitID `json:"commit"`
-	Directory    string          `json:"directory,omitempty"`
-	Limit        int             `json:"limit,omitempty"`
-	Continuation string          `json:"continuation,omitempty"`
-}
-
-type DirectoryEntry struct {
-	Name string `json:"name"`
-	Kind string `json:"kind"` // file or directory
-}
-
-type DirectoryPage struct {
-	Entries      []DirectoryEntry `json:"entries"`
-	Continuation string           `json:"continuation,omitempty"`
-	Exhausted    bool             `json:"exhausted"`
-	Generation   string           `json:"generation"`
-}
+// Directory request and result values contain only immutable tree coordinates.
+type DirectoryRequest = storecontract.DirectoryRequest
+type DirectoryEntry = storecontract.DirectoryEntry
+type DirectoryPage = storecontract.DirectoryPage
 
 // HistoryStore is an optional layer ⓪ capability. It returns first-parent
 // reachable commits newest first, starting at the supplied immutable commit.
@@ -82,6 +68,14 @@ type DirectoryPage struct {
 type HistoryStore interface {
 	CommitHistory(commit kernel.CommitID, limit int) ([]kernel.CommitID, error)
 }
+
+// CommitMetadataReader exposes immutable commit provenance independently of
+// file contents, host Git checkouts, and knowledge interpretation.
+type CommitMetadataReader interface {
+	ReadCommitMetadata(kernel.CommitID) (CommitMetadata, error)
+}
+
+type CommitMetadata = storecontract.CommitMetadata
 
 // ChangeStore is an optional layer ⓪ acceleration capability. Paths are
 // literal tree paths changed between two immutable commits.
@@ -130,119 +124,24 @@ func ChangeStoreOf(store Store) (ChangeStore, bool) {
 	return changes, ok
 }
 
-type TreeChange struct {
-	Path    string `json:"path"`
-	Content []byte `json:"content,omitempty"`
-	Remove  bool   `json:"remove,omitempty"`
-}
+// Tree changes are literal paths and bytes; private backends share these DTOs.
+type TreeChange = storecontract.TreeChange
+type TreeChangeSet = storecontract.TreeChangeSet
 
-type TreeChangeSet struct {
-	TargetRepository     kernel.RepositoryID `json:"targetRepository"`
-	TargetRef            string              `json:"targetRef"`
-	BaseCommit           kernel.CommitID     `json:"baseCommit"`
-	ExpectedTargetCommit kernel.CommitID     `json:"expectedTargetCommit"`
-	Changes              []TreeChange        `json:"changes"`
-	Message              string              `json:"message,omitempty"`
-	Author               string              `json:"author,omitempty"`
-	RequestID            string              `json:"requestId,omitempty"`
-	RuleID               string              `json:"ruleId,omitempty"`
-}
+const DefaultRef = storecontract.DefaultRef
 
-const DefaultRef = "refs/heads/main"
-
-func RefOrDefault(ref string) string {
-	if ref == "" {
-		return DefaultRef
-	}
-	return ref
-}
+func RefOrDefault(ref string) string { return storecontract.RefOrDefault(ref) }
 
 // Registry contains opened layer ⓪ members. Registration never asks whether a
 // commit contains Knowledge Catalog files.
-type Registry struct {
-	mu         sync.RWMutex
-	stores     map[kernel.RepositoryID]Store
-	onAdvanced []func(Advanced)
-	wrap       func(Store) Store
-}
-
-func NewRegistry() *Registry {
-	return &Registry{stores: map[kernel.RepositoryID]Store{}}
-}
-
-// SetWrap installs a decorator applied to every registered Store, including
-// members already in the registry. The wrap function must be idempotent.
-func (r *Registry) SetWrap(fn func(Store) Store) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.wrap = fn
-	if fn == nil {
-		return
-	}
-	for id, store := range r.stores {
-		r.stores[id] = fn(store)
-	}
-}
-
-func (r *Registry) Add(store Store) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if _, ok := r.stores[store.ID()]; ok {
-		return kernel.Fail(kernel.ErrPreconditionFailed, "repository %s is already registered", store.ID())
-	}
-	if r.wrap != nil {
-		store = r.wrap(store)
-	}
-	r.stores[store.ID()] = store
-	return nil
-}
-
-func (r *Registry) Get(id kernel.RepositoryID) (Store, bool) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	store, ok := r.stores[id]
-	return store, ok
-}
-
-func (r *Registry) Delete(id kernel.RepositoryID) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	delete(r.stores, id)
-}
-
-func (r *Registry) Require(id kernel.RepositoryID, code kernel.ErrorCode) (Store, error) {
-	store, ok := r.Get(id)
-	if ok {
-		return store, nil
-	}
-	if code == kernel.ErrUsageInvalid {
-		return nil, kernel.Fail(code, "repository %s is not mounted", id)
-	}
-	return nil, kernel.Fail(code, "unknown repository %s", id)
-}
-
-func (r *Registry) IDs() []kernel.RepositoryID {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	ids := make([]kernel.RepositoryID, 0, len(r.stores))
-	for id := range r.stores {
-		ids = append(ids, id)
-	}
-	return ids
-}
-
-func (r *Registry) Close() error {
-	r.mu.Lock()
-	stores := r.stores
-	r.stores = map[kernel.RepositoryID]Store{}
-	r.mu.Unlock()
-	var first error
-	for _, store := range stores {
-		if closer, ok := store.(interface{ Close() error }); ok {
-			if err := closer.Close(); err != nil && first == nil {
-				first = err
-			}
-		}
-	}
-	return first
+type Registry interface {
+	SetWrap(func(Store) Store)
+	Add(Store) error
+	Get(kernel.RepositoryID) (Store, bool)
+	Delete(kernel.RepositoryID)
+	Require(kernel.RepositoryID, kernel.ErrorCode) (Store, error)
+	IDs() []kernel.RepositoryID
+	Close() error
+	OnAdvanced(func(Advanced))
+	NotifyAdvanced(Advanced)
 }

@@ -50,45 +50,43 @@
 
 ## 1. 进房 — consume 前半
 
-场景：`catalog-initialized` 提供初始 Catalog 和空授权。`http-served`、`catalog-read-granted`、`grants-bootstrapped` 是其不同前态分支，分别供身份配对、读权边界和管理者发现用例复用。
+场景：`service-initialized` 提供初始 登记空间 和空授权。`http-served`、`inventory-read-granted`、`grants-bootstrapped` 是其不同前态分支，分别供身份配对、读权边界和管理者发现用例复用。
 
 | 命令 | 场景 | 一句语义 | 问 | 刀（对手） | 对 | 形 | 侧 | 路 | 成立 |
 |---|---|---|---|---|---|---|---|---|---|
 | `login` | `http-served` | 验证身份并保存当前 Server 的本机会话 | 过 | 过：`whoami`（只看）、HTTP `Authorization` | 过：local `{status:authenticated, principal, mode:local}`；Taihu 未完成 `{auth_required, auth_url, expires_in, next_step:kc login --wait}`。help「验证身份并保存当前 Server 的本机会话」 | 过：两种 stdout 对应两种模式，与 `create` 双模式同类 | 过：回执不带 Server 地址 | 日常 | 成立 |
 | `logout` | `http-served` | 清除当前 Server 的本机会话 | 过 | 过：`login` | 过：`{status:logged out}`。help「清除当前 Server 的本机会话」 | 过 | 过 | 日常 | 成立 |
-| `whoami` | `catalog-initialized` / `http-served` | 当前认证主体是谁 | 过 | 过：`admission show`（权与入口）、`login`（建立会话） | 过：`{principal}`，`grants` 缺席。help「显示当前认证主体」 | 过 | 过：不列 grant | 日常 | 成立 |
+| `whoami` | `service-initialized` / `http-served` | 当前认证主体是谁 | 过 | 过：`admission show`（权与入口）、`login`（建立会话） | 过：`{principal}`，`grants` 缺席。help「显示当前认证主体」 | 过 | 过：不列 grant | 日常 | 成立 |
 | `admission show` | `http-served` / `grants-bootstrapped` | 本人已有哪些权、去哪申请、谁能发权 | 过 | 过：`whoami`、`grant list`（管理者视图） | 过：`{principal, grants, request.url, request.administrators}`；无 `status`/`eligible`/`currentActions`。未 bootstrap 时 administrators 空。help「显示本人已有权限和外部申请入口」 | 过：名字有申请味，stdout 已否决队列 | 过：KC 不托管申请队列 | 日常 | 成立 |
-| `catalog list` | `catalog-initialized` / `catalog-read-granted` | 我能看见哪几间 Catalog | 过 | 过：`show`（一间库存）、HTTP 集合 GET | 过：`{catalogs:[{id}]}`。help「列出可见 Catalog」 | 过 | 过：只有一间可见时自动 `use` 是[CLI 交互](cli.md)选定，不是对失败 | 日常 | 成立 |
-| `catalog use` | `catalog-read-granted` | 选择当前 Catalog | 过 | 过：`catalog list`、每次命令再传 catalog | 过：`{catalogId}`。缺 id → `USAGE_INVALID`。help「选择当前 Catalog」 | 过 | 过 | 日常 | 成立 |
-| `show` | `catalog-initialized` / `repository-attached` 的库存隔离用例 | 当前 Catalog 挂了哪些仓和知识集 | 过 | 过：`catalog list`、`schema list`（实体不是库存）、对象 LIST（已否决） | 过：`{catalogId, repositories[].id, datasets}`；`home`/`title`/`summary` 缺席。help「显示当前 Catalog 的 Repository 与知识集」 | 过 | 过：`catalog.read` 不放行正文 | 日常 | 成立 |
+| `show` | `service-initialized` / `repository-attached` 的库存隔离用例 | 当前 登记空间 挂了哪些仓和知识集 | 过 | 过：`schema list`（实体不是库存）、对象 LIST（已否决） | 过：`{repositories[].id, datasets}`；`home`/`title`/`summary` 缺席。help「显示当前 登记空间 的 Repository 与知识集」 | 过 | 过：`inventory.read` 不放行正文 | 日常 | 成立 |
 
-`catalog-initialized` 上的退役 checkout probe 与 `TestRemovedCommandsAreRejected` / `TestAppendAndStreamSurfacesStayAbsent` 钉住：没有对象 LIST、checkout/export、MCP 正路径。缺的不是本表漏判。
+`service-initialized` 上的退役 checkout probe 与 `TestRemovedCommandsAreRejected` / `TestAppendAndStreamSurfacesStayAbsent` 钉住：没有对象 LIST、checkout/export、MCP 正路径。缺的不是本表漏判。
 
 ---
 
 ## 2. 挂源给权 — write / compose 供给
 
-场景：`catalog-initialized` 挂平台建仓的具名 Go 旅程与独立撤权 probe；`repository-attached` 挂库存隔离、写权隔离和 detach 用例。建仓、撤权、detach 的验证结果没有另建状态。
+场景：`service-initialized` 挂平台建仓的具名 Go 旅程与独立撤权 probe；`repository-attached` 挂库存隔离、写权隔离和 detach 用例。建仓、撤权、detach 的验证结果没有另建状态。
 
 | 命令 | 场景 | 一句语义 | 问 | 刀（对手） | 对 | 形 | 侧 | 路 | 成立 |
 |---|---|---|---|---|---|---|---|---|---|
-| `create --name` | `catalog-initialized` 的平台建仓 Go 证据 | 向平台要一个空仓 | 过 | 过：`git init`、直接改 Catalog 文件、HTTP POST 集合 | 过：`{catalog, repositoryId, status:APPLIED, head}`；无 `--name`/`--url` → `USAGE_INVALID`。help「创建托管 Repository 或连接自有 Repository」 | 过 | 过：不 attach、不发 `knowledge.read` | 日常 | 成立 |
-| `create --url` | `catalog-initialized` 的连接入口 Go 证据 | 把已有仓接到 KC 能打开 | 过 | 过：`attach`（登记）、裸 clone | 过：与 `--name` 互斥；缺 `--credential-file` → `USAGE_INVALID` | 过 | 过：连接 ≠ 挂进 Catalog | 日常 | 成立 |
-| `attach` | `repository-attached` | 把已打开的仓挂进当前 Catalog | 过 | 过：`create`、改登记表文件 | 过：`{catalog, repositoryId}`，随后 `show` 见成员。help「把已连接 Repository 挂入当前 Catalog」 | 过 | 过：不要求已发布，不发读权 | 日常 | 成立 |
-| `detach` | `repository-attached` / `probe-detach-keeps-head-readable.feature` | 从当前 Catalog 拿下这个仓 | 过 | 过：`catalog archive`（整间房）、删 Snapshot | 过：`{repositoryId, detached:true}`；`writer head` 仍有 commit。help「从当前 Catalog 拿下 Repository」 | 过 | 过：不删对象 | 日常 | 成立 |
-| `grant add` | 复用授权前态的 construct；一次性发权在各独立 probe | 允许某人在这仓、这间 Catalog 或这个 Dataset 做一类动作 | 过 | 过：改 `allow.json`、HTTP POST shares | 过：`{id, principal, catalog\|repository, actions}`。help「发放一条仓、Catalog 或 Dataset 范围的授权规则」 | 过 | 过：`--repo` 与 `--catalog` 二选一；Dataset 消费权加 `--dataset`；不能发 `*` | 日常 | 成立 |
-| `grant list` | `catalog-initialized` / `*-granted` | 这范围现在有哪些授权规则 | 过 | 过：`admission show`（本人）、AllowFile 原文 | 过：`{rules:[…]}`；空登记 `{rules:[]}`。help「列出授权规则」 | 过 | 过：`--repo`/`--catalog` 过滤 | 日常 | 成立 |
-| `grant remove` | `catalog-initialized` / `probe-revoke-catalog-read-denied.feature` | 撤销这一条授权规则 | 过 | 过：`grant add`、`detach` | 过：`{revoked:alw_1}`，随后 `rules:[]`。help「撤销一条授权规则」 | 过 | 过：立即生效，旧 pin 不能绕过（KS-02） | 日常 | 成立 |
+| `create --name` | `service-initialized` 的平台建仓 Go 证据 | 向平台要一个空仓 | 过 | 过：`git init`、直接改 登记空间 文件、HTTP POST 集合 | 过：`{catalog, repositoryId, status:APPLIED, head}`；无 `--name`/`--url` → `USAGE_INVALID`。help「创建托管 Repository 或连接自有 Repository」 | 过 | 过：不 attach、不发 `knowledge.read` | 日常 | 成立 |
+| `create --url` | `service-initialized` 的连接入口 Go 证据 | 把已有仓接到 KC 能打开 | 过 | 过：`attach`（登记）、裸 clone | 过：与 `--name` 互斥；缺 `--credential-file` → `USAGE_INVALID` | 过 | 过：连接 ≠ 挂进 登记空间 | 日常 | 成立 |
+| `attach` | `repository-attached` | 把已打开的仓挂进当前 登记空间 | 过 | 过：`create`、改登记表文件 | 过：`{catalog, repositoryId}`，随后 `show` 见成员。help「把已连接 Repository 挂入当前 登记空间」 | 过 | 过：不要求已发布，不发读权 | 日常 | 成立 |
+| `detach` | `repository-attached` / `probe-detach-keeps-head-readable.feature` | 从当前 登记空间 拿下这个仓 | 过 | 过：`catalog archive`（整间房）、删 Snapshot | 过：`{repositoryId, detached:true}`；`writer head` 仍有 commit。help「从当前 登记空间 拿下 Repository」 | 过 | 过：不删对象 | 日常 | 成立 |
+| `grant add` | 复用授权前态的 construct；一次性发权在各独立 probe | 允许某人在这仓、这间 登记空间 或这个 Dataset 做一类动作 | 过 | 过：改 `allow.json`、HTTP POST shares | 过：`{id, principal, catalog\|repository, actions}`。help「发放一条仓、登记空间 或 Dataset 范围的授权规则」 | 过 | 过：服务、Repository 与 Dataset 范围明确；Dataset 消费权加 `--dataset`；不能发 `*` | 日常 | 成立 |
+| `grant list` | `service-initialized` / `*-granted` | 这范围现在有哪些授权规则 | 过 | 过：`admission show`（本人）、AllowFile 原文 | 过：`{rules:[…]}`；空登记 `{rules:[]}`。help「列出授权规则」 | 过 | 过：`--repo`/`--dataset` 过滤 | 日常 | 成立 |
+| `grant remove` | `service-initialized` / `probe-revoke-catalog-read-denied.feature` | 撤销这一条授权规则 | 过 | 过：`grant add`、`detach` | 过：`{revoked:alw_1}`，随后 `rules:[]`。help「撤销一条授权规则」 | 过 | 过：立即生效，旧 pin 不能绕过（KS-02） | 日常 | 成立 |
 
 ---
 
 ## 3. 读知识 — consume 后半
 
-场景：System 可读与不可写用例挂在 `catalog-initialized`；`schema-read-granted` 供两个 Schema 边界用例复用。`projection-synced` 提供索引，`knowledge-search-granted` 上分别验证搜索权限和临时增加读权后的交付；对象史在 `knowledge-published`。这些分支不是一条权限继承链。
+场景：System 可读与不可写用例挂在 `service-initialized`；`schema-read-granted` 供两个 Schema 边界用例复用。`projection-synced` 提供索引，`knowledge-search-granted` 上分别验证搜索权限和临时增加读权后的交付；对象史在 `knowledge-published`。这些分支不是一条权限继承链。
 
 | 命令 | 场景 | 一句语义 | 问 | 刀（对手） | 对 | 形 | 侧 | 路 | 成立 |
 |---|---|---|---|---|---|---|---|---|---|
-| `schema list` | `catalog-initialized` 的 System 浏览用例与 Go 分页证据；`schema-read-granted` | 这仓发布了哪些实体类型 | 过 | 过：`show`、空 `search`、对象 LIST、`read` 合同正文 | 过：`{repository, commit?, schemas[].objectId, entity, description}`。无 `--repo` → `USAGE_INVALID`。help「列出一个 Repository 已发布的实体，不是对象目录或合同正文」 | 过 | 过：`catalog.read` 不隐含 | 日常 | 成立 |
+| `schema list` | `service-initialized` 的 System 浏览用例与 Go 分页证据；`schema-read-granted` | 这仓发布了哪些实体类型 | 过 | 过：`show`、空 `search`、对象 LIST、`read` 合同正文 | 过：`{repository, commit?, schemas[].objectId, entity, description}`。无 `--repo` → `USAGE_INVALID`。help「列出一个 Repository 已发布的实体，不是对象目录或合同正文」 | 过 | 过：`inventory.read` 不隐含 | 日常 | 成立 |
 | `schema describe` | `schema-read-granted` | 这种实体哪些字段能搜、能滤 | 过 | 过：`schema list`（实体目录）、`read` 合同正文 | 过：`{repository, schemas[].objectId, fields[{path,access}]}`，可选 `origin`，`entity` 缺席。help「列出字段能否 filter、text、sort，以及 Bound State 访问原点」 | 过 | 过：不返回实例正文 | 进阶 | 成立 |
 | `search` | `knowledge-search-granted` | 这仓里哪些知识匹配这句话 | 过 | 过：`read`、Linux `rg`、空查询当浏览 | 过：hits `{repository, objectId, commit}`；无 query → `USAGE_INVALID`。help「按 Schema AccessHints 检索知识，列出匹配对象，不是文件 contains」 | 过 | 过：无 `knowledge.read` 仍定位、不带正文 | 日常 | 成立 |
 | `read` | `knowledge-search-granted` / `read-grant-returns-canonical.feature`；`knowledge-published` | 打开这一份知识的正文 | 过 | 过：`search`、`log`/`provenance`、Linux `cat`、`writer head` | 过：`{repository, objectId, commit, value}`。help「读取一个知识对象在固定 commit 上的正文」 | 过 | 过 | 日常 | 成立 |
@@ -96,7 +94,7 @@
 | `relations` | `knowledge-published` | 哪些关系对象连着这份知识 | 过 | 过：`search`（匹配）、`read`（正文）、`provenance` | 过：hits 关系对象坐标（邻居对象只在关系端点里）；无投影 → `CAPABILITY_UNSATISFIED`。help「列出连着对象的关系对象命中，不是邻接对象正文」 | 过：`--direction DIRECTED\|UNDIRECTED` | 过：不扫描权威 | 进阶 | 成立 |
 | `traverse` | `TestTraverseNeighborhoodClosureAcrossChannels`（OpenSearch live 夹具；`--repo` / `--dataset` / HTTP 三通道）与 `knowledgeapp` 闭包单元证据 | 从这一份知识沿关系能到达哪些对象 | 过 | 过：`relations`（一跳边级命中，不做闭包）、`read`；范围外 frontier 只出 `boundary` 不出节点 | 过：`nodes[]` 按对象去重带最小跳深、`edges[]` 保留关系坐标与完整端点、`boundary`、`exhausted`；`--max-hops` 0/9/缺省 → `USAGE_INVALID`。help「在固定范围内沿关系做有界邻域遍历，不是图查询语言」 | 过：`--limit 1` 分页为不相交增量，并集等于闭包；`--max-hops 1` 截断到一跳 | 过：闭包不枚举路径、不承诺最短路径，续传绑定清单摘要，不扩大授权 | 进阶 | 成立 |
 | `provenance` | `knowledge-published` | 这一份知识声称从哪来 | 过 | 过：`log`（修订）、`read`（正文） | 过：`{objectId, repository, …}`。help「读取对象来源信封」 | 过 | 过 | 进阶 | 成立 |
-| `log` | `knowledge-published` | 这一份知识经历过哪些版本 | 过 | 过：`catalog audit`（登记表史）、`git log`（路径） | 过：`{logs, continuation?}`。help「分页读取对象修订历史」 | 过 | 过：不要 `--aspect` | 进阶 | 成立 |
+| `log` | `knowledge-published` | 这一份知识经历过哪些版本 | 过 | 过：`registry audit`（登记表史）、`git log`（路径） | 过：`{logs, continuation?}`。help「分页读取对象修订历史」 | 过 | 过：不要 `--aspect` | 进阶 | 成立 |
 | `binding show` | `repository-attached` / `access-missing-runtime-unavailable.feature` 的 Binding 观测 | 这个字段声明怎么连墙外 | 过 | 过：`read`（句柄正文）、`access`（观察值） | 过：Binding 声明。help「查看 Binding 声明」 | 过 | 过：只看声明 | 进阶 | 成立 |
 | `access` | `repository-attached` 的访问边界 probe 与资源解析 Go 证据；根节点的参数拒绝 probe | 读墙外此刻的观察值 | 过 | 过：`binding show`、`read`、`invoke` | 过：Schema 无 origin → `CAPABILITY_UNSATISFIED`；成功 `{objectId, aspectName, schemaRef, value, basis}`。help「按 Schema origin 与实体 ID 读取该 Aspect 的当前观察」 | 过 | 过：`--operation` 拒，指向 `invoke` | 进阶 | 成立 |
 | `invoke` | `repository-attached` / `invoke-missing-capability-denied.feature` | 对墙外执行一次已声明的操作 | 过 | 过：`access` | 过：描述无 origin → `CAPABILITY_UNSATISFIED`。help「调用 ResourceDescriptor 操作」 | 过 | 过：仓读权不能替代源系统强制 | 进阶 | 成立 |
@@ -174,29 +172,28 @@
 
 ## 8. 访问账与反馈
 
-场景：`catalog-initialized` 的 access/hitmap 来源 probe；`http-served` 的访问账与 trace Go 证据；`catalog-initialized` 的反馈输入 probe；`knowledge-search-granted` 的重排、反馈 Go 证据。
+场景：`service-initialized` 的 access/hitmap 来源 probe；`http-served` 的访问账与 trace Go 证据；`service-initialized` 的反馈输入 probe；`knowledge-search-granted` 的重排、反馈 Go 证据。
 
 | 命令 | 场景 | 一句语义 | 问 | 刀（对手） | 对 | 形 | 侧 | 路 | 成立 |
 |---|---|---|---|---|---|---|---|---|---|
-| `operations audit access` | `catalog-initialized` / `probe-access-log.feature`；`http-served` 的审计 Go 证据 | 最近发生了哪些访问 | 过 | 过：`catalog audit`（登记表）、`log`（对象史） | 过：`{source:access, entries?}`；空窗不是错误。help「查看访问账」 | 过 | 过 | 进阶 | 成立 |
-| `operations audit hitmap` | `catalog-initialized` / `probe-access-log.feature`；`http-served` 的审计 Go 证据 | 检索命中了哪些对象 | 过 | 过：`audit access`（事件 vs 对象） | 过：`{source:hitmap, hits}`。help「按对象汇总检索命中，不是访问事件账」 | 过 | 过 | 进阶 | 成立 |
+| `operations audit access` | `service-initialized` / `probe-access-log.feature`；`http-served` 的审计 Go 证据 | 最近发生了哪些访问 | 过 | 过：`registry audit`（登记表）、`log`（对象史） | 过：`{source:access, entries?}`；空窗不是错误。help「查看访问账」 | 过 | 过 | 进阶 | 成立 |
+| `operations audit hitmap` | `service-initialized` / `probe-access-log.feature`；`http-served` 的审计 Go 证据 | 检索命中了哪些对象 | 过 | 过：`audit access`（事件 vs 对象） | 过：`{source:hitmap, hits}`。help「按对象汇总检索命中，不是访问事件账」 | 过 | 过 | 进阶 | 成立 |
 | `operations audit trace` | `http-served` 的 trace Go 证据；根节点缺操作数 probe | 这一次请求的证据链 | 过 | 过：`audit access`（分页账）、`hitmap` | 过：缺 `--trace-id` → `USAGE_INVALID`；成功 `{traceId, entries[]}`（kind=access/feedback/refine/retrieval）。help「查看请求追踪」 | 过 | 过 | 进阶 | 成立 |
-| `operations feedback record` | `catalog-initialized` 的非法 outcome probe；`knowledge-search-granted` 的反馈 Go 证据 | 给这次检索记一条人的对错 | 过 | 过：`preview validate` 的 PASSED/FAILED | 过：非法 outcome → `USAGE_INVALID`；成功 `{traceId, outcome, recorded:true, …}`。help「记录检索反馈」 | 过 | 过：晚于请求的独立调用 | 进阶 | 成立 |
+| `operations feedback record` | `service-initialized` 的非法 outcome probe；`knowledge-search-granted` 的反馈 Go 证据 | 给这次检索记一条人的对错 | 过 | 过：`preview validate` 的 PASSED/FAILED | 过：非法 outcome → `USAGE_INVALID`；成功 `{traceId, outcome, recorded:true, …}`。help「记录检索反馈」 | 过 | 过：晚于请求的独立调用 | 进阶 | 成立 |
 
 ---
 
-## 9. Catalog 进阶与部署
+## 9. 登记空间 进阶与部署
 
-场景：`catalog-initialized` 上的审计发权 probe、部署恢复与 System 发布 Go 证据；`repository-attached` 的归档 probe；`http-served` 提供身份用例复用的测试 Server。
+场景：`service-initialized` 上的审计发权 probe、部署恢复与 System 发布 Go 证据；`repository-attached` 的归档 probe；`http-served` 提供身份用例复用的测试 Server。
 
 | 命令 | 场景 | 一句语义 | 问 | 刀（对手） | 对 | 形 | 侧 | 路 | 成立 |
 |---|---|---|---|---|---|---|---|---|---|
-| `catalog audit` | `catalog-initialized` 的审计读取与审计发权 probe | 这间 Catalog 的登记表怎么变过来的 | 过 | 过：`log`（对象修订）、`audit access` | 过：`{source:catalog, catalogId, entries}`。无 `catalog.audit.read` → 拒绝。help「查看 Catalog 登记表历史」 | 过 | 过：不放行库存发现 | 进阶 | 成立 |
-| `catalog archive` | `repository-attached` / `probe-archive-rejects-dataset-definition.feature` | 结束这间 Catalog 的生命周期 | 过 | 过：`detach`（一个仓）、删部署 | 过：`{catalog, archived:true}`，随后 `show.archived=true`。无管理权 → 拒绝。help「归档当前 Catalog」 | 过 | 过 | 进阶 | 成立 |
-| `deployment init` | `catalog-initialized` 的初始化 Go 证据与缺配置 probe | 按配置文件把部署建起来 | 过 | 过：手建目录、`serve` | 过：成功 `{initialized:true, catalogs}`；无 `--config` → `USAGE_INVALID`。help「初始化部署」 | 过 | 过：不猜本机 Home | 部署 | 成立 |
-| `deployment status` | `catalog-initialized` 的恢复 Go 证据与缺配置 probe | 既有部署恢复好了没有 | 过 | 过：`show`、`writer head` | 过：`{status:ready, catalogs:[{id,head,archived,repositories}]}`；无 `--config` → `USAGE_INVALID`。help「查看部署恢复状态」 | 过 | 过：缺耐久状态失败关闭 | 部署 | 成立 |
-| `deployment system publish` | `catalog-initialized` 的 System 发布 Go 证据与缺配置 probe | 把 System Schema 写入绑定仓 | 过 | 过：`writer put` 到 `kr://kc/system`（禁止） | 过：`{repositoryId, commit, metaSchema, metaSchemaDigest, seeded}`；无 `--config` → `USAGE_INVALID`。help「把 System Schema 写入绑定仓」 | 过 | 过：不登记业务 Snapshot | 部署 | 成立 |
-| `deployment identity migrate` | `catalog-initialized` 的身份迁移 Go 证据 | 把历史身份绑定迁到核验过的主体 | 过 | 过：`grant add` 重发、改用户名 | 过：`{status:APPLIED\|REPLAYED, principal, migratedRules}`。help「迁移历史身份绑定」 | 过 | 过：重放不重建已撤销规则 | 部署 | 成立 |
+| `registry audit` | `service-initialized` 的审计读取与审计发权 probe | 这间 登记空间 的登记表怎么变过来的 | 过 | 过：`log`（对象修订）、`audit access` | 过：`{source:registry, entries}`。无 `registry.audit.read` → 拒绝。help「查看 登记空间 登记表历史」 | 过 | 过：不放行库存发现 | 进阶 | 成立 |
+| `deployment init` | `service-initialized` 的初始化 Go 证据与缺配置 probe | 按配置文件把部署建起来 | 过 | 过：手建目录、`serve` | 过：成功 `{initialized:true, registry}`；无 `--config` → `USAGE_INVALID`。help「初始化部署」 | 过 | 过：不猜本机 Home | 部署 | 成立 |
+| `deployment status` | `service-initialized` 的恢复 Go 证据与缺配置 probe | 既有部署恢复好了没有 | 过 | 过：`show`、`writer head` | 过：`{status:ready, registry:{id,head,repositories}}`；无 `--config` → `USAGE_INVALID`。help「查看部署恢复状态」 | 过 | 过：缺耐久状态失败关闭 | 部署 | 成立 |
+| `deployment system publish` | `service-initialized` 的 System 发布 Go 证据与缺配置 probe | 把 System Schema 写入绑定仓 | 过 | 过：`writer put` 到 `kr://kc/system`（禁止） | 过：`{repositoryId, commit, metaSchema, metaSchemaDigest, seeded}`；无 `--config` → `USAGE_INVALID`。help「把 System Schema 写入绑定仓」 | 过 | 过：不登记业务 Snapshot | 部署 | 成立 |
+| `deployment identity migrate` | `service-initialized` 的身份迁移 Go 证据 | 把历史身份绑定迁到核验过的主体 | 过 | 过：`grant add` 重发、改用户名 | 过：`{status:APPLIED\|REPLAYED, principal, migratedRules}`。help「迁移历史身份绑定」 | 过 | 过：重放不重建已撤销规则 | 部署 | 成立 |
 | `serve` | `http-served` | 启动 typed API | 过 | 过：ttyd（人敲 `kc`）、把 `/` 当页面 | 过：help「启动 typed API Server；浏览器打开根路径会 404」。无配置 → `USAGE_INVALID`。成功是进程在听，不是 JSON 页 | 过 | 过：不是 CLI 入口 | 部署 | 成立 |
 
 `serve` 的刀是「给 Client 一个 typed API」，不是给人一个终端。走查入口仍是 ttyd。
@@ -222,18 +219,16 @@
 |---|---|---|
 | `login` | `http-served` | 是 |
 | `logout` | `http-served` | 是 |
-| `whoami` | `catalog-initialized` | 是 |
+| `whoami` | `service-initialized` | 是 |
 | `admission show` | `http-served` / `grants-bootstrapped` | 是 |
-| `catalog list` | `catalog-read-granted` | 是 |
-| `catalog use` | `catalog-read-granted` | 是 |
-| `show` | `catalog-initialized` | 是 |
-| `create` | `catalog-initialized` 的平台建仓与连接 Go 证据 | 是（两种模式） |
+| `show` | `service-initialized` | 是 |
+| `create` | `service-initialized` 的平台建仓与连接 Go 证据 | 是（两种模式） |
 | `attach` | `repository-attached` | 是 |
 | `detach` | `repository-attached` / `probe-detach-keeps-head-readable.feature` | 是 |
 | `grant add` | 复用授权前态的 construct；一次性发权在各独立 probe | 是 |
-| `grant list` | `catalog-initialized` | 是 |
-| `grant remove` | `catalog-initialized` / `probe-revoke-catalog-read-denied.feature` | 是 |
-| `schema list` | `catalog-initialized` 的 System 浏览用例与 Go 分页证据；`schema-read-granted` | 是 |
+| `grant list` | `service-initialized` | 是 |
+| `grant remove` | `service-initialized` / `probe-revoke-catalog-read-denied.feature` | 是 |
+| `schema list` | `service-initialized` 的 System 浏览用例与 Go 分页证据；`schema-read-granted` | 是 |
 | `schema describe` | `schema-read-granted` | 是 |
 | `search` | `knowledge-search-granted` | 是 |
 | `read` | `knowledge-search-granted` / `read-grant-returns-canonical.feature`；`knowledge-published` | 是 |
@@ -269,16 +264,15 @@
 | `operations gate add` | `repository-attached` / `probe-gates.feature` | 是 |
 | `operations gate list` | `repository-attached` / `probe-gates.feature` | 是 |
 | `operations gate remove` | `repository-attached` / `probe-gates.feature` | 是 |
-| `operations audit access` | `catalog-initialized` / `probe-access-log.feature`；`http-served` 的审计 Go 证据 | 是 |
-| `operations audit hitmap` | `catalog-initialized` / `probe-access-log.feature`；`http-served` 的审计 Go 证据 | 是 |
+| `operations audit access` | `service-initialized` / `probe-access-log.feature`；`http-served` 的审计 Go 证据 | 是 |
+| `operations audit hitmap` | `service-initialized` / `probe-access-log.feature`；`http-served` 的审计 Go 证据 | 是 |
 | `operations audit trace` | `http-served` 的 trace Go 证据；根节点缺操作数 probe | 是 |
-| `operations feedback record` | `catalog-initialized` 的非法 outcome probe；`knowledge-search-granted` 的反馈 Go 证据 | 是 |
-| `catalog audit` | `catalog-initialized` 的审计读取与审计发权 probe | 是 |
-| `catalog archive` | `repository-attached` / `probe-archive-rejects-dataset-definition.feature` | 是 |
-| `deployment init` | `catalog-initialized` | 是 |
-| `deployment status` | `catalog-initialized` 的恢复 Go 证据与缺配置 probe | 是 |
-| `deployment system publish` | `catalog-initialized` 的 System 发布 Go 证据与缺配置 probe | 是 |
-| `deployment identity migrate` | `catalog-initialized` 的身份迁移 Go 证据 | 是 |
+| `operations feedback record` | `service-initialized` 的非法 outcome probe；`knowledge-search-granted` 的反馈 Go 证据 | 是 |
+| `registry audit` | `service-initialized` 的审计读取与审计发权 probe | 是 |
+| `deployment init` | `service-initialized` | 是 |
+| `deployment status` | `service-initialized` 的恢复 Go 证据与缺配置 probe | 是 |
+| `deployment system publish` | `service-initialized` 的 System 发布 Go 证据与缺配置 probe | 是 |
+| `deployment identity migrate` | `service-initialized` 的身份迁移 Go 证据 | 是 |
 | `serve` | `http-served` | 是 |
 | `kcfs plan` | `knowledge-set-defined` 的固定 pin 文件计划 Go 证据 | 是 |
 | `kcfs mount` | `knowledge-set-defined` 的 kcfs 命令边界 Go 证据；真实 Linux FUSE 另验收 | 是 |
@@ -295,7 +289,7 @@
 
 只该留在 HTTP：FaultJSON 全量、SEARCH 投递链与 `KnowledgeHit`、集合 GET 库存、AllowFile 原文。产品 CLI 变短不删除这些路由。
 
-`catalog-initialized` 的退役入口 probe 与具名 Go 反例已钉：MCP、对象 LIST、checkout/export、connector-run、APPEND/Stream 正路径都不存在。
+`service-initialized` 的退役入口 probe 与具名 Go 反例已钉：MCP、对象 LIST、checkout/export、connector-run、APPEND/Stream 正路径都不存在。
 
 ---
 

@@ -43,7 +43,7 @@ func TestSceneAccessorNoticeUpdatesSearchIndex(t *testing.T) {
 	body(t, kc(home, "put", "--command-id", "state-entity", "--repo", repositoryID,
 		"--object", "Service:orders", "--aspect", "properties", "--value", `{"name":"orders"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", repositoryID+"=refs/heads/main@"))
-	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--catalog", "kr://scene/catalog", "--dataset", "agent"))
+	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--dataset", "agent"))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read,search", "--repo", repositoryID))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "projection.manage", "--repo", repositoryID))
 	body(t, kc(home, "allow", "--principal", "agent:observer", "--action", "projection.manage", "--repo", repositoryID))

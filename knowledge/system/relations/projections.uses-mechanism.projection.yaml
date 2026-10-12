@@ -1,0 +1,18 @@
+---
+object_id: kc/relation/projections.uses-mechanism.projection
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: relations/projections.uses-mechanism.projection.yaml
+---
+relationId: kc/relation/projections.uses-mechanism.projection
+relationType: uses_mechanism
+direction: DIRECTED
+endpoints:
+  - role: from
+    objectRef:
+      repository: kr://kc/system
+      object: kc/capability/projections
+  - role: to
+    objectRef:
+      repository: kr://kc/system
+      object: kc/mechanism/projection

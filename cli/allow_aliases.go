@@ -10,7 +10,7 @@ package cli
 import (
 	inv "kc/invocation"
 
-	"kc/catalog"
+	"kc/snapshot/dataset"
 )
 
 type (
@@ -18,9 +18,9 @@ type (
 )
 
 const (
-	workspaceDefinitionFlag      = inv.WorkspaceDefinitionFlag
-	catalogDiscoveryFlag         = inv.CatalogDiscoveryFlag
-	verifiedCatalogDiscoveryFlag = inv.VerifiedCatalogDiscoveryFlag
+	workspaceDefinitionFlag        = inv.WorkspaceDefinitionFlag
+	inventoryDiscoveryFlag         = inv.InventoryDiscoveryFlag
+	verifiedInventoryDiscoveryFlag = inv.VerifiedInventoryDiscoveryFlag
 )
 
 func writeAllow(home string, file inv.AllowFile) error { return inv.WriteAllow(home, file) }
@@ -29,7 +29,7 @@ func prepareKnowledgePinContext(flags map[string]FlagValue) error {
 	return inv.PrepareKnowledgePinContext(flags)
 }
 
-func suppliedKnowledgeSet(flags map[string]FlagValue) *catalog.KnowledgeSet {
+func suppliedKnowledgeSet(flags map[string]FlagValue) *dataset.KnowledgeSet {
 	return inv.SuppliedKnowledgeSet(flags)
 }
 

@@ -3,9 +3,9 @@ package knowledgeapp
 import (
 	"context"
 
-	"kc/catalog"
 	"kc/controlplane"
 	"kc/kernel"
+	"kc/snapshot/dataset"
 )
 
 type ProposalCreator interface {
@@ -37,11 +37,11 @@ func (e ProposalExecutor) Execute(_ context.Context, request ProposalRequest) (c
 }
 
 type PreviewCreator interface {
-	CreatePreviewAt(catalog.ResolvedKnowledgeSet, controlplane.Proposal) (controlplane.Preview, error)
+	CreatePreviewAt(dataset.ResolvedKnowledgeSet, controlplane.Proposal) (controlplane.Preview, error)
 }
 
 type PreviewRequest struct {
-	Resolved catalog.ResolvedKnowledgeSet
+	Resolved dataset.ResolvedKnowledgeSet
 	Proposal controlplane.Proposal
 }
 

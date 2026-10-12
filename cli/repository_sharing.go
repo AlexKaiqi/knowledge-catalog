@@ -21,8 +21,9 @@ func admissionOverview(cx *inv.Invocation) (kcclient.AdmissionResult, error) {
 	for _, rule := range file.Rules {
 		if rule.Principal == out.Principal {
 			out.Grants = append(out.Grants, kcclient.AdmissionGrant{
-				ID: rule.ID, Actions: slices.Clone(rule.Actions), Catalog: rule.Catalog,
+				ID: rule.ID, Actions: slices.Clone(rule.Actions),
 				Repository: rule.Repo, SharedBy: rule.SharedBy,
+				Dataset: rule.Dataset, Ref: rule.Ref, Object: rule.Object, Aspect: rule.Aspect,
 			})
 		}
 		if administrators[rule.Principal] {

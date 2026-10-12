@@ -10,7 +10,7 @@ import (
 
 // Reader is the read face on a pinned Repository commit. It does not write.
 // Consumer federation is Serving on a KnowledgeSetPin (coordinates from ResolveKnowledgeSet).
-// Catalog does not read object_id.
+// Dataset service does not read object_id.
 //
 // Tasks, by what they answer (design ch.7):
 //
@@ -21,14 +21,14 @@ import (
 //
 // GroundingCitation is a consume-side projection of a READ result (D12).
 type Reader struct {
-	store    *snapshot.Registry
+	store    snapshot.Registry
 	journal  journal.Journal
 	mu       sync.Mutex
 	repos    map[kernel.RepositoryID]knowledge.Repository
 	hydrator knowledge.Hydrator
 }
 
-func NewReader(store *snapshot.Registry) *Reader {
+func NewReader(store snapshot.Registry) *Reader {
 	return &Reader{
 		store: store,
 		repos: map[kernel.RepositoryID]knowledge.Repository{},

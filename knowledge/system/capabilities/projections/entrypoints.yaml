@@ -1,0 +1,35 @@
+---
+object_id: kc/capability/projections
+aspect_name: entrypoints
+kind: Aspect
+path_hint: capabilities/projections/entrypoints.yaml
+schema_ref: schema/system/capability-entrypoints/v1
+---
+{
+  "commands": [
+    {
+      "action": "knowledge.access.describe",
+      "command": "kc operations access-spec describe",
+      "description": "查看 AccessSpec",
+      "help": "kc help operations access-spec describe"
+    },
+    {
+      "action": "projection.read",
+      "command": "kc operations projection describe",
+      "description": "查看投影状态",
+      "help": "kc help operations projection describe"
+    },
+    {
+      "action": "projection.manage",
+      "command": "kc operations projection notice",
+      "description": "通知 Bound State 观察变化，不推进仓 HEAD",
+      "help": "kc help operations projection notice"
+    },
+    {
+      "action": "projection.manage",
+      "command": "kc operations projection sync",
+      "description": "同步历史或排障投影",
+      "help": "kc help operations projection sync"
+    }
+  ]
+}

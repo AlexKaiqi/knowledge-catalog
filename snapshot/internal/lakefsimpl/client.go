@@ -151,6 +151,9 @@ func (c *apiClient) getObject(ref, objectPath string) ([]byte, error) {
 	}
 	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
 		location := resp.Header.Get("Location")
+		// Consume the bounded redirect body so repeated immutable reads reuse
+		// the API connection rather than exhausting local ephemeral ports.
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
 		resp.Body.Close()
 		if location == "" {
 			return nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "lakefs presigned read omitted Location")

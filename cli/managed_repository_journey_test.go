@@ -6,6 +6,7 @@ import (
 	apphome "kc/home"
 	"kc/internal/testkit"
 	"kc/kernel"
+	"kc/knowledge"
 	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
@@ -19,7 +20,7 @@ import (
 // the user's target repository; every provider operation crosses Run -> HTTP.
 func TestManagedRepositoryProviderCreatesPublishesAndResumes(t *testing.T) {
 	cfg, configPath := declaredDeployment(t, false)
-	catalogID, repositoryID := cfg.Catalogs[0].ID, "kr://scene/managed-knowledge"
+	catalogID, repositoryID := cfg.Registry.ID, "kr://scene/managed-knowledge"
 	provider, ungranted := "provider", "ungranted"
 	lakefsFake := testkit.NewLakeFSFake(t)
 	t.Setenv("KC_LAKEFS_CREDENTIAL", testkit.LakeFSFakeCredential)
@@ -63,16 +64,15 @@ func TestManagedRepositoryProviderCreatesPublishesAndResumes(t *testing.T) {
 			return nil, err
 		}
 		var out map[string]any
-		err = typed.CatalogService().CreateRepository(context.Background(), catalogID, kcclient.RepositoryCreateRequest{
+		err = typed.SnapshotService().CreateRepository(context.Background(), kcclient.RepositoryCreateRequest{
 			Repository: repository, CommandID: commandID,
 		}, kcclient.RequestOptions{}, &out)
 		return out, err
 	}
 	// Existing admission policy permits creation, but does not pre-grant any
 	// target repository action or give this user catalog/admin management.
-	body(t, govern("grant", "add", "--principal", provider, "--action", "catalog.repositories.create,catalog.repositories.manage", "--catalog", catalogID))
-	body(t, provide("catalog", "use", catalogID))
-	if shown := asMap(t, body(t, provide("show"))); shown["catalogId"] != catalogID {
+	body(t, govern("grant", "add", "--principal", provider, "--action", "repositories.create,repositories.manage"))
+	if shown := asMap(t, body(t, provide("show"))); shown["catalogId"] != nil {
 		t.Fatalf("authenticated provider must discover the public Catalog: %#v", shown)
 	}
 	expectCode(t, provide("grant", "list"), "FORBIDDEN")
@@ -87,10 +87,9 @@ func TestManagedRepositoryProviderCreatesPublishesAndResumes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if created["status"] != "APPLIED" || created["catalog"] != catalogID || created["repositoryId"] != repositoryID || created["commandId"] != "provider-create" || created["head"] == "" || created["head"] == nil {
+	if created["status"] != "APPLIED" || created["catalog"] != nil || created["repositoryId"] != repositoryID || created["commandId"] != "provider-create" || created["head"] == "" || created["head"] == nil {
 		t.Fatalf("create did not return a ready repository: %#v", created)
 	}
-	body(t, kcRemote(t, server.URL, provider, "catalog", "use", catalogID))
 	body(t, kcRemote(t, server.URL, provider, "attach", "--repo", repositoryID))
 	if inventory := remoteCatalogShow(t, server.URL, cfg.BootstrapPrincipal, catalogID); !hasRepository(inventory, repositoryID) {
 		t.Fatalf("attached repository was not admitted: %#v", inventory)
@@ -152,8 +151,8 @@ func TestManagedRepositoryProviderCreatesPublishesAndResumes(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg.CacheDir = filepath.Join(filepath.Dir(cfg.CacheDir), "managed-replacement-instance")
-	if len(cfg.Repositories) != 0 {
-		t.Fatal("journey smuggled the created target into deployment configuration")
+	if len(cfg.Repositories) != 1 || cfg.Repositories[0].ID != string(knowledge.SystemRepositoryID) {
+		t.Fatalf("static deployment bindings must contain only the required system authority: %#v", cfg.Repositories)
 	}
 	writeDeployment(t, configPath, cfg)
 	start()

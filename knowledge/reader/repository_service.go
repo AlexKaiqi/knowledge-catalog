@@ -12,7 +12,7 @@ import (
 )
 
 // Lookup creates one shared layer ② interpreter over a Snapshot lookup seam.
-// It is used when the caller owns membership (for example Catalog) but does
+// It is used when the caller owns membership (for example Dataset service) but does
 // not expose its Registry.
 func Lookup(base func(kernel.RepositoryID) (snapshot.Store, error)) MemberLookup {
 	service := NewReader(nil)
@@ -20,7 +20,7 @@ func Lookup(base func(kernel.RepositoryID) (snapshot.Store, error)) MemberLookup
 }
 
 // Require resolves a mounted Snapshot and exposes its layer ② capability
-// through the shared Knowledge service. Catalog remains Snapshot-only.
+// through the shared Knowledge service. Dataset service remains Snapshot-only.
 func (r *Reader) Require(repositoryID kernel.RepositoryID, code kernel.ErrorCode) (knowledge.Repository, error) {
 	store, err := r.store.Require(repositoryID, code)
 	if err != nil {
@@ -29,7 +29,7 @@ func (r *Reader) Require(repositoryID kernel.RepositoryID, code kernel.ErrorCode
 	return r.Wrap(store, code)
 }
 
-// Wrap converts one Catalog/Snapshot member into the process-wide Knowledge
+// Wrap converts one Dataset service/Snapshot member into the process-wide Knowledge
 // read service wrapper. Interpretation remains here;
 // the underlying adapter exposes only immutable tree bytes.
 func (r *Reader) Wrap(store snapshot.Store, code kernel.ErrorCode) (knowledge.Repository, error) {
@@ -58,7 +58,7 @@ func (r *Reader) Wrap(store snapshot.Store, code kernel.ErrorCode) (knowledge.Re
 	return wrapped, nil
 }
 
-// Lookup preserves Catalog membership checks while moving knowledge
+// Lookup preserves Dataset service membership checks while moving knowledge
 // interpretation to this service boundary.
 func (r *Reader) Lookup(base func(kernel.RepositoryID) (snapshot.Store, error)) MemberLookup {
 	return func(id kernel.RepositoryID) (knowledge.Repository, error) {

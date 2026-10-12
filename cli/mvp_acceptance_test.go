@@ -12,7 +12,7 @@ import (
 func TestMVPProviderConsumerJourney(t *testing.T) {
 	home := testkit.TempDir(t)
 	repo := "kr://acme/public/core"
-	body(t, kc(home, "init", "--catalog", "acme/catalog"))
+	body(t, kc(home, "init"))
 	seedRepo(t, home, repo)
 	body(t, kc(home, "put", "--command-id", "schema-1", "--repo", repo,
 		"--object", "schema/runbook.body",
@@ -31,7 +31,7 @@ func TestMVPProviderConsumerJourney(t *testing.T) {
 
 	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1",
 		"--source", repo))
-	state := asMap(t, body(t, kc(home, "catalog-show")))
+	state := asMap(t, body(t, kc(home, "show")))
 	if len(state["datasets"].([]any)) != 1 {
 		t.Fatalf("consumer could not discover the Workspace: %#v", state)
 	}

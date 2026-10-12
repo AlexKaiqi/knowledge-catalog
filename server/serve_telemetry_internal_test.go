@@ -16,7 +16,9 @@ import (
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
+	apphome "kc/home"
 	"kc/internal/telemetry"
+	"kc/internal/testkit"
 	inv "kc/invocation"
 	"kc/knowledge"
 	"kc/knowledge/reader"
@@ -251,7 +253,15 @@ func TestTypedHTTPCollectsApplicationMetricsAndChildSpan(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
 	home := t.TempDir()
-	flags := map[string]invoke.FlagValue{"home": home, "catalog": "kr://acme/telemetry"}
+	fake := testkit.NewLakeFSFake(t)
+	t.Setenv("KC_LAKEFS_CREDENTIAL", fake.Credential())
+	if _, _, err := apphome.InitHome(home, apphome.RegistryBinding{ID: "kr://acme/telemetry", Driver: "lakefs", DSN: fake.DSN(fake.NewRepo())}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := apphome.PublishSystemRepository(home, "lakefs", fake.DSN(fake.NewRepo()), ""); err != nil {
+		t.Fatal(err)
+	}
+	flags := map[string]invoke.FlagValue{"home": home, "repo": "kr://acme/telemetry"}
 	if _, err := inv.ExecuteApplicationOperation(context.Background(), "local", "init", inv.Command{Stage: invoke.StageHome, Run: inv.VerbInit}, flags, nil, nil, home, nil); err != nil {
 		t.Fatal(err)
 	}

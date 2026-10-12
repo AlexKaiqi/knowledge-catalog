@@ -14,10 +14,10 @@ import (
 // protocol behavior; it is not a call-only coverage fixture.
 func TestCatalogViewsChecksAndKnowledgeResolve(t *testing.T) {
 	home := testkit.TempDir(t)
-	catalogID := "kr://acme/catalog"
+
 	repositoryID := "kr://acme/public/core"
 
-	body(t, kc(home, "local", "init", "--catalog", catalogID))
+	body(t, kc(home, "local", "init"))
 	seedRepo(t, home, repositoryID)
 	body(t, kc(home, "writer", "put", "--command-id", "coverage-schema", "--repo", repositoryID,
 		"--object", "schema/policy.body",
@@ -38,14 +38,7 @@ func TestCatalogViewsChecksAndKnowledgeResolve(t *testing.T) {
 	body(t, kc(home, "dataset", "define", "coverage-pos", "--revision", "1",
 		"--source", repositoryID+"=refs/heads/main@knowledge"))
 
-	inventory := asMap(t, body(t, kc(home, "catalog", "list")))
-	listedCatalogs := inventory["catalogs"].([]any)
-	if len(listedCatalogs) != 1 || asMap(t, listedCatalogs[0])["id"] != catalogID {
-		t.Fatalf("catalog list must return visible Catalog IDs: %#v", inventory)
-	}
-	if _, ok := asMap(t, listedCatalogs[0])["dir"]; ok {
-		t.Fatalf("catalog list must not leak host paths: %#v", listedCatalogs[0])
-	}
+	expectCode(t, kc(home, "catalog", "list"), "USAGE_INVALID")
 
 	catalogView := asMap(t, body(t, kc(home, "show")))
 	listed := businessRepositories(catalogView)

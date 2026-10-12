@@ -67,7 +67,7 @@ func TestTypedMutationExcludesReadsUntilItFinishes(t *testing.T) {
 
 func TestTypedInvocationReadOnlyClassification(t *testing.T) {
 	for _, action := range []string{
-		"catalog.read", "catalog.audit.read", "knowledge.read", "knowledge.search",
+		"inventory.read", "registry.audit.read", "knowledge.read", "knowledge.search",
 		"knowledge.relations", "knowledge.provenance", "knowledge.history.read",
 		"knowledge.schema.read", "knowledge.binding.resolve", "dataset.resolve",
 		"writer.receipt.read", "admin.grants.read", "projection.read",
@@ -77,7 +77,7 @@ func TestTypedInvocationReadOnlyClassification(t *testing.T) {
 			t.Errorf("%s should be read-only", action)
 		}
 	}
-	for _, action := range []string{"writer.commit", "catalog.repositories.create", "dataset.manage", "projection.manage", "feedback.write"} {
+	for _, action := range []string{"writer.commit", "repositories.create", "dataset.manage", "projection.manage", "feedback.write"} {
 		if inv.TypedInvocationReadOnly(action) {
 			t.Errorf("%s should exclude concurrent reads", action)
 		}

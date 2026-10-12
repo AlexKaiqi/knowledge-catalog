@@ -12,18 +12,15 @@ const (
 	defaultRepositoryDriver = "lakefs"
 	defaultIndexDriver      = "none"
 	defaultReposDir         = "repos"
-	defaultCatalogsDir      = "catalogs"
+	defaultRegistryDir      = "registry"
 	defaultProjectionsDir   = "projections"
 	DefaultCheckoutsDir     = "checkouts"
-	legacyCatalogDir        = "repos/_catalog"
-	legacyCatalogsDir       = "repos/_catalogs"
 )
 
 // LayoutFile is .kc/layout.yaml: this machine's directories.
 type LayoutFile struct {
 	Repos       string `json:"repos,omitempty" yaml:"repos"`
-	Catalog     string `json:"catalog,omitempty" yaml:"catalog,omitempty"`
-	Catalogs    string `json:"catalogs,omitempty" yaml:"catalogs"`
+	Registry    string `json:"registry,omitempty" yaml:"registry"`
 	Projections string `json:"projections,omitempty" yaml:"projections"`
 	Checkouts   string `json:"checkouts,omitempty" yaml:"checkouts"`
 }
@@ -51,7 +48,7 @@ func legacyStoresJSONPath(home string) string {
 }
 
 func DefaultLayout() LayoutFile {
-	return LayoutFile{Repos: defaultReposDir, Catalogs: defaultCatalogsDir, Projections: defaultProjectionsDir, Checkouts: DefaultCheckoutsDir}
+	return LayoutFile{Repos: defaultReposDir, Registry: defaultRegistryDir, Projections: defaultProjectionsDir, Checkouts: DefaultCheckoutsDir}
 }
 
 // DefaultStores returns the local profile with the lakeFS repository driver

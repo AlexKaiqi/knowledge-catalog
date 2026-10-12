@@ -7,31 +7,31 @@ import (
 	"kc/internal/testkit"
 )
 
-func TestCatalogAuditIsGitLog(t *testing.T) {
+func TestCatalogAuditReadsSnapshotHistory(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
-	catID := "kr://acme/catalog"
+	catID := "kr://kc/registry"
 
-	started := asMap(t, body(t, kc(h, "init", "--catalog", "kr://acme/catalog")))
+	started := asMap(t, body(t, kc(h, "init")))
 	if _, ok := started["opsStream"]; ok {
 		t.Fatal("init must not advertise an ops stream", started)
 	}
-	if started["catalog"] != catID {
+	if _, present := started["catalog"]; present {
 		t.Fatal(started)
 	}
 	expectCode(t, kc(h, "audit", "--as", "other"), "FORBIDDEN")
 	expectCode(t, kc(h, "show", "--as", "other"), "FORBIDDEN")
-	space := asMap(t, body(t, kc(h, "catalog-show")))
-	if space["catalogId"] != catID {
+	space := asMap(t, body(t, kc(h, "show")))
+	if _, present := space["catalogId"]; present {
 		t.Fatal(space)
 	}
 
 	trail := asMap(t, body(t, kc(h, "audit")))
-	if trail["source"] != "catalog" || trail["catalogId"] != catID {
+	if trail["source"] != "registry" {
 		t.Fatal(trail)
 	}
 	if !catalogLogHas(t, trail, "init") {
-		t.Fatal("catalog git should record init", trail["entries"])
+		t.Fatal("Catalog Snapshot history should record init", trail["entries"])
 	}
 	zero := asMap(t, body(t, kc(h, "audit", "--limit", "0")))
 	if len(zero["entries"].([]any)) != len(trail["entries"].([]any)) {
@@ -48,7 +48,7 @@ func TestCatalogAuditIsGitLog(t *testing.T) {
 	))
 	afterPut := asMap(t, body(t, kc(h, "audit")))
 	if catalogLogHas(t, afterPut, "put") || catalogLogHas(t, afterPut, "COMMIT") {
-		t.Fatal("knowledge writes must not land in Catalog git", afterPut["entries"])
+		t.Fatal("knowledge writes must not land in Catalog Snapshot history", afterPut["entries"])
 	}
 	if !catalogLogHas(t, afterPut, "register") {
 		t.Fatal(afterPut["entries"])
@@ -64,16 +64,15 @@ func TestCatalogAuditIsGitLog(t *testing.T) {
 		"--object", "ops/note", "--value", `{"note":"no"}`), "TARGET_REPOSITORY_DENIED")
 }
 
-func TestCatalogGitStampsPrincipal(t *testing.T) {
+func TestCatalogSnapshotStampsPrincipal(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
-	catID := "kr://acme/catalog"
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+
+	body(t, kc(h, "init"))
 	seedRepo(t, h, core)
 	rule := asMap(t, body(t, kc(h, "allow",
 		"--principal", "agent:payments",
 		"--action", "dataset.manage",
-		"--catalog", catID,
 	)))
 	body(t, kc(h, "dataset", "define",
 		"--as", "agent:payments",
@@ -98,14 +97,14 @@ func TestCatalogGitStampsPrincipal(t *testing.T) {
 	}
 }
 
-func TestCatalogLogNotInheritedBySecondCatalog(t *testing.T) {
+func TestRetiredCatalogCreationPreservesRegisteredInventory(t *testing.T) {
 	h := testkit.TempDir(t)
-	docs := "kr://acme/docs/catalog"
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(h, "catalog-add", "--catalog", docs))
-	st := asMap(t, body(t, kc(h, "status", "--catalog", docs)))
+
+	body(t, kc(h, "init"))
+	expectCode(t, kc(h, "catalog-add"), "USAGE_INVALID")
+	st := asMap(t, body(t, kc(h, "status")))
 	if ids := businessRepositories(st); len(ids) != 0 || !hasRepository(st, "kr://kc/system") {
-		t.Fatal("second Catalog must contain System but not inherit business repositories", st["repositories"])
+		t.Fatal("retired Catalog creation must preserve registered inventory", st["repositories"])
 	}
 }
 

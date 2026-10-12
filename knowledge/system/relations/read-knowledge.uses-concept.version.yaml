@@ -1,0 +1,18 @@
+---
+object_id: kc/relation/read-knowledge.uses-concept.version
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: relations/read-knowledge.uses-concept.version.yaml
+---
+relationId: kc/relation/read-knowledge.uses-concept.version
+relationType: uses_concept
+direction: DIRECTED
+endpoints:
+  - role: from
+    objectRef:
+      repository: kr://kc/system
+      object: kc/capability/read-knowledge
+  - role: to
+    objectRef:
+      repository: kr://kc/system
+      object: kc/concept/version

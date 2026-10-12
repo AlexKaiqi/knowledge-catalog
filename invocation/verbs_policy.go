@@ -18,12 +18,11 @@ func VerbHookAdd(cx *Invocation) (any, error) {
 		return nil, err
 	}
 	binding := hook.Binding{
-		On:      on,
-		Phase:   phase,
-		Repo:    cx.Flag("repo"),
-		Catalog: cx.Flag("catalog"),
-		Run:     cx.Flag("run"),
-		URL:     cx.Flag("url"),
+		On:    on,
+		Phase: phase,
+		Repo:  cx.Flag("repo"),
+		Run:   cx.Flag("run"),
+		URL:   cx.Flag("url"),
 	}
 	if err := hook.ValidateBinding(binding); err != nil {
 		return nil, err
@@ -48,7 +47,7 @@ func VerbHookLs(cx *Invocation) (any, error) {
 	scope := cx.BindingScope()
 	out := []hook.Binding{}
 	for _, b := range file.Bindings {
-		if scope.Matches(b.On, b.Repo, b.Catalog) {
+		if scope.Matches(b.On, b.Repo) {
 			out = append(out, b)
 		}
 	}
@@ -90,7 +89,6 @@ func VerbGateAdd(cx *Invocation) (any, error) {
 	rule := gate.Rule{
 		On:      on,
 		Repo:    cx.Flag("repo"),
-		Catalog: cx.Flag("catalog"),
 		Require: require,
 	}
 	if on == gate.OnMerge && rule.Repo == "" {
@@ -116,7 +114,7 @@ func VerbGateLs(cx *Invocation) (any, error) {
 	scope := cx.BindingScope()
 	out := []gate.Rule{}
 	for _, rule := range file.Rules {
-		if scope.Matches(rule.On, rule.Repo, rule.Catalog) {
+		if scope.Matches(rule.On, rule.Repo) {
 			out = append(out, rule)
 		}
 	}
@@ -147,17 +145,19 @@ func VerbGateRm(cx *Invocation) (any, error) {
 // retrieval bindings. It is not store-ls: layout directories and secret
 // environment names stay off the public surface (core-architecture secrets rule).
 func VerbObserveStores(cx *Invocation) (any, error) {
-	var catalogs, repos []StoreBinding
+	var registry *StoreBinding
+	var repos []StoreBinding
 	if cx.WS != nil {
 		if cx.WS.Deployment != nil {
-			for _, item := range cx.WS.Deployment.Catalogs {
-				catalogs = append(catalogs, StoreBinding{item.ID, item.Driver, item.DSN})
+			{
+				item := cx.WS.Deployment.Registry
+				registry = &StoreBinding{item.ID, item.Driver, item.DSN}
 			}
 			for _, item := range cx.WS.Deployment.Repositories {
 				repos = append(repos, StoreBinding{item.ID, item.Driver, item.DSN})
 			}
 		}
-		return ObservePublicStores(cx.WS.Stores, cx.WS.File, catalogs, repos), nil
+		return ObservePublicStores(cx.WS.Stores, cx.WS.File, registry, repos), nil
 	}
 	if !kchome.Ready(cx.Home) {
 		return nil, kchome.Missing(cx.Home)
@@ -174,7 +174,7 @@ func VerbObserveStores(cx *Invocation) (any, error) {
 }
 
 func VerbCheckKnowledgeSet(cx *Invocation) (any, error) {
-	cat, err := PickCatalog(cx.WS, cx.Flags)
+	cat, err := PickDatasets(cx.WS, cx.Flags)
 	if err != nil {
 		return nil, err
 	}

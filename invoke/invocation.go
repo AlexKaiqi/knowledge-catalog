@@ -12,7 +12,7 @@ const (
 	// attachment fails.
 	StageHome Stage = iota
 
-	// StageOpen opens this --home's object graph (stores, catalogs, writer)
+	// StageOpen opens this --home's object graph (stores, Dataset service, writer)
 	// and records the call. Used by the verbs that shape the home itself,
 	// before any grant exists.
 	StageOpen
@@ -22,23 +22,19 @@ const (
 	StageGoverned
 )
 
-// BindingScope is the selector triple shared by the policy verbs.
+// BindingScope is the action and Repository selectors shared by the policy verbs.
 type BindingScope struct {
-	On      string
-	Repo    string
-	Catalog string
+	On   string
+	Repo string
 }
 
 // Matches reports whether the scope selects the given coordinate: an empty
 // selector matches everything.
-func (s BindingScope) Matches(on, repo, catalogID string) bool {
+func (s BindingScope) Matches(on, repo string) bool {
 	if s.On != "" && s.On != on {
 		return false
 	}
 	if s.Repo != "" && s.Repo != repo {
-		return false
-	}
-	if s.Catalog != "" && s.Catalog != catalogID {
 		return false
 	}
 	return true

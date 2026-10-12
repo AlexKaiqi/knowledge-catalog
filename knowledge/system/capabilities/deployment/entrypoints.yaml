@@ -1,0 +1,40 @@
+---
+object_id: kc/capability/deployment
+aspect_name: entrypoints
+kind: Aspect
+path_hint: capabilities/deployment/entrypoints.yaml
+schema_ref: schema/system/capability-entrypoints/v1
+---
+{
+  "commands": [
+    {
+      "action": "deployment.identity.migrate",
+      "command": "kc deployment identity migrate",
+      "description": "迁移历史身份绑定",
+      "help": "kc help deployment identity migrate"
+    },
+    {
+      "action": "deployment.init",
+      "command": "kc deployment init",
+      "description": "初始化部署",
+      "help": "kc help deployment init"
+    },
+    {
+      "action": "deployment.read",
+      "command": "kc deployment status",
+      "description": "查看部署恢复状态",
+      "help": "kc help deployment status"
+    },
+    {
+      "action": "deployment.system.publish",
+      "command": "kc deployment system publish",
+      "description": "把系统知识出版物写入绑定仓",
+      "help": "kc help deployment system publish"
+    },
+    {
+      "command": "kc serve",
+      "description": "启动 typed API Server；浏览器打开根路径会 404",
+      "help": "kc help serve"
+    }
+  ]
+}

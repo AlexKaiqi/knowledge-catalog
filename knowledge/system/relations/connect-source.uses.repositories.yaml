@@ -1,0 +1,18 @@
+---
+object_id: kc/relation/connect-source.uses.repositories
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: relations/connect-source.uses.repositories.yaml
+---
+relationId: kc/relation/connect-source.uses.repositories
+relationType: uses
+direction: DIRECTED
+endpoints:
+  - role: from
+    objectRef:
+      repository: kr://kc/system
+      object: kc/guide/connect-source
+  - role: to
+    objectRef:
+      repository: kr://kc/system
+      object: kc/capability/repositories

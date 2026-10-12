@@ -16,10 +16,10 @@ import (
 
 	"kc/internal/treepath"
 	"kc/kernel"
-	"kc/snapshot"
+	"kc/snapshot/internal/storecontract"
 )
 
-func (r *Repository) nextWIP(cs snapshot.TreeChangeSet) string {
+func (r *Repository) nextWIP(cs storecontract.TreeChangeSet) string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.wip++
@@ -49,12 +49,15 @@ func (r *Repository) deleteObject(branch, objectPath string) error {
 	return err
 }
 
-func (r *Repository) commit(branch string, cs snapshot.TreeChangeSet) (kernel.CommitID, error) {
+func (r *Repository) commit(branch string, cs storecontract.TreeChangeSet) (kernel.CommitID, error) {
 	message := strings.TrimSpace(cs.Message)
 	if message == "" {
 		message = "Knowledge Catalog update"
 	}
 	metadata := map[string]string{}
+	if cs.Author != "" {
+		metadata["kc.author"] = cs.Author
+	}
 	if cs.RequestID != "" {
 		metadata["kc.command_id"] = cs.RequestID
 	}
@@ -83,7 +86,7 @@ func (r *Repository) commit(branch string, cs snapshot.TreeChangeSet) (kernel.Co
 // the bulk path.
 type objectWriter func(branch, objectPath string, content []byte) error
 
-func (r *Repository) ApplyTreeCommit(cs snapshot.TreeChangeSet) (kernel.CommitID, error) {
+func (r *Repository) ApplyTreeCommit(cs storecontract.TreeChangeSet) (kernel.CommitID, error) {
 	return r.applyTreeCommit(cs, r.client.stage)
 }
 
@@ -91,11 +94,11 @@ func (r *Repository) ApplyTreeCommit(cs snapshot.TreeChangeSet) (kernel.CommitID
 // the lakeFS object-upload data plane (single round trip per object, bytes
 // cross the lakeFS server) for many-small-object commits. CAS, wip isolation,
 // commit and publication semantics equal ApplyTreeCommit.
-func (r *Repository) ApplyTreeCommitBulk(cs snapshot.TreeChangeSet) (kernel.CommitID, error) {
+func (r *Repository) ApplyTreeCommitBulk(cs storecontract.TreeChangeSet) (kernel.CommitID, error) {
 	return r.applyTreeCommit(cs, r.client.uploadObject)
 }
 
-func (r *Repository) applyTreeCommit(cs snapshot.TreeChangeSet, write objectWriter) (kernel.CommitID, error) {
+func (r *Repository) applyTreeCommit(cs storecontract.TreeChangeSet, write objectWriter) (kernel.CommitID, error) {
 	if err := r.denyIfArchived(); err != nil {
 		return "", err
 	}
@@ -110,7 +113,7 @@ func (r *Repository) applyTreeCommit(cs snapshot.TreeChangeSet, write objectWrit
 	}
 	target := cs.TargetRef
 	if target == "" || target == "HEAD" {
-		target = snapshot.DefaultRef
+		target = storecontract.DefaultRef
 	}
 	targetBranch, ok := r.branchName(target)
 	if !ok {
@@ -151,7 +154,7 @@ func (r *Repository) applyTreeCommit(cs snapshot.TreeChangeSet, write objectWrit
 // is returned after in-flight writes finish. Commit and publication stay
 // single-threaded: lakeFS serializes commits per branch, and the publication
 // lock protocol relies on that.
-func (r *Repository) applyChanges(branch string, changes []snapshot.TreeChange, write objectWriter) error {
+func (r *Repository) applyChanges(branch string, changes []storecontract.TreeChange, write objectWriter) error {
 	workers := stageConcurrency()
 	if workers > len(changes) {
 		workers = len(changes)
@@ -200,7 +203,7 @@ func (r *Repository) applyChanges(branch string, changes []snapshot.TreeChange, 
 	return firstErr
 }
 
-func (r *Repository) applyChangeWith(write objectWriter, branch string, change snapshot.TreeChange) error {
+func (r *Repository) applyChangeWith(write objectWriter, branch string, change storecontract.TreeChange) error {
 	clean, err := treepath.Clean(change.Path)
 	if err != nil {
 		return err

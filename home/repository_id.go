@@ -15,7 +15,14 @@ func NormalizeRepositoryID(raw string) (string, error) {
 		return "", fmt.Errorf("repository id is required")
 	}
 	if strings.Contains(raw, "/") || strings.Contains(raw, "://") {
-		return NormalizeCatalogID(raw)
+		if !strings.HasPrefix(raw, "kr://") {
+			raw = "kr://" + raw
+		}
+		rest := strings.TrimPrefix(raw, "kr://")
+		if strings.Count(rest, "/") < 1 || strings.HasSuffix(rest, "/") || strings.ContainsAny(rest, " \r\n") {
+			return "", fmt.Errorf("repository id must be kr://<org>/<name>")
+		}
+		return raw, nil
 	}
 	if validExternalAuthorityName(raw) {
 		return raw, nil

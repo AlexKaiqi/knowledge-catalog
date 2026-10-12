@@ -11,7 +11,7 @@ import (
 
 func TestManagedLegacyOwnerAliasPreservesInventoryAndOriginalRequestAfterRestart(t *testing.T) {
 	cfg, ws, creates := managedFixture(t)
-	original := ManagedRepositoryRequest{CatalogID: cfg.Catalogs[0].ID, RepositoryID: "kr://managed/historical", CommandID: "original-command", Principal: "gitea:42", Name: "historical notes"}
+	original := ManagedRepositoryRequest{RepositoryID: "kr://managed/historical", CommandID: "original-command", Principal: "gitea:42", Name: "historical-notes"}
 	grants := 0
 	grant := func(g ManagedRepositoryGrant) error { grants++; return nil }
 	created, err := ws.CreateManagedRepository(original, grant)
@@ -59,7 +59,7 @@ func TestManagedLegacyOwnerAliasPreservesInventoryAndOriginalRequestAfterRestart
 	if err != nil || result.Status != "REPLAYED" || result.Owner != user.Username || result.ManagementURL != created.ManagementURL {
 		t.Fatalf("explicit old command cannot resume: %#v %v", result, err)
 	}
-	result, err = ws.CreateNamedManagedRepository(ManagedRepositoryRequest{CatalogID: cfg.Catalogs[0].ID, Principal: user.Username, Name: original.Name, IdentityProvider: user.Provider, IdentityIssuer: user.Issuer, IdentitySubject: user.Subject}, grant)
+	result, err = ws.CreateNamedManagedRepository(ManagedRepositoryRequest{Principal: user.Username, Name: original.Name, IdentityProvider: user.Provider, IdentityIssuer: user.Issuer, IdentitySubject: user.Subject}, grant)
 	if err != nil || result.RepositoryID != original.RepositoryID || result.CommandID != original.CommandID || result.Owner != user.Username {
 		t.Fatalf("name retry allocated another repository: %#v %v", result, err)
 	}
@@ -74,8 +74,8 @@ func TestManagedLegacyOwnerAliasPreservesInventoryAndOriginalRequestAfterRestart
 }
 
 func TestManagedLegacyOwnerResumesUnissuedPolicyUsingOriginalGrantDigest(t *testing.T) {
-	cfg, ws, creates := managedFixture(t)
-	original := ManagedRepositoryRequest{CatalogID: cfg.Catalogs[0].ID, RepositoryID: "kr://managed/interrupted", CommandID: "interrupted-command", Principal: "gitea:42"}
+	_, ws, creates := managedFixture(t)
+	original := ManagedRepositoryRequest{RepositoryID: "kr://managed/interrupted", CommandID: "interrupted-command", Principal: "gitea:42"}
 	var first ManagedRepositoryGrant
 	if _, err := ws.CreateManagedRepository(original, func(g ManagedRepositoryGrant) error {
 		first = g

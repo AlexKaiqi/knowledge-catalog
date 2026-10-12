@@ -13,14 +13,13 @@ import (
 	"testing"
 )
 
-func TestManagedRepositoryCreateUsesTypedClientWithoutCatalogDiscovery(t *testing.T) {
+func TestManagedRepositoryCreateUsesTypedClientWithoutInventoryDiscovery(t *testing.T) {
 	t.Setenv("KC_AUTH_TOKEN", "")
 	t.Setenv("KC_CONFIG_DIR", t.TempDir())
-	const catalogID = "kr://managed/catalog"
 	calls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
-		if r.Method != http.MethodPost || r.URL.EscapedPath() != "/catalog/v1/repositories" {
+		if r.Method != http.MethodPost || r.URL.EscapedPath() != "/snapshot/v1/connections" {
 			t.Errorf("unexpected request: %s %s", r.Method, r.URL.EscapedPath())
 		}
 		if r.Header.Get("X-Kc-As") != "agent:creator" {
@@ -30,16 +29,13 @@ func TestManagedRepositoryCreateUsesTypedClientWithoutCatalogDiscovery(t *testin
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Error(err)
 		}
-		if want := map[string]any{"name": "source", "catalog": catalogID}; !reflect.DeepEqual(body, want) {
+		if want := map[string]any{"name": "source"}; !reflect.DeepEqual(body, want) {
 			t.Errorf("create request = %#v, want %#v", body, want)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"catalog":"kr://managed/catalog","repositoryId":"kr://managed/source","status":"APPLIED","head":"initial"}`))
+		_, _ = w.Write([]byte(`{"repositoryId":"kr://managed/source","status":"APPLIED","head":"initial"}`))
 	}))
 	defer server.Close()
-	if err := persistClientCatalog(server.URL, catalogID); err != nil {
-		t.Fatal(err)
-	}
 	result := Run([]string{"create", "--name", "source", "--server", server.URL, "--as", "agent:creator"})
 	if result.Status != 0 || !strings.Contains(result.Stdout, `"status": "APPLIED"`) || calls != 1 {
 		t.Fatalf("create: calls=%d result=%#v", calls, result)
@@ -49,30 +45,26 @@ func TestManagedRepositoryCreateUsesTypedClientWithoutCatalogDiscovery(t *testin
 func TestCreateURLUsesTypedConnectionWithoutAttaching(t *testing.T) {
 	t.Setenv("KC_AUTH_TOKEN", "")
 	t.Setenv("KC_CONFIG_DIR", t.TempDir())
-	const catalogID = "kr://managed/catalog"
 	credential := filepath.Join(t.TempDir(), "credential")
 	if err := os.WriteFile(credential, []byte("secret-token"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.EscapedPath() != "/catalog/v1/catalogs/kr:%2F%2Fmanaged%2Fcatalog/repositories:connect" {
+		if r.Method != http.MethodPost || r.URL.EscapedPath() != "/snapshot/v1/connections:connect" {
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.EscapedPath())
 		}
 		var body map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Fatal(err)
 		}
-		if body["repository"] != "kr://git.example/acme/source" || body["url"] != "https://git.example/acme/source.git" || body["credential"] != "secret-token" {
+		if body["repository"] != "source" || body["url"] != "https://lakefs.example/source" || body["credential"] != "secret-token" {
 			t.Fatalf("connection request: %#v", body)
 		}
-		_, _ = w.Write([]byte(`{"repositoryId":"kr://git.example/acme/source","status":"APPLIED"}`))
+		_, _ = w.Write([]byte(`{"repositoryId":"source","status":"APPLIED"}`))
 	}))
 	defer server.Close()
-	if err := persistClientCatalog(server.URL, catalogID); err != nil {
-		t.Fatal(err)
-	}
-	result := Run([]string{"create", "--url", "https://git.example/acme/source.git", "--credential-file", credential, "--server", server.URL, "--as", "kaiqidong"})
-	if result.Status != 0 || !strings.Contains(result.Stdout, "kr://git.example/acme/source") {
+	result := Run([]string{"create", "--url", "https://lakefs.example/source", "--credential-file", credential, "--server", server.URL, "--as", "kaiqidong"})
+	if result.Status != 0 || !strings.Contains(result.Stdout, "source") {
 		t.Fatalf("create --url: %#v", result)
 	}
 }
@@ -81,10 +73,10 @@ func TestManagedRepositoryCreateRequiresOneProductSourceAndRejectsHostFlags(t *t
 	t.Setenv("KC_SERVER_URL", "http://127.0.0.1:1")
 	for name, args := range map[string][]string{
 		"missing source":         {"create"},
-		"mixed source":           {"create", "--name", "source", "--url", "https://git.example/acme/source", "--credential-file", "credential.json"},
+		"mixed source":           {"create", "--name", "source", "--url", "https://lakefs.example/source", "--credential-file", "credential.json"},
 		"name with credential":   {"create", "--name", "source", "--credential-file", "credential.json"},
-		"url without credential": {"create", "--url", "https://git.example/acme/source"},
-		"url with store":         {"create", "--url", "https://git.example/acme/source", "--credential-file", "credential.json", "--store", "gitea"},
+		"url without credential": {"create", "--url", "https://lakefs.example/source"},
+		"url with store":         {"create", "--url", "https://lakefs.example/source", "--credential-file", "credential.json", "--store", "lakefs"},
 	} {
 		result := Run(args)
 		if result.Status == 0 || !strings.Contains(result.Stdout, "USAGE_INVALID") {
@@ -105,7 +97,7 @@ func TestManagedRepositoryCreateHelpAndWriteLock(t *testing.T) {
 	if result.Status != 0 || !strings.Contains(result.Stdout, "kc create") {
 		t.Fatalf("create help unavailable: %#v", result)
 	}
-	if surface, ok := cliSurface["create"]; !ok || surface.Action != "catalog.repositories.create" || inv.TypedInvocationReadOnly(surface.Action) {
+	if surface, ok := cliSurface["create"]; !ok || surface.Action != "repositories.create" || inv.TypedInvocationReadOnly(surface.Action) {
 		t.Fatalf("create must have its own mutating action: %#v", surface)
 	}
 }
@@ -114,7 +106,7 @@ func TestManagedRepositoryCreateHTTPRejectsCallerProvisioningFields(t *testing.T
 	handler := serv.HTTPHandlerWithOptions(t.TempDir(), serv.HTTPServerOptions{})
 	defer handler.(interface{ Close() error }).Close()
 	for _, name := range []string{"driver", "dir", "dsn", "principal", "actions", "creator"} {
-		request := httptest.NewRequest(http.MethodPost, "/catalog/v1/catalogs/catalog-A/repositories:create", strings.NewReader(`{"repository":"repo-A","commandId":"create-one","`+name+`":"forbidden"}`))
+		request := httptest.NewRequest(http.MethodPost, "/snapshot/v1/repositories:create", strings.NewReader(`{"repository":"repo-A","commandId":"create-one","`+name+`":"forbidden"}`))
 		request.Header.Set("Content-Type", "application/json")
 		request.Header.Set("X-Kc-As", "agent:creator")
 		response := httptest.NewRecorder()

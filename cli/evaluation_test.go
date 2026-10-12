@@ -9,9 +9,9 @@ import (
 
 func TestCLIEvaluationDailyJourneyProductStdout(t *testing.T) {
 	home := testkit.TempDir(t)
-	catalog := "kr://acme/catalog"
+
 	repo := "kr://acme/public/core"
-	body(t, kc(home, "init", "--catalog", catalog))
+	body(t, kc(home, "init"))
 	seedRepo(t, home, repo)
 	body(t, kc(home, "put", "--command-id", "schema-1", "--repo", repo,
 		"--object", "schema/runbook.body",
@@ -19,7 +19,7 @@ func TestCLIEvaluationDailyJourneyProductStdout(t *testing.T) {
 	body(t, kc(home, "put", "--command-id", "source-1", "--repo", repo,
 		"--object", "runbook/payment", "--schema-ref", "schema/runbook.body",
 		"--value", `{"body":"切换支付流量前先检查冻结窗口"}`))
-	body(t, kc(home, "grant", "add", "--principal", "bot", "--action", "catalog.read", "--catalog", catalog))
+	body(t, kc(home, "grant", "add", "--principal", "bot", "--action", "inventory.read"))
 	body(t, kc(home, "grant", "add", "--principal", "bot", "--action", "knowledge.read", "--repo", repo))
 
 	read := asMap(t, body(t, kc(home, "read", "--repo", repo, "--object", "runbook/payment")))

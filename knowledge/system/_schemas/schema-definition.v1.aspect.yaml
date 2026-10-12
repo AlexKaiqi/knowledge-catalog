@@ -1,0 +1,37 @@
+---
+object_id: schema/meta/schema-definition/v1
+path_hint: _schemas/schema-definition.v1.aspect.yaml
+---
+# Published System object schema/meta/schema-definition/v1.
+# Digest is Canonical JSON of this value; Writer validates Domain Schema
+# against the built-in parser of the same contract, not a floating copy.
+metaSchema: schema/meta/schema-definition/v1
+entity: SchemaDefinition
+description: Domain Schema 文档自身的合同：声明实体名、可选说明、Aspect、resource-access 原点（Canonical frontmatter）、字段结构与逻辑访问声明；结构校验、查询合同解释及物理能力分别维护。
+pattern: record
+additionalProperties: false
+fields:
+  metaSchema:
+    type: string
+  entity:
+    type: string
+    required: true
+    access: [filter]
+  description:
+    type: string
+    access: [text]
+  aspect:
+    type: string
+    access: [filter]
+  pattern:
+    type: string
+    required: true
+    access: [filter]
+  additionalProperties:
+    type: boolean
+  origin:
+    type: string
+    access: [filter]
+  fields:
+    type: object
+    required: true

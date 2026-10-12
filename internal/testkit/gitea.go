@@ -13,7 +13,8 @@ import (
 	"time"
 )
 
-// GiteaEndpoint gives every caller in a test binary the same live Gitea
+// GiteaEndpoint is the independent identity-authentication fixture; it does
+// not provide a Snapshot storage backend. Callers share the same live Gitea
 // instance: KC_GITEA_URL/KC_GITEA_TOKEN when set, otherwise a docker
 // container started once and reused. run is a per-process nonce so
 // concurrent test binaries (or reruns against the same env-provided server)
@@ -25,7 +26,7 @@ import (
 func GiteaEndpoint(t *testing.T) (base, token, run string) {
 	t.Helper()
 	if testing.Short() {
-		t.Skip("live Gitea adapter test is outside the short suite")
+		t.Skip("live Gitea authentication test is outside the short suite")
 	}
 	giteaOnce.Do(func() {
 		if u := strings.TrimSpace(os.Getenv("KC_GITEA_URL")); u != "" {
@@ -46,13 +47,13 @@ func GiteaEndpoint(t *testing.T) (base, token, run string) {
 	})
 	if giteaErr != nil {
 		if os.Getenv("KC_REQUIRE_LIVE_ADAPTERS") == "1" {
-			t.Fatalf("live Gitea adapter is required: %v", giteaErr)
+			t.Fatalf("live Gitea authentication is required: %v", giteaErr)
 		}
 		t.Skip(giteaErr.Error())
 	}
 	if giteaURL == "" || giteaToken == "" {
 		if os.Getenv("KC_REQUIRE_LIVE_ADAPTERS") == "1" {
-			t.Fatal("live Gitea adapter is required but unavailable")
+			t.Fatal("live Gitea authentication is required but unavailable")
 		}
 		t.Skip("gitea not available")
 	}
@@ -77,7 +78,7 @@ var (
 // mid-test — this is exactly the CONNECTION RESET flakiness a shared name
 // produced before this was per-process).
 //
-// The three packages that use this process-wide fixture call StopGitea from
+// Tests using this process-wide identity fixture call StopGitea from
 // TestMain. A testing.T cleanup cannot own it because sync.Once spans every
 // test in the package.
 func startDockerGitea() (string, string, error) {

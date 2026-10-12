@@ -13,9 +13,8 @@ import (
 
 func TestLocalDeploymentBootstrapsThenUsesServerClientBoundary(t *testing.T) {
 	home := testkit.TempDir(t)
-	catalogID := "kr://acme/local-server"
 	principal := "agent:local-admin"
-	body(t, kc(home, "local", "init", "--catalog", catalogID))
+	body(t, kc(home, "local", "init"))
 	expectCode(t, kc(home, "local", "grant", "bootstrap"), "USAGE_INVALID")
 	body(t, kc(home, "local", "grant", "bootstrap", "--principal", principal))
 	expectCode(t, kc(home, "local", "grant", "bootstrap", "--principal", "agent:other"), "PRECONDITION_FAILED")
@@ -27,9 +26,8 @@ func TestLocalDeploymentBootstrapsThenUsesServerClientBoundary(t *testing.T) {
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
-	body(t, kcRemote(t, server.URL, principal, "catalog", "use", catalogID))
 	state := asMap(t, body(t, kcRemote(t, server.URL, principal, "show")))
-	if state["catalogId"] != catalogID {
+	if _, present := state["catalogId"]; present {
 		t.Fatalf("server returned wrong catalog: %#v", state)
 	}
 }
@@ -42,13 +40,12 @@ func TestLocalDeploymentBootstrapsThenUsesServerClientBoundary(t *testing.T) {
 // answered. Consumers discover a knowledge set only after it has been composed.
 func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 	home := testkit.TempDir(t)
-	catalogID := "kr://acme/product"
 	repositoryID := "kr://acme/public/core"
 	setID := "oncall"
 	admin := "agent:local-admin"
 	provider := "agent:provider"
 	consumer := "agent:consumer"
-	body(t, kc(home, "local", "init", "--catalog", catalogID))
+	body(t, kc(home, "local", "init"))
 	seedRepo(t, home, repositoryID)
 	body(t, kc(home, "local", "grant", "bootstrap", "--principal", admin))
 
@@ -131,7 +128,7 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 	}
 
 	body(t, governor("grant", "add", "--principal", consumer,
-		"--action", "catalog.read,dataset.resolve,file.read", "--catalog", catalogID))
+		"--action", "inventory.read,dataset.resolve,file.read"))
 	body(t, governor("grant", "add", "--principal", consumer,
 		"--action", "knowledge.read,knowledge.provenance,knowledge.search,knowledge.schema.read,knowledge.history.read",
 		"--repo", repositoryID))
@@ -150,16 +147,9 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 	expectCode(t, asConsumer("writer", "put", "--command-id", "consumer-write", "--repo", repositoryID,
 		"--object", "guessed/object", "--value", `{"body":"tamper"}`), "FORBIDDEN")
 
-	inventory := asMap(t, body(t, asConsumer("catalog", "list")))
-	listed := inventory["catalogs"].([]any)
-	if len(listed) != 1 || asMap(t, listed[0])["id"] != catalogID {
-		t.Fatalf("consumer could not discover Catalogs: %#v", inventory)
-	}
-	assertInventoryJSON(t, home, inventory)
-
-	body(t, asConsumer("catalog", "use", catalogID))
+	expectCode(t, asConsumer("catalog", "list"), "USAGE_INVALID")
 	state := asMap(t, body(t, asConsumer("show")))
-	if state["catalogId"] != catalogID {
+	if _, present := state["catalogId"]; present {
 		t.Fatalf("consumer show did not infer the only visible Catalog: %#v", state)
 	}
 	assertInventoryJSON(t, home, state)
@@ -215,9 +205,8 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 		"--object", providerObject, "--aspect", "io"), "USAGE_INVALID")
 	expectCode(t, asConsumer("log", "--dataset", discoveredWorkspace,
 		"--object", providerObject, "--member", "user:bob"), "USAGE_INVALID")
-	body(t, governor("catalog", "use", catalogID))
-	auditZero := asMap(t, body(t, governor("catalog", "audit", "--limit", "0")))
-	auditDefault := asMap(t, body(t, governor("catalog", "audit")))
+	auditZero := asMap(t, body(t, governor("registry", "audit", "--limit", "0")))
+	auditDefault := asMap(t, body(t, governor("registry", "audit")))
 	if len(auditZero["entries"].([]any)) != len(auditDefault["entries"].([]any)) {
 		t.Fatalf("remote audit --limit 0 must mean the default page: %#v vs %#v", auditZero, auditDefault)
 	}

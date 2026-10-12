@@ -32,7 +32,7 @@ var StoresPath = kchome.StoresPath
 
 var NormalizeIndexDriver = kchome.NormalizeIndexDriver
 
-var OpenCatalogs = kchome.OpenCatalogs
+var OpenDatasets = kchome.OpenDatasets
 
 var Ready = kchome.Ready
 

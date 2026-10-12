@@ -6,40 +6,58 @@ import (
 	"os"
 	"path/filepath"
 
-	"kc/catalog"
 	"kc/controlplane"
 	"kc/gate"
 	"kc/hook"
 	"kc/internal/jsonfile"
 	"kc/kernel"
 	"kc/knowledge"
-	"kc/knowledge/reader"
 	"kc/knowledge/writer"
 	"kc/observability"
 	"kc/snapshot"
-	"kc/snapshot/commandlog"
+	"kc/snapshot/dataset"
 )
 
 const deploymentMarker = "deployment-state.json"
 
-// Initialization receipts distinguish a new configured Catalog from a lost
+// Initialization receipts distinguish a new configured Registry from a lost
 // authority ref. They are recovery evidence, never membership or source config.
 type deploymentState struct {
-	Version                    int      `json:"version"`
-	InitializedCatalogs        []string `json:"initializedCatalogs"`
-	ManagedStoreInitialized    bool     `json:"managedStoreInitialized,omitempty"`
-	IdentityStoreInitialized   bool     `json:"identityStoreInitialized,omitempty"`
-	ConnectionStoreInitialized bool     `json:"connectionStoreInitialized,omitempty"`
+	Version                    int    `json:"version"`
+	RegistryAuthority          string `json:"registryAuthority"`
+	ManagedStoreInitialized    bool   `json:"managedStoreInitialized,omitempty"`
+	IdentityStoreInitialized   bool   `json:"identityStoreInitialized,omitempty"`
+	ConnectionStoreInitialized bool   `json:"connectionStoreInitialized,omitempty"`
 }
 
-func (s deploymentState) initialized(id string) bool {
-	for _, known := range s.InitializedCatalogs {
-		if known == id {
-			return true
-		}
+// UnmarshalJSON reads an old receipt only when it identifies one authority.
+// Opening never rewrites it; explicit init writes the singular current format.
+func (s *deploymentState) UnmarshalJSON(body []byte) error {
+	type current deploymentState
+	var value current
+	if err := json.Unmarshal(body, &value); err != nil {
+		return err
 	}
-	return false
+	fields, err := durableFields(body)
+	if err != nil {
+		return err
+	}
+	legacy, old := fields["initializedcatalogs"]
+	_, modern := fields["registryauthority"]
+	if old {
+		if modern {
+			return kernel.Fail(kernel.ErrPreconditionFailed, "deployment receipt mixes registry formats")
+		}
+		var ids []string
+		if err := json.Unmarshal(legacy, &ids); err != nil || len(ids) != 1 || ids[0] == "" {
+			return kernel.Fail(kernel.ErrPreconditionFailed, "legacy deployment receipt must name exactly one registry authority")
+		}
+		value.RegistryAuthority = ids[0]
+	}
+	*s = deploymentState(value)
+	return nil
 }
+
 func readDeploymentState(c DeploymentConfig) (deploymentState, error) {
 	var state deploymentState
 	err := jsonfile.Read(filepath.Join(c.StateDir, deploymentMarker), &state)
@@ -69,7 +87,7 @@ func ValidateDeploymentState(c DeploymentConfig) error {
 
 func validateDeploymentState(c DeploymentConfig, allowIdentityUpgrade bool) error {
 	marker, err := readDeploymentState(c)
-	if err != nil || marker.Version != 1 || len(marker.InitializedCatalogs) == 0 {
+	if err != nil || marker.Version != 1 || marker.RegistryAuthority != c.Registry.ID {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "deployment state is unavailable; initialize explicitly or restore the durable volume")
 	}
 	for _, name := range durableFiles {
@@ -100,10 +118,10 @@ func validateDeploymentState(c DeploymentConfig, allowIdentityUpgrade bool) erro
 	if _, err := hook.Read(c.StateDir); err != nil {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "durable hook policy is invalid")
 	}
-	if _, err := controlplane.NewFileControlState(filepath.Join(c.StateDir, "control.json")).LoadBundle(); err != nil {
+	if _, err := controlplane.NewFileControlState(filepath.Join(c.StateDir, "control.json"), c.Registry.ID).Load(); err != nil {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "durable control state is invalid")
 	}
-	if _, err := commandlog.OpenBoltStore(filepath.Join(c.StateDir, "writer.db")); err != nil {
+	if _, err := snapshot.OpenBoltCommandStore(filepath.Join(c.StateDir, "writer.db")); err != nil {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "durable Writer ledger is invalid")
 	}
 	if marker.ManagedStoreInitialized {
@@ -131,8 +149,8 @@ func validateDeploymentState(c DeploymentConfig, allowIdentityUpgrade bool) erro
 }
 
 // InitializeDeployment is an explicit operator operation. The Snapshot
-// container already exists or is created here; only Catalog registry files
-// may be initialized. seedPolicies owns the application's grant contract and runs once, in staging.
+// containers are declared explicitly; it publishes system knowledge and
+// initializes Registry registries. seedPolicies runs once, in staging.
 func InitializeDeployment(c DeploymentConfig, seedPolicies func(string, string) error) error {
 	if err := c.Validate(); err != nil {
 		return err
@@ -170,11 +188,12 @@ func InitializeDeployment(c DeploymentConfig, seedPolicies func(string, string) 
 		}
 	}
 	if !initialized {
-		for _, b := range c.Catalogs {
-			reg, err := openCatalogRegistry(b)
+		{
+			b := c.Registry
+			reg, err := openRegistry(b)
 			if err == nil {
 				_ = reg.Close()
-				return kernel.Fail(kernel.ErrPreconditionFailed, "Catalog authority already exists but durable deployment state is missing; restore the state volume")
+				return kernel.Fail(kernel.ErrPreconditionFailed, "registry authority already exists but durable deployment state is missing; restore the state volume")
 			}
 			if kernel.CodeOf(err) != kernel.ErrVersionUnresolved {
 				return err
@@ -183,10 +202,10 @@ func InitializeDeployment(c DeploymentConfig, seedPolicies func(string, string) 
 	}
 	store := snapshot.NewRegistry()
 	defer store.Close()
-	if err := store.Add(knowledge.NewSystemRepository()); err != nil {
+	if err := initializeSystemAuthority(store, c, initialized); err != nil {
 		return err
 	}
-	if err := ensureCatalogAuthorities(store, c, &state, initialized); err != nil {
+	if err := ensureRegistryAuthority(store, c, &state, initialized); err != nil {
 		return err
 	}
 	if initialized {
@@ -198,41 +217,40 @@ func InitializeDeployment(c DeploymentConfig, seedPolicies func(string, string) 
 	return initializeDeploymentStaging(c, state, seedPolicies)
 }
 
-// ensureCatalogAuthorities opens or creates each configured Catalog registry
+// ensureRegistryAuthority opens or creates the unique registry
 // on the shared Snapshot store and registers the System Repository authority.
-func ensureCatalogAuthorities(store *snapshot.Registry, c DeploymentConfig, state *deploymentState, initialized bool) error {
-	for _, b := range c.Catalogs {
-		var reg *catalog.Registry
+func ensureRegistryAuthority(store snapshot.Registry, c DeploymentConfig, state *deploymentState, initialized bool) error {
+	{
+		b := c.Registry
+		var reg dataset.Registry
 		var err error
 		if initialized {
-			reg, err = openCatalogRegistry(b)
+			reg, err = openRegistry(b)
 		}
-		if kernel.CodeOf(err) == kernel.ErrVersionUnresolved && state.initialized(b.ID) {
-			return kernel.Fail(kernel.ErrPreconditionFailed, "Catalog %s was initialized but its authority ref is missing; restore the Catalog Snapshot authority", b.ID)
+		if kernel.CodeOf(err) == kernel.ErrVersionUnresolved && state.RegistryAuthority == b.ID {
+			return kernel.Fail(kernel.ErrPreconditionFailed, "registry %s was initialized but its authority ref is missing; restore the registry Snapshot authority", b.ID)
 		}
 		if !initialized || kernel.CodeOf(err) == kernel.ErrVersionUnresolved {
 			if reg != nil {
 				_ = reg.Close()
 			}
-			reg, err = createCatalogRegistry(b)
+			reg, err = createRegistry(b)
 		}
 		if err != nil {
 			return err
 		}
-		cat, err := catalog.NewCatalog(store, reg)
+		cat, err := dataset.NewService(store, reg)
 		if err != nil {
 			_ = reg.Close()
 			return err
 		}
-		if !cat.Archived() {
-			if err := cat.RegisterRepository(knowledge.SystemRepositoryID); err != nil {
-				_ = reg.Close()
-				return err
-			}
+		if err := cat.RegisterRepository(knowledge.SystemRepositoryID); err != nil {
+			_ = reg.Close()
+			return err
 		}
 		_ = reg.Close()
-		if !state.initialized(b.ID) {
-			state.InitializedCatalogs = append(state.InitializedCatalogs, b.ID)
+		if state.RegistryAuthority != b.ID {
+			state.RegistryAuthority = b.ID
 		}
 	}
 	return nil
@@ -289,10 +307,10 @@ func initializeDeploymentStaging(c DeploymentConfig, state deploymentState, seed
 	if err := gate.Write(staging, gate.File{}); err != nil {
 		return err
 	}
-	if err := controlplane.NewFileControlState(filepath.Join(staging, "control.json")).SaveBundle(map[string]controlplane.ControlState{}); err != nil {
+	if err := controlplane.NewFileControlState(filepath.Join(staging, "control.json"), c.Registry.ID).Save(controlplane.EmptyControlState); err != nil {
 		return err
 	}
-	if _, err := commandlog.New(commandlog.NewBoltStore(filepath.Join(staging, "writer.db"))); err != nil {
+	if _, err := snapshot.NewCommandLedger(snapshot.NewBoltCommandStore(filepath.Join(staging, "writer.db"))); err != nil {
 		return err
 	}
 	if err := createManagedLedger(filepath.Join(staging, managedLedgerFile)); err != nil {
@@ -345,21 +363,21 @@ func OpenDeployment(c DeploymentConfig) (*Home, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, binding := range c.Catalogs {
-		if !state.initialized(binding.ID) {
-			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "Catalog %s requires explicit deployment initialization", binding.ID)
+	{
+		binding := c.Registry
+		if state.RegistryAuthority != binding.ID {
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "registry %s requires explicit deployment initialization", binding.ID)
 		}
 	}
 	store := snapshot.NewRegistry()
-	registries := map[string]*catalog.Registry{}
+	var registry dataset.Registry
 	fail := func(err error) (*Home, error) {
-		for _, reg := range registries {
-			_ = reg.Close()
+		if registry != nil {
+			_ = registry.Close()
 		}
 		_ = store.Close()
 		return nil, err
 	}
-	systemBound := false
 	file := HomeFile{}
 	for _, b := range c.Repositories {
 		item := b.homeRepo()
@@ -368,11 +386,14 @@ func OpenDeployment(c DeploymentConfig) (*Home, error) {
 		if err != nil {
 			return fail(err)
 		}
+		if b.ID == string(knowledge.SystemRepositoryID) {
+			source, err = readOnlySystemAuthority(source)
+			if err != nil {
+				return fail(err)
+			}
+		}
 		if err := store.Add(source); err != nil {
 			return fail(err)
-		}
-		if b.ID == string(knowledge.SystemRepositoryID) {
-			systemBound = true
 		}
 	}
 	if state.ManagedStoreInitialized {
@@ -408,43 +429,24 @@ func OpenDeployment(c DeploymentConfig) (*Home, error) {
 			file.Repos = append(file.Repos, record.Binding.homeRepo())
 		}
 	}
-	if !systemBound {
-		if err := store.Add(knowledge.NewSystemRepository()); err != nil {
-			return fail(err)
-		}
-	}
-	rd := reader.NewReader(store)
-	system, err := rd.Require(knowledge.SystemRepositoryID, kernel.ErrCapabilityUnsatisfied)
-	if err != nil {
-		return fail(err)
-	}
 	systemSource, _ := store.Get(knowledge.SystemRepositoryID)
-	systemHead, err := systemSource.Head(snapshot.DefaultRef)
-	if err != nil {
+	if err := verifySystemAuthority(systemSource); err != nil {
 		return fail(err)
 	}
-	for _, op := range knowledge.SystemSchemaOperations() {
-		current, err := system.Read(op.Address.ObjectID, systemHead)
+	var datasets dataset.Service
+	{
+		b := c.Registry
+		reg, err := openRegistry(b)
 		if err != nil {
 			return fail(err)
 		}
-		if kernel.CanonicalDigest(current.Value) != kernel.CanonicalDigest(op.Value) {
-			return fail(kernel.Fail(kernel.ErrPreconditionFailed, "System publication differs from the binary trust root"))
-		}
-	}
-	catalogs := map[string]*catalog.Catalog{}
-	for _, b := range c.Catalogs {
-		reg, err := openCatalogRegistry(b)
-		if err != nil {
-			return fail(err)
-		}
-		cat, err := catalog.NewCatalog(store, reg)
+		cat, err := dataset.NewService(store, reg)
 		if err != nil {
 			_ = reg.Close()
 			return fail(err)
 		}
-		catalogs[b.ID], registries[b.ID] = cat, reg
-		file.Catalogs = append(file.Catalogs, HomeCatalog{ID: b.ID, Dir: c.CatalogCache(b)})
+		datasets, registry = cat, reg
+		file.Registry = HomeRegistry{ID: b.ID, Dir: c.RegistryCache(b)}
 	}
 	stores := c.runtimeStores()
 	if err := stores.ValidateProfile(); err != nil {
@@ -458,7 +460,7 @@ func OpenDeployment(c DeploymentConfig) (*Home, error) {
 	if err := writeEvidencePolicy(c.StateDir, c.Evidence); err != nil {
 		return fail(err)
 	}
-	ws, err := assemble(c.StateDir, file, stores, store, catalogs, registries, true)
+	ws, err := assemble(c.StateDir, file, stores, store, datasets, registry, true)
 	if err != nil {
 		return fail(err)
 	}
@@ -467,12 +469,9 @@ func OpenDeployment(c DeploymentConfig) (*Home, error) {
 }
 
 // AttachRepository validates an existing configured Snapshot before admitting
-// its identity in one Catalog commit. Source contents are never changed.
-func (ws *Home) AttachRepository(catalogID string, id kernel.RepositoryID) error {
-	cat, _, err := ws.UseCatalog(catalogID)
-	if err != nil {
-		return err
-	}
+// its identity in one Registry commit. Source contents are never changed.
+func (ws *Home) AttachRepository(id kernel.RepositoryID) error {
+	cat := ws.Datasets
 	if ws.Deployment != nil {
 		if _, err := ws.Deployment.Binding(id); err != nil {
 			if err := ValidateDeploymentState(*ws.Deployment); err != nil {

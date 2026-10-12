@@ -7,8 +7,9 @@
 能力或公开 API。目标与执行序见根 [TASK.md](../../TASK.md)；设计事实以
 各行 owner 为准；测试保留与运行证据规则以 [`test-catalog.md`](test-catalog.md) §0 为准。
 
-本轮范围固定为 `DOLT-01`、`DOC-14/16/17/18/19` 与 `APP-CORE-01`。动态 State、规模资格、
-组件选型、多实例和所有 `REVIEW-*` 不在本轮完成分母。
+原重构范围为 `DOLT-01`、`DOC-14/16/17/18/19` 与 `APP-CORE-01`。`DOLT-01` / `RA-01`
+已随 adapter 退役退出当前执行分母；`RA-02` 的未来 native provider 资格仍保留，尚无可执行
+用例时按缺口报告。动态 State、规模资格、组件选型、多实例和所有 `REVIEW-*` 不在本范围。
 
 ---
 
@@ -48,7 +49,7 @@
   公开观察，差异为空。Dolt 是首个取证的 native provider，已随 adapter 退役删除；
   等价性门槛保留给未来的 native provider。
 - **禁止观察：** 用不同 commit 标识直接比较；缺 live 环境静默 skip；只验证 interface
-  存在；provider 分支进入 Catalog、Reader、Writer 或 CLI。
+  存在；provider 分支进入 Dataset 登记服务、Reader、Writer 或 CLI。
 - **必跑：** 等价性对拍按 [`provider-contract-validation.md`](provider-contract-validation.md)
   的流程执行；严格 live 模式用 `KC_REQUIRE_LIVE_ADAPTERS=1`。当前仓内没有 native
   Knowledge provider，该门槛暂无可执行用例，登记为缺口而不是已满足。
@@ -71,8 +72,7 @@
 
 ### RA-04 · 能力冻结与 raw tree 隔离
 
-- **owner：** [架构总览](core-architecture.md) 与
-  [架构总览](core-architecture.md)；条目 `DOC-14`、`DOC-18`。
+- **owner：** [架构总览](core-architecture.md)；条目 `DOC-14`、`DOC-18`。
 - **成功观察：** composition root 一次解析并冻结读/定位/变化能力；请求路径只消费冻结
   结果；native Knowledge 装配不满足 raw tree 写；缺能力返回稳定协议错误。
 - **禁止观察：** 不带 `ok` 的运行期类型断言、panic、按 provider 名称分支、native
@@ -135,26 +135,28 @@
 export PATH="$HOME/.local/go/bin:$PATH"
 
 make check-docs
+make quality
 make validation-inventory
 make check-validation
 make check-surface
 make test-boundary
 make test
-
-KC_DOLT_FORCE_DOCKER=1 KC_DOLT_DOCKER_IMAGE=dolthub/dolt:2.3.1 \
-  go test ./snapshot/dolt ./knowledge/dolt -count=1 -v
+make test-contracts
 make test-adapters
 ```
 
 还必须运行本轮新增 parity、poison、有界计数、账本故障注入与 application-core 合同。race
-只对改动并发状态的包执行，至少覆盖 `snapshot/dolt`、`snapshot/commandlog` 和新应用包。
+只对改动并发状态的包执行，覆盖受影响的 command log 与应用包；已删除的 Dolt 包不再有
+执行要求。当前合同入口见 [`test-catalog.md`](test-catalog.md) §0；重新引入 native provider 时，
+还须恢复 `RA-02` / `RA-04` 要求的专用合同，不能用现有 tree provider 结果代替。
 
 `make test-all` 可以提供更宽证据，但不替代上面的严格 provider 档；与本轮无关的 live
 服务缺失需逐项记为未验证，不能反过来阻止对基础闭环作精确判定。
 
 ## 5. 完成与回写
 
-只有 `RA-01`…`RA-06` 全部通过，才可完成本轮。完成时：
+完成判定须逐项报告 `RA-02`…`RA-06`，退役的 `RA-01` 不再要求执行或补回。`RA-02` 当前
+缺少 native provider 用例，不能写成已满足，也不能据此宣称全部资格已通过。完成已验证范围时：
 
 1. [`TASK.md`](../../TASK.md) 逐项勾选实际完成的条目；
 2. [`architecture-invariants.md`](architecture-invariants.md) 只登记已经存在并通过的证据；

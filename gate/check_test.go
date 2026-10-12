@@ -100,7 +100,7 @@ func TestRequiredUnionsMatchingRules(t *testing.T) {
 		{On: gate.OnMerge, Repo: "kr://acme/semantic", Require: []string{"suite:lint"}},
 		{On: gate.OnMerge, Repo: "kr://acme/physical", Require: []string{"suite:other"}},
 	}}
-	got := file.Required(gate.OnMerge, "kr://acme/semantic", "")
+	got := file.Required(gate.OnMerge, "kr://acme/semantic")
 	if len(got) != 2 || got[0] != "validate" || got[1] != "suite:lint" {
 		t.Fatal(got)
 	}

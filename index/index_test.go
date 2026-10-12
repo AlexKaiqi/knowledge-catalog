@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"kc/catalog"
 	"kc/index"
 	"kc/internal/testkit"
 	"kc/kernel"
@@ -14,6 +13,7 @@ import (
 	"kc/knowledge/reader"
 	"kc/knowledge/writer"
 	"kc/snapshot"
+	"kc/snapshot/dataset"
 )
 
 type staleCandidateEngine struct {
@@ -379,7 +379,7 @@ func TestIndexPermissionsWhenHinted(t *testing.T) {
 
 func TestCatalogHookUpdatesIndexAfterCommit(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	cat := testkit.OpenCatalog(t, s.Store)
+	cat := testkit.OpenDatasets(t, s.Store)
 	idx := liveIndex(t)
 	t.Cleanup(func() { _ = idx.Close() })
 	cat.AddHook(&indexHook{idx: idx})
@@ -420,7 +420,7 @@ func TestCatalogHookUpdatesIndexAfterCommit(t *testing.T) {
 
 func TestProposalDoesNotNotifyCatalog(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	cat := testkit.OpenCatalog(t, s.Store)
+	cat := testkit.OpenDatasets(t, s.Store)
 	idx := liveIndex(t)
 	t.Cleanup(func() { _ = idx.Close() })
 	var snaps int
@@ -611,7 +611,7 @@ func TestIndexSharedPathUntypedObjectKeepsLiveAtHead(t *testing.T) {
 
 func TestCatalogHookSharedPathDoesNotLeaveLiveLagging(t *testing.T) {
 	s := testkit.NewSetup(t, "kr://acme/org/semantics")
-	cat := testkit.OpenCatalog(t, s.Store)
+	cat := testkit.OpenDatasets(t, s.Store)
 	idx := liveIndex(t)
 	t.Cleanup(func() { _ = idx.Close() })
 	cat.AddHook(&indexHook{idx: idx})
@@ -652,7 +652,7 @@ func TestCatalogHookSharedPathDoesNotLeaveLiveLagging(t *testing.T) {
 
 type indexHook struct{ idx *index.Index }
 
-func (h *indexHook) AfterSnapshot(ev catalog.Snapshot) error {
+func (h *indexHook) AfterSnapshot(ev dataset.Snapshot) error {
 	registry := snapshot.NewRegistry()
 	if err := registry.Add(ev.Repository); err != nil {
 		return err
@@ -666,10 +666,10 @@ func (h *indexHook) AfterSnapshot(ev catalog.Snapshot) error {
 
 type countSnap struct {
 	n    *int
-	next catalog.Hook
+	next dataset.Hook
 }
 
-func (c *countSnap) AfterSnapshot(ev catalog.Snapshot) error {
+func (c *countSnap) AfterSnapshot(ev dataset.Snapshot) error {
 	*c.n++
 	if c.next != nil {
 		return c.next.AfterSnapshot(ev)

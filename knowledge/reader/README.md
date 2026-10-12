@@ -1,8 +1,8 @@
 # knowledge/reader/
 
-**Reader 是声明读取面**：在已经钉死的 Snapshot commit 上做 **② 知识解释**。它不写仓、不调用动态 runtime。拼装 Aspect、`object_id`、来源信封与 Binding 解析从这里开始。Catalog `ResolveKnowledgeSet`（①）只给出 `{repo → commit}`；`reader.Open` 才骑在这次坐标上。面向消费者的逻辑 READ 再由 `knowledge/serving` 组合本 Reader 与注入的 State runtime；Schema 的知识解释留在本包，`AccessSpec`、查询和结果合同属于 `retrieval/`。
+**Reader 是声明读取面**：在已经钉死的 Snapshot commit 上做 **② 知识解释**。它不写仓、不调用动态 runtime。拼装 Aspect、`object_id`、来源信封与 Binding 解析从这里开始。Dataset 服务 `ResolveKnowledgeSet`（①）只给出 `{repo → commit}`；`reader.Open` 才骑在这次坐标上。面向消费者的逻辑 READ 再由 `knowledge/serving` 组合本 Reader 与注入的 State runtime；Schema 的知识解释留在本包，`AccessSpec`、查询和结果合同属于 `retrieval/`。
 
-对外入口是 **Reader**（D26）。它也是应用装配处的 Knowledge Service：Catalog 交付
+对外入口是 **Reader**（D26）。它也是应用装配处的 Knowledge Service：Dataset 服务 交付
 `snapshot.Store` 后，`Reader.Lookup` 才包装为结构感知的 Repository。Access 仍是领域名：读取协议 + Provider，不必是远程服务。
 
 两种读目标不是两套协议。坐标来自 `catalog.ResolveKnowledgeSet`；拼装在本包：
@@ -27,6 +27,7 @@ Reader 不创建仓对象。它产出的是读结果和可丢的访问状态：
 | ObjectRevision / ObjectDiff | `Log` / `Diff` | 对象历史三问之一，不是 git log |
 | ProvenanceTrace | `GetProvenance` | **本对象各单元信封**；不爬 `sourceRefs` |
 | ResolvedBinding | `ResolveBinding` | 固定声明 commit/digest；Bound State 来自 Domain Schema origin，遗留 Descriptor 仍可解析；不调用 runtime；交给 `knowledge/serving` |
+| ResolvedInterface | `ResolveObjectInterface` / `ResolveObjectInterfaceAt` | 固定实现 Member、合同及实现/输入/结果 Schema；不运行处理器 |
 | GroundingCitation | `NewGroundingCitation(READ 结果)` | 给 Application/UI，不是仓对象 |
 | Workspace checkout | `WriteCheckout`（内部机制，当前无公开 CLI） | 可丢 grep 树；钉这次 KnowledgeSetPin；不是权威 |
 
@@ -51,7 +52,7 @@ Reader 不创建仓对象。它产出的是读结果和可丢的访问状态：
 | 文件 | 负责 |
 |---|---|
 | `reader.go` | `Reader`：构造、精确读 `RESOLVE` / `READ`（Ref 和 Address）、`LIST` |
-| `repository_service.go` | Catalog/Snapshot → Knowledge 包装；`ReadMany` 只在单次调用内共享同 commit tree/解析结果 |
+| `repository_service.go` | Dataset 服务/Snapshot → Knowledge 包装；`ReadMany` 只在单次调用内共享同 commit tree/解析结果 |
 | `schema.go` | `DESCRIBE_SCHEMA` 编排：固定 commit 上解析 `schema/*` / `schema_ref` |
 | `schema_parse.go` | Binding/兼容形状所需的无 I/O 辅助；Domain Schema 的规范解析复用根包 `ParseSchemaDefinition` |
 | `history.go` | 三问：`LOG` / `DIFF` / `GET_PROVENANCE`（设计 7.5；不可互换） |
@@ -67,7 +68,7 @@ Gitea 等 tree-backed authority 的 Writer 在同一 commit 写入 `.kc/knowledg
 ref 时，Reader 仍按文件 frontmatter 解释（仓根 `README.md` 是有界约定路径）；增量投影用
 `ChangedPaths` 上的单元路径 hydrate，不要求该 commit 先有 Writer locator。两种 authority 由同一 Reader/Writer conformance 验收。
 
-索引在 **Repository 之上**，实现在独立包 `index/`（不进 Writer / Catalog 核心）。逻辑查询与结果合同在 `retrieval/`；OpenSearch provider 逐 clause Probe 再返回 CandidateRef，命中后回读这次解开的 Canonical。未配置 provider 时只保留精确读取能力。完整边界见 `retrieval/README.md` 与 `index/README.md`。
+索引在 **Repository 之上**，实现在独立包 `index/`（不进 Writer / Dataset 服务 核心）。逻辑查询与结果合同在 `retrieval/`；OpenSearch provider 逐 clause Probe 再返回 CandidateRef，命中后回读这次解开的 Canonical。未配置 provider 时只保留精确读取能力。完整边界见 `retrieval/README.md` 与 `index/README.md`。
 
 生产 hydrate 不在底座缓存 Knowledge object。Reader 包装后的 Repository 实现
 `knowledge.BatchReadStore`，默认 tree locator 在一次批量调用内只读一份固定 commit 的 manifest，
@@ -75,6 +76,15 @@ ref 时，Reader 仍按文件 frontmatter 解释（仓根 `README.md` 是有界�
 `object_id → KnowledgeValue`。Adapter 只可缓存原始 tree/blob/transport。上层产品如需完整对象缓存，在 KC 之上的 retriever lane 实现。
 
 ## 精确读
+
+`DiscoverObjectInterfaces` 只发现给定对象的 `interfaces` Members，使用同一次固定范围。
+合同引用可为本仓对象 ID 或已在 Workspace 中明确钉住的跨仓 `kc://` 引用；不会沿引用
+挂载新仓、读取 HEAD 或取得范围外 Schema。每个实现必须明确选择，候选之间不覆盖。
+`InterfaceDefinition.standardImplementationSchemas` 是合同推荐的形式；实际支持由处理器的
+注册摘要与实现检查决定，不能仅从推荐名单推导就绪或授权。
+`ResolvedInterface.ImplementationSchemaDigest` 是包含字段 `access` 的完整知识摘要，
+`ImplementationSchemaStructureDigest` 只排除字段 `access`，供处理器支持匹配使用；
+两个摘要来自同一次固定 Schema 读取，查询声明的变化不会被完整依据掩盖。
 
 ```text
 READ(ref, commit, selector?)   → 拼装后按 AspectSelector 裁
@@ -101,7 +111,7 @@ GET_PROVENANCE   这个对象在该 commit 上各单元贴了什么信封？    
 
 `GET_PROVENANCE` 不做 PROV 推理。Application 若要沿 `sourceRefs` / `evidence_refs` 再读，必须另发 `RESOLVE` / `READ` / `GET_PROVENANCE`。
 
-`kc catalog audit` 是登记表 git 历史（`Catalog.Log`），不是成员 `LOG`。Catalog 当前态是 `kc show`。
+`kc catalog audit` 是登记表 git 历史（`Dataset 服务.Log`），不是成员 `LOG`。Dataset 服务 当前态是 `kc show`。
 
 生产 SEARCH、RELATIONS、continuation 与 Refine 合同见 [`retrieval/README.md`](../../retrieval/README.md)。
 
@@ -128,3 +138,8 @@ go run ./cmd/kc -- schema describe --repo kr://acme/public/core --object Table:t
 在挂载时内部冻结；没有公开 checkout 或 `refine` 命令。
 
 协议与 Aspect 读策略见 [架构总览](../../docs/reviewed/core-architecture.md) 第 7 章、[声明式索引](../../docs/reviewed/declarative-index.md)。
+
+
+`DescribeRepoSchema` 通过固定 commit 的有界 Schema locator 解释逻辑类型与字段 access。
+查询访问合同只从 Schema 产生，普通对象的名字或正文不会覆盖字段声明；Dataset 的 Schema
+辅助读取保持相同版本与文件范围，不通过扫描普通对象补齐解释依赖。

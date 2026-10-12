@@ -1,0 +1,24 @@
+---
+object_id: interface/live-access/v1
+aspect_name: definition
+schema_ref: schema/core/object-interface/v1
+path_hint: object-interfaces/live-access/definition.yaml
+---
+name: LiveAccess
+meaning: 通过固定实现声明访问对象当前状态或调用允许的源操作。
+standardImplementationSchemas:
+  - schema/implements.live-access/v1
+operations:
+  read:
+    effect: read
+    input: 当前状态读取输入；范围由固定实现声明及源操作解释。
+    result: 当前值及独立观察依据。
+  invoke:
+    effect: write
+    input: 对象声明操作所需输入，不能覆盖运行目标、操作映射或可信身份。
+    result: 由源操作合同定义的结果。
+guarantees:
+  - 访问入口和操作映射来自本次固定知识声明。
+  - 当前状态读取保留独立观察依据，固定声明不冻结运行值。
+  - 操作执行与知识读取分别检查权限。
+  - 运行失败不被解释为业务空值，访问不会自动发布知识。

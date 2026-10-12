@@ -1,0 +1,27 @@
+views:
+  - "access-control"
+layer: "app"
+role: "consumer"
+surface: both
+publishes:
+  - "access.rules"
+summary: "inventory.read 可见本 登记空间 库存身份；不放行审计或发权"
+evidence:
+  - source: "access.rules"
+    views:
+      - "access-control"
+    tests:
+      - "TestCatalogIsolationDoesNotShareAllow"
+    title: "不同 登记空间 的授权规则相互隔离"
+probes:
+  - file: "probe-audit-not-implied.feature"
+    source: "access.rules"
+    views:
+      - "access-control"
+    title: "登记空间 读权不放行登记历史读取"
+  - file: "probe-not-admin.feature"
+    source: "access.rules"
+    views:
+      - "access-control"
+    title: "登记空间 读权不放行发权或归档且原规则保持"
+fixture: "在空授权前态为 bot 建立该 登记空间 的 inventory.read 规则并选择该 登记空间，供审计拒绝与管理拒绝两个用例复用。"

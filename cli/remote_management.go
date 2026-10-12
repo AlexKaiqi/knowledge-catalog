@@ -2,44 +2,25 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
 	inv "kc/invocation"
-	"strings"
 
-	"kc/catalog"
 	kcclient "kc/client"
 	"kc/kernel"
 	"kc/knowledge/writer"
+	"kc/snapshot/dataset"
 )
 
-func runRemoteCatalog(ctx context.Context, client *kcclient.Client, server, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
-	service := client.CatalogService()
-	if path == "catalog list" {
-		var output any
-		if err := service.Catalogs(ctx, options, &output); err != nil {
-			return nil, err
-		}
-		var listed remoteCatalogList
-		if raw, err := json.Marshal(output); err == nil {
-			_ = json.Unmarshal(raw, &listed)
-		}
-		if len(listed.Catalogs) == 1 {
-			_ = persistClientCatalog(server, listed.Catalogs[0].ID)
-		}
-		return output, nil
-	}
+func runRemoteRegistry(ctx context.Context, client *kcclient.Client, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
+	service := client.SnapshotService()
 	if path == "create" {
 		if err := validateManagedRepositoryCreateFlags(flags); err != nil {
 			return nil, err
 		}
-		catalogID, err := remoteCatalogID(ctx, server, service, flags, options)
-		if err != nil {
-			return nil, err
-		}
 		var output any
+		var err error
 		if flagString(flags, "name") != "" {
 			err = service.CreateNamedRepository(ctx, kcclient.NamedRepositoryCreateRequest{
-				Name: flagString(flags, "name"), Store: flagString(flags, "store"), Catalog: catalogID,
+				Name: flagString(flags, "name"), Store: flagString(flags, "store"),
 			}, options, &output)
 		} else {
 			repository, deriveErr := repositoryIDFromConnectionURL(flagString(flags, "url"))
@@ -50,117 +31,68 @@ func runRemoteCatalog(ctx context.Context, client *kcclient.Client, server, path
 			if credentialErr != nil {
 				return nil, credentialErr
 			}
-			err = service.ConnectRepository(ctx, catalogID, kcclient.ConnectionRequest{
-				Repository: repository, Driver: "gitea", URL: flagString(flags, "url"), Credential: credential,
+			err = service.ConnectRepository(ctx, kcclient.ConnectionRequest{
+				Repository: repository, Driver: "lakefs", URL: flagString(flags, "url"), Credential: credential,
 			}, options, &output)
 		}
 		return output, err
 	}
-	catalogID, err := remoteCatalogID(ctx, server, service, flags, options)
-	if err != nil {
-		return nil, err
-	}
+	var err error
 	var output any
 	switch path {
 	case "show":
-		err = service.Show(ctx, catalogID, options, &output)
-	case "catalog audit":
+		err = service.Show(ctx, options, &output)
+	case "registry audit":
 		var limit int
 		limit, err = remoteLimit(flags)
 		if err == nil {
-			err = service.Audit(ctx, catalogID, limit, options, &output)
+			err = service.Audit(ctx, limit, flagString(flags, "continuation"), options, &output)
 		}
-	case "catalog archive":
-		err = service.Archive(ctx, catalogID, options, &output)
 	case "attach":
-		err = service.AttachRepository(ctx, catalogID, kcclient.RepositoryAttachRequest{Repository: flagString(flags, "repo")}, options, &output)
+		err = service.AttachRepository(ctx, kcclient.RepositoryAttachRequest{Repository: flagString(flags, "repo")}, options, &output)
 	case "detach":
-		err = service.DetachRepository(ctx, catalogID, flagString(flags, "repo"), options, &output)
+		err = service.DetachRepository(ctx, flagString(flags, "repo"), options, &output)
 	default:
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "remote typed client does not implement %s", path)
 	}
 	return output, err
 }
 
-func runRemoteWorkspace(ctx context.Context, client *kcclient.Client, server, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
+func runRemoteWorkspace(ctx context.Context, client *kcclient.Client, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
 	if path == "pin" && flagString(flags, "dataset") == "" && flagString(flags, "source") == "" && flagString(flags, "file") == "" && flagString(flags, "from-repo") == "" && flagString(flags, "payload") == "" && len(flagStrings(flags, "file-source")) == 0 {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "kc pin requires --dataset <id> or --source <repository>[=selector]...")
 	}
-	service := client.CatalogService()
-	catalogID, err := remoteCatalogID(ctx, server, service, flags, options)
-	if err != nil {
-		return nil, err
-	}
+	service := client.SnapshotService()
+	var err error
 	var output any
 	switch path {
 	case "pin":
 		if flagString(flags, "dataset") == "" {
-			output, err = runRemoteWorkspaceResolveDefinition(ctx, service, catalogID, flags, options)
+			output, err = runRemoteWorkspaceResolveDefinition(ctx, service, flags, options)
 		} else {
-			var resolved catalog.ResolvedKnowledgeSet
-			err = service.ResolveKnowledgeSet(ctx, catalogID, flagString(flags, "dataset"), kcclient.KnowledgeSetResolveRequest{Pin: remotePin(flags)}, options, &resolved)
-			output = taskKnowledgeSetPin{ResolvedKnowledgeSet: resolved, Catalog: catalogID}
+			var resolved dataset.ResolvedKnowledgeSet
+			err = service.ResolveKnowledgeSet(ctx, flagString(flags, "dataset"), kcclient.KnowledgeSetResolveRequest{Pin: remotePin(flags)}, options, &resolved)
+			output = taskKnowledgeSetPin{ResolvedKnowledgeSet: resolved}
 		}
 		if err != nil {
 			return nil, err
 		}
 		return inv.ShapePinOutput(flags, output)
 	case "pin check":
-		err = service.CheckKnowledgeSet(ctx, catalogID, flagString(flags, "dataset"), kcclient.KnowledgeSetResolveRequest{Pin: remotePin(flags)}, options, &output)
+		err = service.CheckKnowledgeSet(ctx, flagString(flags, "dataset"), kcclient.KnowledgeSetResolveRequest{Pin: remotePin(flags)}, options, &output)
 	case "dataset define":
-		return runRemoteWorkspaceDefine(ctx, service, catalogID, flags, options)
+		return runRemoteWorkspaceDefine(ctx, service, flags, options)
 	case "dataset clone":
-		return runRemoteDatasetClone(ctx, client, catalogID, flags, options)
+		return runRemoteDatasetClone(ctx, client, flags, options)
 	case "dataset retire":
-		err = service.RetireKnowledgeSet(ctx, catalogID, flagString(flags, "dataset"), options, &output)
+		err = service.RetireKnowledgeSet(ctx, flagString(flags, "dataset"), options, &output)
 	default:
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "remote typed client does not implement %s", path)
 	}
 	return output, err
 }
 
-type remoteCatalogList struct {
-	Catalogs []struct {
-		ID string `json:"id"`
-	} `json:"catalogs"`
-}
-
-func verifyRemoteCatalogUse(ctx context.Context, service kcclient.CatalogService, catalogID string, options kcclient.RequestOptions) error {
-	var listed remoteCatalogList
-	if err := service.Catalogs(ctx, options, &listed); err != nil {
-		return err
-	}
-	for _, item := range listed.Catalogs {
-		if item.ID == catalogID {
-			return nil
-		}
-	}
-	return kernel.Fail(kernel.ErrForbidden, "catalog %s is not visible to this principal", catalogID)
-}
-
-func remoteCatalogID(ctx context.Context, server string, service kcclient.CatalogService, flags map[string]FlagValue, options kcclient.RequestOptions) (string, error) {
-	if id := strings.TrimSpace(flagString(flags, "catalog")); id != "" {
-		return id, nil
-	}
-	if id := savedClientCatalog(server); id != "" {
-		return id, nil
-	}
-	var listed remoteCatalogList
-	if err := service.Catalogs(ctx, options, &listed); err != nil {
-		return "", err
-	}
-	if len(listed.Catalogs) == 1 {
-		id := listed.Catalogs[0].ID
-		_ = persistClientCatalog(server, id)
-		return id, nil
-	}
-	if len(listed.Catalogs) == 0 {
-		return "", kernel.Fail(kernel.ErrUsageInvalid, "no visible catalog")
-	}
-	return "", kernel.Fail(kernel.ErrUsageInvalid, "catalog use is required when more than one catalog is visible")
-}
-
-func runRemoteWorkspaceResolveDefinition(ctx context.Context, service kcclient.CatalogService, catalogID string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
+func runRemoteWorkspaceResolveDefinition(ctx context.Context, service kcclient.SnapshotService, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
 	sources, err := remoteKnowledgeSetSources(flags)
 	if err != nil {
 		return nil, err
@@ -172,18 +104,18 @@ func runRemoteWorkspaceResolveDefinition(ctx context.Context, service kcclient.C
 			return nil, err
 		}
 	}
-	definition := catalog.KnowledgeSet{Revision: revision, Sources: sources}
-	var output catalog.ResolvedKnowledgeSet
-	err = service.ResolveDefinition(ctx, catalogID, kcclient.KnowledgeSetRequest{
+	definition := dataset.KnowledgeSet{Revision: revision, Sources: sources}
+	var output dataset.ResolvedKnowledgeSet
+	err = service.ResolveDefinition(ctx, kcclient.KnowledgeSetRequest{
 		Dataset: flagString(flags, "dataset"), Revision: revision, Sources: sources,
 	}, options, &output)
 	if err != nil {
 		return nil, err
 	}
-	return taskKnowledgeSetPin{ResolvedKnowledgeSet: output, Catalog: catalogID, Definition: &definition}, nil
+	return taskKnowledgeSetPin{ResolvedKnowledgeSet: output, Definition: &definition}, nil
 }
 
-func runRemoteWorkspaceDefine(ctx context.Context, service kcclient.CatalogService, catalogID string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
+func runRemoteWorkspaceDefine(ctx context.Context, service kcclient.SnapshotService, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
 	workspace, err := requireRemoteFlag(flags, "dataset")
 	if err != nil {
 		return nil, err
@@ -197,7 +129,7 @@ func runRemoteWorkspaceDefine(ctx context.Context, service kcclient.CatalogServi
 		return nil, err
 	}
 	var output any
-	err = service.DefineKnowledgeSet(ctx, catalogID, kcclient.KnowledgeSetRequest{
+	err = service.DefineKnowledgeSet(ctx, kcclient.KnowledgeSetRequest{
 		Dataset: workspace, Revision: revision, Sources: sources,
 	}, options, &output)
 	return output, err
@@ -259,15 +191,15 @@ func runRemoteGovernance(ctx context.Context, client *kcclient.Client, path stri
 		err := service.Preview(ctx, request, options, &output)
 		return output, err
 	case "governance preview validate":
-		request := kcclient.ValidateRequest{Catalog: flagString(flags, "catalog"), Preview: flagString(flags, "preview")}
+		request := kcclient.ValidateRequest{Preview: flagString(flags, "preview")}
 		err := service.Validate(ctx, request, options, &output)
 		return output, err
 	case "governance validation record":
-		request := kcclient.ValidationRequest{Catalog: flagString(flags, "catalog"), Preview: flagString(flags, "preview"), Suite: flagString(flags, "suite"), Outcome: flagString(flags, "outcome")}
+		request := kcclient.ValidationRequest{Preview: flagString(flags, "preview"), Suite: flagString(flags, "suite"), Outcome: flagString(flags, "outcome")}
 		err := service.RecordValidation(ctx, request, options, &output)
 		return output, err
 	case "governance proposal merge":
-		request := kcclient.MergeRequest{Catalog: flagString(flags, "catalog"), Proposal: flagString(flags, "proposal"), Preview: flagString(flags, "preview"), Validation: flagString(flags, "validation")}
+		request := kcclient.MergeRequest{Proposal: flagString(flags, "proposal"), Preview: flagString(flags, "preview"), Validation: flagString(flags, "validation")}
 		err := service.Merge(ctx, request, options, &output)
 		return output, err
 	default:
@@ -280,18 +212,46 @@ func runRemoteAdmin(ctx context.Context, client *kcclient.Client, path string, f
 	service := client.AdminService()
 	switch path {
 	case "grant add", "admin grant add":
-		request := kcclient.GrantRequest{Principal: flagString(flags, "principal"), Actions: splitCmds(flagString(flags, "action")), Repository: flagString(flags, "repo"), Catalog: flagString(flags, "catalog"), Ref: flagString(flags, "ref"), Object: flagString(flags, "object"), Aspect: flagString(flags, "aspect"), Dataset: flagString(flags, "dataset")}
+		request := kcclient.GrantRequest{Principal: flagString(flags, "principal"), Actions: splitCmds(flagString(flags, "action")), Repository: flagString(flags, "repo"), Ref: flagString(flags, "ref"), Object: flagString(flags, "object"), Aspect: flagString(flags, "aspect"), Dataset: flagString(flags, "dataset")}
 		err := service.AddGrant(ctx, request, options, &output)
 		return output, err
 	case "grant list", "admin grant list":
-		err := service.Grants(ctx, options, &output)
-		return output, err
+		return runRemoteGrantList(ctx, client, flags, options)
 	case "grant remove", "admin grant remove":
 		err := service.RemoveGrant(ctx, flagString(flags, "id"), options, &output)
 		return output, err
 	default:
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "remote typed client does not implement %s", path)
 	}
+}
+
+func runRemoteGrantList(ctx context.Context, client *kcclient.Client, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
+	action := flagString(flags, "action")
+	principal := flagString(flags, "principal")
+	filter := kcclient.GrantRequest{Principal: principal, Repository: flagString(flags, "repo"), Dataset: flagString(flags, "dataset"), Ref: flagString(flags, "ref"), Object: flagString(flags, "object"), Aspect: flagString(flags, "aspect")}
+	if action != "" {
+		if principal == "" {
+			identity, ok, err := client.Identity(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if !ok {
+				return nil, kernel.Fail(kernel.ErrUnauthenticated, "grant question requires an authenticated principal")
+			}
+			principal = identity.Principal
+		}
+		// Keep the CLI's existing explicit-rule question, including global rules.
+		// It consequently requires a global grant inventory read capability.
+		filter = kcclient.GrantRequest{Principal: principal, Actions: []string{action}}
+	}
+	var listed inv.GrantList
+	if err := client.AdminService().GrantsMatching(ctx, filter, options, &listed); err != nil {
+		return nil, err
+	}
+	if action == "" {
+		return listed, nil
+	}
+	return inv.EvaluateAllow(listed.Rules, inv.AllowQuery{Principal: principal, Action: action, Repo: flagString(flags, "repo"), Dataset: flagString(flags, "dataset"), Ref: flagString(flags, "ref"), Object: flagString(flags, "object"), Aspect: flagString(flags, "aspect")})
 }
 
 func runRemoteDesiredCommit(ctx context.Context, client *kcclient.Client, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {

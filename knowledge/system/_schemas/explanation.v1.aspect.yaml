@@ -1,0 +1,15 @@
+---
+object_id: schema/system/explanation/v1
+path_hint: _schemas/explanation.v1.aspect.yaml
+---
+metaSchema: schema/meta/schema-definition/v1
+entity: SystemExplanation
+description: 系统仓模型、入口与机制说明的正文。
+aspect: definition
+pattern: record
+additionalProperties: false
+fields:
+  body:
+    type: string
+    required: true
+    access: [text]

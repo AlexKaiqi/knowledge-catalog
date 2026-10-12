@@ -16,7 +16,7 @@ import (
 func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "init"))
 	seedRepo(t, h, core)
 	body(t, kc(h, "put", "--command-id", "task-io", "--repo", core,
 		"--object", "ETLTask:daily-orders", "--aspect", "io", "--value", `{"inputs":["orders"]}`))
@@ -44,8 +44,8 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 		t.Fatal("result still names the resolved commit; caller did not pass it", serving[0], c1, c2)
 	}
 
-	space := asMap(t, body(t, kc(h, "catalog-show")))
-	if space["catalogId"] != "kr://acme/catalog" {
+	space := asMap(t, body(t, kc(h, "show")))
+	if _, present := space["catalogId"]; present {
 		t.Fatal(space)
 	}
 	if _, ok := space["releases"]; ok {
@@ -135,8 +135,8 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 		expectCode(t, kc(h, "search", "--dataset", "agent", "--query", "later"), "CAPABILITY_UNSATISFIED")
 	}
 
-	catState := asMap(t, body(t, kc(h, "catalog-show")))
-	if catState["catalogId"] == "" {
+	catState := asMap(t, body(t, kc(h, "show")))
+	if _, present := catState["catalogId"]; present {
 		t.Fatalf("catalog show: %#v", catState)
 	}
 	access := asMap(t, body(t, kc(h, "describe-access", "--dataset", "agent")))
@@ -159,10 +159,10 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	}
 
 	hist := asMap(t, body(t, kc(h, "audit", "--dataset", "agent")))
-	if hist["source"] != "catalog" {
+	if hist["source"] != "registry" || hist["authorityId"] != "kr://kc/registry" || hist["catalogId"] != nil {
 		t.Fatal("workspace-filtered registry history is audit", hist)
 	}
-	expectMsg(t, kc(h, "log", "--catalog", "kr://acme/catalog"), "rejects --catalog")
+	expectMsg(t, kc(h, "log", "--catalog", "retired"), "rejects --catalog")
 	expectMsg(t, kc(h, "log", "--dataset", "agent"), "missing --object")
 	expectMsg(t, kc(h, "log", "--dataset", "agent", "--repo", core, "--object", "policy/A"), "do not mix")
 
@@ -172,16 +172,16 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	}
 
 	expectCode(t, kc(h, "read", "--as", "bot", "--dataset", "agent", "--object", "policy/A"), "FORBIDDEN")
-	body(t, kc(h, "allow", "--principal", "bot", "--cmd", "read-workspace", "--catalog", "kr://acme/catalog", "--dataset", "agent"))
+	body(t, kc(h, "allow", "--principal", "bot", "--cmd", "read-workspace", "--dataset", "agent"))
 	body(t, kc(h, "allow", "--principal", "bot", "--cmd", "read", "--repo", core))
 	asBot := body(t, kc(h, "read", "--as", "bot", "--dataset", "agent", "--object", "policy/A")).([]any)
 	if asMap(t, asMap(t, asBot[0])["value"])["body"] != "later live 冻结窗口" {
 		t.Fatal(asBot)
 	}
 	expectCode(t, kc(h, "show", "--as", "bot"), "FORBIDDEN")
-	body(t, kc(h, "allow", "--principal", "bot", "--action", "catalog.read", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "allow", "--principal", "bot", "--action", "inventory.read"))
 	asBotSpace := asMap(t, body(t, kc(h, "show", "--as", "bot")))
-	if asBotSpace["catalogId"] != "kr://acme/catalog" {
+	if _, present := asBotSpace["catalogId"]; present {
 		t.Fatal(asBotSpace)
 	}
 
@@ -195,10 +195,9 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 
 func TestKnowledgeSetAuthorizationCoverageIsHonest(t *testing.T) {
 	h := testkit.TempDir(t)
-	catalogID := "kr://acme/catalog"
 	public := "kr://acme/public/runbooks"
 	private := "kr://acme/private/runbooks"
-	body(t, kc(h, "init", "--catalog", catalogID))
+	body(t, kc(h, "init"))
 	for _, repo := range []string{public, private} {
 		seedRepo(t, h, repo)
 		body(t, kc(h, "put", "--command-id", "schema-"+repo, "--repo", repo,
@@ -213,8 +212,7 @@ func TestKnowledgeSetAuthorizationCoverageIsHonest(t *testing.T) {
 		"--value", `{"body":"payment private procedure"}`))
 	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1",
 		"--source", public+"=refs/heads/main", "--source", private+"=refs/heads/main"))
-	body(t, kc(h, "allow", "--principal", "bot", "--action", "file.read,dataset.resolve,knowledge.search",
-		"--catalog", catalogID, "--dataset", "agent"))
+	body(t, kc(h, "allow", "--principal", "bot", "--action", "file.read,dataset.resolve,knowledge.search", "--dataset", "agent"))
 	body(t, kc(h, "allow", "--principal", "bot", "--cmd", "read", "--repo", public))
 	body(t, kc(h, "allow", "--principal", "bot", "--action", "knowledge.history.read", "--repo", public))
 
@@ -265,27 +263,25 @@ func TestKnowledgeSetAuthorizationCoverageIsHonest(t *testing.T) {
 
 func TestCatalogReadDiscoversWithoutKnowledgeRead(t *testing.T) {
 	h := testkit.TempDir(t)
-	catalogID := "kr://acme/catalog"
 	repo := "kr://acme/public/runbooks"
-	body(t, kc(h, "init", "--catalog", catalogID))
+	body(t, kc(h, "init"))
 	seedRepo(t, h, repo)
 	body(t, kc(h, "put", "--command-id", "seed", "--repo", repo,
 		"--object", "runbook/public", "--value", `{"body":"secret procedure"}`))
-	body(t, kc(h, "allow", "--principal", "bot", "--action", "catalog.read", "--catalog", catalogID))
+	body(t, kc(h, "allow", "--principal", "bot", "--action", "inventory.read"))
 
 	state := asMap(t, body(t, kc(h, "show", "--as", "bot")))
 	listed := businessRepositories(state)
 	if len(listed) != 1 || listed[0] != repo {
-		t.Fatalf("catalog.read must discover registered repositories: %#v", state)
+		t.Fatalf("inventory.read must discover registered repositories: %#v", state)
 	}
 	expectCode(t, kc(h, "read", "--as", "bot", "--repo", repo, "--object", "runbook/public"), "FORBIDDEN")
 }
 
 func TestRepoSearchDeliveryStripsUnauthorizedBody(t *testing.T) {
 	h := testkit.TempDir(t)
-	catalogID := "kr://acme/catalog"
 	repo := "kr://acme/public/runbooks"
-	body(t, kc(h, "init", "--catalog", catalogID))
+	body(t, kc(h, "init"))
 	seedRepo(t, h, repo)
 	body(t, kc(h, "put", "--command-id", "schema", "--repo", repo,
 		"--object", "schema/runbook.body",
@@ -320,9 +316,8 @@ func TestRepoSearchDeliveryStripsUnauthorizedBody(t *testing.T) {
 
 func TestHTTPWorkspaceSearchKeepsDatasetFileReadBody(t *testing.T) {
 	h := testkit.TempDir(t)
-	catalogID := "kr://acme/catalog"
 	repo := "kr://acme/public/runbooks"
-	body(t, kc(h, "init", "--catalog", catalogID))
+	body(t, kc(h, "init"))
 	seedRepo(t, h, repo)
 	body(t, kc(h, "put", "--command-id", "schema", "--repo", repo,
 		"--object", "schema/runbook.body",
@@ -332,8 +327,7 @@ func TestHTTPWorkspaceSearchKeepsDatasetFileReadBody(t *testing.T) {
 		"--value", `{"body":"payment public procedure"}`))
 	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1",
 		"--source", repo+"=refs/heads/main"))
-	body(t, kc(h, "allow", "--principal", "taihu:alice", "--action", "file.read",
-		"--catalog", catalogID, "--dataset", "agent"))
+	body(t, kc(h, "allow", "--principal", "taihu:alice", "--action", "file.read", "--dataset", "agent"))
 	body(t, kc(h, "allow", "--principal", "taihu:alice", "--action", "knowledge.search", "--repo", repo))
 	if !searchAvailable() {
 		expectCode(t, kc(h, "search", "--as", "taihu:alice", "--dataset", "agent", "--query", "payment"), "CAPABILITY_UNSATISFIED")
@@ -386,8 +380,7 @@ func TestKnowledgeOnlyWorkspaceCannotCheckoutByScanning(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 	group := "kr://acme/groups/payments"
-	catalogID := "kr://acme/catalog"
-	body(t, kc(h, "init", "--catalog", catalogID))
+	body(t, kc(h, "init"))
 	seedRepo(t, h, core)
 	seedRepo(t, h, group)
 	body(t, kc(h, "put",
@@ -401,7 +394,7 @@ func TestKnowledgeOnlyWorkspaceCannotCheckoutByScanning(t *testing.T) {
 		"--source", core+"=refs/heads/main",
 		"--source", group+"=refs/heads/main"))
 	body(t, kc(h, "grant", "add", "--principal", "agent:files",
-		"--action", "dataset.resolve", "--catalog", catalogID, "--dataset", "payments-agent"))
+		"--action", "dataset.resolve", "--dataset", "payments-agent"))
 
 	server := httptest.NewServer(serv.HTTPHandlerWithOptions(h, serv.HTTPServerOptions{}))
 	t.Cleanup(server.Close)
@@ -409,7 +402,7 @@ func TestKnowledgeOnlyWorkspaceCannotCheckoutByScanning(t *testing.T) {
 		t.Cleanup(func() { _ = closer.Close() })
 	}
 	raw, _ := json.Marshal(map[string]any{"dataset": "payments-agent"})
-	request, err := http.NewRequest(http.MethodPost, server.URL+"/dataset-files/v1/mounts:list", bytes.NewReader(raw))
+	request, err := http.NewRequest(http.MethodPost, server.URL+"/snapshot/v1/files/mounts:list", bytes.NewReader(raw))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -436,7 +429,7 @@ func TestKnowledgeOnlyWorkspaceCannotCheckoutByScanning(t *testing.T) {
 func TestDatasetSearchExcludesPathsOutsidePublishedList(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "init"))
 	seedRepo(t, h, core)
 	body(t, kc(h, "put", "--command-id", "schema-body", "--repo", core, "--object", "schema/policy.body",
 		"--path-hint", "policies/schema.yaml",
@@ -474,7 +467,7 @@ func TestDatasetSearchExcludesPathsOutsidePublishedList(t *testing.T) {
 func TestHistoricalDatasetReadStaysOnPublishedCommit(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "init"))
 	seedRepo(t, h, core)
 	body(t, kc(h, "put", "--command-id", "schema-body", "--repo", core, "--object", "schema/policy.body",
 		"--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`))

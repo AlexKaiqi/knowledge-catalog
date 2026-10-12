@@ -7,7 +7,7 @@ import (
 func homeVerbs() map[string]command {
 	return map[string]command{
 		"help":                        {Stage: stageHome, Run: verbHelp},
-		"catalog-audit":               {Stage: stageHome, Run: inv.VerbAudit},
+		"registry-audit":              {Stage: stageHome, Run: inv.VerbAudit},
 		"deployment-init":             {Stage: stageHome, Run: verbClientOperation},
 		"deployment-status":           {Stage: stageHome, Run: verbClientOperation},
 		"deployment-system-publish":   {Stage: stageHome, Run: verbClientOperation},

@@ -4,7 +4,7 @@
 #
 #   export KC_SERVICE_CLIENT_SECRET   # Taihu app secret for introspection
 #   ./scripts/live-taihu-auth.sh        # prints auth URL, then waits
-#   KC_LIVE_TAIHU=1 KC_AUTH_TOKEN=… go test -count=1 -run TestLiveTaihuAuthentication ./cli
+#   KC_LIVE_TAIHU=1 KC_AUTH_TOKEN=… go test -count=1 -run TestLiveTaihuAuthentication ./server
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -34,7 +34,12 @@ bin="${TMPDIR:-/tmp}/kc-taihu-live-bin"
 "${go_bin}" build -o "${bin}" ./cmd/kc
 deployment_config="${deployment_root}/deployment.json"
 if [[ ! -e "${deployment_config}" ]]; then
-  "${go_bin}" run ./scripts/fixture-deployment --root "${deployment_root}" --catalog kr://taihu/live --principal service:taihu-live-operator >/dev/null
+  registry_driver="${KC_LIVE_REGISTRY_DRIVER:-lakefs}"
+  registry_dsn="${KC_LIVE_REGISTRY_DSN:?set the existing registry Snapshot DSN}"
+  system_dsn="${KC_LIVE_SYSTEM_DSN:?set the existing system Snapshot DSN}"
+  "${go_bin}" run ./scripts/fixture-deployment --root "${deployment_root}" \
+    --registry-id kr://taihu/live --registry-driver "${registry_driver}" --registry-dsn "${registry_dsn}" \
+    --principal service:taihu-live-operator "--${registry_driver}-repo" "kr://kc/system=${system_dsn}" >/dev/null
   python3 - "${deployment_config}" "${auth_url}" <<'PYCONFIG'
 import json, pathlib, sys
 path = pathlib.Path(sys.argv[1])

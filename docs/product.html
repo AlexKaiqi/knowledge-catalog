@@ -93,7 +93,7 @@
         <p class="eyebrow">KNOWLEDGE CATALOG</p>
         <h1>让知识独立供给<br>让使用有据可查</h1>
         <p class="intro">Knowledge Catalog 让不同团队维护的知识能独立发布、按任务组合，供人、应用和 Agent 使用并持续修正。供给方维护内容、业务模型和来源；使用者选择需要的范围，保留本次任务所用的版本与引用依据。</p>
-        <p>Catalog 协议的 Go 参考实现，提供可部署的知识发布与消费服务。在 lakeFS 等已有存储之上组织 Dataset、知识模型与统一访问；大规模使用的容量、吞吐与恢复能力按部署验证。</p>
+        <p>Knowledge Catalog 协议的 Go 参考实现，提供可部署的知识发布与消费服务。在 lakeFS 等已有存储之上组织 Dataset、知识模型与统一访问；大规模使用的容量、吞吐与恢复能力按部署验证。</p>
       </header>
 
       <section id="value" aria-labelledby="value-title">
@@ -119,7 +119,7 @@
 
       <section id="overview" aria-labelledby="overview-title">
         <div class="section-heading"><span class="section-no">02</span><h2 id="overview-title">能力与架构全景</h2></div>
-        <p class="section-intro">系统分为四个逻辑层。⓪ 通过适配器接入已有版本化存储；① 在其上组织和发布 Dataset；② 解释知识声明；③ 编排索引维护与检索。底层存储引擎承担文件、版本和容量，Knowledge Catalog 负责其上的数据组织、知识语义与访问流程。</p>
+        <p class="section-intro">系统按存储、文件组合、知识解释与检索组织能力；文件组合属于 Snapshot 模块。⓪ 通过适配器接入已有版本化存储；① 在其上组织和发布 Dataset；② 解释知识声明；③ 编排索引维护与检索。底层存储引擎承担文件、版本和容量，Knowledge Catalog 负责其上的数据组织、知识语义与访问流程。</p>
         <figure class="architecture-map" aria-labelledby="architecture-caption">
           <figcaption id="architecture-caption">核心架构<span>接入方 → 平台能力 → 消费入口</span></figcaption>
           <div class="architecture-canvas" tabindex="0" role="region" aria-label="完整架构图，窄屏可横向滚动">
@@ -190,7 +190,7 @@
 
               <a href="#layer-dataset">
                 <rect class="foundation-box" x="330" y="580" width="480" height="86" rx="9"/>
-                <text class="layer-title" x="350" y="613">① Dataset / Catalog</text>
+                <text class="layer-title" x="350" y="613">① Snapshot Dataset</text>
                 <text class="node-copy" x="350" y="642">来源登记 · 范围选取 · 跨仓组合 · 发布</text>
               </a>
               <path class="flow" d="M760 580 V533"/><polygon points="760,533 756,542 764,542" fill="#567565"/>
@@ -247,8 +247,8 @@
       <section id="concepts" aria-labelledby="concepts-title">
         <div class="section-heading"><span class="section-no">03</span><h2 id="concepts-title">分层职责与能力边界</h2></div>
         <div class="capability-grid">
-          <article class="capability-card" id="layer-snapshot"><span class="capability-number">⓪ SNAPSHOT STORE</span><h3>底层存储集成</h3><p>Snapshot Store 是统一的存储适配接口。文件、快照、分支与提交由 lakeFS、Gitea 等底层引擎提供；Knowledge Catalog 将这些能力接入数据集发布和知识读写流程。</p><p>普通文件的版本管理可由 Git 承担。大文件、大量文件的存储采用 lakeFS 与对象存储方案，其规模能力来自底层组件；系统整体的容量、吞吐与恢复能力仍需部署实测。</p></article>
-          <article class="capability-card" id="layer-dataset"><span class="capability-number">① DATASET / CATALOG</span><h3>数据集组合与交付</h3><p>从一个仓选取部分文件，或把多个仓的内容组合成 Dataset。Catalog 登记可用来源与 Dataset；源内容与历史仍保留在各仓。</p><p>Dataset 有自己的消费授权与发布版本，同一份源数据可按用途交付给不同使用者。发布固定选定范围与来源版本，源仓后续修改不会改写已发布版本。</p></article>
+          <article class="capability-card" id="layer-snapshot"><span class="capability-number">⓪ SNAPSHOT STORE</span><h3>底层存储集成</h3><p>Snapshot Store 是统一的存储适配接口。文件、快照、分支与提交由 lakeFS 底层引擎提供；Knowledge Catalog 将这些能力接入数据集发布和知识读写流程。</p><p>普通文件的版本管理可由 Git 承担。大文件、大量文件的存储采用 lakeFS 与对象存储方案，其规模能力来自底层组件；系统整体的容量、吞吐与恢复能力仍需部署实测。</p></article>
+          <article class="capability-card" id="layer-dataset"><span class="capability-number">① SNAPSHOT DATASET</span><h3>数据集组合与交付</h3><p>从一个仓选取部分文件，或把多个仓的内容组合成 Dataset。服务唯一登记空间保存来源与 Dataset 发布记录；源内容与历史仍保留在各仓。</p><p>Dataset 有自己的消费授权与发布版本，同一份源数据可按用途交付给不同使用者。发布固定选定范围与来源版本，源仓后续修改不会改写已发布版本。</p></article>
           <article class="capability-card" id="layer-knowledge"><span class="capability-number">② KNOWLEDGE</span><h3>知识模型与读写</h3><p>自定义 Schema 声明数据类型、字段与关系。同一个业务对象可以有不同方面，例如服务的定义、负责人和运行说明。</p><p>系统据此校验、解释和读取知识，保留对象标识与来源。文件改名不改变业务对象的标识，引用与关联不依赖文件路径。<a href="#knowledge">了解 Entity、Aspect 与 Relation →</a></p></article>
           <article class="capability-card" id="layer-retrieval"><span class="capability-number">③ RETRIEVAL</span><h3>声明式索引与检索</h3><p>在 Schema 中声明哪些字段支持全文搜索、过滤与排序，系统完成索引构建、更新与重建，并用同版本缓存和预热加速访问。</p><p>消费者通过统一入口查找对象、获取对应正文；接入方无需逐次操作检索引擎。可用查询能力取决于声明和部署，索引与缓存不替代源数据。</p></article>
         </div>
@@ -356,15 +356,14 @@ fields:
 
       <section id="connect" aria-labelledby="connect-title">
         <div class="section-heading"><span class="section-no">05</span><h2 id="connect-title">开始之前：确认身份与使用范围</h2></div>
-        <p class="section-intro">部署方准备服务、存储和授权策略。日常使用通过已配置服务入口的客户端完成；登录后发现可见 Catalog、来源与 Dataset，再选择自己的使用范围。</p>
+        <p class="section-intro">部署方准备服务、存储和授权策略。日常使用通过已配置服务入口的客户端完成；登录后查看服务唯一登记空间中的来源与 Dataset，再选择自己的使用范围。</p>
         <div class="code-block"><div class="code-head"><span>已配置服务入口 / 按部署要求完成登录</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc login
 kc whoami
 kc admission show
-kc catalog list
-kc catalog use kr://acme/catalog
+kc show
 kc show</code></pre></div>
-        <p class="result"><strong>检查结果</strong>当前身份正确；已选中要使用的 Catalog；能看到登记的仓与 Dataset。示例 ID 请替换为实际值。</p>
-        <p class="note"><strong>登录、发现与读取是不同条件。</strong>登录不自动授予数据读权。<code>admission show</code> 显示当前授权和部署提供的申请入口；缺少权限时按该入口联系授权方。Catalog 库存不等于知识搜索结果。</p>
+        <p class="result"><strong>检查结果</strong>当前身份正确；已连接目标服务；能看到登记的仓与 Dataset。示例 ID 请替换为实际值。</p>
+        <p class="note"><strong>登录、发现与读取是不同条件。</strong>登录不自动授予数据读权。<code>admission show</code> 显示当前授权和部署提供的申请入口；缺少权限时按该入口联系授权方。服务库存不等于知识搜索结果。</p>
         <details><summary>第一次配置客户端时，在哪里填写服务地址？</summary><div class="answer"><p>服务入口可由交付的客户端预设。原生客户端首次登录可用 <code>kc login --server 'https://kc.example.com'</code>，认证方式以该服务要求为准；登录后复用保存的会话。开发环境的 local 认证不是生产身份方案。后续参数以 <code>kc help login</code> 为准。</p></div></details>
       </section>
 
@@ -372,7 +371,7 @@ kc show</code></pre></div>
         <div class="section-heading"><span class="section-no">06</span><h2 id="consume-title">消费：选择范围，读取与查找知识</h2></div>
         <p class="section-intro">选择获准单仓或已发布 Dataset。已知对象身份时直接读取，需要定位时再搜索；精确读取不依赖搜索索引，也不要求手工管理 pin 文件。下面以具备知识声明与全文检索能力的 Dataset 为例。</p>
         <div class="step"><span class="step-number">1</span><h3>找到要用的 Dataset</h3><p>从当前目录库存或维护者的交付说明获得 Dataset 名称、内容范围和示例对象。文件型 Dataset 不会自动获得知识搜索能力。</p>
-          <div class="code-block"><div class="code-head"><span>查看当前 Catalog 的库存</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc show</code></pre></div>
+          <div class="code-block"><div class="code-head"><span>查看服务 的库存</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc show</code></pre></div>
         </div>
         <div class="step"><span class="step-number">2</span><h3>搜索需要的对象</h3><p>例如在 <code>oncall</code> 中查找值班说明。系统在本次操作中固定 Dataset 的已发布版本。</p>
           <div class="code-block"><div class="code-head"><span>oncall 已发布、已授权且具备全文检索字段</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc search --dataset oncall --query '值班'</code></pre></div>
@@ -393,8 +392,8 @@ kc provenance --repo kr://acme/operations --commit SEARCH_COMMIT \
       <section id="provide" aria-labelledby="provide-title">
         <div class="section-heading"><span class="section-no">07</span><h2 id="provide-title">接入：从源仓组织出可交付的 Dataset</h2></div>
         <p class="section-intro">接入方负责内容、结构与持续维护；Dataset 维护者决定交付范围和发布节奏。先完成文件与 Dataset 底座，再按需要增加知识能力。</p>
-        <div class="path-strip" aria-label="接入与交付步骤"><b>创建或连接仓</b><span aria-hidden="true">→</span><b>登记进 Catalog</b><span aria-hidden="true">→</span><b>准备并发布内容</b><span aria-hidden="true">→</span><b>发布 Dataset</b><span aria-hidden="true">→</span><b>授权消费</b></div>
-        <div class="step"><span class="step-number">1</span><h3>创建或连接源仓，再登记</h3><p>选择部署提供的存储池，或连接允许接入的自有仓。创建或连接成功后，再将返回的 Repository ID 登记到当前 Catalog。</p>
+        <div class="path-strip" aria-label="接入与交付步骤"><b>创建或连接仓</b><span aria-hidden="true">→</span><b>登记到服务</b><span aria-hidden="true">→</span><b>准备并发布内容</b><span aria-hidden="true">→</span><b>发布 Dataset</b><span aria-hidden="true">→</span><b>授权消费</b></div>
+        <div class="step"><span class="step-number">1</span><h3>创建或连接源仓，再登记</h3><p>选择部署提供的存储池，或连接允许接入的自有仓。创建或连接成功后，再将返回的 Repository ID 登记到服务。</p>
           <div class="code-block"><div class="code-head"><span>托管仓 / 需具备创建与登记权限</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc create --name operations
 # 用上一条返回的 Repository ID 替换示例
 kc attach --repo kr://acme/operations</code></pre></div>
@@ -431,7 +430,7 @@ kc writer commit --command-id oncall-content-001 \
           <p>切分针对文件与路径，不等同于任意内容条件、行级过滤或字段脱敏。需要精确到单个文件时，可使用 <code>--file-source 仓@来源文件@交付路径</code>；交付目标不能冲突。</p>
         </div>
         <div class="step"><span class="step-number">4</span><h3>独立授权，并用消费身份验收</h3><p>有授权管理能力的维护者可给指定用户授予 Dataset 消费权。消费者不必因此获得源仓维护权。</p>
-          <div class="code-block"><div class="code-head"><span>由具备授权管理权限的主体执行</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc grant add --catalog kr://acme/catalog --dataset oncall \
+          <div class="code-block"><div class="code-head"><span>由具备授权管理权限的主体执行</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc grant add --dataset oncall \
   --principal teammate --action file.read</code></pre></div>
           <p class="result"><strong>检查结果</strong>目标用户可读取 Dataset 清单内的内容；清单外内容和仓级维护动作不因这项授权而开放。发布成功不等于自动完成授权。</p>
         </div>
@@ -566,7 +565,7 @@ kcfs mount --dataset oncall --root /work/my-project</code></pre></div>
         <div class="section-heading"><span class="section-no">12</span><h2 id="trust-title">交付范围、维护权限与引用依据各自明确</h2></div>
         <p class="section-intro">Dataset 将“能使用这一份交付内容”与“能访问或维护整个源仓”分开。版本坐标说明读到了什么，当前权限决定现在是否仍能读取。</p>
         <div class="table-scroll"><table><thead><tr><th scope="col">边界</th><th scope="col">用户能得到什么</th><th scope="col">不能由此推导什么</th></tr></thead><tbody>
-          <tr><td>Catalog 发现</td><td>查看获准发现的目录库存</td><td>自动读取所有成员内容或搜索整个 Catalog</td></tr>
+          <tr><td>库存发现</td><td>查看获准发现的目录库存</td><td>自动读取所有成员内容或扩大搜索范围</td></tr>
           <tr><td>Dataset 消费授权</td><td>读取已发布清单内文件，并在其上使用知识消费能力</td><td>清单外内容、整仓读取与写入权限</td></tr>
           <tr><td>Repository 授权</td><td>在获授动作范围内读取或维护该源仓</td><td>自动获得其他资源或 Dataset 的授权</td></tr>
           <tr><td>历史版本依据</td><td>在保留和权限条件满足时复核内容</td><td>永久保留权限，或冻结所有外部实时状态</td></tr>
@@ -620,7 +619,7 @@ kc provenance --repo kr://acme/operations --object runbooks/oncall \
         <div class="help-command"><div><code>kc help consume</code>选择范围、搜索和读取</div><div><code>kc help write</code>准备变更、提交与回读</div><div><code>kc help compose</code>登记、组合和授权</div><div><code>kcfs help</code>本地只读挂载与生命周期</div></div>
         <div class="note"><strong>分享这份手册</strong><p>直接发送此 HTML 文件即可，阅读无需代码仓库、网络字体或外部资源。顶部按钮可打印或保存为 PDF。实际执行示例仍需客户端、可用服务与相应授权；地址、身份、对象和草稿均须替换为自己的内容。</p></div>
       </section>
-      <footer class="footer"><p>Knowledge Catalog · 产品使用手册<br>产品价值、任务路径与使用边界 / 2026-09-30</p><p>内容、样式与交互均包含在此文件中<br><a href="#content">回到开头 ↑</a></p></footer>
+      <footer class="footer"><p>Knowledge Catalog · 产品使用手册<br>产品价值、任务路径与使用边界 / 2026-10-12</p><p>内容、样式与交互均包含在此文件中<br><a href="#content">回到开头 ↑</a></p></footer>
     </main>
   </div>
   <div id="copy-status" class="screen-reader" role="status" aria-live="polite"></div>

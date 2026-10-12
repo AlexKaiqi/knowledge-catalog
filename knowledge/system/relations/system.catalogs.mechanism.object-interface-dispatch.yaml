@@ -1,0 +1,27 @@
+---
+object_id: kc/relation/system.catalogs.mechanism.object-interface-dispatch
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: relations/system.catalogs.mechanism.object-interface-dispatch.yaml
+---
+{
+  "relationId": "kc/relation/system.catalogs.mechanism.object-interface-dispatch",
+  "relationType": "catalogs",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "from",
+      "objectRef": {
+        "repository": "kr://kc/system",
+        "object": "kc/system"
+      }
+    },
+    {
+      "role": "to",
+      "objectRef": {
+        "repository": "kr://kc/system",
+        "object": "kc/mechanism/object-interface-dispatch"
+      }
+    }
+  ]
+}

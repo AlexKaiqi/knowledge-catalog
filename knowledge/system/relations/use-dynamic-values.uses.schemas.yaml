@@ -1,0 +1,18 @@
+---
+object_id: kc/relation/use-dynamic-values.uses.schemas
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: relations/use-dynamic-values.uses.schemas.yaml
+---
+relationId: kc/relation/use-dynamic-values.uses.schemas
+relationType: uses
+direction: DIRECTED
+endpoints:
+  - role: from
+    objectRef:
+      repository: kr://kc/system
+      object: kc/guide/use-dynamic-values
+  - role: to
+    objectRef:
+      repository: kr://kc/system
+      object: kc/capability/schemas

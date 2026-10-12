@@ -17,9 +17,9 @@ var connectionCredentialsBucket = []byte("credentials-v1")
 
 // Credentials are kept in a separate private bucket, never in public bindings.
 type connectionRecord struct {
+	legacyAuthority  string
 	AllocationID     string            `json:"allocationId"`
 	Owner            string            `json:"owner"`
-	Catalog          string            `json:"catalog"`
 	Binding          RepositoryBinding `json:"binding"`
 	BackendID        string            `json:"backendId"`
 	InitialHead      kernel.CommitID   `json:"initialHead"`
@@ -89,12 +89,23 @@ func connectionDB(dir string, write bool, fn func(*bolt.Tx) error) error {
 
 func decodeConnection(raw, secret []byte) (connectionRecord, error) {
 	var r connectionRecord
+	fields, err := durableFields(raw)
+	if err != nil {
+		return r, err
+	}
+	var legacyAuthority string
+	if value, ok := fields["catalog"]; ok {
+		if err := json.Unmarshal(value, &legacyAuthority); err != nil || legacyAuthority == "" {
+			return r, kernel.Fail(kernel.ErrPreconditionFailed, "legacy connection registry authority is invalid")
+		}
+	}
 	invalid := func() (connectionRecord, error) {
 		return r, kernel.Fail(kernel.ErrPreconditionFailed, "private connection ledger contains an invalid binding")
 	}
-	if json.Unmarshal(raw, &r) != nil || len(r.AllocationID) != 32 || r.Owner == "" || r.Catalog == "" || r.Binding.ID == "" || r.Binding.Driver != "gitea" || r.Binding.Dir != "" || r.BackendID == "" || r.InitialHead == "" || r.Revision == 0 || (r.Phase != "CONNECTED" && r.Phase != "READY") || validateConnectionActions(r.Actions) != nil || validateShareActions(r.ShareActions) != nil || len(secret) == 0 || r.CredentialDigest != kernel.CanonicalDigest(string(secret)) {
+	if json.Unmarshal(raw, &r) != nil || len(r.AllocationID) != 32 || r.Owner == "" || r.Binding.ID == "" || r.Binding.Driver != "lakefs" || r.Binding.Dir != "" || r.BackendID == "" || r.InitialHead == "" || r.Revision == 0 || (r.Phase != "CONNECTED" && r.Phase != "READY") || validateConnectionActions(r.Actions) != nil || validateShareActions(r.ShareActions) != nil || len(secret) == 0 || r.CredentialDigest != kernel.CanonicalDigest(string(secret)) {
 		return invalid()
 	}
+	r.legacyAuthority = legacyAuthority
 	if _, err := connectionOrigin(r.Binding.DSN); err != nil {
 		return invalid()
 	}

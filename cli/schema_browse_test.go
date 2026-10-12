@@ -15,7 +15,7 @@ import (
 
 func TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent(t *testing.T) {
 	home := t.TempDir()
-	mustKnowledgeSetFSRun(t, home, "init", "--catalog", "kr://acme/catalog")
+	mustKnowledgeSetFSRun(t, home, "init")
 	server := httptest.NewServer(httpHandler(home))
 	defer server.Close()
 
@@ -74,9 +74,35 @@ func TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent(t *testing.T) {
 	if row["objectId"] == "" || row["entity"] == "" || row["description"] == "" {
 		t.Fatalf("schema list row missing entity name: %#v", row)
 	}
-	second := page(first["continuation"].(string))
-	if second["continuation"] != nil || second["coverage"] != nil || second["exhausted"] != nil || second["total"] != nil {
-		t.Fatalf("last page must omit pagination inventions: %#v", second)
+	seen := map[string]bool{}
+	current := first
+	for {
+		if current["coverage"] != nil || current["exhausted"] != nil || current["total"] != nil {
+			t.Fatalf("schema page must omit pagination inventions: %#v", current)
+		}
+		schemas := current["schemas"].([]any)
+		if len(schemas) == 0 || len(schemas) > 2 || current["commit"] != first["commit"] {
+			t.Fatalf("page did not keep its bound and basis: %#v", current)
+		}
+		for _, schema := range schemas {
+			id := schema.(map[string]any)["objectId"].(string)
+			if seen[id] {
+				t.Fatalf("pagination repeated Schema %s", id)
+			}
+			seen[id] = true
+		}
+		if current["continuation"] == nil {
+			break
+		}
+		current = page(current["continuation"].(string))
+	}
+	for _, schema := range knowledge.SystemSchemaOperations() {
+		if !seen[string(schema.Address.ObjectID)] {
+			t.Errorf("paginated directory omitted %s", schema.Address.ObjectID)
+		}
+	}
+	if len(seen) != wantTotal {
+		t.Fatalf("Schema directory contains %d entries, want %d", len(seen), wantTotal)
 	}
 
 	status, zero, raw := request(map[string]any{"repository": "kr://kc/system", "limit": 0})

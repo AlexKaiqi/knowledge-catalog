@@ -14,7 +14,7 @@ import (
 func TestLocalCLISearchDoesNotCatchUpProjection(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "init"))
 	// This contract is about the no-provider local profile; the suite may
 	// export KC_TEST_OPENSEARCH_URL, so pin index:none explicitly.
 	body(t, kc(h, "store-set", "--index", "none"))
@@ -30,13 +30,13 @@ func TestServeProjectionWorkerCatchesCommitWithoutSync(t *testing.T) {
 		t.Fatal("KC_TEST_OPENSEARCH_URL is required")
 	}
 	home := testkit.TempDir(t)
-	catalogID := "kr://acme/product"
+
 	repositoryID := "kr://acme/public/core"
 	setID := "oncall"
 	admin := "agent:local-admin"
 	provider := "agent:provider"
 	consumer := "agent:consumer"
-	body(t, kc(home, "local", "init", "--catalog", catalogID))
+	body(t, kc(home, "local", "init"))
 	seedRepo(t, home, repositoryID)
 	body(t, kc(home, "local", "grant", "bootstrap", "--principal", admin))
 
@@ -67,7 +67,7 @@ func TestServeProjectionWorkerCatchesCommitWithoutSync(t *testing.T) {
 	commit := publishedCommit(t, published)
 
 	body(t, governor("grant", "add", "--principal", consumer,
-		"--action", "catalog.read,dataset.resolve,file.read", "--catalog", catalogID))
+		"--action", "inventory.read,dataset.resolve,file.read"))
 	body(t, governor("grant", "add", "--principal", consumer,
 		"--action", "knowledge.read,knowledge.search,knowledge.schema.read",
 		"--repo", repositoryID))

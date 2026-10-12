@@ -3,7 +3,7 @@ package home
 import "testing"
 
 func TestAdmissionConfigOnlyDeclaresExternalRequestURL(t *testing.T) {
-	base := DeploymentConfig{Catalogs: []CatalogBinding{{ID: "kr://platform/catalog"}}}
+	base := DeploymentConfig{Registry: RegistryBinding{ID: "kr://platform/catalog"}}
 	base.Admission = &AdmissionConfig{}
 	if err := validateAdmissionConfig(base); err == nil {
 		t.Fatal("empty admission block must fail closed")

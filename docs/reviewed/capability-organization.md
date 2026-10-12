@@ -9,19 +9,49 @@ interface）先行，内部实现按三档隐藏。承接 [核心架构](core-ar
 
 以能力边界作为仓库的组织单元：**一个顶层目录 = 一个能力 = 一个概念**。每个能力以
 对外最小信息（README + interface）先行，内部实现语言级隐藏。四个协议边界
-（Snapshot / Catalog / Knowledge / Retrieval）保持公开形状不动，只做「内部实现完全不暴露」的收尾；
+（Snapshot、Knowledge、Retrieval）在各自 owner 下收敛，只做「内部实现完全不暴露」的收尾；
 组织优化的主战场是应用层的约 20 个单元。
 
 ## Non-Goals
 
-- 不改四个协议边界的公开形状（`snapshot/store.go`、`catalog/README.md`、`knowledge/README.md`、
+- 底层存储与知识解释仍沿各自合同（`snapshot/store.go`、`snapshot/dataset/README.md`、`knowledge/README.md`、
   `retrieval/README.md` 是已选定合同）；公开消费面不新增对象列举、不新增 PATCH / 跨仓事务。
 - 不新增协议层或编号体系；应用能力负责装配与政策执行，不是第五个协议边界。
 - 不删除、削弱 conformance / arch 守卫断言；`internal/arch` 层表变更属协议决策，必须同变更改
   `core-architecture.md`。
 - 不做 big-bang 重命名；一次迁移一个能力，每步可逆、全绿。
-- 不移动非 Go 能力区域（`webui/`、`dsh-plugin/`、`output/`、`docs/graph/`、`.data/`）。
+- 不移动非 Go 能力区域（`webui/`、`output/`、`docs/graph/`、`.data/`）。
 - 不处理 Dataset 消费语义、VFS 能力扩展等产品行为演进（各自 owner 所有）。
+
+## Snapshot Store 目录修订
+
+2026-10-12 用户明确要求把 Dataset、对应权限核心、HTTP 和完整控制台收口为可独立使用的 Snapshot Store 模块。此次修订替代本设计此前对这部分目录的“顶层扁平”与“非 Go 区域不移动”限制；它不改变其它能力的组织约定或历史批次记录。
+
+`Snapshot Store` 是产品能力的目录所有者，模块内分别保留底层存储、文件组合、访问控制、服务接口和展示组件。实现集中在 `snapshot/dataset`、`snapshot/access`、`snapshot/service`、`snapshot/console`；旧 Catalog 路径删除；KC 的服务和调用缝仅做装配与外部业务适配。不得以类型转发掩盖双实现，不得将 Knowledge、索引或 Home 生命周期反向引入新核心。登记空间已按单服务收敛，仓登记、发布历史和授权权威保持；架构守卫应验证这条新的所有权边界。 外部 import 闭集为 snapshot 根包与 dataset/access/service/console 四个具名一级包；实现深层不作为另一路径开放。各模块契约、实现与测试同归其主，优先同包未导出类型，确需私有子包时采用本模块 internal；contract.go 是代码组织约定而非 Go 可见性机制。lakeFS 是唯一生产存储实现，Gitea/filegit 存储及具体类型转发退役，独立 Gitea 身份认证仍可装配。
+
+身份消费者闭集增加 `snapshot/service`：其共享已核验的运输身份合同与有界验证响应，不拥有另一份身份账。旧 Invocation 与 Server 路径只保留兼容转发。文件组合核心仍不得触达身份提供方或知识实现。
+
+结构耦合的逻辑单元沿用顶层目录，唯独将 `snapshot/service` 及其子包登记为具名嵌套单元：它是消费身份合同的应用适配，不能把这条依赖归到 Snapshot 核心。所有生产 import 仍计入度量；包级层表与依赖闭包守卫继续验证真实方向。组织调整须用同一单元政策重算调整前后，证明确实收紧后才显式登记新单元；不能通过抬高基线或省略边让门禁通过。
+
+## Object 模块目录修订
+
+2026-10-12 的对象重构目标进一步修订本设计的目录约定：基本身份、表示、结构合同及固定
+读写归 `object/`；通用对象能力归 `interfaces/`，发现与投影归 `discovery/`，当前态访问归
+`liveaccess/`。这四个模块同级，不把后面三项收入 Object，也不另设 `objectcore`、
+`objectio` 或笼统的 `objectapp`。Snapshot Store 的上述重构边界继续独立成立。
+
+模块可以提供具名的公开一级子能力；跨模块依赖只进入根包或这些一级入口。依赖方向仍须
+单独验证，目录深度合法不代表可以形成循环。根包不反向导入依赖它的实现子包；更深层实现
+由本模块隐藏。此前“全部顶层扁平”及“所有契约只在根包”的要求不再限制这些模块。
+
+同一请求的业务保证由所属能力的 `service/` 统一执行；CLI 与 HTTP 共用它，而不是要求
+全部业务集中在 `knowledgeapp`。可搜索 Dataset 的采用、动态发现桥接和系统出版物各有
+明确流程所有者。固定正文缓存可作为 `object/cache` 独立装配，基础 Reader 只持 hydrate
+窄口，不能因此持有缓存实现状态。宿主只选择、注入及管理组件生命周期，不承接逐请求规则。
+
+本节确定目标，不宣称目录已经迁移。下文旧包名、批次和耦合实测保留其原范围；旧目录树与
+`knowledgeapp` 唯一归属的描述不作为阻止此次目标迁移的约束。每批仍需更新真实依赖守卫、
+验证公开观察，并按同一度量政策证明边界收紧，不以目录改名或重新分组掩盖依赖。
 
 ## 1. 能力定义与资格
 
@@ -94,21 +124,14 @@ kc/
 │
 ├── kernel/                 能力:坐标与错误底座 —— 全部即契约,无 internal
 │
-├── snapshot/               能力⓪:不可变版本与文件树(变化识别是一等能力)
-│   ├── README.md                       # ① 拥有版本/条件推进/求差;不拥有知识解释
-│   ├── store.go                        # ② Repository 口(唯一协议面)
-│   ├── receipt.go                      # ② 协议回执类型(B9 新增,消除 treewriter.Receipt 外泄;不替换旧导出)
-│   ├── conformance_test.go             # ④ RepositoryContract:各介质同一行为合同
-│   ├── lakefs/  gitea/                 # ② 注册薄壳:仅 import ③实现体(A-01:只许装配根引)
-│   ├── treewriter/  commandlog/  stamp/ # ③ 公开子包(写入器/命令日志/图章;跨树消费)
-│   └── internal/
-│       └── lakefsimpl/  giteaimpl/     # ③ 具体介质实现体(仅薄壳可达,B10)
-│
-├── catalog/                能力①:登记与组合
-│   ├── README.md                       # ① 拥有登记/Dataset 发布;不拥有 object_id/Aspect
-│   ├── catalog.go  dataset.go          # ② 登记口与 ResolvedKnowledgeSet 冻结(KS-01/K-10)
-│   ├── conformance_test.go             # ④ 依赖集闭集(现有焦点测试归位)
-│   └── internal/worktreeimpl/          # ③ 宿主检出实现(B11;catalog/worktree 为薄壳)
+├── snapshot/               版本化存储与文件产品模块
+│   ├── store.go                        # 存储、文件树、版本与可选能力合同
+│   ├── write_contract.go command_contract.go # 字面写入、共享耐久幂等合同
+│   ├── dataset/                       # contract.go、文件组合、发布、历史与测试
+│   ├── access/                        # contract.go、明确权限、实现与测试
+│   ├── service/                       # contract.go、独立 HTTP 与原始字节交付
+│   ├── console/                       # contract.go、完整 lakeFS 控制台与资产
+│   └── internal/lakefsimpl/            # 私有 lakeFS；支持合同与图章按需私有化
 │
 ├── knowledge/              能力②:身份与读写解释
 │   ├── README.md                       # ① 拥有身份/Schema/来源/治理;不拥有组合与检索
@@ -227,7 +250,7 @@ kc/
 │   ├── arch/                           # 闸:层表 + denylist + 闭集(fail-closed)
 │   ├── gitdir/ journal/ jsonfile/ repofile/ treepath/   # infra,低于⓪①,非能力
 │   └── telemetry/  testkit/
-├── docs/  webui/  dsh-plugin/  output/   # 文档治理 / 宿主集成 / 资产,非能力
+├── docs/  dsh-plugin/  output/   # 文档治理 / 宿主集成 / 资产,非能力
 └── .data/                                # 草稿与场景数据,非能力
 ```
 
@@ -386,8 +409,8 @@ gate/
 | 能力 | 契约（对外最小信息 → 公开类型） | 隐藏（internal 化） | 允许依赖 | 关键不变量 | 验证入口 |
 |---|---|---|---|---|---|
 | `kernel` | 坐标 / 错误信封 / canonical digest（`kernel/README.md` 四文件） | 无（全部即契约） | 无 | E-01 | kernel 单测 |
-| `snapshot` ⓪ | Repository 口：不可变版本、条件推进、变化识别（`snapshot/store.go`） | `lakefs`/`gitea` 实现体、`treewriter`/`commandlog`/`stamp` | kernel, internal infra | W-01, W-02, K-02, K-23, A-01, CA-02 | RepositoryContract（Gitea/LakeFS）、A-01 守卫 |
-| `catalog` ① | 登记与 Dataset 发布配方（`catalog/README.md`） | `worktree` | kernel, snapshot | KS-01, K-03, K-10…13 | `TestCatalogStaysOffTheKnowledgeProtocol` 依赖集闭集 |
+| `snapshot` ⓪ | 不可变版本、条件推进、变化识别、字面写与共享幂等（根合同） | 私有 lakeFS、写入与账实现 | kernel, internal infra | W-01, W-02, K-02, K-23, A-01, CA-02 | lakeFS Store/Writer conformance 与公开入口守卫 |
+| `snapshot/dataset` ① | 登记与 Dataset 文件发布（`snapshot/dataset/contract.go`） | 同包私有实现 | kernel, snapshot | KS-01, K-03, K-10…13 | 独立文件模块与依赖方向守卫 |
 | `knowledge` ② | Writer CAS/幂等、Reader 同版本 hydrate 窄口、Schema 声明 | `unitcodec`/`semanticview`/`maintenance` | kernel, snapshot | I-01, V-01, W-01/02, C-01, S-01, D-01, CA-01 | knowledge conformance |
 | `retrieval` ③合同 | 查询计划、候选页、回读纪律、失败关闭、页界（SearchRequest/SearchView） | 无（纯合同） | kernel, snapshot, knowledge | R-01, R-02, K-25, C-01, IX-01 | retrieval conformance；禁 import index |
 | `index` ③投影 | 读面 Retriever（exact-basis + READY）+ 写面 ProjectionMaintainer（basis/coverage/lag、代际、增量、对账） | planner/编译器/消费者对账/两条 lane；opensearch 实现体 | kernel, snapshot, knowledge, retrieval | P-01, PC-01, IX-02…05, K-19 | 投影 conformance；PC-01 测试组 |
@@ -424,7 +447,7 @@ serving 不再 import observability；层表 observability: knowledge → app。
 
 ### 3.3 依赖方向规则（app 层内新增；层间规则不变）
 
-- 层表仍为 `base / infra / snapshot / catalog / knowledge / retrieval / app` 七层
+- 内部层表保留依赖检查用途；Catalog 不再是独立产品对象，文件组合由 Snapshot Dataset 能力承担
   （`internal/arch/layers_test.go::architectureLayer`）；本设计只在 app 层内加方向约束。
 - `server → { knowledgeapp, home, delivery, gate, hook, identity, observability, controlplane, invoke }`
 - `cli → { client, invoke, home }`（cli 前端不直接碰应用用例，一律经 typed client）

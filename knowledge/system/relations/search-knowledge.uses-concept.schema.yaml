@@ -1,0 +1,18 @@
+---
+object_id: kc/relation/search-knowledge.uses-concept.schema
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: relations/search-knowledge.uses-concept.schema.yaml
+---
+relationId: kc/relation/search-knowledge.uses-concept.schema
+relationType: uses_concept
+direction: DIRECTED
+endpoints:
+  - role: from
+    objectRef:
+      repository: kr://kc/system
+      object: kc/capability/search-knowledge
+  - role: to
+    objectRef:
+      repository: kr://kc/system
+      object: kc/concept/schema

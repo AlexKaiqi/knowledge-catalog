@@ -13,18 +13,15 @@ import (
 // ManagedRepositoryConfig delegates allocation in one deployment-owned pool.
 // It is not a Repository binding; individual allocations live in durable state.
 type ManagedRepositoryConfig struct {
-	Driver          string   `json:"driver" yaml:"driver"`
-	Root            string   `json:"root,omitempty" yaml:"root,omitempty"`
-	DSN             string   `json:"dsn,omitempty" yaml:"dsn,omitempty"`
-	PublicURL       string   `json:"publicURL,omitempty" yaml:"publicURL,omitempty"`
-	UserEmailDomain string   `json:"userEmailDomain,omitempty" yaml:"userEmailDomain,omitempty"`
-	AuthSourceID    int64    `json:"authSourceId,omitempty" yaml:"authSourceId,omitempty"`
-	CreatorActions  []string `json:"creatorActions" yaml:"creatorActions"`
-	ShareActions    []string `json:"shareActions,omitempty" yaml:"shareActions,omitempty"`
+	Driver         string   `json:"driver" yaml:"driver"`
+	Root           string   `json:"root,omitempty" yaml:"root,omitempty"`
+	DSN            string   `json:"dsn,omitempty" yaml:"dsn,omitempty"`
+	PublicURL      string   `json:"publicURL,omitempty" yaml:"publicURL,omitempty"`
+	CreatorActions []string `json:"creatorActions" yaml:"creatorActions"`
+	ShareActions   []string `json:"shareActions,omitempty" yaml:"shareActions,omitempty"`
 }
 
 type ManagedRepositoryRequest struct {
-	CatalogID        string
 	RepositoryID     string
 	CommandID        string
 	Principal        string
@@ -46,7 +43,6 @@ type RepositoryInitialGrant struct {
 type ManagedRepositoryGrant = RepositoryInitialGrant
 
 type ManagedRepositoryResult struct {
-	Catalog           string          `json:"catalog"`
 	RepositoryID      string          `json:"repositoryId"`
 	CommandID         string          `json:"commandId"`
 	Status            string          `json:"status"`
@@ -71,20 +67,14 @@ func (ws *Home) CreateManagedRepository(req ManagedRepositoryRequest, grant func
 	if ws == nil || ws.Deployment == nil || ws.readOnly {
 		return result, kernel.Fail(kernel.ErrPreconditionFailed, "managed provisioning requires a writable deployment")
 	}
-	if req.CatalogID == "" {
-		return result, kernel.Fail(kernel.ErrUsageInvalid, "managed create requires an explicit Catalog")
-	}
-	cat, ok := ws.Catalogs[req.CatalogID]
-	if !ok {
-		return result, kernel.Fail(kernel.ErrUsageInvalid, "unknown Catalog %s", req.CatalogID)
-	}
 	id, err := NormalizeRepositoryID(req.RepositoryID)
 	if err != nil || id != req.RepositoryID || strings.TrimSpace(req.CommandID) == "" || strings.TrimSpace(req.Principal) == "" || req.RepositoryID == string(knowledge.SystemRepositoryID) {
 		return result, kernel.Fail(kernel.ErrUsageInvalid, "managed create requires a valid repository, commandId, and principal")
 	}
-	for _, binding := range ws.Deployment.Catalogs {
+	{
+		binding := ws.Deployment.Registry
 		if binding.ID == req.RepositoryID {
-			return result, kernel.Fail(kernel.ErrTargetRepositoryDenied, "Catalog identity cannot be provisioned as a Snapshot")
+			return result, kernel.Fail(kernel.ErrTargetRepositoryDenied, "registry authority cannot be provisioned as a member Snapshot")
 		}
 	}
 	value, _ := managedOperationLocks.LoadOrStore(filepath.Clean(ws.Dir), &sync.Mutex{})
@@ -94,7 +84,7 @@ func (ws *Home) CreateManagedRepository(req ManagedRepositoryRequest, grant func
 	if err := ValidateDeploymentState(*ws.Deployment); err != nil {
 		return result, err
 	}
-	if err := ws.Registries[req.CatalogID].CheckAuthority(); err != nil {
+	if err := ws.Registry.CheckAuthority(); err != nil {
 		return result, err
 	}
 	req, err = ws.managedRequestForOwner(req)
@@ -105,13 +95,11 @@ func (ws *Home) CreateManagedRepository(req ManagedRepositoryRequest, grant func
 		if grant == nil {
 			return kernel.Fail(kernel.ErrUsageInvalid, "managed create requires the configured creator-policy callback")
 		}
-		if cat.Archived() {
-			return kernel.Fail(kernel.ErrCatalogArchived, "Catalog %s is archived", req.CatalogID)
-		}
 		if _, exists := ws.Store.Get(kernel.RepositoryID(req.RepositoryID)); exists {
 			return kernel.Fail(kernel.ErrPreconditionFailed, "repository identity already has a source binding")
 		}
-		for _, existing := range ws.Catalogs {
+		{
+			existing := ws.Datasets
 			if existing.HasRepository(kernel.RepositoryID(req.RepositoryID)) {
 				return kernel.Fail(kernel.ErrPreconditionFailed, "repository identity is already admitted")
 			}
@@ -132,23 +120,11 @@ func (ws *Home) CreateManagedRepository(req ManagedRepositoryRequest, grant func
 	}
 	var source snapshot.Store
 	if record.Phase == managedReserved {
-		if cat.Archived() {
-			return result, kernel.Fail(kernel.ErrCatalogArchived, "Catalog %s is archived", req.CatalogID)
-		}
-		if record.AccountAllocationID != "" && driver.managedEnsureOwner != nil {
-			record.AccountBackendID, err = driver.managedEnsureOwner(record)
-			if err != nil {
-				return result, err
-			}
-			if err = saveManaged(ws.Dir, record); err != nil {
-				return result, err
-			}
-		}
 		pool, _, err := selectManagedPool(*ws.Deployment, record.Store)
 		if err != nil {
 			return result, err
 		}
-		source, record.BackendID, err = driver.managedCreate(pool, record.Binding, record.AllocationID, record.AccountAllocationID != "")
+		source, record.BackendID, err = driver.managedCreate(pool, record.Binding, record.AllocationID)
 		if err != nil {
 			return result, err
 		}
@@ -185,11 +161,8 @@ func (ws *Home) CreateManagedRepository(req ManagedRepositoryRequest, grant func
 	if grant == nil {
 		return result, kernel.Fail(kernel.ErrUsageInvalid, "managed retry requires the creator-policy callback")
 	}
-	if err := ws.Registries[req.CatalogID].CheckAuthority(); err != nil {
+	if err := ws.Registry.CheckAuthority(); err != nil {
 		return result, err
-	}
-	if cat.Archived() {
-		return result, kernel.Fail(kernel.ErrPreconditionFailed, "managed source is no longer in an active Catalog")
 	}
 	if err := grant(ManagedRepositoryGrant{AllocationID: record.AllocationID, Principal: req.Principal, RepositoryID: req.RepositoryID, Actions: append([]string(nil), record.Actions...)}); err != nil {
 		return result, err
@@ -226,6 +199,9 @@ func validateManagedBindings(c DeploymentConfig, records []managedRecord) error 
 	bindings.ManagedStores = nil
 	bindings.Repositories = append([]RepositoryBinding(nil), c.Repositories...)
 	for _, record := range records {
+		if record.legacyAuthority != "" && record.legacyAuthority != c.Registry.ID {
+			return kernel.Fail(kernel.ErrPreconditionFailed, "managed allocation belongs to a different registry authority")
+		}
 		bindings.Repositories = append(bindings.Repositories, record.Binding)
 	}
 	// Validate historical bindings even after new provisioning is disabled.
@@ -263,7 +239,7 @@ func (ws *Home) verifyManagedBinding(id kernel.RepositoryID) error {
 }
 
 func validateCreatorActions(actions []string) error {
-	allowed := []string{"writer.preview", "writer.commit", "writer.receipt.read", "repository.metadata.read", "repository.shares.manage", "catalog.repositories.manage", "governance.proposal.create", "governance.merge", "governance.preview.create", "governance.validate", "governance.validation.record", "projection.read", "dataset.resolve", "file.read", "knowledge.read", "knowledge.provenance", "knowledge.history.read", "knowledge.schema.read", "knowledge.search", "knowledge.relations"}
+	allowed := []string{"writer.preview", "writer.commit", "writer.receipt.read", "repository.metadata.read", "repository.shares.manage", "repositories.manage", "governance.proposal.create", "governance.merge", "governance.preview.create", "governance.validate", "governance.validation.record", "projection.read", "dataset.resolve", "file.read", "knowledge.read", "knowledge.provenance", "knowledge.history.read", "knowledge.schema.read", "knowledge.search", "knowledge.relations"}
 	if len(actions) == 0 {
 		return kernel.Fail(kernel.ErrUsageInvalid, "managed repositories require an explicit nonempty creatorActions policy")
 	}

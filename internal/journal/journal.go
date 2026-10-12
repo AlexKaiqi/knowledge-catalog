@@ -13,7 +13,7 @@ import (
 
 // Two durable trails, both pointers-only (not knowledge bodies):
 //
-//	layer=system  Writer / Catalog / ControlPlane / Reader
+//	layer=system  Writer / Dataset service / ControlPlane / Reader
 //	layer=kc      CLI facade (init, allow, argv, --as)
 const (
 	LayerSystem = "system"

@@ -14,29 +14,29 @@ import (
 func TestAuthoritySelectionChangesOnlyRepositoryProfileField(t *testing.T) {
 	base := DefaultStores()
 	base.Index = "none"
-	var normalized []StoresFile
-	for _, provider := range []string{"gitea", "lakefs"} {
-		candidate := base
-		candidate.Repository = provider
-		candidate = candidate.withDefaults()
-		if err := candidate.ValidateProfile(); err != nil {
-			t.Fatalf("%s profile: %v", provider, err)
-		}
-		driver, err := authorityFor(candidate.Repository)
-		if err != nil || driver.open == nil || driver.discover == nil {
-			t.Fatalf("%s does not expose the common authority lifecycle: %#v %v", provider, driver, err)
-		}
-		normalized = append(normalized, candidate)
+	candidate := base
+	candidate.Repository = "lakefs"
+	candidate = candidate.withDefaults()
+	if err := candidate.ValidateProfile(); err != nil {
+		t.Fatal(err)
 	}
-	left, right := normalized[0], normalized[1]
-	left.Repository, right.Repository = "", ""
-	if !reflect.DeepEqual(left, right) {
-		t.Fatalf("authority switch changed fields other than repository:\nleft=%#v\nright=%#v", left, right)
+	driver, err := authorityFor(candidate.Repository)
+	if err != nil || driver.open == nil || driver.discover == nil {
+		t.Fatalf("lakefs does not expose the common authority lifecycle: %#v %v", driver, err)
+	}
+	base.Repository, candidate.Repository = "", ""
+	if !reflect.DeepEqual(base, candidate) {
+		t.Fatalf("authority selection changed fields other than repository: %#v %#v", base, candidate)
+	}
+	for _, retired := range []string{"gitea", "filegit"} {
+		if _, err := authorityFor(retired); err == nil {
+			t.Fatalf("retired Snapshot driver %s accepted", retired)
+		}
 	}
 }
 
 func TestAuthorityDriverNamesComeOnlyFromCompositionRegistry(t *testing.T) {
-	want := []string{"gitea", "lakefs"}
+	want := []string{"lakefs"}
 	if got := authorityDriverNames(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("formal authority registry drift: got %v want %v", got, want)
 	}

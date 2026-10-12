@@ -10,7 +10,7 @@ type StoreBinding struct {
 	ID, Driver, DSN string
 }
 
-func ObservePublicStores(stores StoresFile, file HomeFile, catalogs, repos []StoreBinding) map[string]any {
+func ObservePublicStores(stores StoresFile, file HomeFile, registry *StoreBinding, repos []StoreBinding) map[string]any {
 	seen := map[string]bool{}
 	authorities := make([]map[string]any, 0)
 	add := func(role, id, driver, dsn string) {
@@ -33,11 +33,12 @@ func ObservePublicStores(stores StoresFile, file HomeFile, catalogs, repos []Sto
 		}
 		authorities = append(authorities, item)
 	}
-	for _, item := range catalogs {
-		add("catalog", item.ID, item.Driver, item.DSN)
+	if registry != nil {
+		add("registry", registry.ID, registry.Driver, registry.DSN)
 	}
-	for _, item := range file.Catalogs {
-		add("catalog", item.ID, stores.Repository, "")
+	{
+		item := file.Registry
+		add("registry", item.ID, stores.Repository, "")
 	}
 	for _, item := range repos {
 		add("repository", item.ID, item.Driver, item.DSN)
@@ -54,11 +55,11 @@ func ObservePublicStores(stores StoresFile, file HomeFile, catalogs, repos []Sto
 	}
 	driver := strings.TrimSpace(stores.Repository)
 	for _, item := range authorities {
-		if item["role"] != "catalog" {
+		if item["role"] != "registry" {
 			continue
 		}
-		if catalogDriver, _ := item["driver"].(string); strings.TrimSpace(catalogDriver) != "" {
-			driver = catalogDriver
+		if registryDriver, _ := item["driver"].(string); strings.TrimSpace(registryDriver) != "" {
+			driver = registryDriver
 		}
 		break
 	}

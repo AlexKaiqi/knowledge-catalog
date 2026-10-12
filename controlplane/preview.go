@@ -3,8 +3,8 @@ package controlplane
 import (
 	"maps"
 
-	"kc/catalog"
 	"kc/kernel"
+	"kc/snapshot/dataset"
 )
 
 type Preview struct {
@@ -21,14 +21,14 @@ type PreviewCandidate struct {
 }
 
 func (cp *ControlPlane) CreatePreview(setID string, proposal Proposal) (Preview, error) {
-	resolved, err := cp.catalog.ResolveKnowledgeSet(setID)
+	resolved, err := cp.datasets.ResolveKnowledgeSet(setID)
 	if err != nil {
 		return Preview{}, err
 	}
 	if resolved.Repositories[proposal.TargetRepository] != proposal.BaseCommit {
 		return Preview{}, kernel.Fail(kernel.ErrValidationBasisMismatch, "proposal base is not the current dataset member; re-pin after write")
 	}
-	overlaid, err := cp.catalog.ResolveKnowledgeSetOverlay(setID, map[kernel.RepositoryID]kernel.CommitID{
+	overlaid, err := cp.datasets.ResolveKnowledgeSetOverlay(setID, map[kernel.RepositoryID]kernel.CommitID{
 		proposal.TargetRepository: proposal.CandidateCommit,
 	})
 	if err != nil {
@@ -49,7 +49,7 @@ func (cp *ControlPlane) CreatePreview(setID string, proposal Proposal) (Preview,
 
 // CreatePreviewAt overlays a proposal on one caller-supplied, already fixed
 // task basis. Governance must not resolve a named Workspace again.
-func (cp *ControlPlane) CreatePreviewAt(resolved catalog.ResolvedKnowledgeSet, proposal Proposal) (Preview, error) {
+func (cp *ControlPlane) CreatePreviewAt(resolved dataset.ResolvedKnowledgeSet, proposal Proposal) (Preview, error) {
 	if resolved.Repositories[proposal.TargetRepository] != proposal.BaseCommit {
 		return Preview{}, kernel.Fail(kernel.ErrValidationBasisMismatch, "proposal base is not the pinned dataset member; re-pin after write")
 	}

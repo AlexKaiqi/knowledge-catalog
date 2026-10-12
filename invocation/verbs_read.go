@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"encoding/json"
-	"kc/catalog"
 	"kc/invoke"
 	"kc/kernel"
 	knowledge "kc/knowledge"
@@ -15,11 +14,12 @@ import (
 	knowledgeserving "kc/knowledge/serving"
 	knowledgeapp "kc/knowledgeapp"
 	"kc/retrieval"
+	"kc/snapshot/dataset"
 	"strconv"
 )
 
 type (
-	workspaceRead  = func(serving *reader.Serving, cat *catalog.Catalog) (any, error)
+	workspaceRead  = func(serving *reader.Serving, cat dataset.Service) (any, error)
 	repositoryRead = func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error)
 )
 
@@ -34,7 +34,7 @@ func VerbResolveBinding(cx *Invocation) (any, error) {
 		return nil, fmt.Errorf("resolve-binding requires --aspect")
 	}
 	return OnTarget(cx,
-		func(serving *reader.Serving, _ *catalog.Catalog) (any, error) {
+		func(serving *reader.Serving, _ dataset.Service) (any, error) {
 			return serving.ResolveBinding(address)
 		},
 		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
@@ -66,14 +66,14 @@ func OnTarget(cx *Invocation, onWorkspace workspaceRead, onRepository repository
 }
 
 // VerbResolve reports the Workspace pin itself. Object RESOLVE belongs to
-// `kc resolve`; Catalog must not interpret object_id.
+// `kc resolve`; Registry must not interpret object_id.
 func VerbResolve(cx *Invocation) (any, error) {
 	if cx.Flag("object") != "" || cx.Flag("aspect") != "" || cx.Flag("member") != "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid,
 			"pin returns only a fixed dataset pin; use kc resolve for an object")
 	}
 	if ServingWorkspace(cx.Flags) {
-		cat, err := PickCatalog(cx.WS, cx.Flags)
+		cat, err := PickDatasets(cx.WS, cx.Flags)
 		if err != nil {
 			return nil, err
 		}
@@ -97,7 +97,7 @@ func VerbResolveObject(cx *Invocation) (any, error) {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "resolve requires --object")
 	}
 	return OnTarget(cx,
-		func(serving *reader.Serving, _ *catalog.Catalog) (any, error) {
+		func(serving *reader.Serving, _ dataset.Service) (any, error) {
 			if UsesAddress(cx.Flags) {
 				address, err := AddressFrom(cx.Flags)
 				if err != nil {
@@ -135,7 +135,7 @@ func ResolveTemporaryWorkspace(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	cat, err := PickCatalog(cx.WS, cx.Flags)
+	cat, err := PickDatasets(cx.WS, cx.Flags)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +146,7 @@ func ResolveTemporaryWorkspace(cx *Invocation) (any, error) {
 			return nil, fmt.Errorf("--revision must be a number")
 		}
 	}
-	resolved, err := cat.ResolveDefinition(catalog.KnowledgeSet{Revision: revision, Sources: sources})
+	resolved, err := cat.ResolveDefinition(dataset.KnowledgeSet{Revision: revision, Sources: sources})
 	if err != nil {
 		return nil, err
 	}
@@ -240,7 +240,7 @@ func VerbProvenance(cx *Invocation) (any, error) {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "provenance is object-level; do not pass --aspect or --member")
 	}
 	return OnTarget(cx,
-		func(serving *reader.Serving, _ *catalog.Catalog) (any, error) {
+		func(serving *reader.Serving, _ dataset.Service) (any, error) {
 			objectID, err := cx.Require("object")
 			if err != nil {
 				return nil, err
@@ -405,7 +405,7 @@ func WorkspaceRelationEndpoint(raw string, pin reader.KnowledgeSetPin) (knowledg
 func VerbDescribeSchema(cx *Invocation) (any, error) {
 	objectID := knowledge.ObjectID(cx.Flag("object"))
 	return OnTarget(cx,
-		func(serving *reader.Serving, _ *catalog.Catalog) (any, error) {
+		func(serving *reader.Serving, _ dataset.Service) (any, error) {
 			reports, err := serving.DescribeSchema(objectID)
 			if err != nil {
 				return nil, err
@@ -424,12 +424,9 @@ func VerbDescribeSchema(cx *Invocation) (any, error) {
 }
 
 // VerbLog lists the commits that introduced each digest of one object. Registry
-// history is `kc catalog audit`; current combination space is `kc catalog show`.
+// history is `kc registry audit`; current combination space is `kc show`.
 func VerbLog(cx *Invocation) (any, error) {
 	if cx.Flag("object") == "" && cx.Flag("repo") == "" {
-		if _, ok := cx.Flags["catalog"]; ok {
-			return nil, fmt.Errorf("catalog registry history is kc audit")
-		}
 	}
 	if cx.Flag("aspect") != "" || cx.Flag("member") != "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "log is object history; do not pass --aspect or --member")
@@ -439,7 +436,7 @@ func VerbLog(cx *Invocation) (any, error) {
 		return nil, err
 	}
 	return OnTarget(cx,
-		func(serving *reader.Serving, _ *catalog.Catalog) (any, error) {
+		func(serving *reader.Serving, _ dataset.Service) (any, error) {
 			objectID, err := cx.Require("object")
 			if err != nil {
 				return nil, err
@@ -523,7 +520,7 @@ func SetTelemetryChangeCounts(observation *invoke.ObservationTelemetry, operatio
 // operations must not silently turn an authorization gap into an empty or
 // apparently complete result. SEARCH keeps every pin member in the candidate
 // set and applies the delivery chain after hydrate.
-func OpenCompleteServing(cx *Invocation, object string) (*reader.Serving, *catalog.Catalog, error) {
+func OpenCompleteServing(cx *Invocation, object string) (*reader.Serving, dataset.Service, error) {
 	serving, cat, err := OpenServingAt(cx, cx.WS, cx.Flags)
 	if err != nil {
 		return nil, nil, err
@@ -543,7 +540,7 @@ func AspectSelectorFrom(flags map[string]invoke.FlagValue) *knowledge.AspectSele
 	return &knowledge.AspectSelector{Include: include, Exclude: exclude}
 }
 
-func FilterKnowledgeServingReads(home string, flags map[string]invoke.FlagValue, _ *catalog.Catalog, values []knowledgeserving.ReadResult) []knowledgeserving.ReadResult {
+func FilterKnowledgeServingReads(home string, flags map[string]invoke.FlagValue, _ dataset.Service, values []knowledgeserving.ReadResult) []knowledgeserving.ReadResult {
 	out := []knowledgeserving.ReadResult{}
 	for _, item := range values {
 		if AllowedRepoRead(home, flags, string(item.Repository), string(item.ObjectID)) {

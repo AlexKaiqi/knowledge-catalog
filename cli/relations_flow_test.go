@@ -56,7 +56,7 @@ func relationHitID(t *testing.T, value any) string {
 func TestRelationsWithoutIndexNeverFallsBackToAuthorityScan(t *testing.T) {
 	home := testkit.TempDir(t)
 	repository := "kr://acme/public/core"
-	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(home, "init"))
 	// Candidate discovery must be impossible without an index; pin index:none
 	// because the suite may export KC_TEST_OPENSEARCH_URL to every home.
 	body(t, kc(home, "store-set", "--index", "none"))
@@ -85,7 +85,7 @@ func TestRelationRepositoryWorkspaceAndHTTPUseOneExactBasisExecutor(t *testing.T
 	}
 	home := testkit.TempDir(t)
 	repository := "kr://acme/public/core"
-	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(home, "init"))
 	body(t, kc(home, "store-set", "--index", "opensearch"))
 	body(t, kc(home, "store-set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repository)
@@ -113,7 +113,7 @@ func TestRelationRepositoryWorkspaceAndHTTPUseOneExactBasisExecutor(t *testing.T
 		t.Fatalf("repository/workspace relation executor drift: %q != %q", repositoryID, setID)
 	}
 
-	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--catalog", "kr://acme/catalog", "--dataset", "agent"))
+	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--dataset", "agent"))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "knowledge.relations", "--repo", repository))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "knowledge.read", "--repo", repository))
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})

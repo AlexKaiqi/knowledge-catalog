@@ -9,11 +9,11 @@ import (
 
 func TestExplicitManagedHumanUsesUsername(t *testing.T) {
 	cfg, ws, _ := managedFixture(t)
-	result, err := ws.CreateManagedRepository(ManagedRepositoryRequest{CatalogID: cfg.Catalogs[0].ID, RepositoryID: "kr://managed/explicit", CommandID: "explicit-human", Principal: "kaiqidong"}, func(ManagedRepositoryGrant) error { return nil })
+	result, err := ws.CreateManagedRepository(ManagedRepositoryRequest{RepositoryID: "kr://managed/explicit", CommandID: "explicit-human", Principal: "kaiqidong"}, func(ManagedRepositoryGrant) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(result.ManagementURL, "/kaiqidong/") {
+	if result.Owner != "kaiqidong" || !strings.HasPrefix(result.ManagementURL, cfg.ManagedRepositories.PublicURL+"/repositories/") {
 		t.Fatalf("MANAGED-USER-NAME: explicit user create still uses platform account: %s", result.ManagementURL)
 	}
 }
@@ -40,9 +40,8 @@ func TestNamedLakeFSRepositoryIDMatchesGravelerName(t *testing.T) {
 	if err != nil || id != "table-meta" {
 		t.Fatalf("LakeFS protocol id must be the Graveler name: %q %v", id, err)
 	}
-	id, err = namedManagedRepositoryID(ManagedRepositoryRequest{Name: "团队规范", Principal: "alice"}, ManagedRepositoryConfig{Driver: "gitea"}, "deadbeef")
-	if err != nil || id != "kr://alice/repo-deadbeef" {
-		t.Fatalf("Gitea keeps a logical coordinate: %q %v", id, err)
+	if _, err := namedManagedRepositoryID(ManagedRepositoryRequest{Name: "notes", Principal: "alice"}, ManagedRepositoryConfig{Driver: "gitea"}, "deadbeef"); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
+		t.Fatalf("retired Snapshot driver accepted: %v", err)
 	}
 	_, err = namedManagedRepositoryID(ManagedRepositoryRequest{Name: "物理层", Principal: "admin"}, ManagedRepositoryConfig{Driver: "lakefs"}, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 	if err == nil || kernel.CodeOf(err) != kernel.ErrUsageInvalid {
@@ -92,11 +91,11 @@ func TestNamedManagedRepositoryDistinctStoresAndUsersStaySeparate(t *testing.T) 
 	ids := map[string]bool{}
 	for _, principal := range []string{"alice", "bob"} {
 		for _, store := range []string{"one", "two"} {
-			result, err := ws.CreateNamedManagedRepository(ManagedRepositoryRequest{CatalogID: cfg.Catalogs[0].ID, Name: "团队规范", Principal: principal, Store: store}, func(ManagedRepositoryGrant) error { return nil })
+			result, err := ws.CreateNamedManagedRepository(ManagedRepositoryRequest{Name: principal + "-" + store + "-notes", Principal: principal, Store: store}, func(ManagedRepositoryGrant) error { return nil })
 			if err != nil {
 				t.Fatal(err)
 			}
-			if ids[result.RepositoryID] || result.Owner != principal || result.Store != store || !strings.Contains(result.ManagementURL, "/"+principal+"/") {
+			if ids[result.RepositoryID] || result.Owner != principal || result.Store != store || !strings.HasPrefix(result.ManagementURL, cfg.ManagedRepositories.PublicURL+"/repositories/") {
 				t.Fatalf("store or owner collision: %#v", result)
 			}
 			ids[result.RepositoryID] = true
@@ -113,18 +112,18 @@ func TestNamedManagedRepositoryDistinctStoresAndUsersStaySeparate(t *testing.T) 
 
 func TestNamedManagedRepositoryHasDurableOwnerAndManagementURL(t *testing.T) {
 	cfg, ws, creates := managedFixture(t)
-	req := ManagedRepositoryRequest{CatalogID: cfg.Catalogs[0].ID, Name: "团队规范", Principal: "alice"}
+	req := ManagedRepositoryRequest{Name: "alice-notes", Principal: "alice"}
 	grants := 0
 	grant := func(ManagedRepositoryGrant) error { grants++; return nil }
 	result, err := ws.CreateNamedManagedRepository(req, grant)
 	if err != nil {
 		t.Fatalf("MANAGED-USER-NAME: %v", err)
 	}
-	if result.Owner != "alice" || result.Name != req.Name || result.Store != "gitea" || result.ManagementURL == "" || result.ProvisioningState != "READY" {
+	if result.Owner != "alice" || result.Name != req.Name || result.Store != "lakefs" || result.ManagementURL == "" || result.ProvisioningState != "READY" {
 		t.Fatalf("MANAGED-DURABLE-MANAGEMENT-URL: %#v", result)
 	}
-	if !strings.Contains(result.RepositoryID, "kr://alice/") {
-		t.Fatalf("logical owner missing: %s", result.RepositoryID)
+	if result.RepositoryID != req.Name {
+		t.Fatalf("Graveler identity missing: %s", result.RepositoryID)
 	}
 	if _, err := ws.CreateNamedManagedRepository(req, grant); err != nil {
 		t.Fatal(err)
@@ -154,7 +153,7 @@ func TestNamedManagedRepositoryRequiresUnambiguousStore(t *testing.T) {
 	cfg, ws, _ := managedFixture(t)
 	ws.Deployment.ManagedStores = map[string]ManagedRepositoryConfig{"one": *cfg.ManagedRepositories, "two": *cfg.ManagedRepositories}
 	ws.Deployment.ManagedRepositories = nil
-	_, err := ws.CreateNamedManagedRepository(ManagedRepositoryRequest{CatalogID: cfg.Catalogs[0].ID, Name: "notes", Principal: "alice"}, func(ManagedRepositoryGrant) error { t.Fatal("ambiguous pool granted access"); return nil })
+	_, err := ws.CreateNamedManagedRepository(ManagedRepositoryRequest{Name: "notes", Principal: "alice"}, func(ManagedRepositoryGrant) error { t.Fatal("ambiguous pool granted access"); return nil })
 	if err == nil || !strings.Contains(err.Error(), "store") {
 		t.Fatalf("MANAGED-STORE-SELECTION: %v", err)
 	}

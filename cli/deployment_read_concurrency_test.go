@@ -6,7 +6,6 @@ import (
 	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -23,7 +22,7 @@ func TestDeploymentConcurrentTypedReadsKeepRequestStateIsolated(t *testing.T) {
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}
-	catalogPath := "/catalog/v1/catalogs/" + url.PathEscape(cfg.Catalogs[0].ID)
+	catalogPath := "/snapshot/v1"
 	call := func(method, path, body, principal, requestID string) error {
 		request := httptest.NewRequest(method, path, strings.NewReader(body))
 		request.Header.Set("Content-Type", "application/json")
@@ -40,11 +39,11 @@ func TestDeploymentConcurrentTypedReadsKeepRequestStateIsolated(t *testing.T) {
 		t.Fatal(err)
 	}
 	requests := []struct{ method, path, body string }{
-		{http.MethodGet, catalogPath, ""},
+		{http.MethodGet, catalogPath + "/inventory", ""},
 		{http.MethodPost, catalogPath + "/datasets/system/resolve", `{}`},
 		{http.MethodPost, catalogPath + "/datasets/system/check", `{}`},
 		{http.MethodPost, "/knowledge/v1/objects:read", `{"repository":"kr://kc/system","object":"schema/meta/schema-definition/v1"}`},
-		{http.MethodPost, "/dataset-files/v1/mounts:list", `{"dataset":"system","view":"semantic"}`},
+		{http.MethodPost, "/snapshot/v1/files/mounts:list", `{"dataset":"system","view":"semantic"}`},
 	}
 	start := make(chan struct{})
 	errors := make(chan error, len(requests)*6)

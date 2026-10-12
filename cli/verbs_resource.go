@@ -1,9 +1,9 @@
 package cli
 
 import (
-	"kc/catalog"
 	apphome "kc/home"
 	inv "kc/invocation"
+	"kc/snapshot/dataset"
 )
 
 func resourceVerbs() map[string]command {
@@ -13,12 +13,12 @@ func resourceVerbs() map[string]command {
 	}
 }
 
-// effectiveWorkspace is the recipe this command actually uses: Catalog (or a
+// effectiveWorkspace is the recipe this command actually uses: registration state (or a
 // hitchhiking yaml) plus the local overlay for this --as, if any.
-func effectiveWorkspace(ws *apphome.Home, home string, cat *catalog.Catalog, setID string, flags map[string]FlagValue) (catalog.KnowledgeSet, error) {
+func effectiveWorkspace(ws *apphome.Home, home string, cat dataset.Service, setID string, flags map[string]FlagValue) (dataset.KnowledgeSet, error) {
 	def, err := inv.EnsureWorkspace(ws, home, cat, setID)
 	if err != nil {
-		return catalog.KnowledgeSet{}, err
+		return dataset.KnowledgeSet{}, err
 	}
 	if ws.Deployment != nil {
 		return def, nil

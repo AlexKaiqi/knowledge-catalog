@@ -75,9 +75,10 @@ func newHTTPHandlerWithRuntime(home string, options HTTPServerOptions, opened *H
 		facade.ready.BindProbe(func(surface string) readiness.Result {
 			facade.invoke.RLock()
 			defer facade.invoke.RUnlock()
-			for _, registry := range opened.Registries {
+			{
+				registry := opened.Registry
 				if err := registry.CheckAuthority(); err != nil {
-					return readiness.Result{Status: "not_ready", Surface: surface, ReasonCode: "CATALOG_STATE_UNAVAILABLE"}
+					return readiness.Result{Status: "not_ready", Surface: surface, ReasonCode: "REGISTRY_STATE_UNAVAILABLE"}
 				}
 			}
 			for _, id := range opened.Store.IDs() {
@@ -182,21 +183,6 @@ func (f *httpFacade) closeReadHome() error {
 	err := f.readHome.Close()
 	f.readHome = nil
 	return err
-}
-
-func (f *httpFacade) validateIdentityHeaders(w http.ResponseWriter, r *http.Request, id inv.HTTPIdentity) bool {
-	if !f.options.Authenticated() {
-		return true
-	}
-	if strings.TrimSpace(r.Header.Get("X-Kc-As")) != "" {
-		writeHTTPForbidden(w, "X-Kc-As is disabled when authentication is enabled")
-		return false
-	}
-	if strings.TrimSpace(r.Header.Get("X-Kc-On-Behalf-Of")) != "" {
-		writeHTTPForbidden(w, "onBehalfOf must come from the trusted authenticator")
-		return false
-	}
-	return true
 }
 
 func (f *httpFacade) addIdentityFlags(flags map[string]FlagValue, r *http.Request, id inv.HTTPIdentity) {

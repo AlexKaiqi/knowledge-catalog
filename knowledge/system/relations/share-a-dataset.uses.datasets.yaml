@@ -1,0 +1,18 @@
+---
+object_id: kc/relation/share-a-dataset.uses.datasets
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: relations/share-a-dataset.uses.datasets.yaml
+---
+relationId: kc/relation/share-a-dataset.uses.datasets
+relationType: uses
+direction: DIRECTED
+endpoints:
+  - role: from
+    objectRef:
+      repository: kr://kc/system
+      object: kc/guide/share-a-dataset
+  - role: to
+    objectRef:
+      repository: kr://kc/system
+      object: kc/capability/datasets

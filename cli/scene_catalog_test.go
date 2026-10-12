@@ -70,7 +70,7 @@ func TestSceneBundlesDeclareExistingEntryState(t *testing.T) {
 		if _, ok := states[bundle.EntryState]; !ok {
 			t.Errorf("bundle %s must name an existing entry_state, got %q", bundle.ID, bundle.EntryState)
 		}
-		if bundle.EntryState != "" && bundle.EntryState != "catalog-initialized" {
+		if bundle.EntryState != "" && bundle.EntryState != "service-initialized" {
 			localEntries++
 		}
 	}
@@ -128,9 +128,9 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 		dir := dirs[state.ID]
 		parent := filepath.Base(filepath.Dir(dir))
 		switch {
-		case state.ID == "catalog-initialized":
+		case state.ID == "service-initialized":
 			if parent != "scenes" || len(state.DependsOn) != 0 {
-				t.Fatalf("catalog-initialized must be the nested tree root, parent=%s depends_on=%v", parent, state.DependsOn)
+				t.Fatalf("service-initialized must be the nested tree root, parent=%s depends_on=%v", parent, state.DependsOn)
 			}
 		case len(state.DependsOn) != 1 || state.DependsOn[0] != parent:
 			t.Fatalf("%s directory parent %s != depends_on %v", state.ID, parent, state.DependsOn)
@@ -205,8 +205,8 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 			}
 		}
 	}
-	if len(roots) != 1 || roots[0] != "catalog-initialized" {
-		t.Fatalf("tree must have a single root catalog-initialized, got %v", roots)
+	if len(roots) != 1 || roots[0] != "service-initialized" {
+		t.Fatalf("tree must have a single root service-initialized, got %v", roots)
 	}
 	for _, state := range doc.States {
 		for _, parent := range state.DependsOn {
@@ -221,12 +221,12 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 
 	// Directory edges describe reusable fixtures; one-off outcomes are cases.
 	parents := map[string]string{
-		"source-repositories-configured":   "catalog-initialized",
+		"source-repositories-configured":   "service-initialized",
 		"repository-attached":              "source-repositories-configured",
-		"catalog-create-granted":           "catalog-initialized",
-		"catalog-read-granted":             "catalog-initialized",
-		"grants-bootstrapped":              "catalog-initialized",
-		"http-served":                      "catalog-initialized",
+		"repository-create-granted":        "service-initialized",
+		"inventory-read-granted":           "service-initialized",
+		"grants-bootstrapped":              "service-initialized",
+		"http-served":                      "service-initialized",
 		"domain-schema-published":          "repository-attached",
 		"schema-read-granted":              "domain-schema-published",
 		"semantic-knowledge-published":     "domain-schema-published",
@@ -239,7 +239,7 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 		"dataset-defined":                  "knowledge-published",
 		"proposal-opened":                  "dataset-defined",
 		"proposal-preview-created":         "proposal-opened",
-		"named-repositories-created":       "catalog-initialized",
+		"named-repositories-created":       "service-initialized",
 		"qinghe-knowledge-published":       "named-repositories-created",
 	}
 	for child, parent := range parents {
@@ -254,14 +254,14 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 	}
 	// Keep the former edge contracts at their actual verification hosts.
 	cases := map[string]map[string][]string{
-		"catalog-initialized": {
-			"probe-audit-grant-without-inventory.feature": {"--action catalog.audit.read", "Then error FORBIDDEN"},
+		"service-initialized": {
+			"probe-audit-grant-without-inventory.feature": {"--action registry.audit.read", "Then error FORBIDDEN"},
 			"probe-revoke-catalog-read-denied.feature":    {"kc grant remove", "Then error FORBIDDEN"},
 		},
 		"repository-attached": {
 			"probe-publish-permissions-keeps-read-denied.feature": {"kc writer put", "--aspect permissions", "Then error FORBIDDEN"},
 			"probe-detach-keeps-head-readable.feature":            {"kc detach", "kc writer head", "| commit     | nonempty |"},
-			"probe-archive-rejects-dataset-definition.feature":    {"kc catalog archive", "kc dataset define", "CATALOG_ARCHIVED"},
+			"probe-archive-rejects-dataset-definition.feature":    {"kc catalog archive", "kc dataset define", "USAGE_INVALID"},
 			"probe-writer-grant-isolates-principals.feature":      {"--action writer.commit", "Then error FORBIDDEN", "kc writer put"},
 		},
 		"proposal-preview-created": {
@@ -361,13 +361,13 @@ func TestSceneRepositoryVerificationCasesStayOnAttachedState(t *testing.T) {
 			t.Errorf("%s verifies an attached repository; it must not introduce a reusable state", id)
 		}
 	}
-	for _, capability := range []string{"catalog.allow", "collector.preview"} {
+	for _, capability := range []string{"access.rules", "collector.preview"} {
 		if !contains(state.Publishes, capability) {
 			t.Errorf("repository-attached lost verification capability %s", capability)
 		}
 	}
 	wantEvidence := map[string][]string{
-		"catalog.allow": {
+		"access.rules": {
 			"TestCatalogReadDiscoversWithoutKnowledgeRead",
 			"TestCatalogInventoryDoesNotHideReposWithoutKnowledgeRead",
 			"TestUndeclaredSystemRepositoryStillRequiresGrant",
@@ -391,12 +391,12 @@ func TestSceneRepositoryVerificationCasesStayOnAttachedState(t *testing.T) {
 	probe := "_probes/probe-inventory-without-body.feature"
 	foundProbe := false
 	for _, process := range state.Processes {
-		foundProbe = foundProbe || process.File == probe && process.Surface == "feature" && process.Source == "catalog.allow"
+		foundProbe = foundProbe || process.File == probe && process.Surface == "feature" && process.Source == "access.rules"
 	}
 	if !foundProbe {
 		t.Fatal("inventory discovery and body denial must be one probe on repository-attached")
 	}
-	path := filepath.Join(scenesRoot(), "catalog-initialized", "source-repositories-configured", "repository-attached", probe)
+	path := filepath.Join(scenesRoot(), "service-initialized", "source-repositories-configured", "repository-attached", probe)
 	feature, err := parseSceneFeatureFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -419,16 +419,15 @@ func TestSceneRepositoryVerificationCasesStayOnAttachedState(t *testing.T) {
 		}
 	}
 	wantObservations := map[string]map[string]string{
-		"kc grant add --principal inventory-reader --action catalog.read --catalog kr://scene/catalog": {
-			"id": "nonempty", "principal": "inventory-reader", "catalog": "kr://scene/catalog", "actions.0": "catalog.read",
+		"kc grant add --principal inventory-reader --action inventory.read": {
+			"id": "nonempty", "principal": "inventory-reader", "catalog": "absent", "actions.0": "inventory.read",
 		},
 		"kc grant list": {
-			"rules[].principal": "inventory-reader", "rules[].catalog": "kr://scene/catalog", "rules[].actions.0": "catalog.read",
+			"rules[].principal": "inventory-reader", "rules.0.catalog": "absent", "rules[].actions.0": "inventory.read",
 		},
 		"kc show --as inventory-reader": {
-			"catalogId": "kr://scene/catalog", "repositories[].id": "kr://scene/knowledge",
+			"catalogId": "absent", "repositories[].id": "kr://scene/knowledge",
 		},
-		"kc catalog list --as inventory-reader":                                      {"catalogs[].id": "kr://scene/catalog"},
 		"kc read --as inventory-reader --repo kr://scene/knowledge --object missing": {"error": "FORBIDDEN"},
 	}
 	for command, fields := range wantObservations {
@@ -441,16 +440,16 @@ func TestSceneRepositoryVerificationCasesStayOnAttachedState(t *testing.T) {
 }
 
 func TestSceneSystemSchemaMaterialsMatchEmbed(t *testing.T) {
-	files := []string{
-		"schema-definition.v1.aspect.yaml",
-		"resource-descriptor.v1.aspect.yaml",
-		"relation.v1.aspect.yaml",
-		"readme.v1.aspect.yaml",
+	files := map[string]string{
+		"schema-definition.v1.aspect.yaml":   "_schemas/schema-definition.v1.aspect.yaml",
+		"resource-descriptor.v1.aspect.yaml": "_schemas/resource-descriptor.v1.aspect.yaml",
+		"relation.v1.aspect.yaml":            "_schemas/relation.v1.aspect.yaml",
+		"readme.v1.aspect.yaml":              "_schemas/readme.v1.aspect.yaml",
 	}
-	sceneDir := filepath.Join(scenesRoot(), "catalog-initialized", "_materials", "system")
-	embedDir := filepath.Join(repoRoot(), "knowledge", "system", "schemas")
-	for _, name := range files {
-		want, err := os.ReadFile(filepath.Join(embedDir, name))
+	sceneDir := filepath.Join(scenesRoot(), "service-initialized", "_materials", "system")
+	embedDir := filepath.Join(repoRoot(), "knowledge", "system")
+	for name, source := range files {
+		want, err := os.ReadFile(filepath.Join(embedDir, source))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -459,7 +458,7 @@ func TestSceneSystemSchemaMaterialsMatchEmbed(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !bytes.Equal(got, want) {
-			t.Errorf("%s drifted from knowledge/system/schemas", name)
+			t.Errorf("%s drifted from knowledge/system/%s", name, source)
 		}
 	}
 }
@@ -475,16 +474,16 @@ func TestSceneCatalogCoversPublicProductSurfaces(t *testing.T) {
 		"kcfs":                      "knowledge-set-defined",
 		"dataset overlay":           "knowledge-set-defined",
 		"attach":                    "repository-attached",
-		"create":                    "catalog-initialized",
+		"create":                    "service-initialized",
 		"detach":                    "repository-attached",
-		"deployment init":           "catalog-initialized",
+		"deployment init":           "service-initialized",
 		"governance preview create": "proposal-preview-created",
 		"writer commit":             "domain-schema-published",
 		"writer receipt":            "domain-schema-published",
 		"writer put":                "knowledge-published",
 		"schema list":               "schema-read-granted",
 		"read":                      "knowledge-search-granted",
-		"catalog list":              "catalog-read-granted",
+		"show":                      "inventory-read-granted",
 	}
 	for command, stateID := range want {
 		state, ok := ids[stateID]
@@ -765,7 +764,6 @@ func TestSceneFeaturesCoverHelpShortestPaths(t *testing.T) {
 		"kc read --dataset",
 		"kc login --server",
 		"kc admission show",
-		"kc catalog list",
 		"kc show",
 		"kc schema list",
 	}
@@ -807,7 +805,6 @@ func TestSceneFeaturesCoverHelpShortestPaths(t *testing.T) {
 
 func TestSceneConsumeJourneyIsOneFeature(t *testing.T) {
 	needles := []string{
-		"kc catalog list",
 		"kc show",
 		"kc schema list --repo",
 		"kc search --as agent:copilot --dataset",
@@ -937,15 +934,15 @@ func TestSceneCatalogCoversPermissionActions(t *testing.T) {
 		ids[state.ID] = struct{}{}
 	}
 	want := map[string]string{
-		"catalog.read":                "catalog-read-granted",
-		"catalog.audit.read":          "catalog-initialized",
-		"catalog.repositories.create": "catalog-create-granted",
-		"knowledge.search":            "knowledge-search-granted",
-		"knowledge.read":              "knowledge-search-granted",
-		"knowledge.schema.read":       "schema-read-granted",
-		"file.read":                   "knowledge-set-defined",
-		"dataset.resolve":             "knowledge-set-defined",
-		"dataset.manage":              "dataset-manage-granted",
+		"inventory.read":        "inventory-read-granted",
+		"registry.audit.read":   "service-initialized",
+		"repositories.create":   "repository-create-granted",
+		"knowledge.search":      "knowledge-search-granted",
+		"knowledge.read":        "knowledge-search-granted",
+		"knowledge.schema.read": "schema-read-granted",
+		"file.read":             "knowledge-set-defined",
+		"dataset.resolve":       "knowledge-set-defined",
+		"dataset.manage":        "dataset-manage-granted",
 	}
 	for action, state := range want {
 		if _, ok := ids[state]; !ok {
@@ -955,7 +952,7 @@ func TestSceneCatalogCoversPermissionActions(t *testing.T) {
 	if processOn(loadState(doc, "knowledge-search-granted"), "delivery.chain").Source != "delivery.chain" {
 		t.Fatal("AUTH-03 delivery chain must be a process on knowledge-search-granted")
 	}
-	if processOn(loadState(doc, "knowledge-set-defined"), "catalog.allow").Source != "catalog.allow" {
+	if processOn(loadState(doc, "knowledge-set-defined"), "access.rules").Source != "access.rules" {
 		t.Fatal("AUTH-02 consume isolation must be a process on knowledge-set-defined")
 	}
 }
@@ -1139,7 +1136,7 @@ func sceneProbeChangesGrants(t *testing.T, path string) bool {
 
 func TestSceneCatalogDoesNotRegisterMaterials(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(scenesRoot(), "catalog.yaml")); err == nil {
-		t.Fatal("protocol scenes must not use catalog.yaml; that name is the product Catalog registry")
+		t.Fatal("protocol scenes must not use authority metadata as their tree registry")
 	}
 	if _, err := os.Stat(filepath.Join(scenesRoot(), "sources.yaml")); err == nil {
 		t.Fatal("protocol scenes must not keep sources.yaml; node labels stay in _meta.yaml")
@@ -1150,7 +1147,7 @@ func TestSceneCatalogDoesNotRegisterMaterials(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(scenesRoot(), "check")); err == nil {
 		t.Fatal("protocol scenes must not keep check/; the state directories are the use cases")
 	}
-	initFeature, err := os.ReadFile(filepath.Join(scenesRoot(), "catalog-initialized", "_build", "construct.feature"))
+	initFeature, err := os.ReadFile(filepath.Join(scenesRoot(), "service-initialized", "_build", "construct.feature"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1201,7 +1198,7 @@ func TestSceneResultsHangOnEveryNode(t *testing.T) {
 	if !strings.Contains(string(ignore), "_results/") {
 		t.Fatal(".data/scenes/.gitignore must ignore per-node _results/")
 	}
-	cmd := exec.Command("git", "check-ignore", "-v", "--", filepath.Join(".data", "scenes", "catalog-initialized", "_results", "latest.json"))
+	cmd := exec.Command("git", "check-ignore", "-v", "--", filepath.Join(".data", "scenes", "service-initialized", "_results", "latest.json"))
 	cmd.Dir = repoRoot()
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -1215,7 +1212,7 @@ func TestSceneResultsHangOnEveryNode(t *testing.T) {
 func TestSceneAccessorMaterialsAreTheOnboardingRuntime(t *testing.T) {
 	dir := filepath.Join(
 		scenesRoot(),
-		"catalog-initialized",
+		"service-initialized",
 		"source-repositories-configured",
 		"repository-attached",
 		"_materials",
@@ -1229,7 +1226,7 @@ func TestSceneAccessorMaterialsAreTheOnboardingRuntime(t *testing.T) {
 }
 
 func TestSceneWarehouseMaterialsUseTypeDirectories(t *testing.T) {
-	base := filepath.Join(scenesRoot(), "catalog-initialized", "named-repositories-created", "qinghe-knowledge-published", "_materials")
+	base := filepath.Join(scenesRoot(), "service-initialized", "named-repositories-created", "qinghe-knowledge-published", "_materials")
 	tableMeta := filepath.Join(base, "table-meta")
 	sales := filepath.Join(base, "sales-semantic")
 	if _, err := os.Stat(filepath.Join(tableMeta, "objects")); err == nil {
@@ -1421,7 +1418,7 @@ func discoverConstructableNodes(t *testing.T) []sceneTreeNode {
 			walk(child, next)
 		}
 	}
-	walk("catalog-initialized", nil)
+	walk("service-initialized", nil)
 	return nodes
 }
 
@@ -1614,4 +1611,38 @@ func loadSceneCatalog(t *testing.T) sceneCatalogFile {
 		t.Fatal(sceneCatalogErr)
 	}
 	return sceneCatalogDoc
+}
+
+func TestSceneOutputTablesHaveClosedShape(t *testing.T) {
+	err := filepath.WalkDir(scenesRoot(), func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() && entry.Name() == "_results" {
+			return filepath.SkipDir
+		}
+		if entry.IsDir() || !strings.HasSuffix(path, ".feature") {
+			return nil
+		}
+		feature, err := parseSceneFeatureFile(path)
+		if err != nil {
+			return err
+		}
+		for _, scenario := range feature.scenarios {
+			for _, step := range scenario.steps {
+				if step.kind != "output-has" && step.kind != "output-includes" {
+					continue
+				}
+				for _, row := range step.table {
+					if len(row) != 2 {
+						t.Errorf("%s output oracle requires path and expectation: %v", path, row)
+					}
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 }

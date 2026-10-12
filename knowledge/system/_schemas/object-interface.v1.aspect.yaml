@@ -1,0 +1,16 @@
+---
+object_id: schema/core/object-interface/v1
+path_hint: _schemas/object-interface.v1.aspect.yaml
+---
+metaSchema: schema/meta/schema-definition/v1
+entity: InterfaceDefinition
+description: 对象 Interface 的能力合同；执行处理器由运行环境独立装配。
+aspect: definition
+pattern: record
+additionalProperties: false
+fields:
+  name: {type: string, required: true}
+  meaning: {type: string, required: true}
+  standardImplementationSchemas: {type: object_ref_list, required: true}
+  operations: {type: object, required: true}
+  guarantees: {type: array}

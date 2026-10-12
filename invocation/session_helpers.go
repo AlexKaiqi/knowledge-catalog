@@ -1,7 +1,7 @@
 package invocation
 
 // Session persistence and managed-repository validation helpers shared by the
-// catalog operations and the login flows. (CAP-ORG-01 B6.)
+// registry operations and the login flows. (CAP-ORG-01 B6.)
 
 import (
 	"crypto/sha256"
@@ -19,7 +19,6 @@ import (
 	"compress/gzip"
 	"context"
 	"io"
-	"kc/catalog"
 	"kc/delivery"
 	"kc/invoke"
 	"kc/kernel"
@@ -27,6 +26,7 @@ import (
 	knowledgeserving "kc/knowledge/serving"
 	knowledgeapp "kc/knowledgeapp"
 	"kc/retrieval"
+	"kc/snapshot/dataset"
 	"net/http"
 )
 
@@ -46,22 +46,6 @@ func SavedClientServer() string {
 		}
 	}
 	return ""
-}
-
-func PersistClientCatalog(server, catalogID string) error {
-	catalogID = strings.TrimSpace(catalogID)
-	if catalogID == "" {
-		return kernel.Fail(kernel.ErrUsageInvalid, "catalog id is required")
-	}
-	return WriteJSONFile(ServerSessionPath(server, "catalog.json"), ClientCatalogState{Catalog: catalogID})
-}
-
-func PersistHomeCatalog(home, catalogID string) error {
-	catalogID = strings.TrimSpace(catalogID)
-	if catalogID == "" {
-		return kernel.Fail(kernel.ErrUsageInvalid, "catalog id is required")
-	}
-	return WriteJSONFile(HomeCatalogUsePath(home), ClientCatalogState{Catalog: catalogID})
 }
 
 func ConfigDir() string {
@@ -121,7 +105,7 @@ func ValidateManagedRepositoryCoordinates(flags map[string]invoke.FlagValue) err
 		}
 		return nil
 	}
-	for _, name := range []string{"catalog", "repo", "command-id"} {
+	for _, name := range []string{"repo", "command-id"} {
 		if _, err := RequireRemoteFlag(flags, name); err != nil {
 			return err
 		}
@@ -242,7 +226,7 @@ func ServingWorkspace(flags map[string]invoke.FlagValue) bool {
 	return SuppliedKnowledgeSet(flags) != nil ||
 		invoke.FlagString(flags, "pin") != "" ||
 		invoke.FlagString(flags, "dataset-file") != "" ||
-		(invoke.DatasetOf(flags) != "" && !ReadingCatalogCommand(flags))
+		(invoke.DatasetOf(flags) != "" && !ReadingInventoryCommand(flags))
 }
 
 func DeliverSearchResult(home string, flags map[string]invoke.FlagValue, out retrieval.SearchResult) (retrieval.SearchResult, error) {
@@ -341,22 +325,7 @@ func WriteOperation(flags map[string]invoke.FlagValue, op knowledge.OpKind, valu
 	}, nil
 }
 
-func ReadingCatalogCommand(flags map[string]invoke.FlagValue) bool {
-	if SuppliedKnowledgeSet(flags) != nil {
-		return false
-	}
-	if invoke.FlagString(flags, "repo") != "" || invoke.FlagString(flags, "commit") != "" || invoke.FlagString(flags, "ref") != "" {
-		return false
-	}
-	if invoke.FlagString(flags, "object") != "" || invoke.FlagString(flags, "aspect") != "" {
-		return false
-	}
-	if invoke.DatasetOf(flags) != "" {
-		return false
-	}
-	_, ok := flags["catalog"]
-	return ok
-}
+func ReadingInventoryCommand(flags map[string]invoke.FlagValue) bool { return false }
 
 func DeliverSearchHit(home string, flags map[string]invoke.FlagValue, hit retrieval.KnowledgeHit) (retrieval.KnowledgeHit, error) {
 	env, err := KnowledgeDelivery(home, flags).Apply(delivery.Context{Principal: invoke.FlagString(flags, "as")}, delivery.FromValue(hit.Knowledge, hit.Version.Observations))
@@ -367,14 +336,14 @@ func DeliverSearchHit(home string, flags map[string]invoke.FlagValue, hit retrie
 	return hit, nil
 }
 
-func OpenServingAt(cx *Invocation, ws *kchome.Home, flags map[string]invoke.FlagValue) (*reader.Serving, *catalog.Catalog, error) {
+func OpenServingAt(cx *Invocation, ws *kchome.Home, flags map[string]invoke.FlagValue) (*reader.Serving, dataset.Service, error) {
 	if invoke.FlagString(flags, "repo") != "" || invoke.FlagString(flags, "commit") != "" || invoke.FlagString(flags, "ref") != "" {
 		if err := RejectMixedKnowledgeBasis(flags); err != nil {
 			return nil, nil, err
 		}
 		return nil, nil, kernel.Fail(kernel.ErrUsageInvalid, "choose a Workspace definition/pin or a Repository basis; do not mix")
 	}
-	cat, err := PickCatalog(ws, flags)
+	cat, err := PickDatasets(ws, flags)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -3,9 +3,9 @@
 `smoke.py` 是 scenes/ 用例树的**可运行性验证**，不是压测，也不是资格结论：
 
 - 只绑定 env 配置指向的已部署 KC Server（`/readyz` 必须先就绪）；**不启动、
-  不编排任何容器**。本地被测环境怎么起（Gitea 权威 / lakeFS 部署）由部署方
+  不编排任何容器**。本地被测环境怎么起（lakeFS 部署）由部署方
   脚本负责，与 runner 无关。
-- 只经公开 HTTP surface：`/catalog/v1`（托管建仓）、`/writer/v1`（commit/receipt/
+- 只经公开 HTTP surface：`/snapshot/v1/connections`（托管建仓）与 `/snapshot/v1/repositories`（成员准入/移除）、`/writer/v1`（commit/receipt/
   head）、`/knowledge/v1`（read/search/schemas:list）、`/operations/v1`
   （projections:describe）。
 - 执行探针子集（量级阶梯远小于资格档）：
@@ -23,6 +23,7 @@
 ## 运行
 
 ```bash
+python3 .data/scale/runner/test_protocol.py # 无网络，验证请求命名空间和退休环境选择拒绝
 python3 .data/scale/runner/smoke.py --self-test
 python3 .data/scale/runner/smoke.py --env <env.yaml>
 ```
@@ -76,6 +77,6 @@ python3 .data/scale/runner/ladder.py --env <env.yaml> [--max-files 100]
 - **部署卫生**：全局 reconcile 的 `applyPending` 串行执行且遇错即返回；一个带
   不可达 Bound State origin 的残留仓会让其它仓的后台追平被饿死（本机冒烟环境
   早期探针残留触发过）。压测环境不应留不可达的 Bound State schema。
-- **清理语义**：公开面只有 detach（catalog 成员移除）；介质侧 Gitea 物理仓与
+- **清理语义**：公开面只有 detach（服务成员移除）；介质侧 lakeFS 物理仓与
   OpenSearch 投影索引留在部署方，由部署方生命周期负责。
 

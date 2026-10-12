@@ -17,13 +17,13 @@ import (
 
 // DeploymentConfig is an immutable deployment input. StateDir is an explicit
 // durable volume; CacheDir is disposable instance storage. Neither is an
-// inventory: Catalog membership is read only from the configured Snapshot
+// inventory: Registry membership is read only from the configured Snapshot
 // authority.
 type DeploymentConfig struct {
 	Version             int                                `json:"version" yaml:"version"`
 	StateDir            string                             `json:"stateDir" yaml:"stateDir"`
 	CacheDir            string                             `json:"cacheDir" yaml:"cacheDir"`
-	Catalogs            []CatalogBinding                   `json:"catalogs" yaml:"catalogs"`
+	Registry            RegistryBinding                    `json:"registry" yaml:"registry"`
 	Repositories        []RepositoryBinding                `json:"repositories,omitempty" yaml:"repositories,omitempty"`
 	RepositoryAccess    []RepositoryAccess                 `json:"repositoryAccess,omitempty" yaml:"repositoryAccess,omitempty"`
 	ManagedRepositories *ManagedRepositoryConfig           `json:"managedRepositories,omitempty" yaml:"managedRepositories,omitempty"`
@@ -45,21 +45,20 @@ type EvidenceConfig struct {
 	MaxBytes     int64  `json:"maxBytes,omitempty" yaml:"maxBytes,omitempty"`
 }
 
-// CatalogBinding locates an independent Snapshot authority that stores Catalog
+// RegistryBinding locates an independent Snapshot authority that stores Registry
 // registry files. It is not a Knowledge Repository and must not reuse a member
-// repository identity. Initialization may create the Catalog ref; opening a
+// repository identity. Initialization may create the Registry ref; opening a
 // deployment never creates that ref.
-type CatalogBinding struct {
+type RegistryBinding struct {
 	ID             string `json:"id" yaml:"id"`
 	Driver         string `json:"driver" yaml:"driver"`
 	DSN            string `json:"dsn,omitempty" yaml:"dsn,omitempty"`
 	Dir            string `json:"dir,omitempty" yaml:"dir,omitempty"`
 	Ref            string `json:"ref,omitempty" yaml:"ref,omitempty"`
 	DiscoverySetID string `json:"discoveryWorkspaceId,omitempty" yaml:"discoveryWorkspaceId,omitempty"`
-	Private        bool   `json:"private,omitempty" yaml:"private,omitempty"`
 }
 
-// RepositoryBinding is an operator-approved source, not Catalog membership.
+// RepositoryBinding is an operator-approved source, not Registry membership.
 // Credentials are supplied by the adapter's deployment credential provider.
 type RepositoryBinding struct {
 	ID     string `json:"id" yaml:"id"`
@@ -103,11 +102,13 @@ func (c DeploymentConfig) Validate() error {
 	if pathsOverlap(c.StateDir, c.CacheDir) {
 		return invalid("durable stateDir and disposable cacheDir must be separate, non-nested paths")
 	}
-	if len(c.Catalogs) == 0 {
-		return invalid("deployment must name at least one Catalog Snapshot authority")
+	if c.Registry.ID == "" {
+		return invalid("deployment must name one registry Snapshot authority")
 	}
-	if c.Auth != "local" && c.Auth != "taihu" && c.Auth != "gitea" {
-		return invalid("deployment auth must be local, taihu, or gitea")
+	switch c.Auth {
+	case "local", "taihu", "gitea", "lakefs":
+	default:
+		return invalid("deployment auth must be local, taihu, gitea, or lakefs")
 	}
 	if err := validateManagedConfig(c); err != nil {
 		return err
@@ -121,24 +122,48 @@ func (c DeploymentConfig) Validate() error {
 	if err := validateRepositoryAccess(c.RepositoryAccess); err != nil {
 		return err
 	}
+	if err := c.validateSnapshotBindings(); err != nil {
+		return err
+	}
+	if c.Stores.Layout != (LayoutFile{}) || c.Stores.Profile != "" || c.Stores.Repository != "" {
+		return invalid("deployment stores accepts index, opensearch and hydrationCache; configure source drivers in repositories and paths in stateDir/cacheDir")
+	}
+	if err := c.runtimeStores().ValidateProfile(); err != nil {
+		return err
+	}
+	if err := c.Stores.rejectSecrets(); err != nil {
+		return err
+	}
+	if err := c.validateEvidence(); err != nil {
+		return err
+	}
+	if _, err := c.Binding(knowledge.SystemRepositoryID); err != nil {
+		return invalid("deployment requires an explicit Snapshot binding for %s", knowledge.SystemRepositoryID)
+	}
+	return nil
+}
+
+func (c DeploymentConfig) validateSnapshotBindings() error {
+	invalid := func(format string, args ...any) error { return kernel.Fail(kernel.ErrUsageInvalid, format, args...) }
 	ids := map[string]bool{}
-	for _, b := range c.Catalogs {
+	{
+		b := c.Registry
 		if b.DiscoverySetID != strings.TrimSpace(b.DiscoverySetID) || strings.ContainsAny(b.DiscoverySetID, "\r\n") {
 			return invalid("discoveryWorkspaceId must be an exact Workspace identity")
 		}
-		id, err := NormalizeCatalogID(b.ID)
+		id, err := NormalizeRepositoryID(b.ID)
 		if err != nil || id != b.ID || ids[id] || id == string(knowledge.SystemRepositoryID) {
-			return invalid("Catalog binding has invalid or duplicate identity %q", b.ID)
+			return invalid("registry binding has invalid or duplicate identity %q", b.ID)
 		}
 		ids[id] = true
-		if b.Driver != "gitea" && b.Driver != "lakefs" {
-			return invalid("Catalog %s requires Snapshot driver gitea or lakefs", id)
+		if b.Driver != "lakefs" {
+			return invalid("registry %s requires Snapshot driver lakefs", id)
 		}
 		if b.Dir != "" {
-			return invalid("%s Catalog authority requires dsn and does not accept dir", b.Driver)
+			return invalid("%s registry authority requires dsn and does not accept dir", b.Driver)
 		}
 		if b.DSN == "" {
-			return invalid("Catalog %s requires an existing Snapshot authority location", id)
+			return invalid("registry %s requires an existing Snapshot authority location", id)
 		}
 		item := b.homeRepo()
 		driver, err := authorityFor(b.Driver)
@@ -151,7 +176,7 @@ func (c DeploymentConfig) Validate() error {
 			}
 		}
 		if b.Ref != "" && !strings.HasPrefix(b.Ref, "refs/heads/") {
-			return invalid("Catalog ref must be a full branch ref")
+			return invalid("registry ref must be a full branch ref")
 		}
 	}
 	for _, b := range c.Repositories {
@@ -160,8 +185,8 @@ func (c DeploymentConfig) Validate() error {
 			return invalid("Snapshot binding has invalid, reserved, or duplicate identity %q", b.ID)
 		}
 		ids[id] = true
-		if b.Driver != "gitea" && b.Driver != "lakefs" {
-			return invalid("Snapshot binding requires explicit driver gitea or lakefs")
+		if b.Driver != "lakefs" {
+			return invalid("Snapshot binding requires explicit driver lakefs")
 		}
 		if b.Dir != "" {
 			return invalid("%s Snapshot binding requires dsn and does not accept dir", b.Driver)
@@ -183,18 +208,6 @@ func (c DeploymentConfig) Validate() error {
 			return invalid("Snapshot %s requires an existing authority location", b.ID)
 		}
 	}
-	if c.Stores.Layout != (LayoutFile{}) || c.Stores.Profile != "" || c.Stores.Repository != "" {
-		return invalid("deployment stores accepts index, opensearch and hydrationCache; configure source drivers in repositories and paths in stateDir/cacheDir")
-	}
-	if err := c.runtimeStores().ValidateProfile(); err != nil {
-		return err
-	}
-	if err := c.Stores.rejectSecrets(); err != nil {
-		return err
-	}
-	if err := c.validateEvidence(); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -208,7 +221,7 @@ func (c DeploymentConfig) validateEvidence() error {
 	})
 }
 
-func (b CatalogBinding) homeRepo() HomeRepo {
+func (b RegistryBinding) homeRepo() HomeRepo {
 	return HomeRepo{ID: b.ID, Driver: b.Driver, DSN: b.DSN, Dir: b.Dir}
 }
 
@@ -216,18 +229,9 @@ func (b RepositoryBinding) homeRepo() HomeRepo {
 	return HomeRepo{ID: b.ID, Driver: b.Driver, DSN: b.DSN, Dir: b.Dir}
 }
 
-func (c DeploymentConfig) CatalogIsPrivate(id string) bool {
-	for _, binding := range c.Catalogs {
-		if binding.ID == id {
-			return binding.Private
-		}
-	}
-	return true
-}
-
 func (c DeploymentConfig) runtimeStores() StoresFile {
 	stores := c.Stores.withDefaults()
-	stores.Layout.Catalogs = filepath.Join(c.CacheDir, "catalogs")
+	stores.Layout.Registry = filepath.Join(c.CacheDir, "registry")
 	stores.Layout.Projections = filepath.Join(c.CacheDir, "projections")
 	stores.Layout.Checkouts = filepath.Join(c.CacheDir, "checkouts")
 	return stores
@@ -242,9 +246,9 @@ func pathsOverlap(a, b string) bool {
 	return inside(a, b) || inside(b, a)
 }
 
-func (c DeploymentConfig) CatalogCache(binding CatalogBinding) string {
+func (c DeploymentConfig) RegistryCache(binding RegistryBinding) string {
 	// Digest avoids the collisions inherent in the legacy directory scanner.
-	return filepath.Join(c.CacheDir, "catalogs", string(kernel.CanonicalDigest(binding.ID)))
+	return filepath.Join(c.CacheDir, "registry", string(kernel.CanonicalDigest(binding.ID)))
 }
 
 func (c DeploymentConfig) Binding(id kernel.RepositoryID) (RepositoryBinding, error) {
@@ -257,7 +261,7 @@ func (c DeploymentConfig) Binding(id kernel.RepositoryID) (RepositoryBinding, er
 }
 
 func (c DeploymentConfig) String() string {
-	return fmt.Sprintf("deployment with %d Catalogs and %d Snapshot bindings", len(c.Catalogs), len(c.Repositories))
+	return fmt.Sprintf("deployment with one registry and %d Snapshot bindings", len(c.Repositories))
 }
 
 func deploymentRealPath(p string) string {

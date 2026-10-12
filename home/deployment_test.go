@@ -13,15 +13,15 @@ func deploymentFixture(t *testing.T) DeploymentConfig {
 	root := t.TempDir()
 	fake := testkit.NewLakeFSFake(t)
 	t.Setenv("KC_LAKEFS_CREDENTIAL", testkit.LakeFSFakeCredential)
-	return DeploymentConfig{Version: 1, StateDir: filepath.Join(root, "state"), CacheDir: filepath.Join(root, "cache"), Catalogs: []CatalogBinding{{ID: "kr://test/catalog", Driver: "lakefs", DSN: fake.DSN(fake.NewRepo())}}, Auth: "local", BootstrapPrincipal: "owner"}
+	return DeploymentConfig{Version: 1, StateDir: filepath.Join(root, "state"), CacheDir: filepath.Join(root, "cache"), Repositories: []RepositoryBinding{{ID: "kr://kc/system", Driver: "lakefs", DSN: fake.DSN(fake.NewRepo())}}, Registry: RegistryBinding{ID: "kr://test/catalog", Driver: "lakefs", DSN: fake.DSN(fake.NewRepo())}, Auth: "local", BootstrapPrincipal: "owner"}
 }
 func TestDeploymentAcceptsLakeFSGravelerRepositoryID(t *testing.T) {
 	cfg := deploymentFixture(t)
-	cfg.Repositories = []RepositoryBinding{{ID: "table-meta", Driver: "lakefs", DSN: "http://lakefs.example/table-meta"}}
+	cfg.Repositories = append(cfg.Repositories, RepositoryBinding{ID: "table-meta", Driver: "lakefs", DSN: "http://lakefs.example/table-meta"})
 	if err := cfg.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	cfg.Repositories[0].ID = "kc-system"
+	cfg.Repositories[1].ID = "kc-system"
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("platform Graveler name accepted as business Snapshot binding")
 	}
@@ -54,7 +54,7 @@ func TestDeploymentDoesNotInitializeOnOpen(t *testing.T) {
 }
 func TestDeploymentRejectsInstanceBoundAuthorities(t *testing.T) {
 	cfg := deploymentFixture(t)
-	cfg.Catalogs[0].Dir = filepath.Join(cfg.CacheDir, "catalog-authority")
+	cfg.Registry.Dir = filepath.Join(cfg.CacheDir, "catalog-authority")
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("authority inside cache accepted")
 	}
@@ -62,7 +62,7 @@ func TestDeploymentRejectsInstanceBoundAuthorities(t *testing.T) {
 	if err := cfg.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	cfg.Catalogs[0].Driver = ""
+	cfg.Registry.Driver = ""
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Catalog without Snapshot driver accepted")
 	}
@@ -125,15 +125,15 @@ func TestDeploymentRejectsSymlinkAndFileURLAuthoritiesInCache(t *testing.T) {
 				t.Fatal(err)
 			}
 			if kind == "url" {
-				cfg.Catalogs[0].Driver = "lakefs"
-				cfg.Catalogs[0].Dir = ""
-				cfg.Catalogs[0].DSN = "file://" + filepath.Join(cfg.CacheDir, "catalog")
+				cfg.Registry.Driver = "lakefs"
+				cfg.Registry.Dir = ""
+				cfg.Registry.DSN = "file://" + filepath.Join(cfg.CacheDir, "catalog")
 			} else {
 				alias := filepath.Join(filepath.Dir(cfg.CacheDir), "alias")
 				if err := os.Symlink(cfg.CacheDir, alias); err != nil {
 					t.Fatal(err)
 				}
-				cfg.Catalogs[0].Dir = filepath.Join(alias, "catalog-authority")
+				cfg.Registry.Dir = filepath.Join(alias, "catalog-authority")
 			}
 			if err := cfg.Validate(); err == nil {
 				t.Fatal("instance-bound authority accepted")
@@ -219,7 +219,7 @@ func TestDeploymentDoesNotRecreateLostCatalogBranch(t *testing.T) {
 	// A Catalog authority the server can no longer open is never silently
 	// recreated with empty membership: init fails instead.
 	lost := testkit.NewLakeFSFake(t)
-	cfg.Catalogs[0].DSN = lost.DSN("never-created")
+	cfg.Registry.DSN = lost.DSN("never-created")
 	if err := InitializeDeployment(cfg, seed); err == nil {
 		t.Fatal("init recreated lost Catalog with empty membership")
 	}
@@ -227,7 +227,7 @@ func TestDeploymentDoesNotRecreateLostCatalogBranch(t *testing.T) {
 
 func TestDeploymentRejectsIgnoredLayoutAndDriverDefaults(t *testing.T) {
 	for _, change := range []func(*DeploymentConfig){
-		func(c *DeploymentConfig) { c.Stores.Layout.Catalogs = "alternate" },
+		func(c *DeploymentConfig) { c.Stores.Layout.Registry = "alternate" },
 		func(c *DeploymentConfig) { c.Stores.Repository = "gitea" },
 		func(c *DeploymentConfig) { c.Stores.Profile = "local" },
 	} {
@@ -249,7 +249,7 @@ func TestDeploymentRejectsLegacyCatalogGitRemoteField(t *testing.T) {
 		"bootstrapPrincipal: owner\n" +
 		"catalogs:\n" +
 		"  - id: kr://test/catalog\n" +
-		"    remote: file://" + filepath.Join(root, "catalog.git") + "\n"
+		"    remote: file://" + filepath.Join(root, "dataset.git") + "\n"
 	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 		t.Fatal(err)
 	}

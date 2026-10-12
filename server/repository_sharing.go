@@ -7,7 +7,6 @@ import (
 	"kc/invoke"
 	"net/http"
 	"slices"
-	"sort"
 
 	kcclient "kc/client"
 	"kc/identity"
@@ -15,58 +14,13 @@ import (
 )
 
 func (f *httpFacade) registerAdmissionSharingRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /identity/v1/admission", f.admissionShow)
-	mux.HandleFunc("GET /catalog/v1/repositories/{repository}/shares", f.repositoryShareList)
-	mux.HandleFunc("POST /catalog/v1/repositories/{repository}/shares", f.repositoryShareCreate)
-	mux.HandleFunc("DELETE /catalog/v1/repositories/{repository}/shares/{share}", f.repositoryShareRevoke)
-}
-
-func (f *httpFacade) admissionShow(w http.ResponseWriter, r *http.Request) {
-	f.executeTyped(w, r, "admission-show", "identity.read", inv.Command{Stage: invoke.StageHome, Run: func(cx *inv.Invocation) (any, error) {
-		return admissionOverview(cx)
-	}}, map[string]FlagValue{})
-}
-
-func admissionOverview(cx *inv.Invocation) (kcclient.AdmissionResult, error) {
-	out := kcclient.AdmissionResult{
-		Principal: cx.Flag("as"),
-		Grants:    []kcclient.AdmissionGrant{},
-		Request:   kcclient.AdmissionRequest{Administrators: []string{}},
-	}
-	file, err := inv.ReadAllow(cx.Home)
-	if err != nil {
-		return out, err
-	}
-	administrators := map[string]bool{}
-	for _, rule := range file.Rules {
-		if rule.Principal == out.Principal {
-			out.Grants = append(out.Grants, kcclient.AdmissionGrant{
-				ID: rule.ID, Actions: slices.Clone(rule.Actions), Catalog: rule.Catalog,
-				Repository: rule.Repo, SharedBy: rule.SharedBy,
-			})
-		}
-		if administrators[rule.Principal] {
-			continue
-		}
-		for _, action := range rule.Actions {
-			if inv.ActionMatches(action, "admin.grants.manage") {
-				administrators[rule.Principal] = true
-				break
-			}
-		}
-	}
-	for principal := range administrators {
-		out.Request.Administrators = append(out.Request.Administrators, principal)
-	}
-	sort.Strings(out.Request.Administrators)
-	if cx.WS != nil && cx.WS.Deployment != nil && cx.WS.Deployment.Admission != nil {
-		out.Request.URL = cx.WS.Deployment.Admission.RequestURL
-	}
-	return out, nil
+	mux.HandleFunc("GET /snapshot/v1/connections/{repository}/shares", f.repositoryShareList)
+	mux.HandleFunc("POST /snapshot/v1/connections/{repository}/shares", f.repositoryShareCreate)
+	mux.HandleFunc("DELETE /snapshot/v1/connections/{repository}/shares/{share}", f.repositoryShareRevoke)
 }
 
 func (f *httpFacade) repositoryShareList(w http.ResponseWriter, r *http.Request) {
-	f.executeTyped(w, r, "catalog-repo-share-list", "repository.shares.manage", inv.Command{Stage: invoke.StageHome, Run: VerbRepositoryShareList}, map[string]FlagValue{"repo": r.PathValue("repository")})
+	f.executeTyped(w, r, "repository-share-list", "repository.shares.manage", inv.Command{Stage: invoke.StageHome, Run: VerbRepositoryShareList}, map[string]FlagValue{"repo": r.PathValue("repository")})
 }
 
 func (f *httpFacade) repositoryShareCreate(w http.ResponseWriter, r *http.Request) {
@@ -74,13 +28,13 @@ func (f *httpFacade) repositoryShareCreate(w http.ResponseWriter, r *http.Reques
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	f.executeTyped(w, r, "catalog-repo-share-add", "repository.shares.manage", inv.Command{Stage: invoke.StageHome, Run: func(cx *inv.Invocation) (any, error) {
+	f.executeTyped(w, r, "repository-share-add", "repository.shares.manage", inv.Command{Stage: invoke.StageHome, Run: func(cx *inv.Invocation) (any, error) {
 		return createRepositoryShare(cx, request)
 	}}, map[string]FlagValue{"repo": r.PathValue("repository")})
 }
 
 func (f *httpFacade) repositoryShareRevoke(w http.ResponseWriter, r *http.Request) {
-	f.executeTyped(w, r, "catalog-repo-share-remove", "repository.shares.manage", inv.Command{Stage: invoke.StageHome, Run: VerbRepositoryShareRemove}, map[string]FlagValue{"repo": r.PathValue("repository"), "id": r.PathValue("share")})
+	f.executeTyped(w, r, "repository-share-remove", "repository.shares.manage", inv.Command{Stage: invoke.StageHome, Run: VerbRepositoryShareRemove}, map[string]FlagValue{"repo": r.PathValue("repository"), "id": r.PathValue("share")})
 }
 
 func sharingPolicy(cx *inv.Invocation) ([]string, error) {
@@ -91,10 +45,10 @@ func sharingPolicy(cx *inv.Invocation) ([]string, error) {
 }
 
 // wholeRepositoryActionAllowed deliberately refuses to widen grants limited
-// to one Catalog/ref/object/aspect/workspace into a full repository share.
+// to one Registry/ref/object/aspect/workspace into a full repository share.
 func wholeRepositoryActionAllowed(rules []inv.AllowRule, principal, repository, action string) bool {
 	for _, rule := range rules {
-		if rule.Principal != principal || (rule.Repo != "" && rule.Repo != repository) || rule.Catalog != "" || rule.Ref != "" || rule.Object != "" || rule.Aspect != "" || rule.Dataset != "" {
+		if rule.Principal != principal || (rule.Repo != "" && rule.Repo != repository) || rule.Ref != "" || rule.Object != "" || rule.Aspect != "" || rule.Dataset != "" {
 			continue
 		}
 		for _, granted := range rule.Actions {

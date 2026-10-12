@@ -1,6 +1,14 @@
 # 产品 CLI 重构（已落地）
 
+2026-10-12 收敛：一套服务只有一个登记空间，独立 Catalog 与 list/use/archive 已删除。`show` 与 `registry audit` 保留库存和登记历史；Dataset、仓登记与文件 API 归 `/snapshot/v1`，请求和授权规则没有 Catalog qualifier。下文 Catalog 选择及旧路径仅是历史迁移记录，不能恢复为当前合同。
+
 应然设计见 [CLI 交互](../docs/reviewed/cli.md)。公开 argv 以 [`surface.go`](surface.go) 为准，现行操作语义以 [`SURFACE.md`](SURFACE.md) 为准。本文保留重构目标、否决项和迁移对照，不是文档图 owner。
+
+下文的计数、落地顺序与风险属于当时迁移记录，不作为当前命令分母或未完成清单；当前范围
+由注册表、help 与 Conformance 对账。历史问题的完成结果见 §13.1。
+
+本文中的 DSH/task mount 风险属于原宿主集成的历史背景；该集成与私有任务/项目上下文读取已
+退役。当前 Catalog 选择已退役；正式环境默认与 Client 会话仍由现行公开合同拥有。
 
 不复制 HTTP URL 到 argv。HTTP / typed client 仍按资源分层；CLI 不镜像每条集合 GET。不做旧 argv 兼容层。
 
@@ -10,7 +18,8 @@
 2. **删干净**：退役的 argv、handler、help 段落、场景步骤整段删除，不留别名、不留「暂时还能用」、不留兼容分支。
 3. **不妥协**：无历史包袱；旧 argv 只出现在 `TestRemovedCommandsAreRejected` 与迁移对照注释里，不构成恢复理由。
 
-验收锚点：`TestProductCLIRefactorDefinesTheExactPublicSurface`（58 条）+ `TestRemovedCommandsAreRejected`。落地顺序见 §14。
+验收锚点：`TestProductCLIRefactorDefinesTheExactPublicSurface` + `TestRemovedCommandsAreRejected`。
+当前数量从注册表生成；落地顺序的历史记录见 §14。
 
 设计依据：[Dataset](../docs/reviewed/dataset.md)、[权限体系](../docs/reviewed/permissions.md)、[`docs/reviewed/terminology.md`](../docs/reviewed/terminology.md)。协议动词、错误码、字段形状不在本文重贴。
 
@@ -507,7 +516,9 @@ kc grant add --repo <id> --principal <user> \
 
 ## 13. 验收锚点（TDD 分母）
 
-公开 argv 的精确闭集以 **`cli/command_test.go::TestProductCLIRefactorDefinesTheExactPublicSurface`** 为准：**61 条**路径（`serve` / `kcfs` 由场景树状态 + `TestSceneCatalogCoversPublicProductSurfaces` 另钉，不进 `cliSurface` map）。
+公开 argv 的精确闭集以 **`cli/command_test.go::TestProductCLIRefactorDefinesTheExactPublicSurface`**
+与 `cliSurface` 对账；不在本文手工维护当前数量。`serve` / `kcfs` 的独立入口继续由场景与
+对应合同验证。
 
 退役 argv 以 **`TestRemovedCommandsAreRejected`** 为准：`admission request`、`admin grant *`、`catalog show`、`catalog repo *`（含 share/connection）、`workspace list|show` 等必须 `USAGE_INVALID`，不做兼容别名。
 
@@ -556,9 +567,14 @@ kc grant add --repo <id> --principal <user> \
 
 ---
 
-## 15. 协议/实现缺口（不能 rename 了事）
+## 15. 当时的协议/实现缺口（不能 rename 了事）
 
-| 缺口 | 现行 | 目标 | 主要触点 |
+下表保留迁移前的反例与目标，不代表当前实现状态。`detach` 已通过
+`invocation.VerbDetach` 调用 `Catalog.UnregisterRepository`；`catalog use` 已通过
+`invocation.CatalogUseOperation` / `PersistClientCatalog` 保存 Client 上下文，回归由
+`TestUnregisterRepositoryRemovesMember` 与 `TestCatalogUsePersistsClientCatalog` 验证。
+
+| 当时缺口 | 迁移前 | 目标 | 当时主要触点 |
 |---|---|---|---|
 | **detach** | `verbArchiveRepo` → Snapshot archive | 从 Catalog registry **拿下**成员，不 archive Snapshot | `catalog/lifecycle.go`（无 Unregister）、HTTP、client |
 | **create** | `CreateManagedRepository` / `ConnectRepository` 末尾 `RegisterRepository` | create **不登记**；attach 才登记 | `home/managed.go`、`home/connections.go` |
@@ -571,7 +587,7 @@ kc grant add --repo <id> --principal <user> \
 
 ---
 
-## 16. 风险（落地时盯）
+## 16. 当时的风险（落地时盯）
 
 1. **detach 无现成 API** — 不能直接把 `catalog repo archive` rename 成 `detach`。
 2. **create 后 show 不可见** — 现有 journey 假设 create 即登记；场景须按 REFACTOR 重写。
@@ -582,7 +598,7 @@ kc grant add --repo <id> --principal <user> \
 
 ---
 
-## 落地前仍有效的验收（现行面）
+## 当前合同入口
 
 HTTP 分母仍是 `httpsurface.Patterns()`。场景树见 [`.data/scenes/README.md`](../.data/scenes/README.md)。
 

@@ -1,10 +1,8 @@
 package invocation
 
 import (
-	"fmt"
-
 	"kc/invoke"
-	"kc/kernel"
+	"kc/snapshot/access"
 )
 
 func VerbWhoami(cx *Invocation) (any, error) {
@@ -27,31 +25,20 @@ func VerbAllow(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	actions := SplitCmds(cx.Flag("action"))
-	if err := ValidateActions(actions); err != nil {
-		return nil, err
-	}
-	repo := cx.Flag("repo")
-	catalogID := cx.Flag("catalog")
-	if (repo == "") == (catalogID == "") {
-		return nil, fmt.Errorf("grant add requires exactly one of --repo or --catalog")
-	}
 	file, err := ReadAllow(cx.Home)
 	if err != nil {
 		return nil, err
 	}
-	rule := AllowRule{
-		ID:        NextRuleID(file.Rules),
-		Principal: principal,
-		Actions:   actions,
-		Repo:      repo,
-		Catalog:   catalogID,
-		Ref:       cx.Flag("ref"),
-		Object:    cx.Flag("object"),
-		Aspect:    cx.Flag("aspect"),
-		Dataset:   invoke.DatasetOf(cx.Flags),
+	updated, rule, err := access.AddRule(file.Rules, AllowRule{
+		Principal: principal, Actions: SplitCmds(cx.Flag("action")),
+		Repo: cx.Flag("repo"),
+		Ref:  cx.Flag("ref"), Object: cx.Flag("object"), Aspect: cx.Flag("aspect"),
+		Dataset: invoke.DatasetOf(cx.Flags),
+	})
+	if err != nil {
+		return nil, err
 	}
-	file.Rules = append(file.Rules, rule)
+	file.Rules = updated
 	if err := WriteAllow(cx.Home, file); err != nil {
 		return nil, err
 	}
@@ -67,19 +54,19 @@ func VerbRevoke(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	kept, found := DropByID(file.Rules, id, func(r AllowRule) string { return r.ID })
-	if !found {
-		return nil, fmt.Errorf("unknown rule %s", id)
+	updated, err := access.RemoveRule(file.Rules, id)
+	if err != nil {
+		return nil, err
 	}
-	file.Rules = kept
+	file.Rules = updated
 	if err := WriteAllow(cx.Home, file); err != nil {
 		return nil, err
 	}
 	return map[string]any{"revoked": id}, nil
 }
 
-// VerbAllowed with no principal/action dumps the rule file; with both it evaluates
-// one question and fails closed.
+// VerbAllowed preserves the CLI's explicit-rule evaluation when action is
+// supplied. HTTP inventory calls VerbGrantList independently of this question.
 func VerbAllowed(cx *Invocation) (any, error) {
 	file, err := ReadAllow(cx.Home)
 	if err != nil {
@@ -91,20 +78,15 @@ func VerbAllowed(cx *Invocation) (any, error) {
 	}
 	action := cx.Flag("action")
 	if principal == "" || action == "" {
-		return file, nil
+		return VerbGrantList(cx)
 	}
-	rule, ok := MatchAllow(file.Rules, AllowQuery{
+	return EvaluateAllow(file.Rules, AllowQuery{
 		Principal: principal,
 		Action:    action,
 		Repo:      cx.Flag("repo"),
-		Catalog:   cx.Flag("catalog"),
 		Ref:       cx.Flag("ref"),
 		Object:    cx.Flag("object"),
 		Aspect:    cx.Flag("aspect"),
 		Dataset:   invoke.DatasetOf(cx.Flags),
 	})
-	if !ok {
-		return nil, kernel.Fail(kernel.ErrForbidden, "%s is not allowed to %s", principal, action)
-	}
-	return map[string]any{"allow": true, "ruleId": rule.ID}, nil
 }

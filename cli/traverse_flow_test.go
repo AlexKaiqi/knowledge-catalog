@@ -117,7 +117,7 @@ func TestTraverseNeighborhoodClosureAcrossChannels(t *testing.T) {
 	home := testkit.TempDir(t)
 	repository := "kr://acme/public/core"
 	host := "kr://acme/partner"
-	body(t, kc(home, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(home, "init"))
 	body(t, kc(home, "store-set", "--index", "opensearch"))
 	body(t, kc(home, "store-set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repository)
@@ -188,7 +188,7 @@ func TestTraverseNeighborhoodClosureAcrossChannels(t *testing.T) {
 		t.Fatalf("paged closure union: pages=%d %#v", pages, union)
 	}
 
-	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--catalog", "kr://acme/catalog", "--dataset", "agent"))
+	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--dataset", "agent"))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "knowledge.traverse", "--repo", repository))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "knowledge.read", "--repo", repository))
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})

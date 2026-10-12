@@ -71,11 +71,10 @@ async function fixture({ hash = "#/", search = "NOT_CONFIGURED" } = {}) {
         if (!principal) return response({ error: { code: "UNAUTHENTICATED", message: "sign in" } }, 401);
         return response({ principal });
       }
-      if (path === "/catalog/v1/catalogs") return response({ catalogs: [{ id: "kr://acme/catalog" }] });
       if (path === "/operations/v1/stores") {
         return response({
           snapshot: { driver: "lakefs", profile: "scale", authorities: [
-            { id: "kr://acme/catalog", role: "catalog", driver: "lakefs", origin: "http://127.0.0.1:18000", name: "acme-catalog" },
+            { id: "kr://acme/catalog", role: "registry", driver: "lakefs", origin: "http://127.0.0.1:18000", name: "acme-catalog" },
             { id: "kr://acme/core", role: "repository", driver: "lakefs", origin: "http://127.0.0.1:18000", name: "acme-core" },
           ]},
           retrieval: { driver: "none" },
@@ -111,9 +110,9 @@ async function fixture({ hash = "#/", search = "NOT_CONFIGURED" } = {}) {
         }
         throw new Error("unexpected search " + options.body);
       }
-      if (decodeURIComponent(path) === "/catalog/v1/repositories/kr://acme/core") {
+      if (decodeURIComponent(path) === "/snapshot/v1/connections/kr://acme/core") {
         return response({
-          repositoryId: "kr://acme/core", store: "lakefs", catalog: "kr://acme/catalog",
+          repositoryId: "kr://acme/core", store: "lakefs",
           provisioningState: "READY", head: "c1",
           readiness: { publication: "PUBLISHED", publishedCommit: "c1", schemaCount: 4, search },
         });
@@ -128,10 +127,10 @@ async function fixture({ hash = "#/", search = "NOT_CONFIGURED" } = {}) {
         return response({ setId: "payments", revision: 2, ref: "v2", repositories: { "kr://acme/core": "c1" }, items: [{ target: "policies" }] });
       }
       if (path.endsWith("/datasets") && (!options.method || options.method === "GET")) {
-        return response({ catalogId: "kr://acme/catalog", datasets: [{ id: "payments", revision: 2, repositories: ["kr://acme/core"], itemCount: 1 }] });
+        return response({ datasets: [{ id: "payments", revision: 2, repositories: ["kr://acme/core"], itemCount: 1 }] });
       }
       if (path.endsWith("/repositories") && (!options.method || options.method === "GET")) {
-        return response({ catalogId: "kr://acme/catalog", repositories: [{ id: "kr://acme/core", schemaCount: 4 }] });
+        return response({ repositories: [{ id: "kr://acme/core", schemaCount: 4 }] });
       }
       throw new Error("unexpected endpoint " + (options.method || "GET") + " " + path);
     },
@@ -151,7 +150,7 @@ test("home shows a server verdict and catalog repository cards", async () => {
   await turn();
   assert.equal(app.element("identity").textContent, "alice");
   assert.equal(app.element("app").hidden, false);
-  assert.equal(app.element("catalog").value, "kr://acme/catalog");
+  assert.ok(!source.includes("/catalog/v1/") && !source.includes("catalogID()"), "console must use the service inventory without a Catalog selector");
   assert.match(app.element("verdict").textContent, /检索分面未就绪/);
   assert.equal(app.element("repo-cards").children.length, 1);
   assert.equal(app.element("repo-cards").children[0].children[0].textContent, "kr://acme/core");

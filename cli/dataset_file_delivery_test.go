@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"kc/catalog"
 	"kc/client"
 	"kc/kernel"
 	"kc/snapshot"
+	"kc/snapshot/dataset"
 )
 
 // docs/reviewed/dataset.md U10: per-file entries publish as item truth and
@@ -19,21 +19,21 @@ import (
 // file entries outside every mount. Delivery-time content conflicts refuse
 // instead of picking a winner by source order.
 
-func fileDeliverySources(paths ...string) []catalog.KnowledgeSetSource {
+func fileDeliverySources(paths ...string) []dataset.KnowledgeSetSource {
 	sources := directoryDeliverySources(paths...)
 	return append(sources,
-		catalog.KnowledgeSetSource{
+		dataset.KnowledgeSetSource{
 			Repository: deliveryData, Selector: snapshot.DefaultRef,
 			File: "semantic/metrics/README.md", Target: "reference/policies/metric.md",
 		},
-		catalog.KnowledgeSetSource{
+		dataset.KnowledgeSetSource{
 			Repository: deliveryDocs, Selector: snapshot.DefaultRef,
 			File: "docs/guides/summary.md", Target: "data/exports/summary.txt",
 		},
 	)
 }
 
-func publishFileDelivery(t *testing.T, f *directoryDelivery, revision int, paths ...string) catalog.ResolvedKnowledgeSet {
+func publishFileDelivery(t *testing.T, f *directoryDelivery, revision int, paths ...string) dataset.ResolvedKnowledgeSet {
 	t.Helper()
 	f.write(t, deliveryDocs, "docs-v"+string(rune('0'+revision)), []snapshot.TreeChange{
 		{Path: "docs/guides/summary.md", Content: []byte("guide v1 summary\n")},
@@ -54,7 +54,7 @@ func TestDatasetFileDeliveryServesRenamedAndMixedEntries(t *testing.T) {
 	}
 	files := 0
 	for _, item := range opened.Pin.Items {
-		if item.Kind == catalog.DatasetItemFile {
+		if item.Kind == dataset.DatasetItemFile {
 			files++
 		}
 	}
@@ -112,7 +112,7 @@ func TestDatasetFileDeliveryServesRenamedAndMixedEntries(t *testing.T) {
 func TestDatasetFileDeliveryRejectsContentConflicts(t *testing.T) {
 	f := newDirectoryDelivery(t)
 	sources := append(directoryDeliverySources("reference/policies", "reference/guides", "data/metrics"),
-		catalog.KnowledgeSetSource{
+		dataset.KnowledgeSetSource{
 			Repository: deliveryData, Selector: snapshot.DefaultRef,
 			File: "semantic/metrics/README.md", Target: "reference/policies/README.md",
 		})
@@ -136,7 +136,7 @@ func TestDatasetFileDeliveryRejectsContentConflicts(t *testing.T) {
 	}
 }
 
-func assertListing(t *testing.T, f *directoryDelivery, pin catalog.ResolvedKnowledgeSet, dir string, want ...string) {
+func assertListing(t *testing.T, f *directoryDelivery, pin dataset.ResolvedKnowledgeSet, dir string, want ...string) {
 	t.Helper()
 	var out client.WorkspaceFileDirectoryResponse
 	if err := f.reader.WorkspaceFilesService().Directory(context.Background(), client.WorkspaceFileDirectoryRequest{
@@ -168,7 +168,7 @@ func assertListing(t *testing.T, f *directoryDelivery, pin catalog.ResolvedKnowl
 	}
 }
 
-func (f *directoryDelivery) assertDeliveredRead(t *testing.T, pin catalog.ResolvedKnowledgeSet, path, content string) {
+func (f *directoryDelivery) assertDeliveredRead(t *testing.T, pin dataset.ResolvedKnowledgeSet, path, content string) {
 	t.Helper()
 	var out client.WorkspaceFileReadResponse
 	if err := f.reader.WorkspaceFilesService().Read(context.Background(), client.WorkspaceFileReadRequest{

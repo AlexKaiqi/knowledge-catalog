@@ -25,7 +25,6 @@ p{line-height:1.5;color:var(--muted);margin:0 0 8px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:12px 0;box-shadow:var(--shadow)}
 .desk{padding:16px 18px}
 .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.catalog-picker{display:flex;flex-direction:column;gap:6px;min-width:240px}
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin:12px 0}
 article.pick{cursor:pointer;transition:transform .15s ease,border-color .15s ease}
 article.pick:hover{border-color:#b7c4b4;transform:translateY(-1px)}
@@ -89,7 +88,7 @@ footer{font-size:12px;color:var(--faint);margin-top:36px}
 <p class="verdict" id="verdict">正在查看这台 kc serve…</p>
 <p id="page-lead" class="muted">进仓后用 schema、read、search。</p>
 </div>
-<div class="catalog-picker"><label for="catalog">Catalog</label><select id="catalog"></select></div></div>
+</div>
 <div id="error" class="error" role="alert" hidden></div>
 <section id="login" class="card" hidden><h2>登录 Knowledge Catalog</h2><p id="login-description">使用已有 KC 身份观察这台 Server。</p>
 <form id="credentials" hidden><label id="credential-label" for="credential">用户名</label><input id="credential" autocomplete="username" required>
@@ -103,7 +102,7 @@ footer{font-size:12px;color:var(--faint);margin-top:36px}
 <div class="card">
 <h2>成员仓</h2>
 <nav class="faces" id="access-ways" aria-label="访问方式" hidden></nav>
-<p class="muted" id="repo-empty">这个 Catalog 还没有登记成员仓。</p>
+<p class="muted" id="repo-empty">这套服务 还没有登记成员仓。</p>
 <div class="cards" id="repo-cards"></div>
 </div>
 <div class="card" id="dataset-section">

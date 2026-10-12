@@ -15,96 +15,39 @@ import (
 func TestCatalogRepoWriteFlow(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
-	docs := "kr://acme/docs/catalog"
-
 	expectMsg(t, kc(h, "repo-add", "--repo", core), "no component fixture")
-
-	started := asMap(t, body(t, kc(h, "init", "--catalog", "acme/catalog")))
-	if started["catalog"] != "kr://acme/catalog" {
-		t.Fatal(started)
+	started := asMap(t, body(t, kc(h, "init")))
+	for _, retired := range []string{"catalog", "namespace", "home", "created", "initialized"} {
+		if _, present := started[retired]; present {
+			t.Fatalf("init exposes obsolete or local context %s: %#v", retired, started)
+		}
 	}
-	if _, ok := started["namespace"]; ok {
-		t.Fatal("init must not echo namespace; the catalog id is enough", started)
-	}
-	if _, ok := started["home"]; ok {
-		t.Fatal("init must not echo local --home", started)
-	}
-	if _, ok := started["created"]; ok {
-		t.Fatal("init must not report created; access the catalog with show", started)
-	}
-	if _, ok := started["initialized"]; ok {
-		t.Fatal("init must not report initialized", started)
-	}
-	again := asMap(t, body(t, kc(h, "init", "--catalog", "kr://acme/catalog")))
-	if again["catalog"] != "kr://acme/catalog" {
-		t.Fatal(again)
-	}
-	state := asMap(t, body(t, kc(h, "catalog-show")))
-	if state["catalogId"] != "kr://acme/catalog" {
-		t.Fatal(state)
-	}
-	if len(state["datasets"].([]any)) != 0 {
-		t.Fatal(state)
+	body(t, kc(h, "init"))
+	state := asMap(t, body(t, kc(h, "show")))
+	if _, present := state["catalogId"]; present || len(state["datasets"].([]any)) != 0 {
+		t.Fatalf("initial inventory: %#v", state)
 	}
 	if ids := businessRepositories(state); len(ids) != 0 || !hasRepository(state, "kr://kc/system") {
-		t.Fatal("new catalog must contain only the System Repository", state)
+		t.Fatal("new registration space must contain only the System Repository", state)
 	}
 	expectMsg(t, kc(h, "read"), "missing --repo")
 	expectMsg(t, kc(h, "read-catalog"), "unknown command read-catalog")
 	expectMsg(t, kc(h, "read-release"), "unknown command read-release")
-	named := asMap(t, body(t, kc(h, "show")))
-	if named["catalogId"] != "kr://acme/catalog" {
-		t.Fatal(named)
+	hist := asMap(t, body(t, kc(h, "registry", "audit")))
+	if !catalogLogHas(t, hist, "init") {
+		t.Fatalf("registry history must record initialization: %#v", hist)
 	}
-	hist := asMap(t, body(t, kc(h, "audit")))
-	if hist["catalogId"] != "kr://acme/catalog" {
-		t.Fatal(hist)
-	}
-	sawInit := false
-	for _, item := range hist["entries"].([]any) {
-		msg, _ := asMap(t, item)["message"].(string)
-		if len(msg) >= 4 && msg[:4] == "init" {
-			sawInit = true
-		}
-	}
-	if !sawInit {
-		t.Fatal("catalog git history is audit", hist)
-	}
-	expectMsg(t, kc(h, "log", "--catalog", "kr://acme/catalog"), "rejects --catalog")
+	expectCode(t, kc(h, "log", "--catalog", "old"), "USAGE_INVALID")
 	expectMsg(t, kc(h, "writer", "put", "--dataset", "agent", "--command-id", "x", "--object", "note/x", "--value", `{}`), "rejects --dataset")
-	expectMsg(t, kc(h, "init", "--namespace", "acme"), "not --namespace")
-	expectMsg(t, kc(h, "init", "--catalog", "acme"), "catalog id must be")
-	expectMsg(t, kc(h, "init", "--catalog", "kr://other/catalog"), "already has catalog")
-
+	expectCode(t, kc(h, "init", "--namespace", "acme"), "USAGE_INVALID")
+	expectCode(t, kc(h, "catalog-add"), "USAGE_INVALID")
 	empty := asMap(t, body(t, kc(h, "status")))
-	if _, ok := empty["home"]; ok {
-		t.Fatal("status must not echo local --home", empty)
+	if asMap(t, empty["registry"])["head"] == "" {
+		t.Fatal("registry authority head unavailable", empty)
 	}
-	if _, ok := empty["namespace"]; ok {
-		t.Fatal("status must not echo namespace", empty)
+	if len(empty["repos"].([]any)) != 1 || statusRepo(t, empty, "kr://kc/system")["driver"] != "lakefs" {
+		t.Fatal(empty)
 	}
-	if asMap(t, empty["catalog"])["repositoryId"] != "kr://acme/catalog" {
-		t.Fatal(empty["catalog"])
-	}
-	if len(empty["repos"].([]any)) != 0 {
-		t.Fatal(empty["repos"])
-	}
-	if ids := businessRepositories(empty); len(ids) != 0 || !hasRepository(empty, "kr://kc/system") {
-		t.Fatal(empty["repositories"])
-	}
-
-	addedCat := asMap(t, body(t, kc(h, "catalog-add", "--catalog", docs)))
-	if addedCat["catalog"] != docs {
-		t.Fatal(addedCat)
-	}
-	body(t, kc(h, "catalog", "use", docs))
-	docsState := asMap(t, body(t, kc(h, "show")))
-	if docsState["catalogId"] != docs {
-		t.Fatal(docsState)
-	}
-	body(t, kc(h, "catalog", "use", "kr://acme/catalog"))
-	expectMsg(t, kc(h, "catalog-add", "--catalog", docs), "already exists")
-
 	coreDSN := lakeFSRepoDSN(t)
 	mounted := asMap(t, body(t, kc(h, "repo-add", "--repo", core, "--dsn", coreDSN)))
 	if mounted["repositoryId"] != core {
@@ -112,48 +55,25 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 	}
 	head := mounted["head"].(string)
 	if head == "" {
-		t.Fatal(mounted["head"])
+		t.Fatal(mounted)
 	}
-	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/catalog"), "reserved")
-	expectMsg(t, kc(h, "repo-add", "--repo", docs), "reserved")
-
+	expectMsg(t, kc(h, "repo-add", "--repo", "kr://kc/registry"), "reserved")
 	st := asMap(t, body(t, kc(h, "status")))
-	if len(st["catalogs"].([]any)) != 2 || len(st["repos"].([]any)) != 1 {
-		t.Fatal(st["catalogs"], st["repos"])
+	if len(st["repos"].([]any)) != 2 {
+		t.Fatal(st)
+	}
+	if statusRepo(t, st, core)["dsn"] != coreDSN {
+		t.Fatal("source authority was not retained", st)
 	}
 	if hasRepository(st, core) {
-		t.Fatal("attach must not register into the default Catalog", st["repositories"])
+		t.Fatal("connection must not implicitly register a member", st)
 	}
-	body(t, kc(h, "register", "--repo", core))
-	st = asMap(t, body(t, kc(h, "status")))
-	if !hasRepository(st, core) {
-		t.Fatal("register should add the repository to the default Catalog", st["repositories"])
-	}
-	docsStatus := asMap(t, body(t, kc(h, "status", "--catalog", docs)))
-	if hasRepository(docsStatus, core) {
-		t.Fatal("second Catalog must not inherit registered repositories", docsStatus["repositories"])
-	}
-	space := asMap(t, body(t, kc(h, "show")))
-	if !hasRepository(space, core) {
-		t.Fatal("show must list registered repositories", space)
-	}
-	body(t, kc(h, "catalog", "use", docs))
-	docsSpace := asMap(t, body(t, kc(h, "show")))
-	if hasRepository(docsSpace, core) {
-		t.Fatal("second Catalog dump must not inherit registered repositories", docsSpace)
-	}
-
-	registered := asMap(t, body(t, kc(h, "attach", "--repo", core)))
-	if registered["catalog"] != docs || registered["repositoryId"] != core {
+	registered := asMap(t, body(t, kc(h, "register", "--repo", core)))
+	if registered["repositoryId"] != core {
 		t.Fatal(registered)
 	}
-	docsStatus = asMap(t, body(t, kc(h, "status", "--catalog", docs)))
-	if !hasRepository(docsStatus, core) {
-		t.Fatal(docsStatus["repositories"])
-	}
-	docsSpace = asMap(t, body(t, kc(h, "show")))
-	if !hasRepository(docsSpace, core) {
-		t.Fatal(docsSpace)
+	if !hasRepository(asMap(t, body(t, kc(h, "show"))), core) {
+		t.Fatal("explicit attach must expose source in inventory")
 	}
 
 	body(t, kc(h, "put",
@@ -346,24 +266,15 @@ func statusRepo(t *testing.T, status map[string]any, id string) map[string]any {
 func TestCatalogRepoWriteErrors(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
-	docs := "kr://acme/docs/catalog"
-
 	expectMsg(t, kc(h, "repo-add", "--repo", core), "no component fixture")
-	expectMsg(t, kc(h, "catalog-add", "--catalog", docs), "no component fixture")
+	expectCode(t, kc(h, "catalog-add"), "USAGE_INVALID")
 	expectMsg(t, kc(h, "status"), "no component fixture")
-
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
-	body(t, kc(h, "catalog-add", "--catalog", docs))
-	expectMsg(t, kc(h, "catalog-add", "--catalog", docs), "already exists")
-	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/catalog"), "reserved")
-	expectMsg(t, kc(h, "repo-add", "--repo", docs), "reserved")
+	body(t, kc(h, "init"))
+	expectCode(t, kc(h, "catalog", "use", "old"), "USAGE_INVALID")
+	expectMsg(t, kc(h, "repo-add", "--repo", "kr://kc/registry"), "reserved")
 	missingSnapshot := kc(h, "attach", "--repo", core)
 	expectCode(t, missingSnapshot, "PRECONDITION_FAILED")
 	expectMsg(t, missingSnapshot, "Snapshot "+core+" is unavailable")
-	expectMsg(t, kc(h, "status", "--catalog", "kr://missing/catalog"), "unknown catalog")
-	body(t, kc(h, "catalog", "use", "kr://missing/catalog"))
-	expectMsg(t, kc(h, "attach", "--repo", core), "unknown catalog")
-	body(t, kc(h, "catalog", "use", "kr://acme/catalog"))
 
 	coreDSN := lakeFSRepoDSN(t)
 	body(t, kc(h, "repo-add", "--repo", core, "--dsn", coreDSN))
@@ -396,7 +307,7 @@ func TestCatalogRepoWriteErrors(t *testing.T) {
 	expectCode(t, kc(h, "commit", "--command-id", "empty", "--changeset", empty), "USAGE_INVALID")
 
 	h2 := testkit.TempDir(t)
-	body(t, kc(h2, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h2, "init"))
 	seedRepo(t, h2, core)
 	expectCode(t, kc(h2, "put", "--as", "other", "--command-id", "y", "--repo", core, "--object", "a", "--value", "1"), "FORBIDDEN")
 
@@ -411,7 +322,7 @@ func TestCatalogRepoWriteErrors(t *testing.T) {
 func TestSearchAfterPutIsIncremental(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
-	body(t, kc(h, "init", "--catalog", "kr://acme/catalog"))
+	body(t, kc(h, "init"))
 	seedRepo(t, h, core)
 	body(t, kc(h, "put", "--command-id", "schema-body", "--repo", core, "--object", "schema/policy.body",
 		"--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`))

@@ -23,7 +23,7 @@ var commands = func() map[string]command {
 		maintenanceVerbs(),
 		resourceVerbs(),
 		indexVerbs(),
-		catalogVerbs(),
+		datasetVerbs(),
 		connectionVerbs(),
 		controlVerbs(),
 	} {

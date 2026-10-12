@@ -1,6 +1,6 @@
 # index/
 
-**③ 检索派生**：Repository/Binding 之上的规划、候选定位与可丢投影。它不拥有知识正文，不进入 Writer/Catalog 核心；命中后必须由独立 hydrator 在计划声明的 basis 上读取完整知识与版本。
+**③ 检索派生**：Repository/Binding 之上的规划、候选定位与可丢投影。它不拥有知识正文，不进入 Writer/Dataset 服务 核心；命中后必须由独立 hydrator 在计划声明的 basis 上读取完整知识与版本。
 
 ## 目标边界
 
@@ -15,10 +15,12 @@ retrieval/              OpenSearch service provider
 upper-layer runtime     Binding lookup / source pushdown
 
 catalog                 只提供 ResolvedKnowledgeSet；不 import index
-cli                     组装上述依赖与 Catalog.Hook
+cli                     组装上述依赖与 Dataset 服务.Hook
 ```
 
-Schema 字段只声明 `access: [text|filter|sort]` 与逻辑类型。编译分三步：
+Schema 字段统一声明逻辑类型与 `access: text/filter/sort` 查询能力，这是索引声明的唯一来源。
+查询能力变化单独判断索引影响，不自动构成知识值结构不兼容；固定旧版本按当时字段声明解释。
+编译分三步：
 
 ```text
 AccessSpec      固定 repository + commit + FieldRef(schema, aspect, path)
@@ -26,7 +28,7 @@ ProjectionSpec 某 provider 对 AccessSpec 的可重建物理实现
 RetrievalPlan  某次 SearchRequest 的 provider fragments、residual、combine、hydrate、claims
 ```
 
-Schema 不写 provider、index name、analyzer、`stored/summary/key` 或查询算子。`AccessDigest` 与 `PhysicalDigest` 分开，允许 analyzer/provider revision 改变时在 Schema 不变的情况下重建。
+Schema 与索引声明都不写 provider、index name、analyzer、`stored/summary/key` 或查询算子。`AccessDigest` 与 `PhysicalDigest` 分开，允许 analyzer/provider revision 改变时在 Schema 不变的情况下重建。
 
 Provider 端口必须分开：
 
@@ -62,6 +64,9 @@ Workspace 复用。OpenSearch 多 index、`_msearch` 或按不可变 PinID 建�
 
 ## 当前 Go 实现（2026-08-25）
 
+- `reader.DescribeRepoSchema` 在固定仓与版本，通过有界 Schema locator 读取字段声明，
+  `retrieval.AccessSpecFromReport` 编译逻辑类型与查询能力，再进入 provider Probe 与就绪/执行检查。
+  `AccessDigest` 保留归一化字段合同；查询能力改变触发重建，普通内容版本推进保持增量。
 - `retrieval.AccessSpec` 只编译 `text/filter/sort`，字段身份是完整 `(schema, aspect, path)`；裸 path 仅在唯一时可用。
 - `CompiledDoc` 是一个 object_id 一篇完整文档；Aspect/Member 只是维护单元。Member path 相对每个 member value 求值并合并成多值 cells。
 - 类型化 cells 分离 string/long/double/boolean/date/text；`eligibleFields` 保留“适用但缺值”，使 MISSING 不会命中无关 schema。

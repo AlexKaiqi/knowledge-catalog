@@ -1,0 +1,18 @@
+---
+object_id: kc/relation/recover-a-write.uses.publish-knowledge
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: relations/recover-a-write.uses.publish-knowledge.yaml
+---
+relationId: kc/relation/recover-a-write.uses.publish-knowledge
+relationType: uses
+direction: DIRECTED
+endpoints:
+  - role: from
+    objectRef:
+      repository: kr://kc/system
+      object: kc/guide/recover-a-write
+  - role: to
+    objectRef:
+      repository: kr://kc/system
+      object: kc/capability/publish-knowledge

@@ -19,8 +19,10 @@
 
 | 设计 | 回答的问题 |
 |---|---|
-| [架构总览](core-architecture.md) | 系统为什么只需要 Snapshot、Catalog、Knowledge、Retrieval 这些核心边界 |
+| [架构总览](core-architecture.md) | 系统怎样以 Snapshot（含仓登记与 Dataset）、Knowledge、Retrieval 划分核心责任 |
+| [对象供给全景](object-system.md) | 业务对象、知识表示与载体如何分开，从发布到释放各有什么保证，发布发现怎样独立交付 |
 | [知识读写](knowledge.md) | 身份与维护单元怎样解释，Schema 如何约束单仓发布 |
+| [对象 Interface](object-interface.md) | 共同处理合同怎样独立发布、解析并由装配处理器兑现 |
 | [Dataset](dataset.md) | 怎样按文件路径选择来源、重组目录、固定版本并交付原始字节 |
 | [声明式索引](declarative-index.md) | Schema 的访问意图怎样成为逻辑合同，与物理实现及查询计划如何分开 |
 | [索引控制](index-control.md) | 维护哪些版本，怎样增量、对账、恢复和退出，失败怎样隔离 |

@@ -7,16 +7,15 @@ import (
 
 	"kc/kernel"
 	"kc/snapshot"
-	"kc/snapshot/commandlog"
 )
 
 func TestReceiptAuthorizationUsesDurableRepositoryScope(t *testing.T) {
 	dir := t.TempDir()
-	ledger, err := commandlog.New(nil)
+	ledger, err := snapshot.NewCommandLedger(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = ledger.Execute("published-command", "digest", commandlog.Request{RepositoryID: "kr://owned/repo", TargetRef: string(snapshot.DefaultRef)}, func() (any, error) { return map[string]any{"newCommit": "published"}, nil })
+	_, _, err = ledger.Execute("published-command", "digest", snapshot.CommandRequest{RepositoryID: "kr://owned/repo", TargetRef: string(snapshot.DefaultRef)}, func() (any, error) { return map[string]any{"newCommit": "published"}, nil })
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"strings"
 
-	"kc/snapshot"
+	"kc/snapshot/internal/storecontract"
 )
 
 const EnvCredential = "KC_LAKEFS_CREDENTIAL"
@@ -27,7 +27,7 @@ func ParseDSN(raw string) (Endpoint, error) {
 	if raw == "" {
 		return Endpoint{}, fmt.Errorf("lakefs dsn is required (http(s)://host/repository)")
 	}
-	if err := snapshot.RejectConfiguredSecret("lakefs", raw, EnvCredential); err != nil {
+	if err := storecontract.RejectConfiguredSecret("lakefs", raw, EnvCredential); err != nil {
 		return Endpoint{}, err
 	}
 	u, err := url.Parse(raw)
