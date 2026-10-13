@@ -1,5 +1,7 @@
 package dataset
 
+import "maps"
+
 func PublicKnowledgeSets(workspaces []KnowledgeSet) []map[string]any {
 	out := make([]map[string]any, 0, len(workspaces))
 	for _, workspace := range workspaces {
@@ -27,6 +29,9 @@ func PublicKnowledgeSet(workspace KnowledgeSet) map[string]any {
 	}
 	if workspace.Retired {
 		out["retired"] = true
+	}
+	if len(workspace.Metadata) > 0 {
+		out["metadata"] = maps.Clone(workspace.Metadata)
 	}
 	return out
 }

@@ -65,9 +65,12 @@ describe.each(['development', 'preview'] as const)('%s KC administration proxy',
         expect(await call(path, method, body)).toBe(200);
         expect(calls).toEqual([{method, path, body, cookie: 'internal_auth_session=test-proof', marker: '1'}]);
     });
-    test('unrelated repository/S3 requests still reach lakeFS', async () => {
-        expect(await call('/api/v1/repositories')).toBe(418);
-        expect(await call('/native-repo/main/example.csv')).toBe(418);
-        expect(calls).toEqual([]);
+    test('native repository requests reach the product authorization entry', async () => {
+        expect(await call('/api/v1/repositories')).toBe(200);
+        expect(calls).toEqual([{method: 'GET', path: '/api/v1/repositories', body: '', cookie: 'internal_auth_session=test-proof', marker: '1'}]);
+    });
+    test('unknown file paths cannot bypass the product entry', async () => {
+        expect(await call('/native-repo/main/example.csv')).toBe(200);
+        expect(calls).toEqual([{method: 'GET', path: '/native-repo/main/example.csv', body: '', cookie: 'internal_auth_session=test-proof', marker: '1'}]);
     });
 });

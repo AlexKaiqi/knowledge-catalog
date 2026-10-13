@@ -56,3 +56,12 @@ Inventory lists explicit rules only. It does not claim to describe effective
 permissions and does not expose private deployment ledger records. Pins and
 cached content never cache an authorization decision: services evaluate the
 current rules for every new request.
+
+## 原 Repo 操作
+
+`repository_actions.go` 拥有闭集原 Repo 操作动作与求值选择。原仓 metadata、history、文件读取、文件写入、commit、引用管理、merge、Settings、Actions、PR 和 import 分别授权。`MatchRepository` 沿用同一规则求值，排除 Dataset、Object、Aspect 限定规则；这些约束不充当文件 ACL。账号管理和认证不由此包重建。
+
+原仓自定义元数据读取使用 `repository.metadata.read`，增量设置与按键删除使用
+`repository.metadata.write`。元数据写权不隐含文件、commit、Settings 或授权管理权；
+这些动作也不隐含元数据写权。元数据键和值不进入规则求值，不因 `owner`、`source`
+等自定义键产生授权或来源身份。

@@ -66,7 +66,7 @@ func (o KnowledgeSetOverlay) empty() bool {
 // delivered target or adds a new one.
 func MergeOverlay(base KnowledgeSet, overlay KnowledgeSetOverlay) (KnowledgeSet, error) {
 	if overlay.empty() {
-		return base, nil
+		return cloneKnowledgeSet(base), nil
 	}
 	if overlay.Name != "" && overlay.Name != base.SetID {
 		return KnowledgeSet{}, kernel.Fail(kernel.ErrUsageInvalid,
@@ -192,7 +192,7 @@ func MergeOverlay(base KnowledgeSet, overlay KnowledgeSetOverlay) (KnowledgeSet,
 	if err := validateSourceCoordinates(sources); err != nil {
 		return KnowledgeSet{}, err
 	}
-	out := base
+	out := cloneKnowledgeSet(base)
 	out.Sources = sources
 	out.Items = nil
 	return out, nil

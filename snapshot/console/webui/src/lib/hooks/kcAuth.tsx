@@ -25,7 +25,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
             } catch (err) { if (!controller.signal.aborted) setError(err as Error); }
             finally { if (!controller.signal.aborted) setLoading(false); }
         })();
-        return () => { controller.abort(); session.logout(); };
+        return () => { controller.abort(); };
     }, [attempt]);
     return <AuthContext.Provider value={{user, loading, error, retry: () => setAttempt(value => value + 1)}}>{children}</AuthContext.Provider>;
 };

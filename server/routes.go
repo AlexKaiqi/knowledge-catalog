@@ -19,6 +19,12 @@ type Route struct {
 }
 
 var routes = []Route{
+	{Method: "GET", Pattern: "/api/v1/"},
+	{Method: "POST", Pattern: "/api/v1/"},
+	{Method: "PUT", Pattern: "/api/v1/"},
+	{Method: "DELETE", Pattern: "/api/v1/"},
+	{Method: "PATCH", Pattern: "/api/v1/repositories/{repository}/pulls/{pull}"},
+
 	{Method: "GET", Pattern: "/admin/v1/grants"},
 	{Method: "POST", Pattern: "/admin/v1/grants"},
 	{Method: "DELETE", Pattern: "/admin/v1/grants/{grant}"},

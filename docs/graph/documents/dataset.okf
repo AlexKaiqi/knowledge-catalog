@@ -16,6 +16,7 @@ path_hint: docs/graph/documents/dataset.okf
     "operator"
   ],
   "ownerTopics": [
-    "repository-registration-and-dataset-composition-and-pin"
+    "repository-registration-and-dataset-composition-and-pin",
+    "dataset-resource-metadata-and-versioning"
   ]
 }

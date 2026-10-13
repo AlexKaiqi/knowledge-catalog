@@ -241,6 +241,17 @@ func HTTPHandlerFromConfig(path string, options HTTPServerOptions) (http.Handler
 			return nil, err
 		}
 		options.AuthMode, options.Authenticator = auth.AuthMode, auth.Authenticator
+		options.NativeAPIOrigin = auth.NativeAPIOrigin
+	}
+	if options.NativeAPIOrigin == "" && options.AuthModeLabel() == "lakefs" {
+		options.NativeAPIOrigin = cfg.AuthURL
+	}
+	if options.NativeAPIOrigin == "" && cfg.Registry.Driver == "lakefs" {
+		endpoint, err := snapshot.ParseLakeFSDSN(cfg.Registry.DSN)
+		if err != nil {
+			return nil, err
+		}
+		options.NativeAPIOrigin = endpoint.Origin
 	}
 	ws, err := apphome.OpenDeployment(cfg)
 	if err != nil {

@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1720" viewBox="0 0 1280 1720" role="img"><title>对象系统：职责与模块归属</title><rect width="100%" height="100%" fill="#FFFFFF"/>
+<text x="48" y="82.48" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="46" font-weight="500" fill="#18283B">对象系统：职责与模块归属</text>
+<text x="48" y="128.00" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="25" font-weight="400" fill="#5A6C80">目标目录设计 · 按任务归属服务 · 分层不表示调用顺序</text>
+<rect x="48" y="166" width="1184" height="114" rx="10" fill="#F6F8FB" stroke="#D4DDE7" stroke-width="1.3"/>
+<text x="72" y="214.04" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="33" font-weight="500" fill="#18283B">宿主装配</text>
+<text x="280" y="214.64" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="28" font-weight="400" fill="#18283B">cmd / 现有部署入口</text>
+<text x="72" y="257.00" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="25" font-weight="400" fill="#18283B">创建实例 · 注入端口 · 注册命令、路由与页面 · 启动 / 关闭</text>
+<rect x="48" y="318" width="284" height="662" rx="10" fill="#FFFFFF" stroke="#D4DDE7" stroke-width="1.3"/>
+<text x="68" y="366.40" font-family="Menlo, monospace" font-size="30" font-weight="500" fill="#18283B">object/</text>
+<text x="68" y="404.12" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="24" font-weight="400" fill="#5A6C80">对象基本读写</text>
+<rect x="64" y="430" width="252" height="102" rx="7" fill="#F6F8FB" stroke="none" stroke-width="1.3"/>
+<text x="78" y="465.36" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="22" font-weight="400" fill="#5A6C80">接入入口</text>
+<text x="78" y="500.36" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="22" font-weight="400" fill="#18283B">http · cli · client</text>
+<rect x="64" y="552" width="252" height="192" rx="7" fill="#EDF4FF" stroke="none" stroke-width="1.3"/>
+<text x="78" y="592.88" font-family="Menlo, monospace" font-size="26" font-weight="500" fill="#18283B">service/</text>
+<text x="78" y="635.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#18283B">读取 / 发布</text>
+<text x="78" y="671.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#18283B">固定版本与当前授权</text>
+<text x="78" y="707.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#18283B">写入不等待投影</text>
+<rect x="64" y="764" width="252" height="194" rx="7" fill="#F6F8FB" stroke="none" stroke-width="1.3"/>
+<text x="78" y="800.36" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="22" font-weight="400" fill="#5A6C80">能力实现</text>
+<text x="78" y="838.48" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="21" font-weight="400" fill="#18283B">reader / writer</text>
+<text x="78" y="871.36" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="22" font-weight="400" fill="#18283B">固定读取与范围组装</text>
+<text x="78" y="903.36" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="22" font-weight="400" fill="#18283B">CAS · 幂等 · 回执</text>
+<text x="78" y="934.48" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="21" font-weight="400" fill="#18283B">format / semanticview</text>
+<rect x="348" y="318" width="284" height="662" rx="10" fill="#FFFFFF" stroke="#D4DDE7" stroke-width="1.3"/>
+<text x="368" y="366.40" font-family="Menlo, monospace" font-size="30" font-weight="500" fill="#18283B">discovery/</text>
+<text x="368" y="404.12" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="24" font-weight="400" fill="#5A6C80">候选发现与查询</text>
+<rect x="364" y="430" width="252" height="102" rx="7" fill="#F6F8FB" stroke="none" stroke-width="1.3"/>
+<text x="378" y="465.36" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="22" font-weight="400" fill="#5A6C80">接入入口</text>
+<text x="378" y="500.36" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="22" font-weight="400" fill="#18283B">http · cli · client</text>
+<rect x="364" y="552" width="252" height="192" rx="7" fill="#EDF4FF" stroke="none" stroke-width="1.3"/>
+<text x="378" y="592.88" font-family="Menlo, monospace" font-size="26" font-weight="500" fill="#18283B">service/</text>
+<text x="378" y="635.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#18283B">搜索 / 关系 / 遍历</text>
+<text x="378" y="671.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#18283B">候选 → 同依据回读</text>
+<text x="378" y="707.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#18283B">复核与正文交付</text>
+<rect x="364" y="764" width="252" height="194" rx="7" fill="#F6F8FB" stroke="none" stroke-width="1.3"/>
+<text x="378" y="800.36" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="22" font-weight="400" fill="#5A6C80">能力实现</text>
+<text x="378" y="838.48" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="21" font-weight="400" fill="#18283B">query / projection</text>
+<text x="378" y="871.36" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="22" font-weight="400" fill="#18283B">查询执行 / 后台维护</text>
+<text x="378" y="902.48" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="21" font-weight="400" fill="#18283B">opensearch / llmhttp</text>
+<text x="378" y="935.36" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="22" font-weight="400" fill="#18283B">查询不负责建索引</text>
+<rect x="648" y="318" width="284" height="662" rx="10" fill="#FFFFFF" stroke="#D4DDE7" stroke-width="1.3"/>
+<text x="668" y="366.40" font-family="Menlo, monospace" font-size="30" font-weight="500" fill="#18283B">interfaces/</text>
+<text x="668" y="404.12" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="24" font-weight="400" fill="#5A6C80">通用能力调用</text>
+<rect x="664" y="430" width="252" height="102" rx="7" fill="#F6F8FB" stroke="none" stroke-width="1.3"/>
+<text x="678" y="465.36" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="22" font-weight="400" fill="#5A6C80">接入入口</text>
+<text x="678" y="500.36" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="22" font-weight="400" fill="#18283B">http · cli · client</text>
+<rect x="664" y="552" width="252" height="192" rx="7" fill="#EDF4FF" stroke="none" stroke-width="1.3"/>
+<text x="678" y="592.88" font-family="Menlo, monospace" font-size="26" font-weight="500" fill="#18283B">service/</text>
+<text x="678" y="635.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#18283B">实现选择与合同匹配</text>
+<text x="678" y="671.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#18283B">操作授权 → Handler</text>
+<text x="678" y="707.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#18283B">输入 / 结果验证</text>
+<rect x="664" y="764" width="252" height="194" rx="7" fill="#F6F8FB" stroke="none" stroke-width="1.3"/>
+<text x="678" y="800.36" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="22" font-weight="400" fill="#5A6C80">能力实现</text>
+<text x="678" y="838.48" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="21" font-weight="400" fill="#18283B">resolve / registry</text>
+<text x="678" y="870.48" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="21" font-weight="400" fill="#18283B">dispatch / Handler</text>
+<text x="678" y="903.36" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="22" font-weight="400" fill="#18283B">固定合同与实现声明</text>
+<text x="678" y="935.36" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="22" font-weight="400" fill="#18283B">不安装具体内置能力</text>
+<rect x="948" y="318" width="284" height="662" rx="10" fill="#FFFFFF" stroke="#D4DDE7" stroke-width="1.3"/>
+<text x="968" y="366.40" font-family="Menlo, monospace" font-size="30" font-weight="500" fill="#18283B">liveaccess/</text>
+<text x="968" y="404.12" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="24" font-weight="400" fill="#5A6C80">瞬时状态访问</text>
+<rect x="964" y="430" width="252" height="102" rx="7" fill="#F6F8FB" stroke="none" stroke-width="1.3"/>
+<text x="978" y="465.36" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="22" font-weight="400" fill="#5A6C80">接入入口</text>
+<text x="978" y="500.36" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="22" font-weight="400" fill="#18283B">http · cli · client</text>
+<rect x="964" y="552" width="252" height="192" rx="7" fill="#EDF4FF" stroke="none" stroke-width="1.3"/>
+<text x="978" y="592.88" font-family="Menlo, monospace" font-size="26" font-weight="500" fill="#18283B">service/</text>
+<text x="978" y="635.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#18283B">状态读取 / 声明操作</text>
+<text x="978" y="671.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#18283B">动态值组装</text>
+<text x="978" y="707.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#18283B">返回观察依据</text>
+<rect x="964" y="764" width="252" height="194" rx="7" fill="#F6F8FB" stroke="none" stroke-width="1.3"/>
+<text x="978" y="800.36" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="22" font-weight="400" fill="#5A6C80">能力实现</text>
+<text x="978" y="838.48" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="21" font-weight="400" fill="#18283B">binding / handler</text>
+<text x="978" y="870.48" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="21" font-weight="400" fill="#18283B">httpv1 / hydrate</text>
+<text x="978" y="903.36" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="22" font-weight="400" fill="#18283B">声明与观察分别保留</text>
+<text x="978" y="935.36" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="22" font-weight="400" fill="#18283B">来源客户端经端口注入</text>
+<text x="48" y="1031.00" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="25" font-weight="500" fill="#5A6C80">公共基础</text>
+<rect x="48" y="1053" width="1184" height="118" rx="10" fill="#EAF2FC" stroke="#D4DDE7" stroke-width="1.3"/>
+<text x="72" y="1098.28" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="31" font-weight="500" fill="#18283B">object 根合同</text>
+<text x="72" y="1137.12" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="24" font-weight="400" fill="#18283B">ObjectID · Reference · Address · Aspect / Member · Schema · Relation · Provenance</text>
+<rect x="48" y="1190" width="1184" height="126" rx="10" fill="#F0F3F6" stroke="#D4DDE7" stroke-width="1.3"/>
+<text x="72" y="1236.28" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="31" font-weight="500" fill="#18283B">Snapshot 底座</text>
+<text x="345" y="1236.00" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="25" font-weight="400" fill="#18283B">版本化内容 · Dataset 文件范围 · 当前授权</text>
+<text x="72" y="1280.12" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="24" font-weight="400" fill="#5A6C80">lakeFS 承担 snapshot store；业务对象身份由 Object 层表达。</text>
+<text x="48" y="1373.76" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="27" font-weight="500" fill="#18283B">其他明确的流程与可选组件</text>
+<rect x="48" y="1402" width="384" height="98" rx="8" fill="#F6F8FB" stroke="#D4DDE7" stroke-width="1.3"/>
+<text x="68" y="1439.24" font-family="Menlo, monospace" font-size="23" font-weight="400" fill="#18283B">discovery/datasets</text>
+<text x="68" y="1478.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#18283B">可搜索 Dataset 采用</text>
+<rect x="448" y="1402" width="384" height="98" rx="8" fill="#F6F8FB" stroke="#D4DDE7" stroke-width="1.3"/>
+<text x="468" y="1439.24" font-family="Menlo, monospace" font-size="23" font-weight="400" fill="#18283B">liveaccess/discovery</text>
+<text x="468" y="1478.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#18283B">观察与动态查询交接</text>
+<rect x="848" y="1402" width="384" height="98" rx="8" fill="#F6F8FB" stroke="#D4DDE7" stroke-width="1.3"/>
+<text x="868" y="1439.24" font-family="Menlo, monospace" font-size="23" font-weight="400" fill="#18283B">systemrepo</text>
+<text x="868" y="1478.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#18283B">系统出版物发布与核对</text>
+<rect x="48" y="1518" width="384" height="98" rx="8" fill="#F6F8FB" stroke="#D4DDE7" stroke-width="1.3"/>
+<text x="68" y="1555.24" font-family="Menlo, monospace" font-size="23" font-weight="400" fill="#18283B">object/cache</text>
+<text x="68" y="1594.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#18283B">固定版本正文缓存</text>
+<rect x="448" y="1518" width="384" height="98" rx="8" fill="#F6F8FB" stroke="#D4DDE7" stroke-width="1.3"/>
+<text x="468" y="1555.24" font-family="Menlo, monospace" font-size="23" font-weight="400" fill="#18283B">object/maintenance</text>
+<text x="468" y="1594.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#18283B">显式维护与派生进度</text>
+<rect x="848" y="1518" width="384" height="98" rx="8" fill="#F6F8FB" stroke="#D4DDE7" stroke-width="1.3"/>
+<text x="868" y="1555.24" font-family="Menlo, monospace" font-size="23" font-weight="400" fill="#18283B">controlplane / delivery</text>
+<text x="868" y="1594.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#18283B">治理闭环 / 正文交付</text>
+<text x="48" y="1665.12" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="24" font-weight="400" fill="#5A6C80">各能力拥有自己的请求流程；宿主只装配，Object 根包保持基础合同。</text>
+</svg>

@@ -1,6 +1,7 @@
 import { jsonRequest, KCError, RequestMethod } from './transport';
 import { session } from './session';
 import {addedGrant, admissionResult, grantList, revokeResult} from './kcAccess';
+import {Metadata} from './kcMetadata';
 export { KCError } from './transport';
 export type { Fault } from './transport';
 
@@ -15,7 +16,7 @@ export type DirectoryEntry = { name: string; kind: 'file' | 'directory' };
 export type MountsResponse = { pin: ResolvedPin; mounts: VirtualMount[] };
 export type DirectoryResponse = { pin: ResolvedPin; entries: DirectoryEntry[]; continuation?: string; exhausted: boolean };
 export type FileResponse = { content: string; totalBytes: number; eof: boolean; offset: number };
-export type DatasetSummary = { id: string; revision: number; repositories: string[]; itemCount: number; retired?: boolean };
+export type DatasetSummary = { id: string; revision: number; repositories: string[]; itemCount: number; retired?: boolean; metadata?: Metadata };
 export type RegisteredRepository = {id: string; consoleRepository?: string};
 export type SourceInput = { baseRev?: string; repository: string; selector?: string; commit?: string; path?: string; subPath?: string; file?: string; target?: string };
 export type DatasetDetail = DatasetSummary & { items: DatasetItem[]; sources: SourceInput[]; versions: number[]; servingRevision: number; continuation?: string };
@@ -65,8 +66,8 @@ export const kc = {
     repositories: (signal?: AbortSignal) => request<{ repositories: RegisteredRepository[] }>('/snapshot/v1/repositories', undefined, signal),
     datasets: (signal?: AbortSignal) => request<{ datasets: DatasetSummary[] }>('/snapshot/v1/datasets', undefined, signal),
     dataset: (dataset: string, revision?: number, signal?: AbortSignal, history?: HistoryPage) => request<DatasetDetail>(detailPath(dataset, revision, history), undefined, signal),
-    preview: (body: { dataset: string; revision: number; sources: SourceInput[] }, signal?: AbortSignal) => request<ResolvedPin>('/snapshot/v1/datasets:resolve', body, signal),
-    define: (body: { dataset: string; revision: number; sources: SourceInput[] }, signal?: AbortSignal) => request<unknown>('/snapshot/v1/datasets', body, signal),
+    preview: (body: { dataset: string; revision: number; sources: SourceInput[]; metadata?: Metadata }, signal?: AbortSignal) => request<ResolvedPin>('/snapshot/v1/datasets:resolve', body, signal),
+    define: (body: { dataset: string; revision: number; sources: SourceInput[]; metadata?: Metadata }, signal?: AbortSignal) => request<unknown>('/snapshot/v1/datasets', body, signal),
     retire: (dataset: string, signal?: AbortSignal) => request<unknown>(`${datasetPath(dataset)}/retire`, {}, signal),
     mounts: (dataset: string, pin?: ResolvedPin, signal?: AbortSignal) => request<MountsResponse>('/snapshot/v1/files/mounts:list', coordinate(dataset, pin), signal),
     tree: (dataset: string, pin: ResolvedPin, path: string, continuation?: string, signal?: AbortSignal) =>

@@ -11,6 +11,8 @@ type LoginConfig = {
   LoginFailedMessage: string|null
   LoginUrl: string
   LogoutUrl: string
+  snapshot_identity?: boolean
+  provider_url?: string
 };
 
 const initValue = {

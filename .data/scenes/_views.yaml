@@ -27,6 +27,7 @@ product_documents:
       U4: 判定与证据归 cli-evaluation.md，尚未建立 .data/scenes 现行旅程绑定。
       U5: 判定与证据归 cli-evaluation.md，尚未建立 .data/scenes 现行旅程绑定。
       U6: 判定与证据归 cli-evaluation.md，尚未建立 .data/scenes 现行旅程绑定。
+      U7: 插件包、实例与目标绑定的管理入口尚待选定公开合同；当前没有启用、停用及解绑发现插件的执行旅程，已有发现入口不证明这些新增管理能力。
   resource-access:
     section: 方向性用例
     gaps:

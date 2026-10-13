@@ -40,9 +40,9 @@ Go handler 仅依赖标准库，可独立挂载。禁止依赖 `server`、`cli`�
 个人权限与授权管理共用规则详情、创建/修改表单和条件修改窗口，字段采用左侧 key、
 右侧 value 的列布局。个人权限只展示当前调用方的显式规则，只有服务端给出可管理提示
 的规则才显示修改入口，实际修改仍由服务端校验当前权限和旧规则快照。
-原 My Credentials、Users、Groups 页面继续使用 native API；Community 单管理员模式
-允许进入原页面，用户列表可查看；原 API 未实现的凭证/组管理如实显示后端返回，
-管理写入口按原后端能力禁用。具备对应认证服务的部署继续使用原管理 API。
+原 My Credentials、Users、Groups 导航保留；外部认证模式显示已核验主体并链接实际认证
+系统，该系统管理账号、组与用户凭据。私网 lakeFS 的账号管理 API 不向用户转发。
+遗留显式 lakeFS 认证模式继续显示原管理页并遵守原后端能力限制。
 
 ## 验证
 
@@ -51,3 +51,5 @@ Go handler 仅依赖标准库，可独立挂载。禁止依赖 `server`、`cli`�
 `make test-webui` 执行完整前端类型、lint、行为、构建及受影响 Go 回归。
 原控制台路由由 `webui/src/extendable/completeConsole.test.tsx` 守卫；实际后端证据与版本边界
 见 [控制台验证记录](webui/CONSOLE-VALIDATION.md)。
+
+原 Repo API 也须经 `snapshot/service`：现有认证确认调用者，当前产品授权通过后用服务私有存储凭据转发未修改的私网 lakeFS。原账号与认证复用现有提供方；Dataset 没有第二次认证。接线与网络边界见 `webui/KC-VENDOR.md`。

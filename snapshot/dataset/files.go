@@ -125,9 +125,59 @@ func validateRegistryYAMLNode(node *yaml.Node) error {
 
 // DecodeJSON decodes the current Workspace vocabulary only.
 func DecodeJSON(body []byte, dest any) error {
+	if metadata, ok := dest.(*map[string]string); ok {
+		return decodeMetadataJSON(body, metadata)
+	}
+	if err := ValidateMetadataJSON(body, dest); err != nil {
+		return err
+	}
 	dec := json.NewDecoder(bytes.NewReader(body))
 	dec.DisallowUnknownFields()
 	return dec.Decode(dest)
+}
+
+// decodeMetadataJSON checks the actual token types because encoding/json accepts
+// null string values as empty strings and silently keeps the last duplicate key.
+func decodeMetadataJSON(body []byte, dest *map[string]string) error {
+	dec := json.NewDecoder(bytes.NewReader(body))
+	start, err := dec.Token()
+	if err != nil {
+		return err
+	}
+	if start != json.Delim('{') {
+		return fmt.Errorf("metadata must be an object of string keys and values")
+	}
+	metadata := map[string]string{}
+	for dec.More() {
+		token, err := dec.Token()
+		if err != nil {
+			return err
+		}
+		key, ok := token.(string)
+		if !ok {
+			return fmt.Errorf("metadata keys must be strings")
+		}
+		if _, duplicate := metadata[key]; duplicate {
+			return fmt.Errorf("metadata contains duplicate key %q", key)
+		}
+		value, err := dec.Token()
+		if err != nil {
+			return err
+		}
+		text, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("metadata values must be strings")
+		}
+		metadata[key] = text
+	}
+	if _, err := dec.Token(); err != nil {
+		return err
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return fmt.Errorf("metadata must contain exactly one object")
+	}
+	*dest = metadata
+	return nil
 }
 
 func yamlNode(n any) *yaml.Node {

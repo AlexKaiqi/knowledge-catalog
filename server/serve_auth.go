@@ -17,7 +17,9 @@ import (
 type HTTPServerOptions struct {
 	// AuthMode is the pairing advertised by GET /identity/v1/auth.
 	// Empty means local when Authenticator is also nil (test seam).
-	AuthMode        string
+	AuthMode string
+	// NativeAPIOrigin is a fixed lakeFS origin, never a client-selected proxy.
+	NativeAPIOrigin string
 	Authenticator   inv.HTTPAuthenticator
 	AdminPrincipals []string
 	// ServiceIdentity identifies the KC service to Taihu for token introspection
@@ -75,7 +77,7 @@ func authenticateHTTPRequest(w http.ResponseWriter, r *http.Request, options HTT
 	}
 	var id inv.HTTPIdentity
 	var err error
-	if options.AuthModeLabel() == "lakefs" {
+	if options.AuthModeLabel() == "lakefs" || options.AuthModeLabel() == "taihu" {
 		err = validateLakeFSConsoleRequest(r)
 	}
 	if err == nil {

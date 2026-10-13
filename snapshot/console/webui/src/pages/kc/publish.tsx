@@ -5,6 +5,8 @@ import { kc, uiPath, ResolvedPin } from '../../lib/api/kc';
 import { Definition, parseDefinition } from './definition';
 import ErrorNotice from '../../lib/components/kcError';
 import SourceEditor, { emptyRow, sourceInputs, sourceRow, SourceRow } from './sourceEditor';
+import {MetadataRow, metadataRows, metadataFromRows} from '../../lib/api/kcMetadata';
+import {MetadataEditor} from '../../lib/components/resourceMetadata';
 
 const PublishPage: React.FC = () => {
     const { datasetId } = useParams();
@@ -12,6 +14,8 @@ const PublishPage: React.FC = () => {
     const [dataset, setDataset] = useState(datasetId ?? '');
     const [revision, setRevision] = useState(1);
     const [rows, setRows] = useState<SourceRow[]>([emptyRow()]);
+    const [metadata, setMetadata] = useState<MetadataRow[]>([]);
+    const [metadataDefined, setMetadataDefined] = useState(false);
     const [mode, setMode] = useState<'form' | 'json'>('form');
     const [json, setJson] = useState('');
     const [preview, setPreview] = useState<{signature: string; pin: ResolvedPin} | null>(null);
@@ -25,6 +29,7 @@ const PublishPage: React.FC = () => {
         pending.current = controller;
         setBusy(false); setPreview(null); setMode('form'); setJson('');
         setReady(false); setError(null); setDataset(datasetId ?? ''); setRows([emptyRow()]); setRevision(1);
+        setMetadata([]); setMetadataDefined(false);
         (async () => {
             try {
                 const registered = await kc.repositories(controller.signal);
@@ -35,13 +40,15 @@ const PublishPage: React.FC = () => {
                     if (controller.signal.aborted) return;
                     setRevision(detail.servingRevision + 1);
                     setRows(detail.sources.map(sourceRow));
+                    setMetadata(metadataRows(detail.metadata)); setMetadataDefined(detail.metadata !== undefined);
                 }
                 setReady(true);
             } catch (err) { if (!controller.signal.aborted) setError(err as Error); }
         })();
         return () => controller.abort();
     }, [datasetId]);
-    const definition = (): Definition => mode === 'json' ? parseDefinition(json, datasetId) : parseDefinition(JSON.stringify({dataset: dataset.trim(), revision, sources: sourceInputs(rows)}), datasetId);
+    const metadataField = () => metadataDefined ? {metadata: metadataFromRows(metadata)} : {};
+    const definition = (): Definition => mode === 'json' ? parseDefinition(json, datasetId) : parseDefinition(JSON.stringify({dataset: dataset.trim(), revision, sources: sourceInputs(rows), ...metadataField()}), datasetId);
     const changeMode = (value: 'form' | 'json'): void => {
         setError(null);
         try {
@@ -50,10 +57,11 @@ const PublishPage: React.FC = () => {
                 const sources = rows.map(row => ({repository: row.repository, selector: row.selector || 'refs/heads/main',
                     commit: row.basis === 'commit' ? row.commit : undefined, baseRev: row.baseRev,
                     ...(row.kind === 'file' ? {file: row.source, target: row.target} : row.kind === 'prefix' ? {path: row.target, subPath: row.source || undefined} : {subPath: row.source || undefined})}));
-                setJson(JSON.stringify({dataset, revision, sources}, null, 2));
+                setJson(JSON.stringify({dataset, revision, sources, ...metadataField()}, null, 2));
             } else {
                 const current = definition();
                 setDataset(current.dataset); setRevision(current.revision); setRows(current.sources.map(sourceRow));
+                setMetadata(metadataRows(current.metadata)); setMetadataDefined(current.metadata !== undefined);
             }
             setMode(value);
         } catch (err) { setError(err as Error); }
@@ -101,12 +109,14 @@ const PublishPage: React.FC = () => {
                 </ToggleButtonGroup>
                 {mode === 'json' ? <Form.Group controlId="dataset-json" className="mb-4"><Form.Label>Dataset JSON 定义</Form.Label>
                     <Form.Control as="textarea" rows={18} value={json} onChange={event => setJson(event.target.value)} spellCheck={false}/>
-                    <Form.Text>使用 KC 发布合同：dataset、revision、sources；不支持的字段会明确拒绝。</Form.Text>
+                    <Form.Text>使用 KC 发布合同：dataset、revision、sources，以及可选的 metadata 字符串键值对象；不支持的字段会明确拒绝。</Form.Text>
                 </Form.Group> : <>
                 <Form.Group controlId="dataset-name" className="mb-3"><Form.Label>Dataset 名称</Form.Label>
                     <Form.Control required readOnly={!!datasetId} value={dataset} onChange={(event) => setDataset(event.target.value)} /></Form.Group>
                 <Form.Group controlId="dataset-revision" className="mb-3"><Form.Label>发布版本</Form.Label>
                     <Form.Control type="number" min={1} step={1} required value={revision} onChange={(event) => setRevision(Number(event.target.value))} /></Form.Group>
+                <MetadataEditor rows={metadata} disabled={busy} change={next => {setMetadata(next); setMetadataDefined(true);}}/>
+                <p className="text-muted">元数据随本次发布版本保存；编辑新版时沿用当前版，可修改或清空。</p>
                 {datasetId && <Alert variant="info">沿用原版的固定提交。需要采用来源更新时，将对应来源的版本切换为“发布时固定分支版本”。发布会创建新版本，旧版保持原样。</Alert>}
                 {repositories.length === 0 && <Alert variant="warning">服务没有已登记的来源仓，请先完成来源接入。</Alert>}
                 {rows.map((row, index) => <SourceEditor key={index} row={row} index={index} repositories={repositories} disabled={busy}

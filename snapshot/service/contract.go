@@ -16,6 +16,8 @@ type Sources interface {
 }
 
 type Authorization struct {
+	// NativeRepository selects raw Repo scope; Dataset/Object/Aspect grants do not open it.
+	NativeRepository   bool
 	Caller             identity.HTTPIdentity
 	Query              access.Query
 	Definition         *dataset.KnowledgeSet
@@ -38,10 +40,14 @@ type FileReadEvidence struct {
 // add its own policy, publication preparation and evidence, without replacing
 // Dataset publication or grant authority with an application executor.
 type Resources struct {
-	Datasets  dataset.Service
-	Sources   Sources
-	Access    access.Service
-	Authorize func(context.Context, Authorization) error
+	// Actual unique bindings on Config.NativeOrigin, never guessed coordinates.
+	NativeRepositories map[string]kernel.RepositoryID
+	// Creation reuses the host durable allocation and registration lifecycle.
+	CreateNativeRepository func(context.Context, identity.HTTPIdentity, string) (kernel.RepositoryID, string, error)
+	Datasets               dataset.Service
+	Sources                Sources
+	Access                 access.Service
+	Authorize              func(context.Context, Authorization) error
 	// DescribeRepository adds optional application-owned inventory metadata for
 	// an already selected registered source. It cannot change that source ID.
 	DescribeRepository func(context.Context, identity.HTTPIdentity, kernel.RepositoryID) (map[string]any, error)
@@ -63,10 +69,19 @@ type IdentityOptions struct {
 	// BrowserLogin is optional discovery metadata owned by an external login
 	// provider; this file service neither implements nor interprets that flow.
 	BrowserLogin any
+	// ProviderURL links to the existing identity authority, never the storage account.
+	ProviderURL string
+	// LogoutURL terminates a browser session at its existing identity gateway.
+	LogoutURL string
 }
 
 type Config struct {
-	Identity IdentityOptions
+	// Trusted native instance. NativeCredential supplies server-private storage
+	// proof after caller authentication; it never becomes a caller identity.
+	NativeOrigin          string
+	NativeCredential      func(context.Context) (string, error)
+	NativeManagedCreation bool
+	Identity              IdentityOptions
 	// Acquire returns narrow resources plus a release function. It may hold a
 	// caller's lease/lock but must never expose Home or Invocation to this module.
 	Acquire func(context.Context, identity.HTTPIdentity, string) (Resources, func(), error)

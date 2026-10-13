@@ -62,7 +62,7 @@ describe('complete lakeFS console', () => {
             const headers = new Headers(options?.headers);
             expect(headers.has('X-Kc-As')).toBe(false);
             expect(headers.has('Authorization')).toBe(false);
-            expect(headers.has('X-Kc-Console')).toBe(false);
+            expect(headers.get('X-Kc-Console')).toBe('1');
         }
         const proof = vi.mocked(fetch).mock.calls.find(([path]) => String(path) === '/identity/v1/whoami');
         expect(proof?.[1]?.credentials).toBe('same-origin');

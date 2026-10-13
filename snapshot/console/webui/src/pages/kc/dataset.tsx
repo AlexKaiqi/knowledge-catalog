@@ -7,6 +7,7 @@ import DeliveryTree from './deliveryTree';
 import Compare from './compare';
 import {ActionsBar} from '../../lib/components/controls';
 import {CodeIcon, DatabaseIcon, GitCommitIcon, GitCompareIcon, PencilIcon} from '@primer/octicons-react';
+import {MetadataView} from '../../lib/components/resourceMetadata';
 
 const DatasetPage: React.FC = () => {
     const { datasetId = '' } = useParams();
@@ -91,6 +92,7 @@ const DatasetPage: React.FC = () => {
                 <ButtonToolbar className="ms-auto">{!detail.retired && <Link className="btn btn-success" to={`${uiPath.dataset(datasetId)}/edit`}><PencilIcon/> 编辑当前版并发布新版</Link>}</ButtonToolbar>
             </Stack></ActionsBar>
             <h1 className="visually-hidden">{detail.id} v{detail.revision} {detail.retired ? '已退役' : ''}</h1>
+            <Card className="mb-4"><Card.Header>自定义元数据 · v{detail.revision}</Card.Header><Card.Body><MetadataView metadata={detail.metadata}/></Card.Body></Card>
             <Card className="mb-4"><Card.Header>来源与交付范围</Card.Header><Card.Body className="p-0">
                 <Table responsive hover className="mb-0"><thead><tr><th>交付路径</th><th>来源仓</th><th>来源路径</th><th>固定提交</th><th>形态</th></tr></thead>
                     <tbody>{detail.items.map((item) => <tr key={item.target}><td>{item.target || '/'}</td><td>{item.repository}</td><td>{item.file ?? item.prefix ?? '/'}</td><td><code title={item.commit}>{item.commit.slice(0, 12)}</code></td><td>{item.kind === 'file' ? '文件' : '目录'}</td></tr>)}</tbody>
@@ -116,7 +118,7 @@ const DatasetPage: React.FC = () => {
                 {history?.continuation && <Button className="mb-3" variant="outline-primary" disabled={historyBusy} onClick={() => {void moreHistory();}}>{historyBusy ? '正在加载历史…' : '加载更多历史版本'}</Button>}
                 <p className="text-muted">历史按页读取，比较与版本选择只展示已加载的发布记录；当前退役和授权判定继续适用于历史读取。Dataset 有新发布导致分页失效时，请打开当前版本重新加载。</p></div></Container></Tab>
             <Tab eventKey="compare" title={<><GitCompareIcon/> Compare</>}><Container fluid="sm"><div className="mt-4"><Compare key={`${datasetId}:${detail.revision}`} dataset={datasetId} detail={{...detail, versions}}/></div></Container></Tab>
-            <Tab eventKey="definition" title={<><CodeIcon/> JSON</>}><Container fluid="sm"><div className="mt-4"><pre className="text-wrap">{JSON.stringify({dataset: detail.id, revision: detail.revision, sources: detail.sources}, null, 2)}</pre></div></Container></Tab>
+            <Tab eventKey="definition" title={<><CodeIcon/> JSON</>}><Container fluid="sm"><div className="mt-4"><pre className="text-wrap">{JSON.stringify({dataset: detail.id, revision: detail.revision, sources: detail.sources, ...(detail.metadata === undefined ? {} : {metadata: detail.metadata})}, null, 2)}</pre></div></Container></Tab>
             </Tabs>
         </>}
     </div>;

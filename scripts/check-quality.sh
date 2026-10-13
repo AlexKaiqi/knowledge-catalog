@@ -8,6 +8,20 @@ max_file_lines="${KC_MAX_GO_FILE_LINES:-700}"
 duplicate_tokens="${KC_MAX_DUPLICATE_TOKENS:-150}"
 cd "$repo_root"
 
+# Check new files too: an unstaged diff does not include non-ignored additions.
+# --no-index uses exit 1 for a clean difference and 2/3 for check failures.
+git diff --check >/dev/null
+git diff --cached --check >/dev/null
+while IFS= read -r -d '' added_file; do
+	[[ -f "$added_file" ]] || continue
+	check_status=0
+	git diff --no-index --check /dev/null "$added_file" >/dev/null || check_status=$?
+	if (( check_status > 1 )); then
+		printf '%s: new-file whitespace check failed\n' "$added_file" >&2
+		exit 1
+	fi
+done < <(git ls-files --others --exclude-standard -z)
+
 go_files=()
 production_files=()
 while IFS= read -r file; do

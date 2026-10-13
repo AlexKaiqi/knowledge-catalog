@@ -22,7 +22,7 @@ schema_ref: schema/system/capability-entrypoints/v1
     {
       "action": "repositories.manage",
       "command": "kc detach",
-      "description": "从服务登记空间 拿下 Repository",
+      "description": "从服务登记空间移除 Repository 登记",
       "help": "kc help detach"
     }
   ]

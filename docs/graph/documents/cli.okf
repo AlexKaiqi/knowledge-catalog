@@ -17,6 +17,7 @@ path_hint: docs/graph/documents/cli.okf
   ],
   "ownerTopics": [
     "system-cli-entrypoint-publication",
-    "product-cli-argv-help-and-operands"
+    "product-cli-argv-help-and-operands",
+    "cli-affordance-carrier-and-progressive-disclosure"
   ]
 }

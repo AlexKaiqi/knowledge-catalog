@@ -63,7 +63,10 @@ Reader 可以持有应用注入的同版本 hydrate 端口（公开类型 `knowl
 | Object（业务对象） | 领域中被独立指认、引用和供给的关注单元，例如图片资产、模块或外部表；其边界和身份延续由领域模型规定。它不是 Snapshot 的路径、文件或字节。 |
 | 对象知识表示 | 关于业务对象的版本化定义、组成、事实、说明、来源及使用合同；以既有 Repository 和知识标识定位，不增加第二套通用领域身份。 |
 | 知识记录 / 声明 | 知识表示的维护内容，以及可独立寻址的 Schema、Interface、Relation 等合同或关系记录；沿用现有 ObjectID / Address 技术寻址，存在标识不代表自动发布了一个业务供给。 |
-| 可供性（Affordance） | 与对象明确实现及操作关联的任务选择信息，说明用途、适用条件、效果、风险、成本及示例；属于版本化知识，不替代 Interface、不授予权限，也不证明实现可用。 |
+| 可供性（Affordance） | 关联明确实现与任务合同的能力说明规范，说明用途、条件、效果、风险、成本及示例。对象能力关联固定 Interface、实现及操作；CLI 任务能力沿用 typed 任务合同与 help 载体，可关联已装配 Plugin，不强制登记为对象 Interface。知识出版须经 Writer 固定；说明、help 或元数据不授予权限、不证明可用，也不另建分派或描述字段协议。 |
+| Plugin（目标插件） | 有明确身份、版本和可执行实现的软件实体，提供受明确任务合同约束的能力；合同与说明沿用知识发布，代码由运行宿主装配。标准插件与业务插件不改变基础身份、写边界或权限合同。 |
+| PluginBinding（目标插件采用绑定） | 将指定 Plugin 的采用版本与配置关联到 Repository 或 Dataset 的能力启用范围；采用不发权，范围不等于代码沙箱，也不替代 State 的值来源 Binding。 |
+| PluginHost（目标插件宿主） | 核对注册、装配代码、注入服务并管理插件生命周期与恢复的运行宿主；逐请求身份、授权、固定范围及证据继续由既有任务服务保证，不另建身份栈。 |
 | Snapshot Store | 固定内容、不可变版本与条件推进的存储权威；lakeFS 实现此底座，不拥有业务 Object、Schema 或 Interface 的解释。 |
 | README | 知识仓自描述 Markdown 知识对象（Address + `schema_ref`，字段 `body` 可 SEARCH）。仓根 `README.md` 是人写与 git 直推解释用的有界 `path_hint`，不是身份，也不是第二条检索代数。`show` 的 `repositories` 不派生 title/summary。不是无 frontmatter 的 git 文件、不是对象 LIST、不是登记字段。 |
 | Meta Schema | 约束 Domain Schema 文档自身的协议合同；由二进制内置信任根校验，并在 System Repository 中发布同一内容。不是实例字段基类，Domain Schema 不从它继承可访问字段。 |
@@ -80,6 +83,7 @@ Reader 可以持有应用注入的同版本 hydrate 端口（公开类型 `knowl
 | pin | `ResolvedKnowledgeSet` 的用户侧简称。文件名使用 `pin.json`，标识使用 `PinID`；不要再造 View。 |
 | SearchView | 一次 SEARCH 实际观察到的 Snapshot/Binding basis。它属于检索结果，不等于知识集；知识集范围由请求时的 ResolvedKnowledgeSet 编译，不写进索引文档。 |
 | 固定元信息 | 知识对象的协议坐标，不是业务正文：`repository`、`object_id`、`basis`、`schema_ref`。检索索引携带它们供 typed filter。知识集、Pin、allow 规则、当前 principal 以及未选定的仓级可见性分类都不是固定元信息。 |
+| 自定义资源元数据 | Repository 或 Dataset 自身可选的字符串键值属性，不属于知识固定坐标或正文。Repository 使用原 Store 管理权威；Dataset 随组合发布固定。属性不改变身份、范围或授权。 |
 | 交付链 | hydrate Canonical 之后、编码返回之前按固定顺序挂接的平台规则。输入是知识 ID，输出是调用方可见内容。公开类型 `delivery.Chain`。当前选定仅仓读权屏蔽；不是 Hook，不是检索代数，也不是新的协议层。细节由[权限体系](permissions.md)拥有。 |
 | Preview | ControlPlane 中 Proposal + 知识集 overlay 的治理 basis。它只用于 validate/gate/merge。 |
 | TaskContext | 客户端宿主私有的任务上下文：身份、KnowledgeSet、ResolvedKnowledgeSet 与 mount 生命周期。它不是服务端 Session，也不写入用户工作目录。 |
@@ -129,7 +133,8 @@ Reader 可以持有应用注入的同版本 hydrate 端口（公开类型 `knowl
 - 用 Collector 指 change notice 或访问地址；用 Observer 指 Writer 对账或访问地址；用 Resource Access 指采集或 notice。
 - 用「接入方」指上述任一进程：接入方是产品旅程角色，不是容器名。
 - 知识 Collector 与 OTel Collector 不得混称；遥测管线写全称 OTel Collector。
-- `Source Profile` / 源说明 / 登记 `title`+`summary` 信封：统一为 README 知识对象；库存只列身份。
+- `Source Profile` / 单独源说明 / 登记 `title`+`summary` 信封：这些独立说明信封已退役；
+  仓内知识说明沿用知识对象，不限制原 Store 或 Dataset 的自定义资源元数据，登记不复制来源属性。
 - 无界 `LIST` 作为知识发现或 SEARCH 降级：自然语言发现使用 SEARCH；面向首次使用的
   DISCOVER/BROWSE 必须有界、分页、声明 basis 并以 continuation 推进，内容是 来源/Dataset
   与该仓已发布实体名单，不是对象实例目录、也不是 Schema 正文或 DESCRIBE_SCHEMA；维护扫描只使用 `ScanSnapshotPage`，文件遍历使用按目录分页的 Gateway。

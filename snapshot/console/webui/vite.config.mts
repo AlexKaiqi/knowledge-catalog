@@ -23,9 +23,9 @@ const canonicalUIBasePlugin: Plugin = {
 // https://vitejs.dev/config/
 export default ({ command }: ConfigEnv) => {
   const target = process.env.KC_UI_SERVER || 'http://127.0.0.1:7380';
-  const lakefsTarget = process.env.LAKEFS_UI_SERVER || 'http://127.0.0.1:18000';
+  const authTarget = process.env.KC_UI_AUTH_SERVER;
   const nativeAuthProxy: ProxyOptions = {
-    target: lakefsTarget, changeOrigin: false,
+    target: authTarget, changeOrigin: false,
     configure(proxy) {
       proxy.on('proxyRes', response => {
         const location = response.headers.location;
@@ -37,12 +37,11 @@ export default ({ command }: ConfigEnv) => {
   };
   const proxy = {
     ...Object.fromEntries(['/identity/v1', '/snapshot/v1', '/knowledge/v1', '/admin/v1']
-      .map((prefix) => [prefix, {target, changeOrigin: true}] as const)),
-    '/api/v1': {target: lakefsTarget, changeOrigin: true},
-    '/logout': nativeAuthProxy,
-    '/oidc': nativeAuthProxy,
-    // lakeFS's native DuckDB viewer reads the S3 gateway at the same origin.
-    '^/(?!ui(?:/|$)|identity/v1|snapshot/v1|knowledge/v1|admin/v1|api/v1|logout|oidc)': {target: process.env.LAKEFS_S3_SERVER || lakefsTarget, changeOrigin: true},
+      .map((prefix) => [prefix, {target, changeOrigin: false}] as const)),
+    '/api/v1': {target, changeOrigin: false},
+    ...(authTarget ? {'/logout': nativeAuthProxy, '/oidc': nativeAuthProxy} : {}),
+    // Every data request uses the product gateway; only original auth callbacks go native.
+    '^/(?!ui(?:/|$)|identity/v1|snapshot/v1|knowledge/v1|admin/v1|api/v1|logout|oidc)': {target, changeOrigin: false},
   };
   const baseConfig = {
     base: '/ui/',

@@ -29,7 +29,7 @@ beforeEach(async () => {
         res.writeHead(302, {Location: redirects.find(({path}) => path === req.url)?.location ?? '/'}); res.end();
     });
     s3 = createHTTPServer((_req, res) => {res.writeHead(418); res.end('Wrong S3 backend');});
-    vi.stubEnv('LAKEFS_UI_SERVER', `http://127.0.0.1:${await listen(native)}`);
+    vi.stubEnv('KC_UI_AUTH_SERVER', `http://127.0.0.1:${await listen(native)}`);
     vi.stubEnv('LAKEFS_S3_SERVER', `http://127.0.0.1:${await listen(s3)}`);
     const dev = config({command: 'serve', mode: 'development'});
     if (!('server' in dev)) throw new Error('Expected development proxy configuration');

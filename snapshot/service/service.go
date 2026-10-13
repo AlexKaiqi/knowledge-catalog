@@ -43,7 +43,11 @@ func (r Resources) authorize(ctx context.Context, request Authorization) error {
 	if request.Definition != nil {
 		query.Dataset = ""
 	}
-	if _, ok := access.Match(rules, query); ok {
+	match := access.Match
+	if request.NativeRepository {
+		match = access.MatchRepository
+	}
+	if _, ok := match(rules, query); ok {
 		return nil
 	}
 	return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to %s", query.Principal, query.Action)

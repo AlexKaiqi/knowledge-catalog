@@ -16,7 +16,7 @@ schema_ref: schema/system/capability-entrypoints/v1
     {
       "action": "dataset.manage",
       "command": "kc dataset define",
-      "description": "定义可复用的多 Repository 配方（目录映射与逐文件交付）",
+      "description": "发布 Dataset 的固定版本文件交付范围（目录映射与逐文件交付）",
       "help": "kc help dataset define"
     },
     {
@@ -28,7 +28,7 @@ schema_ref: schema/system/capability-entrypoints/v1
     {
       "action": "dataset.manage",
       "command": "kc dataset retire",
-      "description": "退役命名配方",
+      "description": "退役 Dataset，停止消费并保留发布记录",
       "help": "kc help dataset retire"
     }
   ]

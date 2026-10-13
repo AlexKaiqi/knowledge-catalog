@@ -7,7 +7,7 @@ import {Loading} from '../../lib/components/controls';
 import TextDiff from '../../lib/components/repository/TextDiff';
 import ErrorNotice from '../../lib/components/kcError';
 
-const definitionText = (detail: DatasetDetail): string => JSON.stringify({sources: detail.sources,
+const definitionText = (detail: DatasetDetail): string => JSON.stringify({sources: detail.sources, metadata: detail.metadata ?? {},
     items: [...detail.items].sort((a, b) => a.target.localeCompare(b.target))}, null, 2);
 
 const Compare: React.FC<{dataset: string; detail: DatasetDetail}> = ({dataset, detail}) => {

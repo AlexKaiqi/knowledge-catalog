@@ -33,13 +33,27 @@ httpsurface.Patterns()  ──测试对账──►  mux 已登记的 method+pat
 ### CLI 传输
 
 `run.go` 入口；`parse.go` / `flags_operand.go` 把 argv 收成 flags；`surface.go` 解析分组路径；
-`help.go` 是帮助文本。共享 flag 读取与校验分别在 `invoke/flags.go`、
+`help.go` 保留总览与帮助渲染，`help_snapshot.go` 集中 Snapshot 相关叶子说明。
+共享 flag 读取与校验分别在 `invoke/flags.go`、
 `invocation/flags_hygiene.go`。
 
 ### 远程 Client
 
 `remote.go` 与 `remote_*.go` 把公开 CLI 编成 `client/` 调用。`remote_login.go`
 只管理本机登录态；正式环境默认与按 Server 保存的会话由 Client 读取，不设服务端 Session。
+
+Snapshot 适配按能力收拢，仍在同一个 `cli` 包中：
+
+| 文件簇 | 职责 |
+|---|---|
+| `remote_repository.go`、`remote_connections.go`、`flags_managed_repository.go` | 仓供给与连接、登记、库存和登记历史 |
+| `remote_dataset.go`、`dataset_recipe.go` | Dataset 请求构造、配方输入与已有内部解析调用 |
+| `dataset_overlay.go`、`dataset_clone.go` | 本机配方合成、已发布文件树物化 |
+| `remote_access.go` | 显式授权管理及规则列表处理 |
+| `datasetfs*.go` | 独立的 `kcfs` 宿主交付入口 |
+
+`surface.go` 仍是公开路径闭集，`remote_dispatch.go` 负责分派；这些文件不复制
+Snapshot 的发布、授权或文件路由实现。现有函数与调用行为保留，文件归组不新增命令。
 
 ### 部署与应用过程
 
@@ -179,3 +193,9 @@ Dataset、ref、object、aspect 过滤，不暴露授权账本私有回执。
 
 知识消费只接受 `--repo` 或 `--dataset`；没有 Catalog 选择范围，也不接受
 `--catalog`、`--source`、`--pin`。Writer、`diff` 与 `schema list` 拒绝 `--dataset`。
+
+`kc dataset define` 可通过配方中的可选 `metadata`，或 `--metadata '<JSON object>'`
+提交自定义字符串键值。显式参数提交完整对象并替换配方中的属性，`--metadata '{}'`
+清空；省略参数则保留输入配方中的属性。元数据随本次 revision 发布并在库存与历史详情
+回读，不检查任何说明文件。HTTP / Client 与控制台使用相同定义字段；原生 Repository
+元数据由 Snapshot Client 的原 lakeFS 路由读取、增量设置和按键删除。

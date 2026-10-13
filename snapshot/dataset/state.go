@@ -25,6 +25,9 @@ func (s State) IsEmpty() bool {
 
 func NormalizeState(state State) State {
 	workspaces := slices.Clone(state.KnowledgeSets)
+	for i := range workspaces {
+		workspaces[i] = cloneKnowledgeSet(workspaces[i])
+	}
 	slices.SortFunc(workspaces, func(a, b KnowledgeSet) int {
 		return strings.Compare(a.SetID, b.SetID)
 	})
@@ -46,6 +49,9 @@ func NormalizeState(state State) State {
 
 func normalizeDatasetVersions(versions []KnowledgeSet) []KnowledgeSet {
 	out := slices.Clone(versions)
+	for i := range out {
+		out[i] = cloneKnowledgeSet(out[i])
+	}
 	slices.SortFunc(out, func(a, b KnowledgeSet) int {
 		if n := strings.Compare(a.SetID, b.SetID); n != 0 {
 			return n

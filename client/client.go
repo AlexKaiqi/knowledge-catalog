@@ -158,6 +158,7 @@ func (c *Client) IdentityService() IdentityService { return IdentityService{clie
 // AuthDiscovery is the unauthenticated pairing advertisement from
 // GET /identity/v1/auth. It is not a session and does not grant access.
 type AuthDiscovery struct {
+	ProviderURL    string              `json:"providerURL,omitempty"`
 	BrowserLogin   *BrowserLoginConfig `json:"browserLogin,omitempty"`
 	Mode           string              `json:"mode"`
 	LocalAssertion bool                `json:"localAssertion"`
@@ -224,7 +225,9 @@ func (c *Client) doJSON(ctx context.Context, method, path string, input any, opt
 		return err
 	}
 	contentEncoding := ""
-	if len(body) >= gzipRequestBodyThreshold {
+	// Native lakeFS requests keep their original encoding: its API is not the
+	// KC facade that owns transparent gzip decompression.
+	if len(body) >= gzipRequestBodyThreshold && !strings.HasPrefix(path, "/api/v1/") {
 		var compressed bytes.Buffer
 		gz := gzip.NewWriter(&compressed)
 		if _, err := gz.Write(body); err != nil {
@@ -270,6 +273,9 @@ func (c *Client) doJSON(ctx context.Context, method, path string, input any, opt
 		}
 		if json.Unmarshal(raw, &envelope) == nil && envelope.Error != nil {
 			return envelope.Error
+		}
+		if strings.HasPrefix(path, "/api/v1/") {
+			return nativeJSONError(response.StatusCode, raw)
 		}
 		return kernel.Fail(kernel.ErrTemporaryUnavailable, "kc server returned HTTP %d", response.StatusCode)
 	}

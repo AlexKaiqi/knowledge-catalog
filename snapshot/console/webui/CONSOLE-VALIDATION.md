@@ -245,3 +245,7 @@ Dataset 比较截图及实际下载的 v1 文件。这些是本地运行证据�
 binary 的 KC 进程与一次性测试凭据/状态。preview 与自建标签页也关闭。
 没有改动现有实例、共享工作区，或新增 skip。DATASET-04 仍为 `[ ]`，
 遵守项目“全绿且无 skip 才可完成”的登记要求。
+
+## 2026-10-13 · Registry 基线上的 Repo 授权整合
+
+以 Desktop `fa52d18` 及冻结的未提交改动为基线，保留 Registry 与直接 Dataset 服务，移入共享认证、原 Repo API 强制产品授权和原证明转发。旧 Catalog 分支证据仅作历史；本候选的新源码绑定检查、真实后端、浏览器与逐文件合并记录在 `.validation/repo-access-current/`。没有升级依赖或修改现有部署。第三方声明仍使用 `skipLibCheck:true`。两个真实主体尚待多用户环境；物理删除已绑定仓明确拒绝，原观察回调的后端错误分类按 TASK 记债。既有 live skip 不写成验收通过。

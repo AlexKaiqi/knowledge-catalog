@@ -23,6 +23,7 @@ type KnowledgeSetRequest struct {
 	Dataset  string                       `json:"dataset"`
 	Revision int                          `json:"revision"`
 	Sources  []dataset.KnowledgeSetSource `json:"sources"`
+	Metadata map[string]string            `json:"metadata,omitempty"`
 }
 type KnowledgeSetResolveRequest struct {
 	Pin                json.RawMessage `json:"pin,omitempty"`

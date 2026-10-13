@@ -30,6 +30,17 @@
 版本；`DefineKnowledgeSet` 是这两步的纯文件组合入口。新 revision 必须大于当前版，
 不得覆盖已接受版本或倒退。源分支前进不会改变已发布 Dataset，知识投影准备由上层负责。
 
+`KnowledgeSet.Metadata` 是可选的字符串键值 map，与文件选择一起固定在发布 revision 中。
+调用方可以在 `PrepareKnowledgeSet` 返回的候选上设置 metadata，再交给 `PublishKnowledgeSet`；
+原有 `DefineKnowledgeSet` / `PrepareKnowledgeSet` 签名保持不变。metadata 原样进入当前定义、
+不可变发布历史、库存摘要、管理详情与 `.kc-dataset.yaml` 便携配方。`description` 可以作为
+普通自定义 key 使用，不是必填字段，也不引入 Schema 或嵌套值。省略 metadata 的旧记录继续
+恢复；修改或清除 metadata 需要发布新的 revision。map 在状态、视图与返回值之间独立复制。
+metadata 不读取、识别或处理 README，不增加任何来源或文件范围。
+公开定义与配方保持纯 DTO。`DecodeJSON` 严格检查它们及嵌套定义中的 metadata；需要保留
+自身 JSON 数值精度和字节预算的传输层可以另行调用 `ValidateMetadataJSON(raw, target)`。
+该验证端口只沿目标 Go 类型识别 Dataset / 配方，`any` 与 `json.RawMessage` 正文保持不透明。
+
 `DatasetVersion` 返回已接受历史记录。`ReplayPublished` 从可信发布记录恢复 pin，再
 核对客户端坐标与文件清单；客户端摘要不能授权自己。`ReplayDefinition` 仅用于另行授权
 的临时配方，不能借命名 Dataset grant 扩大范围。成员准入、退役和当前权限继续约束旧 pin。

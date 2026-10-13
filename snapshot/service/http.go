@@ -68,6 +68,12 @@ func (h *handler) observeRequest(r *http.Request, caller identity.HTTPIdentity, 
 // Register mounts the Snapshot Store's complete console, Dataset, file and
 // explicit access APIs. The embedding server supplies its own unrelated APIs.
 func (h *handler) Register(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/v1/", h.nativeAPI)
+	mux.HandleFunc("POST /api/v1/", h.nativeAPI)
+	mux.HandleFunc("PUT /api/v1/", h.nativeAPI)
+	mux.HandleFunc("DELETE /api/v1/", h.nativeAPI)
+	mux.HandleFunc("PATCH /api/v1/repositories/{repository}/pulls/{pull}", h.nativeAPI)
+
 	mux.Handle("GET /ui/", console.Handler())
 	mux.HandleFunc("GET /identity/v1/auth", h.identityAuth)
 	mux.HandleFunc("GET /identity/v1/whoami", h.identityWhoAmI)

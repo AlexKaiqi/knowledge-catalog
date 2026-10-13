@@ -4,12 +4,14 @@ import (
 	"context"
 	"kc/kernel"
 	"kc/snapshot/dataset"
+	"maps"
 )
 
 type DatasetPublication struct {
 	Dataset  string
 	Revision int
 	Sources  []dataset.KnowledgeSetSource
+	Metadata map[string]string
 }
 
 type DatasetRegistry interface {
@@ -36,6 +38,7 @@ func (e DatasetPublisher) Execute(ctx context.Context, request DatasetPublicatio
 	if err != nil {
 		return dataset.KnowledgeSet{}, err
 	}
+	def.Metadata = maps.Clone(request.Metadata)
 	if err := e.Prepare(ctx, def); err != nil {
 		return dataset.KnowledgeSet{}, err
 	}

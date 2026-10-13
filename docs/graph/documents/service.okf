@@ -24,6 +24,7 @@ path_hint: docs/graph/documents/service.okf
     "deployment-topology",
     "durable-deployment-and-recovery",
     "managed-repository-provisioning",
+    "native-repository-resource-metadata-integration",
     "versioned-access-evidence-and-agent-feedback",
     "metrics-logs-traces-health-and-slo"
   ]

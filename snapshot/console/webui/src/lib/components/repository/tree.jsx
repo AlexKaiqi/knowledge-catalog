@@ -434,15 +434,16 @@ const OriginModal = ({ show, onHide, entry, repo, reference }) => {
 };
 
 const PathLink = ({ repoId, reference, path, children, presign = false, as = null }) => {
+  const [error, setError] = useState(null);
   const name = path.split("/").pop();
   const link = linkToPath(repoId, reference.id, path, presign);
-  if (as === null)
-    return (
-      <a href={link} download={name}>
-        {children}
-      </a>
-    );
-  return React.createElement(as, { href: link, download: name }, children);
+  const onClick = async event => {
+    event.preventDefault(); setError(null);
+    try { await objects.download(repoId, reference.id, path); }
+    catch (failure) { setError(failure); }
+  };
+  return <>{React.createElement(as || 'a', {href: link, download: name, onClick}, children)}
+    {error && <AlertError error={error}/>}</>;
 };
 
 const EntryRow = ({ config, repo, reference, path, entry, onDelete, showActions }) => {
@@ -643,6 +644,7 @@ export const URINavigator = ({
   isPathToFile = false,
   hasCopyButton = false
 }) => {
+  const [downloadError, setDownloadError] = useState(null);
   const parts = pathParts(path, isPathToFile);
   const params = { repoId: repo.id };
   const displayedReference =
@@ -719,11 +721,17 @@ export const URINavigator = ({
         {(downloadUrl) && (
           <a
               href={downloadUrl}
+              onClick={async event => {
+                event.preventDefault(); setDownloadError(null);
+                try { await objects.download(repo.id, reference.id, path); }
+                catch (failure) { setDownloadError(failure); }
+              }}
               download={path.split('/').pop()}
               className="btn btn-link btn-sm download-button me-1">
             <FaDownload />
           </a>
         )}
+        {downloadError && <AlertError error={downloadError}/>}
       </div>
     </div>
   );

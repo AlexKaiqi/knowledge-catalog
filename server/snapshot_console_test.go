@@ -29,3 +29,14 @@ func TestSnapshotConsoleLinkUsesVerifiedInstanceAndActualNativeName(t *testing.T
 		t.Fatalf("missing caller proof acquired a local console link: %q", got)
 	}
 }
+
+func TestExternalConsoleLinkUsesConfiguredStoreWithoutImpersonatingLakeFSIdentity(t *testing.T) {
+	bindings := []home.HomeRepo{{ID: "kr://org/logical", Driver: "lakefs", DSN: "https://native.test/files"}}
+	caller := identity.HTTPIdentity{Principal: "alice", User: &identity.VerifiedUser{Provider: "gitea", Issuer: "https://identity.test", Subject: "123"}}
+	if got := snapshotConsoleRepository(bindings, caller, "kr://org/logical", "https://native.test"); got != "files" {
+		t.Fatalf("external identity lost registered native navigation: %q", got)
+	}
+	if got := snapshotConsoleRepository(bindings, caller, "kr://org/logical", "https://other.test"); got != "" {
+		t.Fatal("navigation crossed native instances")
+	}
+}

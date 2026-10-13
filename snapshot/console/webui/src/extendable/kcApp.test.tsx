@@ -261,10 +261,10 @@ test('JSON to Form rejects unknown fields and preserves supported file definitio
     await screen.findByLabelText('Dataset 名称');
     fireEvent.click(screen.getByLabelText('JSON'));
     const value = {dataset: 'docs', revision: 2, sources: [{repository: 'kr://example/source', commit: 'c1', selector: 'refs/heads/main', file: 'README.md', target: 'guide.md'}]};
-    const unsupported = JSON.stringify({...value, metadata: {owner: 'team'}});
+    const unsupported = JSON.stringify({...value, unsupported: {owner: 'team'}});
     fireEvent.change(screen.getByLabelText('Dataset JSON 定义'), {target: {value: unsupported}});
     fireEvent.click(screen.getByLabelText('Form'));
-    await screen.findByText(/不支持字段 metadata/);
+    await screen.findByText(/不支持字段 unsupported/);
     expect((screen.getByLabelText('Dataset JSON 定义') as HTMLTextAreaElement).value).toBe(unsupported);
     expect(screen.queryByLabelText('Dataset 名称')).toBe(null);
     fireEvent.change(screen.getByLabelText('Dataset JSON 定义'), {target: {value: JSON.stringify(value)}});

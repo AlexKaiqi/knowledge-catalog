@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"net/http"
 	"strconv"
 	"strings"
@@ -28,6 +29,18 @@ type datasetRequest struct {
 	Dataset  string                       `json:"dataset"`
 	Revision int                          `json:"revision"`
 	Sources  []dataset.KnowledgeSetSource `json:"sources"`
+	Metadata datasetMetadata              `json:"metadata,omitempty"`
+}
+
+type datasetMetadata map[string]string
+
+func (metadata *datasetMetadata) UnmarshalJSON(raw []byte) error {
+	var values map[string]string
+	if err := dataset.DecodeJSON(raw, &values); err != nil {
+		return err
+	}
+	*metadata = values
+	return nil
 }
 
 type datasetResolveRequest struct {
@@ -125,7 +138,7 @@ func publishDataset(ctx context.Context, caller identity.HTTPIdentity, resources
 	if _, err := cat.PrepareKnowledgeSet(request.Dataset, request.Revision, request.Sources); err != nil {
 		return nil, err
 	}
-	definition := dataset.KnowledgeSet{SetID: request.Dataset, Revision: request.Revision, Sources: request.Sources}
+	definition := dataset.KnowledgeSet{SetID: request.Dataset, Revision: request.Revision, Sources: request.Sources, Metadata: maps.Clone(request.Metadata)}
 	var receipt map[string]any
 	if resources.BeforePublish != nil {
 		var err error
@@ -140,10 +153,12 @@ func publishDataset(ctx context.Context, caller identity.HTTPIdentity, resources
 	if err := resources.authorize(ctx, Authorization{Caller: caller, Query: access.Query{Action: "dataset.manage", Dataset: request.Dataset}}); err != nil {
 		return nil, err
 	}
+	metadata := maps.Clone(definition.Metadata)
 	definition, err := cat.PrepareKnowledgeSet(definition.SetID, definition.Revision, definition.Sources)
 	if err != nil {
 		return nil, err
 	}
+	definition.Metadata = metadata
 	if resources.PreparePublication != nil {
 		if err := resources.PreparePublication(ctx, caller, definition); err != nil {
 			return nil, err
@@ -157,6 +172,9 @@ func publishDataset(ctx context.Context, caller identity.HTTPIdentity, resources
 		return nil, err
 	}
 	out := map[string]any{"setId": accepted.SetID, "revision": accepted.Revision, "sources": accepted.Sources}
+	if len(accepted.Metadata) > 0 {
+		out["metadata"] = maps.Clone(accepted.Metadata)
+	}
 	for _, key := range []string{"recipeFile", "recipeRepository", "recipeCommit", "recipeLocation", "recipeSkipped"} {
 		if value, ok := receipt[key]; ok {
 			out[key] = value
@@ -280,7 +298,7 @@ func (h *handler) datasetResolveDefinition(w http.ResponseWriter, r *http.Reques
 	}
 	r = requestWithDataset(r, request.Dataset)
 	h.withResources(w, r, "pin-source", func(ctx context.Context, caller identity.HTTPIdentity, resources Resources) (any, error) {
-		definition := dataset.KnowledgeSet{SetID: request.Dataset, Revision: request.Revision, Sources: request.Sources}
+		definition := dataset.KnowledgeSet{SetID: request.Dataset, Revision: request.Revision, Sources: request.Sources, Metadata: maps.Clone(request.Metadata)}
 		if err := authorizeDefinition(ctx, caller, resources, "dataset.resolve", &definition, nil); err != nil {
 			return nil, err
 		}

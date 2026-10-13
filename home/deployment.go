@@ -35,6 +35,7 @@ type DeploymentConfig struct {
 	Evidence            *EvidenceConfig                    `json:"evidence,omitempty" yaml:"evidence,omitempty"`
 	Auth                string                             `json:"auth" yaml:"auth"`
 	AuthURL             string                             `json:"authURL,omitempty" yaml:"authURL,omitempty"`
+	AuthLogoutURL       string                             `json:"authLogoutURL,omitempty" yaml:"authLogoutURL,omitempty"`
 	Listen              string                             `json:"listen,omitempty" yaml:"listen,omitempty"`
 }
 
@@ -109,6 +110,9 @@ func (c DeploymentConfig) Validate() error {
 	case "local", "taihu", "gitea", "lakefs":
 	default:
 		return invalid("deployment auth must be local, taihu, gitea, or lakefs")
+	}
+	if err := validateAuthLogoutURL(c.AuthLogoutURL); err != nil {
+		return err
 	}
 	if err := validateManagedConfig(c); err != nil {
 		return err

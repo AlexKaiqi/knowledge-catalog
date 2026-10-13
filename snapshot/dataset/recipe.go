@@ -2,6 +2,7 @@ package dataset
 
 import (
 	"bytes"
+	"maps"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -20,9 +21,10 @@ const KnowledgeSetFileName = ".kc-dataset.yaml"
 // one repository file delivered to one target path. This file is only for
 // mount/file recipes; federated-read workspaces (Path nil) stay service-only.
 type KnowledgeSetRecipe struct {
-	Name   string                  `yaml:"name" json:"name"`
-	Mounts []KnowledgeSetMount     `yaml:"mounts" json:"mounts"`
-	Files  []KnowledgeSetFileMount `yaml:"files,omitempty" json:"files,omitempty"`
+	Name     string                  `yaml:"name" json:"name"`
+	Mounts   []KnowledgeSetMount     `yaml:"mounts" json:"mounts"`
+	Files    []KnowledgeSetFileMount `yaml:"files,omitempty" json:"files,omitempty"`
+	Metadata map[string]string       `yaml:"metadata,omitempty" json:"metadata,omitempty"`
 }
 
 // KnowledgeSetMount is one mount line in KnowledgeSetRecipe.
@@ -48,8 +50,15 @@ type KnowledgeSetFileMount struct {
 
 // ParseKnowledgeSetRecipe reads .kc-dataset.yaml bytes.
 func ParseKnowledgeSetRecipe(raw []byte) (KnowledgeSetRecipe, error) {
+	var document yaml.Node
+	if err := yaml.Unmarshal(raw, &document); err != nil {
+		return KnowledgeSetRecipe{}, kernel.Fail(kernel.ErrUsageInvalid, "invalid %s: %v", KnowledgeSetFileName, err)
+	}
+	if err := validateRecipeMetadata(&document); err != nil {
+		return KnowledgeSetRecipe{}, err
+	}
 	var rec KnowledgeSetRecipe
-	if err := yaml.Unmarshal(raw, &rec); err != nil {
+	if err := document.Decode(&rec); err != nil {
 		return KnowledgeSetRecipe{}, kernel.Fail(kernel.ErrUsageInvalid, "invalid %s: %v", KnowledgeSetFileName, err)
 	}
 	if strings.TrimSpace(rec.Name) == "" {
@@ -73,6 +82,28 @@ func ParseKnowledgeSetRecipe(raw []byte) (KnowledgeSetRecipe, error) {
 	return rec, nil
 }
 
+func validateRecipeMetadata(document *yaml.Node) error {
+	if len(document.Content) != 1 || document.Content[0].Kind != yaml.MappingNode {
+		return nil // Existing recipe shape validation reports the structural error.
+	}
+	root := document.Content[0]
+	for i := 0; i < len(root.Content); i += 2 {
+		if root.Content[i].Value != "metadata" {
+			continue
+		}
+		metadata := root.Content[i+1]
+		if metadata.Kind != yaml.MappingNode {
+			return kernel.Fail(kernel.ErrUsageInvalid, "%s metadata must contain string keys and values", KnowledgeSetFileName)
+		}
+		for _, entry := range metadata.Content {
+			if entry.Kind != yaml.ScalarNode || entry.Tag != "!!str" {
+				return kernel.Fail(kernel.ErrUsageInvalid, "%s metadata must contain string keys and values", KnowledgeSetFileName)
+			}
+		}
+	}
+	return nil
+}
+
 // FormatKnowledgeSetRecipe writes the yaml alice (or bob) would commit.
 func FormatKnowledgeSetRecipe(rec KnowledgeSetRecipe) ([]byte, error) {
 	var buf bytes.Buffer
@@ -94,7 +125,7 @@ func RecipeFromKnowledgeSet(def KnowledgeSet) (KnowledgeSetRecipe, bool) {
 	if len(def.Sources) == 0 {
 		return KnowledgeSetRecipe{}, false
 	}
-	rec := KnowledgeSetRecipe{Name: def.SetID}
+	rec := KnowledgeSetRecipe{Name: def.SetID, Metadata: maps.Clone(def.Metadata)}
 	for _, src := range def.Sources {
 		if src.IsFileEntry() {
 			rec.Files = append(rec.Files, KnowledgeSetFileMount{

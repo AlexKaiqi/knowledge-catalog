@@ -30,6 +30,10 @@ func localIdentity(options IdentityOptions) bool {
 // local fixture identity. Neither native roles nor self-reported proxy headers
 // become authorization or trusted delegation.
 func AuthenticateRequest(r *http.Request, options IdentityOptions) (identity.HTTPIdentity, error) {
+	return authenticateRequest(r, options, false)
+}
+
+func authenticateRequest(r *http.Request, options IdentityOptions, nativeUpload bool) (identity.HTTPIdentity, error) {
 	as := strings.TrimSpace(r.Header.Get("X-Kc-As"))
 	authorization := strings.TrimSpace(r.Header.Get("Authorization"))
 	onBehalf := strings.TrimSpace(r.Header.Get("X-Kc-On-Behalf-Of"))
@@ -49,8 +53,8 @@ func AuthenticateRequest(r *http.Request, options IdentityOptions) (identity.HTT
 	if onBehalf != "" {
 		return identity.HTTPIdentity{}, kernel.Fail(kernel.ErrForbidden, "onBehalfOf must come from the trusted authenticator")
 	}
-	if mode == "lakefs" {
-		if err := ValidateLakeFSConsoleRequest(r); err != nil {
+	if mode == "lakefs" || mode == "taihu" {
+		if err := validateLakeFSConsoleRequest(r, nativeUpload); err != nil {
 			return identity.HTTPIdentity{}, err
 		}
 	}
@@ -105,6 +109,9 @@ func (h *handler) identityAuth(w http.ResponseWriter, _ *http.Request) {
 		accepts = []string{"Cookie", "Authorization"}
 	}
 	out := map[string]any{"mode": mode, "localAssertion": local, "accepts": accepts}
+	if h.config.Identity.ProviderURL != "" {
+		out["providerURL"] = h.config.Identity.ProviderURL
+	}
 	if h.config.Identity.BrowserLogin != nil {
 		out["browserLogin"] = h.config.Identity.BrowserLogin
 	}

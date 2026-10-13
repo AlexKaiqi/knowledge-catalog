@@ -8,6 +8,60 @@
 
 ## 1. 项目路线与进展
 
+### OBJECT-REFACTOR-EXECUTION-01 · Object 模块重构执行（2026-10-13）
+
+- [ ] 本轮认领：用户再次要求现在推进；先审查已完成 Snapshot 成果并建立阶段性提交检查点，随后执行对象重构计划的 R0～R3。当前处于提交前核验，尚未新增对象验收用例或迁移生产代码。
+- Goal / owner：沿 `object-refactor-plan.md` 与 `object-refactor-guideline.md` 建立发布发现验收和同源基线，再统一切换 Object、Interfaces、Discovery、LiveAccess、Systemrepo、内部 PluginHost 及调用方；对象、访问、发现、授权、CLI 与验证保证仍归各主题 owner，关系沿 docs/graph。
+- Non-Goals：保留既有 CLI/HTTP、存储格式、对象身份、权限、版本及结果合同；不新增业务处理器、必填对象类型、Interface 或索引发布门槛，不实现尚未选定的插件管理命令或权限，不安装依赖、不推送，不覆盖其他在途改动。
+- 不变量与选定：沿 A-01/L-01、I-01/V-01、W-01/W-02、R-01/R-02、AUTH-01～03、API-01、CA-01、OI-01～05。先补图片、分散模块、外部表的公开 Writer/Server 验收；保持行为、必要修正及目标架构分别取证，R2 一次统一结构切换，不保留兼容壳、双实现或深层跨模块访问。
+- 接口与验证：沿当前 Snapshot 根及 dataset/access/service/console 公开入口、既有 Reader/Writer、Schema 字段 access、Interface 与访问观察合同。持续全包编译、定向回归、正式场景和架构契约；交付前 `make check-docs`、`make quality` 及受影响测试/race 全绿，真实部署另行取证，未执行和无关 live skip 不称验收通过。
+- 检查点依据：单登记空间已有 `fa52d18`；控制台线程中断后，由本任务核验 `.validation/shared-auth/20261013/` 当前 lakeFS 1.86 / Gitea 双主体证据及最终合同。82 项真实 API/CLI、33 项撤权及 30 条浏览器流程已有记录；实际提交还须核对源码一致性与依赖闭包。
+- 增量质量出口：最终契约 `20261013T033644Z-0a3a0f64af7a` 的两条 fail 事件来自同一个 `TestSceneViews/product_links`：新 `cli#U7` 缺少证据或明确 gap。当前同一测试已复现失败；在 `.data/scenes/_views.yaml` 如实登记尚未选定/实现的插件管理旅程，不削弱断言、不冒充已有发现测试覆盖管理能力。该轮 sourceChanged=true，不作为 Object 基线。
+- 候选增量检查：五个新 `docs/graph/relations/*.okf` 有 EOF 空行，先前工作树 `git diff --check` 不覆盖未跟踪文件。候选暂存检查取得失败证据；本轮去掉这些增量空行，并将 `scripts/check-quality.sh` 的增量空白检查覆盖工作树、暂存区及非忽略新文件，保持已有 Git 空白规则，不追存量或改阈值。
+
+### OBJECT-PLUGIN-DESIGN-01 · 插件扩展目标、CLI 与重构路线（2026-10-13）
+
+- [x] 本轮完成文档：将 publish/discover/access 的插件扩展设计合入已有目标架构与 R0～R3 计划，明确核心、宿主、声明式索引、LiveAccess 和 CLI 的边界及迁移出口；未实施任何重构阶段。
+- Goal / owner：目标与扩展生命周期归 `docs/reviewed/object-refactor-guideline.md`，路线归 `object-refactor-plan.md`，能力说明及 CLI 载体分别归 `object-system.md` / `terminology.md` / `cli.md`；核心及组织边界沿 core-architecture / capability-organization，所有权与直接关系仅由 docs/graph 登记。
+- Non-Goals：仅修改文档与图登记，不实现插件宿主、管理命令或代码迁移，不改变现有协议、Action、命令结果与授权，不发布 system 内容、不运行服务或部署验收、不安装依赖、不提交；保留其它会话的在途改动。
+- 不变量：保持 A-01 / L-01、API-01、I-01 / V-01、W-01 / W-02、R-01 / R-02、AUTH-01 / AUTH-03、CA-01、PC-01 与 OI-01～05；安装不发权，范围不等于代码沙箱，基本发布不等待插件/索引/来源在线。
+- 选定：系统拥有不可跳过的任务边界，Host 管包/安装/请求视图及可撤销资源，插件注册类型化服务和参与点；默认绑定保留既有能力，Repo/Dataset 显式选择且冲突拒绝。保持 R0 验收、R1 必要行为修正、R2 统一结构切换、R3 完整验收；R2 内按受限基座→Host→标准插件→动态桥接→CLI/装配收尾组织依赖。
+- 否决：任意事件或 middleware 重排授权/依据/交付，metadata 执行业务代码、组合自动继承、每插件生成命令树、安装即发权、普通查询启动重建、写完设计即称实现通过。
+- 接口与质量出口：设计引用既有 Go 类型/README/Conformance，不复制新字段、错误码或状态机。新增管理能力实施前独立选定 typed API、当前权限、审计与恢复；默认 access 的 basis/value 校验、专用观察证据、外呼目标/redirect 和既有 invoke 说明差距按指南登记位置/信号/判定/处置/触发，未在本轮修复。
+- 验证：变更 owner 与图登记已重读，`make check-docs` 通过（32 文档 / 149 关系），`make quality` 退出 0，格式、tidy、vet、staticcheck、复杂度、体积、克隆及耦合棘轮通过；增量与空白检查通过。只证明设计及工程门禁，不外推 R0～R3、业务或部署验收，未新增 skip 或削弱断言，未提交。
+- 最终复核：明确必要证据可靠保存后才对外交付；默认绑定只由既有显式部署装配恢复，知识声明不安装实例；静态帮助与安装账/配置/其它 scope/来源秘密的可见性分开。所见现状差距均保留触发条件，没有把静态疑点写作已证实运行故障。
+
+### SNAPSHOT-CLI-01 · Snapshot CLI 文件分组与帮助闭环（2026-10-13）
+
+- [x] 本轮完成：仅整理 Snapshot 相关 CLI 适配文件，修正描述与帮助导航，必要回归、受影响测试、`make check-docs`、`make quality` 全绿；命令、单包与业务行为保持原样。
+- Goal / owner：保持现有产品调用形状和行为，收拢仓/库存、Dataset、显式授权与文件交付的 CLI 适配；交互与输入/输出保证归 `docs/reviewed/cli.md`，文件范围/版本交付归 `dataset.md`，服务与原生资源接入归 `service.md`，授权归 `permissions.md`。owner 和直接关系已按 `docs/graph/` 核对。
+- Non-Goals：不新增命令或业务入口、不拆 Go 包、不扩公开接口、不改变发布/授权/版本/文件交付行为、不迁移对象层、不新增标签或注册框架、不安装依赖、不启动真实部署验收、不提交；保留本轮开始前全部工作树修改。
+- 不变量：保留 V-01、KS-01/KS-02、AUTH-01～03、API-01 与 A-01/L-01；创建/连接、登记、Dataset 发布和发权仍分别成立；一次消费保持既定范围和版本，CLI 与 HTTP 的注册权威不合并。
+- 选定：同一个 `cli` 包内按能力移动既有函数；现有命令闭集、分派、身份上下文及帮助渲染保留。Snapshot 叶子说明集中在私有帮助函数并静态合并，现有帮助组补可达路径；否决新子包、新 CommandSpec 框架、Discover 执行入口、原生 API 机械命令化及随整理修存量行为。
+- 接口：`cli/surface.go` 保持公开路径/动作闭集，既有 `client.SnapshotService` / AdminService 和 `snapshot/dataset` 配方合同继续承接调用；文件移动不改函数签名或请求构造。help 的同源系统入口出版物按现有生成器刷新，仅同步描述。
+- 验证：先补帮助导航/发布效果/输入规则与本机预处理的失败证据，再整理文件及帮助；运行 Snapshot CLI/Client/服务相关回归、公开命令与架构合同、文档图和工程质量门。定向范围不替代真实部署验收。
+- 质量闭环：本轮帮助同源、目录可达性与文件移动的增量信号当场修或升级守卫。既有缺入口（Dataset 详情/历史与按需文件读取、仓属性管理、规则原子更新）保持后续行为任务；其它层的已登记问题不在本批修。未通过所需检查前不勾选。
+- 实现范围：仓/库存/登记历史收拢到 `remote_repository.go`，Dataset 调用与配方输入分别归 `remote_dataset.go` / `dataset_recipe.go`，本机 overlay 归 `dataset_overlay.go`，显式授权归 `remote_access.go`；保留现有 connection、clone、kcfs 与共享分派。`help_snapshot.go` 集中 12 个 Snapshot 叶子，总览可进入既有 composition / dataset / grant / registry 组与 kcfs；更正发布固定版、单仓选择、根映射回退、可选配方写回、退役保留记录及 plan / mount 的差异。README / SURFACE 同步文件组织，现有生成器仅刷新系统入口出版物中的 3 条 Snapshot 描述。
+- 增量信号处置：独立基线对照确认 8 个迁移函数签名与函数体 token 等价、公开路径闭集与 Client 形状不变，46 个非 Snapshot 叶子说明逐项不变；帮助导航、真实资源效果、kcfs 边界及重复帮助项升级为回归守卫，根映射被旧描述误排除的问题当场修正。`remote_dataset.go` 的既有内部 pin / pin check 分支原样保留，登记为路由清理债：仅在后续明确授权清理退休内部入口时按调用闭集判断并处理，本批不因文件搬迁删分支。
+- 最终验证：新增帮助回归先取得失败证据再修正到绿；受影响 CLI 定向检查 61 个顶层测试通过（含子测试共 144 个 pass 事件），0 fail / 0 skip。`client`、`snapshot/dataset`、`snapshot/access`、`snapshot/service`、`internal/arch`、文档与验证库存脚本测试通过；`make check-docs`（32 文档 / 149 关系）、`make check-surface`、`make quality` 与 `git diff --check` 全绿，质量工具使用本机已有模块缓存。未安装依赖、未启动部署服务/容器、未执行真实部署验收、未提交；本条只证明上述整理及相关合同范围。
+
+### RESOURCE-METADATA-01 · Repo 原生元数据与 Dataset 可选元数据（2026-10-13）
+
+- [ ] 本轮认领：设计、公开合同与实现一起支持 Repository / Dataset 的可选自定义元数据；README 不成为创建、发布或发现的前提。
+- Goal / owner：Dataset 的资源说明与版本交付归 `docs/reviewed/dataset.md`，原生 Repository 接入与服务边界归 `docs/reviewed/service.md` / `core-architecture.md`，README 与知识说明归 `knowledge.md`，授权归 `permissions.md`；按 `docs/graph/` 的 owner 与直接关系定位。
+- Non-Goals：不建立第二份 Repository 元数据权威，不把资源属性解释为知识或授权，不强制 README / Schema，不引入 PATCH、跨仓事务或新的搜索代数，不安装依赖、不提交、不运行真实部署验收。
+- 不变量：保留 V-01、KS-01 / KS-02、AUTH-01～03、API-01 与 A-01 / L-01；Dataset 已接受发布（含元数据）不可改写，元数据不改变文件范围、来源身份或权限。
+- 选定：两种资源采用 lakeFS 原生的字符串键值形状；Repository 读写使用原 lakeFS metadata API 与权威，Dataset 可在定义和新版本发布时携带完整可选元数据，并随发布记录持久、恢复、回读。无元数据继续成立；README 是可选详细说明。否决复制原仓 metadata 到登记账、强制选入 README，以及把 metadata 放入知识 Schema 或索引作为正文权威。
+- 接口：Repository 沿用 `snapshot/service` 的原生受控路由、`snapshot/access` 动作和控制台；Dataset 以 `snapshot/dataset.KnowledgeSet` / `KnowledgeSetRecipe`、Snapshot HTTP / Client 与定义控制台承接，具体字段与校验写在公开类型、包 README 和回归合同。
+- 验证：执行受影响 Dataset 持久化/历史/深拷贝/配方、原生 Repository 读写授权与代理、Client/CLI/HTTP 和前端回归，以及 `make check-docs`、`make quality` 与受影响合同；不以定向测试宣称真实部署或全量验收。保留本轮开始前所有工作树改动。
+- 质量闭环：本轮发现的增量问题当场修或补守卫；存量信号按位置 / 信号 / 判定 / 处置 / 触发条件记在本条，未完成验证不勾选。
+- 实现范围：原生 Repository metadata GET / POST / DELETE 与显式读写授权、Snapshot SDK 和原仓设置页；Dataset 定义、便携配方、发布准备、持久恢复、库存、历史详情、CLI `--metadata` 与表单 / JSON 编辑。两者都使用字符串键值，元数据能力完全不读取、识别或处理 README。
+- 增量问题处置：修复空 overlay 与状态/返回值共享 map、发布准备及配方入口丢元数据、嵌套定义绕过类型校验；严格校验集中在纯函数与传输入口，保留公开 DTO 纯数据架构守卫、业务任意值和精确数字及 Writer 流式路径。增加持久旧发布不可改写/删除与失败保持回归；原生客户端补错误分类和原生请求不压缩合同，UI 部分失败回读实际权威。
+- 同期门禁信号：原生物理来源源码注释使用 CLI 守卫的保留词导致文本误报，仅将注释改为同义 forwarding，未改逻辑或守卫；前端同期文件读取改动遗留未使用变量，仅清理废弃项并由现有 lint 验证。未覆盖其它在途功能。
+- 验证过程：前端 172 项与 typecheck / lint / build、受影响 Go 与 Dataset race、文档和工程质量闸已有通过记录；首轮普通场景业务通过但 sourceChanged=true，不作为同份源码证据。完整契约发现公开 DTO 解码方法违反守卫，已改为纯验证端口并重跑相关架构回归到绿；最终普通场景与完整契约在固定候选上复跑，真实部署验收保持独立、未执行。
+- 最终验证：固定候选指纹 `f6cae9f1905dce00ba100c13a018ac33f868863b16cbe70b50416516026deb40`；`make test` / `20261013T032225Z-2d3b133a08c3` 退出 0，21 pass / 0 fail / 0 skip；`make test-contracts` / `20261013T032225Z-74b7acaf2e5a` 退出 0，2229 pass / 0 fail / 11 既有外部 skip，CLI 57/57 成功且满足风险分层合同。两次 sourceChanged=false；pass 事件含子测试，不作为库存通过率。固定候选 `make test-webui`（175 tests、typecheck / lint / build 与控制台 Go 回归）、`make quality` / `make check-docs` 全绿；当前工作目录另跑元数据 / Native / 架构 / 精确解码回归与 `make quality` 到绿，未覆盖同期在途变更。
+- 未验证边界：上述 11 项为既有 live runtime、真实 lakeFS、身份、付费模型和规模合同，与本轮新增回归无新增 skip；真实部署验收未执行。实现完成，但依严格「完整契约无 skip」勾选规则保留本条未勾选，不记全量 / 真实部署验收通过。固定候选证据与日志已保存在 `.validation/`；只回写交付记录，没有提交。
+
 ### SINGLE-REGISTRY-01 · 一套服务一个登记空间（2026-10-12）
 
 - [ ] 单登记空间实现及受影响普通检查已完成；完整契约仍有 11 项既有外部/真实环境测试跳过，按严格「全绿且无 skip」规则保留未勾选，不登记全量/真实部署验收通过。
@@ -39,6 +93,47 @@
 
 
 
+
+### OBJECT-REFACTOR-VERIFY-01 · 按验证依据裁决重构路线（2026-10-12）
+
+- [x] 本轮完成独立评估与计划修订：从目标验收、实际包依赖和用例树验证机制比较路线，撤回按层划分的 P0～P7；采用 R0 先补验收、R1 必要行为纠偏、R2 一次组织迁移、R3 最终验收，未启动实现。
+- Goal / owner：object-refactor-plan 拥有路线，object-refactor-guideline 拥有目标与边界；验证按 test-catalog / 场景树合同，不把既有覆盖当目标限制。
+- 依据：当前 `go list -json ./...` 枚举 60 个生产包，knowledge / reader / serving / retrieval / index 的直接生产消费方分别为 25 / 7 / 5 / 9 / 5；计数只说明影响面，结合共享类型、混合职责、无需兼容和不改持久/wire 语义选择统一组织切换。行为验收先在旧实现取基线，架构目标在迁移批次先红后绿；不强制经营每层的过渡 API。
+- 更正：ResourceLookup 构造适配器本身不访问源，WithLiveAccess 优先选择已注册 Handler，已有独立 Echo 正式调用测试；这里先判为结构耦合，不直接判“普通 Interface 不能调用”的行为缺陷。必要行为风险仍由反例复核，不靠读到类型名推导故障。
+- 本轮范围与证据：只改计划、guideline 执行原则、文档图标题及任务记录；views / product / states 三项树静态检查通过，未运行场景或业务回归。运行 `make check-docs` / `make quality` 并复核增量；不改 Snapshot 在途源码、不安装依赖、不提交。
+- 验证结果：`make quality` 退出码 0，含 32 文档 / 143 关系的文档检查、工程门禁和耦合棘轮通过；`git diff --check` 通过。三项树检查只证明组织、声明及共享前态合同，`go list` 只证明静态枚举；未将其记作业务或部署验收，R0～R3 全部未实施。
+
+### OBJECT-REFACTOR-ORDER-01 · 重构顺序纠正（2026-10-12）
+
+- 状态：此处逐层实施的顺序建议已撤回，未执行。历史修订范围与质量失败记录保留，当前唯一执行路线归 OBJECT-REFACTOR-VERIFY-01 与 object-refactor-plan 的 R0～R3。
+- Goal / owner：执行顺序归 object-refactor-plan，边界与依赖原则归 object-refactor-guideline；保持现有合同、发布发现切片及 Snapshot 在途范围。
+- 判断 / 选定：原计划先迁 Interfaces/Discovery、P4 再切换基础类型、Reader 与编码，至少需要第二次调用方适配；基础阶段必须倒查上层需求，完成最终公共合同与路径。解除下层反向依赖只做必要局部拆解，不提前重构整个上层。
+- 验证范围：`make check-docs`、`make quality`、文档增量复核；只验计划修订，不执行代码迁移、业务或部署验收，不安装依赖、不提交。
+- 当时证据与处置：文档图 32 篇 / 143 条关系通过，`git diff --check` 通过；`make quality` 退出码 2，停在其它在途改动的 gofmt 检查（`snapshot/access/update.go`、`snapshot/access/update_test.go`、`snapshot/service/access_http.go`）。当轮未改这些源码或削弱门禁，未取得该轮质量通过；来源改动后需要新的有效证据。这个记录不作为当前路线已验收依据。
+
+### OBJECT-REFACTOR-PLAN-01 · 对象模块分阶段计划（2026-10-12）
+
+- [x] 本轮完成计划整理：保存 P0～P7 的依赖、实施批次、中间态和验证出口，登记文档图并对齐 guideline；未启动代码重构，实施阶段全部保持未完成。
+- Goal / owner：执行阶段归 `docs/reviewed/object-refactor-plan.md`，目标归 object-refactor-guideline，各领域合同与验证方法继续沿主题 owner。
+- Non-Goals：不改源码、system 出版物、场景树或 Snapshot 在途实现，不运行业务/部署验收、不安装依赖、不提交；不把非强制说明变成发布门槛。
+- 选定 / 不变量：沿用 guideline 的依赖、身份、版本、共享 executor、缓存、查询及 Interface 不变量；原 P0～P7 未实施且已撤回，当前按 OBJECT-REFACTOR-VERIFY-01 的验证优先路线执行；真实调用方和契约随结构一并切换，不建双实现/兼容壳。
+- 本轮验证：`make check-docs`、`make quality`、文档增量复核；只证明计划与工程门禁，不计为任何 P0～P7 实施阶段通过。
+- 验证结果：文档图 32 篇 / 143 条关系通过；`make quality` 退出码 0，工程门禁及耦合棘轮通过；`git diff --check` 通过。只改计划、guideline 执行原则、文档图和本任务记录，未运行业务测试或真实部署，未提交。
+- 当前阶段（全部未认领；按对应验证出口完成后再勾选）：
+  - [ ] R0：以目标保证补足公共行为验收，取得有效基线；提前建立异构对象发布发现证据。
+  - [ ] R1：独立复核并修正必要行为差异，先红后绿，形成结构迁移基线。
+  - [ ] R2：一次统一切换对象、能力、发现、专门流程及真实调用方，持续编译/定向验证，整批全绿才完成。
+  - [ ] R3：核对最终源码的完整受影响合同、架构和质量证据，独立完成部署验收。
+
+### OBJECT-GUIDELINE-01 · 对象模块重构指南（2026-10-12）
+
+- [x] 本轮完成文档整理：保存可重复查看的目录、职责、依赖、迁移与验收 guideline，将图示资源纳入仓库并登记文档图；文档及质量门禁通过，不代表代码迁移或业务验收完成。
+- Goal / owner：目标与迁移边界归 `docs/reviewed/object-refactor-guideline.md`；能力组织、架构与请求责任分别沿 capability-organization / core-architecture / service，发布发现语义沿 object-system 及其直接 owner。
+- Non-Goals：不改源码、公开协议、system 出版物或场景树，不新增业务对象发布门槛，不改 Snapshot 在途实现，不安装依赖、不启动服务、不提交；保留其它在途改动。
+- 不变量 / 选定：沿用 A-01 / L-01、I-01 / V-01、API-01、CA-01、R-01 / R-02、OI-01～05；选定同级 object / interfaces / discovery / liveaccess 与公开一级入口，基本读写归 Object，任务服务归所属能力；否决 objectapp 兜底与宿主执行请求规则。
+- 验证：本轮运行 `make check-docs`、`make quality`，检查 Markdown 与图示资源；这些证据只验文档及工程门禁，不代表目标结构、业务用例或真实部署通过。
+- 验证结果：`make check-docs` 为 31 文档 / 136 关系通过；`make quality` 退出码 0，格式、tidy、vet、staticcheck、复杂度、体积、克隆及耦合门禁通过。两张 PNG 完整性与两份 SVG XML 检查通过，图示视觉复核通过；`git diff --check` 通过。未运行业务测试或真实部署，未提交。
+- 延后问题的处置：ObjectID 空白校验（`knowledge/address.go` / Writer）随基本读写迁移修正；显式 Schema pin 与索引采用依据不一致（`reader/schema.go` / `index/spec.go` / `index/extract.go`）随发现拆分补同依据回归；只读 Repository 暴露完整 Store 写能力（`knowledge/repository.go`）随读写端口拆分收窄。位置、信号、判定及触发条件详见指南，均未在本轮修复。
 
 ### OBJECT-DESIGN-01 · 对象供给全景与发布发现设计（2026-10-12）
 
@@ -1319,3 +1414,11 @@ C-17–C-21。静态核查发现网关只检查开头的上跳路径，C-21 保�
 **本项控制台纠偏（2026-10-12）：** Goal 是复用原控制台差异展示与 Repository Compare，让 Dataset 首页直接列出获准 Catalog 的数据集，Catalog 作为可选过滤和明确的创建归属；列表、导航、版本工具栏和文件浏览沿用原控制台组件与样式。Owner 为 Dataset、Service 与 Core Architecture，不变量 V-01、KS-01–02、AUTH-02。Non-Goals：不把组合树当成单仓，不新增本地 Git 权威，不改变 Catalog 身份、消费范围和权限，不升级依赖或修改现有部署。选定共享原文本 diff、显式跳转原仓固定 commit 比较，来源入口仅依据受信同实例坐标；否决手写 item 对比、猜测 kr 标识对应原仓名及自动用 Dataset 授权读取整仓。合同仍为 snapshot/dataset/contract.go、snapshot/service/contract.go；独立真实后端与浏览器验收另记 .validation/console-ux/20261012/。
 
 **本项 Access Control 纠偏（2026-10-12）：** Goal 为我的权限与授权管理共用规则表单，字段和值分栏，补齐有管理权的规则编辑，恢复原 My Credentials/Users/Groups 的可进入页面。Owner 为 Permissions、Service、Snapshot access/service/console 合同；不变量 AUTH-01–03、KS-02、V-01。Non-Goals：不另建 KC 用户/组权威，不改变现有部署或认证模式，不因个人权限页面而授予管理权，不升级依赖。选定同一规则组件的查看/编辑/新增模式；PUT 原子替换现有规则，在 RuleStore 同一序列化边界校验旧范围、新范围与 expected 旧规则，保持 ID 和来源，冲突及失败不改授权账。分享生成规则继续通过分享管理修改。否决先撤销再新增、客户端求值自我发权、仅取消禁用后把社区后端不支持的管理写成可用。接口由 snapshot/access/contract.go、snapshot/service/README.md 与 httpsurface 注册表承接；先红后绿的回归、真实原 API 与浏览器验证记录在 .validation/access-ux/20261012/。
+
+**Repo / Dataset 授权接线（2026-10-12，本项续作）：** Goal 为复用现有认证器与耐久身份绑定，把 Repo、Dataset 产品授权归 snapshot/access；snapshot/service 对完整原控制台 Repo API 强制检查当前授权后，以调用者原证明转发 lakeFS。Owner：Permissions、Service、Snapshot Store；不变量 API-01、AUTH-01–03、KS-02、V-01、CA-01。Non-Goals：不重做账号、组、凭据或登录，不建立第二份政策，不升级依赖、修改现有部署或自动提交推送。以 Desktop 已提交 fa52d18 的 Registry / Dataset 服务合同为准，不恢复 Catalog API。选定闭集原 API 操作映射、真实同实例仓坐标、当前规则与已有默认政策、库存过滤后分页、原始流交付；否决客户端藏按钮、方法粗分权限、平台服务凭据注入、Dataset 权限开放来源整仓。接口见 snapshot/access/contract.go、snapshot/service/contract.go。新增原调用方扫描守卫防止再次写错 PR 合并方法；真实 v1.86 后端已证实原 v1.58 控制台使用 PUT 合并，未定义路由移除。
+
+**验收与剩余边界：** 2026-10-13 已自建独立真实 Gitea 1.26.3 认证及未修改的 lakeFS 1.86.0，两个真实主体的 API/CLI 初轮 82 项检查通过；最终浏览器、撤权与源码绑定检查以 .validation/shared-auth/20261013/ 最终报告为准。此前单主体证据不计此次多用户验收。snapshot/service/native_api.go 物理 Repo DELETE 尚无部署绑定、托管恢复及 Dataset 来源的完整耐久解绑生命周期，当前先授权再明确拒绝；完整删除需求触发实现。后端失败审计债已当场修复：原结果与 HTTP 状态归为实际失败，私有存储认证失败为服务不可用；回归覆盖 401/403/404/500，不伪造成功。锁定库声明仍 skipLibCheck:true；既有 live skip 单独披露，本项不标完成。旧证据与逐文件整合清单放 .validation/repo-access-current/。
+
+原 API 写操作另需尊重宿主已挂载 Store 的字面文件写能力与归档状态；不按保留仓名隐式发权。独立真实 system 仓的引用创建曾绕过只读挂载，已取得红证据并恢复测试分支；补 generic capability 检查与宽授权不能绕过只读仓的回归。
+
+**现有认证与私网存储接线（2026-10-13，用户确认后实施）：** Goal 是复用现有 Taihu / Gitea 认证器与耐久身份绑定，在 Snapshot 模块统一执行 Repo、Dataset 授权，授权后由服务端私有存储凭据调用未修改的 lakeFS 1.86。Owner 为 Permissions、Deployment Auth、Service；不变量 AUTH-01–03、API-01、KS-02、V-01、CA-01。Non-Goals：不重做账号、组、登录权威，不修改 lakeFS 源码、升级依赖、恢复 Catalog 合同或改动已有部署，不覆盖 Desktop 的其它修改。选定统一业务入口、原 Repo 操作闭集、真实仓绑定、当前授权账及受控后端客户端；替换此前只适用于 lakeFS 用户证明的原样转发接线。底层账号/凭据/初始化 API 不得随存储凭据对外转发；原控制台账号入口使用已有认证提供方，操作审计区分实际调用者与存储账号。接口由 snapshot/service/contract.go、identity/http.go 和既有 Client 认证合同承接，Server 只装配。不采用旧版本或模拟认证作为验收；独立真实 Gitea 多用户认证 + lakeFS 1.86 验证控制台、CLI、撤权与绕过，Taihu 验签/授权码合同另按其既有验证边界记录。逐文件基线、红绿证据与清理记录在 .validation/shared-auth/20261013/。

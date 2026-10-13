@@ -4,7 +4,7 @@
 的 Apache-2.0 前端，在完整原控制台上增加 Dataset 顶层入口与对应权限管理。
 Repositories、对象浏览、提交、分支、标签、比较、PR、Actions、Settings、Administration、
 原登录、Setup 和插件扩展继续由原 `LakeFSApp` / `IndexPage` / `Layout` 提供。
-前端、嵌入资产与静态 HTTP handler 归属 `snapshot/console/`；组合入口直接复用已有 lakeFS 后端与用户登录。
+前端、嵌入资产与静态 HTTP handler 归属 `snapshot/console/`；组合入口复用未修改的私网 lakeFS 后端与现有认证系统。
 Dataset 与文件授权由 Snapshot Store 的应用面提供，上层 KC 负责装配和调用，不在控制台建立知识对象模型。
 
 ## Pin 与修改范围
@@ -15,11 +15,13 @@ Dataset 与文件授权由 Snapshot Store 的应用面提供，上层 KC 负责�
   `src/pages/index.jsx` 增加 Dataset routes，Router 的 basename 为 `/ui`。
 - `src/lib/components/navbar.jsx` 增加 Datasets 导航；Dataset 页面复用 Layout，
   原仓页保留原导航、仓内 tabs 和能力入口。恢复可达页面时修正了源码类型问题。
-- `src/lib/api/kc.ts` / `session.ts` / `transport.ts` 与 `src/lib/hooks/kcAuth.tsx`
-  复用 KC 认证发现和 whoami，使用原 lakeFS 登录后的 HttpOnly Cookie。
-  Datasets 没有独立登录表单，不保存用户名、token 或访问密钥；进入页面先复核身份，
-  取消、退出和身份变化使在途结果失效。原用户 profile 缓存仅增失效代次守卫，
-  防旧请求在账号切换后写回；原 API 路径和登录提交继续复用。
+- `src/lib/api/kc.ts` / `session.ts` / `transport.ts` 与原 `index.js`
+  共用现有认证证明。Taihu/Gitea 模式使用认证系统已签发的用户令牌，组织认证沿用
+  既有 PAR/PKCE 与续期；`whoami` 确认主体后才进入控制台。浏览器令牌仅保存在
+  按 origin 隔离的 sessionStorage，不进入 URL、localStorage、pin 或资源定义。
+  原 Repo、Dataset 与授权页没有第二次认证。退出、身份切换和迟到响应有代次保护，
+  续期必须再次确认同一主体。遗留 lakeFS 模式仍可显式使用原会话。
+  `sharedLogin.tsx` 复用 Bootstrap 登录布局，不创建账号、组或签发用户令牌。
 - `src/pages/kc/` 在 `/datasets` 直接列出服务登记的 Dataset；名称在一套服务内唯一。
   新建、编辑与历史详情使用 `/datasets/actions/create`、`/datasets/:dataset/edit` 与 `/datasets/:dataset`，
   没有 Catalog 选择、query 或路径。未知 JSON 字段被拒绝；定义变化后需重新预览才能发布。
@@ -28,7 +30,7 @@ Dataset 与文件授权由 Snapshot Store 的应用面提供，上层 KC 负责�
   `react-diff-viewer-continued` 组件。来源文件变化直接链接原 Repository Compare，
   传入两版实际固定 commit，复用原 lakeFS diff API 和文件 renderer；不创建 Git checkout。
   `consoleRepository` 是注册来源的可选导航元数据，由宿主验证它属于已认证的原仓实例后
-  提供；没有坐标则明确显示未接入，不能从 kr:// 身份猜仓名。此链接不发权，不自动用
+  提供；来源必须绑定在配置的 native origin，没有坐标则明确显示未接入，不能从 kr:// 身份猜仓名。此链接不发权，不自动用
   Dataset 授权读取整仓；跨仓组合和目标路径变化在发布定义中展示。
 - `vite.config.mts` 的 `base: '/ui/'`、输出 `../webapp` 和构建后 `.gitkeep`
   与 Snapshot Store console embed 对齐。缺失静态资源返回 404，已声明页面支持深链接。
@@ -57,42 +59,59 @@ KC Server 只挂载 `console.Handler()`；其它 HTTP 服务也可在 `/ui/` 挂
 
 ```bash
 KC_UI_SERVER=http://127.0.0.1:7380 \
-LAKEFS_UI_SERVER=http://127.0.0.1:18080 \
-LAKEFS_S3_SERVER=http://127.0.0.1:18081 \
+KC_UI_AUTH_SERVER=http://127.0.0.1:18080 \
 npm --prefix snapshot/console/webui run dev
 # npm --prefix snapshot/console/webui run serve 使用同样的环境变量和分流
 ```
 
-`KC_UI_SERVER` 默认 7380；`LAKEFS_UI_SERVER` 的源码默认值为 18000；
-`LAKEFS_S3_SERVER` 默认与 lakeFS API 地址相同。示例只连接已准备后端，不启动它们。
-dev / preview 对 GET/HEAD 的裸 `/ui` 统一 308 到 `/ui/`，保留查询；与 Server 和
-部署入口的挂载规则对齐，原登录的刷新行为不需要改写。
-S3 使用 path-style URL，原 DuckDB viewer 向同源的 `/<repository>/...` 发请求。
-上游预签名对象地址仍由 lakeFS 返回，跨源地址需对象存储允许浏览器 CORS。
+`KC_UI_SERVER` 默认 7380。`KC_UI_AUTH_SERVER` 是可选的已有认证网关地址，
+没有默认值；只有显式配置时才代理 `/logout` 与 `/oidc/*`，不会误接私网存储认证。
+例子只连接已准备后端，不启动服务。dev / preview 的裸 `/ui` 统一 308 到 `/ui/`。
+原 DuckDB 引擎保留：网关 Cookie 模式使用同源 HTTP/Range；Bearer 模式通过受控
+原文件 API 读取字节后注册 buffer，因为 worker 不继承浏览器脚本的令牌。
+图片、PDF 和原文件下载也通过实际用户的受控请求，令牌不会写入链接。
+预览仍受 vendor 的文件体积上限约束；原下载的 Blob 方式会占用文件大小的浏览器内存，
+超大文件流式保存待浏览器文件写入能力接线，触发条件为大文件下载需求。
 
-## 生产同源分流
+## 生产同源接线
 
-部署层在同一外部 origin 将原页面请求转给已有 lakeFS 后端，将 Dataset 和 KC 授权请求转给 KC。
-下表及配置是组合接线，原 API 和原认证继续由 lakeFS 提供，使用用户自己的凭证。
+现有认证系统验证人、Agent 或服务主体；Snapshot 统一授权 Repo 与 Dataset。
+授权通过后，服务内部的 `KC_LAKEFS_CREDENTIAL` 调用未修改的 lakeFS 1.86。
+该凭据既不是用户认证证明，也不进入前端。native origin 来自显式 Registry lakeFS
+DSN；不同认证系统的 issuer 不会被误当成存储地址。
 
-| 请求 | 后端与凭证 |
+| 请求 | 路径与身份 |
 |---|---|
-| `/ui/` 与 `/ui/*` | `snapshot/console.Handler()` 的静态资产及页面深链接；KC Server 只挂载 |
-| `/identity/v1`、`/snapshot/v1`、`/knowledge/v1`、`/admin/v1` | KC Server；复用原用户的 lakeFS Cookie，经固定 lakeFS 后端验证后由 KC 独立评权 |
-| `/api/v1` 与其子路径 | lakeFS 原 API；该用户的 lakeFS Cookie/凭证 |
-| `/logout`、`/oidc/*` | lakeFS 原登出与 OIDC 登录/回调；保留后端或外部 IdP 的浏览器重定向。全部页面共用原退出入口，同时清除 Dataset 内存状态 |
-| 其余根路径 | lakeFS S3 网关；原 viewer 沿用湖用户 Cookie/token（DuckDB 的占位 S3 密钥不承担认证） |
+| `/ui/` 与深链接 | `snapshot/console.Handler()`；先构建前端再构建服务 |
+| `/identity/v1`、`/snapshot/v1`、`/knowledge/v1`、`/admin/v1` | 现有认证验证主体，当前产品规则授权 |
+| `/api/v1` | Snapshot 入口验证与授权后调用私网 lakeFS；未知操作拒绝 |
+| native 账号、凭据、组、策略、初始化 | 外部认证模式拒绝转发私有存储账号；保留导航并链接真实认证系统 |
+| 已有认证网关的退出／回调 | 部署显式配置；浏览器会话由原认证系统管理 |
+| 其余路径 | KC 明确入口或 404；没有 native 数据 fallback |
 
-以下为可审阅的 Nginx 分流示例，放入 `http` 上下文；替换域名、上游端口，
-由部署方在外层配置 HTTPS。没有应用到任何现有部署。
-不带 URI 的 `proxy_pass` 保留请求路径和查询，避免破坏编码的 Dataset ID 或 S3 签名；
-行为依据见 [Nginx 官方文档](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_pass)。
+配置示例（秘密由部署环境注入）：
+
+```yaml
+auth: taihu
+# 或已有 Gitea 认证地址；不是 Gitea 存储 adapter
+authURL: https://identity.example.test/oauth2
+# 使用网关浏览器会话时必须声明其既有退出入口
+authLogoutURL: https://identity.example.test/logout
+registry:
+  id: kr://deployment/registry
+  driver: lakefs
+  dsn: http://private-lakefs:8000/kc-registry
+```
+
+直连 Bearer 浏览器退出清除本地证明并返回认证页，不撤销认证系统已签发的全局令牌。
+网关 Cookie 会话还须导航到 `authLogoutURL` 清除其会话；KC 不猜测 Taihu 的退出 URL。
+CLI 保存与退出仍按既有 Client 合同。认证系统与存储管理员不会自动得到产品 grant。
+
+下面是入口分流例子，放入 Nginx `http` 上下文。示例未应用到任何部署。
+外部认证网关应清理客户端伪造的身份头并按原验签合同注入；这里不自行制造身份。
 
 ```nginx
 upstream kc_console_backend { server 127.0.0.1:7380; }
-upstream lakefs_console_backend { server 127.0.0.1:18080; }
-upstream lakefs_s3_backend { server 127.0.0.1:18081; }
-
 server {
     listen 8080;
     server_name console.example.test;
@@ -103,67 +122,28 @@ server {
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_cache off;
-
     location = /ui { return 308 /ui/$is_args$args; }
-    location ^~ /ui/ { proxy_pass http://kc_console_backend; }
-    location ~ ^/(identity|snapshot|knowledge|admin)/v1(?:/|$) {
-        # proxy_set_header directives inherit only if none are set locally.
-        proxy_set_header Host $http_host;
-        proxy_set_header X-Forwarded-Host $http_host;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_pass http://kc_console_backend;
-    }
-    location ~ ^/api/v1(?:/|$) {
-        proxy_set_header Host $http_host;
-        proxy_set_header X-Forwarded-Host $http_host;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Kc-As "";
-        proxy_pass http://lakefs_console_backend;
-    }
-    location = /logout {
-        # Mount only the original relative login page under /ui; keep external IdP redirects.
-        proxy_redirect ~^(/auth/login(?:[?#].*)?)$ /ui$1;
-        proxy_pass http://lakefs_console_backend;
-    }
-    location ^~ /oidc/ {
-        proxy_redirect ~^(/auth/login(?:[?#].*)?)$ /ui$1;
-        proxy_pass http://lakefs_console_backend;
-    }
     location / {
         proxy_request_buffering off;
-        proxy_pass http://lakefs_s3_backend;
+        proxy_pass http://kc_console_backend;
     }
 }
 ```
 
-登出保留原浏览器导航，不通过 `fetch` 截断认证器的跳转。仅把原后端相对
-`/auth/login` 响应地址挂到 `/ui/auth/login`，外部与已带 `/ui` 的地址保持原样；
-对应 Nginx 行为见 [proxy_redirect 官方文档](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_redirect)。
-保留外部 Host；S3 签名不能在代理中改路径或主机。原 lakeFS 的 SSO `login_url`、
-fallback、logout_url、Cookie Domain/Path 和回调地址应以外部 origin 配置；认证器
-若使用额外回调路径，部署方必须明确转发该路径到 lakeFS，不能落入 S3。
-组合控制台部署显式配置 `auth: lakefs`、`authURL: http://127.0.0.1:18080`，
-或 `kc serve --auth lakefs --auth-url http://127.0.0.1:18080`。KC 只向这个固定
-原后端的 `/api/v1/user` 验证调用方证明；不转发部署的 Store 管理凭据。
-原 Cookie 的 Domain/Path 必须覆盖控制台 origin 的 KC 路径。KC Cookie 请求
-附带 `X-Kc-Console: 1`，KC 不开放跨源 CORS；网关应保留该标记和 Fetch Metadata，
-不得替跨源请求自动补标记或把浏览器用户名转成身份头。客户端传来的 KC
-自报身份头仍被拒绝。具体证明过滤与耐久身份绑定见 `server/README.md`。
-统一登录不授予新权限；lakeFS 管理员身份不自动成为 KC 管理员。原 User API
-仅有账号 id 与秒级创建时间，账户回收/迁移必须显式处置旧 KC 绑定和授权；
-同名同秒重建的识别缺口与验证边界见 TASK、控制台验证记录。自动绑定限于
-符合现有 KC 用户名合同的原账号 ID；邮箱等不兼容 ID 明确拒绝，需要显式身份关联，
-不静默改名，也不让原用户重复登录。KC 的 Taihu/
-Gitea/local API 与 CLI 模式保留，组合控制台没有这些模式的第二次登录入口；
-不兼容配置明确报错，不回退本地身份。
-Server 不固定增加会阻断上游预签名请求、远端图片或 PDF viewer 的 CSP；
-部署如增加 CSP，应按实际对象存储、图片与 SSO 来源验证完整原控制台。
+所有产品数据请求交给同一个入口；已有身份网关若位于同源外层，在其自身配置中承接
+已登记的回调和退出路径。无需把 `/api/v1` 或任意根路径转给 lakeFS。
+不带 URI 的 `proxy_pass` 保留原路径与查询，依据见
+[Nginx 官方合同](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_pass)。
+Cookie/签名网关浏览器请求保留 Fetch Metadata 和 `X-Kc-Console: 1`，不能替跨源
+请求补标记；修改仅接受 JSON，原 Repo multipart 上传是受控例外。
+客户端自报 KC 身份头仍被拒绝。原后端 Cookie、数据重定向与预签名下载不向外提供。
+导入与物理地址关联也检查每个真实来源仓，不允许用目标 Repo 的导入权读取其它仓。
+未登记外部介质没有可用来源授权合同，当前明确拒绝并记录这一能力边界。
 
-部署前验证原登录一次后直接进入 Dataset、统一登出与会话过期、权限不足、
-原文件上传下载、S3 viewer、刷新深链接
-和缺失资源 404。本轮夹具验证不代替目标网关、SSO 或真实湖部署验收。
+私网 lakeFS 与原始介质必须仅能被服务访问；只在网关挂权限却允许用户直连数据 origin
+仍可绕过，不能算可用部署。本轮测试用随机 localhost 端口隔离容器，真实用户令牌直连
+native 被拒绝；生产网络防火墙与具体 Taihu SSO/SLO 仍需独立部署验收。
+遗留 `auth: lakefs` 接线保留其单用户与秒精度身份代际限制，不计多用户验收。
 
 ## 检查范围与已知限制
 

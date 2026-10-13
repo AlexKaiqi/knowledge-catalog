@@ -82,8 +82,71 @@ RepositoryID 对应的原仓名，不得返回凭据。它只是导航元数据�
 授权库存和个人准入响应附带可选 `canManage` 提示供控制台显示修改入口；提示只反映
 读取时的权限，不能替代修改时的服务端校验，也不代表有效权限全集。
 
+Dataset 定义请求可以携带可选 `metadata: map[string]string`。省略或 `{}` 表示本次发布
+没有自定义元数据；新发布提交完整对象，不继承旧版或按键合并。请求不接受非字符串值、
+null 或重复键。候选准备、可选配方出版与最终接受均保留这些属性；当前库存和按 revision
+选择的历史详情回读同一已接受记录。修改和清空需发布新 revision；不读取或识别说明文件，
+不扩大文件范围，也不改变 Dataset 授权。
+
 文件组合 API 使用 `/snapshot/v1/datasets`、`/snapshot/v1/datasets/{dataset}` 及对应
 `resolve` / `check` / `retire` 动作；原始文件交付使用
 `/snapshot/v1/files/mounts:list`、`tree:list`、`file:read`。请求只给 Dataset 与固定 pin，
 旧 `/catalog/v1/catalogs/...` 路由和 `catalog` DTO 字段明确拒绝，不保留别名。
 `inventoryDiscovery` 是上层库存发现政策的显式标记，不改变文件清单、准入或授权。
+
+## 原 Repo API 的强制检查
+
+`Config.NativeOrigin` 是固定可信的原 lakeFS 地址，不能包含凭据、查询或片段。
+`Resources.NativeRepositories` 来自实际登记，将同实例原仓名映射到逻辑 RepositoryID；
+歧义、未登记和不同实例均拒绝，不能从 kr:// 名字推导。
+`GET/POST/PUT/DELETE /api/v1/` 和原 PR 的 PATCH 保留原传输形状；
+`nativeRepositoryRoutes` 为每个 Repo 操作选择 `snapshot/access` 的明确动作，未知操作拒绝。
+GET 本身不代表只读，例如 staging/backing 需要单独的导入能力。
+
+原仓可选自定义元数据直接使用原生 `/api/v1/repositories/{repository}/metadata`：
+`GET` 返回字符串键值表；`POST` 接受 `{metadata: {...}}`，只新增或更新给定键；
+`DELETE` 接受 `{keys: [...]}`，只删除指定键。两种修改返回原生 `204`。
+读取要求 `repository.metadata.read`，修改要求 `repository.metadata.write`，
+均按实际原仓名绑定的逻辑 RepositoryID 逐请求求值。唯一权威是 lakeFS 原仓元数据，
+网关保留原请求与响应，不写入登记账、不冻结到来源 commit、不从文件生成值；
+所有键都作为不解释的字符串处理，不用于身份、来源选择或授权。
+
+认证复用现有验证器与耐久身份绑定。Taihu/Gitea 等外部认证模式下，
+`Config.NativeCredential` 只在服务端提供私有存储证明；每个请求先验证真实主体，再检查
+当前产品授权。改写后删除用户 Authorization、Cookie、X-Kc、X-Tai 与转发身份头，
+仅对固定 native origin 设置存储证明，绝不把该证明返回浏览器。
+缺少私有证明失败关闭，不回退用户证明。`GET /api/v1/user` 只显示已验证主体；
+native 账号、凭据、策略、组、初始化接口拒绝转发。账号入口由已有认证系统承接。
+遗留 `auth: lakefs` 显式模式才按原调用者证明转发，并保留其原认证器限制。
+认证管理员、存储管理员或组成员资格均不产生本模块 grant。
+Repo 查询不使用库存默认政策、Dataset、Object 或 Aspect 规则；Ref 是精确范围，
+文件路径不进入 Object 字段。库存按当前元数据权限过滤，游标仅来自可见仓。
+
+下载、表格预览和 Range 读取走同一受控原 API。`pre_sign_support_ui` 关闭，避免上传/
+下载绕过检查，原文件流保持字节与响应头。同源浏览器文件 GET/HEAD 可使用 Fetch Metadata，
+修改仍要求同源标记；multipart 例外仅限原上传，本模块 JSON API 的检查不因此放宽。
+
+可选 `Resources.CreateNativeRepository` 复用宿主耐久分配、登记和初始授权，返回真实仓名与
+逻辑身份。KC 使用已配置单个 managed pool、默认分支及原创建政策；表单明确展示此模式，
+不忽略自定义 namespace/分支/样例数据。未配置生命周期时明确拒绝创建。
+creatorActions 显式选择初始权限，重试不恢复撤权；创建、导入、物理删除和发权各自授权。
+
+生产 native 数据地址必须仅在服务内部可达，外部 `/api/v1` 全部走本模块。
+另一个用户可直达的 native 数据地址会绕过检查，不构成已验收部署。
+仅按部署声明分流已有认证网关的退出/回调，不把这些路径默认交给私网存储服务；
+不保留任意路径的 native fallback。
+
+导入与物理地址关联检查后端真实 namespace 中每个相交来源仓的 `file.read`，同时检查
+目标 `repository.import`；未登记来源、未知 namespace、路径上跳或无版本坐标的 ref
+限权读取都拒绝。宽前缀不能越过子 namespace。任意外部介质导入尚无来源授权合同，
+明确拒绝，不能把目标导入权解释为存储凭据能读取的全部位置。
+后端失败记录为失败，私有存储认证错误返回服务不可用，不使有效业务用户被错误登出；
+后端会话 Cookie 与受保护数据重定向不能进入客户端。
+
+当前物理删除入口先核对 `repository.delete`，随后拒绝删除仍在宿主绑定中的仓：
+尚无解绑部署连接、托管恢复记录与 Dataset 来源的耐久生命周期。直接转发 DELETE 会
+使恢复失败，因此不能将此入口写成已完成。原控制台保留删除入口及明确错误，后续需
+由宿主提供完整解绑流程，不能删除账或假造成功。已有分支、标签及文件删除照常执行。
+
+
+宿主 Authorize 适配还需保留实际 Store 的只读/归档边界。KC 原仓写操作检查字面文件写入能力，原 API 不得绕过只读 system 或只读连接；这不改变读取授权。

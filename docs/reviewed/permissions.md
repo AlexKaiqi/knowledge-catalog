@@ -11,6 +11,8 @@ Snapshot Store 的 Dataset 和文件访问控制由模块内的 `snapshot/access
 范围分别求值。库存可见不授予正文、Dataset 文件或管理权限；删除旧选择字段不能把既有
 限制变成服务全局授权，含退役范围的政策须明确处置后才能使用。
 
+Repo、Dataset 产品授权由 Snapshot access 模块拥有，HTTP 强制检查由相邻 service 模块拥有。原控制台 Repo 操作同样受这些规则约束；认证、账号和凭据继续由既有提供方负责，Server 只装配身份、耐久账、已有默认政策与资源映射。Dataset 消费不产生来源整仓权限，撤权在下一次访问生效。
+
 ## Non-Goals
 
 - 不引入对象级 ACL、自动继承或隐式委托；边界落在仓与已发布 Dataset 范围。
@@ -51,7 +53,17 @@ Store 门禁保护底层介质；KC 授权保护产品动作；外部业务系�
 那张表；观察到的外部授权快照也不能反向成为 KC 的访问策略。
 授权语义不依赖具体 Store 的概念，Store 替换后语义保持。部署可以把 Store 自身的 ACL
 与 KC 授权同向使用（仓默认私有、Server 以服务账号拉取对象），但那仍是介质门禁；
-Agent 一旦持有成员仓 clone，对象级只读失去意义；CODEOWNERS 属于评审路由，不是读隔离。
+已经交付的字节不能因撤权追回；撤权约束后续服务读取。CODEOWNERS 属于评审路由，不是读隔离。
+
+Repo 与 Dataset 的授权统一在 Snapshot 模块执行，包括原控制台的 Repo 请求；认证复用
+现有系统，不依赖 lakeFS 开源版拥有多个原生用户。实际主体的证明只用于认证与当前授权，
+私有 lakeFS 的服务凭据仅用于已获准操作。底层账号管理不公开给该凭据的调用者，导入与
+物理地址关联必须检查内容来源，未知来源不得借目标仓权限读取。操作证据记录实际主体与
+后端结果，底层提交者为存储账号时不能把它解释成业务调用者。
+
+资源自定义元数据按资源管理边界授权。原生 Repository 的属性读取与修改分别求值；
+Dataset 属性沿用库存查看与组合发布的权限。调用者填写的属性不成为管理主体、读写权或
+分享政策；属性变化不能绕过撤权，也不使来源仓或组合范围扩权。
 
 创建来源、登记来源、发布 Dataset 和发权是不同事实。部署可以对创建者配置明确的窄授权，
 但它仍需可审计、可撤销，重放创建和重启不能恢复已撤销规则。发布者只能在当前获准选取、
@@ -225,8 +237,8 @@ consume 侧动作闭集、未声明仓 fail closed；System Repository 是该声
 flowchart TD
   P["principal：用户 / Agent 代理用户 / 服务账号<br/>（IdP issuer+subject 与 KC 用户名耐久绑定）"]
 
-  subgraph STORE["Store 门禁（Git 托管 / 部署凭证；不产生产品动作授权）"]
-    G["Gitea private / collaborator、clone/push、服务账号拉取"]
+  subgraph STORE["Snapshot Store 介质门禁（私网 lakeFS 与部署凭据）"]
+    G["仅服务内部调用；存储账号不产生产品动作授权"]
   end
 
   subgraph KC["KC 授权：每个产品请求跨 Server 认证边界按序求值"]
@@ -243,7 +255,7 @@ flowchart TD
   end
 
   P -->|"认证（部署认证器）"| KC
-  P -.->|clone/push| G
+  KC -->|"当前授权通过后，以私有存储凭据调用"| G
   P -.->|受保护动作| E
 
   KC --> CAT["服务登记：库存发现与管理（库存可见不表示成员正文可读）"]

@@ -132,7 +132,16 @@ func lakeFSConsoleHeaders(headers http.Header) error {
 }
 
 func ValidateLakeFSConsoleRequest(r *http.Request) error {
-	if r.Header.Get("Authorization") != "" || len(r.Header.Values("Cookie")) == 0 {
+	return validateLakeFSConsoleRequest(r, false)
+}
+
+func validateLakeFSConsoleRequest(r *http.Request, nativeUpload bool) error {
+	// A verified gateway header can also carry a machine request after the
+	// gateway consumes its Bearer. Browser provenance requires CSRF protection;
+	// the trusted header alone must not turn every existing CLI into a browser.
+	browser := len(r.Header.Values("Cookie")) > 0 || r.Header.Get("X-Tai-Identity") != "" &&
+		(r.Header.Get("Sec-Fetch-Site") != "" || r.Header.Get("Origin") != "" || r.Header.Get("X-Kc-Console") != "")
+	if r.Header.Get("Authorization") != "" || !browser {
 		return nil
 	}
 	if err := lakeFSConsoleHeaders(r.Header); err != nil {
@@ -145,7 +154,7 @@ func ValidateLakeFSConsoleRequest(r *http.Request) error {
 	contentTypes := r.Header.Values("Content-Type")
 	if len(contentTypes) == 1 {
 		mediaType, _, err := mime.ParseMediaType(contentTypes[0])
-		if err == nil && mediaType == "application/json" {
+		if err == nil && (mediaType == "application/json" || nativeUpload && mediaType == "multipart/form-data") {
 			return nil
 		}
 	}

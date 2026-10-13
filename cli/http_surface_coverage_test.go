@@ -29,8 +29,8 @@ var routeRegistration = regexp.MustCompile(`mux\.Handle(?:Func)?\("(GET|POST|PUT
 // not share the CLI command table: HTTP is an independent typed protocol.
 func TestEveryPublicHTTPRouteIsRegisteredWithOnlyItsDeclaredMethod(t *testing.T) {
 	routes := registeredHTTPRoutes(t)
-	if len(routes) != 87 {
-		t.Fatalf("public HTTP route count changed from the reviewed 87 to %d; review the new protocol surface", len(routes))
+	if len(routes) != 92 {
+		t.Fatalf("public HTTP route count changed from the reviewed 92 to %d; review the new protocol surface", len(routes))
 	}
 
 	handler := serv.HTTPHandlerWithOptions(testkit.TempDir(t), serv.HTTPServerOptions{})
@@ -75,7 +75,11 @@ func TestEveryPublicHTTPRouteIsRegisteredWithOnlyItsDeclaredMethod(t *testing.T)
 				t.Fatalf("declared route is unreachable: %s returned %d", key, response.StatusCode)
 			}
 
-			undeclared, err := http.NewRequest(http.MethodPatch, server.URL+path, nil)
+			wrongMethod := http.MethodPatch
+			if route.Method == http.MethodPatch {
+				wrongMethod = http.MethodOptions
+			}
+			undeclared, err := http.NewRequest(wrongMethod, server.URL+path, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -86,7 +90,7 @@ func TestEveryPublicHTTPRouteIsRegisteredWithOnlyItsDeclaredMethod(t *testing.T)
 			}
 			_ = wrong.Body.Close()
 			if wrong.StatusCode != http.StatusMethodNotAllowed {
-				t.Fatalf("undeclared PATCH %s returned %d, want 405", path, wrong.StatusCode)
+				t.Fatalf("undeclared %s %s returned %d, want 405", wrongMethod, path, wrong.StatusCode)
 			}
 		})
 	}
@@ -267,6 +271,9 @@ func registeredHTTPRoutes(t *testing.T) []publicHTTPRoute {
 }
 
 func concreteHTTPPath(pattern string) string {
+	if strings.HasPrefix(pattern, "/api/v1/") {
+		return strings.NewReplacer("{repository}", "native-repo", "{pull}", "one").Replace(pattern)
+	}
 	replacer := strings.NewReplacer(
 		"{repository}", "kr:%2F%2Facme%2Frepository",
 		"{dataset}", "agent",
@@ -287,7 +294,7 @@ func allowedHTTPPath(path string) bool {
 		}
 	}
 	for _, namespace := range []string{
-		"/identity/v1/", "/snapshot/v1/", "/knowledge/v1/", "/snapshot/v1/files/",
+		"/api/v1/", "/identity/v1/", "/snapshot/v1/", "/knowledge/v1/", "/snapshot/v1/files/",
 		"/writer/v1/", "/governance/v1/", "/admin/v1/", "/operations/v1/",
 	} {
 		if strings.HasPrefix(path, namespace) {

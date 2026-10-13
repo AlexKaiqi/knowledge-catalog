@@ -1,6 +1,7 @@
 package dataset
 
 import (
+	"maps"
 	"slices"
 	"strings"
 
@@ -57,6 +58,9 @@ type KnowledgeSet struct {
 	Sources  []KnowledgeSetSource `json:"sources"`
 	Items    []DatasetItem        `json:"items,omitempty"`
 	Retired  bool                 `json:"retired,omitempty"`
+	// Metadata belongs to this published revision. Keys and values are opaque
+	// strings; neither metadata nor its absence changes the delivered file scope.
+	Metadata map[string]string `json:"metadata,omitempty" yaml:"metadata,omitempty"`
 }
 
 func (c *service) DefineKnowledgeSet(setID string, revision int, sources []KnowledgeSetSource) (KnowledgeSet, error) {
@@ -154,7 +158,7 @@ func (c *service) PublishKnowledgeSet(def KnowledgeSet) (KnowledgeSet, error) {
 	if err != nil {
 		return KnowledgeSet{}, err
 	}
-	def = KnowledgeSet{SetID: def.SetID, Revision: def.Revision, Sources: frozen, Items: items}
+	def = KnowledgeSet{SetID: def.SetID, Revision: def.Revision, Sources: frozen, Items: items, Metadata: maps.Clone(def.Metadata)}
 	next := c.dumpState()
 	next.KnowledgeSets = slices.DeleteFunc(next.KnowledgeSets, func(existing KnowledgeSet) bool { return existing.SetID == def.SetID })
 	next.KnowledgeSets = append(next.KnowledgeSets, cloneKnowledgeSet(def))
@@ -236,6 +240,7 @@ func (c *service) Set(setID string) (KnowledgeSet, error) {
 }
 
 func cloneKnowledgeSet(def KnowledgeSet) KnowledgeSet {
+	def.Metadata = maps.Clone(def.Metadata)
 	def.Sources = slices.Clone(def.Sources)
 	def.Items = slices.Clone(def.Items)
 	for i := range def.Sources {

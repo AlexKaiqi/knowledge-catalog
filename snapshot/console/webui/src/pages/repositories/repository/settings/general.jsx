@@ -12,6 +12,7 @@ import Modal from "react-bootstrap/Modal";
 import {repositories} from "../../../../lib/api";
 import {useRouter} from "../../../../lib/hooks/router";
 import {ReadOnlyBadge} from "../../../../lib/components/badges";
+import RepositoryMetadata from './metadata';
 
 const DeleteRepositoryModal = ({repo, show, onSubmit, onCancel}) => {
     const [isDisabled, setIsDisabled] = useState(true);
@@ -113,6 +114,8 @@ const SettingsContainer = () => {
                     </Col>
                 </Row>
             </Container>
+
+            <RepositoryMetadata repository={repo.id} readOnly={repo.read_only}/>
 
             <Button variant="danger" className="mt-3" disabled={repo?.read_only} onClick={() => setShowDeleteModal(!showingDeleteModal)}>
                 <TrashIcon/> Delete Repository

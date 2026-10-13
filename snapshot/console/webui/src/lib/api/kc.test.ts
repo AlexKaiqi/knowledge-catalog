@@ -39,7 +39,7 @@ test('development uses the same UI base and closed KC API paths', () => {
     const dev = config({ command: 'serve', mode: 'development' });
     expect(dev.base).toBe('/ui/');
     if (!('server' in dev)) throw new Error('Development must configure the KC proxy');
-    expect(Object.keys(dev.server.proxy)).toEqual(['/identity/v1', '/snapshot/v1', '/knowledge/v1', '/admin/v1', '/api/v1', '/logout', '/oidc', '^/(?!ui(?:/|$)|identity/v1|snapshot/v1|knowledge/v1|admin/v1|api/v1|logout|oidc)']);
-    for (const [path, proxy] of Object.entries(dev.server.proxy)) expect(proxy.target).toBe(path.startsWith('^/') ? process.env.LAKEFS_S3_SERVER || process.env.LAKEFS_UI_SERVER || 'http://127.0.0.1:18000' : path === '/api/v1' || path === '/logout' || path === '/oidc' ? process.env.LAKEFS_UI_SERVER || 'http://127.0.0.1:18000' : process.env.KC_UI_SERVER || 'http://127.0.0.1:7380');
+    expect(Object.keys(dev.server.proxy)).toEqual(['/identity/v1', '/snapshot/v1', '/knowledge/v1', '/admin/v1', '/api/v1', '^/(?!ui(?:/|$)|identity/v1|snapshot/v1|knowledge/v1|admin/v1|api/v1|logout|oidc)']);
+    for (const proxy of Object.values(dev.server.proxy)) expect(proxy.target).toBe(process.env.KC_UI_SERVER || 'http://127.0.0.1:7380');
     expect(dev.preview.proxy).toEqual(dev.server.proxy);
 });

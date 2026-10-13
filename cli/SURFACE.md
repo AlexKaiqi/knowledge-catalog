@@ -41,7 +41,8 @@ KC 不托管申请/审批队列；没有 `admission request`。部署可选
 
 ## 知识集
 
-知识集只用于同一任务需要多个 Repository：
+Dataset 按消费任务选择一个或多个 Repository 的确定版本中的文件，并组织交付布局。
+单仓文件选择同样成立；配方是输入形式，接受的 Dataset 发布才是服务交付范围。
 
 ```text
 kc dataset define <id> --revision <n> --source <repo>[=<selector>] …
@@ -53,7 +54,12 @@ kcfs plan  --dataset <id> --root <project>
 kcfs mount --dataset <id> --root <project>
 ```
 
-`dataset define` / `retire` 管理可复用配方，位置参数 `<id>` 与 `--dataset` 相同。`overlay` 是本机 `--file` 底稿加 `--overlay` 补丁，不发表；用 overlay 名去 `search` / `read --dataset` 是 `KNOWLEDGE_SET_INVALID`。单 Repository 消费直接 `--repo`。`kcfs plan|mount` 在挂载时内部冻结本次 ResolvedKnowledgeSet，产品 argv 不出现 pin 文件。
+`dataset define` 发布新版本，固定来源与文件范围并推进当前服务版；`retire` 停止后续消费，保留已接受发布记录。
+位置参数 `<id>` 与 `--dataset` 相同。源仓后来提交不改变既有 Dataset；采用更新需要再次发布。
+目录映射中，一旦任一目录来源声明交付路径，其余目录来源也须声明；逐文件条目使用自己的来源与交付路径。
+`overlay` 是本机 `--file` 底稿加 `--overlay` 补丁，不发表；stdout 交付合成定义，`--out` 写便携配方。
+`clone` 物化当前服务版到空目录或不存在的目录，不覆盖已有内容。解析与文件消费分别需要相应 Dataset 权限。
+`kcfs plan|mount` 在调用时内部冻结本次 ResolvedKnowledgeSet，产品 argv 不出现 pin 文件；当前宿主投影不支持逐文件条目，改用 clone 或文件网关。
 
 ## Knowledge
 
@@ -110,7 +116,7 @@ kc writer receipt --command-id <id>
 
 ## Help
 
-- `kc help`：七个产品分组与一句话，不铺命令和 flag。
+- `kc help`：产品分组与可输入的帮助 topic，不铺叶子命令和 flag；Snapshot 文件消费可继续查看 `kcfs help`。
 - `kc help <组>`：该组每条命令一行，主路径在前。
 - `kc help <组> <动词>`：先说这条命令干什么，再给 argv 骨架；值有写法的叶子再加上怎么写和能抄的例子。
 - `kc help consume|write|compose`：最短真人旅程，不是身份或授权角色。

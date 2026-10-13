@@ -9,13 +9,16 @@ import (
 	"kc/invoke"
 	knowledgeserving "kc/knowledge/serving"
 
+	"bytes"
 	"compress/gzip"
 	"encoding/json"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 
 	"kc/kernel"
+	"kc/snapshot/dataset"
 	snapshotservice "kc/snapshot/service"
 )
 
@@ -125,6 +128,10 @@ func decodeServiceRequestBody(w http.ResponseWriter, r *http.Request, target any
 		invoke.WriteJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "decode request: %v", err)))
 		return false
 	}
+	var definitionJSON bytes.Buffer
+	if requestHasDatasetDefinition(target) {
+		stream = io.TeeReader(stream, &definitionJSON)
+	}
 	decoder := json.NewDecoder(stream)
 	decoder.DisallowUnknownFields()
 	if err := kernel.DecodeJSON(decoder, target); err != nil {
@@ -135,7 +142,27 @@ func decodeServiceRequestBody(w http.ResponseWriter, r *http.Request, target any
 		invoke.WriteJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "request body must contain one JSON object")))
 		return false
 	}
+	if definitionJSON.Len() > 0 {
+		if err := dataset.ValidateMetadataJSON(definitionJSON.Bytes(), target); err != nil {
+			invoke.WriteJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "decode request: %v", err)))
+			return false
+		}
+	}
 	return true
+}
+
+// Only inline Dataset envelopes need the original bytes for strict metadata
+// validation. Writer bodies keep their existing streaming and number semantics.
+func requestHasDatasetDefinition(target any) bool {
+	shape := reflect.TypeOf(target)
+	for shape != nil && shape.Kind() == reflect.Pointer {
+		shape = shape.Elem()
+	}
+	if shape == nil || shape.Kind() != reflect.Struct {
+		return false
+	}
+	field, exists := shape.FieldByName("Definition")
+	return exists && field.Type == reflect.TypeOf((*dataset.KnowledgeSet)(nil))
 }
 
 func decodeServiceRequest(w http.ResponseWriter, r *http.Request, target any) bool {

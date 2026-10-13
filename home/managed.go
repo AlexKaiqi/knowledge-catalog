@@ -4,6 +4,7 @@ import (
 	"kc/kernel"
 	"kc/knowledge"
 	"kc/snapshot"
+	"kc/snapshot/access"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -245,7 +246,7 @@ func validateCreatorActions(actions []string) error {
 	}
 	seen := map[string]bool{}
 	for _, action := range actions {
-		if !slices.Contains(allowed, action) || seen[action] {
+		if (!slices.Contains(allowed, action) && !access.IsRepositoryCreatorAction(action)) || seen[action] {
 			return kernel.Fail(kernel.ErrUsageInvalid, "invalid or duplicate managed creator action %q", action)
 		}
 		seen[action] = true
@@ -296,7 +297,7 @@ func validateShareActions(actions []string) error {
 	allowed := []string{"knowledge.read", "knowledge.search", "knowledge.schema.read", "knowledge.provenance", "knowledge.history.read", "knowledge.relations", "dataset.resolve", "file.read"}
 	seen := map[string]bool{}
 	for _, action := range actions {
-		if !slices.Contains(allowed, action) || seen[action] {
+		if (!slices.Contains(allowed, action) && !access.IsRepositoryReadAction(action)) || seen[action] {
 			return kernel.Fail(kernel.ErrUsageInvalid, "invalid or duplicate managed share action %q", action)
 		}
 		seen[action] = true

@@ -13,8 +13,9 @@ export const RepositoryCreateForm = ({ formID, config, onSubmit, formValid, setF
 
     const [repoValid, setRepoValid] = useState(null);
     const defaultNamespacePrefix = config.default_namespace_prefix
+    const managedCreation = config.snapshot_managed_creation === true;
 
-    const [storageNamespaceValid, setStorageNamespaceValid] = useState(defaultNamespacePrefix ? true : null);
+    const [storageNamespaceValid, setStorageNamespaceValid] = useState(managedCreation || defaultNamespacePrefix ? true : null);
     const [defaultBranchValid, setDefaultBranchValid] = useState(true);
     const [addSampleData, setAddSampleData] = useState(false);
 
@@ -26,7 +27,7 @@ export const RepositoryCreateForm = ({ formID, config, onSubmit, formValid, setF
         const isRepoValid = repoValidityRegex.test(repoNameField.current.value);
         setRepoValid(isRepoValid);
         setFormValid(isRepoValid && storageNamespaceValid && defaultBranchValid);
-        if (defaultNamespacePrefix) {
+        if (defaultNamespacePrefix && !managedCreation) {
             storageNamespaceField.current.value = defaultNamespacePrefix + repoNameField.current.value
             checkStorageNamespaceValidity()
         }
@@ -84,7 +85,7 @@ export const RepositoryCreateForm = ({ formID, config, onSubmit, formValid, setF
               }
           </Form.Group>
 
-          {!flattenForm && sampleCheckbox}
+          {!flattenForm && !managedCreation && sampleCheckbox}
       </>
     )
 
@@ -92,7 +93,7 @@ export const RepositoryCreateForm = ({ formID, config, onSubmit, formValid, setF
       <>
           <Form.Group controlId="defaultBranch" className="mt-3">
               <FloatingLabel label="Default Branch Name" controlId="defaultBranchNameCtrl">
-                  <Form.Control type="text" ref={defaultBranchField} defaultValue={"main"}  placeholder="main" onChange={checkDefaultBranchValidity}/>
+                  <Form.Control type="text" ref={defaultBranchField} defaultValue={"main"} readOnly={managedCreation} placeholder="main" onChange={checkDefaultBranchValidity}/>
               </FloatingLabel>
               {defaultBranchValid === false &&
                 <Form.Text className="text-danger">
@@ -100,7 +101,7 @@ export const RepositoryCreateForm = ({ formID, config, onSubmit, formValid, setF
                 </Form.Text>
               }
           </Form.Group>
-          <Form.Group className="mt-3">
+          {!managedCreation && <Form.Group className="mt-3">
               <FloatingLabel label="Storage Namespace" controlId="storageNamespaceCtrl">
                   <Form.Control type="text" ref={storageNamespaceField} placeholder={storageNamespaceExample} onChange={checkStorageNamespaceValidity} aria-describedby="namespaceHelpText"/>
               </FloatingLabel>
@@ -114,8 +115,9 @@ export const RepositoryCreateForm = ({ formID, config, onSubmit, formValid, setF
                     </Form.Text>
                 </p>
               }
-          </Form.Group>
-          {flattenForm && sampleCheckbox}
+          </Form.Group>}
+          {managedCreation && <Form.Text>存储位置由已配置的创建池分配，创建、登记和初始权限沿用现有流程。</Form.Text>}
+          {flattenForm && !managedCreation && sampleCheckbox}
       </>
     );
 
@@ -148,7 +150,7 @@ export const RepositoryCreateForm = ({ formID, config, onSubmit, formValid, setF
             }
             onSubmit({
                 name: repoNameField.current.value,
-                storage_namespace: storageNamespaceField.current.value,
+                storage_namespace: managedCreation ? '' : storageNamespaceField.current.value,
                 default_branch: defaultBranchField.current.value,
                 sample_data: addSampleData,
             });

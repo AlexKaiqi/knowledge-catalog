@@ -103,8 +103,9 @@ Dataset 和当前服务版，跨范围或发布基点变化后返回 `USAGE_INVA
 [`Snapshot Store 控制台`](../snapshot/console/README.md) 和
 [`接线与构建`](../snapshot/console/webui/KC-VENDOR.md)。先构建前端，再构建使用者二进制。
 缺少入口时显示构建提示；已声明页面的深链接回到入口，缺失静态资产保持 404。
-部署入口直接转发原页面的 API 与 S3 请求给已有 lakeFS 后端，Dataset 请求给 KC；
-同源分流配置见上述 vendor 文档，原页面使用 lakeFS 用户凭证。
+组合控制台沿用现有认证系统的用户证明，原 Repo 与 Dataset 请求都进入 Snapshot 当前授权边界。
+授权通过后才由服务私有存储凭据调用未修改的私网 lakeFS；原账号管理入口指向现有认证系统。
+不把原 API 或任意数据路径直接转发给 native 后端。同源入口与网络边界见上述 vendor 文档。
 
 - `routes_anchor_test.go`：与 `httpsurface.Patterns()` 双向对账 + 无重复 + 字面表有序；
 - arch：`TestEveryProductionPackageHasAnAllowedLayer`（app 层注册）、

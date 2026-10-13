@@ -19,6 +19,9 @@ const rootHelp = `kc — Knowledge Catalog CLI
 部署        初始化、恢复并运行 Server
 
 最短旅程：kc help consume | kc help write | kc help compose
+仓与文件交付：kc help composition | kc help dataset
+授权与登记历史：kc help grant | kc help registry
+只读文件视图：kcfs help
 命令帮助：kc help <组> [<动词>]
 `
 
@@ -55,7 +58,7 @@ const composeHelp = `kc help compose — 组合 Repository 并发权
   kc dataset define <id> --revision <n> --source <repo>[=<selector>][@path[@subPath]]
   # 逐文件交付：--file-source <repo>@<来源文件>@<交付路径>
   kc grant add --dataset <id> --principal <user> \
-    --action file.read
+    --action dataset.resolve,file.read
   kc grant add --repo <id> --principal <user> --action <actions>
   kc dataset clone <id> <dir>   # 把交付目录树物化成本地目录
 `
@@ -65,7 +68,7 @@ type helpEntry struct {
 	Usage       string
 }
 
-var helpEntries = map[string]helpEntry{
+var helpEntries = mergeHelpEntries(snapshotHelpEntries(), map[string]helpEntry{
 	"login": {
 		Description: "验证身份并保存当前 Server 的本机会话",
 		Usage: `kc login [--mode taihu|token|local] [--wait]
@@ -83,52 +86,6 @@ var helpEntries = map[string]helpEntry{
 	"admission show": {
 		Description: "显示本人已有权限和外部申请入口",
 		Usage:       `kc admission show`,
-	},
-	"show": {
-		Description: "显示服务的 Repository 与 Dataset 库存",
-		Usage:       `kc show`,
-	},
-	"create": {
-		Description: "创建托管 Repository 或连接自有 Repository",
-		Usage: `kc create (--name <名称> [--store <store>] | --url <url> --credential-file <path>)
-  --name 与 --url 互斥。--name 是平台供给空仓；--url 是连接已有仓。
-  LakeFS 上 --name 就是仓 ID，与 lakeFS 仓库名相同。
-  例：kc create --name table-meta`,
-	},
-	"attach": {
-		Description: "把已连接 Repository 挂入服务登记空间",
-		Usage:       `kc attach --repo <id>`,
-	},
-	"detach": {
-		Description: "从服务登记空间 拿下 Repository",
-		Usage:       `kc detach --repo <id>`,
-	},
-	"grant add": {
-		Description: "发放一条服务、仓或 Dataset 范围的授权规则",
-		Usage: `kc grant add --principal <id> --action <action[,action...]> [--repo <id>] [--dataset <id>]
-  --action 是 knowledge.read 这种带点的名字，逗号分隔。不能发 '*'（那是 deployment init 的 bootstrap）。
-  Dataset 消费权用 --dataset，动作是 file.read。
-  值里有空格或 * 必须加单引号，否则 shell 会把 * 展开成当前目录的文件名。
-  重复发放会新增一条规则，不是幂等。撤销抄本条回执或 grant list 的 id。
-  例：kc grant add --repo kr://scene/knowledge --principal healzhou --action knowledge.read,knowledge.search
-  例：kc grant add --dataset scene-set --principal healzhou --action file.read`,
-	},
-	"grant list": {
-		Description: "列出授权规则",
-		Usage: `kc grant list [--principal <id>] [--action <action>] [--repo <id>] [--dataset <id>]
-  不带 action 时列出显式规则，可按 --principal、--repo 或 --dataset 过滤，不是整份 allow 文件。
-  带 action 时是显式规则求值，省略 principal 则问当前主体；需要全局 admin.grants.read，不包含默认消费声明。
-  例：kc grant list --repo kr://scene/knowledge
-  例：kc grant list --repo kr://scene/knowledge --principal healzhou --action knowledge.read`,
-	},
-	"grant remove": {
-		Description: "撤销一条授权规则",
-		Usage: `kc grant remove --id <rule-id>
-  --id 来自 grant add 回执或 grant list，不是场景执行器占位符。`,
-	},
-	"registry audit": {
-		Description: "查看服务登记历史",
-		Usage:       `kc registry audit [--limit <n>] [--continuation <cursor>]`,
 	},
 	"deployment init": {
 		Description: "初始化部署",
@@ -243,39 +200,6 @@ var helpEntries = map[string]helpEntry{
 		Usage: `kc operations feedback record --trace-id <id> --dataset <id> --outcome <answered|accepted|rejected|corrected|helpful|unhelpful> [--message <text>]
   --outcome 只能是 enumerated 那六个词，不是 PASSED/FAILED。
   例：kc operations feedback record --trace-id tr-1 --dataset scene-set --outcome helpful`,
-	},
-	"dataset define": {
-		Description: "定义可复用的多 Repository 配方（目录映射与逐文件交付）",
-		Usage: `kc dataset define <id> --revision <n> (--source <repo>[=<selector>][@path[@subPath]]... | --file <recipe.yaml>)
-  --source 可重复；等号后面是 selector，省略则用默认 published。<id> 也可用 --dataset 写出。
-  目录映射：第一个 @ 后写交付目录（path），第二个 @ 后写来源仓内的子目录（subPath）。
-  所有 --source 都要写 @path（根用 @ 写空串），交付目录不得嵌套重叠；同一仓多个片段共用一个固定 commit。
-  逐文件交付：--file-source <repo>[=<selector>]@<来源文件>@<交付路径>，可与 --source 同用；
-  同一交付目标文件只能有一个来源，冲突会被拒绝；文件条目不改变所在仓的固定版本。
-  例：kc dataset define scene-set --revision 1 --source kr://scene/knowledge
-  例：kc dataset define --dataset scene-set --revision 1 --source kr://scene/knowledge
-  例：kc dataset define delivery --revision 1 --source docs@reference/policies@handbook/policies --source data@data/metrics@semantic/metrics --file-source docs@handbook/README.md@reference/README.md
-  例：kc dataset define scene-set --revision 1 --file .kc-dataset.yaml`,
-	},
-	"dataset clone": {
-		Description: "把已发布 Dataset 的交付目录树物化成普通本地目录",
-		Usage: `kc dataset clone <dataset> <dir>
-  把已发布 Dataset 的当前服务版交付目录树物化成普通本地目录，不需要 kcfs。
-  <dir> 必须是空目录或不存在；clone 不覆盖已有文件。
-  回执列出版本、pinId 与每个来源仓的 commit；不写 manifest 文件，也不收 --pin。
-  例：kc dataset clone scene-set ./scene-copy`,
-	},
-	"dataset retire": {
-		Description: "退役命名配方",
-		Usage: `kc dataset retire <id>
-  <id> 也可用 --dataset 写出。
-  例：kc dataset retire scene-set`,
-	},
-	"dataset overlay": {
-		Description: "只在本机合成一份不发表的配方",
-		Usage: `kc dataset overlay --file <recipe.yaml> --overlay <overlay.yaml> [--out <path>]
-  --file 是底稿配方，--overlay 是本机补丁。不发表、不改共享知识集。
-  例：kc dataset overlay --file recipe.yaml --overlay overlay.yaml`,
 	},
 	"schema list": {
 		Description: "列出一个 Repository 已发布的对象类型，不是对象实例目录或合同正文",
@@ -409,6 +333,19 @@ var helpEntries = map[string]helpEntry{
 		Description: "查询 Writer 命令回执",
 		Usage:       `kc writer receipt --command-id <id>`,
 	},
+})
+
+func mergeHelpEntries(base, extra map[string]helpEntry) map[string]helpEntry {
+	entries := make(map[string]helpEntry, len(base)+len(extra))
+	for _, group := range []map[string]helpEntry{base, extra} {
+		for path, entry := range group {
+			if _, exists := entries[path]; exists {
+				panic(fmt.Sprintf("duplicate CLI help entry %q", path))
+			}
+			entries[path] = entry
+		}
+	}
+	return entries
 }
 
 // complexLeafOperands is the closed set of leaves whose values have a writing
@@ -427,9 +364,9 @@ var complexLeafOperands = []string{
 var helpGroups = map[string][]string{
 	"identity":    {"login", "logout", "whoami", "admission show"},
 	"admission":   {"admission show"},
-	"composition": {"show", "create", "attach", "detach", "grant add", "grant list", "grant remove", "dataset define", "dataset clone", "dataset retire", "dataset overlay"},
+	"composition": {"show", "create", "attach", "detach", "registry audit", "grant add", "grant list", "grant remove", "dataset define", "dataset clone", "dataset retire", "dataset overlay"},
 	"registry":    {"registry audit"},
-	"dataset":     {"dataset define", "dataset clone", "dataset retire", "dataset overlay"},
+	"dataset":     {"dataset define", "dataset clone", "dataset retire", "dataset overlay", "show", "grant add", "grant list", "grant remove"},
 	"grant":       {"grant add", "grant list", "grant remove"},
 	"knowledge":   {"schema list", "search", "read", "resolve", "relations", "traverse", "provenance", "log", "schema describe", "binding show", "access", "invoke"},
 	"publishing":  {"diff", "writer commit", "writer put", "writer remove", "writer head", "writer receipt"},
@@ -488,7 +425,11 @@ func helpFor(topic string) (string, error) {
 		return help + "\n", nil
 	}
 	if paths, ok := helpGroups[topic]; ok {
-		return formatGroupHelp(topic, paths), nil
+		help := formatGroupHelp(topic, paths)
+		if topic == "dataset" {
+			help += "\n只读文件视图：kcfs help\n"
+		}
+		return help, nil
 	}
 	paths := make([]string, 0)
 	for path := range cliSurface {

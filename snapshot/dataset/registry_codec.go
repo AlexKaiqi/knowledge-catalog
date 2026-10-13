@@ -66,6 +66,9 @@ func preserveDefinitionBytes(existing, desired map[string][]byte) error {
 		}
 		next, retained := desired[path]
 		if !retained {
+			if strings.HasPrefix(path, datasetVersionPrefix) {
+				return kernel.Fail(kernel.ErrNonFastForward, "accepted dataset release %s cannot be removed", path)
+			}
 			continue
 		}
 		before, err := asKnowledgeSetYAML(body)
@@ -78,6 +81,10 @@ func preserveDefinitionBytes(existing, desired map[string][]byte) error {
 		}
 		if kernel.CanonicalDigest(before) == kernel.CanonicalDigest(after) {
 			desired[path] = body
+		} else if strings.HasPrefix(path, datasetVersionPrefix) {
+			return kernel.Fail(kernel.ErrNonFastForward, "accepted dataset release %s cannot be rewritten", path)
+		} else if before.Revision == after.Revision && registryDefinitionDigest(before) != registryDefinitionDigest(after) {
+			return kernel.Fail(kernel.ErrNonFastForward, "accepted dataset revision at %s cannot be rewritten", path)
 		}
 	}
 	return nil

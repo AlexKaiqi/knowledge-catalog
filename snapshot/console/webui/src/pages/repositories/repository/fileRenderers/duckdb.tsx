@@ -5,6 +5,8 @@ import duckdb_wasm from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
 import mvp_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
 import duckdb_wasm_eh from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
 import eh_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
+import {API_ENDPOINT, objects, qs} from '../../../../lib/api';
+import {userProof} from '../../../../lib/api/sessionProof';
 
 
 
@@ -45,10 +47,9 @@ async function getDuckDB(): Promise<duckdb.AsyncDuckDB> {
 const DUCKDB_STRING_CONSTANT = 2;
 const LAKEFS_URI_PATTERN = /^(['"]?)(lakefs:\/\/(.*))(['"])\s*$/;
 
-// returns a mapping of `lakefs://..` URIs to their `s3://...` equivalent
+// Read through the original API's current Repo authorization, including ranges.
 async function extractFiles(conn: AsyncDuckDBConnection, sql: string): Promise<{ [name: string]: string }> {
     const tokenized = await conn.bindings.tokenize(sql)
-    const r = Math.random(); // random number to make sure the S3 gateway picks up the request
     let prev = 0;
     const fileMap: { [name: string]: string } = {};
     tokenized.offsets.forEach((offset, i) => {
@@ -61,7 +62,9 @@ async function extractFiles(conn: AsyncDuckDBConnection, sql: string): Promise<{
         if (tokenized.types[i] === DUCKDB_STRING_CONSTANT) {
             const matches = part.match(LAKEFS_URI_PATTERN)
             if (matches !== null) {
-                fileMap[matches[2]] = `s3://${matches[3]}?r=${r}`;
+                const [repo, ref, ...path] = matches[3].split('/');
+                if (!repo || !ref || !path.length) throw new Error('A lakefs URI requires repository, ref and file path');
+                fileMap[matches[2]] = `${document.location.origin}${API_ENDPOINT}/repositories/${encodeURIComponent(repo)}/refs/${encodeURIComponent(ref)}/objects?${qs({path: path.join('/'), presign: false})}`;
             }
         }
     })
@@ -74,27 +77,23 @@ export async function runDuckDBQuery(sql: string):  Promise<arrow.Table<any>> {
     /* eslint-disable  @typescript-eslint/no-explicit-any */
     let result: arrow.Table<any>
     const conn  = await db.connect()
+    let fileNames: string[] = [];
     try {
-        // TODO (ozk): read this from the server's configuration?
-        await conn.query(`SET s3_region='us-east-1';`)
-        // set the example values (used to make sure the S3 gateway picks up the request)
-        // real authentication is done using the existing swagger cookie or token
-        await conn.query(`SET s3_access_key_id='use_swagger_credentials';`)
-        await conn.query(`SET s3_secret_access_key='these_are_meaningless_but_must_be_set';`)
-        await conn.query(`SET s3_endpoint='${document.location.protocol}//${document.location.host}';`)
-
-        // register lakefs uri-ed files as s3 files
         const fileMap = await extractFiles(conn, sql)
-        const fileNames = Object.getOwnPropertyNames(fileMap)
+        fileNames = Object.getOwnPropertyNames(fileMap)
         await Promise.all(fileNames.map(
-            fileName => db.registerFileURL(fileName, fileMap[fileName], DuckDBDataProtocol.S3, true)
+            async fileName => {
+                if (!userProof.get()) return db.registerFileURL(fileName, fileMap[fileName], DuckDBDataProtocol.HTTP, true);
+                const [repo, ref, ...path] = fileName.slice('lakefs://'.length).split('/');
+                const content = await objects.blob(repo, ref, path.join('/'));
+                return db.registerFileBuffer(fileName, new Uint8Array(await content.arrayBuffer()));
+            }
         ))
         // execute the query
         result = await conn.query(sql)
 
-        // remove registrations
-        await Promise.all(fileNames.map(fileName => db.dropFile(fileName)))
     } finally {
+        await Promise.all(fileNames.map(fileName => db.dropFile(fileName)))
         await conn.close()
     }
     return result

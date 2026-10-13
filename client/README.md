@@ -34,6 +34,23 @@ endpoint shape. The writer commit route additionally carries its own larger
 body cap (`KC_MAX_COMMIT_REQUEST_BYTES`, default 512 MiB) because legitimate
 whole-repository ChangeSets exceed the per-route service default.
 
+Native lakeFS `/api/v1/` requests remain uncompressed, retaining the upstream
+wire contract. Native error bodies (`message` / `code`) are decoded without
+changing KC error-envelope handling.
+
+`SnapshotService.RepositoryMetadata`, `SetRepositoryMetadata` and
+`DeleteRepositoryMetadata` address the actual native lakeFS repository name
+at `/api/v1/repositories/{repository}/metadata`; callers never infer that name
+from a logical Repository ID. Reads return a string map, sets submit
+`{metadata: {...}}` and preserve unspecified keys, and deletes submit
+`{keys: [...]}`. Current product authorization and upstream authorization both
+apply. The original lakeFS repository remains the only metadata authority.
+
+`KnowledgeSetRequest.Metadata` is an optional `map[string]string`. Dataset
+definition publishes the complete object with its revision; omission or `{}`
+publishes no metadata. Dataset inventory and selected historical detail carry
+the accepted metadata. This capability does not read or interpret files.
+
 `MemorySessionStore` intentionally forgets credentials when the process exits.
 Applications that need durable login must provide a `SessionStore` backed by an
 OS keychain or Agent credential store; credentials must never enter registration state,

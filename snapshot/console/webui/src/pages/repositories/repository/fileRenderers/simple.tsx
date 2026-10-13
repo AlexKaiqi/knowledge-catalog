@@ -1,8 +1,8 @@
-import React, { FC, useContext } from "react";
+import React, { FC, useContext, useEffect, useState } from "react";
 import Alert from "react-bootstrap/Alert";
 import { humanSize } from "../../../../lib/components/repository/tree";
 import { useAPI } from "../../../../lib/hooks/api";
-import { objects, qs } from "../../../../lib/api";
+import { objects } from "../../../../lib/api";
 import { AlertError, Loading } from "../../../../lib/components/controls";
 import SyntaxHighlighter from "react-syntax-highlighter";
 import { githubGist as syntaxHighlightStyle } from "react-syntax-highlighter/dist/esm/styles/hljs";
@@ -114,15 +114,13 @@ export const ImageRenderer: FC<RendererComponent> = ({
   repoId,
   refId,
   path,
-  presign,
 }) => {
-  const query = qs({ path, presign });
+  const {url, error} = useObjectBlob(repoId, refId, path);
+  if (error) return <AlertError error={error}/>;
   return (
     <p className="image-container">
       <img
-        src={`/api/v1/repositories/${encodeURIComponent(
-          repoId
-        )}/refs/${encodeURIComponent(refId)}/objects?${query}`}
+        src={url}
         alt={path}
       />
     </p>
@@ -133,20 +131,32 @@ export const PDFRenderer: FC<RendererComponent> = ({
   repoId,
   refId,
   path,
-  presign,
 }) => {
-  const query = qs({ path, presign });
+  const {url, error} = useObjectBlob(repoId, refId, path);
+  if (error) return <AlertError error={error}/>;
   return (
     <div className="m-3 object-viewer-pdf">
       <object
-        data={`/api/v1/repositories/${encodeURIComponent(
-          repoId
-        )}/refs/${encodeURIComponent(refId)}/objects?${query}`}
+        data={url}
         type="application/pdf"
       ></object>
     </div>
   );
 };
+
+function useObjectBlob(repoId: string, refId: string, path: string) {
+  const [url, setURL] = useState<string>();
+  const [error, setError] = useState<Error | null>(null);
+  useEffect(() => {
+    let active = true, objectURL = '';
+    setURL(undefined); setError(null);
+    objects.blob(repoId, refId, path).then((blob: Blob) => {
+      if (active) {objectURL = URL.createObjectURL(blob); setURL(objectURL);}
+    }).catch((failure: Error) => {if (active) setError(failure);});
+    return () => {active = false; if (objectURL) URL.revokeObjectURL(objectURL);};
+  }, [repoId, refId, path]);
+  return {url, error};
+}
 
 export const GeoJSONRenderer: FC<RendererComponentWithText> = ({ text }) => {
   return <GeoJSONPreview data={text} />;

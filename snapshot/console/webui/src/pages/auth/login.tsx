@@ -9,6 +9,7 @@ import {AlertError} from "../../lib/components/controls"
 import {useRouter} from "../../lib/hooks/router";
 import {useAPI} from "../../lib/hooks/api";
 import {useNavigate} from "react-router-dom";
+import SharedLogin, {safeLoginTarget} from './sharedLogin';
 
 interface LoginConfig {
     login_url: string;
@@ -19,6 +20,7 @@ interface LoginConfig {
     fallback_login_label?: string;
     login_cookie_names: string[];
     logout_url: string;
+    snapshot_identity?: boolean;
 }
 
 const LoginForm = ({loginConfig = {login_url: "", login_cookie_names: [], logout_url: "", username_ui_placeholder: "", password_ui_placeholder: ""}}: {loginConfig?: LoginConfig}) => {
@@ -40,11 +42,7 @@ const LoginForm = ({loginConfig = {login_url: "", login_cookie_names: [], logout
                                 setLoginError(null);
                                 const data = new FormData(e.currentTarget);
                                 await auth.login(String(data.get('username')), String(data.get('password')))
-                                const safeNext = typeof next === 'string' && next.startsWith('/') && !next.startsWith('//') && Array.from(next).every(character => {
-                                    const code = character.charCodeAt(0);
-                                    return character !== '\\' && code >= 32 && (code < 127 || code > 159);
-                                });
-                                router.push(safeNext ? next : '/');
+                                router.push(safeLoginTarget(next));
                                 navigate(0);
                             } catch(err) {
                                 if (err instanceof AuthenticationError && err.status === 401) {
@@ -111,6 +109,7 @@ const LoginPage = () => {
     }
 
     if (error) return <Row><Col md={{offset: 4, span: 4}}><AlertError error={error}/></Col></Row>;
+    if (loginConfig?.snapshot_identity) return <SharedLogin/>;
     return (
         <LoginForm loginConfig={loginConfig}/>
     );

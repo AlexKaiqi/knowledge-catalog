@@ -76,6 +76,9 @@ func HTTPServerOptionsFromFlags(flags map[string]FlagValue) (HTTPServerOptions, 
 		return HTTPServerOptions{}, err
 	}
 	options.AuthMode = mode
+	if mode == "lakefs" {
+		options.NativeAPIOrigin = url
+	}
 	options.Authenticator = authenticator
 	options.AdminPrincipals = admins
 

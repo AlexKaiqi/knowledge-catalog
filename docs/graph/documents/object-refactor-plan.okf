@@ -1,0 +1,24 @@
+---
+object_id: documentation/object-refactor-plan
+aspect_name: catalog-entry
+kind: Aspect
+path_hint: docs/graph/documents/object-refactor-plan.okf
+---
+{
+  "id": "object-refactor-plan",
+  "path": "docs/reviewed/object-refactor-plan.md",
+  "title": "对象模块重构与验证计划",
+  "class": "evolution",
+  "lifecycle": "planned",
+  "audience": [
+    "architect",
+    "contributor",
+    "reviewer",
+    "maintainer"
+  ],
+  "ownerTopics": [
+    "object-module-refactor-phases",
+    "object-module-refactor-transition-and-checkpoints",
+    "object-plugin-migration-and-validation"
+  ]
+}

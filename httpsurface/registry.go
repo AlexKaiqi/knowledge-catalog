@@ -11,6 +11,12 @@ func Patterns() []string {
 }
 
 var registry = []string{
+	"GET /api/v1/",
+	"POST /api/v1/",
+	"PUT /api/v1/",
+	"DELETE /api/v1/",
+	"PATCH /api/v1/repositories/{repository}/pulls/{pull}",
+
 	"GET /repositories/{repository}",
 	"GET /assets/repository.js",
 	"GET /console",

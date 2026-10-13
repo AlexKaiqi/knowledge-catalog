@@ -100,7 +100,12 @@ func EnsureWorkspace(ws *kchome.Home, home string, cat dataset.Service, setID st
 	if rec.Name == "" {
 		return dataset.KnowledgeSet{}, orig
 	}
-	return cat.DefineKnowledgeSet(setID, 1, rec.Sources())
+	prepared, err := cat.PrepareKnowledgeSet(setID, 1, rec.Sources())
+	if err != nil {
+		return dataset.KnowledgeSet{}, err
+	}
+	prepared.Metadata = rec.Metadata
+	return cat.PublishKnowledgeSet(prepared)
 }
 
 func FindKnowledgeSetRecipe(ws *kchome.Home, home, setID string) (dataset.KnowledgeSetRecipe, error) {

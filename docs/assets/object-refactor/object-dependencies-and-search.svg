@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1480" viewBox="0 0 1280 1480" role="img"><title>对象系统：代码依赖与请求调用</title><rect width="100%" height="100%" fill="#FFFFFF"/>
+<text x="48" y="80.72" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="44" font-weight="500" fill="#18283B">代码依赖与请求调用，分别阅读</text>
+<text x="48" y="126.00" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="25" font-weight="400" fill="#5A6C80">目标结构 · 左侧是依赖关系，右侧是一次固定版本 SEARCH</text>
+<polyline points="792,152 792,990" fill="none" stroke="#D4DDE7" stroke-width="1.2"/>
+<text x="64" y="174.76" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="27" font-weight="500" fill="#18283B">代码依赖：A → B 表示 A 依赖 B</text>
+<text x="840" y="175.64" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="28" font-weight="500" fill="#18283B">固定版本 SEARCH</text>
+<rect x="64" y="228" width="320" height="126" rx="10" fill="#EDF4FF" stroke="#D4DDE7" stroke-width="1.3"/>
+<text x="86" y="273.52" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="29" font-weight="500" fill="#18283B">discovery 根</text>
+<text x="86" y="314.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#18283B">查询与逻辑访问合同</text>
+<rect x="432" y="228" width="320" height="126" rx="10" fill="#EDF4FF" stroke="#D4DDE7" stroke-width="1.3"/>
+<text x="454" y="273.52" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="29" font-weight="500" fill="#18283B">liveaccess 根</text>
+<text x="454" y="314.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#18283B">观察依据与访问合同</text>
+<polyline points="384,268 432,268" fill="none" stroke="#8066A6" stroke-width="2.2" stroke-dasharray="7 6"/>
+<polygon points="432.00,268.00 421.00,273.00 421.00,263.00" fill="#8066A6"/>
+<text x="327" y="213.36" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="22" font-weight="400" fill="#8066A6">仅观察依据类型</text>
+<rect x="432" y="420" width="320" height="126" rx="10" fill="#EDF4FF" stroke="#D4DDE7" stroke-width="1.3"/>
+<text x="454" y="465.52" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="29" font-weight="500" fill="#18283B">interfaces 根</text>
+<text x="454" y="506.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#18283B">能力合同与通用分派</text>
+<polyline points="592,354 592,420" fill="none" stroke="#58728C" stroke-width="2.2"/>
+<polygon points="592.00,420.00 587.00,409.00 597.00,409.00" fill="#58728C"/>
+<text x="610" y="392.36" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="22" font-weight="400" fill="#5A6C80">Handler 合同</text>
+<rect x="64" y="644" width="688" height="134" rx="10" fill="#EAF2FC" stroke="#D4DDE7" stroke-width="1.3"/>
+<text x="88" y="689.40" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="30" font-weight="500" fill="#18283B">object 根 + reader / writer</text>
+<text x="88" y="732.12" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="24" font-weight="400" fill="#18283B">身份与表示 / 固定范围读取 / 对象发布</text>
+<polyline points="210,354 210,644" fill="none" stroke="#58728C" stroke-width="2.2"/>
+<polygon points="210.00,644.00 205.00,633.00 215.00,633.00" fill="#58728C"/>
+<text x="229" y="503.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#5A6C80">固定读视图</text>
+<polyline points="592,546 592,644" fill="none" stroke="#58728C" stroke-width="2.2"/>
+<polygon points="592.00,644.00 587.00,633.00 597.00,633.00" fill="#58728C"/>
+<text x="610" y="599.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#5A6C80">固定声明</text>
+<rect x="64" y="854" width="688" height="110" rx="10" fill="#F0F3F6" stroke="#D4DDE7" stroke-width="1.3"/>
+<text x="88" y="896.40" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="30" font-weight="500" fill="#18283B">Snapshot 公共合同</text>
+<text x="88" y="940.12" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="24" font-weight="400" fill="#18283B">固定内容与版本 · Dataset · 当前授权</text>
+<polyline points="408,778 408,854" fill="none" stroke="#58728C" stroke-width="2.2"/>
+<polygon points="408.00,854.00 403.00,843.00 413.00,843.00" fill="#58728C"/>
+<text x="430" y="818.36" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="22" font-weight="400" fill="#5A6C80">Reader / Writer 使用存储接口</text>
+<rect x="840" y="228" width="352" height="92" rx="10" fill="#EEF7F3" stroke="#D4DDE7" stroke-width="1.3"/>
+<text x="862" y="264.76" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="27" font-weight="500" fill="#18283B">Server 接入</text>
+<text x="862" y="303.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#18283B">可信主体与固定范围</text>
+<polyline points="1016,320 1016,374" fill="none" stroke="#347D70" stroke-width="2.2"/>
+<polygon points="1016.00,374.00 1011.00,363.00 1021.00,363.00" fill="#347D70"/>
+<rect x="840" y="374" width="352" height="92" rx="10" fill="#EEF7F3" stroke="#D4DDE7" stroke-width="1.3"/>
+<text x="862" y="410.76" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="27" font-weight="500" fill="#18283B">discovery/service</text>
+<text x="862" y="449.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#18283B">检查查询权限与请求</text>
+<polyline points="1016,466 1016,520" fill="none" stroke="#347D70" stroke-width="2.2"/>
+<polygon points="1016.00,520.00 1011.00,509.00 1021.00,509.00" fill="#347D70"/>
+<rect x="840" y="520" width="352" height="92" rx="10" fill="#EEF7F3" stroke="#D4DDE7" stroke-width="1.3"/>
+<text x="862" y="556.76" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="27" font-weight="500" fill="#18283B">候选提供方</text>
+<text x="862" y="595.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#18283B">返回候选及查询依据</text>
+<polyline points="1016,612 1016,666" fill="none" stroke="#347D70" stroke-width="2.2"/>
+<polygon points="1016.00,666.00 1011.00,655.00 1021.00,655.00" fill="#347D70"/>
+<rect x="840" y="666" width="352" height="92" rx="10" fill="#EEF7F3" stroke="#D4DDE7" stroke-width="1.3"/>
+<text x="862" y="702.76" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="27" font-weight="500" fill="#18283B">Object Reader</text>
+<text x="862" y="741.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#18283B">同一版本回读正文</text>
+<polyline points="1016,758 1016,812" fill="none" stroke="#347D70" stroke-width="2.2"/>
+<polygon points="1016.00,812.00 1011.00,801.00 1021.00,801.00" fill="#347D70"/>
+<rect x="840" y="812" width="352" height="92" rx="10" fill="#EEF7F3" stroke="#D4DDE7" stroke-width="1.3"/>
+<text x="862" y="848.76" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="27" font-weight="500" fill="#18283B">复核与正文交付</text>
+<text x="862" y="887.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#18283B">保留版本与查询依据</text>
+<text x="840" y="944.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#5A6C80">投影构建由后台维护，</text>
+<text x="840" y="976.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#5A6C80">不会塞进这次查询。</text>
+<text x="64" y="1008.36" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="22" font-weight="400" fill="#5A6C80">省略重复的基础类型引用与 service 对 Snapshot 请求上下文的依赖。</text>
+<polyline points="48,1039 1232,1039" fill="none" stroke="#D4DDE7" stroke-width="1.3"/>
+<text x="64" y="1092.52" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="29" font-weight="500" fill="#18283B">公开子能力的单向依赖</text>
+<text x="64" y="1142.12" font-family="Menlo, monospace" font-size="24" font-weight="400" fill="#18283B">discovery/projection</text>
+<polyline points="412,1137 456,1137" fill="none" stroke="#58728C" stroke-width="2"/>
+<polygon points="456.00,1137.00 445.00,1142.00 445.00,1132.00" fill="#58728C"/>
+<text x="480" y="1142.12" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="24" font-weight="400" fill="#18283B">discovery 根 + object/maintenance</text>
+<polyline points="64,1164 1208,1164" fill="none" stroke="#D4DDE7" stroke-width="1"/>
+<text x="64" y="1199.12" font-family="Menlo, monospace" font-size="24" font-weight="400" fill="#18283B">discovery/opensearch</text>
+<polyline points="412,1194 456,1194" fill="none" stroke="#58728C" stroke-width="2"/>
+<polygon points="456.00,1194.00 445.00,1199.00 445.00,1189.00" fill="#58728C"/>
+<text x="480" y="1199.12" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="24" font-weight="400" fill="#18283B">discovery 根 + projection</text>
+<polyline points="64,1221 1208,1221" fill="none" stroke="#D4DDE7" stroke-width="1"/>
+<text x="64" y="1256.12" font-family="Menlo, monospace" font-size="24" font-weight="400" fill="#18283B">liveaccess/discovery</text>
+<polyline points="412,1251 456,1251" fill="none" stroke="#58728C" stroke-width="2"/>
+<polygon points="456.00,1251.00 445.00,1256.00 445.00,1246.00" fill="#58728C"/>
+<text x="480" y="1256.12" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="24" font-weight="400" fill="#18283B">liveaccess 根 + discovery / projection</text>
+<polyline points="64,1278 1208,1278" fill="none" stroke="#D4DDE7" stroke-width="1"/>
+<text x="64" y="1313.12" font-family="Menlo, monospace" font-size="24" font-weight="400" fill="#18283B">discovery/datasets</text>
+<polyline points="412,1308 456,1308" fill="none" stroke="#58728C" stroke-width="2"/>
+<polygon points="456.00,1308.00 445.00,1313.00 445.00,1303.00" fill="#58728C"/>
+<text x="480" y="1313.12" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="24" font-weight="400" fill="#18283B">projection + Snapshot Dataset 公共 API</text>
+<polyline points="64,1335 1208,1335" fill="none" stroke="#D4DDE7" stroke-width="1"/>
+<text x="64" y="1370.12" font-family="Menlo, monospace" font-size="24" font-weight="400" fill="#18283B">systemrepo</text>
+<polyline points="412,1365 456,1365" fill="none" stroke="#58728C" stroke-width="2"/>
+<polygon points="456.00,1365.00 445.00,1370.00 445.00,1360.00" fill="#58728C"/>
+<text x="480" y="1370.12" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="24" font-weight="400" fill="#18283B">Object Writer + 各能力出版源</text>
+<text x="64" y="1448.24" font-family="'PingFang SC', 'Hiragino Sans GB', sans-serif" font-size="23" font-weight="400" fill="#5A6C80">跨模块只依赖根或公开一级入口；动态取源不由查询根直接执行。</text>
+</svg>

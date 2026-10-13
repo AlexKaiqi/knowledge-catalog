@@ -8,9 +8,13 @@
 
 `ReadDeployment` 接受单个 YAML 或 JSON 文档，拒绝未知字段。`DeploymentConfig` 是配置合同；部署工具负责版本化和分发配置，服务凭证通过环境注入；用户显式连接凭证遵守下文的私有耐久账合同。
 
-`auth` 接受 `local`、`taihu`、`gitea` 或 `lakefs`。统一原 lakeFS 控制台登录时显式
-配置 `auth: lakefs`、`authURL: <原 lakeFS origin>`；Server 以调用者会话验证身份，
-Snapshot 服务凭证仍私有。Cookie 防跨站边界、用户名绑定与原 API 秒精度身份回收限制见
+`auth` 接受 `local`、`taihu`、`gitea` 或遗留 `lakefs`。组合多用户控制台沿用现有
+`taihu`/`gitea` 认证与 `authURL`，Repo、Dataset 均由 Snapshot 当前规则授权；
+`KC_LAKEFS_CREDENTIAL` 只作为服务私有存储凭据。原 native origin 从显式 Registry lakeFS
+DSN 确定，不从认证来源或首个仓推断。若使用已有浏览器认证网关会话，`authLogoutURL`
+显式指定该网关的退出 URL（HTTP(S) 或同源绝对路径）；KC 不猜测或创建会话退出服务。
+遗留单主体接线可显式配置 `auth: lakefs`、`authURL: <原 lakeFS origin>`，仍按原证明验证。
+Cookie 防跨站边界、用户名绑定与原 API 秒精度身份回收限制见
 [`server/README.md`](../server/README.md)。登录不自动授予 登记表/Dataset 动作。
 
 ```yaml
@@ -187,3 +191,5 @@ stores:
 库存发现入口 由 Client 执行 show → 普通 ResolveKnowledgeSet → 固定 pin SEARCH。已有 typed Resolve 与 Search 请求的 `inventoryDiscovery: true` 只表达发现语境，Server 必须校验它匹配本部署配置的精确发现 Dataset，禁止混入临时 definition 或单仓坐标，SEARCH 必须携带固定 pin。通过该验证后的准入只看当前 `inventory.read`；没有 `file.read` 或逐仓 `knowledge.search` 不裁掉 discovery 成员。正文仍通过现有交付链按当前逐仓 `knowledge.read` 屏蔽；其他 Workspace、READ、Schema、文件、rerank 等动作不使用这条例外。
 
 旧单空间耐久回执可以只读恢复：原 deployment marker 必须恰含一个权威并与唯一 `registry.id` 一致；混合格式、多权威和重复别名拒绝。历史 managed allocation 按原 request 字节验证摘要，原 allocation、初始政策与 READY 回执不因公共选择字段退出而重算；重放不会补权或改写记录。未完成创建由显式重试迁到新格式，显式 `deployment init` 才写新版 marker。旧连接记录同样严格核对原登记权威。
+
+原控制台托管创建复用当前耐久分配与登记流程。`creatorActions` 允许显式选择 `snapshot/access.IsRepositoryCreatorAction` 的原 Repo 动作；物理删除、import、创建与授权管理不会自动发给创建者。分享只允许 `IsRepositoryReadAction` 的原仓读动作，不自动扩大到写。

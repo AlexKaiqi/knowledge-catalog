@@ -1,6 +1,7 @@
 package dataset_test
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -66,5 +67,43 @@ func TestParseKnowledgeSetRecipeRequiresNameAndMounts(t *testing.T) {
 	}
 	if _, err := catalog.ParseKnowledgeSetRecipe([]byte("name: notes\nmounts: []\n")); err == nil {
 		t.Fatal("empty mounts")
+	}
+}
+
+func TestDatasetRecipeMetadataRoundTripAndIsolation(t *testing.T) {
+	definition := catalog.KnowledgeSet{
+		SetID: "delivery", Metadata: map[string]string{"description": "portable delivery", "custom": "42", "": ""},
+		Sources: []catalog.KnowledgeSetSource{{Repository: "source", Selector: "refs/heads/main", File: "visible.txt", Target: "public.txt"}},
+	}
+	recipe, ok := catalog.RecipeFromKnowledgeSet(definition)
+	if !ok {
+		t.Fatal("file recipe not generated")
+	}
+	raw, err := catalog.FormatKnowledgeSetRecipe(recipe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := catalog.ParseKnowledgeSetRecipe(raw)
+	if err != nil || !reflect.DeepEqual(parsed.Metadata, definition.Metadata) || !reflect.DeepEqual(parsed.Sources(), definition.Sources) {
+		t.Fatalf("portable metadata changed file selection: %#v %v", parsed, err)
+	}
+	recipe.Metadata["description"] = "recipe edit"
+	if definition.Metadata["description"] != "portable delivery" {
+		t.Fatal("portable recipe shares definition metadata")
+	}
+	if _, err := catalog.ParseKnowledgeSetRecipe([]byte("name: legacy\nmounts:\n  - repository: source\n    selector: refs/heads/main\n    path: ''\n")); err != nil {
+		t.Fatalf("old recipe without metadata rejected: %v", err)
+	}
+}
+
+func TestDatasetRecipeMetadataRequiresStringKeysAndValues(t *testing.T) {
+	for _, metadata := range []string{
+		"description: 42", "description: true", "description: null", "description: [text]",
+		"description: {nested: value}", "42: value", "null", "[]", "description: first\n  description: second",
+	} {
+		raw := "name: delivery\nfiles:\n  - repository: source\n    selector: refs/heads/main\n    file: visible.txt\n    target: public.txt\nmetadata:\n  " + metadata + "\n"
+		if _, err := catalog.ParseKnowledgeSetRecipe([]byte(raw)); err == nil {
+			t.Fatalf("portable recipe accepted invalid string metadata: %s", metadata)
+		}
 	}
 }

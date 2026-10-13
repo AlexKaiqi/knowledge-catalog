@@ -1,0 +1,27 @@
+---
+object_id: documentation/relation/object-refactor-plan--operationalizes--object-refactor-guideline
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: docs/graph/relations/object-refactor-plan.operationalizes.object-refactor-guideline.okf
+---
+{
+  "relationId": "documentation/relation/object-refactor-plan--operationalizes--object-refactor-guideline",
+  "relationType": "operationalizes",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "from",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/object-refactor-plan"
+      }
+    },
+    {
+      "role": "to",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/object-refactor-guideline"
+      }
+    }
+  ]
+}

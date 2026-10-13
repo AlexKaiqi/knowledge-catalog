@@ -84,7 +84,7 @@ func PrepareKnowledgePinContext(flags map[string]invoke.FlagValue) error {
 		if err != nil {
 			return err
 		}
-		definition = &dataset.KnowledgeSet{Revision: 1, Sources: recipe.Sources()}
+		definition = &dataset.KnowledgeSet{Revision: 1, Sources: recipe.Sources(), Metadata: recipe.Metadata}
 	}
 	if raw := strings.TrimSpace(invoke.FlagString(flags, "pin")); raw != "" && definition == nil {
 		if !strings.HasPrefix(raw, "{") {

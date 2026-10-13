@@ -106,6 +106,10 @@ func VerbDefineKnowledgeSet(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	metadata, err := DatasetMetadata(cx.Flags, rec.Metadata)
+	if err != nil {
+		return nil, err
+	}
 	sources, err = ApplyBaseRevs(sources, cx.FlagValues("base-rev"))
 	if err != nil {
 		return nil, err
@@ -123,7 +127,7 @@ func VerbDefineKnowledgeSet(cx *Invocation) (any, error) {
 	var published *RecipePublish
 	if !adopted {
 		published, err = PublishKnowledgeSetRecipe(cx, dataset.KnowledgeSet{
-			SetID: setID, Revision: revision, Sources: sources,
+			SetID: setID, Revision: revision, Sources: sources, Metadata: metadata,
 		})
 		if err != nil {
 			return nil, err
@@ -135,7 +139,7 @@ func VerbDefineKnowledgeSet(cx *Invocation) (any, error) {
 			return Authorize(cx.Home, "dataset.manage", cx.Flags, nil)
 		},
 		Prepare: cx.WS.PrepareDataset,
-	}).Execute(cx.Context, knowledgeapp.DatasetPublication{Dataset: setID, Revision: revision, Sources: sources})
+	}).Execute(cx.Context, knowledgeapp.DatasetPublication{Dataset: setID, Revision: revision, Sources: sources, Metadata: metadata})
 	if err != nil {
 		return nil, err
 	}
@@ -143,6 +147,9 @@ func VerbDefineKnowledgeSet(cx *Invocation) (any, error) {
 		"setId":    def.SetID,
 		"revision": def.Revision,
 		"sources":  def.Sources,
+	}
+	if len(def.Metadata) > 0 {
+		out["metadata"] = def.Metadata
 	}
 	if published != nil {
 		if published.File != "" {

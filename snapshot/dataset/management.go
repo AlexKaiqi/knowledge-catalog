@@ -41,6 +41,7 @@ func ManagementView(state State, id string, revision int, options ManagementOpti
 	if current.Retired {
 		view["retired"] = true
 	}
+	selected = cloneKnowledgeSet(selected)
 	items := selected.Items
 	if items == nil {
 		items = []DatasetItem{}

@@ -131,7 +131,11 @@ func ResolveTemporaryWorkspace(cx *Invocation) (any, error) {
 	if cx.Flag("source") == "" && cx.Flag("file") == "" && cx.Flag("from-repo") == "" && cx.Flag("payload") == "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "kc pin requires --dataset <id> or --source <repository>[=selector]...")
 	}
-	sources, _, _, err := WorkspaceSources(cx)
+	sources, recipe, _, err := WorkspaceSources(cx)
+	if err != nil {
+		return nil, err
+	}
+	metadata, err := DatasetMetadata(cx.Flags, recipe.Metadata)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +150,7 @@ func ResolveTemporaryWorkspace(cx *Invocation) (any, error) {
 			return nil, fmt.Errorf("--revision must be a number")
 		}
 	}
-	resolved, err := cat.ResolveDefinition(dataset.KnowledgeSet{Revision: revision, Sources: sources})
+	resolved, err := cat.ResolveDefinition(dataset.KnowledgeSet{Revision: revision, Sources: sources, Metadata: metadata})
 	if err != nil {
 		return nil, err
 	}

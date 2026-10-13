@@ -84,43 +84,6 @@ func remoteIntFlag(flags map[string]FlagValue, name string) (int, error) {
 	return value, nil
 }
 
-func remoteKnowledgeSetSources(flags map[string]FlagValue) ([]dataset.KnowledgeSetSource, error) {
-	if flagString(flags, "from-repo") != "" {
-		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "remote Workspace definition does not read a server repository recipe; submit explicit sources")
-	}
-	fileEntries, err := inv.FileSourcesFrom(flagStrings(flags, "file-source"))
-	if err != nil {
-		return nil, err
-	}
-	if file := flagString(flags, "file"); file != "" {
-		if len(fileEntries) > 0 {
-			return nil, kernel.Fail(kernel.ErrUsageInvalid,
-				"--file-source combines with --source only; a recipe file carries file entries in its files section")
-		}
-		raw, err := os.ReadFile(file)
-		if err != nil {
-			return nil, err
-		}
-		recipe, err := dataset.ParseKnowledgeSetRecipe(raw)
-		if err != nil {
-			return nil, err
-		}
-		return recipe.Sources(), nil
-	}
-	var sources []dataset.KnowledgeSetSource
-	if items := flagStrings(flags, "source"); len(items) > 0 {
-		sources, err = inv.WorkspaceSourcesFrom(items)
-		if err != nil {
-			return nil, err
-		}
-	}
-	sources = append(sources, fileEntries...)
-	if len(sources) == 0 {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "at least one --source or --file-source is required")
-	}
-	return sources, nil
-}
-
 func remoteCommitRequest(path string, flags map[string]FlagValue) (kcclient.CommitRequest, string, error) {
 	commandID, err := requireRemoteFlag(flags, "command-id")
 	if err != nil {

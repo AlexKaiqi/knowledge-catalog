@@ -41,7 +41,8 @@ func TestDatasetPublicationSwitchesOnlyAfterCapabilitiesReady(t *testing.T) {
 					return nil
 				},
 			}
-			_, err := executor.Execute(context.Background(), DatasetPublication{Dataset: "notes", Revision: 2})
+			metadata := map[string]string{"custom": "value"}
+			published, err := executor.Execute(context.Background(), DatasetPublication{Dataset: "notes", Revision: 2, Metadata: metadata})
 			want := []string{"authorize", "freeze", "prepare"}
 			if fail {
 				if !errors.Is(err, problem) || registry.accepted != 1 {
@@ -51,6 +52,10 @@ func TestDatasetPublicationSwitchesOnlyAfterCapabilitiesReady(t *testing.T) {
 				want = append(want, "publish")
 				if err != nil || registry.accepted != 2 {
 					t.Fatal(err)
+				}
+				metadata["custom"] = "caller changed"
+				if published.Metadata["custom"] != "value" {
+					t.Fatalf("accepted metadata lost or aliases caller: %#v", published.Metadata)
 				}
 			}
 			if !reflect.DeepEqual(events, want) {

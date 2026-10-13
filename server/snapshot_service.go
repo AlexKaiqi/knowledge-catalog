@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"strings"
 
 	"go.opentelemetry.io/otel/trace"
@@ -12,6 +13,7 @@ import (
 	inv "kc/invocation"
 	"kc/invoke"
 	"kc/kernel"
+	"kc/snapshot"
 	"kc/snapshot/access"
 	"kc/snapshot/dataset"
 	snapshotservice "kc/snapshot/service"
@@ -22,11 +24,23 @@ import (
 // to an application command executor or duplicates its Dataset/file engine.
 func (f *httpFacade) snapshotStoreService() snapshotservice.Handler {
 	return snapshotservice.NewHandler(snapshotservice.Config{
-		Identity: f.snapshotIdentityOptions(),
-		Acquire:  f.acquireSnapshotResources,
-		Observe:  f.observeSnapshotOperation,
-		Around:   f.aroundSnapshotOperation,
+		Identity:              f.snapshotIdentityOptions(),
+		NativeOrigin:          f.options.NativeAPIOrigin,
+		NativeCredential:      f.snapshotNativeCredential(),
+		NativeManagedCreation: f.deployment != nil && (f.deployment.ManagedRepositories != nil || len(f.deployment.ManagedStores) > 0),
+		Acquire:               f.acquireSnapshotResources,
+		Observe:               f.observeSnapshotOperation,
+		Around:                f.aroundSnapshotOperation,
 	})
+}
+
+func (f *httpFacade) snapshotNativeCredential() func(context.Context) (string, error) {
+	if !f.options.Authenticated() || f.options.AuthModeLabel() == "lakefs" {
+		return nil
+	}
+	return func(context.Context) (string, error) {
+		return os.Getenv(snapshot.LakeFSCredentialEnv), nil
+	}
 }
 
 func (f *httpFacade) snapshotIdentityOptions() snapshotservice.IdentityOptions {
@@ -37,10 +51,17 @@ func (f *httpFacade) snapshotIdentityOptions() snapshotservice.IdentityOptions {
 	if login := f.browserLoginConfig(); login != nil {
 		options.BrowserLogin = login
 	}
+	if f.deployment != nil && f.options.AuthModeLabel() != "lakefs" {
+		options.ProviderURL = strings.TrimSuffix(strings.TrimRight(f.deployment.AuthURL, "/"), "/oauth2")
+		options.LogoutURL = f.deployment.AuthLogoutURL
+	}
 	return options
 }
 
 func snapshotOperationAction(operation string) (string, error) {
+	if action, ok := strings.CutPrefix(operation, "native:"); ok && access.IsRepositoryAction(action) {
+		return action, nil
+	}
 	switch operation {
 	case "inventory-show", "repository-list", "dataset-list", "dataset-show":
 		return "inventory.read", nil
@@ -98,6 +119,10 @@ func (f *httpFacade) snapshotResources(opened *Home, caller identity.HTTPIdentit
 		Datasets: opened.Datasets, Sources: opened.Store,
 		Access: access.NewService(snapshotGrantStore{home: opened.Dir, writable: !readOnly}),
 	}
+	if strings.HasPrefix(operation, "native:") {
+		resources.NativeRepositories = snapshotNativeRepositories(opened.BindingFile().Repos, f.options.NativeAPIOrigin)
+		resources.CreateNativeRepository = f.nativeRepositoryCreator(opened)
+	}
 	if opened.Deployment != nil && opened.Deployment.Admission != nil {
 		resources.RequestURL = opened.Deployment.Admission.RequestURL
 	}
@@ -109,7 +134,7 @@ func (f *httpFacade) snapshotResources(opened *Home, caller identity.HTTPIdentit
 	}
 	resources.DescribeRepository = func(_ context.Context, caller identity.HTTPIdentity, id kernel.RepositoryID) (map[string]any, error) {
 		view := inv.DescribeRepository(opened, id)
-		if repository := snapshotConsoleRepository(opened.File.Repos, caller, id); repository != "" {
+		if repository := snapshotConsoleRepository(opened.BindingFile().Repos, caller, id, f.options.NativeAPIOrigin); repository != "" {
 			view["consoleRepository"] = repository
 		}
 		return view, nil
@@ -153,6 +178,11 @@ func (f *httpFacade) snapshotResources(opened *Home, caller identity.HTTPIdentit
 }
 
 func (f *httpFacade) authorizeSnapshotRequest(ctx context.Context, opened *Home, operation string, immutable bool, request snapshotservice.Authorization) error {
+	if request.NativeRepository {
+		err := authorizeNativeSnapshot(opened, request)
+		f.snapshotAuthorizationObserver(ctx, operation)(authorizationDecision(err))
+		return err
+	}
 	flags := snapshotRequestFlags(ctx, request.Caller, request.Query)
 	flags["home"] = opened.Dir
 	if request.Definition != nil && request.Query.Dataset == "" {
@@ -339,4 +369,34 @@ func snapshotDatasetObserver(j journal.Journal) dataset.Observer {
 	return func(operation string, refs map[string]any, err error) error {
 		return journal.Finish(j, journal.LayerSystem, "registry", operation, refs, err)
 	}
+}
+
+func authorizeNativeSnapshot(opened *Home, request snapshotservice.Authorization) error {
+	if !access.IsRepositoryReadAction(request.Query.Action) && opened.Store != nil {
+		source, ok := opened.Store.Get(kernel.RepositoryID(request.Query.Repo))
+		if !ok || !nativeRepositoryWritable(source) {
+			return kernel.Fail(kernel.ErrForbidden, "repository has no mutable file-store capability or is archived")
+		}
+	}
+	rules, err := inv.ReadAllow(opened.Dir)
+	if err != nil {
+		return err
+	}
+	query := request.Query
+	query.Principal = request.Caller.Principal
+	if _, ok := access.MatchRepository(rules.Rules, query); ok {
+		return nil
+	}
+	if inv.RepositoryAuthenticatedAllowed(opened.Dir, query.Principal, query.Action, query.Repo, opened) {
+		return nil
+	}
+	return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to %s", query.Principal, query.Action)
+}
+
+func nativeRepositoryWritable(source snapshot.Store) bool {
+	if source == nil {
+		return false
+	}
+	_, ok := snapshot.TreeStoreOf(source)
+	return ok && !source.Archived()
 }

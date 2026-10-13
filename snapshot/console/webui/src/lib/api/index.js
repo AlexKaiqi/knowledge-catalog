@@ -1,3 +1,5 @@
+import {userHeaders, userProof} from './sessionProof';
+import {metadataValue} from './kcMetadata';
 export const API_ENDPOINT = '/api/v1';
 export const DEFAULT_LISTING_AMOUNT = 100;
 export const MAX_LISTING_AMOUNT = 1000;
@@ -62,6 +64,7 @@ export const defaultAPIHeaders = {
     "Accept": "application/json",
     "Content-Type": "application/json",
     "X-Lakefs-Client": "lakefs-webui/__buildVersion",
+    "X-Kc-Console": "1",
 };
 
 export const parseRawHeaders = (rawHeaders) => {
@@ -83,16 +86,29 @@ export const parseRawHeaders = (rawHeaders) => {
 const authenticationError = "error authenticating request"
 
 const apiRequest = async (uri, requestData = {}, additionalHeaders = {}) => {
+    const epoch = userProof.version();
+    // Public startup metadata is independent of the previous caller. A failed
+    // identity restore must not invalidate the login-page configuration fetch.
+    const startup = (!requestData.method || requestData.method === 'GET') && /^\/(setup_lakefs|auth\/capabilities)(?:\?|$)/.test(uri);
+    const {headers: requestHeaders, ...requestOptions} = requestData;
     const headers = new Headers({
         ...defaultAPIHeaders,
         ...additionalHeaders,
     });
-    const response = await fetch(`${API_ENDPOINT}${uri}`, {headers, ...requestData});
+    new Headers(requestHeaders || {}).forEach((value, key) => headers.set(key, value));
+    headers.set('X-Kc-Console', '1');
+    let proof;
+    try { proof = startup ? {} : await userHeaders(); }
+    catch { throw new AuthenticationError('Authentication expired', 401); }
+    Object.entries(proof).forEach(([key, value]) => headers.set(key, value));
+    const response = await fetch(`${API_ENDPOINT}${uri}`, {...requestOptions, credentials: 'same-origin', redirect: 'error', cache: 'no-store', headers});
+    if (!startup && epoch !== userProof.version()) throw new AuthenticationError('Authentication changed', 401);
 
     // check if we're missing credentials
     if (response.status === 401) {
         const errorMessage = await extractError(response);
         if (errorMessage === authenticationError) {
+            if (userProof.get()) userProof.clear();
             invalidateCurrentUser(false);
             throw new AuthenticationError('Authentication Error', response.status);
         }
@@ -475,6 +491,26 @@ class Auth {
 
 class Repositories {
 
+    async metadata(repoId, signal) {
+        const response = await apiRequest(`/repositories/${encodeURIComponent(repoId)}/metadata`, {signal});
+        if (response.status !== 200) throw new Error(await extractError(response));
+        return metadataValue(await response.json());
+    }
+
+    async setMetadata(repoId, metadata, signal) {
+        const response = await apiRequest(`/repositories/${encodeURIComponent(repoId)}/metadata`, {
+            method: 'POST', body: JSON.stringify({metadata: metadataValue(metadata)}), signal,
+        });
+        if (response.status !== 204) throw new Error(await extractError(response));
+    }
+
+    async deleteMetadata(repoId, keys, signal) {
+        const response = await apiRequest(`/repositories/${encodeURIComponent(repoId)}/metadata`, {
+            method: 'DELETE', body: JSON.stringify({keys}), signal,
+        });
+        if (response.status !== 204) throw new Error(await extractError(response));
+    }
+
     async get(repoId) {
         const response = await apiRequest(`/repositories/${encodeURIComponent(repoId)}`);
         if (response.status === 404) {
@@ -703,7 +739,9 @@ class Pulls {
 
 // uploadWithProgress uses good ol' XMLHttpRequest because progress indication in fetch() is
 //  still not well supported across browsers (see https://stackoverflow.com/questions/35711724/upload-progress-indicators-for-fetch).
-export const uploadWithProgress = (url, file, method = 'POST', onProgress = null, additionalHeaders = null) => {
+export const uploadWithProgress = async (url, file, method = 'POST', onProgress = null, additionalHeaders = null) => {
+    const epoch = userProof.version();
+    const proof = url.startsWith(API_ENDPOINT) ? await userHeaders() : {};
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.upload.addEventListener('progress', event => {
@@ -712,6 +750,7 @@ export const uploadWithProgress = (url, file, method = 'POST', onProgress = null
             }
         });
         xhr.addEventListener('load', () => {
+            if (epoch !== userProof.version()) {reject(new AuthenticationError('Authentication changed', 401)); return;}
             resolve({
                 status: xhr.status,
                 body: xhr.responseText,
@@ -728,9 +767,11 @@ export const uploadWithProgress = (url, file, method = 'POST', onProgress = null
         xhr.open(method, url, true);
         xhr.setRequestHeader('Accept', 'application/json');
         xhr.setRequestHeader('X-Lakefs-Client', 'lakefs-webui/__buildVersion');
+        if (url.startsWith(API_ENDPOINT)) xhr.setRequestHeader('X-Kc-Console', '1');
         if (additionalHeaders) {
             Object.keys(additionalHeaders).map(key => xhr.setRequestHeader(key, additionalHeaders[key]))
         }
+        Object.entries(proof).forEach(([key, value]) => xhr.setRequestHeader(key, value));
         if (url.startsWith(API_ENDPOINT)) {
             // swagger API requires a form with a "content" field
             const data = new FormData();
@@ -743,6 +784,21 @@ export const uploadWithProgress = (url, file, method = 'POST', onProgress = null
 };
 
 class Objects {
+
+    async blob(repoId, ref, path) {
+        const response = await apiRequest(`/repositories/${encodeURIComponent(repoId)}/refs/${encodeURIComponent(ref)}/objects?` + qs({path, presign: false}));
+        if (response.status !== 200 && response.status !== 206) throw new Error(await extractError(response));
+        return response.blob();
+    }
+
+    async download(repoId, ref, path) {
+        const blob = await this.blob(repoId, ref, path);
+        const url = URL.createObjectURL(blob);
+        try {
+            const link = document.createElement('a');
+            link.href = url; link.download = path.split('/').pop(); link.click();
+        } finally { setTimeout(() => URL.revokeObjectURL(url), 1000); }
+    }
 
     async list(repoId, ref, tree, after = "", presign = false, amount = DEFAULT_LISTING_AMOUNT, delimiter = "/") {
         const query = qs({prefix: tree, amount, after, delimiter, presign});
