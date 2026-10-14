@@ -132,7 +132,7 @@ var complexLeafOperands = includeLiveAccessValueHelp(includeDeclarativeIndexValu
 	"governance proposal create", "governance preview create",
 	"governance validation record", "operations hook add", "operations gate add",
 	"operations feedback record", "deployment init", "deployment status",
-	"deployment system publish", "deployment identity migrate", "serve",
+	"deployment system publish", "serve",
 })))))
 
 var helpGroups = composeLiveAccessHelpGroups(composeDeclarativeIndexHelpGroups(composeDiscoveryHelpGroups(composeObjectHelpGroups(composeSnapshotHelpGroups(map[string][]string{
@@ -144,7 +144,7 @@ var helpGroups = composeLiveAccessHelpGroups(composeDeclarativeIndexHelpGroups(c
 	"writer":      {"writer commit", "writer head", "writer receipt"},
 	"governance":  {"governance proposal create", "governance preview create", "governance preview validate", "governance validation record", "governance proposal merge"},
 	"operations":  {"operations hook add", "operations hook list", "operations hook remove", "operations gate add", "operations gate list", "operations gate remove", "operations audit access", "operations audit trace", "operations audit hitmap", "operations feedback record"},
-	"deployment":  {"deployment init", "deployment status", "deployment system publish", "deployment identity migrate", "serve"},
+	"deployment":  {"deployment init", "deployment status", "deployment system publish", "serve"},
 })))))
 
 func formatLeafHelp(path string) string {

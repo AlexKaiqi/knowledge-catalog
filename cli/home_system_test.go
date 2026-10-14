@@ -40,7 +40,7 @@ func TestLocalSystemPublishSeedsLakeFSAuthority(t *testing.T) {
 	}
 	fakeDSN := fake.DSN(fake.NewRepo())
 	expectCode(t, kc(home, "local", "system", "publish"), "USAGE_INVALID")
-	expectCode(t, kc(home, "local", "system", "publish", "--driver", "gitea"), "USAGE_INVALID")
+	expectCode(t, kc(home, "local", "system", "publish", "--driver", "stream"), "USAGE_INVALID")
 
 	published := asMap(t, body(t, kc(home, "local", "system", "publish", "--driver", "lakefs", "--dsn", fakeDSN)))
 	if published["repositoryId"] != string(objectmodel.SystemRepositoryID) || published["driver"] != "lakefs" || published["seeded"] != true {

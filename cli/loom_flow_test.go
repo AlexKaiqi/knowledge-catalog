@@ -13,15 +13,6 @@ import (
 	"kc/snapshot"
 )
 
-func TestLoomRepoAddDirDoesNotStampExternalGit(t *testing.T) {
-	h := testkit.TempDir(t)
-	body(t, kc(h, "init"))
-	alice := "kr://acme/personals/alice"
-	failed := kc(h, "repo-add", "--repo", alice, "--driver", "filegit")
-	expectCode(t, failed, "USAGE_INVALID")
-	expectMsg(t, failed, "no longer supported")
-}
-
 func TestLoomPublishedDatasetFreezesUntilRepublish(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"

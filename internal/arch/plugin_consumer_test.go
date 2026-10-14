@@ -25,8 +25,6 @@ func TestIndexPluginDependencyGuardRejectsHostAndImplementation(t *testing.T) {
 		{"declarativeindex/projection", true},
 		{"declarativeindex/opensearch", true},
 		{"declarativeindex/opensearch/internal/opensearchimpl", true},
-		{"discovery/opensearch", true},
-		{"discovery/internal/opensearchimpl", true},
 		{"discovery/llmhttp", true},
 		{"discovery/client", true},
 		{"declarativeindex/cli", true},

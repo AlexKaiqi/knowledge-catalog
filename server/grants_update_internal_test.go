@@ -21,7 +21,7 @@ func grantLedgerWithMigrationForTest(t *testing.T, dir string) inv.AllowFile {
 	if err != nil {
 		t.Fatal(err)
 	}
-	file.IdentityMigrations = map[string]inv.IdentityMigrationReceipt{"private-migration": {Digest: kernel.CanonicalDigest("verified-migration"), MigratedRules: 1}}
+	file.Admissions = map[string]inv.AdmissionReceipt{"private-admission": {Principal: "reader", Actions: []string{"file.read"}}}
 	if err := inv.WriteAllow(dir, file); err != nil {
 		t.Fatal(err)
 	}

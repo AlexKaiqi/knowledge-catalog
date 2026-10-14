@@ -70,7 +70,6 @@ environment-bound/                        # 环境配置绑定 + readiness（根
 | KC-PERF-11 | 负载下 crash/retry | `steady-soaked/probe-failure-recovery` |
 | KC-PERF-12 | Generation rollover 与归档恢复 | gap：待 REVIEW-01 选定代际方案后补状态，不预先建目录 |
 
-原用例中 Dolt 专属描述（SQL server、command ledger、`kc_files` 等）随路线退役作废；
 行为正确性归 `.data/scenes` 与共享合同，压测只保留停止条件与结果可信度门禁。
 
 ## 3. 单次运行合同

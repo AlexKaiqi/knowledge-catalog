@@ -186,15 +186,6 @@ func TestSnapshotContractsDoNotExposePrivateTypes(t *testing.T) {
 
 func TestSnapshotRetiredImplementationsStayAbsent(t *testing.T) {
 	root := moduleRoot(t)
-	for _, path := range []string{"catalog", "snapshot/gitea", "snapshot/filegit", "snapshot/lakefs", "snapshot/treewriter", "snapshot/commandlog", "snapshot/stamp", "snapshot/internal/giteaimpl", "scripts/system-gitea.sh"} {
-		matches, err := filepath.Glob(filepath.Join(root, path))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(matches) > 0 {
-			t.Errorf("retired implementation or alternate contract path remains: %s", path)
-		}
-	}
 	for _, pkg := range []string{"dataset", "access", "service", "console", "client", "cli"} {
 		matches, err := filepath.Glob(filepath.Join(root, "snapshot", pkg, "contract.go"))
 		if err != nil {

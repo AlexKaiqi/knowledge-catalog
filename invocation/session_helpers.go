@@ -10,7 +10,6 @@ import (
 	"fmt"
 	discoveryservice "kc/discovery/service"
 	kchome "kc/home"
-	"kc/identity"
 	liveservice "kc/liveaccess/service"
 	objectmodel "kc/object"
 	"kc/snapshot"
@@ -147,10 +146,7 @@ func EnsureManagedRepositoryGrant(dir string, g kchome.ManagedRepositoryGrant) e
 		}
 		return nil
 	}
-	principal, err := identity.ResolvePrincipal(filepath.Join(dir, identity.Filename), g.Principal)
-	if err != nil {
-		return err
-	}
+	principal := g.Principal
 	if policy.InitialGrants == nil {
 		policy.InitialGrants = map[string]kernel.Digest{}
 	}

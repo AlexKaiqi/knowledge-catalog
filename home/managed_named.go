@@ -22,7 +22,6 @@ func (ws *Home) CreateNamedManagedRepository(req ManagedRepositoryRequest, grant
 		return ManagedRepositoryResult{}, kernel.Fail(kernel.ErrUsageInvalid, "named managed create requires a valid user and name; repository and command are generated")
 	}
 	// Recover original names before choosing current pools or generating new
-	// coordinates. Explicit legacy ownership migration preserves old IDs/URLs.
 	{
 		records, err := loadManagedRecords(ws.Dir)
 		if err != nil {
@@ -30,11 +29,7 @@ func (ws *Home) CreateNamedManagedRepository(req ManagedRepositoryRequest, grant
 		}
 		var previous *managedRecord
 		for _, record := range records {
-			owner, err := ws.managedPrincipal(record.Request.Principal)
-			if err != nil {
-				return ManagedRepositoryResult{}, err
-			}
-			if owner == req.Principal && record.Request.Name == req.Name && (req.Store == "" || req.Store == record.Store) {
+			if record.Request.Principal == req.Principal && record.Request.Name == req.Name && (req.Store == "" || req.Store == record.Store) {
 				if previous != nil {
 					return ManagedRepositoryResult{}, kernel.Fail(kernel.ErrUsageInvalid, "multiple allocations contain this name; use the original repository and command")
 				}
@@ -86,16 +81,8 @@ func (ws *Home) ListManagedRepositories(principal string) ([]ManagedRepositoryRe
 	}
 	result := []ManagedRepositoryResult{}
 	for _, record := range records {
-		owner, err := ws.managedPrincipal(record.Request.Principal)
-		if err != nil {
-			return nil, err
-		}
-		if owner == principal {
-			item, err := ws.managedOwnerResult(record)
-			if err != nil {
-				return nil, err
-			}
-			result = append(result, item)
+		if record.Request.Principal == principal {
+			result = append(result, managedResult(record))
 		}
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].RepositoryID < result[j].RepositoryID })

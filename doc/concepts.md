@@ -66,7 +66,7 @@ Dataset 发布时就固定了来源版本。来源仓后来改了，已发布的
 |---|---|
 | Catalog（作为可创建的对象） | 服务、登记空间。一套服务只有一个登记空间 |
 | Knowledge Set、知识集 | Dataset |
-| Dolt、Gitea 存储 | lakeFS。Gitea 只作登录认证方式 |
+| Dolt、Gitea、filegit 存储 | lakeFS。Gitea 只作登录认证方式 |
 | 投影（对外） | 索引。投影只在实现里使用 |
 | Interface（对外） | 插件。处理器合同只是插件内部机制；对象方法属于 wield |
 | Knowledge、知识（指对象） | 对象 |

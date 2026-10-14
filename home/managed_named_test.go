@@ -40,8 +40,8 @@ func TestNamedLakeFSRepositoryIDMatchesGravelerName(t *testing.T) {
 	if err != nil || id != "table-meta" {
 		t.Fatalf("LakeFS protocol id must be the Graveler name: %q %v", id, err)
 	}
-	if _, err := namedManagedRepositoryID(ManagedRepositoryRequest{Name: "notes", Principal: "alice"}, ManagedRepositoryConfig{Driver: "gitea"}, "deadbeef"); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
-		t.Fatalf("retired Snapshot driver accepted: %v", err)
+	if _, err := namedManagedRepositoryID(ManagedRepositoryRequest{Name: "notes", Principal: "alice"}, ManagedRepositoryConfig{Driver: "stream"}, "deadbeef"); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
+		t.Fatalf("unknown Snapshot driver accepted: %v", err)
 	}
 	_, err = namedManagedRepositoryID(ManagedRepositoryRequest{Name: "物理层", Principal: "admin"}, ManagedRepositoryConfig{Driver: "lakefs"}, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 	if err == nil || kernel.CodeOf(err) != kernel.ErrUsageInvalid {

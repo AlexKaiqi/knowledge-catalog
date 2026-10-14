@@ -38,47 +38,47 @@ var forbidden = []struct {
 	{pkg: "discovery/projection", denied: []string{"liveaccess", "systemrepo"}, why: "projection consumes verified observations; the source bridge owns I/O"},
 	{
 		pkg:    "kernel",
-		denied: []string{"snapshot", "object", "repository", "object/writer", "object/reader", "catalog", "discovery", "declarativeindex", "discovery/projection", "controlplane"},
+		denied: []string{"snapshot", "object", "object/writer", "object/reader", "discovery", "declarativeindex", "discovery/projection", "controlplane"},
 		why:    "kernel is identity and contracts only; it sits under every layer",
 	},
 	{
 		pkg:    "snapshot",
-		denied: []string{"object", "repository", "object/writer", "object/reader", "catalog", "discovery", "declarativeindex", "discovery/projection", "controlplane", "hook", "gate", "snapshot/commandlog", "snapshot/treewriter", "snapshot/gitea", "snapshot/lakefs", "discovery/opensearch", "cli"},
+		denied: []string{"object", "object/writer", "object/reader", "discovery", "declarativeindex", "discovery/projection", "controlplane", "hook", "gate", "cli"},
 		why:    "layer ⓪ knows only path/blob/tree/commit/ref/CAS; optional upper capabilities assert against it",
 	},
 	{
 		pkg:    "object",
-		denied: []string{"repository", "object/writer", "object/reader", "catalog", "discovery", "declarativeindex", "discovery/projection", "controlplane", "hook", "gate", "snapshot/treewriter", "snapshot/gitea", "discovery/opensearch", "cli"},
+		denied: []string{"object/writer", "object/reader", "discovery", "declarativeindex", "discovery/projection", "controlplane", "hook", "gate", "cli"},
 		why:    "layer ② contracts may depend on Snapshot coordinates but not their callers or adapters",
 	},
 	{
 		pkg:    "snapshot/dataset",
-		denied: []string{"catalog", "home", "invocation", "invoke", "server", "client", "object", "discovery/service", "discovery", "declarativeindex", "discovery/projection", "controlplane", "hook", "gate", "snapshot/treewriter", "snapshot/gitea", "snapshot/lakefs", "cli"},
+		denied: []string{"home", "invocation", "invoke", "server", "client", "object", "discovery/service", "discovery", "declarativeindex", "discovery/projection", "controlplane", "hook", "gate", "cli"},
 		why:    "Snapshot Store owns file Dataset definitions and release authority; it cannot depend on consumers, knowledge interpretation, or concrete storage providers",
 	},
 	{
 		pkg:    "snapshot/access",
-		denied: []string{"snapshot", "catalog", "home", "invocation", "invoke", "server", "client", "identity", "object", "discovery/service", "discovery", "declarativeindex", "discovery/projection", "controlplane", "hook", "gate", "cli"},
+		denied: []string{"snapshot", "home", "invocation", "invoke", "server", "client", "identity", "object", "discovery/service", "discovery", "declarativeindex", "discovery/projection", "controlplane", "hook", "gate", "cli"},
 		why:    "generic scoped access rules depend only on coordinates/errors; external application defaults and identity lifecycle stay outside",
 	},
 	{
 		pkg:    "snapshot/service",
-		denied: []string{"catalog", "home", "invocation", "invoke", "server", "client", "object", "discovery/service", "discovery", "declarativeindex", "discovery/projection", "controlplane", "hook", "gate", "snapshot/gitea", "snapshot/lakefs", "cli"},
+		denied: []string{"home", "invocation", "invoke", "server", "client", "object", "discovery/service", "discovery", "declarativeindex", "discovery/projection", "controlplane", "hook", "gate", "cli"},
 		why:    "the independent file service assembles Dataset/access/store ports and external identity only; it never uses the KC application as a hidden backend",
 	},
 	{
 		pkg:    "snapshot/console",
-		denied: []string{"snapshot", "catalog", "home", "invocation", "invoke", "server", "client", "identity", "object", "discovery", "declarativeindex", "discovery/projection", "controlplane", "cli"},
+		denied: []string{"snapshot", "home", "invocation", "invoke", "server", "client", "identity", "object", "discovery", "declarativeindex", "discovery/projection", "controlplane", "cli"},
 		why:    "the complete vendored console is independently served static UI with no application or store authority",
 	},
 	{
 		pkg:    "snapshot/client",
-		denied: []string{"catalog", "home", "invocation", "invoke", "server", "client", "cli", "identity", "object", "discovery", "declarativeindex", "controlplane", "snapshot/service", "snapshot/console", "snapshot/cli"},
+		denied: []string{"home", "invocation", "invoke", "server", "client", "cli", "identity", "object", "discovery", "declarativeindex", "controlplane", "snapshot/service", "snapshot/console", "snapshot/cli"},
 		why:    "the independent Snapshot SDK injects authenticated transport and uses owned wire contracts, never KC session state, service implementation, or command dispatch",
 	},
 	{
 		pkg:    "snapshot/cli",
-		denied: []string{"catalog", "home", "invocation", "server", "client", "cli", "identity", "object", "discovery", "declarativeindex", "controlplane", "snapshot/service", "snapshot/console"},
+		denied: []string{"home", "invocation", "server", "client", "cli", "identity", "object", "discovery", "declarativeindex", "controlplane", "snapshot/service", "snapshot/console"},
 		why:    "module task commands consume the SDK and explicit caller context, never KC application executors or a locally opened authority",
 	},
 	{
@@ -117,43 +117,28 @@ var forbidden = []struct {
 		why:    "shared HTTP encoding and bounded decoding are pure transport infrastructure, not typed domain or session authority",
 	},
 	{
-		pkg:    "catalog",
-		denied: []string{"object", "repository", "discovery", "declarativeindex", "discovery/projection", "object/reader", "object/writer", "hook", "snapshot/treewriter", "snapshot/gitea", "discovery/opensearch", "cli"},
-		why:    "layer ① composes repo refs and Workspace recipes; it must not know object_id, Aspect, IndexPlan, or any concrete store",
-	},
-	{
-		pkg:    "catalog/worktree",
-		denied: []string{"object", "repository", "discovery", "declarativeindex", "discovery/projection", "object/reader", "object/writer", "hook", "snapshot/treewriter", "snapshot/gitea", "discovery/opensearch", "cli"},
-		why:    "host git checkout consumes Catalog recipes and pins; it is still layer ① and must not know object_id, Aspect, or any concrete store",
-	},
-	{
-		pkg:    "catalog/internal/worktreeimpl",
-		denied: []string{"object", "repository", "discovery", "declarativeindex", "discovery/projection", "object/reader", "object/writer", "hook", "snapshot/treewriter", "snapshot/gitea", "discovery/opensearch", "cli"},
-		why:    "worktree implementation (B11 internalization) obeys the same layer-① rule as its shim; no object_id, Aspect, or concrete store",
-	},
-	{
 		pkg:    "object/writer",
-		denied: []string{"repository", "discovery", "declarativeindex", "discovery/projection", "catalog", "hook", "snapshot/treewriter", "snapshot/gitea", "discovery/opensearch", "cli"},
+		denied: []string{"discovery", "declarativeindex", "discovery/projection", "hook", "cli"},
 		why:    "the write surface must not depend on retrieval derivations, composition, or a concrete store",
 	},
 	{
 		pkg:    "object/reader",
-		denied: []string{"repository", "object/maintenance", "discovery", "declarativeindex", "discovery/projection", "catalog", "object/writer", "hook", "snapshot/treewriter", "snapshot/gitea", "discovery/opensearch", "cli", "delivery"},
+		denied: []string{"object/maintenance", "discovery", "declarativeindex", "discovery/projection", "object/writer", "hook", "cli", "delivery"},
 		why:    "layer ② exact assembly consumes coordinates it is handed; maintenance scanning, index execution, and caller-visible delivery stay outside the consumer reader",
 	},
 	{
 		pkg:    "liveaccess",
-		denied: []string{"repository", "discovery", "declarativeindex", "discovery/projection", "catalog", "object/writer", "hook", "gate", "snapshot/treewriter", "snapshot/gitea", "discovery/opensearch", "cli", "client", "delivery"},
+		denied: []string{"discovery", "declarativeindex", "discovery/projection", "object/writer", "hook", "gate", "cli", "client", "delivery"},
 		why:    "consumer Knowledge Serving may compose Reader with an injected State port, but must not own providers, credentials, composition, writes, retrieval, or caller-visible delivery",
 	},
 	{
 		pkg:    "discovery/plugin",
-		denied: []string{"home", "invocation", "invoke", "server", "httpsurface", "client", "cli", "identity", "object/service", "object/writer", "object/client", "object/cli", "snapshot/service", "snapshot/client", "snapshot/cli", "discovery/service", "discovery/client", "discovery/cli", "discovery/opensearch", "discovery/internal/opensearchimpl", "discovery/llmhttp", "declarativeindex"},
+		denied: []string{"home", "invocation", "invoke", "server", "httpsurface", "client", "cli", "identity", "object/service", "object/writer", "object/client", "object/cli", "snapshot/service", "snapshot/client", "snapshot/cli", "discovery/service", "discovery/client", "discovery/cli", "discovery/llmhttp", "declarativeindex"},
 		why:    "typed contribution selection consumes public query, observation and fixed-read ports; hosts and concrete entries assemble it, and transports, execution services, physical drivers and Object publication stay outside",
 	},
 	{
 		pkg:    "discovery/service",
-		denied: []string{"home", "cli", "httpsurface", "client", "snapshot/gitea", "discovery/opensearch", "declarativeindex/opensearch", "declarativeindex/projection", "declarativeindex/control", "declarativeindex/plugin", "declarativeindex/internal"},
+		denied: []string{"home", "cli", "httpsurface", "client", "declarativeindex/opensearch", "declarativeindex/projection", "declarativeindex/control", "declarativeindex/plugin", "declarativeindex/internal"},
 		why:    "the typed application core composes protocol ports; it must not parse transports, open deployments, or select concrete providers",
 	},
 	{
@@ -167,28 +152,23 @@ var forbidden = []struct {
 		why:    "the operation layer is import-neutral between the transports: verbs consume the use-case cores (object/service, discovery/service) and the carrier holds the transport-opened *home.Home, but the seam never knows an argv front end or a service surface (CAP-ORG-01 B5a carrier, B6 operation layer)",
 	},
 	{
-		pkg:    "snapshot/treewriter",
-		denied: []string{"object", "object/reader", "object/writer", "catalog", "discovery", "declarativeindex", "discovery/projection", "controlplane", "snapshot/gitea", "cli"},
-		why:    "literal tree mutation is layer ⓪ and must not acquire Knowledge or composition semantics",
-	},
-	{
 		pkg:    "discovery",
-		denied: []string{"catalog", "object/writer", "discovery/projection", "declarativeindex/control", "declarativeindex/projection", "controlplane", "snapshot/treewriter", "snapshot/gitea", "discovery/opensearch", "declarativeindex/opensearch", "cli", "delivery"},
+		denied: []string{"object/writer", "discovery/projection", "declarativeindex/control", "declarativeindex/projection", "controlplane", "declarativeindex/opensearch", "cli", "delivery"},
 		why:    "layer ③ logical retrieval contracts may consume Knowledge declarations but not providers, application wiring, or caller-visible delivery",
 	},
 	{
 		pkg:    "discovery/projection",
-		denied: []string{"repository", "catalog", "object/writer", "snapshot/gitea", "discovery/opensearch", "declarativeindex", "cli", "delivery"},
+		denied: []string{"object/writer", "declarativeindex", "cli", "delivery"},
 		why:    "generic projection contracts and shared request scopes do not construct an index, own control state, or bind authority/provider implementations",
 	},
 	{
 		pkg:    "declarativeindex/projection",
-		denied: []string{"repository", "catalog", "home", "invocation", "invoke", "server", "cli", "client", "identity", "object/writer", "snapshot/gitea", "delivery", "liveaccess", "systemrepo", "discovery/datasets", "discovery/service", "discovery/plugin", "declarativeindex/control", "declarativeindex/plugin", "declarativeindex/opensearch", "declarativeindex/internal"},
+		denied: []string{"home", "invocation", "invoke", "server", "cli", "client", "identity", "object/writer", "delivery", "liveaccess", "systemrepo", "discovery/datasets", "discovery/service", "discovery/plugin", "declarativeindex/control", "declarativeindex/plugin", "declarativeindex/opensearch", "declarativeindex/internal"},
 		why:    "the concrete index consumes generic contracts, fixed readers and injected engines; queries never depend on their maintenance controller or host assembly",
 	},
 	{
 		pkg:    "declarativeindex/control",
-		denied: []string{"repository", "catalog", "home", "invocation", "invoke", "server", "cli", "client", "identity", "object/writer", "snapshot/gitea", "delivery", "liveaccess", "systemrepo", "discovery/datasets", "discovery/service", "discovery/plugin", "declarativeindex/plugin", "declarativeindex/opensearch", "declarativeindex/internal"},
+		denied: []string{"home", "invocation", "invoke", "server", "cli", "client", "identity", "object/writer", "delivery", "liveaccess", "systemrepo", "discovery/datasets", "discovery/service", "discovery/plugin", "declarativeindex/plugin", "declarativeindex/opensearch", "declarativeindex/internal"},
 		why:    "index control reconciles selected repository and serving bases through its maintenance port; Dataset restoration, Object coordination and concrete engine construction are composed elsewhere",
 	},
 	{
@@ -208,38 +188,23 @@ var forbidden = []struct {
 	},
 	{
 		pkg:    "hook",
-		denied: []string{"catalog", "object/writer", "object/reader", "discovery/projection", "declarativeindex/control", "declarativeindex/projection", "controlplane", "snapshot", "object", "repository", "cli"},
+		denied: []string{"object/writer", "object/reader", "discovery/projection", "declarativeindex/control", "declarativeindex/projection", "controlplane", "snapshot", "object", "cli"},
 		why:    "outbound hooks are a CLI concern; the protocol packages must not call user systems",
 	},
 	{
 		pkg:    "delivery",
-		denied: []string{"cli", "catalog", "discovery/projection", "discovery", "declarativeindex", "discovery/opensearch", "client", "hook", "gate", "object/reader", "object/writer", "liveaccess"},
+		denied: []string{"cli", "discovery/projection", "discovery", "declarativeindex", "client", "hook", "gate", "object/reader", "object/writer", "liveaccess"},
 		why:    "delivery rewrites a hydrated envelope for the caller; it must not locate, index, assemble Canonical, or read allow.json",
 	},
 	{
-		pkg:    "snapshot/commandlog",
-		denied: []string{"snapshot", "object", "catalog", "discovery", "declarativeindex", "discovery/projection", "controlplane", "cli"},
-		why:    "the shared command ledger owns replay mechanics, not any write surface's domain payload",
-	},
-	{
 		pkg:    "internal/gitdir",
-		denied: []string{"snapshot", "object", "repository", "catalog", "object/writer", "object/reader", "discovery/projection", "declarativeindex/control", "declarativeindex/projection", "snapshot/gitea"},
+		denied: []string{"snapshot", "object", "object/writer", "object/reader", "discovery/projection", "declarativeindex/control", "declarativeindex/projection"},
 		why:    "gitdir is git plumbing shared by layer ⓪ adapters and the layer ① registry; it must stay below both",
 	},
 	{
 		pkg:    "object/format",
-		denied: []string{"repository", "catalog", "object/writer", "object/reader", "discovery/projection", "declarativeindex/control", "declarativeindex/projection", "snapshot/gitea"},
+		denied: []string{"object/writer", "object/reader", "discovery/projection", "declarativeindex/control", "declarativeindex/projection"},
 		why:    "repofile is the on-disk unit format, not a store",
-	},
-	{
-		pkg:    "snapshot/gitea",
-		denied: []string{"repository", "object", "object/format", "catalog", "object/writer", "object/reader", "discovery/projection", "declarativeindex/control", "declarativeindex/projection", "controlplane", "discovery/opensearch", "declarativeindex/opensearch", "cli"},
-		why:    "the Gitea adapter exposes only Snapshot paths, commits, refs, history, and CAS",
-	},
-	{
-		pkg:    "snapshot/lakefs",
-		denied: []string{"repository", "object", "object/format", "catalog", "object/writer", "object/reader", "discovery/projection", "declarativeindex/control", "declarativeindex/projection", "controlplane", "discovery/opensearch", "declarativeindex/opensearch", "cli"},
-		why:    "the LakeFS adapter exposes only Snapshot paths, commits, refs, history, and CAS",
 	},
 
 	// App-layer capability denylists (CAP-ORG-01 B2; the §3.4 four-piece audit's
@@ -262,17 +227,17 @@ var forbidden = []struct {
 	},
 	{
 		pkg:    "gate",
-		denied: []string{"snapshot", "catalog", "object", "discovery", "declarativeindex", "discovery/projection", "hook", "controlplane", "cli", "httpsurface", "client", "home"},
+		denied: []string{"snapshot", "object", "discovery", "declarativeindex", "discovery/projection", "hook", "controlplane", "cli", "httpsurface", "client", "home"},
 		why:    "the merge evidence gate reads only its rules and evidence bindings, fail-closed; it must not reach into protocol layers, hooks, or transports",
 	},
 	{
 		pkg:    "identity",
-		denied: []string{"snapshot", "catalog", "object", "discovery", "declarativeindex", "discovery/projection", "hook", "controlplane", "cli", "httpsurface", "client", "home"},
+		denied: []string{"snapshot", "object", "discovery", "declarativeindex", "discovery/projection", "hook", "controlplane", "cli", "httpsurface", "client", "home"},
 		why:    "identity binding reads its own durable store and IdP results only; isolation matches gate's strict set",
 	},
 	{
 		pkg:    "datasetfs",
-		denied: []string{"kernel", "snapshot", "catalog", "object", "discovery", "declarativeindex", "discovery/projection", "controlplane", "hook", "gate", "delivery", "identity", "observability", "invoke", "client", "discovery/service", "cli", "httpsurface", "home"},
+		denied: []string{"kernel", "snapshot", "object", "discovery", "declarativeindex", "discovery/projection", "controlplane", "hook", "gate", "delivery", "identity", "observability", "invoke", "client", "discovery/service", "cli", "httpsurface", "home"},
 		why:    "the local read-only consumption view mounts what a plan hands it; it never calls back into the protocol ring or any transport",
 	},
 	{
@@ -349,10 +314,8 @@ func TestProtocolLayersDoNotDependOnClient(t *testing.T) {
 	graph := loadGraph(t)
 	for _, pkg := range []string{
 		"interfaces", "interfaces/service", "liveaccess/service", "liveaccess/contract", "liveaccess/discovery", "object/cache", "object/format", "systemrepo",
-		"kernel", "snapshot", "snapshot/dataset", "snapshot/access", "object", "catalog", "catalog/worktree", "object/writer", "object/reader", "liveaccess",
-		"catalog/internal/worktreeimpl",
+		"kernel", "snapshot", "snapshot/dataset", "snapshot/access", "object", "object/writer", "object/reader", "liveaccess",
 		"discovery", "discovery/projection", "controlplane", "hook", "gate",
-		"snapshot/treewriter", "snapshot/gitea", "snapshot/lakefs",
 		"declarativeindex/projection", "declarativeindex/control", "declarativeindex/opensearch", "declarativeindex/opensearch/internal/opensearchimpl", "discovery/llmhttp", "observability",
 		"httpsurface", "home",
 	} {
@@ -367,9 +330,6 @@ func TestProtocolLayersDoNotDependOnClient(t *testing.T) {
 // linking layer ① dragged in layers ② and ③.
 func TestCatalogStaysOffTheKnowledgeProtocol(t *testing.T) {
 	graph := loadGraph(t)
-	if _, exists := graph["catalog"]; exists {
-		t.Error("Catalog forwarding implementation must be retired")
-	}
 	for dependency, trail := range graph.reachable("snapshot/dataset") {
 		for _, denied := range []string{"object", "discovery/projection", "discovery", "home", "invocation", "server", "internal/gitdir", "internal/journal"} {
 			if deniedMatch(denied, dependency) {
@@ -421,21 +381,15 @@ func architectureLayer(pkg string) (string, bool) {
 		return "infra", true
 	case "invocation":
 		return "app", true
-	case "snapshot", "snapshot/commandlog", "snapshot/gitea", "snapshot/lakefs", "snapshot/stamp", "snapshot/treewriter",
-		"snapshot/internal/giteaimpl", "snapshot/internal/lakefsimpl", "snapshot/internal/storecontract", "snapshot/internal/stamp", "snapshot/access":
+	case "snapshot", "snapshot/internal/lakefsimpl", "snapshot/internal/storecontract", "snapshot/internal/stamp", "snapshot/access":
 		return "snapshot", true
-	case "catalog", "snapshot/dataset", "catalog/worktree", "catalog/internal/worktreeimpl":
+	case "snapshot/dataset":
 		return "dataset", true
-	case "object/format", "object", "object/maintenance", "object/reader",
-		"object/semanticview", "object/writer",
-		"object/cache", "interfaces", "liveaccess/contract", "liveaccess/evidence", "interfaces/service":
+	case "object/format", "object", "object/maintenance", "object/reader", "object/semanticview", "object/writer", "object/cache", "interfaces", "liveaccess/contract", "liveaccess/evidence", "interfaces/service":
 		return "object", true
-	case "discovery", "discovery/llmhttp", "liveaccess", "discovery/projection", "declarativeindex/projection", "declarativeindex/control", "declarativeindex/opensearch",
-		"declarativeindex/opensearch/internal/opensearchimpl":
+	case "discovery", "discovery/llmhttp", "liveaccess", "discovery/projection", "declarativeindex/projection", "declarativeindex/control", "declarativeindex/opensearch", "declarativeindex/opensearch/internal/opensearchimpl":
 		return "discovery", true
-	case "snapshot/service", "snapshot/console", "snapshot/client", "snapshot/cli", "object/client", "object/cli", "discovery/client", "discovery/cli", "declarativeindex/client", "declarativeindex/cli", "declarativeindex/plugin", "declarativeindex/internal/testfixture", "liveaccess/service", "liveaccess/discovery", "liveaccess/cli", "liveaccess/client", "liveaccess/plugin", "liveaccess/fixture", "cli", "cli/serve", "client", "cmd/kc", "cmd/kcfs", "invoke", "identity", "controlplane", "gate", "hook",
-		"home", "httpsurface", "server", "server/internal/readiness", "internal/telemetry", "internal/testkit", "datasetfs", "delivery", "object/service", "controlplane/service", "discovery/datasets", "discovery/service", "discovery/plugin", "systemrepo", "observability",
-		"scripts/check-docs", "scripts/docs-serve", "scripts/fixture-deployment", "scripts/validation-inventory", "scripts/coupling", "scripts/export-audit":
+	case "snapshot/service", "snapshot/console", "snapshot/client", "snapshot/cli", "object/client", "object/cli", "discovery/client", "discovery/cli", "declarativeindex/client", "declarativeindex/cli", "declarativeindex/plugin", "declarativeindex/internal/testfixture", "liveaccess/service", "liveaccess/discovery", "liveaccess/cli", "liveaccess/client", "liveaccess/plugin", "liveaccess/fixture", "cli", "client", "cmd/kc", "cmd/kcfs", "invoke", "identity", "controlplane", "gate", "hook", "home", "httpsurface", "server", "server/internal/readiness", "internal/telemetry", "internal/testkit", "datasetfs", "delivery", "object/service", "controlplane/service", "discovery/datasets", "discovery/service", "discovery/plugin", "systemrepo", "observability", "scripts/check-docs", "scripts/docs-serve", "scripts/fixture-deployment", "scripts/validation-inventory", "scripts/coupling", "scripts/export-audit":
 		return "app", true
 	default:
 		return "", false
@@ -552,9 +506,8 @@ func TestProjectionWorkerStartsOnlyFromServeFacade(t *testing.T) {
 func TestApplicationPackageBoundaries(t *testing.T) {
 	graph := loadGraph(t)
 	protocol := []string{
-		"kernel", "snapshot", "snapshot/dataset", "snapshot/access", "object", "catalog", "catalog/worktree", "object/writer", "object/reader", "liveaccess",
+		"kernel", "snapshot", "snapshot/dataset", "snapshot/access", "object", "object/writer", "object/reader", "liveaccess",
 		"discovery", "discovery/projection", "controlplane", "hook", "gate",
-		"snapshot/treewriter", "snapshot/gitea", "snapshot/lakefs",
 		"declarativeindex/projection", "declarativeindex/control", "declarativeindex/opensearch", "declarativeindex/opensearch/internal/opensearchimpl", "discovery/llmhttp", "observability",
 	}
 	for _, pkg := range protocol {
@@ -724,7 +677,7 @@ func TestApplicationCoreHasNoTransportOrProviderImports(t *testing.T) {
 	reachable := graph.reachable("discovery/service")
 	for _, denied := range []string{
 		"home", "cli", "httpsurface", "client",
-		"snapshot/gitea", "snapshot/lakefs", "declarativeindex/projection", "declarativeindex/control", "declarativeindex/opensearch", "declarativeindex/opensearch/internal/opensearchimpl",
+		"declarativeindex/projection", "declarativeindex/control", "declarativeindex/opensearch", "declarativeindex/opensearch/internal/opensearchimpl",
 	} {
 		if path, ok := reachable[denied]; ok {
 			t.Errorf("discovery/service reaches %s through %s", denied, strings.Join(path, " -> "))
@@ -818,21 +771,6 @@ func TestLowerLayersDoNotDeclareSemanticObjectCaches(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
-	}
-}
-
-func TestRemovedRepositoryPackageDoesNotReturn(t *testing.T) {
-	root := moduleRoot(t)
-	if _, err := os.Stat(filepath.Join(root, "repository")); err == nil {
-		t.Fatal("repository/ mixes layer ⓪ and ②; keep contracts in snapshot/ and knowledge/")
-	} else if !os.IsNotExist(err) {
-		t.Fatal(err)
-	}
-	graph := loadGraph(t)
-	for pkg, deps := range graph {
-		if slices.Contains(deps, "repository") {
-			t.Errorf("production package %s imports removed repository package; import snapshot or knowledge directly", pkg)
-		}
 	}
 }
 

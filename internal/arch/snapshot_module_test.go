@@ -2,9 +2,6 @@ package arch_test
 
 import (
 	"fmt"
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -78,26 +75,5 @@ func TestSnapshotModuleClientDirectionGuardDetectsIndirectDependencies(t *testin
 				t.Fatalf("direction guard result %v, want violation=%v", violations, tc.want)
 			}
 		})
-	}
-}
-
-func TestLegacyCatalogDoesNotRetainDatasetAuthority(t *testing.T) {
-	files, err := filepath.Glob(filepath.Join(moduleRoot(t), "catalog", "*.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, path := range files {
-		if strings.HasSuffix(path, "_test.go") {
-			continue
-		}
-		file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, decl := range file.Decls {
-			if method, ok := decl.(*ast.FuncDecl); ok && method.Recv != nil {
-				t.Errorf("legacy catalog retains domain method %s in %s; Dataset authority belongs to snapshot/dataset", method.Name, filepath.Base(path))
-			}
-		}
 	}
 }

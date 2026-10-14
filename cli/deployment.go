@@ -50,9 +50,6 @@ func runClientOperation(path string, flags map[string]FlagValue) (any, error) {
 	}
 	if strings.HasPrefix(path, "deployment ") {
 		allowed := "config help"
-		if path == "deployment identity migrate" {
-			allowed += " file"
-		}
 		if err := inv.RejectFlagsOutside(flags, inv.FlagNames(allowed), "kc "+path); err != nil {
 			return nil, err
 		}
@@ -61,19 +58,6 @@ func runClientOperation(path string, flags map[string]FlagValue) (any, error) {
 			return nil, err
 		}
 		switch path {
-		case "deployment identity migrate":
-			if err := kchome.ValidateDeploymentState(config); err != nil {
-				return nil, err
-			}
-			file, err := invoke.RequireFlag(flags, "file")
-			if err != nil {
-				return nil, err
-			}
-			request, err := readIdentityMigrationRequest(file)
-			if err != nil {
-				return nil, err
-			}
-			return migrateLegacyIdentity(config.StateDir, request)
 		case "deployment init":
 			err := kchome.InitializeDeployment(config, func(dir, principal string) error {
 				return inv.WriteAllow(dir, inv.AllowFile{Rules: []inv.AllowRule{{ID: "bootstrap-deployment-admin", Principal: principal, Actions: []string{"*"}}}})

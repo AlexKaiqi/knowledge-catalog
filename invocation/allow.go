@@ -21,11 +21,8 @@ type AllowFile struct {
 	Rules   []AllowRule `json:"rules"`
 	// InitialGrants records completed policy applications, independently of
 	// revocable rules. A provisioning retry must never restore a revoked rule.
-	InitialGrants map[string]kernel.Digest `json:"initialGrants,omitempty"`
-	// IdentityMigrations is preserved by grant/revoke and records one explicit
-	// legacy principal migration together with its current-rule rewrite.
-	IdentityMigrations map[string]IdentityMigrationReceipt `json:"identityMigrations,omitempty"`
-	Admissions         map[string]AdmissionReceipt         `json:"admissions,omitempty"`
+	InitialGrants map[string]kernel.Digest    `json:"initialGrants,omitempty"`
+	Admissions    map[string]AdmissionReceipt `json:"admissions,omitempty"`
 }
 
 type AllowQuery = access.Query
@@ -372,13 +369,4 @@ func SplitCmds(raw string) []string {
 type AdmissionReceipt struct {
 	Principal string   `json:"principal"`
 	Actions   []string `json:"actions"`
-}
-
-// IdentityMigrationReceipt is preserved by grant/revoke and records one
-// explicit legacy principal migration. The operator verifies the issuer and
-// immutable subject independently; matching usernames alone never authorizes
-// migration.
-type IdentityMigrationReceipt struct {
-	Digest        kernel.Digest `json:"digest"`
-	MigratedRules int           `json:"migratedRules"`
 }

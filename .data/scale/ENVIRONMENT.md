@@ -1,8 +1,8 @@
 # 压测环境：配置合同与就绪性
 
 > 状态：规模介质为 lakeFS，档位资源要求尚未登记（规模原则见
-> `doc/engineering/testing.md`）。§5 的 2026-08-31
-> 审计保留为历史记录，其中 Dolt 专属条目不再代表当前部署。
+> `doc/engineering/testing.md`）。runner、历史生成、
+> checkpoint/resume 与证据采集在 runner 实现前仍是缺口，逐项需求见 `scenes/README.md` §4。
 
 压测用例按场景树组织在 [`scenes/`](scenes/README.md)，用例入口与运行合同见
 [`CASES.md`](CASES.md)。本文回答一件事：**一份环境配置怎样才算绑定了可测环境**。
@@ -63,27 +63,3 @@
 - 证据保留时间必须长于最长探针窗口（含 warm-up/cool-down 与报告复算），临时目录
   （tmpfs）不能作为资格证据存放地。
 - 磁盘水位、发压端 CPU、时钟同步状态进入 manifest 与 timeline，与指标相互解释。
-
-## 5. 附录：2026-08-31 环境实测（历史记录）
-
-> 以下审计针对当时的 Dolt 路线 Compose 拓扑，仅证明"当时连 S0 端到端 load case
-> 都没有可调用入口"，不描述当前 lakeFS 部署；工具链缺口（runner、历史生成、
-> checkpoint/resume、证据采集）在 runner 实现前仍然成立，逐项能力需求见
-> `scenes/README.md` §4 与各探针 `requires`。
-
-结论：**当时环境不具备执行 `KC-PERF-01`–`KC-PERF-12` 并产出有效容量结论的条件。**
-
-| 层级 | 当前结论（2026-08-31） |
-| --- | --- |
-| 功能拓扑（KC/存储/索引/观测连通） | `READY`，仅限本地功能用途 |
-| 压测工具链（速率/并发/阶段/报告） | `BLOCKED` |
-| S1/nightly | `BLOCKED` |
-| S2/pilot（三节点 OpenSearch、资源隔离） | `BLOCKED` |
-| S3/release candidate（隔离容量环境） | `BLOCKED` |
-| S5/H4 qualification（过亿对象、2,000 万真实提交） | `BLOCKED` |
-
-要点摘录：Docker VM 约 7.65 GiB 且无资源 limit，无法形成可复现基线；OpenSearch 单节点
-512 MiB heap；Prometheus retention 24h 不足以覆盖 24h 测量；Loki/Jaeger 数据易失；
-generator 可产出 S0 NDJSON 但没有 load runner、真实 H 历史、checkpoint/resume、
-canonical bytes/digest 证据与 fault injector。完整表格与逐项判定见当时版本
-（git 历史）的本文 §3–§4。

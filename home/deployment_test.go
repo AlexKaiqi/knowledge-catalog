@@ -228,7 +228,7 @@ func TestDeploymentDoesNotRecreateLostCatalogBranch(t *testing.T) {
 func TestDeploymentRejectsIgnoredLayoutAndDriverDefaults(t *testing.T) {
 	for _, change := range []func(*DeploymentConfig){
 		func(c *DeploymentConfig) { c.Stores.Layout.Registry = "alternate" },
-		func(c *DeploymentConfig) { c.Stores.Repository = "gitea" },
+		func(c *DeploymentConfig) { c.Stores.Repository = "stream" },
 		func(c *DeploymentConfig) { c.Stores.Profile = "local" },
 	} {
 		cfg := deploymentFixture(t)

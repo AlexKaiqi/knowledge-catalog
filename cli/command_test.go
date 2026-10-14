@@ -35,7 +35,6 @@ func TestProductCLIRefactorDefinesTheExactPublicSurface(t *testing.T) {
 		"dataset overlay",
 		"dataset retire",
 		"dataset show",
-		"deployment identity migrate",
 		"deployment init",
 		"deployment status",
 		"deployment system publish",

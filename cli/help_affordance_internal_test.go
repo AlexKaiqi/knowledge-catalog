@@ -41,7 +41,7 @@ func TestEveryPublicHelpExplainsUseEffectsAndRecoveryWithoutExecuting(t *testing
 			byTopic := Run(append([]string{"help"}, strings.Fields(path)...))
 			argv := append(strings.Fields(path), "--help")
 			switch path {
-			case "deployment init", "deployment status", "deployment system publish", "deployment identity migrate", "serve":
+			case "deployment init", "deployment status", "deployment system publish", "serve":
 				argv = append(argv, "--config", filepath.Join(dir, "missing-deployment"))
 			case "writer put", "writer commit", "governance proposal create", "dataset define", "dataset overlay", "grant update":
 				argv = append(argv, "--file", filepath.Join(dir, "missing-input"))

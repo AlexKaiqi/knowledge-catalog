@@ -26,9 +26,8 @@ type VerifiedUser struct {
 const Filename = "identities.json"
 
 type bindingFile struct {
-	Version       int                     `json:"version"`
-	Bindings      []VerifiedUser          `json:"bindings"`
-	LegacyAliases map[string]VerifiedUser `json:"legacyAliases,omitempty"`
+	Version  int            `json:"version"`
+	Bindings []VerifiedUser `json:"bindings"`
 }
 
 var fileLocks sync.Map
@@ -77,18 +76,6 @@ func readFile(path string) (bindingFile, error) {
 			if user.Username == previous.Username || sameSubject(user, previous) {
 				return file, kernel.Fail(kernel.ErrPreconditionFailed, "durable identity bindings contain a duplicate identity")
 			}
-		}
-	}
-	for legacy, target := range file.LegacyAliases {
-		if err := validateLegacyAlias(legacy, target); err != nil {
-			return file, kernel.Fail(kernel.ErrPreconditionFailed, "durable legacy identity alias is invalid")
-		}
-		found := false
-		for _, user := range file.Bindings {
-			found = found || user == target
-		}
-		if !found {
-			return file, kernel.Fail(kernel.ErrPreconditionFailed, "durable legacy alias has no matching verified binding")
 		}
 	}
 	return file, nil

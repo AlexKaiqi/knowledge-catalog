@@ -88,10 +88,6 @@ func (ws *Home) CreateManagedRepository(req ManagedRepositoryRequest, grant func
 	if err := ws.Registry.CheckAuthority(); err != nil {
 		return result, err
 	}
-	req, err = ws.managedRequestForOwner(req)
-	if err != nil {
-		return result, err
-	}
 	record, err := reserveManaged(*ws.Deployment, req, func() error {
 		if grant == nil {
 			return kernel.Fail(kernel.ErrUsageInvalid, "managed create requires the configured creator-policy callback")
@@ -110,10 +106,7 @@ func (ws *Home) CreateManagedRepository(req ManagedRepositoryRequest, grant func
 	if err != nil {
 		return result, err
 	}
-	result, err = ws.managedOwnerResult(record)
-	if err != nil {
-		return result, err
-	}
+	result = managedResult(record)
 	result.Status = "APPLIED"
 	driver, err := authorityFor(record.Binding.Driver)
 	if err != nil {

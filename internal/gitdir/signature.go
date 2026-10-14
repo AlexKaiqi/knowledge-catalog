@@ -18,7 +18,7 @@ const (
 
 // Signature is the commit metadata kc puts on every write, on any backend.
 // Format and ParseTrailers are inverses, so `kc audit` reads back what a
-// COMMIT wrote on Gitea or lakeFS.
+// COMMIT wrote on lakeFS.
 type Signature struct {
 	Author    string
 	Message   string

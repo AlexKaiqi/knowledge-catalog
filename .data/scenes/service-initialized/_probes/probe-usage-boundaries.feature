@@ -11,5 +11,5 @@ Feature: probe usage boundaries
     Then error USAGE_INVALID
     When I run `kc local system publish`
     Then error USAGE_INVALID
-    When I run `kc local store set --repository filegit --index none`
+    When I run `kc local store set --repository stream --index none`
     Then error USAGE_INVALID

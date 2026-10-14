@@ -152,13 +152,9 @@ func authoritySecretEnvs() map[string]string {
 
 func authorityFor(name string) (authorityDriver, error) {
 	name = normalizeRepoDriver(name)
-	if name == "filegit" || name == "gitea" {
-		return authorityDriver{}, kernel.Fail(kernel.ErrUsageInvalid,
-			"repository driver %s is no longer supported; choose lakefs", name)
-	}
 	driver, ok := authorityDrivers[name]
 	if !ok {
-		return authorityDriver{}, fmt.Errorf("unknown repository driver %s", name)
+		return authorityDriver{}, kernel.Fail(kernel.ErrUsageInvalid, "unknown repository driver %s", name)
 	}
 	return driver, nil
 }

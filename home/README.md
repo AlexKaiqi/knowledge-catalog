@@ -1,6 +1,6 @@
 # home/
 
-部署装配入口：按声明配置连接独立登记表 Snapshot 权威和已有知识 Snapshot，把 Writer / Reader / ControlPlane / Index 装配到 Server。Snapshot 后端只经 `kc/snapshot` 公开构造与能力契约接入；lakeFS 实现归私有 `snapshot/internal/lakefsimpl`（A-01）；`declarativeindex/opensearch` 只允许在 stores 族与就绪端口绑定（`readiness_ports.go`：`NewSearchBackendProbe` 把具体索引探测绑定成端口函数，CAP-ORG-01 B7）。Dolt adapter 已退役删除。本包不得 import `cli`、`client` 或 `httpsurface`。
+部署装配入口：按声明配置连接独立登记表 Snapshot 权威和已有知识 Snapshot，把 Writer / Reader / ControlPlane / Index 装配到 Server。Snapshot 后端只经 `kc/snapshot` 公开构造与能力契约接入；lakeFS 实现归私有 `snapshot/internal/lakefsimpl`（A-01）；`declarativeindex/opensearch` 只允许在 stores 族与就绪端口绑定（`readiness_ports.go`：`NewSearchBackendProbe` 把具体索引探测绑定成端口函数，CAP-ORG-01 B7）。本包不得 import `cli`、`client` 或 `httpsurface`。
 
 业务 CLI 经 Server 和显式 principal。`kc deployment init --config` 显式初始化；`kc serve --config` 与 `OpenDeployment` 仅恢复。没有公开 `local` 命令或由实例目录扫描得到的部署清单。
 
@@ -60,7 +60,7 @@ managedRepositories:
   creatorActions: [writer.preview, writer.commit, writer.receipt.read, repository.metadata.read, knowledge.read, knowledge.provenance]
 ```
 
-LakeFS 使用部署声明的 URL `dsn`、S3 兼容对象存储 `root` 前缀与服务凭证，客户端不接触服务凭证。Snapshot 存储只支持 lakeFS；旧 Gitea/filegit 存储配置明确拒绝。创建动作不要求目标仓预先出现在 repositories。`creatorActions` 必须显式选择 `validateCreatorActions` 允许的窄动作，包含可选的仓元数据、自己的回执、分享、评审和仓维护能力；没有默认发权，不允许全局管理员、登记表 管理或投影写权限。创建者获得的普通 grant 可以撤销。重复创建请求返回原结果，重启与重试不得补回已撤销权限。新仓 binding、创建身份与分阶段进度保存在 `stateDir/managed.db`；RESERVED → OWNED → REGISTERED → READY 逐步记录分配、拥有来源、登记表 准入与创建完成。已完成结果保留初始 HEAD，重复请求不把它替换成当前 HEAD；登记表 仍只保存来源登记与配方。
+LakeFS 使用部署声明的 URL `dsn`、S3 兼容对象存储 `root` 前缀与服务凭证，客户端不接触服务凭证。Snapshot 存储只支持 lakeFS，其它 driver 以 `USAGE_INVALID` 拒绝。创建动作不要求目标仓预先出现在 repositories。`creatorActions` 必须显式选择 `validateCreatorActions` 允许的窄动作，包含可选的仓元数据、自己的回执、分享、评审和仓维护能力；没有默认发权，不允许全局管理员、登记表 管理或投影写权限。创建者获得的普通 grant 可以撤销。重复创建请求返回原结果，重启与重试不得补回已撤销权限。新仓 binding、创建身份与分阶段进度保存在 `stateDir/managed.db`；RESERVED → OWNED → REGISTERED → READY 逐步记录分配、拥有来源、登记表 准入与创建完成。已完成结果保留初始 HEAD，重复请求不把它替换成当前 HEAD；登记表 仍只保存来源登记与配方。
 
 用户自助选择由 `managedStores` 声明的命名池；它与旧 `managedRepositories` 单池配置互斥。只有一个池时自动选择，多个时要求用户的 `--store`。`--name` 接受可读名称。LakeFS 上 `--name`（合法 Graveler slug）就是协议仓 ID，与 lakeFS 仓库名相同，不另造 `repo-<hash>`。同一人重复提交相同名称与 Store 恢复原结果。恢复命令仍由账本生成，不改仓名。既有持久分配和机器主体保持原有恢复身份。
 
@@ -166,7 +166,7 @@ Server 的 `BeginShutdown` 先拒绝新工作，再调用 `StopMaintenance` 取�
 
 ## 自有 Snapshot 连接
 
-`connections` 显式开放已有 lakeFS 仓的自助接入。`allowedOrigins` 是部署批准的 lakeFS origin，不能带凭证、查询或 fragment。用户不能据此探测任意网络地址。该入口只接受 lakeFS；旧 Gitea/filegit driver 明确拒绝。
+`connections` 显式开放已有 lakeFS 仓的自助接入。`allowedOrigins` 是部署批准的 lakeFS origin，不能带凭证、查询或 fragment。用户不能据此探测任意网络地址。该入口只接受 lakeFS。
 
 ```yaml
 connections:

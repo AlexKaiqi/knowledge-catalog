@@ -52,8 +52,6 @@ func TestStoreConfigRejectsSecrets(t *testing.T) {
 	expectMsg(t, kc(h, "store-set", "--driver", "mysql"), "unknown store driver mysql")
 	expectMsg(t, kc(h, "store-set", "--driver", "elasticsearch", "--url", "http://127.0.0.1:9200"), "unknown store driver elasticsearch")
 	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/public/mysql-not-repo", "--driver", "mysql"), "unknown repository driver mysql")
-	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/public/gitea-retired", "--driver", "gitea"), "no longer supported")
-	expectMsg(t, kc(h, "store-set", "--repository", "gitea"), "no longer supported")
 	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/public/lakefs-no-dsn", "--driver", "lakefs"), "requires --dsn")
 	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/public/lakefs-secret", "--driver", "lakefs", "--dsn", "http://u:p@127.0.0.1:8000/core"), "must not contain secrets")
 	body(t, kc(h, "store-set", "--profile", "scale"))
@@ -106,7 +104,7 @@ func TestLocalStoreConfig(t *testing.T) {
 	if strings.Contains(string(layout), "_catalog") {
 		t.Fatalf("layout still uses repos/_catalog: %s", layout)
 	}
-	expectMsg(t, kc(h, "store-set", "--repository", "filegit", "--index", "none"), "no longer supported")
+	expectMsg(t, kc(h, "store-set", "--repository", "stream", "--index", "none"), "unknown repository driver stream")
 	expectMsg(t, kc(h, "store-set", "--index", "memory"), "projection provider")
 	expectMsg(t, kc(h, "store-set", "--index", "sqlite"), "projection provider")
 	body(t, kc(h, "store-set", "--repos-dir", "repos", "--projections-dir", "projections"))
@@ -199,15 +197,15 @@ func TestStoreConfigMigratesLegacyJSON(t *testing.T) {
 	}
 }
 
-func TestStoreConfigRejectsRetiredFileGit(t *testing.T) {
+func TestStoreConfigRejectsUnknownRepositoryDriver(t *testing.T) {
 	h := testkit.TempDir(t)
 	body(t, kc(h, "init"))
-	if err := os.WriteFile(filepath.Join(h, "stores.yaml"), []byte("repository: filegit\nindex: none\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(h, "stores.yaml"), []byte("repository: stream\nindex: none\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	failed := kc(h, "store-ls")
 	expectCode(t, failed, "USAGE_INVALID")
-	expectMsg(t, failed, "no longer supported")
+	expectMsg(t, failed, "unknown repository driver stream")
 }
 
 func TestScaleProfileRepoAddLakeFS(t *testing.T) {

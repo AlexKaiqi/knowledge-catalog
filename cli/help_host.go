@@ -171,30 +171,6 @@ func hostEnvironmentHelpEntries() map[string]helpEntry {
   示例：
     例：kc deployment system publish --config deployment.yaml`,
 		},
-		"deployment identity migrate": {
-			Description: "迁移历史身份绑定",
-			Usage: `kc deployment identity migrate --config <deployment.yaml> --file <request.json>
-  用途：
-    把核验过的历史 provider 主体绑定迁到规范用户名，保留现存规则与托管归属。
-  用法与参数：
-    --config 是部署文件；--file 是身份迁移请求 JSON。
-    请求含 legacyPrincipal 与 user 的 provider、issuer、subject、username；仅支持 Gitea/Taihu。
-  条件：
-    运营者已独立验证可信 issuer 和不可重新指派的 subject；用户名相同不足以授权迁移。
-    Gitea subject 必须是稳定正整数；停止服务，避免与在线 grant 修改并发。
-  结果：
-    返回 APPLIED 或 REPLAYED、规范 principal 和 migratedRules 数量。
-  后果：
-    写入身份别名、迁移仍存在的 grant 主体，并在策略账保存迁移回执；不重发创建者权限，
-    不恢复已撤销规则，历史托管请求保留原身份与请求摘要。
-  风险与成本：
-    身份账与策略账分别耐久写入，没有跨文件事务；错误绑定会改变现有权利的归属。
-  失败恢复：
-    同一明确绑定可重试；同历史主体的不同请求返回 IDEMPOTENCY_CONFLICT。
-    写入中断时先核对两份账，使用原请求恢复，不能用同名新账号替代原可信 subject。
-  示例：
-    例：kc deployment identity migrate --config deployment.yaml --file migrate.json`,
-		},
 		"create": {
 			Description: "创建托管 Repository 或连接自有 Repository",
 			Usage: `kc create (--name <名称> [--store <store>] | --url <url> --credential-file <path>)

@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"kc/kernel"
 	"reflect"
 	"strconv"
 	"testing"
@@ -28,10 +29,8 @@ func TestAuthoritySelectionChangesOnlyRepositoryProfileField(t *testing.T) {
 	if !reflect.DeepEqual(base, candidate) {
 		t.Fatalf("authority selection changed fields other than repository: %#v %#v", base, candidate)
 	}
-	for _, retired := range []string{"gitea", "filegit"} {
-		if _, err := authorityFor(retired); err == nil {
-			t.Fatalf("retired Snapshot driver %s accepted", retired)
-		}
+	if _, err := authorityFor("stream"); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
+		t.Fatalf("unknown Snapshot driver accepted: %v", err)
 	}
 }
 
