@@ -164,7 +164,7 @@ var forbidden = []struct {
 	{
 		pkg:    "invocation",
 		denied: []string{"cli", "server", "httpsurface", "client"},
-		why:    "the operation layer is import-neutral between the transports: verbs consume the use-case core (knowledgeapp) and the carrier holds the transport-opened *home.Home, but the seam never knows an argv front end or a service surface (CAP-ORG-01 B5a carrier, B6 operation layer)",
+		why:    "the operation layer is import-neutral between the transports: verbs consume the use-case cores (object/service, discovery/service) and the carrier holds the transport-opened *home.Home, but the seam never knows an argv front end or a service surface (CAP-ORG-01 B5a carrier, B6 operation layer)",
 	},
 	{
 		pkg:    "snapshot/treewriter",
@@ -747,7 +747,7 @@ func TestApplicationCoreHasNoTransportOrProviderImports(t *testing.T) {
 		"snapshot/gitea", "snapshot/lakefs", "declarativeindex/projection", "declarativeindex/control", "declarativeindex/opensearch", "declarativeindex/opensearch/internal/opensearchimpl",
 	} {
 		if path, ok := reachable[denied]; ok {
-			t.Errorf("knowledgeapp reaches %s through %s", denied, strings.Join(path, " -> "))
+			t.Errorf("discovery/service reaches %s through %s", denied, strings.Join(path, " -> "))
 		}
 	}
 	root := moduleRoot(t)

@@ -20,7 +20,7 @@ import (
 // DATASET-02（mvp-acceptance.md 服务版采用）：真实部署入口上的发布管线恢复。
 // 三个断言：准备阶段失败保留已接受版本；替换实例后数据集状态、授权与回执
 // 存活且同一 pin 继续服务；内容派生 command-id 幂等重放，有效 v2 在恢复后
-// 正常发布。投影准备失败（索引）由 knowledgeapp 发布器测试覆盖，此处走
+// 正常发布。投影准备失败（索引）不在本用例范围，此处走
 // 发布管线的准备阶段（来源冻结）失败。
 func TestDatasetPublishingRecoveryKeepsAcceptedVersion(t *testing.T) {
 	cfg, path := declaredDeployment(t, true)

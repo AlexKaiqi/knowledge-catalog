@@ -4,8 +4,8 @@ package invocation
 // operation, authorized, hook-wrapped, observed, and evidenced — identical for
 // the argv front end (which resolves a grouped command first) and the typed
 // service (which passes an explicit Command and never consults the CLI
-// registry). API-01 lives here: both transports run the same knowledgeapp
-// executors through the same stage machinery. (CAP-ORG-01 B5c.)
+// registry). API-01 lives here: both transports run the same object/service and
+// discovery/service executors through the same stage machinery. (CAP-ORG-01 B5c.)
 
 import (
 	"context"

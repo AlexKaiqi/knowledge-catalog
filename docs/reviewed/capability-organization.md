@@ -87,8 +87,11 @@ CLI/help 继续承载能力说明，现有业务合同随真实调用方一起�
 的注册与重试承诺。最小接入、目标范围和退出保证归[插件接入设计](plugin-extension.md)，
 Object 自身能力与跨模块拆分归[对象重构指南](object-refactor-guideline.md)，交互取舍归 CLI owner。
 
-本节确定目标，不宣称目录已经迁移。下文旧包名、批次和耦合实测保留其原范围；旧目录树与
-`knowledgeapp` 唯一归属的描述不作为阻止此次目标迁移的约束。每批仍需更新真实依赖守卫、
+本节确定目标；2026-10-14 迁移已落地：`knowledge` 拆为 `object/` 与 `systemrepo/`（完整
+平台出版物），`retrieval` 并入 `discovery/`，`index` 迁为 `declarativeindex/`，`knowledgeapp`
+的任务执行器分归 `object/service` 与 `discovery/service`，并新增 `liveaccess/`、`interfaces/`。
+§2.2 目标树、§2.3、§3.1–§3.3 与文末契约入口按新目录名描述现状；§2.4 修正记录、§3.4 审计、
+§4 批次中的 R 修订与耦合实测仍是历史记录，保留旧包名与原范围，不作为现状或约束。每批仍需更新真实依赖守卫、
 验证公开观察，并按同一度量政策证明边界收紧，不以目录改名或重新分组掩盖依赖。
 
 ## 1. 能力定义与资格
@@ -176,36 +179,36 @@ kc/
 ├── object/              能力②:身份与读写解释
 │   ├── README.md                       # ① 拥有身份/Schema/来源/治理;不拥有组合与检索
 │   ├── writer/  reader/                # ② 写面(CAS/幂等)与读面(同版本 hydrate 窄口)——本身就是契约
-│   ├── serving.go                      # ② 消费组合窄口(注入状态端口,CA-01)
-│   ├── conformance_test.go             # ④ I-01/V-01/W-01/W-02/C-01/S-01 反例组
-│   └── internal/
-│       └── unitcodecimpl/  semanticviewimpl/  maintenanceimpl/  # ③ 编码/视图/维护扫描(B11;同名顶层薄壳可达)
+│   ├── service/  cache/                # ② Read/Write 任务执行器;固定正文缓存独立装配
+│   ├── cli/  client/                   # ② 对象任务的命令合同与 typed SDK
+│   ├── format/  semanticview/  maintenance/  # ② 编码/视图/维护扫描(一级子能力,迁移后不再藏 internal/)
+│   └── contract_test.go  schema_*_test.go    # ④ I-01/V-01/W-01/W-02/C-01/S-01 反例组
 │
-├── discovery/              能力③合同:检索合同(薄,纯契约)
+├── systemrepo/             平台完整出版物:content/ 与 PublishSystem(经 Writer 发布,不进 Object 根)
+│
+├── interfaces/             操作合同:固定 Interface 定义、实现与引用;service/ 执行类型化调用
+│
+├── liveaccess/             当前态访问:固定声明取外部值;service/ plugin/ evidence/ discovery/ cli/ client/
+│
+├── discovery/              能力③合同:查询合同与消费服务
 │   ├── README.md                       # ① 拥有查询计划/候选页/回读纪律;不拥有投影实现
-│   ├── search.go  relations.go  view.go   # ② SearchRequest/SearchView/关系合同/页界(IX-01)
-│   ├── conformance_test.go             # ④ R-01/R-02/K-25 反例组
-│   └── (无 internal;禁 import index —— denylist 钉死)
+│   ├── searchop.go  relation.go  result.go   # ② 查询/关系合同/页界(IX-01)
+│   ├── projection/                     # ② 投影消费合同;不持运行实例、不转发实现
+│   ├── service/                        # ② 任务服务:Search/Dataset 检索/关系导航(API-01 规则所在层)
+│   └── (根包实测不 import declarativeindex)
 │
-├── discovery/projection/                  能力③投影:派生投影(读面+写面,可丢派生状态)
+├── declarativeindex/       能力③投影:声明式索引插件(读面+写面,可丢派生状态)
 │   ├── README.md                       # ① 拥有 READY/对账/代际/物理拓扑;不拥有声明本身/Canonical
-│   ├── retriever.go                    # ② 读面:exact-basis 候选源 + READY(R-01/R-02)
-│   ├── maintainer.go                   # ② 写面:basis/coverage/lag、代际重建、增量、消费者对账(PC-01/IX-03/04)
-│   ├── conformance_test.go             # ④ P-01/K-19/PC-01/IX-02..05 反例组
-│   ├── internal/
-│   │   └── opensearchimpl/             # ③ 具体引擎实现体(B12;planner/consumer/lanes 拆分评估无实益不做)
-│   └── opensearch/                     # ② provider 注册薄壳(归属 ③投影,B12)
+│   ├── projection/                     # ② 构造/编译/执行:exact-basis 候选源 + READY(R-01/R-02);conformance_test.go ④
+│   ├── control/                        # ② 维护:basis/coverage/lag、代际重建、增量、消费者对账(PC-01/IX-03/04)
+│   ├── plugin/  cli/  client/          # ② 插件入口与任务适配
+│   └── opensearch/                     # ② provider 注册薄壳 + internal/opensearchimpl 实现体
 │
 │
 │   ━━━ 应用环:本轮组织重构的主对象 ━━━
 │
-├── discovery/service/           应用能力:应用用例(API-01 唯一业务规则所在层)
-│   ├── README.md                       # ① 全部 executor 如实入册:纵切 8 + 治理 5 + 投影 3
-│   ├── read.go  search.go  write.go    # ② 纵切 executor 与请求/响应类型(契约面)
-│   ├── operations.go  governance.go    # ② 治理 executor(PROPOSAL→Merge 经应用核心)
-│   ├── dataset_*.go  traverse.go       # ② Dataset 纵切与邻域闭包
-│   ├── surface_anchor_test.go          # ④ 导出面闭集锚点(仿 cli/surface.go;Phase 0 新建)
-│   └── (单包;internal/ 为 Phase 3 后评估项——59 个 unexported 已压住实现)
+│   (原 knowledgeapp 已拆:任务执行器分归 object/service、discovery/service,
+│    导出面各由其 surface_anchor_test.go 保持闭集)
 ├── home/                   应用能力:部署装配
 │   ├── README.md                       # ① 拥有装配/恢复;不拥有业务规则与 provider 选择权(A-01)
 │   ├── deployment.go  seams.go         # ② DeploymentConfig/OpenDeployment + 各协议口装配缝签名
@@ -303,7 +306,7 @@ Go 的包内私有已经是语言级隐藏，`internal/` 只在实现需要跨�
 | 形状 | 第 2 件（interface） | 第 3 件（隐藏） | 现例 |
 |---|---|---|---|
 | 单包能力 | 根包导出文件 | unexported 标识符 | `delivery` `gate` `identity` `invoke` `connector` `datasetfs` `controlplane` `kernel` |
-| 契约多面 | 根上读/写两面或 port 集 | `internal/` 实现包 | `index`（retriever/maintainer）、`snapshot`（store）、`knowledge`（writer/reader 在根，codec/视图藏） |
+| 契约多面 | 根上读/写两面或 port 集 | 具名一级子能力或 `internal/` 实现包 | `declarativeindex`（projection/control）、`snapshot`（store）、`object`（writer/reader 一级入口） |
 | 装配能力 | 装配缝 + 配置合同 | `internal/` 唯一 adapter import 点 | `home` |
 | 闭集契约 | 闭集函数 + 锚点测试 | 面后实现 | `cli`（surface.go）、`server`（routes.go） |
 
@@ -451,20 +454,21 @@ gate/
 | `kernel` | 坐标 / 错误信封 / canonical digest（`kernel/README.md` 四文件） | 无（全部即契约） | 无 | E-01 | kernel 单测 |
 | `snapshot` ⓪ | 不可变版本、条件推进、变化识别、字面写与共享幂等（根合同） | 私有 lakeFS、写入与账实现 | kernel, internal infra | W-01, W-02, K-02, K-23, A-01, CA-02 | lakeFS Store/Writer conformance 与公开入口守卫 |
 | `snapshot/dataset` ① | 登记与 Dataset 文件发布（`snapshot/dataset/contract.go`） | 同包私有实现 | kernel, snapshot | KS-01, K-03, K-10…13 | 独立文件模块与依赖方向守卫 |
-| `knowledge` ② | Writer CAS/幂等、Reader 同版本 hydrate 窄口、Schema 声明 | `unitcodec`/`semanticview`/`maintenance` | kernel, snapshot | I-01, V-01, W-01/02, C-01, S-01, D-01, CA-01 | knowledge conformance |
-| `retrieval` ③合同 | 查询计划、候选页、回读纪律、失败关闭、页界（SearchRequest/SearchView） | 无（纯合同） | kernel, snapshot, knowledge | R-01, R-02, K-25, C-01, IX-01 | retrieval conformance；禁 import index |
-| `index` ③投影 | 读面 Retriever（exact-basis + READY）+ 写面 ProjectionMaintainer（basis/coverage/lag、代际、增量、对账） | planner/编译器/消费者对账/两条 lane；opensearch 实现体 | kernel, snapshot, knowledge, retrieval | P-01, PC-01, IX-02…05, K-19 | 投影 conformance；PC-01 测试组 |
+| `object` ② | Writer CAS/幂等、Reader 同版本 hydrate 窄口、Schema 声明 | `format`/`semanticview`/`maintenance` 一级子能力 | kernel, snapshot | I-01, V-01, W-01/02, C-01, S-01, D-01, CA-01 | object 合同测试 |
+| `systemrepo` ② | 平台完整出版物与 `PublishSystem`（显式验证后经 Writer 发布） | `content/` 内嵌数据 | kernel, snapshot, object, liveaccess/contract | W-01 | `system_publication_test.go` |
+| `discovery` ③合同 | 查询计划、候选页、回读纪律、失败关闭、页界；`projection/` 消费合同 | 无运行实例 | kernel, snapshot, object | R-01, R-02, K-25, C-01, IX-01 | discovery 合同测试；根包不 import declarativeindex |
+| `declarativeindex` ③投影 | 读面 projection（exact-basis + READY）+ 写面 control（basis/coverage/lag、代际、增量、对账） | 编译/执行/两条 lane；opensearch 实现体 | kernel, snapshot, object, discovery | P-01, PC-01, IX-02…05, K-19 | 投影 conformance；PC-01 测试组 |
 
 声明式索引的三分映射（`core-architecture.md`「协议边界之内还要分清组件责任」）：
-**声明**属于 Knowledge ②（S-01：Schema 只声明逻辑访问语义）；**对声明的编译与执行**属于
-`index`（计划器、物理 digest、代际）；**请求正确性**属于 `retrieval` 合同 + `index` 读面。
-`discovery/projection/README` 的「不拥有」一节写明：不拥有声明本身、不拥有 Canonical、不决定正文是否发布。
+**声明**属于 Object ②（S-01：Schema 只声明逻辑访问语义）；**对声明的编译与执行**属于
+`declarativeindex`（计划器、物理 digest、代际）；**请求正确性**属于 `discovery` 合同 + `declarativeindex/projection` 读面。
+`declarativeindex/projection/README` 的「不拥有」一节写明：不拥有声明本身、不拥有 Canonical、不决定正文是否发布。
 
 ### 3.2 应用环
 
 | 能力 | 契约 | 隐藏 | 现实消费方（实测） | 关键不变量 |
 |---|---|---|---|---|
-| `knowledgeapp` | 全部 typed executor 入册：纵切 8 + 治理 5 + 投影 3（Read/Search/Commit、Dataset publish·read·search·relations·traverse、PROPOSAL→Merge、Projection describe/sync/notice；以导出面锚点为准） | 编排细节 | server（拆分前为 cli） | API-01, CA-01…03, KS-01/02, AUTH-01…03 |
+| `object/service`、`discovery/service` | 原 `knowledgeapp` 的 typed executor 分两处入册：对象读写与治理在 `object/service`，检索、Dataset 检索与关系导航在 `discovery/service`；以各自 `surface_anchor_test.go` 为准 | 编排细节 | invocation（经 server/cli 两 transport） | API-01, CA-01…03, KS-01/02, AUTH-01…03 |
 | `home` | `DeploymentConfig` / `OpenDeployment` + 协议口装配缝 | `authority_drivers`（唯一 adapter import 点） | server, cli, invoke, scripts/fixture-deployment | A-01 |
 | `server`（新） | `httpsurface` method+pattern 闭集 + handler 注册表 | mux、授权强制、遥测、就绪探测 | cmd/kc serve；cli 前端经 client | API-01, IX-01, AUTH-01…03, E-01 |
 | `cli` | argv 闭集（`cli/surface.go`）+ client 会话 | product 输出编码 | 人；cmd/kc | QUALITY-05、check-surface 60 锚点 |
@@ -472,7 +476,7 @@ gate/
 | `client` | Identity / Authentication / Session | 会话持久化 | cli, cmd/kc-integration, integrationruntime | 协议层永不依赖 client（守卫已有） |
 | `snapshot/client` | 所属 typed HTTP 合同与认证运输注入口 | HTTP 请求编码与服务私有实现 | KC client、模块 CLI、独立调用方 | L-01、API-01、KS-01、AUTH-02；核心不依赖 SDK |
 | `snapshot/cli` | 任务命令与帮助注册合同、注入主体上下文 | 参数适配、输出与 SDK 调用 | KC CLI、独立调用方 | L-01、API-01；核心不依赖 CLI |
-| `controlplane` | PROPOSAL→Preview→validate→Merge 操作语义 | journal、状态文件 | server, cli, invoke, knowledgeapp | K-07, K-08, K-09 |
+| `controlplane` | PROPOSAL→Preview→validate→Merge 操作语义 | journal、状态文件 | home, invocation, invoke | K-07, K-08, K-09 |
 | `gate` | 规则/证据绑定同一 previewId、fail-closed | gates.json 读写 | server, controlplane, home | K-08 |
 | `connector` | `connector.Preview`（patch/reconcile）→ ChangeSet | 无源访问、无 Writer | integrationruntime | W-01 |
 | `integrationruntime` | build/activate/run/status typed API | 运行宿主 | cmd/kc-integration | — |
@@ -491,9 +495,11 @@ serving 不再 import observability；层表 observability: knowledge → app。
 
 - 内部层表保留依赖检查用途；Catalog 不再是独立产品对象，文件组合由 Snapshot Dataset 能力承担
   （`internal/arch/layers_test.go::architectureLayer`）；本设计只在 app 层内加方向约束。
-- `server → { knowledgeapp, home, delivery, gate, hook, identity, observability, controlplane, invoke }`
-- `cli → { client, invoke, home }`（cli 前端不直接碰应用用例，一律经 typed client）
-- 协议环（含 `index`）永不 import `server` / `cli` / `client`（守卫已有，随 `server/` 建包把 denylist 同步加上）。
+- `server → { invocation, home, delivery, gate, hook, identity, observability, controlplane, invoke, client }`
+  （应用用例经 `invocation` 消费 `object/service`、`discovery/service`；`client` 是 B7 裁决的管理面线形归宿）
+- `cli → { client, invoke, invocation, home, 各模块 cli/ 与 client/ 入口 }`；`server` 只经 `cli/serve.go`
+  作为二进制组合根引入（cli 前端不直接碰应用用例，一律经 typed client）
+- 协议环（含 `declarativeindex`）永不 import `server` / `cli` / `client`（守卫已有）。
 - 每个能力的 README「依赖方向」一节与 denylist 同句（§1.3）。
 - `snapshot/cli → snapshot/client →` 所属公开文件合同；SDK 不依赖 CLI，根包、Dataset、
   access、service、console 均不反向依赖两种客户端。共享 HTTP 基础设施不依赖任何 typed
@@ -616,7 +622,7 @@ serving 不再 import observability；层表 observability: knowledge → app。
 **选定**
 - 顶层扁平 + 层表分组；否决 `capabilities/` 物理嵌套（依赖非树形、coupling unit 错位、import path 噪声、无强制力）。
 - 能力四件套为准入条件；否决「README 可后补」——写不出「不拥有什么」即降级或合并。
-- `index` 为顶层能力、双导出面（retriever/maintainer）；否决收进 `discovery/internal/`（应用核心直接装配 Retriever）。
+- `declarativeindex` 为顶层能力、双导出面（projection/control）；否决收进 `discovery/internal/`（应用核心经消费合同使用投影）。
 - adapter 采用「公开薄 shim + internal 实现」；否决纯 denylist 约束（少一档语言级强制）。
 - cli 拆分先立 routes 闭集再搬实现；否决实现先行（QUALITY-05 已证无零倒置切面，契约先行才有缝）。
 - Snapshot 文件 SDK/CLI 同归模块，KC 只装配全局上下文；否决中央业务实现加模块转发壳，
@@ -650,9 +656,9 @@ serving 不再 import observability；层表 observability: knowledge → app。
 状态机不复制进本文：接入「未提交或形成提案」与消费「先固定坐标再鉴权」的请求语义由各边界
 Conformance 持有。
 
-- 协议口：`snapshot/store.go`、`catalog/README.md`、`object/README.md`、`discovery/README.md`、
-  `discovery/projection/README.md`（读面/写面两文件名在本设计落地时定稿）。
-- 应用口：`knowledgeapp` executor 集（`docs/reviewed/service.md` §1.2）、`cli/surface.go`、
+- 协议口：`snapshot/store.go`、`snapshot/dataset/contract.go`、`object/README.md`、`discovery/README.md`、
+  `discovery/projection/README.md`、`declarativeindex/projection/README.md`。
+- 应用口：`object/service`、`discovery/service` executor 集（各自 `surface_anchor_test.go`）、`cli/surface.go`、
   `httpsurface.Patterns()`、`home/README.md` 装配合同。
 - 模块客户端口：`snapshot/client/contract.go`、`snapshot/cli/contract.go`；其形状由公开
   Go 合同和模块回归持有，不在本设计复制命令字段。

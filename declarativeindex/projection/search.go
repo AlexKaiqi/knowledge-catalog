@@ -67,7 +67,7 @@ func (idx *Index) SearchAtContext(ctx context.Context, repo objectmodel.Reposito
 // repository version (docs/reviewed/retrieval.md). Eligibility (a ready vector
 // projection) is checked before any recall work; the result keeps partial
 // completeness and the vector lane's approximate evidence, and the caller
-// (knowledgeapp) adds the envelope disclosures. No continuation: a window is
+// (discovery/service) adds the envelope disclosures. No continuation: a window is
 // one bounded top-K request, never paged.
 func (idx *Index) SemanticWindowAtContext(ctx context.Context, repo objectmodel.Repository, commit kernel.CommitID, req retrieval.SearchRequest, queryVector []float32) (retrieval.SearchResult, error) {
 	ctx, cancel := ports.WithSearchBudget(ctx, ports.SearchBudget{})
