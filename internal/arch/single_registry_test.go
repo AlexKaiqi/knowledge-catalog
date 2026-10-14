@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-var registrationOwners = names("home client server invocation snapshot/dataset snapshot/service snapshot/access invoke hook gate controlplane")
+var registrationOwners = names("home client server invocation snapshot/dataset snapshot/service snapshot/access invoke hook")
 var retiredRegistrationNames = names("catalog catalogstate catalogbinding catalogprovider catalogservice catalogid catalogids catalogs catalogbindings catalogregistries currentcatalog selectedcatalog defaultcatalogid catalogspath newcatalog opencatalog createcatalog pickcatalog")
 var singletonRegistrationFields = map[string]string{
 	"home.DeploymentConfig.Registry":      "RegistryBinding",

@@ -28,16 +28,6 @@ func allowVerbs() map[string]inv.Command {
 	}
 }
 
-func controlVerbs() map[string]inv.Command {
-	return map[string]inv.Command{
-		"governance-proposal-create":   {Stage: invoke.StageGoverned, Run: inv.VerbPropose},
-		"governance-preview-create":    {Stage: invoke.StageGoverned, Run: inv.VerbPreview},
-		"governance-preview-validate":  {Stage: invoke.StageGoverned, Run: inv.VerbValidate},
-		"governance-validation-record": {Stage: invoke.StageGoverned, Run: inv.VerbRecordValidation},
-		"governance-proposal-merge":    {Stage: invoke.StageGoverned, Run: inv.VerbMerge},
-	}
-}
-
 func datasetVerbs() map[string]inv.Command {
 	return map[string]inv.Command{
 		"show":           {Stage: invoke.StageGoverned, Run: inv.ReadInventoryState},
@@ -98,9 +88,6 @@ func policyVerbs() map[string]inv.Command {
 		"operations-hook-add":    {Stage: invoke.StageHome, Run: inv.VerbHookAdd},
 		"operations-hook-list":   {Stage: invoke.StageHome, Run: inv.VerbHookLs},
 		"operations-hook-remove": {Stage: invoke.StageHome, Run: inv.VerbHookRm},
-		"operations-gate-add":    {Stage: invoke.StageHome, Run: inv.VerbGateAdd},
-		"operations-gate-list":   {Stage: invoke.StageHome, Run: inv.VerbGateLs},
-		"operations-gate-remove": {Stage: invoke.StageHome, Run: inv.VerbGateRm},
 	}
 }
 
@@ -148,6 +135,8 @@ func writeVerbs() map[string]inv.Command {
 		"writer-commit":  {Stage: invoke.StageGoverned, Run: inv.VerbCommit},
 		"writer-receipt": {Stage: invoke.StageGoverned, Run: inv.VerbReceipt},
 		"writer-head":    {Stage: invoke.StageGoverned, Run: inv.VerbWriterHead},
+		"writer-branch":  {Stage: invoke.StageGoverned, Run: inv.VerbWriterBranch},
+		"writer-merge":   {Stage: invoke.StageGoverned, Run: inv.VerbWriterMerge},
 	}
 }
 

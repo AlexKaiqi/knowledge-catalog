@@ -107,14 +107,14 @@ func TestDeploymentRecoversCatalogAfterCacheLoss(t *testing.T) {
 	if before != after {
 		t.Fatalf("recovery changed Catalog head: %s -> %s", before, after)
 	}
-	if err := os.Remove(filepath.Join(cfg.StateDir, "gates.json")); err != nil {
+	if err := os.Remove(filepath.Join(cfg.StateDir, "hooks.json")); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := OpenDeployment(cfg); err == nil {
-		t.Fatal("missing durable gate policy recreated")
+		t.Fatal("missing durable hook policy recreated")
 	}
 	if err := InitializeDeployment(cfg, seed); err == nil {
-		t.Fatal("init reset missing gate policy")
+		t.Fatal("init reset missing hook policy")
 	}
 }
 func TestDeploymentRejectsSymlinkAndFileURLAuthoritiesInCache(t *testing.T) {
@@ -182,7 +182,7 @@ func TestDeploymentCannotResetLostDurableVolume(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := InitializeDeployment(cfg, seed); err == nil {
-		t.Fatal("existing Catalog received empty governance after volume loss")
+		t.Fatal("existing Catalog received empty policy after volume loss")
 	}
 	if calls != 1 {
 		t.Fatal("bootstrap principal was reissued")
@@ -200,11 +200,11 @@ func TestDeploymentMalformedPolicyFailsClosed(t *testing.T) {
 	if err := InitializeDeployment(cfg, seed); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(cfg.StateDir, "gates.json"), []byte(`{"rules":"corrupt"}`), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(cfg.StateDir, "hooks.json"), []byte(`{"bindings":"corrupt"}`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	if err := ValidateDeploymentState(cfg); err == nil {
-		t.Fatal("malformed gate contract interpreted as empty gates")
+		t.Fatal("malformed hook contract interpreted as empty hooks")
 	}
 }
 

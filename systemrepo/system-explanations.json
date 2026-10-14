@@ -268,16 +268,16 @@
       {
         "owner": "doc/design/governance.md",
         "topic": "目标",
-        "term": "提案",
-        "source": "controlplane/proposal.go",
-        "symbol": "Proposal"
+        "term": "工作分支",
+        "source": "object/writer/merge.go",
+        "symbol": "BranchIntent"
       },
       {
         "owner": "doc/design/governance.md",
         "topic": "目标",
-        "term": "Gate",
-        "source": "gate/check.go",
-        "symbol": "Check"
+        "term": "条件合并",
+        "source": "object/writer/merge.go",
+        "symbol": "MergeIntent"
       }
     ]
   },

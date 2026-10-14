@@ -92,9 +92,9 @@ func ExecuteApplicationOperation(ctx context.Context, name, action string, cmd C
 		ObserveHome(ws, action, flags)
 		return cmd.Run(cx)
 	}
-	// Bind the Registry-scoped control state before authorization so verbs such
-	// as merge can derive their real repository/ref scope from the immutable
-	// proposal instead of making callers repeat (and potentially spoof) it.
+	// Bind the pin context before authorization so verbs such as receipt can
+	// derive their real repository/ref scope from the immutable ledger entry
+	// instead of making callers repeat (and potentially spoof) it.
 	if invoke.FlagString(flags, "repo") == "" {
 		if err := PrepareObjectPinContext(flags); err != nil {
 			return nil, err

@@ -4,7 +4,6 @@ import (
 	"context"
 
 	kcclient "kc/client"
-	inv "kc/invocation"
 	"kc/invoke"
 	"kc/kernel"
 	accesscli "kc/liveaccess/cli"
@@ -14,27 +13,15 @@ func runRemoteOperations(ctx context.Context, client *kcclient.Client, path stri
 	var output any
 	service := client.OperationsService()
 	switch path {
-	case "operations hook add", "operations gate add":
-		request := kcclient.PolicyBindingRequest{On: invoke.FlagString(flags, "on"), Phase: invoke.FlagString(flags, "phase"), Repository: invoke.FlagString(flags, "repo"), Run: invoke.FlagString(flags, "run"), URL: invoke.FlagString(flags, "url"), Require: inv.SplitCmds(invoke.FlagString(flags, "require"))}
-		if path == "operations hook add" {
-			err := service.AddHook(ctx, request, options, &output)
-			return output, err
-		}
-		err := service.AddGate(ctx, request, options, &output)
+	case "operations hook add":
+		request := kcclient.PolicyBindingRequest{On: invoke.FlagString(flags, "on"), Phase: invoke.FlagString(flags, "phase"), Repository: invoke.FlagString(flags, "repo"), Run: invoke.FlagString(flags, "run"), URL: invoke.FlagString(flags, "url")}
+		err := service.AddHook(ctx, request, options, &output)
 		return output, err
-	case "operations hook list", "operations gate list":
-		if path == "operations hook list" {
-			err := service.Hooks(ctx, options, &output)
-			return output, err
-		}
-		err := service.Gates(ctx, options, &output)
+	case "operations hook list":
+		err := service.Hooks(ctx, options, &output)
 		return output, err
-	case "operations hook remove", "operations gate remove":
-		if path == "operations hook remove" {
-			err := service.RemoveHook(ctx, invoke.FlagString(flags, "id"), options, &output)
-			return output, err
-		}
-		err := service.RemoveGate(ctx, invoke.FlagString(flags, "id"), options, &output)
+	case "operations hook remove":
+		err := service.RemoveHook(ctx, invoke.FlagString(flags, "id"), options, &output)
 		return output, err
 	case "operations audit access", "operations audit hitmap":
 		limit, err := remoteLimit(flags)

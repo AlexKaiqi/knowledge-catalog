@@ -4,20 +4,20 @@ aspect: definition
 schema_ref: schema/system/explanation/v1
 path_hint: mechanisms/governance/definition.md
 ---
-# 变更评审与合并
+# 工作分支与条件合并
 
-需要评审的单仓变更先形成提案与固定预览，检查有效证据后再合入目标仓。
+需要评审的单仓变更先写到工作分支，由业务完成评审后，再把审阅过的分支 commit 条件合并到目标引用。
 
-## 变更提案（Proposal）
+## 工作分支
 
-在固定 candidate 上准备变更，形成评审预览与证据，再请求推进目标仓的治理对象。
+Writer 可以把提交写到指定分支。分支写入复用同一套 Schema、来源、并发与幂等校验，但不推进 main，也不通知索引、Dataset 或维护；一次变更仍只修改一个仓。
 
-目标又被修改会使旧证据失效，需要重建有效预览。治理复用 Writer 校验与并发保护，一次提案仍只修改一个仓。
+## 条件合并
 
-## 合并检查（Gate）
+合并只做快进：分支必须是目标的后代。调用方可以固定审阅时看到的分支 commit 与目标 commit，任一移动都拒绝，需要在新基点上重新评审。合并前按目标的 Schema 重新校验分支里的每个改动对象，并要求改动全部是经 Writer 写入的对象单元。只有推进 main 时才通知下游。
 
-在变更提案合入目标仓之前，检查固定预览与所需证据是否有效的治理约束。
+## 审批归业务
 
-Gate 检查已有证据，不临时运行用户套件，也不成为普通 Writer 提交或读取的前置条件。外部套件结果是调用方断言，记录 PASSED 不代表平台运行了套件。
+KC 不保存评审、预览或外部套件结果。审批由业务系统负责，通过前置 writer.merge Hook 接入：前置 Hook 拒绝即否决合并；后置 Hook 投递失败不回滚已接受的合并。
 
 相关说明：[Writer](../../interfaces/writer/definition.md)、[版本](../../concepts/version/definition.md)、[出站扩展](../hook/definition.md)。

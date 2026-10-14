@@ -19,7 +19,13 @@
 - [x] 阶段 5：`interfaces/` 收进 `liveaccess/handler`（合同、实现、注册表）与 `liveaccess/dispatch`（调用任务）；删除部署注入额外处理器的入口（`ObjectInterfaces` 选项与可变参数），非 LiveAccess 合同以 `CAPABILITY_UNSATISFIED` 拒绝（`TestPublicInvokeRefusesContractsNoPluginHandles` 取代原 echo 处理器用例）。系统仓删除对外 Interface 说明（概念、分派机制、能力、两篇指南及其关系），`kc invoke` 归入资源访问能力；用户可见文案改为"插件"。顺带清除阶段 2 遗留的 `deployment identity migrate` 命令面登记与文档。
   - 守卫：新增 `liveaccess/dispatch` 依赖规则，`liveaccess/handler` 禁止反向依赖 dispatch；层表与公开深度白名单同步。
   - 耦合基线：显式 `-write-baseline`。传播成本 14.95% 不变；`liveaccess/handler` 不稳定度 0.33→0.43 是注入口删除后入向依赖 6→4 的预期结果，出向依赖不变。
-- [ ] 阶段 6：删除 controlplane / gate / 提案命令；Snapshot 公开分支与条件合并；Writer 写指定分支；合并前 Object 校验；保留合并前后 Hook。
+- [x] 阶段 6：删除 controlplane / gate / 提案命令；Snapshot 公开分支与条件合并；Writer 写指定分支；合并前 Object 校验；保留合并前后 Hook。
+  - 形状：`writer branch --repo --name [--from|--commit]`、`writer put/remove/commit --ref`、`writer merge --command-id --repo --from [--commit] [--into] [--expected]`（只快进；`CANDIDATE_MOVED`／`NON_FAST_FORWARD`／`SCHEMA_INSTANCE_INVALID`／`PRECONDITION_FAILED`；只有推进 DefaultRef 才通知目录）；`writer.merge` 前置 Hook 可否决（`HOOK_DENIED`），审批归业务。回执 Surface `MERGE`，遥测 `kc.writer.surface` 同步。
+  - 旧测试改写为等价断言（`cli/hook_merge_test.go`、`object/writer/merge_test.go`、kc_test 的 branch/merge 旅程、test-catalog M/I/X 行与错误码表），未删 case、无 skip；场景新节点 `review-branch-written`（两条 probe）取代 proposal 节点。原本命中“命令不存在”的空洞 USAGE_INVALID 断言改成真实 branch/merge 边界。
+  - 文档：governance 设计篇重写；object／service／concepts／architecture／affordance／README／roadmap／architecture-invariants（K-07..K-09、K-21 改为分支合并语义）与各包 README、systemrepo 出版物同步；Grafana gate 面板改为 Writer MERGE 面板，telemetry 词表删 `kc.gate.*`。
+  - 耦合基线：显式 `-write-baseline`。删除 `controlplane`、`controlplane/service`、`gate` 三个单元后传播成本比例 14.95%→15.18%，但绝对可达对 933→877（分母 79²→76² 的比例效应，不是新增边）；`server/internal` 0.75→0.67、`invoke` 0.57→0.50 是失去对 controlplane 的出向依赖。
+  - 验证：make check-docs、make quality（`/tmp/kc-stage6-quality.log`）、make test（`/tmp/kc-stage6-test.log`）、除 cli 外 `go test ./...`（`/tmp/kc-stage6-gotest.log`）、`go test ./cli` 全量、场景树三项与 `_tests`、maintenance_test、perf_tree、check-surface 均通过。
+  - 债：`snapshot/access/rule.go` 的 `retiredAction` 有意保留 `governance.`／`operations.gates.` 前缀，用于拒绝旧授权动作；`.data/scenes` 的 role `governance` 仍成立，保留。
 - [ ] 阶段 3：URN `urn:kc:object:<namespace>/<name>`，方面冲突检测，拒绝旧格式。
 - [ ] 阶段 4：插件按 Schema 生效、按仓关闭、跨仓按类型发现并按 ID 合并；Dataset 收窄为范围、版本与消费权限。
 - [ ] 阶段 7：目录重组与无生产者错误码清理。

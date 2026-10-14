@@ -22,9 +22,6 @@ func (ws *Home) SetJournal(j journal.Journal) {
 	if ws.Reader != nil {
 		ws.Reader.SetJournal(j)
 	}
-	if ws.ControlPlane != nil {
-		ws.ControlPlane.SetJournal(j)
-	}
 	{
 		cat := ws.Datasets
 		if cat != nil {

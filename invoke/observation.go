@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"kc/controlplane"
 	"kc/hook"
 	"kc/internal/telemetry"
 )
@@ -27,7 +26,6 @@ type ObservationTelemetry struct {
 	Authorization      AuthorizationObserver
 	Hook               hook.DispatchObserver
 	HookBacklog        func(pending int, oldestPendingAt time.Time)
-	Gate               controlplane.MergeGateObserver
 	Projection         ProjectionBacklogObserver
 	Evidence           EvidenceTelemetryObserver
 	PutCount           int
@@ -58,9 +56,6 @@ func NewObservationTelemetry(ctx context.Context, runtime *telemetry.Runtime, op
 	}
 	observation.HookBacklog = func(pending int, oldestPendingAt time.Time) {
 		runtime.SetHookOutbox(pending, oldestPendingAt)
-	}
-	observation.Gate = func(required int, outcome string, elapsed time.Duration) {
-		runtime.RecordGate(ctx, required, outcome, elapsed)
 	}
 	observation.Projection = func(lagging int, oldestPendingAt time.Time) {
 		runtime.SetProjectionBacklog(projectionProvider(), lagging, oldestPendingAt)

@@ -10,13 +10,17 @@ import (
 	"kc/snapshot"
 )
 
-// Writer is the write face: one target, one Surface, one command_id.
-// COMMIT/PROPOSAL target a Snapshot (layer ⓪); ChangeSet PUT/REMOVE is layer ②.
+// Writer is the write face: one target Ref, one command_id.
+// COMMIT targets a Snapshot Ref (layer ⓪); ChangeSet PUT/REMOVE is layer ②.
 //
-// Operations, by Surface:
+// Operations:
 //
-//	COMMIT:    CommitIntent, Commit
-//	PROPOSAL:  Propose
+//	COMMIT:  CommitIntent, Commit (any branch Ref)
+//	BRANCH:  CreateBranch
+//	MERGE:   Merge (validated fast-forward of a reviewed source commit)
+//
+// Only the default Ref is published: index and Dataset subscribers are
+// notified when it advances, not when a working branch does.
 //
 // Preview (not a Surface): Ingest, Reconcile. Confirm with Commit.
 type Writer struct {
@@ -174,7 +178,7 @@ func (w *Writer) applySnapshot(commandID string, surface objectmodel.Surface, cs
 				NewCommit:    commitID,
 			},
 		}
-		if surface == objectmodel.SurfaceCommit {
+		if cs.TargetRef == snapshot.DefaultRef {
 			w.store.NotifyAdvanced(snapshot.Advanced{Store: repo, From: oldCommit, To: commitID})
 		}
 		return applied, nil

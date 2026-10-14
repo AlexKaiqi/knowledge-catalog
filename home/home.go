@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"sync"
 
-	"kc/controlplane"
 	"kc/internal/journal"
 	"kc/kernel"
 	liveservice "kc/liveaccess/service"
@@ -22,7 +21,7 @@ import (
 )
 
 // Assembling the live object graph for one command: mount the members, build the
-// registry, then hang Writer / Reader / ControlPlane / index off them. This is
+// registry, then hang Writer / Reader / index off them. This is
 // the only place that knows the wiring order, and it changes when the set of
 // collaborators changes.
 //
@@ -34,7 +33,6 @@ type Home struct {
 	readOnly           bool
 	closeOnce          sync.Once
 	closeErr           error
-	controlMu          sync.Mutex
 	indexDirectory     string
 	pluginsVerified    bool
 	liveAccessEntries  map[string]liveservice.PluginEntry
@@ -47,10 +45,7 @@ type Home struct {
 	Reader             *reader.Reader
 	Datasets           dataset.Service
 	Registry           dataset.Registry
-	ControlPlane       *controlplane.ControlPlane
-	ControlStore       *controlplane.FileControlState
 	File               HomeFile
-	Control            controlplane.ControlState
 	Journal            journal.Journal
 	Index              discoveryplugin.IndexQueries
 	Plugins            *discoveryplugin.IndexPlugins
@@ -120,25 +115,18 @@ func assemble(home string, file HomeFile, stores StoresFile, store snapshot.Regi
 	if err != nil {
 		return nil, err
 	}
-	controlStore := controlplane.NewFileControlState(filepath.Join(home, "control.json"), file.Registry.ID)
-	control, err := controlStore.Load()
-	if err != nil {
-		return nil, err
-	}
 	sys := journal.NewFile(systemJournalPath(home))
 	w.SetJournal(sys)
 	tw.SetObserver(rawWriteObserver(sys))
 	rd := reader.NewReader(store)
 	rd.SetJournal(sys)
 	datasets.SetObserver(datasetObserver(sys))
-	plane := controlplane.New(store, w, datasets)
-	plane.SetJournal(sys)
 	idxDir, err := ResolveStoreDir(home, stores.Layout.Projections, defaultProjectionsDir)
 	if err != nil {
 		return nil, err
 	}
 	ws.Commands, ws.Writer, ws.TreeWriter, ws.Reader = commands, w, tw, rd
-	ws.ControlPlane, ws.ControlStore, ws.Control, ws.Journal = plane, controlStore, control, sys
+	ws.Journal = sys
 	for _, binding := range file.Repos {
 		ws.inventory.bindings[binding.ID] = binding
 	}
@@ -293,12 +281,6 @@ func (ws *Home) Close() error {
 		ws.closeErr = first
 	})
 	return ws.closeErr
-}
-
-func PersistControl(ws *Home) error {
-	ws.controlMu.Lock()
-	defer ws.controlMu.Unlock()
-	return ws.ControlStore.Save(ws.Control)
 }
 
 func recordRegistryCreated(dir string, j journal.Journal, binding RegistryBinding) error {

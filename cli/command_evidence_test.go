@@ -178,13 +178,12 @@ func commandCoverageSnapshot() commandCoverageReport {
 // The policy is based on the semantic action so a new public alias cannot
 // silently weaken its coverage requirement.
 func requiredAssertedBoundaries(action string) int {
-	if strings.HasSuffix(action, ".manage") ||
-		strings.HasPrefix(action, "governance.") {
+	if strings.HasSuffix(action, ".manage") {
 		return 2
 	}
 	switch action {
 	case "deployment.init", "identity.admission.request", "dataset.overlay", "deployment.system.publish",
-		"repositories.create", "repositories.connect", "writer.commit", "writer.preview", "feedback.write":
+		"repositories.create", "repositories.connect", "writer.commit", "writer.branch", "writer.merge", "writer.preview", "feedback.write":
 		return 2
 	default:
 		return 1

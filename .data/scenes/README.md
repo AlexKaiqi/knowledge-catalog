@@ -188,7 +188,7 @@ Then the output has:
 | `Given existing repository <id> [with LiveAccess instance <name>]` | 墙外测试夹具提供既有 Snapshot binding，尚未入 登记空间；可显式输入该源的 LiveAccess 实例选择，写入原生 Repo metadata 并保留索引选择。普通及真实 lakeFS 重放使用同一前态；已有部署须事先配置。接入仍由公开 attach 完成 |
 | `Given configured catalog <id>` / `Given bootstrap principal <id>` | 多 登记空间 / 首次部署授权的夹具前态；真实初始化和恢复另走正式配置入口 |
 | `Given local HTTP server` | 测试认证器上的 typed Server；后续带 `--server $server` 的命令走正式 Run |
-| `When I run \`kc ...\`` | 公开 argv 的应用合同；带 `--server` 时是正式 Client。`$materials` → 本节点 `_materials/`，`$home` → 本趟 home，`$server` → Given local HTTP，`$last.field` / `$previewId` → 上次成功 CLI JSON |
+| `When I run \`kc ...\`` | 公开 argv 的应用合同；带 `--server` 时是正式 Client。`$materials` → 本节点 `_materials/`，`$home` → 本趟 home，`$server` → Given local HTTP，`$last.field` / `$pinId` → 上次成功 CLI JSON |
 | `When HTTP METHOD /path [as principal]` | 打刚才起的 HTTP |
 | `Then the output has` / `includes` | JSON 路径等于 / 数组包含；`$grantId` 引用最近一次成功 `grant add` 的回执 ID，构建冻结后仍供隔离 probe 使用，也可用于后续 argv |
 | `Then error CODE` | 协议错误码 |
@@ -234,7 +234,7 @@ Then the output has:
 - System Repository 可读、对业务 Writer 不可写（U1）
 - Domain Schema 在目标仓版本化（U2）；实例符合 Schema（U3）
 
-失败时七列主状态不变。`--as` / hook / gate 是 facade。授权分叉互不隐含。
+失败时七列主状态不变。`--as` / hook 是 facade。授权分叉互不隐含。
 
 ## 6. 功能面
 
@@ -254,4 +254,4 @@ Then the output has:
 
 时间局部任务至少声明既有状态和本次目的，并证明同一主体可以依次取得所需材料、固定版本、完成操作和验证结果。部署接入、首次发布、既有对象修改、固定 pin 后的上游变化、治理失败恢复、撤权后的下一请求分别评估；不能把 operator 的 setup 插到消费者任务中替他取得权限。`dataset-cli-discovers-searches-reads.feature` 守卫要求所有消费命令带同一主体及 Server。
 
-重部署验收必须保存 登记空间 Snapshot 权威、对象 Snapshot、授权/Gate、Writer receipt、ControlState 和原始证据，只替换进程工作缓存。缺耐久状态应失败关闭；清空派生投影可以触发重建。初始化前态上的部署恢复证据引用正式 Run/Server 测试，不把重新 init 的成功当作恢复。
+重部署验收必须保存 登记空间 Snapshot 权威、对象 Snapshot、授权/Hook、Writer receipt、ControlState 和原始证据，只替换进程工作缓存。缺耐久状态应失败关闭；清空派生投影可以触发重建。初始化前态上的部署恢复证据引用正式 Run/Server 测试，不把重新 init 的成功当作恢复。

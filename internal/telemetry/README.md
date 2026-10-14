@@ -8,7 +8,7 @@
 
 | 属性 | 允许值/来源 | Signal |
 |---|---|---|
-| `kc.face` | `catalog\|object\|writer\|projection\|vfs\|control\|hook\|gate\|other` | metric、span、log |
+| `kc.face` | `snapshot\|object\|writer\|projection\|vfs\|control\|hook\|other` | metric、span、log |
 | `kc.operation` | CLI 命令表或内部稳定操作表 | metric、span、log |
 | `kc.outcome` | `ok\|partial\|unresolved\|denied\|invalid\|conflict\|error` | metric、span、log |
 | `error.type` | 失败时的稳定 kernel code；未知技术错误为 `other` | metric、span、log |
@@ -28,7 +28,7 @@ instrument 专用 attribute 的稳定值域：
 |---|---|
 | `kc.authorization.decision` | `allow\|deny` |
 | `kc.identity.delegated` | boolean；只表示已验证身份是否包含委托，不携带主体值 |
-| `kc.writer.surface` | `COMMIT\|PROPOSAL\|other` |
+| `kc.writer.surface` | `COMMIT\|MERGE\|other` |
 | `kc.writer.replayed` | boolean |
 | `kc.writer.change.operation` | `PUT\|REMOVE\|other` |
 | `kc.projection.mode` | `incremental\|rebuild\|ready\|other` |
@@ -38,7 +38,6 @@ instrument 专用 attribute 的稳定值域：
 | `kc.hook.phase` | `pre\|post\|other` |
 | `kc.hook.transport` | `exec\|http\|outbox\|other` |
 | `kc.outbox.kind` | `projection\|hook\|other` |
-| `kc.gate.required` | boolean；当前 merge 是否声明至少一项 gate requirement |
 | `kc.evidence.kind` | `access\|retrieval\|refine\|feedback\|system\|audit\|other` |
 | `kc.telemetry.signal` | `metric\|log\|trace\|other` |
 | `kc.telemetry.drop_reason` | `queue_full\|timeout\|export_error\|shutdown\|other` |
@@ -100,8 +99,6 @@ instrument 专用 attribute 的稳定值域：
 | `kc.hook.duration` | Histogram | `s` | `kc_hook_duration_seconds` | `kc.hook.phase`、`kc.hook.transport`、`kc.outcome` |
 | `kc.hook.outbox.pending` | ObservableGauge | `{event}` | `kc_hook_outbox_pending` | 无 |
 | `kc.hook.outbox.oldest_pending.age` | ObservableGauge | `s` | `kc_hook_outbox_oldest_pending_age_seconds` | 无 |
-| `kc.gate.checks` | Counter | `{check}` | `kc_gate_checks_total` | `kc.gate.required`、`kc.outcome` |
-| `kc.gate.duration` | Histogram | `s` | `kc_gate_duration_seconds` | `kc.gate.required`、`kc.outcome` |
 | `kc.vfs.transfer.size` | Histogram | `By` | `kc_vfs_transfer_size_bytes` | `kc.operation`、`kc.outcome` |
 | `kc.vfs.directory.entry.count` | Histogram | `{entry}` | `kc_vfs_directory_entry_count` | `kc.operation`、`kc.outcome` |
 

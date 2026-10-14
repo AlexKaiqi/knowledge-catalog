@@ -10,7 +10,7 @@ const (
 	DispositionReplayed ReceiptDisposition = "REPLAYED"
 )
 
-// CommitReceipt is shared by COMMIT and PROPOSAL and can be consumed without
+// CommitReceipt is shared by COMMIT and MERGE and can be consumed without
 // importing a Writer implementation. Its wire shape is the existing contract.
 type CommitReceipt struct {
 	ReceiptRef  string             `json:"receiptRef"`

@@ -128,14 +128,6 @@ func snapshotRef(flags map[string]FlagValue) string {
 	return ref
 }
 
-func remoteProposalRequest(flags map[string]FlagValue) (kcclient.ProposalRequest, error) {
-	operations, err := inv.ProposeOperations(flags)
-	if err != nil {
-		return kcclient.ProposalRequest{}, err
-	}
-	return kcclient.ProposalRequest{Repository: invoke.FlagString(flags, "repo"), ProposalID: invoke.FlagString(flags, "proposal-id"), CandidateRef: invoke.FlagString(flags, "candidate"), TargetRef: invoke.FlagString(flags, "target"), BaseCommit: invoke.FlagString(flags, "base"), Operations: operations, Message: invoke.FlagString(flags, "message"), Provenance: inv.OriginFrom(flags)}, nil
-}
-
 // remoteTokenAuthenticator sends only the credential. The server derives the
 // principal from its trusted authenticator and rejects caller-supplied identity
 // headers; the local Identity remains useful for CLI context and audit UX.
@@ -212,19 +204,6 @@ func remotePin(flags map[string]FlagValue) json.RawMessage {
 		flags[inv.WorkspaceDefinitionFlag] = saved.Definition
 		if pin, err := json.Marshal(saved.ResolvedDataset); err == nil {
 			return pin
-		}
-	}
-	return json.RawMessage(raw)
-}
-
-func remotePinDocument(flags map[string]FlagValue) json.RawMessage {
-	raw := strings.TrimSpace(invoke.FlagString(flags, "pin"))
-	if raw == "" {
-		return nil
-	}
-	if !strings.HasPrefix(raw, "{") {
-		if content, err := os.ReadFile(raw); err == nil {
-			raw = string(content)
 		}
 	}
 	return json.RawMessage(raw)

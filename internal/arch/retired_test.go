@@ -17,6 +17,7 @@ var retiredPaths = []string{
 	"snapshot/gitea", "snapshot/filegit", "snapshot/lakefs", "snapshot/treewriter",
 	"snapshot/commandlog", "snapshot/stamp", "snapshot/internal/giteaimpl",
 	"scripts/system-gitea.sh", "identity/legacy.go", "cli/identity_migration.go",
+	"controlplane", "gate", "cli/help_governance.go", "invocation/verbs_control.go", "object/writer/propose.go",
 }
 
 func TestRetiredPathsStayAbsent(t *testing.T) {

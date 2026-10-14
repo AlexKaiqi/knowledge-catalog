@@ -19,7 +19,7 @@ func TestWriterRejectsEmptyBusinessObjectIdentityWithoutAdvancingVersion(t *test
 		if native {
 			provider = "native"
 		}
-		for _, surface := range []string{"commit", "intent", "proposal"} {
+		for _, surface := range []string{"commit", "intent", "branch"} {
 			t.Run(provider+"/"+surface, func(t *testing.T) {
 				base := testkit.MakeRepository(t, "kr://test/object-identity")
 				registry := snapshot.NewRegistry()
@@ -60,9 +60,12 @@ func TestWriterRejectsEmptyBusinessObjectIdentityWithoutAdvancingVersion(t *test
 								_, err = w.Commit(command, cs)
 							case "intent":
 								_, err = w.CommitIntent(command, writer.CommitIntent{TargetRepository: base.ID(), TargetRef: snapshot.DefaultRef, Operations: operations})
-							case "proposal":
-								_, err = w.Propose(command, writer.ProposeIntent{TargetRepository: base.ID(),
-									CandidateRef: "refs/heads/candidates/" + command, BaseCommit: head, Operations: operations})
+							case "branch":
+								branch := "refs/heads/review/" + command
+								if _, err = w.CreateBranch(writer.BranchIntent{TargetRepository: base.ID(), Ref: branch, FromCommit: head}); err != nil {
+									t.Fatal(err)
+								}
+								_, err = w.CommitIntent(command, writer.CommitIntent{TargetRepository: base.ID(), TargetRef: branch, Operations: operations})
 							}
 							if kernel.CodeOf(err) != kernel.ErrUsageInvalid {
 								t.Errorf("%s %s with identity %q: got %v, want USAGE_INVALID", op, kind, id, err)

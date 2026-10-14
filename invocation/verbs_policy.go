@@ -2,10 +2,8 @@ package invocation
 
 import (
 	"fmt"
-	"kc/gate"
 	kchome "kc/home"
 	"kc/hook"
-	"kc/kernel"
 )
 
 func VerbHookAdd(cx *Invocation) (any, error) {
@@ -69,73 +67,6 @@ func VerbHookRm(cx *Invocation) (any, error) {
 	}
 	file.Bindings = kept
 	if err := hook.Write(cx.Home, file); err != nil {
-		return nil, err
-	}
-	return map[string]any{"revoked": id}, nil
-}
-
-func VerbGateAdd(cx *Invocation) (any, error) {
-	on, err := cx.Require("on")
-	if err != nil {
-		return nil, err
-	}
-	if err := gate.ValidateOn(on); err != nil {
-		return nil, err
-	}
-	require := gate.ParseRequire(cx.Flag("require"))
-	if err := gate.ValidateRequire(require); err != nil {
-		return nil, err
-	}
-	rule := gate.Rule{
-		On:      on,
-		Repo:    cx.Flag("repo"),
-		Require: require,
-	}
-	if on == gate.OnMerge && rule.Repo == "" {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "merge gate requires --repo")
-	}
-	file, err := gate.Read(cx.Home)
-	if err != nil {
-		return nil, err
-	}
-	rule.ID = gate.NextID(file.Rules)
-	file.Rules = append(file.Rules, rule)
-	if err := gate.Write(cx.Home, file); err != nil {
-		return nil, err
-	}
-	return rule, nil
-}
-
-func VerbGateLs(cx *Invocation) (any, error) {
-	file, err := gate.Read(cx.Home)
-	if err != nil {
-		return nil, err
-	}
-	scope := cx.BindingScope()
-	out := []gate.Rule{}
-	for _, rule := range file.Rules {
-		if scope.Matches(rule.On, rule.Repo) {
-			out = append(out, rule)
-		}
-	}
-	return map[string]any{"rules": out}, nil
-}
-
-func VerbGateRm(cx *Invocation) (any, error) {
-	id, err := cx.Require("id")
-	if err != nil {
-		return nil, err
-	}
-	file, err := gate.Read(cx.Home)
-	if err != nil {
-		return nil, err
-	}
-	kept, found := DropByID(file.Rules, id, func(r gate.Rule) string { return r.ID })
-	if !found {
-		return nil, fmt.Errorf("unknown gate %s", id)
-	}
-	file.Rules = kept
-	if err := gate.Write(cx.Home, file); err != nil {
 		return nil, err
 	}
 	return map[string]any{"revoked": id}, nil

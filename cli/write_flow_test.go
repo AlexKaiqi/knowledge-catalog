@@ -130,27 +130,24 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 	}
 	mainHead := asMap(t, removed["result"])["newCommit"].(string)
 
-	proposal := asMap(t, body(t, kc(h,
-		"propose", "--proposal-id", "PR-1", "--repo", core,
-		"--target", "refs/heads/main", "--candidate", "refs/heads/candidates/PR-1",
-		"--object", "policy/A", "--value", `{"v":99}`,
-	)))
-	if proposal["proposalId"] != "PR-1" || proposal["candidateCommit"] == "" {
-		t.Fatal(proposal)
+	branch := asMap(t, body(t, kc(h, "branch", "--repo", core, "--name", "review/PR-1")))
+	if branch["commitId"] != mainHead {
+		t.Fatal("a new branch must start at the published head", branch)
 	}
-	if proposal["candidateCommit"] == mainHead {
-		t.Fatal("propose reused main commit", proposal)
+	candidateCommit := putOnRef(t, h, core, "refs/heads/review/PR-1", "policy/A", "pr-1", `{"v":99}`)
+	if candidateCommit == mainHead {
+		t.Fatal("branch write reused main commit", candidateCommit)
 	}
-	afterPropose := asMap(t, body(t, kc(h, "status")))
-	if statusRepo(t, afterPropose, core)["head"].(string) != mainHead {
-		t.Fatal("propose moved main", afterPropose["repos"])
+	afterBranchWrite := asMap(t, body(t, kc(h, "status")))
+	if statusRepo(t, afterBranchWrite, core)["head"].(string) != mainHead {
+		t.Fatal("branch write moved main", afterBranchWrite["repos"])
 	}
 
 	alive := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--commit", mainHead)))
 	if asMap(t, alive["value"])["v"] != float64(1) {
 		t.Fatal(alive)
 	}
-	candidate := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--ref", "refs/heads/candidates/PR-1")))
+	candidate := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--ref", "refs/heads/review/PR-1")))
 	if asMap(t, candidate["value"])["v"] != float64(99) {
 		t.Fatal(candidate)
 	}

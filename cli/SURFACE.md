@@ -100,15 +100,18 @@ kc writer put <object-urn[#/json/pointer]> --command-id <id> (--value | --file)
 kc writer remove <object-urn[#/json/pointer]> --command-id <id>
 kc writer head --repo <id>
 kc writer receipt --command-id <id>
+kc writer branch --repo <id> --name <branch> [--from <ref> | --commit <id>]
+kc writer merge --command-id <id> --repo <id> --from <branch> [--commit <id>] [--into <branch>] [--expected <id>]
 ```
 
 `diff` 对照当前发布版本，列出这个目录会改哪些对象，不写仓。`writer commit --dir` 用同一对照后提交。`writer put/remove` 只将完整对象引用发送 Object 服务，由服务确认可维护单元；PUT 替换完整 blob/Aspect/Member，空 locator REMOVE 删除整个对象。首次建立 Member 显式 `--kind Member`，不从深度推断模型；深字段、数组索引和集合整体不新增写粒度。基本 `read/put/remove` 拒绝分列寻址；内部 Address 与批量 ChangeSet 是执行合同，不形成第二套基本入口。目录出版仍是应用流程，`--changeset` 是进阶操作数。
 
-## 治理、运维与部署
+## 分支、运维与部署
 
-- 治理：Proposal create 把变更写到 candidate，不推进 target；Preview create/validate、Validation record、merge。Preview
-  create 用 `--dataset`，本次命令解析一次并冻进 Preview；stdout 是 Preview 坐标，不是合入后正文。
-- 运维：Projection、AccessSpec、Hook、Gate、访问审计和反馈；根 help 不铺开进阶叶子。
+- 分支：`writer put/remove/commit --ref` 写到工作分支，不推进默认分支，也不通知目录。`writer merge` 只做快进：
+  合并前按 Schema 与 locator 校验源分支；源分支移动报 `CANDIDATE_MOVED`，目标分叉报 `NON_FAST_FORWARD`。审批归业务，
+  平台只提供 `writer.merge` 前后 Hook，前置 Hook 可否决。
+- 运维：Projection、AccessSpec、Hook、访问审计和反馈；根 help 不铺开进阶叶子。
   `operations audit hitmap` 的 `source` 是 `hitmap`，与访问账的 `source:access` 分开。
   `operations access-spec describe` 接受 `--repo` 或 `--dataset`。
 - 部署：`deployment init|status|system publish` 和 `serve --config`。部署操作不属于普通业务旅程。

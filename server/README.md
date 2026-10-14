@@ -63,7 +63,7 @@ LiveAccess 经同一根 Repo 配置激活。`HTTPServerOptions.LiveAccessPlugins
 ## 依赖方向
 
 可以依赖：所属能力的公开合同与任务服务、`home`（transport 打开 Home 装配执行载体）、
-`invocation`、`delivery`、`gate`、`hook`、`identity`、`observability`、`controlplane`、`invoke`。
+`invocation`、`delivery`、`hook`、`identity`、`observability`、`invoke`。
 禁止 import：`kc/cli`，由 `TestForbiddenDependencies` 保持。`kc/client` 仅用于已有身份与
 管理面共享 wire 形状；其它任务采用所属模块 SDK 合同。实际依赖闭集与既有例外由
 `internal/arch` 维护，不通过 B6/B7 的历史路径恢复第二份执行器。

@@ -1,0 +1,42 @@
+views:
+  - "lifecycle"
+layer: "1"
+role: "governance"
+surface: both
+publishes:
+  - "writer.merge"
+summary: "工作分支 review/scene 含改动；main 不动；read 仍旧值"
+probes:
+  - file: "probe-merge-publishes-reviewed-branch.feature"
+    title: "合并审阅过的分支后从主分支读回新值"
+    source: "writer.merge"
+    views:
+      - "lifecycle"
+  - file: "probe-merge-refuses-diverged-main.feature"
+    title: "主分支在审阅后被推进时合并以 NON_FAST_FORWARD 拒绝且主分支保持推进后的值"
+    source: "writer.merge"
+    views:
+      - "lifecycle"
+    verifies:
+      - claim: "object#U4"
+        detail: "分支审阅后另一个写入推进了 main：合并以 NON_FAST_FORWARD 拒绝，main 保持推进后的已发布值，未审阅组合不被发布。"
+evidence:
+  - source: "writer.merge"
+    views:
+      - "lifecycle"
+    tests:
+      - "TestMergePublishesOnlyTheReviewedBranchCommit"
+      - "TestMergeRefusesDivergedTarget"
+    title: "合并只发布审阅过的分支 commit，源或目标移动后拒绝"
+    verifies:
+      - claim: "object#U4"
+        detail: "审阅后分支又被写入（v2→v3）：按审阅 commit 合并以 CANDIDATE_MOVED 拒绝且 main 不变；按新 commit 与 --expected 合并落在新分支 commit，同 command-id 重放返回 REPLAYED；main 分叉时以 NON_FAST_FORWARD 拒绝。"
+  - source: "writer.merge"
+    views:
+      - "lifecycle"
+    tests:
+      - "TestPreMergeHookVetoesMerge"
+      - "TestHookConfigCRUD"
+      - "TestMergeAuthorizationDerivesTargetRefFromInto"
+    title: "前置合并 Hook 可否决合并，合并授权按目标引用派生"
+fixture: "review/scene 分支上 note/hello 的 text 为 proposed，主分支仍为 hi。"

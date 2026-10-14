@@ -36,8 +36,6 @@ func runRemoteRequest(ctx context.Context, client *kcclient.Client, path string,
 		return runRemoteDesiredDiff(ctx, client, flags, options)
 	case strings.HasPrefix(path, "writer "):
 		return runRemoteWriter(ctx, client, path, flags, options)
-	case strings.HasPrefix(path, "governance "):
-		return runRemoteGovernance(ctx, client, path, flags, options)
 	case strings.HasPrefix(path, "operations "):
 		return runRemoteOperations(ctx, client, path, flags, options)
 	default:

@@ -66,4 +66,4 @@ views:
     description: Schema 发现、固定版本组合、检索读取与清河茶铺完整消费任务。
   lifecycle:
     title: 治理与恢复
-    description: 提案维护、撤权、归档、退役、投影更新与替换实例后的恢复。
+    description: 工作分支合并、撤权、归档、退役、投影更新与替换实例后的恢复。

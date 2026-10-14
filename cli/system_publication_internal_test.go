@@ -93,11 +93,9 @@ func systemCapabilityGroup(action string) string {
 		return "resource-access"
 	case strings.HasPrefix(action, "writer."):
 		return "publish-object"
-	case strings.HasPrefix(action, "governance."):
-		return "governance"
 	case strings.HasPrefix(action, "projection."), action == "object.access.describe":
 		return "projections"
-	case strings.HasPrefix(action, "operations.hooks."), strings.HasPrefix(action, "operations.gates."):
+	case strings.HasPrefix(action, "operations.hooks."):
 		return "extensions"
 	case action == "audit.read", action == "feedback.write":
 		return "evidence"

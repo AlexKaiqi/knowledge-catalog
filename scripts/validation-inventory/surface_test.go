@@ -79,7 +79,6 @@ func surfaceFixture(t *testing.T) string {
 		"server/service_routes.go": "mux.HandleFunc(\"GET /snapshot/v1/inventory\", handler)\n" +
 			"mux.HandleFunc(\"POST /object/v1/read\", handler)\n" +
 			"mux.HandleFunc(\"POST /writer/v1/commits\", handler)\n" +
-			"mux.HandleFunc(\"POST /governance/v1/proposals\", handler)\n" +
 			"mux.HandleFunc(\"POST /identity/v1/token\", handler)\n" +
 			"mux.HandleFunc(\"POST /operations/v1/hooks\", handler)\n",
 		"snapshot/service/file_http.go": "mux.HandleFunc(\"POST /snapshot/v1/files/file:read\", handler)\n" +

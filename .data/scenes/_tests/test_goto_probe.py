@@ -59,7 +59,7 @@ class GotoProbeTest(unittest.TestCase):
             with self.subTest(feature=relative):
                 feature = self.root / "published" / relative
                 original = feature.read_text()
-                feature.write_text("When I run `kc gate add example`\nWhen I run `kc gate remove $last.id`\n")
+                feature.write_text("When I run `kc hook add example`\nWhen I run `kc hook remove $last.id`\n")
                 try:
                     with patch.object(goto, "ROOT", self.root), \
                             patch.object(goto, "walk_states", return_value=[self.node]), \

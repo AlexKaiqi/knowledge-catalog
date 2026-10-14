@@ -610,13 +610,20 @@ func TestSchemaRefSameRepoKcAccepted(t *testing.T) {
 	}
 }
 
-func TestSchemaRefProposeRejectedAndAccepted(t *testing.T) {
+func reviewBranch(t *testing.T, s testkit.Setup, repository kernel.RepositoryID, ref string) string {
+	t.Helper()
+	if _, err := s.Writer.CreateBranch(writer.BranchIntent{TargetRepository: repository, Ref: ref}); err != nil {
+		t.Fatal(err)
+	}
+	return ref
+}
+
+func TestSchemaRefBranchCommitRejectedAndAccepted(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	main := testkit.MustHead(t, s.Repo, "refs/heads/main")
-	_, err := s.Writer.Propose("pr-bad", writer.ProposeIntent{
+	_, err := s.Writer.CommitIntent("pr-bad", writer.CommitIntent{
 		TargetRepository: s.RepositoryID,
-		TargetRef:        "refs/heads/main",
-		CandidateRef:     "refs/heads/candidates/PR-bad",
+		TargetRef:        reviewBranch(t, s, s.RepositoryID, "refs/heads/review/PR-bad"),
 		Operations: []objectmodel.Operation{{
 			Op:        objectmodel.OpPut,
 			Address:   objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "policy/A"},
@@ -626,7 +633,7 @@ func TestSchemaRefProposeRejectedAndAccepted(t *testing.T) {
 	})
 	testkit.ExpectCode(t, err, kernel.ErrSchemaRevisionUnresolved)
 	if testkit.MustHead(t, s.Repo, "refs/heads/main") != main {
-		t.Fatal("propose moved main")
+		t.Fatal("branch commit moved main")
 	}
 
 	schema, err := s.Writer.Commit("schema", objectmodel.CommitChangeSet{
@@ -643,10 +650,9 @@ func TestSchemaRefProposeRejectedAndAccepted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Writer.Propose("pr-ok", writer.ProposeIntent{
+	if _, err := s.Writer.CommitIntent("pr-ok", writer.CommitIntent{
 		TargetRepository: s.RepositoryID,
-		TargetRef:        "refs/heads/main",
-		CandidateRef:     "refs/heads/candidates/PR-ok",
+		TargetRef:        reviewBranch(t, s, s.RepositoryID, "refs/heads/review/PR-ok"),
 		Operations: []objectmodel.Operation{{
 			Op:        objectmodel.OpPut,
 			Address:   objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "policy/A"},
@@ -657,11 +663,11 @@ func TestSchemaRefProposeRejectedAndAccepted(t *testing.T) {
 		t.Fatal(err)
 	}
 	if testkit.MustHead(t, s.Repo, "refs/heads/main") != schema.Result.CommitID {
-		t.Fatal("propose moved main")
+		t.Fatal("branch commit moved main")
 	}
 }
 
-func TestForkPublishProposesNewObject(t *testing.T) {
+func TestForkPublishOnBranchCreatesNewObject(t *testing.T) {
 	pub := testkit.NewSetup(t, "kr://acme/public/semantic")
 	personal := testkit.MakeRepository(t, "kr://acme/personals/alice")
 	if err := pub.Store.Add(personal); err != nil {
@@ -684,10 +690,9 @@ func TestForkPublishProposesNewObject(t *testing.T) {
 	}
 	source := "kc://acme/personals/alice@" + string(draft.Result.CommitID) + "/drafts/metric-x"
 	pubHead := testkit.MustHead(t, pub.Repo, "refs/heads/main")
-	proposed, err := pub.Writer.Propose("fork-1", writer.ProposeIntent{
+	proposed, err := pub.Writer.CommitIntent("fork-1", writer.CommitIntent{
 		TargetRepository: pub.RepositoryID,
-		TargetRef:        "refs/heads/main",
-		CandidateRef:     "refs/heads/candidates/FORK-1",
+		TargetRef:        reviewBranch(t, pub, pub.RepositoryID, "refs/heads/review/FORK-1"),
 		Operations: []objectmodel.Operation{{
 			Op:      objectmodel.OpPut,
 			Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "metrics/x"},
@@ -702,7 +707,7 @@ func TestForkPublishProposesNewObject(t *testing.T) {
 		t.Fatal(err)
 	}
 	if testkit.MustHead(t, pub.Repo, "refs/heads/main") != pubHead {
-		t.Fatal("propose moved public main")
+		t.Fatal("branch commit moved public main")
 	}
 	if _, err := pub.Reader.Read(objectmodel.ObjectRef{Repository: personal.ID(), Object: "drafts/metric-x"}, draft.Result.CommitID, nil); err != nil {
 		t.Fatal(err)

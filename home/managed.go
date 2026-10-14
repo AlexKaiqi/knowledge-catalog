@@ -233,7 +233,7 @@ func (ws *Home) verifyManagedBinding(id kernel.RepositoryID) error {
 }
 
 func validateCreatorActions(actions []string) error {
-	allowed := []string{"writer.preview", "writer.commit", "writer.receipt.read", "repository.metadata.read", "repository.shares.manage", "repositories.manage", "governance.proposal.create", "governance.merge", "governance.preview.create", "governance.validate", "governance.validation.record", "projection.read", "dataset.resolve", "file.read", "object.read", "object.provenance", "object.history.read", "object.schema.read", "object.search", "object.relations"}
+	allowed := []string{"writer.preview", "writer.commit", "writer.receipt.read", "repository.metadata.read", "repository.shares.manage", "repositories.manage", "writer.branch", "writer.merge", "projection.read", "dataset.resolve", "file.read", "object.read", "object.provenance", "object.history.read", "object.schema.read", "object.search", "object.relations"}
 	if len(actions) == 0 {
 		return kernel.Fail(kernel.ErrUsageInvalid, "managed repositories require an explicit nonempty creatorActions policy")
 	}

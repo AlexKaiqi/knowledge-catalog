@@ -23,7 +23,7 @@ func (r *Runtime) registerInstruments(meter metric.Meter) error {
 		(*Runtime).registerSearchInstruments,
 		(*Runtime).registerProjectionInstruments,
 		(*Runtime).registerBindingEvidenceInstruments,
-		(*Runtime).registerGovernanceInstruments,
+		(*Runtime).registerHookInstruments,
 	} {
 		if err := register(r, meter); err != nil {
 			return err
@@ -207,7 +207,7 @@ func (r *Runtime) registerBindingEvidenceInstruments(meter metric.Meter) error {
 	return nil
 }
 
-func (r *Runtime) registerGovernanceInstruments(meter metric.Meter) error {
+func (r *Runtime) registerHookInstruments(meter metric.Meter) error {
 	var err error
 	if r.telemetryDropped, err = meter.Int64Counter("kc.telemetry.dropped", metric.WithUnit("{record}")); err != nil {
 		return err
@@ -235,12 +235,6 @@ func (r *Runtime) registerGovernanceInstruments(meter metric.Meter) error {
 		observer.Observe(age)
 		return nil
 	})); err != nil {
-		return err
-	}
-	if r.gateChecks, err = meter.Int64Counter("kc.gate.checks", metric.WithUnit("{check}")); err != nil {
-		return err
-	}
-	if r.gateDuration, err = meter.Float64Histogram("kc.gate.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(searchPhaseDurationSecondsBuckets...)); err != nil {
 		return err
 	}
 	if r.vfsTransferSize, err = meter.Int64Histogram("kc.vfs.transfer.size", metric.WithUnit("By"), metric.WithExplicitBucketBoundaries(byteBuckets...)); err != nil {

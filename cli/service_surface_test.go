@@ -231,7 +231,8 @@ func TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing(t *testin
 		{http.MethodPost, "/object/v1/resources:access"},
 		{http.MethodPost, "/snapshot/v1/files/tree:list"},
 		{http.MethodPost, "/writer/v1/repositories/repo/commits"},
-		{http.MethodPost, "/governance/v1/proposals"},
+		{http.MethodPost, "/writer/v1/repositories/repo/branches"},
+		{http.MethodPost, "/writer/v1/repositories/repo/merges"},
 		{http.MethodGet, "/admin/v1/grants"},
 		{http.MethodGet, "/operations/v1/stores"},
 		{http.MethodPost, "/operations/v1/projections:sync"},
@@ -257,6 +258,7 @@ func TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing(t *testin
 	retired := []string{
 		"/v1/read", "/v1/init", "/object/v1/list", "/vfs-read",
 		"/snapshot/v1/files/files:write", "/local/v1/init",
+		"/governance/v1/proposals", "/operations/v1/gates",
 	}
 	for _, path := range retired {
 		request, err := http.NewRequest(http.MethodPost, server.URL+path, bytes.NewBufferString("{}"))

@@ -42,11 +42,6 @@ func TestProductCLIRefactorDefinesTheExactPublicSurface(t *testing.T) {
 		"diff",
 		"files list",
 		"files read",
-		"governance preview create",
-		"governance preview validate",
-		"governance proposal create",
-		"governance proposal merge",
-		"governance validation record",
 		"grant add",
 		"grant list",
 		"grant remove",
@@ -60,9 +55,6 @@ func TestProductCLIRefactorDefinesTheExactPublicSurface(t *testing.T) {
 		"operations audit hitmap",
 		"operations audit trace",
 		"operations feedback record",
-		"operations gate add",
-		"operations gate list",
-		"operations gate remove",
 		"operations hook add",
 		"operations hook list",
 		"operations hook remove",
@@ -81,8 +73,10 @@ func TestProductCLIRefactorDefinesTheExactPublicSurface(t *testing.T) {
 		"show",
 		"traverse",
 		"whoami",
+		"writer branch",
 		"writer commit",
 		"writer head",
+		"writer merge",
 		"writer put",
 		"writer receipt",
 		"writer remove",
@@ -366,7 +360,7 @@ func TestEveryInternalOperationReferencedByCLIHasTheDeclaredStage(t *testing.T) 
 			}
 			continue
 		}
-		if objectCLIPath(path) || strings.HasPrefix(path, "writer ") || strings.HasPrefix(path, "governance ") {
+		if objectCLIPath(path) || strings.HasPrefix(path, "writer ") {
 			if cmd.Stage != invoke.StageGoverned {
 				t.Errorf("%s should be governed", path)
 			}

@@ -14,8 +14,8 @@ var rootHelp = `kc — Knowledge Catalog CLI
 组合        查看登记空间、挂接 Repository、发权
 对象        发现对象类型、搜索和读取对象
 发布        把目录里的最终样子发布到一个 Repository
-治理（进阶）校验并合入 Proposal
-运维        投影、Hook、Gate 与审计
+分支        在工作分支写入，校验后条件合并
+运维        投影、Hook 与审计
 部署        初始化、恢复并运行 Server
 
 最短旅程：kc help consume | kc help write | kc help compose
@@ -107,7 +107,6 @@ var helpEntries = mergeHelpEntries(
 	liveAccessHelpEntries(),
 	hostEnvironmentHelpEntries(),
 	hostWriterHelpEntries(),
-	hostGovernanceHelpEntries(),
 	hostOperationsHelpEntries(),
 )
 
@@ -129,8 +128,7 @@ func mergeHelpEntries(groups ...map[string]helpEntry) map[string]helpEntry {
 var complexLeafOperands = includeLiveAccessValueHelp(includeDeclarativeIndexValueHelp(includeDiscoveryValueHelp(includeObjectValueHelp(includeSnapshotValueHelp([]string{
 	"login", "create",
 	"diff", "writer commit",
-	"governance proposal create", "governance preview create",
-	"governance validation record", "operations hook add", "operations gate add",
+	"writer merge", "operations hook add",
 	"operations feedback record", "deployment init", "deployment status",
 	"deployment system publish", "serve",
 })))))
@@ -140,10 +138,9 @@ var helpGroups = composeLiveAccessHelpGroups(composeDeclarativeIndexHelpGroups(c
 	"admission":   {"admission show"},
 	"composition": {"create"},
 	"object":      {},
-	"publishing":  {"diff", "writer commit", "writer head", "writer receipt"},
-	"writer":      {"writer commit", "writer head", "writer receipt"},
-	"governance":  {"governance proposal create", "governance preview create", "governance preview validate", "governance validation record", "governance proposal merge"},
-	"operations":  {"operations hook add", "operations hook list", "operations hook remove", "operations gate add", "operations gate list", "operations gate remove", "operations audit access", "operations audit trace", "operations audit hitmap", "operations feedback record"},
+	"publishing":  {"diff", "writer commit", "writer branch", "writer merge", "writer head", "writer receipt"},
+	"writer":      {"writer commit", "writer branch", "writer merge", "writer head", "writer receipt"},
+	"operations":  {"operations hook add", "operations hook list", "operations hook remove", "operations audit access", "operations audit trace", "operations audit hitmap", "operations feedback record"},
 	"deployment":  {"deployment init", "deployment status", "deployment system publish", "serve"},
 })))))
 

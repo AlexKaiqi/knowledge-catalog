@@ -2,7 +2,7 @@
 
 本文拥有验证方法、用例补充规则与证据判读。具体库存由代码与场景清单生成，执行结果按 run 保存；不在本文维护“本仓当前全绿”的人工结论。
 
-范围：仓库根协议（`kernel` / `snapshot/dataset` / `writer` / `reader` / `controlplane` / `cli`）。
+范围：仓库根协议（`kernel` / `snapshot/dataset` / `writer` / `reader` / `cli`）。
 
 对照：场景目录树（操作→进入的状态；`python3 .data/scenes/tree.py`）、`cli/mvp_acceptance_test.go`（接入/消费最短闭环）、`cli/user_journey_test.go`（通用端到端旅程）、T1–T12（`README.md` Conformance）。公开命令是否落到场景上由 `TestSceneFeaturesCoverPublicCLI` 钉住，不另维护一份覆盖清单。
 
@@ -137,11 +137,11 @@ Aspect declaration/version ② ValueSource / DeclarationDigest
 登记空间 登记表             ① DumpState + 登记表 git
 命令内 pin                 ① ResolveDataset，不落盘
 Canonical 正文             ② READ / GET_PROVENANCE
-ControlState               提案 / Preview / Validation（stateDir/control.json）
+工作分支                   ⓪ 非默认 Ref；合并前不通知目录
 工作投影                   ③ basis / lag；可丢
 ```
 
-`--as` / hook / gate 是 facade，不进七列正文；失败时主状态必须不变。
+`--as` / hook 是 facade，不进七列正文；失败时主状态必须不变。
 
 ### 0.1 场景 feature：先观测，再钉后态
 
@@ -224,11 +224,11 @@ TPC-H 故事是线性的（空库 → 13 表 → 口径 merge）。底座是**�
 | 部署 | 未初始化 / 既有耐久状态 / 缓存丢失 / 恢复或失败关闭 | 显式 deployment init；serve 只恢复 |
 | 登记空间 生命周期 | 空登记表 → 已接入 Repository → 有 Dataset → Dataset 退役 | `attach` / `dataset define` / `dataset retire` |
 | 仓生命周期 | 外部既有 authority 只读接入，或显式平台供给并准入 → 新 commit → 登记空间 成员归档 | `attach` / `create` / `COMMIT` / `SnapshotService.ArchiveRepository` |
-| Snapshot Ref | `main=root` → `main=U*` → 存在 candidate → merge 后 `main=C*` | `writer put`/`writer commit` / `governance proposal create` / `governance proposal merge` |
+| Snapshot Ref | `main=root` → `main=U*` → 存在工作分支 → merge 后 `main=C*` | `writer put`/`writer commit` / `writer branch` + `writer put --ref` / `writer merge` |
 | Binding | Snapshot value / Schema origin Bound State / DescriptorRef / 非法实例 value_source | Bound State 不 PUT 空 Aspect；登记空间 不感知 |
 | Workspace 配方 | 无 / 单 source / 多 source / 同 `object_id` 多仓 | `dataset define`（提高 revision） |
 | 命令 pin | 无 Serving / 本次冻结 / 下次命令重解 | `ResolveDataset`；命令内不得跟 `latest` |
-| 维护闭环 | 无 / 已 propose / 已 preview / PASSED\|FAILED / 已 merge | ControlPlane |
+| 维护闭环 | 无 / 已建分支 / 分支已写入 / 已 merge | Writer（审批由业务经 `writer.merge` 前置 Hook） |
 | 索引 | 空 / 跟 HEAD / lag / schema 触发 rebuild | `AfterSnapshot` Desire（可丢）+ serve HEAD 对账 |
 | 授权 | 主人 / `--as` 命中 / `--as` 拒绝 | `kc grant add`（不改七列） |
 
@@ -240,9 +240,9 @@ W0 持久配置与外部 authority 已准备
  → attach                       W2 既有仓已接入，published HEAD 不变
  → put / commit                 W3 Canonical 在 main=U1；登记空间 不变
  → dataset define                  W4 配方已登记；read --dataset 立刻可读
- → propose                      W5 candidate=C1，main 仍 U1；read --dataset 仍旧值
- → preview + validate PASSED    W6 ControlState 有 Preview；登记表仍无 pin
- → merge                        W7 main=C1；下次 read --dataset 见新值
+ → branch + put --ref           W5 review 分支=C1，main 仍 U1；read --dataset 仍旧值
+ → 业务评审（pre merge Hook）   W6 评审结论在业务侧；登记表仍无 pin
+ → merge                        W7 合并前校验对象，main 快进到 C1；下次 read --dataset 见新值
  → 再注册 Repository + dataset define rev  W8 同 object_id 两条 FederatedValue，不覆盖
  → retire / archive             W9 Workspace 不可 Open；仓禁写；未归档仓仍可写
 ```
@@ -255,7 +255,7 @@ W0 持久配置与外部 authority 已准备
 |---|---|---|
 | `cli/write_flow_test.go` | W0→W3 的 CLI 动词 | 不含 Workspace / merge |
 | `cli/read_flow_test.go` | W3 上维护读 | 不含 `--dataset` |
-| `cli/consume_flow_test.go` | W4 消费口 | 不含提案 |
+| `cli/consume_flow_test.go` | W4 消费口 | 不含分支合并 |
 | `cli/mvp_acceptance_test.go` | 接入方/消费方最短 MVP 旅程 | 从空 Home 验证仓内发布、登记空间 发现、pin、SEARCH/READ/PROVENANCE |
 | `cli/user_journey_test.go` | W1–W9 通用用户旅程 | 从空 Home 跨层验证，不绑定业务域 |
 | T1–T12 | 不变量，不是状态机步骤 | 不代替「从 W5 merge」 |
@@ -282,13 +282,13 @@ Repository 归档与 Dataset 固定 pin 分别指向公开 `SnapshotService.Arch
 | W-01 | W0 | `deployment init --config` | 持久配置选定远端 登记空间；初始化独立服务状态，不创建业务 Snapshot | 已定位 | `TestDeploymentSurvivesInstanceReplacement` |
 | W-02 | W1 | 再显式 init 同一配置 | 不覆盖既有登记与授权；不静默初始化缺失状态 | 已定位 | `TestDeploymentSurvivesInstanceReplacement` / `TestDeploymentMissingDurableStateFailsClosed` |
 | W-03 | W1 | `serve --config` 指向未初始化部署 | 失败关闭，不自动建空 登记空间/授权 | 已定位 | `TestDeploymentDoesNotInitializeOnOpen` |
-| W-04 | W1 | 部署输入包含退役的多空间集合 | 明确拒绝，不选第一间、不合并登记状态；唯一登记权威仍按原历史恢复 | 已定位 | `TestDeploymentRejectsCatalogCollection` / `TestUniqueControlStateDoesNotMergeLegacySpaces` |
+| W-04 | W1 | 部署输入包含退役的多空间集合 | 明确拒绝，不选第一间、不合并登记状态；唯一登记权威仍按原历史恢复 | 已定位 | `TestDeploymentRejectsCatalogCollection` |
 | W-05 | W1 | `attach` 指向登记权威 Repository ID | 拒绝：登记表不是成员仓 | 已定位 | `TestCatalogRepoWriteErrors` |
 | W-06 | W1 | 配置未知 driver 或明文秘密 | 读取配置失败，不修改 authority | 已定位 | `TestStoreConfigRejectsSecrets` / `TestDeploymentRejectsInstanceBoundAuthorities` |
 | W-07 | W1 | deployment status / show / registry audit | 分别为部署恢复状态、组合库存、登记空间 权威历史 | 已定位 | `TestDeploymentSurvivesInstanceReplacement` / `TestCatalogAuditReadsSnapshotHistory` / `TestSnapshotRegistryPersistsMembershipWithoutObjectSemantics` |
 | W-08 | W0 | 业务命令无 Server | 失败关闭，不回退为直开工作目录 | 已定位 | `TestProductCommandsRequireServer` |
 | W-09 | W1 | 旧 local / register 命令 | 入口拒绝；不保留隐藏兼容别名 | 已定位 | `TestDeploymentContractRetiresLocalAndManualRegistration` |
-| W-10 | W1 | 更换实例并删除 cache | 配置、登记空间 Snapshot、对象 Snapshot、授权/gate、Receipt 与治理状态保留；缓存可重建 | 已定位 | `TestDeploymentSurvivesInstanceReplacement` / `TestDeploymentMissingDurableStateFailsClosed` |
+| W-10 | W1 | 更换实例并删除 cache | 配置、登记空间 Snapshot、对象 Snapshot、授权/hook 与 Receipt 保留；缓存可重建 | 已定位 | `TestDeploymentSurvivesInstanceReplacement` / `TestDeploymentMissingDurableStateFailsClosed` |
 | W-11 | W1 | 丢失状态卷、账本或已初始化 登记空间 权威后再次 init | 拒绝重置；恢复不重写既有 Writer ledger，不将损坏策略解释为空 | 已定位 | `TestDeploymentCannotResetLostDurableVolume` / `TestDeploymentDoesNotRecreateLostCatalogBranch` / `TestDeploymentRecoveryDoesNotRewriteControlLedger` / `TestDeploymentMalformedPolicyFailsClosed` / `TestManagedRepositoryReadyReplayRejectsLostCatalogAuthority` |
 | W-12 | W1 | 登记空间 Snapshot 权威或配置的检索后端不可用 | readiness 失败关闭；合法 driver 拼写与装配使用同一规范化规则；拒绝本机 Git remote 字段 | 已定位 | `TestDeploymentReadinessRequiresCatalogAuthority` / `TestDeploymentReadinessUsesNormalizedIndexDriver` / `TestDeploymentRejectsLegacyCatalogGitRemoteField` |
 
@@ -307,7 +307,7 @@ Repository 归档与 Dataset 固定 pin 分别指向公开 `SnapshotService.Arch
 | C-08 | W4 | `SnapshotService.ArchiveRepository` | 该仓 `COMMIT`/`PROPOSE` → `REPOSITORY_ARCHIVED`；新 OpenDataset 不选入 | 已定位 | lifecycle / write errors / S6 |
 | C-09 | W4 | 退役的整体空间归档命令 | `USAGE_INVALID`；不能改变仓登记或阻止后续合法 Dataset 发布 | 已定位 | `probe-archive-rejects-dataset-definition.feature` |
 | C-10 | W8 | `dataset define` 提高 revision、改 sources | **下次** OpenDataset 用新配方；本次 pin 不变 | 已定位 | S4 |
-| C-11 | W4 | `CheckResolved` / `governance preview validate --preview` | 只检查 Snapshot 成员与 commit，不解析 Binding | 已定位 | dataset/control tests |
+| C-11 | W4 | `CheckResolved` | 只检查 Snapshot 成员与 commit，不解析 Binding | 已定位 | dataset tests |
 | C-12 | W4 | `dataset define --as steward --request-id …` | 登记表 Snapshot commit metadata 含 as / request-id / ruleId | 已定位 | `TestCatalogSnapshotStampsPrincipal` / F-03 HTTP evidence |
 | C-13 | W4 | `audit --dataset` vs `log --dataset --object` | audit=配方历史；log=对象引入 commit | 已定位 | consume_flow |
 | C-14 | W3 | 无 Workspace 时 `read --dataset` | `DATASET_INVALID` | 已定位 | S0 / consume_flow |
@@ -358,7 +358,7 @@ setup；默认的两组 feature 场景不自动执行这些独立 Go 用例。C-
 | K-16 | 目录写入 | `kc writer commit --dir` / `kc diff` | 与 K-01 同：只推进成员 Ref。对照当前版本求差是 commit 内部动作；`kc diff` 用同一对照且不写仓 | 已定位 | write_flow / `TestDiffDirectoryAgainstCurrentVersion` |
 | K-17 | W3 | `writer remove` | 对象在新 commit 上 UNRESOLVED；旧 commit 仍可读 | 已定位 | T12 / read_flow |
 | K-18 | W2 | `writer put --repo` = 登记权威 Repository ID | `TARGET_REPOSITORY_DENIED` | 已定位 | S0 |
-| K-19 | W9 仓已归档 | `writer put` / `governance proposal create` | `REPOSITORY_ARCHIVED` | 已定位 | write errors / S6 |
+| K-19 | W9 仓已归档 | `writer put` / `writer branch` | `REPOSITORY_ARCHIVED` | 已定位 | write errors / S6 |
 | K-20 | W3 多 op | 任一 op 失败 | 无部分提交（T3） | 已定位 | T3 |
 | K-21 | W3 | `writer.Reconcile` 预览 | 只出 ChangeSet；确认后走 `writer commit` | 已定位 API / **frozen CLI** | `TestT7Reconcile`；无 `kc reconcile` |
 
@@ -461,29 +461,29 @@ U14 的一次任务完整选用、资源归属与退出复用[共同插件验收
 | V-12 | W4 | `resolve` / `log --object` / `provenance` / `schema describe --dataset` | RESOLVE 是 status（可打到 Address）；Workspace 缺失为 `[]`、`--repo` 缺失为单条 `UNRESOLVED`；log 是有界页且拒绝 `--aspect`/`--member`；provenance 拒绝 Address 坐标 | 已定位 | consume_flow / S5 / `TestCatalogViewsChecksAndObjectResolve` `TestRemoteProviderReadBackAndConsumerDiscovery` `TestObjectResolveAndObjectLogOverHTTP` |
 | V-14 | W4 | `dataset define` | **不发权**；无 `--repo` allow 不能读成员 | 已定位 | `TestDatasetAuthorizationCoverageIsHonest` |
 
-### 2.7 M 维护闭环（提案）
+### 2.7 M 维护闭环（工作分支与条件合并）
 
 | ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
 |---|---|---|---|---|---|
-| M-01 | W4 | `governance proposal create` | candidate=C1；**main 不动**；`read --dataset` 仍旧值（K-07） | 已定位 | T9 / S3 |
-| M-02 | W5 | `governance preview create --dataset` | Preview 只写 ControlState；登记表无 pin yaml | 已定位 | T9 / S3 |
-| M-03 | W5 | `governance preview validate --preview` | 结构检查（仓已挂、commit 在）；写出 ValidationReport | 已定位 | T9 / hook_gate |
-| M-04 | W6 | `governance validation record --suite --outcome` | 只绑定传入 PASSED/FAILED，不跑套件 | 已定位 | T9 |
-| M-05 | 结构 FAILED 或 suite FAILED | `governance proposal merge` | `GATE_UNSATISFIED`；main 不动 | 已定位 | T9 / hook_gate |
-| M-06 | W6 PASSED | `governance proposal merge` | main 快进到 C1；**下次** `read --dataset` 见新值 | 已定位 | T9 / S3 / CLI |
-| M-07 | preview 后 candidate 再提交 | `governance proposal merge` | `CANDIDATE_MOVED` | 已定位 | T9 / S3 |
-| M-08 | preview 后别人推走 main | `governance proposal merge` | `NON_FAST_FORWARD` | 已定位 | T9 |
-| M-09 | 有 `operations gate add --on merge --require validate,suite:x` | 缺 suite 证据 | `GATE_UNSATISFIED` | 已定位 | T9 / hook_gate |
-| M-10 | Preview 成员变了，拿旧 PASSED | `governance proposal merge` | `VALIDATION_BASIS_MISMATCH` | 已定位 | T9 |
-| M-12 | W6 | pre-merge hook 成功、gate 仍缺 suite | hook ≠ gate；仍 `GATE_UNSATISFIED` | 已定位 | `TestPreMergeDoesNotSatisfyGate` |
-| M-13 | W4 | `writer put` / `read` | 不查 gates.json | 已定位 | `TestReadPathAndPutIgnoreGates` |
+| M-01 | W4 | `writer branch` + `writer put --ref` | 分支=C1；**main 不动**；`read --dataset` 仍旧值（K-07） | 已定位 | `TestBranchMergeIsVisibleOnView` / `TestBranchCommitSurface` |
+| M-02 | W5 | `writer branch` 已存在的名字或未知基点 | `PRECONDITION_FAILED` / `VERSION_UNRESOLVED`；登记表无 pin yaml | 已定位 | `TestBranchRequiresNewRefAndKnownBasis` |
+| M-03 | W5 分支含违约实例 | `writer merge` | 合并前按 Schema 校验源 commit：`SCHEMA_INSTANCE_INVALID`；main 不动 | 已定位 | `TestMergeValidatesSourceObjectsAgainstSchema` |
+| M-04 | W5 分支含无 locator 或非对象文件 | `writer merge` | `PRECONDITION_FAILED`；main 不动 | 已定位 | `TestMergeRejectsUnlocatedAndNonObjectSourceFiles` |
+| M-05 | 业务前置 Hook 拒绝 | `writer merge` | `HOOK_DENIED`；main 不动 | 已定位 | `TestPreMergeHookVetoesMerge` |
+| M-06 | W6 | `writer merge --commit C1` | main 快进到 C1；**下次** `read --dataset` 见新值 | 已定位 | `TestBranchMergePublishesReviewedCommit` / `TestMergePublishesOnlyTheReviewedBranchCommit` |
+| M-07 | 评审后分支再提交 | `writer merge --commit <评审时>` | `CANDIDATE_MOVED` | 已定位 | `TestMergeRejectsSourceMovedAfterReview` |
+| M-08 | 评审后别人推走 main | `writer merge` | `NON_FAST_FORWARD` | 已定位 | `TestMergeRejectsTargetDrift` / `TestMergeRefusesDivergedTarget` |
+| M-09 | 授权 | `writer merge --into` / `writer branch --name` | 授权 ref 由目标分支或新分支名推出 | 已定位 | `TestMergeAuthorizationDerivesTargetRefFromInto` / `TestBranchAuthorizationDerivesRefFromName` |
+| M-10 | 系统仓 | `writer branch` / `writer merge` | 拒绝；系统出版物不走分支合并 | 已定位 | `TestSystemRepositoryRefusesBranchAndMerge` |
+| M-12 | 另一仓配了 pre merge Hook | `writer merge` 本仓 | Hook 按仓匹配，不阻塞本仓 | 已定位 | `TestOtherRepositoryMergeHookDoesNotBlock` |
+| M-13 | W4 | `writer put` / `read` | 不触发 `writer.merge` Hook | 已定位 | `TestReadPathAndPutIgnoreMergeHooks` |
 
 ### 2.8 I 索引（③）
 
 | ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
 |---|---|---|---|---|---|
 | I-01 | W3 | COMMIT | `AfterSnapshot` Desire 后 worker 增量；`search` 能命中；索引非权威 | 已定位 | `TestCatalogHookUpdatesIndexAfterCommit` `TestSearchAfterPutIsIncremental` |
-| I-02 | W5 | `governance proposal create` | **不**通知 登记空间 Hook | 已定位 | `TestProposalDoesNotNotifyCatalog` |
+| I-02 | W5 | `writer put --ref` | **不**通知 登记空间 Hook；只有推进默认分支才通知 | 已定位 | `TestBranchWriteDoesNotNotifyPublishedSubscribers` |
 | I-03 | live 已到 U2 | `SearchAt(U1)` | 不把 live rewind 到 U1 | 已定位 | `TestSearchAtDoesNotRewindLive` |
 | I-04 | 改 `schema/*` AccessHints | COMMIT | rebuild（不是增量 content） | 已定位 | `TestIndexSchemaChangeForcesRebuild` |
 | I-05 | W8 | `operations access-spec describe --dataset` | 每仓一份逻辑 AccessSpec，不按 Workspace 建表 | 已定位 | `TestPlanAccessTwoRepositories` |
@@ -534,13 +534,13 @@ U14 的一次任务完整选用、资源归属与退出复用[共同插件验收
 | I-50 | 变化能力报错、缺 provider 能力、unit 代数 | 增量/装配/写能力拒绝与结构检查 | 原错误失败关闭、不触发 rebuild、不 panic、不暴露 raw TreeStore；代数无文件形状 | 已定位 | `TestEnsureFailsClosedWhenIncrementalChangeLookupFails` / `TestBaseAuthorityWithoutObjectCapabilitiesFailsClosed` / `TestMissingProviderCapabilitiesFailWithoutPanic` / `TestProviderNeutralUnitAlgebraHasNoFileStorageShape` |
 | I-51 | command 预留后中断、提交后回执丢失、旧回执清理、ledger 读失败 | 重启、显式 resolve/abandon、保留窗口 | 不重放未知结果；PENDING 不被推断；Bolt 清理不加载历史；读失败不执行 | 已定位 | `TestCommandLogRecoversReservationBeforeCommit` / `TestCommandLogRecoversCommitBeforeReceipt` / `TestCommandLogRetentionIsBoundedAndKeepsPending` / `TestBoltCommandLogPrunesWithoutDeletingPending` / `TestCommandLogReadFailureCannotReapplyCommand` / `TestAcceptedCommitSurvivesEvidenceFailure` |
 | I-52 | CLI/HTTP READ/SEARCH 与 Writer typed intent | transport wiring、命名类型和 import 可达集 | 共用 typed executor；核心无 flags/HTTP/provider 依赖；标识类型不可混 | 已定位 | `TestCLIAndHTTPUseSameTypedApplicationExecutor` / `TestApplicationCoreHasNoTransportOrProviderImports` / `TestApplicationRequestsUseOwnedIdentifierTypes` / `TestCommitExecutorPreservesTypedIntent` |
-| I-53 | 同一 Operation 脚本切换 tree 与 LakeFS+对象存储 provider；并发 expected-old 发布 | shared Repository/Writer contract + 按步骤对拍 + hidden branch lock | 固定版本、Aspect、来源、历史、diff、CAS、幂等、proposal/merge、归档和失败码等价；对象字节走预签名直传；并发发布只有一个成功 | 已定位，协议级 fake 实跑 | `TestLakeFSRepositoryContract` / `TestLakeFSWriterContract` / `TestLakeFSMatchesTreeProviderByOperationStep` / `TestLakeFSPublicationLockPreventsConcurrentLostUpdate` / `TestLakeFSObjectBytesUsePresignedDataPlane` |
+| I-53 | 同一 Operation 脚本切换 tree 与 LakeFS+对象存储 provider；并发 expected-old 发布 | shared Repository/Writer contract + 按步骤对拍 + hidden branch lock | 固定版本、Aspect、来源、历史、diff、CAS、幂等、branch/merge、归档和失败码等价；对象字节走预签名直传；并发发布只有一个成功 | 已定位，协议级 fake 实跑 | `TestLakeFSRepositoryContract` / `TestLakeFSWriterContract` / `TestLakeFSMatchesTreeProviderByOperationStep` / `TestLakeFSPublicationLockPreventsConcurrentLostUpdate` / `TestLakeFSObjectBytesUsePresignedDataPlane` |
 | I-54 | 静态 Aspect 发布后动态 Recipe/Binding observation 推进 | 同一 Controller 两条独立 lane | 静态投影推进 commit basis；动态 notice pull observation，HEAD 和静态 basis 不动 | 已定位 | `TestIngestionControllerKeepsStaticAspectAndDynamicRecipeLanesSeparate` |
 
 [索引控制](../design/discovery.md)的拼装 / Serving State / 同 basis hydrate 已由 I-15..I-20、I-22 与 Object Serving 覆盖。
 I-21 已收口 notice → 控制器 pull；I-34..I-39 仍只对账 Snapshot HEAD。真实 Observer Docker 首版（§11.3）未齐，不能把当前双容器适配器旅程记成整组 D 已通过。
 
-### 2.9 P 授权 / Hook / Gate（facade）
+### 2.9 P 授权 / Hook（facade）
 
 本表是实现证据。P-14 / X-06 跟随 `AUTH-01`：SEARCH 发现全部 pin 成员，无 `object.read` 时屏蔽正文且不是 `partial`；精确读仍 fail closed。P-21 跟随 `AUTH-03`：交付链是定位与返回之间的独立层。P-22 / P-23 的旅程束按入口节点 `_bundles.yaml` 的 `walk` 串状态目录：P-22 沿脊到 `semantic-object-published` → `projection-synced` 后单仓消费；P-23 从语义对象分叉到 `semantic-dataset-defined`。声明面是 `object-search-granted/_probes/schema-search-enforces-declared-access.feature`；交付屏蔽与授读是该宿主上的独立 probes；身份绑定在初始化前态，Dataset 按人不继承见 `dataset-query-principals-granted/`。`"""` 任务块不是协议 Oracle。
 
@@ -554,7 +554,7 @@ I-21 已收口 notice → 控制器 pull；I-34..I-39 仍只对账 Snapshot HEAD
 | P-06 | REPLAYED | hook | 不打 | 已定位 | `TestReplayedSkipsHook` |
 | P-07 | post hook | 成功写 | payload 只有指针，无正文 | 已定位 | `TestPostPutPointersOnly` |
 | P-08 | post 失败 | 已 dataset define | **不**回滚登记表 | 已定位 | `TestPostDefineDatasetPointersOnlyAndFailureDoesNotRollback` |
-| P-09 | `operations hook add` / `operations gate add` | CRUD | stateDir 下的 `hooks.json` / `gates.json` | 已定位 | `TestHookAndGateConfigCRUD` |
+| P-09 | `operations hook add` / `remove` / `list` | CRUD | stateDir 下的 `hooks.json` | 已定位 | `TestHookConfigCRUD` |
 | P-10 | 仓内 `permissions` Aspect | `kc read` | **不是**闸门；GRANT 不进 `allow.json` | 已定位 | `TestUserJourneyObjectGrantDoesNotAuthorizeAccess`；T8 可裁 |
 | P-11 | 已 allow | 撤销授权、查询规则与当前身份（精确调用见用例） | 规则消失后 `--as` 拒绝 | 已定位 | `TestUserJourneyManageAgentAccess` |
 | P-12 | `serve --config`，配置 `auth: local` | 仅 `X-Kc-As` | 与 `--as` 同一授权规则；空身份 `UNAUTHENTICATED`；`Authorization` 或 `X-Kc-On-Behalf-Of` 被拒 | 已定位 | `TestXKcAsUsesTheSameAuthorizationRulesAsCLI` / pairing tests |
@@ -576,7 +576,7 @@ I-21 已收口 notice → 控制器 pull；I-34..I-39 仍只对账 Snapshot HEAD
 
 | ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
 |---|---|---|---|---|---|
-| S-01 | 私有 memory fake + Reader/Writer | provider-independent 组合合同 | Snapshot 身份/CAS/历史 + LOG/DIFF/REMOVE/Archive/schema_ref/PROPOSAL | 已定位 | `TestProviderIndependentRepositoryContract` |
+| S-01 | 私有 memory fake + Reader/Writer | provider-independent 组合合同 | Snapshot 身份/CAS/历史 + LOG/DIFF/REMOVE/Archive/schema_ref/分支写入 | 已定位 | `TestProviderIndependentRepositoryContract` |
 | S-03 | lakeFS + Reader/Writer | 同一份 T12 | Adapter 无工作区且不解释对象；上层读 pinned commit | 已定位 | `TestLakeFSRepositoryContract` / `TestLakeFSWriterContract` |
 | S-04 | local profile 无 provider | SEARCH | `CAPABILITY_UNSATISFIED`；精确 READ/VFS 不受影响 | 已定位 | `TestLocalProfileHasNoSearchProjection` |
 | S-05 | OpenSearch Retriever/Maintainer | 原子 SEARCH 算子 | 已实现叶子 Probe Exact（含 PREFIX/CONTAINS）；未声明或未知算子 → `CAPABILITY_UNSATISFIED` | 已定位 | `TestOpenSearchProbeTypedSubset` / `TestOpenSearchOperators` / `TestOpenSearchContainsUsesEscapedKeywordWildcard` |
@@ -604,7 +604,7 @@ I-21 已收口 notice → 控制器 pull；I-34..I-39 仍只对账 Snapshot HEAD
 | O-05 | Gitea/OpenSearch/resource-access/MySQL | 跨进程调用 | 标准 CLIENT/SERVER span 与 W3C context 覆盖完整依赖图 | gap | 当前 Jaeger 依赖视图只证明 `kc-server` 内部 span，不能冒充静态系统架构 |
 | O-06 | Collector/Loki/Jaeger | 生产部署 | 持久存储、备份、租户隔离、tail sampling、容量与故障演练 | gap | Compose profile 仅是 24h/内存本地验收拓扑 |
 | O-07 | 30 天 SLO | SEARCH/READ/Writer 可用性与 latency good-event ratio | 有 error-budget remaining，且 `1h+5m@14.4x`、`6h+30m@6x`、`1d+2h@3x` 多窗口 burn-rate 告警可证明 firing/recovery | partial | SEARCH/READ/Writer 已有多窗口 availability burn、latency good-event、30 天 budget recording 与面板；规则专项只证明全失败、无流量等 availability 边界；完整性 eligible/profile 的原始维度、各告警 dashboard/runbook 定位与完整 firing/recovery 证据，以及真实 30 天/规模基线仍缺 |
-| O-08 | Snapshot/Binding/identity provider/Hook/Gate | 真实依赖调用 | 实现 rate/error/duration/in-flight/bytes/backlog 所需的低基数原始指标和 child span | partial | 身份 provider、State Binding、Writer、Projection、Hook/outbox、Gate、VFS 与 Snapshot decorator（`kc.snapshot.*` RED/active/bytes，store=`lakefs\|gitea\|other`）已接真实边界和包测试；Gitea/OpenSearch/lakeFS 出站 HTTP 的跨进程 W3C CLIENT/SERVER 传播仍缺 |
+| O-08 | Snapshot/Binding/identity provider/Hook | 真实依赖调用 | 实现 rate/error/duration/in-flight/bytes/backlog 所需的低基数原始指标和 child span | partial | 身份 provider、State Binding、Writer、Projection、Hook/outbox、VFS 与 Snapshot decorator（`kc.snapshot.*` RED/active/bytes，store=`lakefs\|other`）已接真实边界和包测试；Gitea/OpenSearch/lakeFS 出站 HTTP 的跨进程 W3C CLIENT/SERVER 传播仍缺 |
 | O-09 | OTel Collector/Jaeger/Loki/Prometheus | backend 慢、断开或队列满 | Collector accepted/refused/enqueue-failed/send-failed/queue 与 backend ingest/query/storage 自监控可见并告警 | partial | 已 scrape Collector internal metrics 并预置 unavailable/export failure/refused/queue saturation 告警；Jaeger/Loki ingest/query/storage 自监控与故障演练仍缺 |
 | O-10 | 规模负载 | Workspace/Search/Writer/Projection/Evidence 放大 | 容量面板同时展示输入负载、fan-out/工作量、队列/饱和与用户延迟，并与 `scale-benchmark.md` 档位对齐 | partial | 容量/行为面板已有 operation input、Writer payload/change、Snapshot calls/bytes、READ object/unit、Projection docs/change/backlog、Evidence bytes/disk、VFS bytes/entries；缺 projection ETA 与压测基线 |
 | O-11 | access/feedback/system/audit evidence | 身份与用户行为分析 | 分离采用、治理和安全视图；可聚合 DAU/WAU、委托、拒绝、仓/工作区采用、零结果/refine/feedback，不把 principal 做 metric/Loki label | partial | 原始可信 evidence、trace 查询、hitmap，以及 provider/principal-kind/delegated/authn/authz 有界聚合面板已有；缺受控高基数聚合存储/作业、权限分面、委托验证和异常规则 |
@@ -623,7 +623,7 @@ I-21 已收口 notice → 控制器 pull；I-34..I-39 仍只对账 Snapshot HEAD
 | D-03 | 任意 | `WATCH_UPDATES` | 投递端是 post hook；无订阅口 | frozen | 同上 |
 | D-04 | 任意 | Object `LIST_TREE` 父子枚举 | 无公开 Object 枚举；Workspace File Gateway 是独立宿主投影合同 | frozen | 同上 |
 | D-05 | 有 Stream Binding | 普通 READ / 流 SEARCH / `tail` | 不支持普通 READ；Stream window/query 与投影仍未实现，不得伪造流结果 | frozen（负例已定位） | `TestOrdinaryReadRejectsStreamBinding` / frozen command tests |
-| D-06 | Fork 发布 | 自动三方 sync（K-15） | 当前发表路径是目标仓 `governance proposal create` 新对象；自动三方 sync 未做 | 已定位当前路径 / frozen 自动 sync | `TestForkPublishDoesNotCopyPersonal` |
+| D-06 | Fork 发布 | 自动三方 sync（K-15） | 当前发表路径是目标仓工作分支写入新 ID 后合并；自动三方 sync 未做 | 已定位当前路径 / frozen 自动 sync | `TestForkPublishDoesNotCopyPersonal` / `TestForkPublishOnBranchCreatesNewObject` |
 | D-07 | Vendor Repository | 生成只读副本（K-16） | 未做 | frozen | — |
 | D-08 | 两次 OpenDataset | ViewDiff | 未做 | frozen | — |
 | D-09 | 原子查询可用 | RQL 文本语法（OR/NOT/括号） | CLI 原子子句隐式 AND；typed Client 已有 All/Any 表达式，不等于提供 RQL/NOT | frozen（文本语法） | — |
@@ -654,7 +654,7 @@ Aspect 和 columns 下 id／status 两个 Members，另有 `note/kept`。初始 
 | U6 / 表示一致性 | 未采用 Schema 的对象，分别构造整体值／Aspects、完整 Aspect／Members 冲突，覆盖两种批内顺序及既有表示。整批拒绝，Ref、原对象、原回执保持且无 APPLIED 结果。正向控制显式删除旧表示后建立新表示，最终组装值准确。 | `TestWriterRejectsConflictingFinalAspectRepresentation`、`TestWriterAllowsExplicitAspectRepresentationConversion` 与 provider contract 复用；原冲突四子例保持批内两顺序／既有表示、Ref／正文／回执和显式转换 Oracle，必要行为修复后执行，不削弱为成功检查。 | Schema 可选被误解为表示规则也可选，顺序绕过最终冲突检查。 |
 | U7 / Schema | 独立变体：固定版本有界名单无重复／遗漏，describe 给准确结构、类型和已采用约束；不查询业务对象或外呼。无 Schema 的合法普通内容可发布；采用后省略 SchemaRef 仍继承并校验。非法 Schema、同批非法实例、影响旧实例的演进、仍有引用者的删除各自拒绝且无污染；合法新增可选字段、同批合法声明／实例，以及同批删除全部引用者后删除声明均准确读回同一提交。同身份破坏性迁移方式未选，不进正向目标。 | `TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent`、`TestDescribeSchemaKeepsCompleteConstraintsAtFixedVersions`、`TestSchemaDescriptionDigestCoversConstraintOnlyChanges` 和 `TestSchemaDescribeKeepsCompleteDefinition` 证固定名单及完整约束。继承、非法同批、既有引用者拒绝沿原 Schema 用例；`TestSchemaEvolutionRejectsBreakingReuseAndAllowsOptionalAddition`、`TestSchemaRemovalRequiresNoRemainingReferrers` 现核对合法后态和旧版，tree／native 的批次引用者回归另钉最终集合、有界及显式重建。`TestSchemaInstanceValidationUsesSameChangesetDraft` 合法分支已准确回读同一 NewCommit 的 Schema／组装实例，并核对实际采用声明与 describe 的版本；成功回执不代替正文 Oracle。 | 类型浏览混版本、更新丢约束、只验新实例、已引用声明被破坏或误删。 |
 | U8 / 权限与 Dataset| 其他必要权保留，只撤当前读权，旧引用／pin 也拒绝；授权拒绝时不能先读正文。发布仅含一个 Aspect／Member 时，允许所选范围，完整对象不冒充完整，私有单元与缺失 Schema 不补读；相同来源 commit 在不同布局下身份不变。源同对象推进后旧发布仍旧值，额外源版本冲突拒绝；仅 Dataset 读权不能写源仓。 | `TestConsumerUsesActualServerContract`、原 Dataset 材料／pin 边界用例继续复用；`TestDatasetReferenceKeepsAcceptedSourceVersionAndCurrentPermissions` 证新引用下同对象旧值／旧 commit、冲突来源版本、撤权及消费权不能写源仓。`TestObjectReferencePreservesActualAspectAuthorization`、`TestReferencePlanUsesMaintenanceMetadataWithoutReadingBodies`、`TestNativeReferencePlanRejectsUnprovenOrConflictingCoordinates` 证先用真实维护模型授权、无正文预读，整体 blob 的同名字段不能冒充 Aspect。 | 缓存旧授权、越界补读、HEAD 替换固定来源或消费权变写权。 |
-| U9 / Writer 可靠性 | 先有确值和回执；仓 CAS、单元前置条件及批内后操作失败分别拒绝，Ref／原内容／原回执保持，新内容不出现且无成功回执。成功同命令重试返回同提交，异内容拒绝。分别注入提交前中断、提交后响应或耐久回执丢失，未知结果不得自动重做；恢复只确认原命令。提案只推进候选，次级证据失败不反转已接受提交。 | `TestT2CommitCAS`、`TestT3Atomicity`、`TestT4CommandIdempotency`、`TestProposeSurface`、`TestAcceptedCommitSurvivesEvidenceFailure` 与耐久 command ledger 故障回归保留独立后态。`TestObjectMaintenanceRecoversRealAcceptedWriterAfterLostResponse` 证真实 Writer 已接受却丢响应后仅一个 POST、恢复原回执并按其 commit 回读；SDK 另拒绝确定失败轮询与其他命令回执。组件不重抄 transport，进程内证据不代替真实部署。 | 半批生效、丢更新、响应不明时双写、候选错误发布或已接受提交被回滚。 |
+| U9 / Writer 可靠性 | 先有确值和回执；仓 CAS、单元前置条件及批内后操作失败分别拒绝，Ref／原内容／原回执保持，新内容不出现且无成功回执。成功同命令重试返回同提交，异内容拒绝。分别注入提交前中断、提交后响应或耐久回执丢失，未知结果不得自动重做；恢复只确认原命令。工作分支写入只推进该分支，次级证据失败不反转已接受提交。 | `TestT2CommitCAS`、`TestT3Atomicity`、`TestT4CommandIdempotency`、`TestBranchCommitSurface`、`TestAcceptedCommitSurvivesEvidenceFailure` 与耐久 command ledger 故障回归保留独立后态。`TestObjectMaintenanceRecoversRealAcceptedWriterAfterLostResponse` 证真实 Writer 已接受却丢响应后仅一个 POST、恢复原回执并按其 commit 回读；SDK 另拒绝确定失败轮询与其他命令回执。组件不重抄 transport，进程内证据不代替真实部署。 | 半批生效、丢更新、响应不明时双写、候选错误发布或已接受提交被回滚。 |
 | U10 / 历史差异来源 | 有同对象创建、无关提交、更新、路径移动和删除；对象 Log 准确归集、独占引入修订并分页，删除修订存在。Reader 两版对照返回各自固定内容；来源保存 SOURCE／DERIVATION 等实际信封，改变或不可达的 sourceRefs 不被读取。拒绝无当前权的历史读取；结构合规不改写来源性质。 | `TestCatalogRepoReadFlow`、`TestTreeRepositoryLogIncludesRemovalRevision`、provider Repository contract 与根删除回归复用固定两版内容、对象 Log／分页和删除历史；`TestReferenceReadRetainsEachSelectedUnitsRecordedProvenance`、`TestCacheClonesPerAddressRecordedProvenance`、`TestCollectionProductViewKeepsEachUnitsOwnSource` 钉多单元 SOURCE／DERIVATION 固定信封、可变来源隔离和不递归读取来源。对象差异 CLI 未选定，不列缺口，也不拿目录 diff 冒充。 | 原始 Git 历史冒充对象历史、删除消失、两端混版本或外呼最新来源补旧证。 |
 | U11 / 独立采用 | 无 Discovery、LiveAccess 或治理实现，建立普通对象、Schema、Relation 及能力声明并固定读写；外部源离线请求计数为零。不能靠扫描替代未装配发现，也不让 Object 基础包解释 runtime／操作。Relation 引用另一仓不读写端点或产生授权。 | `TestObjectPublicationDoesNotRequireIndexOrInstalledHandler`、`TestPublishedExternalTableDiscoveryDoesNotContactOfflineSource`、`TestCrossRepositoryRelationPublishKeepsEndpointRepoUntouched` 保留无插件／来源离线／端点不被读取或发权的断言；统一引用的 Object Service、SDK 和真实 CLI 基础旅程不需安装处理器，专属 Binding 解释移至 LiveAccess；扩展取值与发现单列兼容，不计 Object 基础通过。 | 基础发布暗依赖插件或端点可用、固定声明读取变成外部执行。 |
 | U12 / 结构 | 查实际 imports／公开调用方，类型与组装单一、无反向依赖、深层泄漏或转发壳。Require／Wrap 的实际返回值不能取得写 Ref／Merge／Archive 能力；写入仍经唯一 Writer。结构失败和业务失败分开判读。 | `TestObjectCapabilityModulesOwnTheirImplementations`、`TestObjectCapabilityPublicDepth`、`TestObjectRootsDoNotImportTheirDependentImplementations`、`TestObjectSDKDependencyGuardRejectsWriterImplementation`、CLI 静态库存与真实调用方守卫复核所有权；`TestReaderReturnsActualReadOnlyRepositoryViews` 的 tree／native × Require／Wrap 原四红例现保留 Oracle 并修复。`TestProviderNeutralUnitAlgebraHasNoFileStorageShape` 独立验证单元；静态绿色不表示业务或真实部署通过。 | 只搬目录、重复权威／协议或读口携带写权限。 |
@@ -682,7 +682,7 @@ R0 出口要求规格与实际断言映射完整，已有红例保留并进入 R
 |---|---|---|
 | `USAGE_INVALID` | 缺 flag、未知命令、空 changeset、search/stream 形状、未挂载仓/流、无 code 的 `fmt.Errorf` 归一 | 已定位 CLI |
 | `PRECONDITION_FAILED` | IfAbsent / DERIVATION / digest / stale cursor / dirty worktree | 已定位 |
-| `NON_FAST_FORWARD` | 过期 expected / merge 时 main 被推走 | 已定位 |
+| `NON_FAST_FORWARD` | 过期 expected / merge 时目标分支已分叉 | 已定位 |
 | `OBJECT_ID_CONFLICT` | 重复 Address / blob+aspect 混 | 已定位 |
 | `IDEMPOTENCY_CONFLICT` | 同 command_id 异 digest | 已定位 |
 | `EVENT_ID_CONFLICT` | 同 eventId 异 payload | 已定位 |
@@ -699,14 +699,12 @@ R0 出口要求规格与实际断言映射完整，已有红例保留并进入 R
 | `VERSION_UNRESOLVED` | 未知 commit / 不存在的 ref | 已定位 |
 | `CAPABILITY_UNSATISFIED` | 未声明 SEARCH 车道；stub 未实现 | 已定位 |
 | `TEMPORARY_UNAVAILABLE` | 瞬时 Backend I/O（Gitea/hook HTTP）；不是未挂载 | 已定位 |
-| `CANDIDATE_MOVED` | preview 后 candidate 前进 | 已定位 |
-| `VALIDATION_BASIS_MISMATCH` | 旧 PASSED 绑新 Preview | 已定位 |
+| `CANDIDATE_MOVED` | 评审后源分支前进，merge 带旧 `--commit` | 已定位 |
 | `DATASET_INVALID` | Workspace 配方不能用：无 Workspace / 重复 source / 已 retire / selector 无此 ref | 已定位 |
 | `FORBIDDEN` | `--as` 未命中 allow | 已定位 |
 | `USAGE_INVALID` | 退役的空间选择、切换和整体归档命令 | 已定位 |
 | `REPOSITORY_ARCHIVED` | 归档后写 | 已定位 |
-| `GATE_UNSATISFIED` | merge 缺证据 | 已定位 |
-| `HOOK_DENIED` | pre 非 0 | 已定位 |
+| `HOOK_DENIED` | pre 非 0（含 `writer.merge` 前置 Hook 否决） | 已定位 |
 
 ---
 
@@ -716,16 +714,16 @@ R0 出口要求规格与实际断言映射完整，已有红例保留并进入 R
 
 | ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
 |---|---|---|---|---|---|
-| X-01 | W5 candidate 存在 | 消费读 | propose 期间 `read --dataset` 仍旧 main | 已定位 | S3 |
-| X-02 | W5 candidate 存在 | 观察索引 | propose 不 `AfterSnapshot` | 已定位 | I-02 |
-| X-03 | W6 Preview 存在 | 读取 登记空间 | Preview 不写登记表 git 配方 | 已定位 | M-02 |
+| X-01 | W5 工作分支已写入 | 消费读 | 合并前 `read --dataset` 仍旧 main | 已定位 | `TestBranchMergeIsVisibleOnView` |
+| X-02 | W5 工作分支已写入 | 观察索引 | 分支写入不 `AfterSnapshot` | 已定位 | I-02 |
+| X-03 | W5 工作分支存在 | 读取 登记空间 | 建分支与分支写入不写登记表配方 | 已定位 | M-02 |
 | X-04 | 命令内 pin | 并发 merge | 本次结果仍旧 pin；**下次**命令见新 HEAD | 已定位 | API serving；CLI 一命令一 pin，跨命令跟已发布 Dataset 或 `--repo --commit` |
 | X-05 | Binding declaration pin | Descriptor 后续更新 | 旧 pin 仍解析旧 runtime/digest | 已定位 | `TestResolveDescriptorBindingAtPinnedCommit` |
 | X-06 | 联邦 Workspace | 只 allow 一仓 `object.read` | 裸对象读 fail closed；SEARCH 两仓都进候选、无读权屏蔽正文、不是 `partial` | 已定位 | P-14 |
 | X-07 | 登记空间 已归档 | 写个人仓、define Workspace | 禁 define；个人仓仍 COMMIT | 已定位 | S6 |
-| X-08 | 有 schema_ref | propose | 与 COMMIT 同一套解析 | 已定位 | `TestSchemaRefOnPropose` |
+| X-08 | 有 schema_ref | `writer put --ref` | 与默认分支 COMMIT 同一套解析 | 已定位 | `TestSchemaRefOnBranchWrite` / `TestSchemaRefBranchCommitRejectedAndAccepted` |
 | X-09 | 已有成功 command_id | 重放带 Hook 的命令 | REPLAYED 不打 hook | 已定位 | P-06 |
-| X-10 | 已配置 Gate 与 Hook | pre-merge | pre-merge 成功 ≠ 清单满足 | 已定位 | M-12 |
+| X-10 | 已配置 post `writer.merge` Hook | merge 成功 | post Hook 只收指针，不能撤销已推进的目标 | 已定位 | M-05 |
 | X-11 | 已移除 driver 名 | 部署配置验证 | 不回流成 authority/discovery/projection/cache | 已定位 | W-09 |
 | X-12 | permissions Aspect 存在 | `kc grant add` 与 READ | 快照可读；不放行 SELECT、不当 read 闸门 | 已定位 | P-10 |
 
@@ -737,7 +735,7 @@ R0 出口要求规格与实际断言映射完整，已有红例保留并进入 R
 转换边界。具体未覆盖项留在 §2/§4 各自风险行，作者流程见 §0.2；本节不重复完成状态。
 
 数仓业务、源客户端与真实业务规模夹具只属于墙外 suite。不要把 Projection 当 Canonical，
-不要把 `permissions` Aspect 当 KC READ 闸门，也不要让 `governance preview validate` 运行场景套件。
+不要把 `permissions` Aspect 当 KC READ 闸门，也不要让合并前对象校验运行场景套件（审批与外部套件归业务 Hook）。
 
 ---
 

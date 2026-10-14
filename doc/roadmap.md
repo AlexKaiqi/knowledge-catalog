@@ -20,7 +20,7 @@
 | [LiveAccess](design/liveaccess.md) | 精确读取、动态索引、双依据 | 插件化：透明取值、逐值失败、身份传递 | 部署恢复、时效、保留期 |
 | [Affordance](design/affordance.md) | 分层帮助、插件说明入口、系统仓 | `kc help` 与系统仓一致 | wield、MCP 网关 |
 | [服务](design/service.md) | 统一执行器、文件网关、可恢复单实例、证据 | 路由清单合一、拆分 `home/` | 多实例、多语言 SDK、SLI |
-| [治理](design/governance.md) | 反馈、提案、Gate、Hook | 定 controlplane 边界与去留 | 真实任务中的修订效果 |
+| [治理](design/governance.md) | 反馈、工作分支、条件合并、Hook | 已删除 controlplane 与 gate，审批归业务 | 真实任务中的修订效果 |
 
 ## 近期：马上要改的
 
@@ -44,7 +44,6 @@
 | HTTP 路由表只保留一份（`httpsurface` 与 `server/routes.go` 二选一） | 现在有三处路由清单需要对账 |
 | 命令行里的会话与登录代码收进 `client/` | 会话属于调用方，不属于命令行 |
 | `cli/` 里的合同测试按所测模块搬回各自目录 | `cli` 测试代码约是生产代码的 6 倍 |
-| `controlplane/` 与 `gate/` 合并为 `governance/` | 提案与合并检查是同一件事；先定提案流程的去留 |
 | 拆分 `home/` | 装配入口承担了过多职责 |
 | 可选：给 `invoke/` 改个更清楚的名字 | 和 `invocation/` 太像 |
 

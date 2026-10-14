@@ -2,7 +2,7 @@ package telemetry
 
 // Domain metric/trace emitters for the runtime. Each method owns one product
 // concept (HTTP, snapshot, search, writer, projection, binding, evidence,
-// hook, gate, VFS); names, units and buckets stay in instruments.go.
+// hook, VFS); names, units and buckets stay in instruments.go.
 
 import (
 	"context"
@@ -20,7 +20,7 @@ func (r *Runtime) RecordHTTP(ctx context.Context, started time.Time, method, rou
 		attribute.String("http.request.method", enumValue(method, "OTHER", "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "OTHER")),
 		attribute.String("http.route", enumValue(route, "unmatched", "/", "/health", "/livez", "/readyz", "/readyz/{surface}", "/metrics",
 			"/snapshot/v1/{operation}", "/object/v1/{operation}", "/writer/v1/{operation}",
-			"/governance/v1/{operation}", "/identity/v1/{operation}", "/admin/v1/{operation}", "/operations/v1/{operation}", "unmatched")),
+			"/identity/v1/{operation}", "/admin/v1/{operation}", "/operations/v1/{operation}", "unmatched")),
 		attribute.Int("http.response.status_code", status),
 		attribute.String("kc.propagation.outcome", enumValue(propagationOutcome, "invalid", "accepted", "generated", "legacy", "invalid", "conflict")),
 	}
@@ -186,7 +186,7 @@ func (r *Runtime) RecordSearch(ctx context.Context, provider, completeness, part
 
 func (r *Runtime) RecordWriter(ctx context.Context, surface, outcome, errorType string, replayed bool, puts, removes, payloadBytes int, elapsed time.Duration) {
 	attrs := []attribute.KeyValue{
-		attribute.String("kc.writer.surface", enumValue(surface, "other", "COMMIT", "PROPOSAL", "other")),
+		attribute.String("kc.writer.surface", enumValue(surface, "other", "COMMIT", "MERGE", "other")),
 		attribute.String("kc.outcome", enumValue(outcome, "error", "ok", "partial", "unresolved", "denied", "invalid", "conflict", "error")),
 		attribute.Bool("kc.writer.replayed", replayed),
 	}
@@ -339,25 +339,6 @@ func (r *Runtime) SetHookOutbox(pending int, oldestPendingAt time.Time) {
 		return
 	}
 	r.hookOutboxPendingAt.Store(oldestPendingAt.UnixNano())
-}
-
-func (r *Runtime) RecordGate(ctx context.Context, required int, outcome string, elapsed time.Duration) {
-	attrs := []attribute.KeyValue{
-		attribute.String("kc.outcome", enumValue(outcome, "error", "ok", "error")),
-		attribute.Bool("kc.gate.required", required > 0),
-	}
-	r.gateChecks.Add(ctx, 1, metric.WithAttributes(attrs...))
-	r.gateDuration.Record(ctx, elapsed.Seconds(), metric.WithAttributes(attrs...))
-	trace.SpanFromContext(ctx).AddEvent("kc.gate.check", trace.WithAttributes(
-		attrs[0], attrs[1], attribute.Int("kc.gate.requirement.count", required), attribute.Float64("kc.gate.duration.seconds", elapsed.Seconds()),
-	))
-	ended := time.Now()
-	_, span := r.tracer.Start(ctx, "kc.gate.check", trace.WithSpanKind(trace.SpanKindInternal),
-		trace.WithTimestamp(ended.Add(-elapsed)), trace.WithAttributes(append(attrs, attribute.Int("kc.gate.requirement.count", required))...))
-	if outcome != "ok" {
-		span.SetStatus(codes.Error, "gate check failed")
-	}
-	span.End(trace.WithTimestamp(ended))
 }
 
 func (r *Runtime) RecordVFSVolume(ctx context.Context, operation, outcome string, transferredBytes, directoryEntries int) {

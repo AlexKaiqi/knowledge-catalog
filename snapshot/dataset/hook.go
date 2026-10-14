@@ -6,7 +6,7 @@ import (
 )
 
 // Hook is an in-process subscriber on service lifecycle.
-// It is not outbound kc hook-add (scripts/HTTP; see doc/design/governance.md) and not a gate.
+// It is not outbound kc hook-add (scripts/HTTP; see doc/design/governance.md).
 // service never imports index; a sidecar implements this interface.
 // Failure must not roll back service, Writer, or Merge (K-19 / K-21).
 type Hook interface {
@@ -34,7 +34,7 @@ func (c *service) AddHook(h Hook) {
 
 // NotifySnapshot fans Store snapshot events out to Hook subscribers.
 // No-op when the Repository is not registered. Hook errors are journaled, not returned.
-// Callers are Writer COMMIT and ControlPlane merge (via Store), not the CLI facade.
+// Callers are Writer COMMIT and Writer MERGE (via Store), not the CLI facade.
 func (c *service) NotifySnapshot(ev Snapshot) {
 	if ev.Repository == nil || !c.HasRepository(ev.Repository.ID()) {
 		return

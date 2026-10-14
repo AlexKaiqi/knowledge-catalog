@@ -7,8 +7,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"kc/controlplane"
-	"kc/gate"
 	"kc/hook"
 	"kc/internal/jsonfile"
 	"kc/kernel"
@@ -64,7 +62,11 @@ func readDeploymentState(c DeploymentConfig) (deploymentState, error) {
 	return state, err
 }
 
-var durableFiles = []string{"allow.json", "hooks.json", "gates.json", "writer.db", "control.json", "system.jsonl", "access.jsonl", "feedback.jsonl", "retrieval.jsonl", "refine.jsonl", "audit.jsonl"}
+// journalFiles start empty at initialization; durableFiles is every file a
+// restart must find again.
+var journalFiles = []string{"system.jsonl", "access.jsonl", "feedback.jsonl", "retrieval.jsonl", "refine.jsonl", "audit.jsonl"}
+
+var durableFiles = append([]string{"allow.json", "hooks.json", "writer.db"}, journalFiles...)
 
 func writeEvidencePolicy(dir string, cfg *EvidenceConfig) error {
 	policy := observability.DefaultFileStorePolicy()
@@ -103,7 +105,7 @@ func validateDeploymentState(c DeploymentConfig, allowIdentityUpgrade bool) erro
 	} else if !allowIdentityUpgrade {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "identity bindings require explicit deployment init; existing grants are not migrated by login")
 	}
-	for _, name := range []string{"allow.json", "hooks.json", "gates.json", "control.json"} {
+	for _, name := range []string{"allow.json", "hooks.json"} {
 		raw, err := os.ReadFile(filepath.Join(c.StateDir, name))
 		if err != nil {
 			return err
@@ -112,14 +114,8 @@ func validateDeploymentState(c DeploymentConfig, allowIdentityUpgrade bool) erro
 			return kernel.Fail(kernel.ErrPreconditionFailed, "durable deployment state %s is invalid", name)
 		}
 	}
-	if _, err := gate.Read(c.StateDir); err != nil {
-		return kernel.Fail(kernel.ErrPreconditionFailed, "durable gate policy is invalid")
-	}
 	if _, err := hook.Read(c.StateDir); err != nil {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "durable hook policy is invalid")
-	}
-	if _, err := controlplane.NewFileControlState(filepath.Join(c.StateDir, "control.json"), c.Registry.ID).Load(); err != nil {
-		return kernel.Fail(kernel.ErrPreconditionFailed, "durable control state is invalid")
 	}
 	if _, err := snapshot.OpenBoltCommandStore(filepath.Join(c.StateDir, "writer.db")); err != nil {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "durable Writer ledger is invalid")
@@ -304,12 +300,6 @@ func initializeDeploymentStaging(c DeploymentConfig, state deploymentState, seed
 	if err := hook.Write(staging, hook.File{}); err != nil {
 		return err
 	}
-	if err := gate.Write(staging, gate.File{}); err != nil {
-		return err
-	}
-	if err := controlplane.NewFileControlState(filepath.Join(staging, "control.json"), c.Registry.ID).Save(controlplane.EmptyControlState); err != nil {
-		return err
-	}
 	if _, err := snapshot.NewCommandLedger(snapshot.NewBoltCommandStore(filepath.Join(staging, "writer.db"))); err != nil {
 		return err
 	}
@@ -321,7 +311,7 @@ func initializeDeploymentStaging(c DeploymentConfig, state deploymentState, seed
 		return err
 	}
 	state.ConnectionStoreInitialized = true
-	for _, name := range durableFiles[5:] {
+	for _, name := range journalFiles {
 		if err := os.WriteFile(filepath.Join(staging, name), nil, 0600); err != nil {
 			return err
 		}

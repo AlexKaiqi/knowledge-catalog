@@ -299,8 +299,8 @@ func TestSnapshotCLIHostOwnershipGuardAllowsAssemblyAndHostContext(t *testing.T)
 	owned := snapshotCLILeafOwnership(snapshotcli.Commands())
 	source := `
 var cliSurface = composeCLICommands(Commands(), map[string]surface{"create": {}})
-var helpEntries = mergeHelpEntries(moduleHelp(), hostGovernanceHelpEntries())
-func hostGovernanceHelpEntries() map[string]entry { return map[string]entry{"governance proposal create": {}} }
+var helpEntries = mergeHelpEntries(moduleHelp(), hostWriterHelpEntries())
+func hostWriterHelpEntries() map[string]entry { return map[string]entry{"writer merge": {}} }
 var helpGroups = composeSnapshotHelpGroups(map[string][]string{"composition": {"create"}, "global journey": {"show", "read"}})
 var composeHelp = "kc show then kc dataset define and kc grant list"
 func applyPositionals(handler string) { if entry, module := snapshotCommandByHandler(handler); module { bindSnapshotOperands(entry) } }

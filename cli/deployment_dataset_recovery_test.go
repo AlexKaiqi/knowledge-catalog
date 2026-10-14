@@ -142,7 +142,7 @@ func TestDatasetPublishingRecoveryKeepsAcceptedVersion(t *testing.T) {
 	stop()
 	server = nil
 	preserved := map[string][]byte{}
-	for _, name := range []string{"allow.json", "writer.db", "control.json", "system.jsonl", "access.jsonl"} {
+	for _, name := range []string{"allow.json", "writer.db", "system.jsonl", "access.jsonl"} {
 		raw, err := os.ReadFile(filepath.Join(cfg.StateDir, name))
 		if err != nil {
 			t.Fatal(err)

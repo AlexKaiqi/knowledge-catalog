@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"encoding/json"
 	declarativeindexclient "kc/declarativeindex/client"
 	discoveryclient "kc/discovery/client"
 	"kc/kernel"
@@ -41,16 +40,6 @@ type WriterService struct{ client *Client }
 func (c *Client) WriterService() WriterService { return WriterService{client: c} }
 
 type CommitRequest = objectclient.CommitRequest
-type ProposalRequest struct {
-	Repository   string                          `json:"repository,omitempty"`
-	ProposalID   string                          `json:"proposalId"`
-	CandidateRef string                          `json:"candidateRef"`
-	TargetRef    string                          `json:"targetRef,omitempty"`
-	BaseCommit   string                          `json:"baseCommit,omitempty"`
-	Operations   []objectmodel.Operation         `json:"operations"`
-	Message      string                          `json:"message,omitempty"`
-	Provenance   *objectmodel.ProvenanceEnvelope `json:"provenance,omitempty"`
-}
 
 func (s WriterService) Commit(ctx context.Context, repository string, q CommitRequest, o RequestOptions, out any) error {
 	return s.client.objects.Commit(ctx, repository, q, objectclient.RequestOptions{RequestID: o.RequestID}, out)
@@ -62,56 +51,45 @@ func (s WriterService) Head(ctx context.Context, repository, ref string, o Reque
 	}
 	return s.client.doJSON(ctx, "GET", path, nil, o, out)
 }
+
+// BranchRequest opens a work branch. From names the starting ref; Commit pins
+// the starting commit instead. The two are exclusive.
+type BranchRequest struct {
+	Name   string `json:"name"`
+	From   string `json:"from,omitempty"`
+	Commit string `json:"commit,omitempty"`
+}
+
+// MergeRequest publishes one reviewed source commit onto Into (default
+// refs/heads/main). Commit pins the reviewed source and Expected pins the
+// target the review saw; either moving rejects the merge.
+type MergeRequest struct {
+	CommandID string `json:"commandId"`
+	From      string `json:"from"`
+	Into      string `json:"into,omitempty"`
+	Commit    string `json:"commit,omitempty"`
+	Expected  string `json:"expected,omitempty"`
+}
+
+func (s WriterService) Branch(ctx context.Context, repository string, q BranchRequest, o RequestOptions, out any) error {
+	return s.client.doJSON(ctx, "POST", "/writer/v1/repositories/"+resourceSegment(repository)+"/branches", q, o, out)
+}
+func (s WriterService) Merge(ctx context.Context, repository string, q MergeRequest, o RequestOptions, out any) error {
+	if strings.TrimSpace(q.CommandID) == "" {
+		return kernel.Fail(kernel.ErrUsageInvalid, "merge requires an explicit commandId")
+	}
+	return s.client.doJSON(ctx, "POST", "/writer/v1/repositories/"+resourceSegment(repository)+"/merges", q, o, out)
+}
 func (s WriterService) Receipt(ctx context.Context, command string, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "GET", "/writer/v1/receipts/"+resourceSegment(command), nil, o, out)
 }
 
-type GovernanceService struct{ client *Client }
-
-func (c *Client) GovernanceService() GovernanceService { return GovernanceService{client: c} }
-
-type PreviewRequest struct {
-	Pin      json.RawMessage `json:"pin,omitempty"`
-	Dataset  string          `json:"dataset,omitempty"`
-	Proposal string          `json:"proposal"`
-}
-type ValidateRequest struct {
-	Preview string `json:"preview"`
-}
-type ValidationRequest struct {
-	Preview string `json:"preview"`
-	Suite   string `json:"suite"`
-	Outcome string `json:"outcome"`
-}
-type MergeRequest struct {
-	Proposal   string `json:"proposal"`
-	Preview    string `json:"preview"`
-	Validation string `json:"validation,omitempty"`
-}
-
-func (s GovernanceService) Proposal(ctx context.Context, q ProposalRequest, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "POST", "/governance/v1/proposals", q, o, out)
-}
-func (s GovernanceService) Preview(ctx context.Context, q PreviewRequest, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "POST", "/governance/v1/previews", q, o, out)
-}
-func (s GovernanceService) Validate(ctx context.Context, q ValidateRequest, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "POST", "/governance/v1/previews:validate", q, o, out)
-}
-func (s GovernanceService) RecordValidation(ctx context.Context, q ValidationRequest, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "POST", "/governance/v1/validations", q, o, out)
-}
-func (s GovernanceService) Merge(ctx context.Context, q MergeRequest, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "POST", "/governance/v1/proposals:merge", q, o, out)
-}
-
 type PolicyBindingRequest struct {
-	On         string   `json:"on"`
-	Phase      string   `json:"phase,omitempty"`
-	Repository string   `json:"repository,omitempty"`
-	Run        string   `json:"run,omitempty"`
-	URL        string   `json:"url,omitempty"`
-	Require    []string `json:"require,omitempty"`
+	On         string `json:"on"`
+	Phase      string `json:"phase,omitempty"`
+	Repository string `json:"repository,omitempty"`
+	Run        string `json:"run,omitempty"`
+	URL        string `json:"url,omitempty"`
 }
 type AuditQueryRequest struct {
 	RequestID    string `json:"requestId,omitempty"`
@@ -169,15 +147,6 @@ func (s OperationsService) Hooks(ctx context.Context, o RequestOptions, out any)
 }
 func (s OperationsService) RemoveHook(ctx context.Context, id string, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "DELETE", "/operations/v1/hooks/"+resourceSegment(id), nil, o, out)
-}
-func (s OperationsService) AddGate(ctx context.Context, q PolicyBindingRequest, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "POST", "/operations/v1/gates", q, o, out)
-}
-func (s OperationsService) Gates(ctx context.Context, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "GET", "/operations/v1/gates", nil, o, out)
-}
-func (s OperationsService) RemoveGate(ctx context.Context, id string, o RequestOptions, out any) error {
-	return s.client.doJSON(ctx, "DELETE", "/operations/v1/gates/"+resourceSegment(id), nil, o, out)
 }
 func (s OperationsService) AccessLog(ctx context.Context, q AuditQueryRequest, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "POST", "/operations/v1/access-log:query", q, o, out)

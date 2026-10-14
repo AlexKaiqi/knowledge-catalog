@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"kc/controlplane"
 	apphome "kc/home"
 	"kc/snapshot"
 )
@@ -129,7 +128,6 @@ func readinessFingerprint(home, surface string) string {
 			filepath.Join(home, "refine"),
 			filepath.Join(home, "writer.db"),
 			filepath.Join(home, "writer.json"),
-			filepath.Join(home, "control.json"),
 		)
 	}
 	var out strings.Builder
@@ -176,9 +174,6 @@ func Probe(home, surface string, providers Providers) Result {
 	if surface == "writer" {
 		if _, err := snapshot.NewCommandLedger(snapshot.NewBoltCommandStore(filepath.Join(home, "writer.db"))); err != nil {
 			return Result{Status: "not_ready", Surface: surface, ReasonCode: "COMMAND_LOG_UNAVAILABLE"}
-		}
-		if _, err := controlplane.NewFileControlState(filepath.Join(home, "control.json"), file.Registry.ID).Load(); err != nil {
-			return Result{Status: "not_ready", Surface: surface, ReasonCode: "CONTROL_STATE_UNAVAILABLE"}
 		}
 		if err := EvidenceWriteProbe(home); err != nil {
 			return Result{Status: "not_ready", Surface: surface, ReasonCode: "EVIDENCE_STORE_UNWRITABLE"}
@@ -267,9 +262,6 @@ func Deployment(config apphome.DeploymentConfig, surface string, providers Provi
 	if surface == "writer" {
 		if _, err := snapshot.OpenBoltCommandStore(filepath.Join(config.StateDir, "writer.db")); err != nil {
 			return fail("COMMAND_LOG_UNAVAILABLE")
-		}
-		if _, err := controlplane.NewFileControlState(filepath.Join(config.StateDir, "control.json"), config.Registry.ID).Load(); err != nil {
-			return fail("CONTROL_STATE_UNAVAILABLE")
 		}
 		if err := EvidenceWriteProbe(config.StateDir); err != nil {
 			return fail("EVIDENCE_STORE_UNWRITABLE")

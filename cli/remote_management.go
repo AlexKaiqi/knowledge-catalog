@@ -30,47 +30,43 @@ func runRemoteWriter(ctx context.Context, client *kcclient.Client, path string, 
 		}
 		err = client.WriterService().Head(ctx, repository, snapshotRef(flags), options, &output)
 		return output, err
+	case "writer branch":
+		repository, err := inv.RequireRemoteFlag(flags, "repo")
+		if err != nil {
+			return nil, err
+		}
+		name, err := inv.RequireRemoteFlag(flags, "name")
+		if err != nil {
+			return nil, err
+		}
+		if invoke.FlagString(flags, "from") != "" && invoke.FlagString(flags, "commit") != "" {
+			return nil, kernel.Fail(kernel.ErrUsageInvalid, "use only one of --from or --commit")
+		}
+		request := kcclient.BranchRequest{Name: name, From: invoke.FlagString(flags, "from"), Commit: invoke.FlagString(flags, "commit")}
+		err = client.WriterService().Branch(ctx, repository, request, options, &output)
+		return output, err
+	case "writer merge":
+		repository, err := inv.RequireRemoteFlag(flags, "repo")
+		if err != nil {
+			return nil, err
+		}
+		commandID, err := inv.RequireRemoteFlag(flags, "command-id")
+		if err != nil {
+			return nil, err
+		}
+		from, err := inv.RequireRemoteFlag(flags, "from")
+		if err != nil {
+			return nil, err
+		}
+		request := kcclient.MergeRequest{CommandID: commandID, From: from, Into: invoke.FlagString(flags, "into"), Commit: invoke.FlagString(flags, "commit"), Expected: invoke.FlagString(flags, "expected")}
+		err = client.WriterService().Merge(ctx, repository, request, options, &output)
+		return output, err
 	case "writer receipt":
 		commandID, err := inv.RequireRemoteFlag(flags, "command-id")
 		if err != nil {
 			return nil, err
 		}
 		err = client.WriterService().Receipt(ctx, commandID, options, &output)
-		return output, err
-	default:
-		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "remote typed client does not implement %s", path)
-	}
-}
-
-func runRemoteGovernance(ctx context.Context, client *kcclient.Client, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
-	var output any
-	service := client.GovernanceService()
-	switch path {
-	case "governance proposal create":
-		request, err := remoteProposalRequest(flags)
-		if err != nil {
-			return nil, err
-		}
-		err = service.Proposal(ctx, request, options, &output)
-		return output, err
-	case "governance preview create":
-		if invoke.FlagString(flags, "dataset") == "" && len(remotePinDocument(flags)) == 0 {
-			return nil, kernel.Fail(kernel.ErrUsageInvalid, "governance preview create requires --dataset")
-		}
-		request := kcclient.PreviewRequest{Dataset: invoke.FlagString(flags, "dataset"), Pin: remotePinDocument(flags), Proposal: invoke.FlagString(flags, "proposal")}
-		err := service.Preview(ctx, request, options, &output)
-		return output, err
-	case "governance preview validate":
-		request := kcclient.ValidateRequest{Preview: invoke.FlagString(flags, "preview")}
-		err := service.Validate(ctx, request, options, &output)
-		return output, err
-	case "governance validation record":
-		request := kcclient.ValidationRequest{Preview: invoke.FlagString(flags, "preview"), Suite: invoke.FlagString(flags, "suite"), Outcome: invoke.FlagString(flags, "outcome")}
-		err := service.RecordValidation(ctx, request, options, &output)
-		return output, err
-	case "governance proposal merge":
-		request := kcclient.MergeRequest{Proposal: invoke.FlagString(flags, "proposal"), Preview: invoke.FlagString(flags, "preview"), Validation: invoke.FlagString(flags, "validation")}
-		err := service.Merge(ctx, request, options, &output)
 		return output, err
 	default:
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "remote typed client does not implement %s", path)

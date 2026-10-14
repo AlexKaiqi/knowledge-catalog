@@ -10,7 +10,7 @@ import (
 )
 
 // This journey owns the public commands that do not naturally occur in the
-// provider/consumer/governance journeys. Each assertion protects observable
+// provider/consumer/review-branch journeys. Each assertion protects observable
 // protocol behavior; it is not a call-only coverage fixture.
 func TestCatalogViewsChecksAndObjectResolve(t *testing.T) {
 	home := testkit.TempDir(t)

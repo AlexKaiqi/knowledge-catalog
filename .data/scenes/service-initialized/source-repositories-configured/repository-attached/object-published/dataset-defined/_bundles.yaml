@@ -1,8 +1,6 @@
 - id: "maintenance"
   suite: "product"
-  summary: "已有对象的提案、预览、验证、合并与读回"
+  summary: "已有对象在工作分支上修改、合并进主分支并读回"
   walk:
-    - construct: "proposal-opened"
-    - construct: "proposal-preview-created"
-    - process: "probe-structure-validation-keeps-main.feature"
-    - process: "probe-record-passed-validation-merges-candidate.feature"
+    - construct: "review-branch-written"
+    - process: "probe-merge-publishes-reviewed-branch.feature"

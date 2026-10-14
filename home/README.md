@@ -1,6 +1,6 @@
 # home/
 
-部署装配入口：按声明配置连接独立登记表 Snapshot 权威和已有对象 Snapshot，把 Writer / Reader / ControlPlane / Index 装配到 Server。Snapshot 后端只经 `kc/snapshot` 公开构造与能力契约接入；lakeFS 实现归私有 `snapshot/internal/lakefsimpl`（A-01）；`declarativeindex/opensearch` 只允许在 stores 族与就绪端口绑定（`readiness_ports.go`：`NewSearchBackendProbe` 把具体索引探测绑定成端口函数，CAP-ORG-01 B7）。本包不得 import `cli`、`client` 或 `httpsurface`。
+部署装配入口：按声明配置连接独立登记表 Snapshot 权威和已有对象 Snapshot，把 Writer / Reader / Index 装配到 Server。Snapshot 后端只经 `kc/snapshot` 公开构造与能力契约接入；lakeFS 实现归私有 `snapshot/internal/lakefsimpl`（A-01）；`declarativeindex/opensearch` 只允许在 stores 族与就绪端口绑定（`readiness_ports.go`：`NewSearchBackendProbe` 把具体索引探测绑定成端口函数，CAP-ORG-01 B7）。本包不得 import `cli`、`client` 或 `httpsurface`。
 
 业务 CLI 经 Server 和显式 principal。`kc deployment init --config` 显式初始化；`kc serve --config` 与 `OpenDeployment` 仅恢复。没有公开 `local` 命令或由实例目录扫描得到的部署清单。
 
@@ -101,9 +101,9 @@ repositoryAccess:
 | 登记权威、成员、Dataset 发布配方与历史 | 配置指定的独立登记表 Snapshot 权威 | 重新打开该 Snapshot；写成功以 ref CAS 为准 |
 | Snapshot 内容、版本与候选分支 | 静态连接或托管仓记录指定的 authority | 只读打开；不得初始化、stamp 或迁移 |
 | 托管仓连接、创建请求与分阶段进度 | `stateDir/managed.db`；Snapshot 仍在托管 authority | 恢复新仓连接及原创建结果，不改静态配置、不补发已撤销 grant |
-| grants、hooks、gates | `stateDir` 内应用数据 | 持久卷保留，不从 bootstrap 配置重建 |
+| grants、hooks | `stateDir` 内应用数据 | 持久卷保留，不从 bootstrap 配置重建 |
 | 可信用户名绑定 | `stateDir/identities.json`；初始化回执记录其存在 | 绑定用户名与 provider/issuer/subject；缺失失败，不重新接管同名账号 |
-| Writer command-id 回执、提案、Preview、验证记录 | `stateDir` 内账本和 control state | 保持幂等重放与维护流程连续性 |
+| Writer command-id 回执（含 MERGE） | `stateDir` 内账本 | 保持幂等重放与维护流程连续性 |
 | 过程证据、访问证据、待投递 outbox | `stateDir` | 保留；队列清空后允许删除空 outbox 文件 |
 | 派生投影与正文缓存 | `cacheDir`；检索投影也可由配置的外部 provider 保存 | 可丢弃并按明确版本重建；登记表 发布权威始终是 Snapshot |
 | endpoint、driver、路径、认证模式、首个管理员 | 声明配置 | 由部署系统恢复；bootstrap 只在显式首次初始化使用 |
@@ -120,12 +120,12 @@ repositoryAccess:
 |---|---|
 | `deployment.go` / `deployment_runtime.go` | 声明解析、初始化、恢复、只读接入与持久状态检查 |
 | `registry_authority.go` | 独立登记表 Snapshot 容器的打开/创建；不进入对象 Store |
-| `home.go` | Store、登记表、Writer、Reader、ControlPlane、Index 的共同装配 |
+| `home.go` | Store、登记表、Writer、Reader、Index 的共同装配 |
 | `managed.go` / `managed_ledger.go` | 显式托管仓创建、耐久分配账和只读恢复；重试不重新发权 |
 | `authority_drivers.go` | 唯一具体 Snapshot adapter 选择点；创建与只读打开分离 |
-| `home_sidecar.go` | AfterSnapshot → Index、Merge Gate |
+| `home_sidecar.go` | AfterSnapshot → Index |
 | `home_system.go` | System Writer 发布与内置信任根校验 |
-| `journal.go` | Writer / Reader / 登记表 / ControlPlane 的过程账 |
+| `journal.go` | Writer / Reader / 登记表 的过程账 |
 | `read_view.go` | 正式部署请求的独立 Reader、过程账上下文和 登记表 已接受状态视图 |
 | `home_discover.go` / `home_mount.go` | 组件夹具的显式创建与目录发现；不用于生产恢复 |
 | `stores*.go` | 运行时 provider 配置及旧组件夹具布局 |

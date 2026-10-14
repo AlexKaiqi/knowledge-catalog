@@ -65,7 +65,8 @@ func (r *Rule) UnmarshalJSON(data []byte) error {
 }
 
 func retiredAction(action string) bool {
-	return strings.HasPrefix(action, "kset.") || strings.HasPrefix(action, "catalog.") || action == "dataset.consume"
+	return strings.HasPrefix(action, "kset.") || strings.HasPrefix(action, "catalog.") || action == "dataset.consume" ||
+		strings.HasPrefix(action, "governance.") || strings.HasPrefix(action, "operations.gates.")
 }
 
 func ValidateActions(actions []string) error {

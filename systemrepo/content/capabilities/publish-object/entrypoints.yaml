@@ -14,6 +14,12 @@ schema_ref: schema/system/capability-entrypoints/v1
       "help": "kc help diff"
     },
     {
+      "action": "writer.branch",
+      "command": "kc writer branch",
+      "description": "从当前发布版本开一条工作分支，写入不影响 main",
+      "help": "kc help writer branch"
+    },
+    {
       "action": "writer.commit",
       "command": "kc writer commit",
       "description": "把目录里的最终样子发布成仓的新版本",
@@ -24,6 +30,12 @@ schema_ref: schema/system/capability-entrypoints/v1
       "command": "kc writer head",
       "description": "查看 Repository 当前发布版本",
       "help": "kc help writer head"
+    },
+    {
+      "action": "writer.merge",
+      "command": "kc writer merge",
+      "description": "把审阅过的分支提交校验后快进发布到目标引用",
+      "help": "kc help writer merge"
     },
     {
       "action": "writer.commit",

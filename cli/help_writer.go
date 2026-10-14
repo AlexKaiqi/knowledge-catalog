@@ -60,6 +60,53 @@ func hostWriterHelpEntries() map[string]helpEntry {
     例：kc writer commit --command-id commit-bulk-1 --repo kr://scene/object --dir drafts --bulk
     例：kc writer receipt --command-id commit-1`,
 		},
+		"writer branch": {
+			Description: "从当前发布版本开一条工作分支，写入不影响 main",
+			Usage: `kc writer branch --repo <id> --name <branch> [--from <ref> | --commit <commit>]
+  用途：
+    为一组待审改动建立独立工作分支；之后用 writer commit --ref 或 writer put --ref 写到这条分支。
+  用法与参数：
+    --name 是新分支名，裸名自动补成 refs/heads/<name>，也可直接写完整 refs/...。
+    --from 选择起点引用（默认 refs/heads/main），--commit 固定起点 commit，两者只能给一个。
+  条件：
+    已认证并有该仓新分支范围的 writer.branch；仓已登记、未归档且不是 system 仓；新分支尚不存在。
+  结果：
+    返回 repositoryId、ref 和起点 commitId。
+  后果：
+    只新建一个引用，不改 main、不发布对象、不触发索引或 Dataset 维护；分支上的后续写入同样不通知订阅者。
+  风险与成本：
+    一次引用创建；分支不会随 main 自动前进，审阅期间 main 推进后合并会被拒绝，需要在新基点上重新开分支。
+  失败恢复：
+    PRECONDITION_FAILED 表示分支已存在，换名或沿用该分支；VERSION_UNRESOLVED 表示起点不存在，核对 --from/--commit。
+  示例：
+    例：kc writer branch --repo kr://scene/object --name review/policy-a
+    例：kc writer commit --command-id draft-1 --repo kr://scene/object --ref refs/heads/review/policy-a --dir drafts`,
+		},
+		"writer merge": {
+			Description: "把审阅过的分支提交校验后快进发布到目标引用",
+			Usage: `kc writer merge --command-id <id> --repo <id> --from <branch> [--commit <reviewed>] [--into <ref>] [--expected <commit>]
+  用途：
+    审批由业务完成后，把分支上审阅过的那个 commit 发布到目标引用（默认 refs/heads/main）。
+  用法与参数：
+    --from 是工作分支（裸名补 refs/heads/）；--commit 固定审阅时看到的分支 commit，--expected 固定审阅时的目标 commit。
+    省略 --commit/--expected 时取当前值；--command-id 由你提供，同 id 重放返回原回执。
+  条件：
+    已认证并有目标引用范围的 writer.merge；分支是目标的后代（快进），分支改动全部是经 Writer 写入的对象单元。
+    合并前按目标的 Schema 重新校验分支里每个改动对象；前置 writer.merge Hook 可否决，用于接入业务审批。
+  结果：
+    返回 Surface MERGE 的耐久回执，含 oldCommit/newCommit；重放时 disposition 为 REPLAYED。
+  后果：
+    只在目标仍等于 expected 时条件推进；推进 main 时才通知索引、Dataset 与维护。后置 Hook 投递失败不回滚合并。
+  风险与成本：
+    读取分支差异并逐对象校验，成本随改动规模增长；不做三方合并，不自动变基。
+  失败恢复：
+    CANDIDATE_MOVED：分支在审阅后又被写入，重新审阅新 commit；NON_FAST_FORWARD：目标已推进，从新 main 重开分支。
+    SCHEMA_INSTANCE_INVALID 或 PRECONDITION_FAILED：分支里有不合规或绕过 Writer 的文件，在分支上修正后重新审阅。
+    响应丢失时按原 command-id 查 writer receipt，不换 id 重发。
+  示例：
+    例：kc writer merge --command-id merge-1 --repo kr://scene/object --from review/policy-a
+    例：kc writer merge --command-id merge-1 --repo kr://scene/object --from review/policy-a --commit c-reviewed --expected c-main`,
+		},
 		"writer head": {
 			Description: "查看 Repository 当前发布版本",
 			Usage: `kc writer head --repo <id>

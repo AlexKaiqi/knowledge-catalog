@@ -270,7 +270,7 @@ exec(sys.stdin.read(), {"__name__": "__main__"})
             routes = root / "server/service_routes.go"
             routes.write_text("\n".join(f'"/{namespace}/v1/resources"'
                                         for namespace in ("snapshot", "object",
-                                                          "writer", "governance", "identity",
+                                                          "writer", "identity",
                                                           "admin", "operations")) + "\n")
             script = root / "scripts/check-surface.sh"
             shutil.copyfile(SCRIPTS / script.name, script)

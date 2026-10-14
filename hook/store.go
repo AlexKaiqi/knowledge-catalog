@@ -15,9 +15,7 @@ const (
 )
 
 var mutatingOn = map[string]bool{
-	"writer.commit": true, "governance.proposal.create": true,
-	"governance.preview.create": true, "governance.validate": true,
-	"governance.validation.record": true, "governance.merge": true,
+	"writer.commit": true, "writer.branch": true, "writer.merge": true,
 	"dataset.manage": true, "repositories.manage": true,
 }
 

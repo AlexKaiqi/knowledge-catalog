@@ -19,7 +19,7 @@ in `AuthenticateRequest`, and never client-asserts identity headers when the
 server derives identity from the verified credential.
 
 `Client.Do` can authenticate a request to KC or another system. Snapshot,
-Object, Workspace Files, Writer, Governance, Identity, Admin and Operations
+Object, Workspace Files, Writer, Identity, Admin and Operations
 are separate typed clients; there is no arbitrary verb invocation. Every call
 re-reads the current
 client session and propagates W3C trace context without adding

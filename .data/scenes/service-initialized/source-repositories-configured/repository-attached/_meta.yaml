@@ -9,7 +9,7 @@ publishes:
   - "object.readme"
   - "access.rules"
   - "catalog.lifecycle"
-  - "control.proposal"
+  - "writer.merge"
   - "resource.handle"
   - "aspect.binding"
   - "binding.observation"
@@ -578,7 +578,7 @@ evidence:
       - "TestT2CommitCAS"
       - "TestT3Atomicity"
       - "TestT4CommandIdempotency"
-      - "TestProposeSurface"
+      - "TestBranchWriteDoesNotNotifyPublishedSubscribers"
       - "TestAcceptedCommitSurvivesEvidenceFailure"
       - "TestReceiptSaveFailureDoesNotAllowDuplicateAfterRestart"
       - "TestCommandLogRecoversCommitBeforeReceipt"
@@ -590,7 +590,7 @@ evidence:
       - "TestMaintenanceRecoveryRejectsAnotherCommandsReceipt"
     verifies:
       - claim: "object#U17"
-        detail: "仓 CAS／单元条件及批内失败无泄漏，同命令重放同 commit，提案不动 main，次级证据失败保留已接受结果。真实 Writer 已提交后丢 HTTP 响应仅一个 POST，恢复原回执并按其 commit 回读；确定失败不轮询，其他命令回执不冒充结果。耐久 ledger 与真实部署分层判读。"
+        detail: "仓 CAS／单元条件及批内失败无泄漏，同命令重放同 commit，分支写入不动 main，次级证据失败保留已接受结果。真实 Writer 已提交后丢 HTTP 响应仅一个 POST，恢复原回执并按其 commit 回读；确定失败不轮询，其他命令回执不冒充结果。耐久 ledger 与真实部署分层判读。"
   - id: "object-history-diff-and-provenance"
     title: "按对象身份复核固定历史、两版内容与独立来源信封"
     source: "writer.snapshot"
@@ -670,11 +670,11 @@ probes:
     source: "catalog.lifecycle"
     views:
       - "lifecycle"
-  - file: "probe-gates.feature"
-    source: "control.proposal"
+  - file: "probe-merge-hooks.feature"
+    source: "writer.merge"
     views:
       - "lifecycle"
-    title: "添加并撤销合并门禁后规则列表为空"
+    title: "添加并撤销合并后置 Hook 后绑定列表为空"
   - file: "access-missing-runtime-unavailable.feature"
     source: "resource.handle"
     views:

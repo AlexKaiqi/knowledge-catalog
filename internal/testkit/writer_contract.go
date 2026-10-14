@@ -9,7 +9,7 @@ import (
 	"kc/snapshot"
 )
 
-// WriterContract runs COMMIT idempotency, schema_ref, and PROPOSAL against any Repository.
+// WriterContract runs COMMIT idempotency, schema_ref, and branch/merge against any Repository.
 //
 // Args:
 //
@@ -70,28 +70,37 @@ func WriterContract[R snapshot.Store](t *testing.T, create func(t *testing.T, id
 		}
 	})
 
-	t.Run("propose writes a candidate ref and leaves main still", func(t *testing.T) {
-		w, repo := writerOn(t, create, "kr://conformance/writer/propose")
+	t.Run("branch commit leaves main still and merge publishes the reviewed commit", func(t *testing.T) {
+		w, repo := writerOn(t, create, "kr://conformance/writer/branch")
 		main := MustHead(t, repo, "refs/heads/main")
-		receipt, err := w.Propose("pr-1", writer.ProposeIntent{
+		const branch = "refs/heads/review/PR-1"
+		if _, err := w.CreateBranch(writer.BranchIntent{TargetRepository: repo.ID(), Ref: branch}); err != nil {
+			t.Fatal(err)
+		}
+		receipt, err := w.CommitIntent("pr-1", writer.CommitIntent{
 			TargetRepository: repo.ID(),
-			TargetRef:        "refs/heads/main",
-			CandidateRef:     "refs/heads/candidates/PR-1",
-			BaseCommit:       main,
+			TargetRef:        branch,
 			Operations:       PutEntity("a", 1, ""),
 		})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if receipt.Surface != "PROPOSAL" {
-			t.Fatal(receipt.Surface)
-		}
 		if MustHead(t, repo, "refs/heads/main") != main {
-			t.Fatal("propose moved main")
+			t.Fatal("branch commit moved main")
 		}
-		cand, ok := repo.GetRef("refs/heads/candidates/PR-1")
-		if !ok || cand != receipt.Result.CommitID {
-			t.Fatalf("candidate %s %v", cand, ok)
+		head, ok := repo.GetRef(branch)
+		if !ok || head != receipt.Result.CommitID {
+			t.Fatalf("branch %s %v", head, ok)
+		}
+		merged, err := w.Merge("merge-1", writer.MergeIntent{
+			TargetRepository: repo.ID(), SourceRef: branch,
+			SourceCommit: receipt.Result.CommitID, ExpectedTargetCommit: main,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if merged.Disposition != writer.DispositionApplied || MustHead(t, repo, "refs/heads/main") != receipt.Result.CommitID {
+			t.Fatalf("merge %#v", merged)
 		}
 	})
 

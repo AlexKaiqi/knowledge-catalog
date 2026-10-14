@@ -23,7 +23,7 @@ Agent 要先读懂对象和系统能做什么，才能 discover 和 access。Aff
 | 层级 | 说明什么 |
 |---|---|
 | `kc help` | 日常能做什么、最短路径，以及对象模型（object_id、Aspect、Member、地址、Relation）和基础访问例子 |
-| 功能组帮助 | 这组有哪些动作，例如 `kc help consume`、`write`、`compose`、`governance` |
+| 功能组帮助 | 这组有哪些动作，例如 `kc help consume`、`write`、`compose` |
 | 叶子命令帮助 | 当前动作的参数和取值方法，是精确调用合同的唯一来源 |
 | `kc plugin <名称> help` | 插件的用途、适用声明、例子与命令入口 |
 | `kr://kc/system` | 用途、选择、机制和使用指南，作为对象发布；调用入口与 help 同源，由自动检查约束漂移 |

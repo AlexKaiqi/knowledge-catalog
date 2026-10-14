@@ -39,47 +39,47 @@ var forbidden = []struct {
 	{pkg: "discovery/projection", denied: []string{"liveaccess", "systemrepo"}, why: "projection consumes verified observations; the source bridge owns I/O"},
 	{
 		pkg:    "kernel",
-		denied: []string{"snapshot", "object", "object/writer", "object/reader", "discovery", "declarativeindex", "discovery/projection", "controlplane"},
+		denied: []string{"snapshot", "object", "object/writer", "object/reader", "discovery", "declarativeindex", "discovery/projection"},
 		why:    "kernel is identity and contracts only; it sits under every layer",
 	},
 	{
 		pkg:    "snapshot",
-		denied: []string{"object", "object/writer", "object/reader", "discovery", "declarativeindex", "discovery/projection", "controlplane", "hook", "gate", "cli"},
+		denied: []string{"object", "object/writer", "object/reader", "discovery", "declarativeindex", "discovery/projection", "hook", "cli"},
 		why:    "layer ⓪ knows only path/blob/tree/commit/ref/CAS; optional upper capabilities assert against it",
 	},
 	{
 		pkg:    "object",
-		denied: []string{"object/writer", "object/reader", "discovery", "declarativeindex", "discovery/projection", "controlplane", "hook", "gate", "cli"},
+		denied: []string{"object/writer", "object/reader", "discovery", "declarativeindex", "discovery/projection", "hook", "cli"},
 		why:    "layer ② contracts may depend on Snapshot coordinates but not their callers or adapters",
 	},
 	{
 		pkg:    "snapshot/dataset",
-		denied: []string{"home", "invocation", "invoke", "server", "client", "object", "discovery/service", "discovery", "declarativeindex", "discovery/projection", "controlplane", "hook", "gate", "cli"},
+		denied: []string{"home", "invocation", "invoke", "server", "client", "object", "discovery/service", "discovery", "declarativeindex", "discovery/projection", "hook", "cli"},
 		why:    "Snapshot Store owns file Dataset definitions and release authority; it cannot depend on consumers, object interpretation, or concrete storage providers",
 	},
 	{
 		pkg:    "snapshot/access",
-		denied: []string{"snapshot", "home", "invocation", "invoke", "server", "client", "identity", "object", "discovery/service", "discovery", "declarativeindex", "discovery/projection", "controlplane", "hook", "gate", "cli"},
+		denied: []string{"snapshot", "home", "invocation", "invoke", "server", "client", "identity", "object", "discovery/service", "discovery", "declarativeindex", "discovery/projection", "hook", "cli"},
 		why:    "generic scoped access rules depend only on coordinates/errors; external application defaults and identity lifecycle stay outside",
 	},
 	{
 		pkg:    "snapshot/service",
-		denied: []string{"home", "invocation", "invoke", "server", "client", "object", "discovery/service", "discovery", "declarativeindex", "discovery/projection", "controlplane", "hook", "gate", "cli"},
+		denied: []string{"home", "invocation", "invoke", "server", "client", "object", "discovery/service", "discovery", "declarativeindex", "discovery/projection", "hook", "cli"},
 		why:    "the independent file service assembles Dataset/access/store ports and external identity only; it never uses the KC application as a hidden backend",
 	},
 	{
 		pkg:    "snapshot/console",
-		denied: []string{"snapshot", "home", "invocation", "invoke", "server", "client", "identity", "object", "discovery", "declarativeindex", "discovery/projection", "controlplane", "cli"},
+		denied: []string{"snapshot", "home", "invocation", "invoke", "server", "client", "identity", "object", "discovery", "declarativeindex", "discovery/projection", "cli"},
 		why:    "the complete vendored console is independently served static UI with no application or store authority",
 	},
 	{
 		pkg:    "snapshot/client",
-		denied: []string{"home", "invocation", "invoke", "server", "client", "cli", "identity", "object", "discovery", "declarativeindex", "controlplane", "snapshot/service", "snapshot/console", "snapshot/cli"},
+		denied: []string{"home", "invocation", "invoke", "server", "client", "cli", "identity", "object", "discovery", "declarativeindex", "snapshot/service", "snapshot/console", "snapshot/cli"},
 		why:    "the independent Snapshot SDK injects authenticated transport and uses owned wire contracts, never KC session state, service implementation, or command dispatch",
 	},
 	{
 		pkg:    "snapshot/cli",
-		denied: []string{"home", "invocation", "server", "client", "cli", "identity", "object", "discovery", "declarativeindex", "controlplane", "snapshot/service", "snapshot/console"},
+		denied: []string{"home", "invocation", "server", "client", "cli", "identity", "object", "discovery", "declarativeindex", "snapshot/service", "snapshot/console"},
 		why:    "module task commands consume the SDK and explicit caller context, never KC application executors or a locally opened authority",
 	},
 	{
@@ -114,7 +114,7 @@ var forbidden = []struct {
 	},
 	{
 		pkg:    "internal/httpjson",
-		denied: []string{"snapshot", "object", "discovery", "declarativeindex", "identity", "home", "invocation", "invoke", "server", "client", "cli", "controlplane", "observability"},
+		denied: []string{"snapshot", "object", "discovery", "declarativeindex", "identity", "home", "invocation", "invoke", "server", "client", "cli", "observability"},
 		why:    "shared HTTP encoding and bounded decoding are pure transport infrastructure, not typed domain or session authority",
 	},
 	{
@@ -129,7 +129,7 @@ var forbidden = []struct {
 	},
 	{
 		pkg:    "liveaccess",
-		denied: []string{"discovery", "declarativeindex", "discovery/projection", "object/writer", "hook", "gate", "cli", "client", "delivery"},
+		denied: []string{"discovery", "declarativeindex", "discovery/projection", "object/writer", "hook", "cli", "client", "delivery"},
 		why:    "consumer Object Serving may compose Reader with an injected State port, but must not own providers, credentials, composition, writes, retrieval, or caller-visible delivery",
 	},
 	{
@@ -154,7 +154,7 @@ var forbidden = []struct {
 	},
 	{
 		pkg:    "discovery",
-		denied: []string{"object/writer", "discovery/projection", "declarativeindex/control", "declarativeindex/projection", "controlplane", "declarativeindex/opensearch", "cli", "delivery"},
+		denied: []string{"object/writer", "discovery/projection", "declarativeindex/control", "declarativeindex/projection", "declarativeindex/opensearch", "cli", "delivery"},
 		why:    "layer ③ logical retrieval contracts may consume Object declarations but not providers, application wiring, or caller-visible delivery",
 	},
 	{
@@ -189,12 +189,12 @@ var forbidden = []struct {
 	},
 	{
 		pkg:    "hook",
-		denied: []string{"object/writer", "object/reader", "discovery/projection", "declarativeindex/control", "declarativeindex/projection", "controlplane", "snapshot", "object", "cli"},
+		denied: []string{"object/writer", "object/reader", "discovery/projection", "declarativeindex/control", "declarativeindex/projection", "snapshot", "object", "cli"},
 		why:    "outbound hooks are a CLI concern; the protocol packages must not call user systems",
 	},
 	{
 		pkg:    "delivery",
-		denied: []string{"cli", "discovery/projection", "discovery", "declarativeindex", "client", "hook", "gate", "object/reader", "object/writer", "liveaccess"},
+		denied: []string{"cli", "discovery/projection", "discovery", "declarativeindex", "client", "hook", "object/reader", "object/writer", "liveaccess"},
 		why:    "delivery rewrites a hydrated envelope for the caller; it must not locate, index, assemble Canonical, or read allow.json",
 	},
 	{
@@ -222,29 +222,19 @@ var forbidden = []struct {
 		why:    "callers borrow identity/session from the client; the client never knows a transport, a route table, or a deployment",
 	},
 	{
-		pkg:    "controlplane",
-		denied: []string{"cli", "httpsurface", "client", "home"},
-		why:    "maintenance-loop operations are transport-agnostic; transports and clients call it, not the other way",
-	},
-	{
-		pkg:    "gate",
-		denied: []string{"snapshot", "object", "discovery", "declarativeindex", "discovery/projection", "hook", "controlplane", "cli", "httpsurface", "client", "home"},
-		why:    "the merge evidence gate reads only its rules and evidence bindings, fail-closed; it must not reach into protocol layers, hooks, or transports",
-	},
-	{
 		pkg:    "identity",
-		denied: []string{"snapshot", "object", "discovery", "declarativeindex", "discovery/projection", "hook", "controlplane", "cli", "httpsurface", "client", "home"},
-		why:    "identity binding reads its own durable store and IdP results only; isolation matches gate's strict set",
+		denied: []string{"snapshot", "object", "discovery", "declarativeindex", "discovery/projection", "hook", "cli", "httpsurface", "client", "home"},
+		why:    "identity binding reads its own durable store and IdP results only; the strictest isolation set",
 	},
 	{
 		pkg:    "datasetfs",
-		denied: []string{"kernel", "snapshot", "object", "discovery", "declarativeindex", "discovery/projection", "controlplane", "hook", "gate", "delivery", "identity", "observability", "invoke", "client", "discovery/service", "cli", "httpsurface", "home"},
+		denied: []string{"kernel", "snapshot", "object", "discovery", "declarativeindex", "discovery/projection", "hook", "delivery", "identity", "observability", "invoke", "client", "discovery/service", "cli", "httpsurface", "home"},
 		why:    "the local read-only consumption view mounts what a plan hands it; it never calls back into the protocol ring or any transport",
 	},
 	{
 		pkg:    "observability",
-		denied: []string{"discovery", "declarativeindex", "discovery/projection", "controlplane", "hook", "gate", "cli", "httpsurface", "client", "home"},
-		why:    "evidence and telemetry are consumed by object/serving and the transports; they must not reach retrieval, index, hooks, gates, or transports (object stays allowed: object/serving imports it)",
+		denied: []string{"discovery", "declarativeindex", "discovery/projection", "hook", "cli", "httpsurface", "client", "home"},
+		why:    "evidence and telemetry are consumed by object/serving and the transports; they must not reach retrieval, index, hooks, or transports (object stays allowed: object/serving imports it)",
 	},
 }
 
@@ -316,7 +306,7 @@ func TestProtocolLayersDoNotDependOnClient(t *testing.T) {
 	for _, pkg := range []string{
 		"liveaccess/handler", "liveaccess/dispatch", "liveaccess/service", "liveaccess/contract", "liveaccess/discovery", "object/cache", "object/format", "systemrepo",
 		"kernel", "snapshot", "snapshot/dataset", "snapshot/access", "object", "object/writer", "object/reader", "liveaccess",
-		"discovery", "discovery/projection", "controlplane", "hook", "gate",
+		"discovery", "discovery/projection", "hook",
 		"declarativeindex/projection", "declarativeindex/control", "declarativeindex/opensearch", "declarativeindex/opensearch/internal/opensearchimpl", "discovery/llmhttp", "observability",
 		"httpsurface", "home",
 	} {
@@ -390,7 +380,7 @@ func architectureLayer(pkg string) (string, bool) {
 		return "object", true
 	case "discovery", "discovery/llmhttp", "liveaccess", "discovery/projection", "declarativeindex/projection", "declarativeindex/control", "declarativeindex/opensearch", "declarativeindex/opensearch/internal/opensearchimpl":
 		return "discovery", true
-	case "snapshot/service", "snapshot/console", "snapshot/client", "snapshot/cli", "object/client", "object/cli", "discovery/client", "discovery/cli", "declarativeindex/client", "declarativeindex/cli", "declarativeindex/plugin", "declarativeindex/internal/testfixture", "liveaccess/service", "liveaccess/discovery", "liveaccess/cli", "liveaccess/client", "liveaccess/plugin", "liveaccess/fixture", "cli", "client", "cmd/kc", "cmd/kcfs", "invoke", "identity", "controlplane", "gate", "hook", "home", "httpsurface", "server", "server/internal/readiness", "internal/telemetry", "internal/testkit", "datasetfs", "delivery", "object/service", "controlplane/service", "discovery/datasets", "discovery/service", "discovery/plugin", "systemrepo", "observability", "scripts/check-docs", "scripts/docs-serve", "scripts/fixture-deployment", "scripts/validation-inventory", "scripts/coupling", "scripts/export-audit":
+	case "snapshot/service", "snapshot/console", "snapshot/client", "snapshot/cli", "object/client", "object/cli", "discovery/client", "discovery/cli", "declarativeindex/client", "declarativeindex/cli", "declarativeindex/plugin", "declarativeindex/internal/testfixture", "liveaccess/service", "liveaccess/discovery", "liveaccess/cli", "liveaccess/client", "liveaccess/plugin", "liveaccess/fixture", "cli", "client", "cmd/kc", "cmd/kcfs", "invoke", "identity", "hook", "home", "httpsurface", "server", "server/internal/readiness", "internal/telemetry", "internal/testkit", "datasetfs", "delivery", "object/service", "discovery/datasets", "discovery/service", "discovery/plugin", "systemrepo", "observability", "scripts/check-docs", "scripts/docs-serve", "scripts/fixture-deployment", "scripts/validation-inventory", "scripts/coupling", "scripts/export-audit":
 		return "app", true
 	default:
 		return "", false
@@ -508,7 +498,7 @@ func TestApplicationPackageBoundaries(t *testing.T) {
 	graph := loadGraph(t)
 	protocol := []string{
 		"kernel", "snapshot", "snapshot/dataset", "snapshot/access", "object", "object/writer", "object/reader", "liveaccess",
-		"discovery", "discovery/projection", "controlplane", "hook", "gate",
+		"discovery", "discovery/projection", "hook",
 		"declarativeindex/projection", "declarativeindex/control", "declarativeindex/opensearch", "declarativeindex/opensearch/internal/opensearchimpl", "discovery/llmhttp", "observability",
 	}
 	for _, pkg := range protocol {
@@ -595,7 +585,6 @@ func TestCapabilityConsumerSets(t *testing.T) {
 	graph := loadGraph(t)
 	allowed := map[string][]string{
 		"delivery":      {"invocation"},
-		"gate":          {"controlplane", "home", "invocation"},
 		"hook":          {"home", "invocation", "invoke"},
 		"identity":      {"cli", "home", "invocation", "server", "snapshot/service"},
 		"observability": {"cli", "client", "home", "invocation", "server", "liveaccess/service"},

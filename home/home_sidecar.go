@@ -2,20 +2,17 @@ package home
 
 import (
 	"errors"
-	"kc/controlplane"
 	indexplugins "kc/discovery/plugin"
-	"kc/gate"
 	"kc/kernel"
 	"kc/object/maintenance"
 	"kc/object/reader"
 	"kc/snapshot/dataset"
 )
 
-// Index AfterSnapshot and merge Gate are wired here, after Home assembly.
+// Index AfterSnapshot is wired here, after Home assembly.
 
 func (ws *Home) wireSidecars() {
 	ws.attachIndex(ws.Datasets)
-	ws.AttachMergeGate(ws.ControlPlane)
 }
 
 type indexHook struct {
@@ -49,46 +46,4 @@ func (ws *Home) attachIndex(cat dataset.Service) {
 		return
 	}
 	cat.AddHook(&indexHook{controller: ws.ObjectMaintenance, plugins: func() *indexplugins.IndexPlugins { return ws.Plugins }, object: ws.Reader})
-}
-
-func (ws *Home) AttachMergeGate(plane *controlplane.ControlPlane) {
-	if plane == nil {
-		return
-	}
-	plane.SetMergeGate(ws.MergeRequired, ws.mergeEvidence)
-}
-
-func (ws *Home) MergeRequired(repo kernel.RepositoryID) []string {
-	file, err := gate.Read(ws.Dir)
-	if err != nil {
-		return nil
-	}
-	return file.Required(gate.OnMerge, string(repo))
-}
-
-func (ws *Home) mergeEvidence(basisID string) []gate.Evidence {
-	return ws.evidenceOn(basisID, true)
-}
-
-func (ws *Home) evidenceOn(basisID string, includeStructure bool) []gate.Evidence {
-	ws.controlMu.Lock()
-	defer ws.controlMu.Unlock()
-	out := []gate.Evidence{}
-	{
-		st := ws.Control
-		for _, report := range st.Validations {
-			if report.PreviewID != basisID {
-				continue
-			}
-			if !includeStructure && (report.SuiteRevision == gate.StructureSuite || report.SuiteRevision == gate.RequireValidate) {
-				continue
-			}
-			out = append(out, gate.Evidence{
-				Name:    report.SuiteRevision,
-				BasisID: basisID,
-				Outcome: report.Outcome,
-			})
-		}
-	}
-	return out
 }

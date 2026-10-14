@@ -59,7 +59,7 @@ if rg -n '(commands|cliSurface|ParseArgs|dispatch|Run\()' "${HTTP_ROUTE_PATHS[@]
   fail=1
 fi
 
-for namespace in snapshot object writer governance identity admin operations; do
+for namespace in snapshot object writer identity admin operations; do
   if ! rg -q "/${namespace}/v1" "${HTTP_ROUTE_PATHS[@]}"; then
     echo "surface check failed: missing /${namespace}/v1 route namespace" >&2
     fail=1

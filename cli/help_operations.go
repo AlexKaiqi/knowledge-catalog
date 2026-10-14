@@ -30,7 +30,7 @@ func hostOperationsHelpEntries() map[string]helpEntry {
   执行失败修复服务端脚本或接收方；修复通知不要重复提交对象，外部批准也不授予动作权限。
 示例：
   例：kc operations hook add --on writer.commit --phase pre --repo kr://scene/object --run check.sh
-  例：kc operations hook add --on governance.merge --phase post --repo kr://scene/object --url https://ci.example/events`,
+  例：kc operations hook add --on writer.merge --phase post --repo kr://scene/object --url https://ci.example/events`,
 		},
 		"operations hook list": {
 			Description: "列出 Hook",
@@ -78,78 +78,6 @@ func hostOperationsHelpEntries() map[string]helpEntry {
   例：kc operations hook remove --id hk_1
   例：kc operations hook list`,
 		},
-		"operations gate add": {
-			Description: "登记 Gate",
-			Usage: `kc operations gate add --on <event> --require <evidence> [--repo <id>]
-用途：
-  为目标仓的提案合并登记必需证据清单，要求已保存结果绑定同一固定 Preview。
-用法与参数：
-  --on 目前只接受 merge；--require 是 validate 或 suite:<name>，逗号分隔，merge 必须带 --repo。
-  validate 匹配 structure 检查，suite:name 匹配该套件；同一仓多条清单合并要求，不以新规则替换旧规则。
-条件：
-  已认证并有目标范围的 operations.gates.manage，治理配置可写；对应检查由其它受控入口记录。
-结果：
-  JSON 返回 Rule 的 id、on、repo 和 require；删除使用该 id。
-后果：
-  保存后续合并读取的清单，缺项或非 PASSED 证据会拒绝跃迁；不运行套件、不生成证据、不合并候选。
-  普通 Writer 提交和消费读取不因此新增 Gate，也不自动发放检查或合并权限。
-风险与成本：
-  新清单可阻止现有提案的后续合并；证据通过仍需目标并发检查，旧 Preview 的结果不能批准新组合。
-  重复 add 新增规则；要求取并集，删除一条不一定消除其它规则中的同名检查。
-失败恢复：
-  核对 on、repo 和 require 写法；响应不确定先 gate list，避免重复登记。
-  GATE_UNSATISFIED 时针对同一 Preview 补齐真实检查结果，不通过少传证据、自动发权或临时跑套件绕过清单。
-示例：
-  例：kc operations gate add --on merge --require validate,suite:lint --repo kr://scene/object
-  例：kc governance preview validate --preview PV-1`,
-		},
-		"operations gate list": {
-			Description: "列出 Gate",
-			Usage: `kc operations gate list [--on <event>] [--repo <id>]
-用途：
-  核对服务已登记的合并证据规则，知道某个目标仓需要哪些检查。
-用法与参数：
-  当前公共 typed CLI 读取全服务名单，--on/--repo 未传作查询过滤；在 rules 中核对目标仓，合并匹配规则的 require。
-条件：
-  已认证并有服务范围的 operations.gates.read，治理配置可读；读清单不授予合并或背书权限。
-结果：
-  JSON 返回 rules，每条含 id、on、repo 和 require；不是检查报告或当前有效权限列表。
-后果：
-  不执行 Gate 检查、不运行外部套件、不修改规则或对象，也不构造 PASSED 证据。
-风险与成本：
-  一次读取未分页的配置名单，规模随规则增长；多条规则的要求取并集，不能只看其中一条。
-  空清单不意味着无条件合并：兼容路径仍需一份绑定同一 Preview 的 PASSED validation。
-失败恢复：
-  身份、读权或配置读取失败分别处理；配置损坏交由部署管理者恢复，不以空规则代替故障。
-  合并拒绝时核对所选目标仓与全部匹配规则，再取得真实证据，不通过修改查询条件掩盖要求。
-示例：
-  例：kc operations gate list
-  例：kc governance proposal merge --proposal PR-1 --preview PV-1 --validation val-PV-1-structure`,
-		},
-		"operations gate remove": {
-			Description: "移除 Gate",
-			Usage: `kc operations gate remove --id <id>
-用途：
-  删除一条治理证据规则，调整后续目标仓合并所需的检查清单。
-用法与参数：
-  --id 来自 gate add 或 gate list；先核对 on、repo 和 require，不能用 suite 名称代替规则身份。
-条件：
-  已认证并有服务范围的 operations.gates.manage，配置可写且指定规则当前存在。
-结果：
-  JSON 返回 revoked，值为被删除的规则 id；未知 id 明确失败。
-后果：
-  保存新规则名单，不删除已保存的验证证据，不执行合并，不回滚已经合入的对象。
-  剩余匹配规则仍生效；没有匹配规则时兼容路径仍要求一份 PASSED validation。
-风险与成本：
-  删除会改变后续治理要求，不能把它当作补齐失败证据；多条规则的并集可能仍要求同一检查。
-  配置写入不提供调用者 CAS 合同，多个管理者应核对实际名单及变更范围。
-失败恢复：
-  未知 id 时先 gate list 核对是否已被移除；保存失败或响应丢失先读取状态再决定重试。
-  误删时按原 on/repo/require 重新登记；不会自动补回先前配置，也不需要重放已完成的合并。
-示例：
-  例：kc operations gate remove --id gt_1
-  例：kc operations gate list`,
-		},
 		"operations audit access": {
 			Description: "查看访问账",
 			Usage: `kc operations audit access [--repo <id>] [--object <id>] [--limit <n>] [--continuation <cursor>]
@@ -163,7 +91,7 @@ func hostOperationsHelpEntries() map[string]helpEntry {
 结果：
   JSON 返回 source:access、entries、可选 continuation 和 completeThrough；记录带主体、trace、版本引用与访问结果。
 后果：
-  不改对象、授权或治理证据；存储按自身保留政策清理过期闭日分区，查询不能恢复已删除事件。
+  不改对象、授权或合并回执；存储按自身保留政策清理过期闭日分区，查询不能恢复已删除事件。
 风险与成本：
   默认查询热窗，本机 adapter 默认保留 30 天，可由部署调整；不是无限审计历史，空结果不证明从未发生访问。
   查询会读取并过滤所选时间窗的记录；limit 限制响应条数，不保证底层只读取这些条数。

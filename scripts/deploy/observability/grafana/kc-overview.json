@@ -22,7 +22,7 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
-      "description": "所选窗口内 Writer COMMIT/PROPOSAL 次数。建仓 create/attach 不在这里；无写入保持 No data。",
+      "description": "所选窗口内 Writer COMMIT/MERGE 次数。建仓 create/attach 不在这里；无写入保持 No data。",
       "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
       "gridPos": {"h": 5, "w": 5, "x": 4, "y": 0}, "id": 2,
       "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},

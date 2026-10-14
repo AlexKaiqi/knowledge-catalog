@@ -29,7 +29,7 @@ func TestSystemObjectCanBeReadThroughAuthenticatedServer(t *testing.T) {
 		{"kc/concept/object", "definition", "具有独立身份"},
 		{"kc/interface/writer", "definition", "单仓变更"},
 		{"kc/interface/cli", "definition", "分组命令入口"},
-		{"kc/mechanism/governance", "definition", "合并检查（Gate）"},
+		{"kc/mechanism/governance", "definition", "条件合并"},
 		{"kc/mechanism/hook", "definition", "授权先成立"},
 		{"kc/mechanism/dynamic-access", "definition", "观察（Observation）"},
 		{"kc/guide/first-publication", "guide", "成功证据"},

@@ -13,6 +13,7 @@ import (
 	"kc/snapshot"
 	"os"
 	"sort"
+	"strings"
 )
 
 func VerbWriterHead(cx *Invocation) (any, error) {
@@ -184,6 +185,63 @@ func CommitDesiredDir(cx *Invocation) (any, error) {
 				BulkIngest:           invoke.FlagBool(cx.Flags, "bulk"),
 			},
 		})
+}
+
+// BranchRef spells a branch flag as a full Ref. A bare name is a branch under
+// refs/heads/; a full Ref is kept as given.
+func BranchRef(name string) string {
+	if name == "" || strings.HasPrefix(name, "refs/") {
+		return name
+	}
+	return "refs/heads/" + name
+}
+
+func VerbWriterBranch(cx *Invocation) (any, error) {
+	repositoryID, err := cx.Require("repo")
+	if err != nil {
+		return nil, err
+	}
+	name, err := cx.Require("name")
+	if err != nil {
+		return nil, err
+	}
+	if cx.Flag("from") != "" && cx.Flag("commit") != "" {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "use only one of --from or --commit")
+	}
+	if err := RequireSnapshotRepository(cx, repositoryID); err != nil {
+		return nil, err
+	}
+	return cx.WS.Writer.CreateBranch(writer.BranchIntent{
+		TargetRepository: kernel.RepositoryID(repositoryID),
+		Ref:              BranchRef(name),
+		FromRef:          BranchRef(cx.Flag("from")),
+		FromCommit:       kernel.CommitID(cx.Flag("commit")),
+	})
+}
+
+func VerbWriterMerge(cx *Invocation) (any, error) {
+	repositoryID, err := cx.Require("repo")
+	if err != nil {
+		return nil, err
+	}
+	from, err := cx.Require("from")
+	if err != nil {
+		return nil, err
+	}
+	commandID, err := cx.Require("command-id")
+	if err != nil {
+		return nil, err
+	}
+	if err := RequireSnapshotRepository(cx, repositoryID); err != nil {
+		return nil, err
+	}
+	return cx.WS.Writer.Merge(commandID, writer.MergeIntent{
+		TargetRepository:     kernel.RepositoryID(repositoryID),
+		SourceRef:            BranchRef(from),
+		SourceCommit:         kernel.CommitID(cx.Flag("commit")),
+		TargetRef:            snapshot.RefOrDefault(BranchRef(cx.Flag("into"))),
+		ExpectedTargetCommit: kernel.CommitID(cx.Flag("expected")),
+	})
 }
 
 func VerbReceipt(cx *Invocation) (any, error) {

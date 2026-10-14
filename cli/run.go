@@ -207,15 +207,6 @@ func rejectPublicSurfaceFlags(publicPath string, flags map[string]FlagValue) err
 	switch publicPath {
 	case "create":
 		return validateManagedRepositoryCreateFlags(flags)
-	case "governance preview create":
-		for _, name := range []string{"catalog", "source"} {
-			if _, ok := flags[name]; ok {
-				return kernel.Fail(kernel.ErrUsageInvalid, "governance preview create rejects --%s; pass --dataset", name)
-			}
-		}
-		if invoke.FlagString(flags, "dataset") == "" {
-			return kernel.Fail(kernel.ErrUsageInvalid, "governance preview create requires --dataset")
-		}
 	case "operations access-spec describe":
 		if (invoke.FlagString(flags, "dataset") == "") == (invoke.FlagString(flags, "repo") == "") {
 			return kernel.Fail(kernel.ErrUsageInvalid, "operations access-spec describe requires exactly one of --repo or --dataset")

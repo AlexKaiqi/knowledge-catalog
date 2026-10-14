@@ -96,7 +96,7 @@
 | `K-04` | `I-01`, `V-01` | |
 | `K-05` | `C-01`, `W-02` | |
 | `K-06` | `W-02` | |
-| `K-07` | — | 治理语义；未单列。证据在 Control / [Hook 与 Gate](../design/governance.md) |
+| `K-07` | — | 合并语义；未单列。证据在[治理](../design/governance.md)与 `cli/hook_merge_test.go` |
 | `K-08` | — | 同上 |
 | `K-09` | — | 同上 |
 | `K-10` | `KS-01`, `V-01` | |
@@ -133,9 +133,9 @@ K 表保留设计推导层的语义结论（原系统设计 §9.3，替换后并
 | `K-04` | ObjectRef 不依赖路径；PinnedObjectRef 固定 Version |
 | `K-05` | Version 内 Canonical 与已接受 Ref 不可原地修改 |
 | `K-06` | Ref/对象更新必须带前置条件，禁止静默 LWW |
-| `K-07` | Proposal Durable 不表示已发布状态改变 |
-| `K-08` | Review、Validation、Approval、Gate 绑定精确 Candidate/Preview |
-| `K-09` | ValidationReport 绑定完整 Preview，而非单仓候选 |
+| `K-07` | 工作分支上的写入不改变默认分支，也不通知目录；只有合并推进默认分支 |
+| `K-08` | 合并绑定精确源 commit 与目标期望 commit；源分支移动或目标分叉都拒绝 |
+| `K-09` | 合并前在源 commit 上校验 Schema 与 locator；失败不推进目标 |
 | `K-10` | ResolvedDataset 是 Repository→Commit Map；命令内不可变 |
 | `K-11` | 跨命令可跟已发布 selector；命令内不得跟随 latest |
 | `K-12` | 联合结果保留 Repository、Version、Object、Scope 和 Provenance |
@@ -147,7 +147,7 @@ K 表保留设计推导层的语义结论（原系统设计 §9.3，替换后并
 | `K-18` | 同幂等键同 digest 返回原 Receipt；异 digest 冲突 |
 | `K-19` | Projection 非 Canonical，必须声明 basis、coverage 和 lag |
 | `K-20` | Workspace pin 锁数据不锁未来权限；授权按请求求值 |
-| `K-21` | 内容写入经 Writer；治理动作经受保护 Control API，不直写 Backend/Ref |
+| `K-21` | 内容写入、建分支与合并都经 Writer，不直写 Backend/Ref |
 | `K-22` | 不构造跨 Repository 的虚假单一事务 |
 | `K-23` | Adapter 迁移不得改变身份、版本和读写协议语义 |
 | `K-24` | Repository 领域生命周期终点是 ARCHIVE；物理删除由保留/合规流程处理 |

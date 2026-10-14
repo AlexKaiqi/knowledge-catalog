@@ -324,11 +324,9 @@ func groupedTestArgs(args []string) []string {
 		"describe-schema": {"schema", "describe"}, "resolve-binding": {"binding", "show"},
 		"resolve-object": {"resolve"},
 		"put":            {"writer", "put"}, "remove": {"writer", "remove"}, "commit": {"writer", "commit"}, "writer-head": {"writer", "head"}, "receipt": {"writer", "receipt"},
-		"propose": {"governance", "proposal", "create"}, "merge": {"governance", "proposal", "merge"}, "preview": {"governance", "preview", "create"},
-		"validate": {"governance", "preview", "validate"}, "record-validation": {"governance", "validation", "record"},
+		"branch": {"writer", "branch"}, "merge": {"writer", "merge"},
 		"describe-index": {"operations", "projection", "describe"}, "index-sync": {"operations", "projection", "sync"}, "index-notify": {"operations", "projection", "notice"}, "describe-access": {"operations", "access-spec", "describe"},
 		"hook-add": {"operations", "hook", "add"}, "hook-ls": {"operations", "hook", "list"}, "hook-rm": {"operations", "hook", "remove"},
-		"gate-add": {"operations", "gate", "add"}, "gate-ls": {"operations", "gate", "list"}, "gate-rm": {"operations", "gate", "remove"},
 		"access-log": {"operations", "audit", "access"}, "trace": {"operations", "audit", "trace"}, "hitmap": {"operations", "audit", "hitmap"}, "record-feedback": {"operations", "feedback", "record"},
 	}
 	if path := paths[args[0]]; len(path) > 0 {
@@ -343,8 +341,7 @@ func legacyTestActions(raw string) string {
 		"read": "object.read", "read-workspace": "file.read", "read-catalog": "inventory.read", "search": "object.search",
 		"relations": "object.relations", "resolve": "dataset.resolve",
 		"describe-access": "object.access.describe",
-		"propose":         "governance.proposal.create", "preview": "governance.preview.create",
-		"validate": "governance.validate", "record-validation": "governance.validation.record", "merge": "governance.merge",
+		"branch":          "writer.branch", "merge": "writer.merge",
 		"register": "repositories.manage", "archive-repo": "repositories.manage", "archive-catalog": "catalog.manage",
 	}
 	parts := strings.Split(raw, ",")
@@ -585,30 +582,26 @@ func TestProtocolErrorJSON(t *testing.T) {
 	expectCode(t, kc(h, "read", testObjectReference(t, "kr://acme/public/core", "missing", ""), "--ref", "refs/heads/main"), "OBJECT_REF_UNRESOLVED")
 }
 
-func TestProposeMergeIsVisibleOnView(t *testing.T) {
+func TestBranchMergeIsVisibleOnView(t *testing.T) {
 	h := testkit.TempDir(t)
+	core := "kr://acme/public/core"
 	kc(h, "init")
-	seedRepo(t, h, "kr://acme/public/core")
-	body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/P-103", ""), "--command-id", "seed", "--value", `{"v":1}`))
-	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"))
-	proposal := asMap(t, body(t, kc(h,
-		"propose", "--proposal-id", "PR-1", "--repo", "kr://acme/public/core",
-		"--target", "refs/heads/main", "--candidate", "refs/heads/candidates/PR-1",
-		"--object", "policy/P-103", "--value", `{"v":2}`,
-	)))
-	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "PR-1", "--dataset", "agent")))
-	structural := asMap(t, body(t, kc(h, "validate", "--preview", preview["previewId"].(string))))
-	if structural["outcome"] != "PASSED" {
-		t.Fatal(structural)
+	seedRepo(t, h, core)
+	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-103", ""), "--command-id", "seed", "--value", `{"v":1}`))
+	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
+	body(t, kc(h, "branch", "--repo", core, "--name", "review/PR-1"))
+	reviewed := putOnRef(t, h, core, "refs/heads/review/PR-1", "policy/P-103", "pr-1", `{"v":2}`)
+	before := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "policy/P-103", ""), "--dataset", "agent")))
+	if asMap(t, before["value"])["v"] != float64(1) {
+		t.Fatal("a branch write must stay off the Dataset view", before)
 	}
-	validation := asMap(t, body(t, kc(h, "record-validation", "--preview", preview["previewId"].(string), "--suite", "S7", "--outcome", "PASSED")))
-	merged := asMap(t, body(t, kc(h, "merge", "--proposal", proposal["proposalId"].(string), "--preview", preview["previewId"].(string), "--validation", validation["reportId"].(string))))
-	if merged["commitId"] != proposal["candidateCommit"] {
-		t.Fatal(merged, proposal)
+	merged := asMap(t, body(t, kc(h, "merge", "--command-id", "merge-pr-1", "--repo", core, "--from", "review/PR-1", "--commit", reviewed)))
+	if asMap(t, merged["result"])["commitId"] != reviewed {
+		t.Fatal(merged)
 	}
-	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "2", "--source", "kr://acme/public/core=refs/heads/main"))
-	serving := asMap(t, body(t, kc(h, "read", testObjectReference(t, "kr://acme/public/core", "policy/P-103", ""), "--dataset", "agent")))
-	if asMap(t, serving)["value"].(map[string]any)["v"] != float64(2) {
+	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "2", "--source", core+"=refs/heads/main"))
+	serving := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "policy/P-103", ""), "--dataset", "agent")))
+	if asMap(t, serving["value"])["v"] != float64(2) {
 		t.Fatal(serving)
 	}
 }
@@ -705,20 +698,14 @@ func TestForkPublishDoesNotCopyPersonal(t *testing.T) {
 	draft := asMap(t, asMap(t, body(t, kc(h, "put", testObjectReference(t, alice, "drafts/metric-x", ""), "--command-id", "alice-draft", "--value", `{"text":"alice draft"}`)))["result"])
 	source := alice + "@" + draft["newCommit"].(string) + "/drafts/metric-x"
 	body(t, kc(h, "dataset", "define", "--dataset", "semantic", "--revision", "1", "--source", pub+"=refs/heads/main"))
-	proposal := asMap(t, body(t, kc(h,
-		"propose", "--proposal-id", "FORK-1", "--repo", pub,
-		"--target", "refs/heads/main", "--candidate", "refs/heads/candidates/FORK-1",
-		"--object", "metrics/x", "--value", `{"text":"published"}`,
+	body(t, kc(h, "branch", "--repo", pub, "--name", "review/FORK-1"))
+	forked := asMap(t, body(t, kc(h, "put", testObjectReference(t, pub, "metrics/x", ""),
+		"--command-id", "fork-1", "--ref", "refs/heads/review/FORK-1", "--value", `{"text":"published"}`,
 		"--origin-kind", "ASSERTION",
 		"--source-ref", "kc://"+strings.TrimPrefix(source, "kr://"),
 	)))
-	preview := asMap(t, body(t, kc(h, "preview", "--proposal", "FORK-1", "--dataset", "semantic")))
-	structural := asMap(t, body(t, kc(h, "validate", "--preview", preview["previewId"].(string))))
-	if structural["outcome"] != "PASSED" {
-		t.Fatal(structural)
-	}
-	validation := asMap(t, body(t, kc(h, "record-validation", "--preview", preview["previewId"].(string), "--suite", "fork", "--outcome", "PASSED")))
-	body(t, kc(h, "merge", "--proposal", proposal["proposalId"].(string), "--preview", preview["previewId"].(string), "--validation", validation["reportId"].(string)))
+	body(t, kc(h, "merge", "--command-id", "merge-fork-1", "--repo", pub, "--from", "review/FORK-1",
+		"--commit", asMap(t, forked["result"])["newCommit"].(string)))
 	body(t, kc(h, "dataset", "define", "--dataset", "semantic", "--revision", "2", "--source", pub+"=refs/heads/main"))
 
 	live := asMap(t, body(t, kc(h, "read", testObjectReference(t, pub, "metrics/x", ""), "--ref", "refs/heads/main")))
@@ -747,39 +734,26 @@ func TestForkPublishDoesNotCopyPersonal(t *testing.T) {
 	}
 }
 
-func TestSchemaRefOnPropose(t *testing.T) {
+func TestSchemaRefOnBranchWrite(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 	kc(h, "init")
 	seedRepo(t, h, core)
-	expectCode(t, kc(h, "propose",
-		"--proposal-id", "PR-schema",
-		"--repo", core,
-		"--target", "refs/heads/main",
-		"--candidate", "refs/heads/candidates/PR-schema",
-		"--object", "policy/A",
-		"--value", `{"v":1}`,
-		"--schema-ref", "schema/policy",
+	body(t, kc(h, "branch", "--repo", core, "--name", "review/schema"))
+	expectCode(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""),
+		"--command-id", "branch-schema-missing", "--ref", "refs/heads/review/schema",
+		"--value", `{"v":1}`, "--schema-ref", "schema/policy",
 	), "SCHEMA_REVISION_UNRESOLVED")
-	expectMsg(t, kc(h, "propose",
-		"--proposal-id", "PR-missing-candidate",
-		"--repo", core,
-		"--target", "refs/heads/main",
-		"--object", "policy/A",
-		"--value", `{"v":1}`,
-	), "missing --candidate")
+	expectCode(t, kc(h, "merge", "--command-id", "merge-missing-from", "--repo", core), "USAGE_INVALID")
 	body(t, kc(h, "put", testObjectReference(t, core, "schema/policy", ""), "--command-id", "schema-policy", "--value", `{"entity":"Policy","pattern":"record"}`))
-	proposal := asMap(t, body(t, kc(h, "propose",
-		"--proposal-id", "PR-schema-ok",
-		"--repo", core,
-		"--target", "refs/heads/main",
-		"--candidate", "refs/heads/candidates/PR-schema-ok",
-		"--object", "policy/A",
-		"--value", `{"v":1}`,
-		"--schema-ref", "schema/policy",
-	)))
-	if proposal["candidateCommit"] == "" {
-		t.Fatal(proposal)
+	body(t, kc(h, "branch", "--repo", core, "--name", "review/schema-ok"))
+	put := asMap(t, body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""),
+		"--command-id", "branch-schema-ok", "--ref", "refs/heads/review/schema-ok",
+		"--value", `{"v":1}`, "--schema-ref", "schema/policy")))
+	head := asMap(t, put["result"])["newCommit"]
+	merged := asMap(t, body(t, kc(h, "merge", "--command-id", "merge-schema-ok", "--repo", core, "--from", "review/schema-ok")))
+	if asMap(t, merged["result"])["commitId"] != head {
+		t.Fatal(merged)
 	}
 }
 

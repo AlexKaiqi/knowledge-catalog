@@ -29,8 +29,8 @@ var routeRegistration = regexp.MustCompile(`mux\.Handle(?:Func)?\("(GET|POST|PUT
 // not share the CLI command table: HTTP is an independent typed protocol.
 func TestEveryPublicHTTPRouteIsRegisteredWithOnlyItsDeclaredMethod(t *testing.T) {
 	routes := registeredHTTPRoutes(t)
-	if len(routes) != 95 {
-		t.Fatalf("public HTTP route count changed from the reviewed 95 to %d; review the new protocol surface", len(routes))
+	if len(routes) != 89 {
+		t.Fatalf("public HTTP route count changed from the reviewed 89 to %d; review the new protocol surface", len(routes))
 	}
 
 	handler := serv.HTTPHandlerWithOptions(testkit.TempDir(t), serv.HTTPServerOptions{})
@@ -115,7 +115,7 @@ func TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses(t *testing.T) {
 	body(t, kc(home, "grant", "add", "--principal", principal,
 		"--action", "file.read", "--dataset", "agent"))
 	body(t, kc(home, "grant", "add", "--principal", principal,
-		"--action", "object.read,governance.proposal.create", "--repo", repositoryID))
+		"--action", "object.read,writer.branch", "--repo", repositoryID))
 
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
@@ -280,7 +280,6 @@ func concreteHTTPPath(pattern string) string {
 		"{command}", "command-1",
 		"{grant}", "grant-1",
 		"{hook}", "hook-1",
-		"{gate}", "gate-1",
 		"{share}", "share-1",
 		"{surface}", "consumer",
 	)
@@ -295,7 +294,7 @@ func allowedHTTPPath(path string) bool {
 	}
 	for _, namespace := range []string{
 		"/api/v1/", "/identity/v1/", "/snapshot/v1/", "/object/v1/", "/snapshot/v1/files/",
-		"/writer/v1/", "/governance/v1/", "/admin/v1/", "/operations/v1/",
+		"/writer/v1/", "/admin/v1/", "/operations/v1/",
 	} {
 		if strings.HasPrefix(path, namespace) {
 			return true
@@ -327,6 +326,8 @@ func TestRetiredHTTPRoutesAreNotFound(t *testing.T) {
 		{http.MethodPost, "/admin/v1/grants/grant-1/remove"},
 		{http.MethodPost, "/operations/v1/hooks/hook-1/remove"},
 		{http.MethodPost, "/operations/v1/gates/gate-1/remove"},
+		{http.MethodGet, "/operations/v1/gates"},
+		{http.MethodPost, "/governance/v1/proposals"},
 	}
 	for _, route := range retired {
 		request, err := http.NewRequest(route.method, server.URL+route.path, bytes.NewReader([]byte("{}")))

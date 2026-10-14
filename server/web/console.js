@@ -10,7 +10,6 @@
     SNAPSHOT_UNAVAILABLE: "Snapshot 权威读不到",
     SURFACE_UNKNOWN: "未知分面",
     COMMAND_LOG_UNAVAILABLE: "Writer 账本读不到",
-    CONTROL_STATE_UNAVAILABLE: "控制状态读不到",
     EVIDENCE_STORE_UNWRITABLE: "证据存不下去",
     DEPLOYMENT_STATE_UNAVAILABLE: "部署状态读不到",
   };

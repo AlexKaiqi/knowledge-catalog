@@ -6,9 +6,7 @@ import (
 
 	"encoding/json"
 	"net/http"
-	"strings"
 
-	kcclient "kc/client"
 	"kc/kernel"
 	objectmodel "kc/object"
 	"kc/observability"
@@ -27,12 +25,8 @@ func (f *httpFacade) registerManagementRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /writer/v1/repositories/{repository}/commits", f.writerCommit)
 	mux.HandleFunc("GET /writer/v1/repositories/{repository}/head", f.writerHead)
 	mux.HandleFunc("GET /writer/v1/receipts/{command}", f.writerReceipt)
-
-	mux.HandleFunc("POST /governance/v1/proposals", f.governanceProposal)
-	mux.HandleFunc("POST /governance/v1/previews", f.governancePreview)
-	mux.HandleFunc("POST /governance/v1/previews:validate", f.governanceValidate)
-	mux.HandleFunc("POST /governance/v1/validations", f.governanceRecordValidation)
-	mux.HandleFunc("POST /governance/v1/proposals:merge", f.governanceMerge)
+	mux.HandleFunc("POST /writer/v1/repositories/{repository}/branches", f.writerBranch)
+	mux.HandleFunc("POST /writer/v1/repositories/{repository}/merges", f.writerMerge)
 
 	mux.HandleFunc("GET /operations/v1/stores", f.observeStores)
 	mux.HandleFunc("POST /operations/v1/projections:describe", f.projectionDescribe)
@@ -40,9 +34,6 @@ func (f *httpFacade) registerManagementRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /operations/v1/hooks", f.hookList)
 	mux.HandleFunc("POST /operations/v1/hooks", f.hookAdd)
 	mux.HandleFunc("DELETE /operations/v1/hooks/{hook}", f.hookRemove)
-	mux.HandleFunc("GET /operations/v1/gates", f.gateList)
-	mux.HandleFunc("POST /operations/v1/gates", f.gateAdd)
-	mux.HandleFunc("DELETE /operations/v1/gates/{gate}", f.gateRemove)
 	mux.HandleFunc("POST /operations/v1/access-log:query", f.accessLog)
 	mux.HandleFunc("POST /operations/v1/traces:query", f.traceGet)
 	mux.HandleFunc("POST /operations/v1/hitmap:query", f.hitmap)
@@ -86,17 +77,6 @@ type writerCommitRequest struct {
 	ChangeSet objectmodel.ChangeSet `json:"changeSet"`
 }
 
-type proposalRequest struct {
-	Repository   string                          `json:"repository,omitempty"`
-	ProposalID   string                          `json:"proposalId"`
-	CandidateRef string                          `json:"candidateRef"`
-	TargetRef    string                          `json:"targetRef,omitempty"`
-	BaseCommit   string                          `json:"baseCommit,omitempty"`
-	Operations   []objectmodel.Operation         `json:"operations"`
-	Message      string                          `json:"message,omitempty"`
-	Provenance   *objectmodel.ProvenanceEnvelope `json:"provenance,omitempty"`
-}
-
 func (f *httpFacade) writerCommit(w http.ResponseWriter, r *http.Request) {
 	var request writerCommitRequest
 	// Scale ChangeSets are whole-repository imports; the commit route carries
@@ -120,65 +100,44 @@ func (f *httpFacade) writerHead(w http.ResponseWriter, r *http.Request) {
 		map[string]FlagValue{"repo": r.PathValue("repository"), "ref": r.URL.Query().Get("ref")})
 }
 
-func proposalFlags(request proposalRequest) map[string]FlagValue {
-	payload, _ := json.Marshal(request.Operations)
-	return compactFlags(map[string]FlagValue{"repo": request.Repository, "proposal-id": request.ProposalID, "candidate": request.CandidateRef, "target": request.TargetRef, "base": request.BaseCommit, "message": request.Message, "payload": string(payload)})
-}
-
-func (f *httpFacade) governanceProposal(w http.ResponseWriter, r *http.Request) {
-	var request proposalRequest
-	if !decodeServiceRequest(w, r, &request) {
-		return
-	}
-	f.executeTyped(w, r, "governance-proposal-create", "governance.proposal.create", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbPropose}, proposalFlags(request))
-}
-
 func (f *httpFacade) writerReceipt(w http.ResponseWriter, r *http.Request) {
 	f.executeTyped(w, r, "writer-receipt", "writer.receipt.read", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbReceipt}, map[string]FlagValue{"command-id": r.PathValue("command")})
 }
 
-type governanceValidationRequest struct {
-	Preview string `json:"preview"`
-	Suite   string `json:"suite"`
-	Outcome string `json:"outcome"`
+// writerBranchRequest opens a work branch through Writer. The new branch is
+// the authorization target; from/commit only select its starting commit.
+type writerBranchRequest struct {
+	Name   string `json:"name"`
+	From   string `json:"from,omitempty"`
+	Commit string `json:"commit,omitempty"`
 }
 
-func (f *httpFacade) governancePreview(w http.ResponseWriter, r *http.Request) {
-	var request kcclient.PreviewRequest
+func (f *httpFacade) writerBranch(w http.ResponseWriter, r *http.Request) {
+	var request writerBranchRequest
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	f.executeTyped(w, r, "governance-preview-create", "governance.preview.create", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbPreview}, compactFlags(map[string]FlagValue{"pin": string(request.Pin), "dataset": request.Dataset, "proposal": request.Proposal}))
+	f.executeTyped(w, r, "writer-branch", "writer.branch", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbWriterBranch},
+		compactFlags(map[string]FlagValue{"repo": r.PathValue("repository"), "name": request.Name, "from": request.From, "commit": request.Commit}))
 }
 
-func (f *httpFacade) governanceValidate(w http.ResponseWriter, r *http.Request) {
-	var request struct {
-		Preview string `json:"preview"`
-	}
+// writerMergeRequest publishes one reviewed source commit onto the target ref.
+// commit pins the reviewed source; expected pins the target the review saw.
+type writerMergeRequest struct {
+	CommandID string `json:"commandId"`
+	From      string `json:"from"`
+	Into      string `json:"into,omitempty"`
+	Commit    string `json:"commit,omitempty"`
+	Expected  string `json:"expected,omitempty"`
+}
+
+func (f *httpFacade) writerMerge(w http.ResponseWriter, r *http.Request) {
+	var request writerMergeRequest
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	f.executeTyped(w, r, "governance-preview-validate", "governance.validate", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbValidate}, compactFlags(map[string]FlagValue{"preview": request.Preview}))
-}
-
-func (f *httpFacade) governanceRecordValidation(w http.ResponseWriter, r *http.Request) {
-	var request governanceValidationRequest
-	if !decodeServiceRequest(w, r, &request) {
-		return
-	}
-	f.executeTyped(w, r, "governance-validation-record", "governance.validation.record", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbRecordValidation}, compactFlags(map[string]FlagValue{"preview": request.Preview, "suite": request.Suite, "outcome": request.Outcome}))
-}
-
-func (f *httpFacade) governanceMerge(w http.ResponseWriter, r *http.Request) {
-	var request struct {
-		Proposal   string `json:"proposal"`
-		Preview    string `json:"preview"`
-		Validation string `json:"validation,omitempty"`
-	}
-	if !decodeServiceRequest(w, r, &request) {
-		return
-	}
-	f.executeTyped(w, r, "governance-proposal-merge", "governance.merge", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbMerge}, compactFlags(map[string]FlagValue{"proposal": request.Proposal, "preview": request.Preview, "validation": request.Validation}))
+	f.executeTyped(w, r, "writer-merge", "writer.merge", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbWriterMerge},
+		compactFlags(map[string]FlagValue{"repo": r.PathValue("repository"), "command-id": request.CommandID, "from": request.From, "into": request.Into, "commit": request.Commit, "expected": request.Expected}))
 }
 
 type projectionRequest struct {
@@ -193,12 +152,11 @@ type accessSpecDescribeRequest struct {
 	Pin        json.RawMessage `json:"pin,omitempty"`
 }
 type policyBindingRequest struct {
-	On         string   `json:"on"`
-	Phase      string   `json:"phase,omitempty"`
-	Repository string   `json:"repository,omitempty"`
-	Run        string   `json:"run,omitempty"`
-	URL        string   `json:"url,omitempty"`
-	Require    []string `json:"require,omitempty"`
+	On         string `json:"on"`
+	Phase      string `json:"phase,omitempty"`
+	Repository string `json:"repository,omitempty"`
+	Run        string `json:"run,omitempty"`
+	URL        string `json:"url,omitempty"`
 }
 type auditQueryRequest struct {
 	RequestID    string `json:"requestId,omitempty"`
@@ -259,7 +217,7 @@ func (f *httpFacade) accessSpecDescribe(w http.ResponseWriter, r *http.Request) 
 }
 
 func policyFlags(request policyBindingRequest) map[string]FlagValue {
-	return compactFlags(map[string]FlagValue{"on": request.On, "phase": request.Phase, "repo": request.Repository, "run": request.Run, "url": request.URL, "require": strings.Join(request.Require, ",")})
+	return compactFlags(map[string]FlagValue{"on": request.On, "phase": request.Phase, "repo": request.Repository, "run": request.Run, "url": request.URL})
 }
 func (f *httpFacade) hookAdd(w http.ResponseWriter, r *http.Request) {
 	var q policyBindingRequest
@@ -275,21 +233,6 @@ func (f *httpFacade) hookRemove(w http.ResponseWriter, r *http.Request) {
 		f.executeTyped(w, r, "operations-hook-remove", "operations.hooks.manage", inv.Command{Stage: invoke.StageHome, Run: inv.VerbHookRm}, map[string]FlagValue{"id": r.PathValue("hook")})
 	}
 }
-func (f *httpFacade) gateAdd(w http.ResponseWriter, r *http.Request) {
-	var q policyBindingRequest
-	if decodeServiceRequest(w, r, &q) {
-		f.executeTyped(w, r, "operations-gate-add", "operations.gates.manage", inv.Command{Stage: invoke.StageHome, Run: inv.VerbGateAdd}, policyFlags(q))
-	}
-}
-func (f *httpFacade) gateList(w http.ResponseWriter, r *http.Request) {
-	f.executeTyped(w, r, "operations-gate-list", "operations.gates.read", inv.Command{Stage: invoke.StageHome, Run: inv.VerbGateLs}, compactFlags(map[string]FlagValue{"on": r.URL.Query().Get("on"), "repo": r.URL.Query().Get("repository")}))
-}
-func (f *httpFacade) gateRemove(w http.ResponseWriter, r *http.Request) {
-	if decodeEmptyServiceRequest(w, r) {
-		f.executeTyped(w, r, "operations-gate-remove", "operations.gates.manage", inv.Command{Stage: invoke.StageHome, Run: inv.VerbGateRm}, map[string]FlagValue{"id": r.PathValue("gate")})
-	}
-}
-
 func auditFlags(q auditQueryRequest) map[string]FlagValue {
 	// The HTTP request has its own trace-id. Keep the historical trace selected
 	// by the query separate so transport tracing cannot silently change audit

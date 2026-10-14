@@ -44,7 +44,7 @@ httpsurface.Patterns()  ──测试对账──►  mux 已登记的 method+pat
 操作数、参数检查、叶说明与帮助组；KC 仓供给帮助仍归宿主；Object 的读取、写入、Schema、历史与来源叶说明归 `object/cli`。
 模块的 `HelpTopics()` 同源提供分组引导与概念页，帮助入口可直接访问；这些主题不加入
 业务命令表。KC 的 consume/compose 旅程衔接来源发现、选源发布、显式授权与文件消费。
-宿主叶说明按 `help_host.go`、`help_writer.go`、`help_governance.go`、
+宿主叶说明按 `help_host.go`、`help_writer.go`、
 `help_operations.go` 分任务持有，中央只合并并拒绝重复登记。全部公开叶及 serve 说明具体
 输入、前提、结果、后果、风险与成本、失败恢复和示例；help 的两种公开写法不执行该动作。
 共享 flag 读取与校验分别在 `invoke/flags.go`、
@@ -133,7 +133,7 @@ create 只让 KC 能打开该 Repository，不登记来源成员；用户随后�
 | `server/serve_handler.go` / `server/service_invoke.go` | handler 装配与认证后的并发读写边界 |
 | `server/serve_facade.go` | `httpFacade`、`/health` `/livez` `/readyz` `/metrics` |
 | `server/service_routes.go` | 正式 namespace、typed DTO 与 handler |
-| `server/service_management_routes.go` | Admin / Governance / Operations / Snapshot 写面 |
+| `server/service_management_routes.go` | Admin / Operations / Snapshot 写面 |
 | `server/auth.go` | 可注册 Authenticator 合同与 factory registry |
 | `server/serve_auth.go` | 请求入口认证、Gitea 身份验证与 admin 判定 |
 | `server/auth_gitea.go` / `server/auth_taihu.go` / `server/auth_service.go` | 具体认证器 |

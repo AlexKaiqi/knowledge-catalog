@@ -1,7 +1,7 @@
 package journal
 
 // WithStamp fills identity/correlation on events that left those fields empty.
-// Writer / Dataset service / ControlPlane call Finish without --as; the CLI stamps the call.
+// Writer / Dataset service call Finish without --as; the CLI stamps the call.
 func WithStamp(inner Journal, as, requestID, ruleID string) Journal {
 	return WithContext(inner, Stamp{Principal: as, RequestID: requestID, RuleID: ruleID})
 }

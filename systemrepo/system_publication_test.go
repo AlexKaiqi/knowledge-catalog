@@ -220,7 +220,7 @@ func TestSystemRepositoryDirectoryPaginationKeepsBasis(t *testing.T) {
 		}
 		request.Continuation = page.Continuation
 	}
-	if len(names) != 16 {
+	if len(names) != 15 {
 		t.Fatalf("capability navigation incomplete: %v", names)
 	}
 	request.Commit = "another-version"

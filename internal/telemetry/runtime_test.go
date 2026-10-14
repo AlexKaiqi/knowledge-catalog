@@ -41,7 +41,6 @@ func TestRuntimeExportsOTelInstrumentsThroughPrometheus(t *testing.T) {
 	runtime.RecordProjection(ctx, "opensearch", "incremental", "ok", 8*time.Millisecond, 100, 3, 1)
 	runtime.RecordHook(ctx, "pre", "exec", "ok", time.Millisecond)
 	runtime.SetHookOutbox(2, time.Now().Add(-time.Second))
-	runtime.RecordGate(ctx, 2, "ok", time.Millisecond)
 	runtime.RecordIdentity(ctx, "local", "agent", false)
 	runtime.RecordVFSVolume(ctx, "file-read", "ok", 2048, -1)
 	bindingCtx, bindingSpan, bindingStarted := runtime.StartBindingLookup(ctx, "state")
@@ -51,7 +50,7 @@ func TestRuntimeExportsOTelInstrumentsThroughPrometheus(t *testing.T) {
 	runtime.SetProjectionBacklog("opensearch", 2, time.Now().Add(-time.Second))
 	ctx, otherSpan, otherStarted := runtime.StartOperation(context.Background(), "repo:high-cardinality", "read")
 	runtime.EndOperation(ctx, otherSpan, otherStarted, "repo:high-cardinality", "read", "ok", "")
-	if spans := exporter.GetSpans(); len(spans) != 7 || spans[0].Name != "kc.object-read" || spans[1].Name != "kc.snapshot.read" || spans[2].Name != "kc.hook.dispatch" || spans[3].Name != "kc.gate.check" || spans[4].Name != "kc.binding.lookup" || spans[5].Name != "kc.authenticate" {
+	if spans := exporter.GetSpans(); len(spans) != 6 || spans[0].Name != "kc.object-read" || spans[1].Name != "kc.snapshot.read" || spans[2].Name != "kc.hook.dispatch" || spans[3].Name != "kc.binding.lookup" || spans[4].Name != "kc.authenticate" {
 		t.Fatalf("exported spans %#v", spans)
 	}
 
@@ -85,7 +84,6 @@ func TestRuntimeExportsOTelInstrumentsThroughPrometheus(t *testing.T) {
 		"kc_hook_dispatches_total",
 		"kc_hook_duration_seconds",
 		"kc_hook_outbox_pending",
-		"kc_gate_checks_total",
 		"kc_binding_lookups_total",
 		"kc_binding_lookup_duration_seconds",
 		"kc_binding_observation_age_seconds",

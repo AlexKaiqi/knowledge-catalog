@@ -1228,7 +1228,7 @@ func (w *sceneWorld) expandArg(arg, materials string) (string, error) {
 		}
 		return fmt.Sprint(got), nil
 	}
-	for _, key := range []string{"previewId", "proposalId", "reportId", "pinId", "pinFile", "grantId"} {
+	for _, key := range []string{"pinId", "pinFile", "grantId"} {
 		token := "$" + key
 		if !strings.Contains(expanded, token) {
 			continue
@@ -1260,7 +1260,7 @@ func (w *sceneWorld) captureCLI() {
 			w.ids["grantId"] = id
 		}
 	}
-	for _, key := range []string{"previewId", "proposalId", "reportId", "pinId"} {
+	for _, key := range []string{"pinId"} {
 		if v, exists := row[key]; exists && fmt.Sprint(v) != "" {
 			w.ids[key] = fmt.Sprint(v)
 		}
@@ -1328,7 +1328,7 @@ func (w *sceneWorld) thenOutputIncludes(step sceneStep) {
 // so a Then table can pin a returned path against this trip's home.
 func (w *sceneWorld) expandExpected(value string) string {
 	value = strings.ReplaceAll(value, "$home", w.home)
-	for _, key := range []string{"previewId", "proposalId", "reportId", "pinId", "pinFile", "grantId"} {
+	for _, key := range []string{"pinId", "pinFile", "grantId"} {
 		token := "$" + key
 		if !strings.Contains(value, token) {
 			continue

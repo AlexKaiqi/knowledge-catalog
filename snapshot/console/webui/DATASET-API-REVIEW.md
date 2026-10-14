@@ -34,7 +34,7 @@ Non-Goals 沿用 [Dataset owner](../../../doc/design/dataset.md) 的文件层边
 | History / 历史定义 | 原详情 GET 增加可选 revision 点查；返回真实发布版本页、该版来源与当前服务版。旧登记表只承认真实存在的当前版，不补造更早历史。 | 管理可见性缺口已修复；发布消息 / 作者 / 时间仍有差距（D-04）。 |
 | 版本比较 | Compare 点查两个已接受版本，对交付条目展示新增、移除、修改，可查看完整来源定义。 | 复用完成；是客户端定义比较，不是官方结构化 diff endpoint，也不是文件正文 diff。 |
 | 元数据 schema、description | KC Dataset 公开定义只承载身份、版本、来源、文件清单与生命周期，不含 Dataset description 或 installation-wide metadata keys。Object Schema 不能替代这个合同。 | 未实现（D-01）；不静默接收之后丢弃。 |
-|Dataset PR 打开、修订、关闭、合并发布 | 保留原仓 PR 页；KC 既有 Proposal 是唯一目标 Repository 的 Writer 候选，不是 Dataset 定义 PR。 |Dataset 审批未实现（D-02）；直接发布不宣称已审批。 |
+|Dataset PR 打开、修订、关闭、合并发布 | 保留原仓 PR 页；KC 的工作分支与条件合并只作用于一个源 Repository 的 Writer 写入，不是 Dataset 定义 PR。 |Dataset 审批未实现（D-02）；直接发布不宣称已审批。 |
 | Iceberg table / namespace | KC Dataset 停在原始文件层，没有 table/namespace 条目或 Iceberg REST catalog 消费合同。选入 metadata.json 只是文件交付。 | 未实现（D-03）；不伪装成表级读取。 |
 | 数据读取与授权 | 交付树、分页、Base64 字节预览和小文件下载统一走 KC File Gateway；pin 是坐标，各请求检查当前授权。退役保留发布记录而停止后续消费。 | 复用完成；KC 没有官方 Dataset`lakefs://` / S3 / Iceberg FQN 兼容消费通道（D-05）。 |
 
@@ -69,7 +69,7 @@ Non-Goals 沿用 [Dataset owner](../../../doc/design/dataset.md) 的文件层边
 | ID / 位置 | 信号 | 判定 | 处置 | 触发条件 |
 |---|---|---|---|---|
 | D-01 · `dataset.Dataset` / `server.catalogDatasetRequest` | 官方 [metadata-key](https://pydocs-enterprise-sdk.lakefs.io/docs/DatasetMetadataKey.html) 合同有类型、required、allowed values、allow multiple 与说明；KC Dataset 没有对应字段。 | 不能把 Object Schema 或 UI localStorage 充当 Dataset 元数据权威。 | 登记产品差距；JSON 不支持字段拒绝，在 Dataset owner 决定保存、验证、更新与治理所有权后再补公开合同。 | 用户需要 Dataset 用途说明或安装级必填元数据管理。 |
-| D-02 · `controlplane.Proposal` / `objectapp.DatasetPublisher` | 官方 [Dataset PR](https://pydocs-enterprise-sdk.lakefs.io/docs/DatasetPullRequest.html) 有定义候选、base version 与 stale/conflict 判定；KC Proposal 的对象是一个源 Repository 写入。 | 源内容审批与 Dataset 发布审批不能混用。 | 保留原仓 PR，不添加无后端的 Dataset 审批按钮；后续在 owner 中选定提案范围、证据、基点与合并采用，终态仍请求唯一登记发布权威。 | 需要在发布 Dataset 定义前执行审批。 |
+| D-02 · `writer merge` / `objectapp.DatasetPublisher` | 官方 [Dataset PR](https://pydocs-enterprise-sdk.lakefs.io/docs/DatasetPullRequest.html) 有定义候选、base version 与 stale/conflict 判定；KC 条件合并的对象是一个源 Repository 的工作分支。 | 源内容审批与 Dataset 发布审批不能混用。 | 保留原仓 PR，不添加无后端的 Dataset 审批按钮；后续在 owner 中选定审批范围、证据、基点与合并采用，终态仍请求唯一登记发布权威。 | 需要在发布 Dataset 定义前执行审批。 |
 | D-03 · `dataset.DatasetItem` / File Gateway | 官方 Dataset 支持 table / namespace；KC 为 file / prefix。官方表消费依赖 [Iceberg REST catalog](https://docs.lakefs.io/iceberg/)。 | 文件指针不保证表语义、namespace 范围或数据文件完整性。 | 登记独立消费合同缺口；不将表解析塞入现有文件组合层，先选定上层能力、快照 / 文件保留及授权语义。 | 需要 Spark / Trino / PyIceberg 等按 Dataset 地址读表。 |
 | D-04 · `dataset.Dataset` / `dataset.Log` / `invocation.RegistryLogEntries` | 官方 [DatasetVersion](https://pydocs-enterprise-sdk.lakefs.io/docs/DatasetVersion.html) 有发布 message、author、creation_date；KC 已接受定义未存这些字段。Registry audit 有提交作者 / 消息 / 证据关联，但包含退役等注册动作，无精确的发布版本时间合同。 | 不能将 registry commit 列表或客户端时钟伪造成 release 元信息。 | 当前 History 诚实显示真实版本号、来源与生命周期；后续可复用发布事件证据，需先选定与接受记录的持久关联及迁移合同。 | 需要逐版展示发布者、变更说明与时间或审计导出。 |
 | D-05 · `dataset-files/v1` / 生产网关 | 官方 Dataset 使用 `lakefs://` / S3 与 Iceberg FQN；本控制台读取 KC File Gateway 字节。原 viewer 的 S3 路径只属于原 lakeFS 仓库页。 | 网关分流不使 KC Dataset 自动获得 lakeFS 消费协议兼容性。 | 按 KC-VENDOR 配置原控制台后端；若增加消费协议 adapter，仍需走同一发布范围与当前授权。 | 需要既有 S3 / lakeFS / Iceberg 客户端以 KC Dataset 坐标消费。 |

@@ -49,10 +49,9 @@ kc read 'urn:kc:object:kr%3A%2F%2Fkc%2Fsystem:kc%2Fconcept%2Fobject#/definition'
 - [发布与修订对象](capabilities/publish-object/definition.md) — `kc/capability/publish-object`
 - [组合与采用 Dataset](capabilities/datasets/definition.md) — `kc/capability/datasets`
 - [查询与管理授权](capabilities/permissions/definition.md) — `kc/capability/permissions`
-- [评审与合入变更](capabilities/governance/definition.md) — `kc/capability/governance`
 - [访问动态资源](capabilities/resource-access/definition.md) — `kc/capability/resource-access`
 - [维护查询投影](capabilities/projections/definition.md) — `kc/capability/projections`
-- [配置 Hook 与 Gate](capabilities/extensions/definition.md) — `kc/capability/extensions`
+- [配置 Hook](capabilities/extensions/definition.md) — `kc/capability/extensions`
 - [审计与反馈](capabilities/evidence/definition.md) — `kc/capability/evidence`
 - [部署与恢复](capabilities/deployment/definition.md) — `kc/capability/deployment`
 
@@ -100,7 +99,7 @@ kc read 'urn:kc:object:kr%3A%2F%2Fkc%2Fsystem:kc%2Fconcept%2Fobject#/definition'
 - [版本底座（Snapshot）](mechanisms/snapshot/definition.md) — `kc/mechanism/snapshot`
 - [身份认证与授权（Principal、Permission）](mechanisms/authorization/definition.md) — `kc/mechanism/authorization`
 - [动态资源访问（Binding、Observation）](mechanisms/dynamic-access/definition.md) — `kc/mechanism/dynamic-access`
-- [变更评审与合并（Proposal、Gate）](mechanisms/governance/definition.md) — `kc/mechanism/governance`
+- [工作分支与条件合并](mechanisms/governance/definition.md) — `kc/mechanism/governance`
 - [出站扩展（Hook）](mechanisms/hook/definition.md) — `kc/mechanism/hook`
 - [派生投影](mechanisms/projection/definition.md) — `kc/mechanism/projection`
 - [访问审计](mechanisms/audit/definition.md) — `kc/mechanism/audit`
@@ -121,4 +120,4 @@ kc read 'urn:kc:object:kr%3A%2F%2Fkc%2Fsystem:kc%2Fconcept%2Fobject#/definition'
 
 ## 文件与对象
 
-`concepts/` 解释模型与依据，`interfaces/` 解释操作入口，`mechanisms/` 解释运行机制，`capabilities/` 说明用途，`guides/` 提供使用步骤。主体与权限、声明与观察、提案与合并检查放在相应机制中解释；目录划分只组织说明内容，不增加 登记空间 的领域类型。模型、入口与机制说明使用同一种正文 Schema。内容按一对象一目录、一切面一文件发布；`_schemas/` 发布 Schema，`object-interfaces/` 发布插件合同，`relations/` 发布独立导航关系。文件路径用于阅读，frontmatter 中的对象标识与切面名确定身份；相关对象也可以按稳定身份精确读取。关系文件可作为对象读取，图查询需要可用的同依据投影。
+`concepts/` 解释模型与依据，`interfaces/` 解释操作入口，`mechanisms/` 解释运行机制，`capabilities/` 说明用途，`guides/` 提供使用步骤。主体与权限、声明与观察、工作分支与条件合并放在相应机制中解释；目录划分只组织说明内容，不增加 登记空间 的领域类型。模型、入口与机制说明使用同一种正文 Schema。内容按一对象一目录、一切面一文件发布；`_schemas/` 发布 Schema，`object-interfaces/` 发布插件合同，`relations/` 发布独立导航关系。文件路径用于阅读，frontmatter 中的对象标识与切面名确定身份；相关对象也可以按稳定身份精确读取。关系文件可作为对象读取，图查询需要可用的同依据投影。

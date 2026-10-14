@@ -114,6 +114,5 @@ type NativeRepository interface {
 type Surface string
 
 const (
-	SurfaceCommit   Surface = "COMMIT"
-	SurfaceProposal Surface = "PROPOSAL"
+	SurfaceCommit Surface = "COMMIT"
 )

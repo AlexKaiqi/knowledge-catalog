@@ -174,10 +174,7 @@ func applyStoreDriver(file *StoresFile, driver string, endpoint storeEndpoint) e
 	}
 	authority, err := authorityFor(normalized)
 	if err != nil {
-		if kernel.CodeOf(err) == kernel.ErrUsageInvalid {
-			return err
-		}
-		return fmt.Errorf("unknown store driver %s", driver)
+		return kernel.Fail(kernel.ErrUsageInvalid, "unknown store driver %s", driver)
 	}
 	if authority.configure == nil {
 		return fmt.Errorf("repository driver %s cannot configure a profile", normalized)

@@ -6,10 +6,10 @@ path_hint: guides/review-a-change/guide.md
 ---
 # 评审并合入变更
 
-1. 目标仓、候选变更和评审范围已确定，主体具备相应治理权。
-2. 形成 candidate 提案，为明确 Dataset 范围建立固定预览。
-3. 检查预览，运行实际外部检查，再记录检查结果。
-4. 证据有效且目标未改变时请求合入；失效时重建预览与证据。
-5. 成功证据：接受回执固定合入版本，可据此读回目标内容。
+1. 目标仓、变更内容和评审范围已确定，主体有新分支的 writer.branch、分支的 writer.commit 与目标引用的 writer.merge。
+2. 从当前发布版本开工作分支，把变更写到该分支；main 不动。
+3. 业务系统按分支 commit 完成评审；需要在 KC 里强制审批时配置前置 writer.merge Hook。
+4. 按审阅的分支 commit 与目标 commit 请求合并；分支或目标移动则在新基点上重新评审。
+5. 成功证据：合并回执固定发布版本，可据此读回目标内容。
 
-所需能力：[评审与合入变更](../../capabilities/governance/definition.md)、[发布与修订对象](../../capabilities/publish-object/definition.md)、[精确读取与复核](../../capabilities/read-object/definition.md)。
+所需能力：[发布与修订对象](../../capabilities/publish-object/definition.md)、[精确读取与复核](../../capabilities/read-object/definition.md)。

@@ -7,7 +7,7 @@ KC 应用的 typed handler 通过本包连接授权、固定范围、证据与�
 
 ## 边界
 
-拥有：`Invocation` 载体与其 Flag/Require/TargetRef/RequireProposal/RequirePreview/
+拥有：`Invocation` 载体与其 Flag/Require/TargetRef/
 BindingScope/ObjectRef 读取器；`Command`（Stage + Run）与 `Handler` 类型；授权判定闸
 （allow.json 模型 + `Authorize`/`AuthorizeInventory`/`AuthorizationFlags`，B5b 迁入）；
 Inventory discovery 请求验证标记；任务 pin 上下文归一（`--pin`/`--dataset-file` → 内部坐标）；

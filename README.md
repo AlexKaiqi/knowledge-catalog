@@ -55,7 +55,7 @@ M 访问物化      StateLookup 端口 + 外部 State / Stream runtime（上层�
 
 - **身份**（RESOLVE，②）：`ObjectIdentity ≠ path`，身份在文件内容（frontmatter），Address = `object_id` + aspect + member。
 - **来源**（GET_PROVENANCE，②）：精确 commit 坐标 + 各单元信封；不是 git log。
-- **写**：`COMMIT`/`PROPOSAL` → Snapshot；State/Stream 是 Aspect Binding 的观察面，不是 Writer Surface。
+- **写**：`COMMIT [--ref]`/`MERGE` → Snapshot；工作分支写入不推进默认分支，条件合并只做快进；State/Stream 是 Aspect Binding 的观察面，不是 Writer Surface。
 - **目标 store**：当前通过 `snapshot` 根包接入 lakeFS，具体后端在 `snapshot/internal/lakefsimpl`；Dataset、权限、HTTP 与完整控制台分别归具名一级模块。`declarativeindex/opensearch` 提供可重建 Snapshot/State 派生。未配置检索时仍提供 Snapshot 精确 READ/VFS，但 SEARCH/RELATIONS 明确缺能力；Bound State READ 与动态字段 SEARCH 通过独立 runtime 服务。见 [`doc/architecture.md`](doc/architecture.md)。
 
 ### 概念与动词
@@ -71,8 +71,7 @@ M 访问物化      StateLookup 端口 + 外部 State / Stream runtime（上层�
 | 检索计划 | RetrievalPlan | ResolvedDataset + AccessSpec + provider capabilities → 每请求路由 |
 | 工作投影 | SEARCH / describe-index | 仅 OpenSearch；本地未配置时 SEARCH 明确缺能力，Snapshot 精确 READ/VFS 不受影响 |
 | 外部资源 | ResourceDescriptor | Agent 读取自包含访问句柄，再走全系统统一访问；默认不沉淀 |
-| Proposal | propose / validateStructure / MERGE | 候选 Ref；结构检查后记录 PASSED/FAILED |
-| 外部套件 | recordValidation | 只绑定传入的 PASSED/FAILED，不跑测试 |
+| 工作分支 | writer branch / put --ref / MERGE | 分支写入不通知目录；合并前校验 Schema 与 locator，只做快进；审批由业务经 `writer.merge` 前置 Hook 给出 |
 
 ## 结构
 
@@ -106,8 +105,6 @@ declarativeindex/   # 声明式索引插件、具体投影与维护
 ├── opensearch/                     # 私有物理驱动的公开装配入口
 └── client/ cli/ plugin/             # typed 运维任务与真实插件登记
 systemrepo/         # 完整平台出版物的显式发布与核对
-controlplane/       # PROPOSAL → Preview → validate → Merge
-gate/               # merge 证据清单
 hook/               # CLI 出站 pre/post
 observability/      # access→retrieval→refine→feedback 证据链、trace、派生 hitmap/training
 datasetfs/         # Linux go-fuse 宿主投影；只消费固定的应用层文件计划
@@ -188,7 +185,7 @@ managedRepositories:
   creatorActions: [writer.preview, writer.commit, object.read, object.provenance, object.schema.read]
 ```
 
-Snapshot 机器凭据由部署环境注入；配置不含 token。配置、登记空间 Snapshot 权威、对象 Snapshot、`stateDir` 中的 grants/gates/receipts/治理过程/原始证据都必须持久保存。`cacheDir` 可以删除重建；缺失耐久状态时启动失败，不重新创建一个空 登记空间。平台仓通过显式 `kc create --name` 申请；自有仓通过 `kc create --url --credential-file` 连接；两者都在随后显式 `kc attach --repo` 时才进入当前 登记空间。绑定与创建结果持久保存，无需逐仓改配置；外部仓不存在时失败。creatorActions 不提供默认权限，调用者只获得部署明确选择的窄动作；重放与重启不补回已撤销 grant。
+Snapshot 机器凭据由部署环境注入；配置不含 token。配置、登记空间 Snapshot 权威、对象 Snapshot、`stateDir` 中的 grants/hooks/receipts/原始证据都必须持久保存。`cacheDir` 可以删除重建；缺失耐久状态时启动失败，不重新创建一个空 登记空间。平台仓通过显式 `kc create --name` 申请；自有仓通过 `kc create --url --credential-file` 连接；两者都在随后显式 `kc attach --repo` 时才进入当前 登记空间。绑定与创建结果持久保存，无需逐仓改配置；外部仓不存在时失败。creatorActions 不提供默认权限，调用者只获得部署明确选择的窄动作；重放与重启不补回已撤销 grant。
 
 按角色进入可先用 `kc help consume`、`kc help write`、`kc help compose`；
 三个角色帮助先给出同一套 登记空间/Repository/Dataset 心智模型，再给最短
@@ -273,13 +270,13 @@ kc serve --config deployment.yaml # auth: gitea / authURL / bootstrapPrincipal �
 | T6 Authority Store | lakeFS 的版本身份、CAS、pinned read 与 provider-neutral conformance；夹具与真实服务证据分开 |
 | T7 Ingestion/Grounding | ingest 扫描、reconcile 对账、groundingCitation |
 | T8 Retrieval Projection | `discovery/projection/` 通用执行合同与 `declarativeindex/projection/` 可重建投影定位 + Canonical 回读；非权威、basis/lag；`AspectSelector` 只裁显式 READ |
-| T9 Maintenance Loop | 完整多 Repository Preview、validateStructure、Validation basis；Merge 更新源仓，重新发布 Dataset 后新请求可见 |
+| T9 Maintenance Loop | 工作分支写入、合并前对象校验、快进合并更新源仓；重新发布 Dataset 后新请求可见 |
 | T10 Refine | SEM_FILTER 三值；SEM_RERANK 单次 listwise Provider、Ref-preserving RankGroup、fixed-basis/lane evidence、输入字节预算；Responses-compatible Luna 可选实测 |
 | T11 登记空间 |Dataset Registry、不可变发布记录、故障传播、来源不覆盖、固定已发布版本 |
-| T12 Snapshot + Object composition | Snapshot 身份/CAS/历史 + 上层 Reader/Writer 的 LOG/DIFF/REMOVE、幂等、schema_ref、PROPOSAL |
-| Hook / Gate | pre 非 0 无 commit；REPLAYED 不打 hook；post 只含指针；缺 suite 不能 merge；Preview 变了旧 PASSED 作废 |
+| T12 Snapshot + Object composition | Snapshot 身份/CAS/历史 + 上层 Reader/Writer 的 LOG/DIFF/REMOVE、幂等、schema_ref、分支写入与 MERGE |
+| Hook / Merge | pre 非 0 无 commit；REPLAYED 不打 hook；post 只含指针；`writer.merge` 前置 Hook 可否决；源分支移动报 CANDIDATE_MOVED，目标分叉报 NON_FAST_FORWARD |
 | Collector helper | `patch` 不误删；`reconcile` 只在 Observed∩Scope 上 REMOVE；超 Scope 拒绝；预览可 COMMIT |
-| End-to-end journey | `cli/mvp_acceptance_test.go` 固定接入方/消费方最短闭环；`cli/user_journey_test.go` 再覆盖 HTTP 读写、proposal、权限和生命周期 |
+| End-to-end journey | `cli/mvp_acceptance_test.go` 固定接入方/消费方最短闭环；`cli/user_journey_test.go` 再覆盖 HTTP 读写、分支合并、权限和生命周期 |
 | Layering | `internal/arch`：[`doc/architecture.md`](doc/architecture.md) 的 import 与类型归属跑成断言。`snapshot/dataset → snapshot`；②不得依赖③；Snapshot adapter 不得依赖 Object/format/Discovery；ObjectID/Address/Provenance 由 `object` 声明 |
 | CLI surface | 各模块 CLI 合同与根 `cli/command_test.go`：Help、输入与命令表对齐；退役动词仍报替代品；嵌入测试的 stage 归属保持；公开参数边界与 Server 集成分别验证 |
 

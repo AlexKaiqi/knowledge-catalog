@@ -12,9 +12,7 @@ package invocation
 
 import (
 	"context"
-	"fmt"
 
-	"kc/controlplane"
 	"kc/home"
 	"kc/invoke"
 	"kc/kernel"
@@ -55,34 +53,6 @@ func (cx *Invocation) SetID() (string, error) {
 // TargetRef resolves a --ref style flag against snapshot.DefaultRef.
 func (cx *Invocation) TargetRef(name string) string {
 	return snapshot.RefOrDefault(cx.Flag(name))
-}
-
-// RequireProposal resolves the --proposal flag against the workspace control
-// plane, failing with a usage error when the proposal is unknown.
-func (cx *Invocation) RequireProposal(flag string) (controlplane.Proposal, error) {
-	id, err := cx.Require(flag)
-	if err != nil {
-		return controlplane.Proposal{}, err
-	}
-	proposal, ok := cx.WS.Control.Proposals[id]
-	if !ok {
-		return controlplane.Proposal{}, fmt.Errorf("unknown proposal; run propose first")
-	}
-	return proposal, nil
-}
-
-// RequirePreview resolves the --preview flag against the workspace control
-// plane, failing with a usage error when the preview is unknown.
-func (cx *Invocation) RequirePreview(flag string) (controlplane.Preview, error) {
-	id, err := cx.Require(flag)
-	if err != nil {
-		return controlplane.Preview{}, err
-	}
-	preview, ok := cx.WS.Control.Previews[id]
-	if !ok {
-		return controlplane.Preview{}, fmt.Errorf("unknown preview; run preview first")
-	}
-	return preview, nil
 }
 
 // BindingScope groups the --on / --repo / registry selectors used by the

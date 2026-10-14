@@ -98,7 +98,7 @@ func TelemetryFace(command string) string {
 		return "snapshot"
 	case strings.HasPrefix(command, "file-"):
 		return "vfs"
-	case strings.HasPrefix(command, "governance-") || strings.HasPrefix(command, "admin-") ||
+	case strings.HasPrefix(command, "admin-") ||
 		strings.HasPrefix(command, "grant-") || strings.HasPrefix(command, "admission-"):
 		return "control"
 	default:
@@ -147,14 +147,14 @@ func RecordDomainTelemetry(ctx context.Context, runtime *telemetry.Runtime, comm
 		}
 		provider := TelemetryProvider(flags)
 		runtime.RecordSearch(ctx, provider, completeness, partialReason, outcome, elapsed, phases, candidates, hydrated, dropped, authorizationDropped)
-	case "writer-put", "writer-remove", "writer-commit", "governance-proposal-create":
+	case "writer-put", "writer-remove", "writer-commit", "writer-merge":
 		replayed := false
 		if row, ok := JSONValue(visible).(map[string]any); ok {
 			replayed = strings.EqualFold(StringValue(row["disposition"]), "REPLAYED")
 		}
 		surface := "COMMIT"
-		if command == "governance-proposal-create" {
-			surface = "PROPOSAL"
+		if command == "writer-merge" {
+			surface = "MERGE"
 		}
 		puts, removes := -1, -1
 		if observation.WriterCountsSet {

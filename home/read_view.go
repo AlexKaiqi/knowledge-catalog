@@ -9,8 +9,8 @@ import (
 // and Index while isolating the mutable collaborators used by a read request.
 // The caller must neither Close this borrowed view nor use it for mutations.
 func (ws *Home) ReadView(j journal.Journal) *Home {
-	// Build the borrowed view explicitly so lifecycle locks (closeOnce,
-	// controlMu) are never copied; new Home fields must be carried here
+	// Build the borrowed view explicitly so lifecycle locks (closeOnce)
+	// are never copied; new Home fields must be carried here
 	// deliberately instead of riding along a struct copy.
 	view := &Home{
 		inventory:          ws.inventory,
@@ -23,10 +23,7 @@ func (ws *Home) ReadView(j journal.Journal) *Home {
 		TreeWriter:         ws.TreeWriter,
 		Datasets:           ws.Datasets,
 		Registry:           ws.Registry,
-		ControlPlane:       ws.ControlPlane,
-		ControlStore:       ws.ControlStore,
 		File:               ws.BindingFile(),
-		Control:            ws.Control,
 		Journal:            j,
 		Index:              ws.Index,
 		Plugins:            ws.Plugins,

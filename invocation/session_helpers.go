@@ -166,7 +166,7 @@ func ServerSessionPath(server, filename string) string {
 }
 
 // DropByID removes one identified rule from a list, reporting whether it was
-// there. Shared by allow / hook / gate, which all revoke by id.
+// there. Shared by allow / hook, which both revoke by id.
 func DropByID[T any](items []T, id string, idOf func(T) string) ([]T, bool) {
 	kept := make([]T, 0, len(items))
 	found := false

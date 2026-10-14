@@ -237,8 +237,7 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 		"object-search-granted":            "projection-synced",
 		"object-published":                 "repository-attached",
 		"dataset-defined":                  "object-published",
-		"proposal-opened":                  "dataset-defined",
-		"proposal-preview-created":         "proposal-opened",
+		"review-branch-written":            "dataset-defined",
 		"named-repositories-created":       "service-initialized",
 		"qinghe-object-published":          "named-repositories-created",
 	}
@@ -247,7 +246,7 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 			t.Errorf("%s must consume the reusable %s fixture", child, parent)
 		}
 	}
-	for _, retired := range []string{"repository-registered", "product.gmv", "connector-registered", "schema-browsed", "catalog-allow-ready", "file-view-planned", "dataset-mounted", "proposal-validated", "validation-recorded", "proposal-merged", "observation-refreshed"} {
+	for _, retired := range []string{"repository-registered", "product.gmv", "connector-registered", "schema-browsed", "catalog-allow-ready", "file-view-planned", "dataset-mounted", "proposal-validated", "validation-recorded", "proposal-merged", "observation-refreshed", "proposal-opened", "proposal-preview-created"} {
 		if _, exists := ids[retired]; exists {
 			t.Errorf("%s must not appear as a reusable scene state", retired)
 		}
@@ -264,9 +263,9 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 			"probe-archive-rejects-dataset-definition.feature":    {"kc catalog archive", "kc dataset define", "USAGE_INVALID"},
 			"probe-writer-grant-isolates-principals.feature":      {"--action writer.commit", "Then error FORBIDDEN", "kc writer put"},
 		},
-		"proposal-preview-created": {
-			"probe-structure-validation-keeps-main.feature":           {"kc governance preview validate", "reportId", "PASSED"},
-			"probe-record-passed-validation-merges-candidate.feature": {"kc governance validation record", "kc governance proposal merge", "proposed"},
+		"review-branch-written": {
+			"probe-merge-publishes-reviewed-branch.feature": {"kc writer merge", "refs/heads/main", "proposed"},
+			"probe-merge-refuses-diverged-main.feature":     {"kc writer put", "Then error NON_FAST_FORWARD", "drift"},
 		},
 		"object-search-granted": {
 			"read-grant-returns-canonical.feature": {"--action object.read", "Then READ body is full canonical"},
@@ -465,19 +464,20 @@ func TestSceneCatalogCoversPublicProductSurfaces(t *testing.T) {
 	}
 	dirs := sceneStateDirs(t, ids)
 	want := map[string]string{
-		"kcfs":                      "semantic-dataset-defined",
-		"dataset overlay":           "semantic-dataset-defined",
-		"attach":                    "repository-attached",
-		"create":                    "service-initialized",
-		"detach":                    "repository-attached",
-		"deployment init":           "service-initialized",
-		"governance preview create": "proposal-preview-created",
-		"writer commit":             "domain-schema-published",
-		"writer receipt":            "domain-schema-published",
-		"writer put":                "object-published",
-		"schema list":               "schema-read-granted",
-		"read":                      "object-search-granted",
-		"show":                      "inventory-read-granted",
+		"kcfs":            "semantic-dataset-defined",
+		"dataset overlay": "semantic-dataset-defined",
+		"attach":          "repository-attached",
+		"create":          "service-initialized",
+		"detach":          "repository-attached",
+		"deployment init": "service-initialized",
+		"writer branch":   "review-branch-written",
+		"writer merge":    "review-branch-written",
+		"writer commit":   "domain-schema-published",
+		"writer receipt":  "domain-schema-published",
+		"writer put":      "object-published",
+		"schema list":     "schema-read-granted",
+		"read":            "object-search-granted",
+		"show":            "inventory-read-granted",
 	}
 	for command, stateID := range want {
 		state, ok := ids[stateID]

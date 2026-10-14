@@ -36,7 +36,7 @@ ObjectRef、版本、对象及 Units/Declarations 所属；动态 State hydrate 
 `kr://kc/system` 是应用根按部署声明只读打开的实际 Snapshot 仓，发布完整的产品自描述对象：基础 Schema、模型、操作入口、运行机制、能力说明、使用指南和导航关系。
 跟踪源是 `system/`（`go:embed`），按 Canonical 树组织；源 `readme.md` 发布为根
 `README.md` 导读，`_schemas/` 放声明，`concepts/` 解释模型与依据，`interfaces/` 解释 Writer/CLI 入口，
-`mechanisms/` 解释版本底座、认证授权、动态访问、治理、出站扩展、投影与审计；`capabilities/` 说明用途，`guides/` 说明步骤。内容一对象一目录，
+`mechanisms/` 解释版本底座、认证授权、动态访问、工作分支与条件合并、出站扩展、投影与审计；`capabilities/` 说明用途，`guides/` 说明步骤。内容一对象一目录，
 `relations/` 放独立关系。每个文件对应一个 Address，身份来自 frontmatter。
 Markdown 切面的值是 `{body}`；定义、用法、入口与使用指南使用仓内 `schema/system/*`
 自描述 Schema；模型、入口与机制正文共用 `schema/system/explanation/v1`。这些阅读分类不增加 Dataset 服务 的领域类型。正文产品术语使用对象；Entity / entity 等现行 wire 名称保持。
@@ -105,7 +105,7 @@ LiveAccess 插件的内部机制（`liveaccess/handler`、`liveaccess/dispatch`�
 system 的 `object-interfaces/` 出版机器合同，`interfaces/` 仍解释 Writer/CLI 操作入口；
 Schema 的字段 `access` 出版逻辑查询声明。扩展合同在普通仓发布，处理器独立装配，不追加只读系统仓。
 
-目录内聚合整个②垂直面：根包拥有协议类型与只读 Repository 视图，`reader/` 负责固定 commit 上的对象解释，`writer/` 负责 Object ChangeSet 的 COMMIT/PROPOSAL。字面路径写入不在本目录，见 `snapshot/`；检索合同不在本目录，见 `discovery/`。
+目录内聚合整个②垂直面：根包拥有协议类型与只读 Repository 视图，`reader/` 负责固定 commit 上的对象解释，`writer/` 负责 Object ChangeSet 的 COMMIT（可写指定分支）与条件合并 MERGE。字面路径写入不在本目录，见 `snapshot/`；检索合同不在本目录，见 `discovery/`。
 
 `semanticview/` 只把已经组装的固定版本 `ObjectValue` 渲染成带 `_kc` 坐标的消费 YAML；
 它不枚举 Repository、不写回，也不拥有投影生命周期。

@@ -40,7 +40,7 @@ go run ./cmd/kc -- help
 - 不要把对象协议写进 `catalog/`；不要把 live 资源伪装成 `snapshot.Store`。
 - 不要安装未经批准的依赖；不要提交，除非用户明确要求。
 - 改协议旅程用例前读 `.data/scenes/README.md`。不要只写 `command succeeds`；不要把 `cli/testdata/scenes` 当成协议场景树。改压测用例前读 `.data/scale/scenes/README.md`，结构或指标改动后跑该目录 `perf_tree.py --check`。
-- 其它路径禁区、发权、hook/gate 与运行时约束见拥有该主题的文档和包 README。
+- 其它路径禁区、发权、hook 与运行时约束见拥有该主题的文档和包 README。
 
 ## 交付
 

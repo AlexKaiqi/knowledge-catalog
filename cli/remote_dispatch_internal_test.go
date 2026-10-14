@@ -48,11 +48,8 @@ var remoteDispatchRoutes = []remoteDispatchRouteCase{
 	{path: "writer put", method: http.MethodPost, target: "/object/v1/objects:put", flags: map[string]FlagValue{"kind": "Member", "command-id": "command-A", "value": `{"body":"runbook"}`, "ref": "refs/heads/main", "message": "useful"}, operands: []string{"urn:kc:object:repo-A:policy%2FA#/body/en"}},
 	{path: "writer head", method: http.MethodGet, target: "/writer/v1/repositories/repo-A/head?ref=refs%2Fheads%2Fmain"},
 	{path: "writer receipt", method: http.MethodGet, target: "/writer/v1/receipts/command-A"},
-	{path: "governance proposal create", method: http.MethodPost, target: "/governance/v1/proposals"},
-	{path: "governance preview create", method: http.MethodPost, target: "/governance/v1/previews"},
-	{path: "governance preview validate", method: http.MethodPost, target: "/governance/v1/previews:validate"},
-	{path: "governance validation record", method: http.MethodPost, target: "/governance/v1/validations"},
-	{path: "governance proposal merge", method: http.MethodPost, target: "/governance/v1/proposals:merge"},
+	{path: "writer branch", method: http.MethodPost, target: "/writer/v1/repositories/repo-A/branches", flags: map[string]FlagValue{"repo": "repo-A", "name": "review/policy-a"}},
+	{path: "writer merge", method: http.MethodPost, target: "/writer/v1/repositories/repo-A/merges", flags: map[string]FlagValue{"repo": "repo-A", "command-id": "command-A", "from": "review/policy-a", "commit": "commit-A", "expected": "commit-B"}},
 	{path: "grant add", method: http.MethodPost, target: "/admin/v1/grants"},
 	{path: "grant list", method: http.MethodGet, target: "/admin/v1/grants?action=object.read&principal=user%3Aalice"},
 	{path: "grant remove", method: http.MethodDelete, target: "/admin/v1/grants/rule-A"},
@@ -63,9 +60,6 @@ var remoteDispatchRoutes = []remoteDispatchRouteCase{
 	{path: "operations hook add", method: http.MethodPost, target: "/operations/v1/hooks"},
 	{path: "operations hook list", method: http.MethodGet, target: "/operations/v1/hooks"},
 	{path: "operations hook remove", method: http.MethodDelete, target: "/operations/v1/hooks/rule-A"},
-	{path: "operations gate add", method: http.MethodPost, target: "/operations/v1/gates"},
-	{path: "operations gate list", method: http.MethodGet, target: "/operations/v1/gates"},
-	{path: "operations gate remove", method: http.MethodDelete, target: "/operations/v1/gates/rule-A"},
 	{path: "operations audit access", method: http.MethodPost, target: "/operations/v1/access-log:query"},
 	{path: "operations audit trace", method: http.MethodPost, target: "/operations/v1/traces:query"},
 	{path: "operations audit hitmap", method: http.MethodPost, target: "/operations/v1/hitmap:query"},
@@ -114,9 +108,6 @@ func TestRemoteTypedDispatchRoutesSupportedOperations(t *testing.T) {
 			}
 			if test.path == "traverse" {
 				flags["max-hops"] = "2"
-			}
-			if test.path == "governance preview create" {
-				flags["pin"] = `{"setId":"agent","revision":1,"repositories":{"repo-A":"commit-A"},"pinId":"pin-A"}`
 			}
 			if test.path == "log" || test.path == "provenance" {
 				delete(flags, "aspect")
@@ -203,10 +194,9 @@ func remoteDispatchTestFlags() map[string]FlagValue {
 		"query": "runbook", "limit": "2", "revision": "1",
 		"source":     []string{"repo-A=refs/heads/main@"},
 		"command-id": "command-A", "value": `{"body":"runbook"}`,
-		"proposal-id": "proposal-A", "proposal": "proposal-A", "candidate": "refs/heads/proposal-A",
-		"preview": "preview-A", "validation": "validation-A", "suite": "contract", "outcome": "PASSED",
+		"outcome":   "PASSED",
 		"principal": "user:alice", "action": "object.read", "id": "rule-A",
-		"on": "merge", "phase": "pre", "run": "verify", "require": "contract",
+		"on": "writer.merge", "phase": "pre", "run": "verify",
 		"commit": "commit-A", "ref": "refs/heads/main", "trace-id": "trace-A", "message": "useful",
 	}
 }

@@ -16,7 +16,7 @@ func TestSnapshotStoreFileModuleHasIndependentOwners(t *testing.T) {
 			continue
 		}
 		for dependency, trail := range graph.reachable(pkg) {
-			for _, upper := range []string{"catalog", "home", "invocation", "invoke", "server", "cli", "client", "object", "discovery/service", "discovery", "discovery/projection", "controlplane"} {
+			for _, upper := range []string{"catalog", "home", "invocation", "invoke", "server", "cli", "client", "object", "discovery/service", "discovery", "discovery/projection"} {
 				if dependency == upper || strings.HasPrefix(dependency, upper+"/") {
 					t.Errorf("%s binds the file module to external KC application %s: %v", pkg, dependency, trail)
 				}

@@ -27,7 +27,7 @@ type WriterRequest struct {
 
 func (w *Writer) Lookup(commandID string) (IdempotencyEntry, bool) {
 	entry, ok := w.commands.Lookup(commandID)
-	if !ok || (entry.Request.Kind != string(objectmodel.SurfaceCommit) && entry.Request.Kind != string(objectmodel.SurfaceProposal)) {
+	if !ok || (entry.Request.Kind != string(objectmodel.SurfaceCommit) && entry.Request.Kind != mergeKind) {
 		return IdempotencyEntry{}, false
 	}
 	var receipt CommitReceipt

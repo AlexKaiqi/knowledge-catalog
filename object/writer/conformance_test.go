@@ -168,34 +168,32 @@ func TestT4CommandIdempotency(t *testing.T) {
 	testkit.ExpectCode(t, err, kernel.ErrIdempotencyConflict)
 }
 
-func TestProposeSurface(t *testing.T) {
+func TestBranchCommitSurface(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	main := testkit.MustHead(t, s.Repo, "refs/heads/main")
-	receipt, err := s.Writer.Propose("pr-1", writer.ProposeIntent{
+	if _, err := s.Writer.CreateBranch(writer.BranchIntent{TargetRepository: s.RepositoryID, Ref: "refs/heads/review/PR-1"}); err != nil {
+		t.Fatal(err)
+	}
+	intent := writer.CommitIntent{
 		TargetRepository: s.RepositoryID,
-		TargetRef:        "refs/heads/main",
-		CandidateRef:     "refs/heads/candidates/PR-1",
-		BaseCommit:       main,
+		TargetRef:        "refs/heads/review/PR-1",
 		Operations:       testkit.PutEntity("a", 1, ""),
-	})
+	}
+	receipt, err := s.Writer.CommitIntent("pr-1", intent)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if receipt.Surface != "PROPOSAL" {
-		t.Fatal(receipt.Surface)
+	if receipt.Surface != "COMMIT" || receipt.Result.TargetRef != "refs/heads/review/PR-1" {
+		t.Fatalf("%#v", receipt)
 	}
 	if testkit.MustHead(t, s.Repo, "refs/heads/main") != main {
-		t.Fatal("propose moved main")
+		t.Fatal("branch commit moved main")
 	}
-	cand, ok := s.Repo.GetRef("refs/heads/candidates/PR-1")
-	if !ok || cand != receipt.Result.CommitID {
-		t.Fatalf("candidate %s %v", cand, ok)
+	branch, ok := s.Repo.GetRef("refs/heads/review/PR-1")
+	if !ok || branch != receipt.Result.CommitID {
+		t.Fatalf("branch %s %v", branch, ok)
 	}
-	again, err := s.Writer.Propose("pr-1", writer.ProposeIntent{
-		TargetRepository: s.RepositoryID,
-		CandidateRef:     "refs/heads/candidates/PR-1",
-		Operations:       testkit.PutEntity("a", 1, ""),
-	})
+	again, err := s.Writer.CommitIntent("pr-1", intent)
 	if err != nil {
 		t.Fatal(err)
 	}

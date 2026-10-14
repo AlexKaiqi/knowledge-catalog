@@ -393,23 +393,33 @@ func TestCatalogHookUpdatesIndexAfterCommit(t *testing.T) {
 	}
 }
 
-func TestProposalDoesNotNotifyCatalog(t *testing.T) {
+func TestBranchWriteDoesNotNotifyCatalogUntilMerge(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	cat := testkit.OpenDatasets(t, s.Store)
 	idx := liveIndex(t)
 	t.Cleanup(func() { _ = idx.Close() })
 	var snaps int
 	cat.AddHook(&countSnap{n: &snaps, next: &indexHook{idx: idx}})
-	if _, err := s.Writer.Propose("p1", writer.ProposeIntent{
-		TargetRepository: s.RepositoryID,
-		TargetRef:        "refs/heads/main",
-		CandidateRef:     "refs/kc/proposals/p1",
-		Operations:       testkit.PutEntity("policy/P-9", map[string]any{"body": "candidate only"}, ""),
+	const branch = "refs/heads/review/p9"
+	if _, err := s.Writer.CreateBranch(writer.BranchIntent{TargetRepository: s.RepositoryID, Ref: branch}); err != nil {
+		t.Fatal(err)
+	}
+	base := testkit.MustHead(t, s.Repo, branch)
+	if _, err := s.Writer.Commit("b1", objectmodel.CommitChangeSet{
+		TargetRepository: s.RepositoryID, TargetRef: branch,
+		BaseCommit: base, ExpectedTargetCommit: base,
+		Operations: testkit.PutEntity("policy/P-9", map[string]any{"body": "candidate only"}, ""),
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if snaps != 0 {
-		t.Fatalf("proposal must not NotifySnapshot: %d", snaps)
+		t.Fatalf("a work-branch write must not NotifySnapshot: %d", snaps)
+	}
+	if _, err := s.Writer.Merge("m1", writer.MergeIntent{TargetRepository: s.RepositoryID, SourceRef: branch, TargetRef: snapshot.DefaultRef}); err != nil {
+		t.Fatal(err)
+	}
+	if snaps != 1 {
+		t.Fatalf("merging onto the published ref must NotifySnapshot once: %d", snaps)
 	}
 }
 

@@ -2,6 +2,7 @@ package invocation
 
 import (
 	"fmt"
+	"kc/snapshot"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,8 +33,7 @@ const AllowVersion = 2
 // commandActions maps a bare command name to the semantic action it requires.
 var commandActions = map[string]string{
 	"put": "writer.commit", "remove": "writer.commit", "commit": "writer.commit",
-	"propose": "governance.proposal.create", "preview": "governance.preview.create",
-	"validate": "governance.validate", "record-validation": "governance.validation.record", "merge": "governance.merge",
+	"branch": "writer.branch", "merge": "writer.merge",
 	"resolve": "dataset.resolve", "resolve-object": "object.read", "resolve-binding": "object.binding.resolve",
 	"read": "object.read", "relations": "object.relations", "describe-schema": "object.schema.read",
 	"search": "object.search", "log": "object.history.read", "provenance": "object.provenance",
@@ -281,8 +281,7 @@ func AuthorizeWorkspaceObjectDefinition(rules []AllowRule, q AllowQuery, definit
 // AuthorizationFlags derives scopes that are already fixed by a stored
 // protocol object. The caller should not have to repeat these coordinates,
 // and an untrusted repeated value must not be able to change the authorization
-// target. Unknown proposal/Preview IDs intentionally stay unscoped and
-// therefore fail closed for non-owners before revealing control-plane state.
+// target. Branch and merge are scoped to the ref they create or advance.
 func AuthorizationFlags(cx *Invocation) map[string]invoke.FlagValue {
 	if cx == nil || cx.WS == nil {
 		return cx.Flags
@@ -307,20 +306,14 @@ func AuthorizationFlags(cx *Invocation) map[string]invoke.FlagValue {
 			}
 		}
 		return derived
-	case "governance-proposal-merge":
-		proposal, ok := cx.WS.Control.Proposals[cx.Flag("proposal")]
-		if !ok {
-			return cx.Flags
-		}
-		derived["repo"] = string(proposal.TargetRepository)
-		derived["ref"] = proposal.TargetRef
+	case "writer-branch":
+		// The new branch is the authorization target; a repeated --ref
+		// cannot redirect the grant to another ref.
+		derived["ref"] = BranchRef(cx.Flag("name"))
 		return derived
-	case "governance-preview-validate", "governance-validation-record":
-		preview, ok := cx.WS.Control.Previews[cx.Flag("preview")]
-		if !ok {
-			return cx.Flags
-		}
-		derived["dataset"] = preview.SetID
+	case "writer-merge":
+		// Merge authority is the target ref it advances, never the source.
+		derived["ref"] = snapshot.RefOrDefault(BranchRef(cx.Flag("into")))
 		return derived
 	default:
 		return derived

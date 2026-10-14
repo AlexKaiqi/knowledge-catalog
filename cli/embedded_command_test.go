@@ -33,7 +33,6 @@ var commands = func() map[string]inv.Command {
 		resourceVerbs(),
 		indexVerbs(),
 		datasetVerbs(),
-		controlVerbs(),
 	} {
 		for name, cmd := range group {
 			if _, dup := all[name]; dup {

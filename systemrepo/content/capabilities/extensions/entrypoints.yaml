@@ -8,24 +8,6 @@ schema_ref: schema/system/capability-entrypoints/v1
 {
   "commands": [
     {
-      "action": "operations.gates.manage",
-      "command": "kc operations gate add",
-      "description": "登记 Gate",
-      "help": "kc help operations gate add"
-    },
-    {
-      "action": "operations.gates.read",
-      "command": "kc operations gate list",
-      "description": "列出 Gate",
-      "help": "kc help operations gate list"
-    },
-    {
-      "action": "operations.gates.manage",
-      "command": "kc operations gate remove",
-      "description": "移除 Gate",
-      "help": "kc help operations gate remove"
-    },
-    {
       "action": "operations.hooks.manage",
       "command": "kc operations hook add",
       "description": "登记 Hook",

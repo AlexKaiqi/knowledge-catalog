@@ -73,11 +73,8 @@ const (
 	// Unattached repositories/streams are ErrUsageInvalid.
 	ErrTemporaryUnavailable ErrorCode = "TEMPORARY_UNAVAILABLE"
 
-	// ErrCandidateMoved: candidate advanced after validation.
+	// ErrCandidateMoved: the merge source moved from the reviewed commit.
 	ErrCandidateMoved ErrorCode = "CANDIDATE_MOVED"
-
-	// ErrValidationBasisMismatch: PASSED report is not bound to this exact Preview.
-	ErrValidationBasisMismatch ErrorCode = "VALIDATION_BASIS_MISMATCH"
 
 	// ErrDatasetInvalid: dataset recipe cannot be used (unknown,
 	// retired, duplicate source, empty sources, selector has no such ref).
@@ -91,11 +88,8 @@ const (
 	// principal. Authorization is evaluated only after authentication succeeds.
 	ErrUnauthenticated ErrorCode = "UNAUTHENTICATED"
 
-	// ErrRepositoryArchived: repository is archived; COMMIT/PROPOSE are closed.
+	// ErrRepositoryArchived: repository is archived; COMMIT/BRANCH/MERGE are closed.
 	ErrRepositoryArchived ErrorCode = "REPOSITORY_ARCHIVED"
-
-	// ErrGateUnsatisfied: merge evidence checklist is not PASSED on this basis.
-	ErrGateUnsatisfied ErrorCode = "GATE_UNSATISFIED"
 
 	// ErrHookDenied: outbound pre hook exited non-zero, timed out, or HTTP denied.
 	ErrHookDenied ErrorCode = "HOOK_DENIED"

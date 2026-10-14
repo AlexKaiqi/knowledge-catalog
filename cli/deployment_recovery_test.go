@@ -16,7 +16,6 @@ import (
 	"kc/internal/testkit"
 	"kc/kernel"
 	objectmodel "kc/object"
-	"kc/snapshot"
 )
 
 func declaredDeployment(t *testing.T, source bool) (apphome.DeploymentConfig, string) {
@@ -94,21 +93,19 @@ func TestDeploymentSurvivesInstanceReplacement(t *testing.T) {
 	expectCode(t, call("attach", "--repo", "kr://recover/unconfigured"), "PRECONDITION_FAILED")
 	body(t, call("dataset", "define", "incident", "--revision", "1", "--source", "kr://recover/source"))
 	body(t, call("grant", "add", "--principal", "agent:reader", "--action", "object.read", "--repo", "kr://recover/source"))
-	body(t, call("operations", "gate", "add", "--on", "merge", "--repo", "kr://recover/source", "--require", "suite:recovery-suite"))
 	sink := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusServiceUnavailable) }))
 	defer sink.Close()
 	body(t, call("operations", "hook", "add", "--on", "writer.commit", "--phase", "post", "--url", sink.URL))
+	body(t, call("operations", "hook", "add", "--on", "writer.merge", "--phase", "post", "--repo", "kr://recover/source", "--url", sink.URL))
 	receipt := body(t, call("writer", "put", testObjectReference(t, "kr://recover/source", "note/recover", ""), "--command-id", "recovery-write", "--value", `{"text":"durable"}`))
 	body(t, call("dataset", "define", "incident", "--revision", "2", "--source", "kr://recover/source"))
-	body(t, call("governance", "proposal", "create", "--proposal-id", "recovery-proposal", "--repo", "kr://recover/source", "--target", snapshot.DefaultRef, "--candidate", "refs/heads/candidates/recovery", "--object", "note/recover", "--value", `{"text":"proposed"}`))
-	preview := asMap(t, body(t, call("governance", "preview", "create", "--proposal", "recovery-proposal", "--dataset", "incident")))
-	previewID := preview["previewId"].(string)
-	body(t, call("governance", "preview", "validate", "--preview", previewID))
-	validation := asMap(t, body(t, call("governance", "validation", "record", "--preview", previewID, "--suite", "recovery-suite", "--outcome", "PASSED")))
+	body(t, call("writer", "branch", "--repo", "kr://recover/source", "--name", "review/recovery"))
+	proposed := asMap(t, body(t, call("writer", "put", testObjectReference(t, "kr://recover/source", "note/recover", ""), "--command-id", "recovery-branch-write", "--ref", "refs/heads/review/recovery", "--value", `{"text":"proposed"}`)))
+	reviewed := asMap(t, proposed["result"])["newCommit"].(string)
 	oldHead := body(t, call("writer", "head", "--repo", "kr://recover/source"))
 	catalogState := body(t, call("show"))
 	policy := body(t, call("grant", "list"))
-	gates := body(t, call("operations", "gate", "list"))
+	hooks := body(t, call("operations", "hook", "list"))
 	stats, err := hook.InspectOutbox(cfg.StateDir)
 	if err != nil || stats.Pending == 0 {
 		t.Fatalf("missing durable outbox: %#v %v", stats, err)
@@ -116,7 +113,7 @@ func TestDeploymentSurvivesInstanceReplacement(t *testing.T) {
 	stop()
 	server = nil
 	preserved := map[string][]byte{}
-	for _, name := range []string{"allow.json", "gates.json", "hooks.json", "writer.db", "control.json", "system.jsonl", "access.jsonl", "hook-outbox.jsonl"} {
+	for _, name := range []string{"allow.json", "hooks.json", "writer.db", "system.jsonl", "access.jsonl", "hook-outbox.jsonl"} {
 		raw, err := os.ReadFile(filepath.Join(cfg.StateDir, name))
 		if err != nil {
 			t.Fatal(err)
@@ -145,15 +142,18 @@ func TestDeploymentSurvivesInstanceReplacement(t *testing.T) {
 	if got := body(t, call("grant", "list")); !reflect.DeepEqual(got, policy) {
 		t.Fatal("grants lost on replacement")
 	}
-	if got := body(t, call("operations", "gate", "list")); !reflect.DeepEqual(got, gates) {
-		t.Fatal("gates lost on replacement")
+	if got := body(t, call("operations", "hook", "list")); !reflect.DeepEqual(got, hooks) {
+		t.Fatal("hooks lost on replacement")
 	}
 	replay := asMap(t, body(t, call("writer", "put", testObjectReference(t, "kr://recover/source", "note/recover", ""), "--command-id", "recovery-write", "--value", `{"text":"durable"}`)))
 	if replay["disposition"] != "REPLAYED" {
 		t.Fatalf("idempotency receipt lost: original=%#v replay=%#v", receipt, replay)
 	}
 	expectCode(t, kcRemote(t, server.URL, "agent:reader", "writer", "put", testObjectReference(t, "kr://recover/source", "note/recover", ""), "--command-id", "forbidden-recovery", "--value", `{}`), "FORBIDDEN")
-	body(t, call("governance", "proposal", "merge", "--proposal", "recovery-proposal", "--preview", previewID, "--validation", validation["reportId"].(string)))
+	merged := asMap(t, body(t, call("writer", "merge", "--command-id", "recovery-merge", "--repo", "kr://recover/source", "--from", "review/recovery", "--commit", reviewed)))
+	if asMap(t, merged["result"])["commitId"] != reviewed {
+		t.Fatalf("the reviewed branch commit did not survive replacement: %#v", merged)
+	}
 }
 
 func TestDeploymentMissingDurableStateFailsClosed(t *testing.T) {
@@ -166,7 +166,7 @@ func TestDeploymentMissingDurableStateFailsClosed(t *testing.T) {
 	server := httptest.NewServer(handler)
 	defer server.Close()
 	defer handler.(interface{ Close() error }).Close()
-	if err := os.Remove(filepath.Join(cfg.StateDir, "gates.json")); err != nil {
+	if err := os.Remove(filepath.Join(cfg.StateDir, "hooks.json")); err != nil {
 		t.Fatal(err)
 	}
 	expectCode(t, kcRemote(t, server.URL, "agent:operator", "show"), "PRECONDITION_FAILED")

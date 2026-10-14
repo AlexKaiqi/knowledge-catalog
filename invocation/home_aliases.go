@@ -20,5 +20,3 @@ var LayoutPath = kchome.LayoutPath
 var StoresPath = kchome.StoresPath
 
 var Ready = kchome.Ready
-
-var PersistControl = kchome.PersistControl

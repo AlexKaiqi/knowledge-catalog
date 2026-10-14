@@ -43,7 +43,7 @@ func TestEveryPublicHelpExplainsUseEffectsAndRecoveryWithoutExecuting(t *testing
 			switch path {
 			case "deployment init", "deployment status", "deployment system publish", "serve":
 				argv = append(argv, "--config", filepath.Join(dir, "missing-deployment"))
-			case "writer put", "writer commit", "governance proposal create", "dataset define", "dataset overlay", "grant update":
+			case "writer put", "writer commit", "dataset define", "dataset overlay", "grant update":
 				argv = append(argv, "--file", filepath.Join(dir, "missing-input"))
 			case "files read":
 				argv = append(argv, "--out", filepath.Join(dir, "download"))
@@ -66,17 +66,16 @@ func TestEveryPublicHelpExplainsUseEffectsAndRecoveryWithoutExecuting(t *testing
 
 func TestHelpPreservesDistinctWriteAndEvidenceBoundaries(t *testing.T) {
 	for path, claims := range map[string][]string{
-		"provenance":                   {"单仓需 object.provenance", "命名 Dataset", "file.read", "完整读取检查"},
-		"access":                       {"resource.access", "file.read 不蕴含此访问权"},
-		"writer commit":                {"目录外已有对象保留", "不自动拆批", "只轮询原回执"},
-		"writer remove":                {"全部存储单元", "不擦除历史版本"},
-		"invoke":                       {"外部状态", "幂等", "响应丢失", "盲目重试"},
-		"deployment status":            {"追加", "审计", "不初始化"},
-		"governance proposal merge":    {"--preview", "CAS", "不自动重新发布"},
-		"governance validation record": {"不保存 --message", "不在这里跑套件", "替换当前保存结果"},
-		"operations hook list":         {"全服务名单", "未传作查询过滤"},
-		"operations gate list":         {"全服务名单", "未传作查询过滤"},
-		"operations audit hitmap":      {"不返回下一页游标", "截断", "保留窗口"},
+		"provenance":              {"单仓需 object.provenance", "命名 Dataset", "file.read", "完整读取检查"},
+		"access":                  {"resource.access", "file.read 不蕴含此访问权"},
+		"writer commit":           {"目录外已有对象保留", "不自动拆批", "只轮询原回执"},
+		"writer remove":           {"全部存储单元", "不擦除历史版本"},
+		"invoke":                  {"外部状态", "幂等", "响应丢失", "盲目重试"},
+		"deployment status":       {"追加", "审计", "不初始化"},
+		"writer merge":            {"快进", "--expected", "Hook 可否决", "推进 main 时才通知", "不做三方合并"},
+		"writer branch":           {"不改 main", "不通知订阅者", "不会随 main 自动前进"},
+		"operations hook list":    {"全服务名单", "未传作查询过滤"},
+		"operations audit hitmap": {"不返回下一页游标", "截断", "保留窗口"},
 	} {
 		t.Run(path, func(t *testing.T) {
 			for _, claim := range claims {

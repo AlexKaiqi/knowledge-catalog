@@ -7,7 +7,7 @@ import (
 
 // COMMIT applies a ChangeSet and CAS-moves the target Ref (default main).
 // CommitIntent fills expectedTargetCommit from the current head on first use;
-// retries reuse the stored CAS. applySnapshot is shared with PROPOSAL.
+// retries reuse the stored CAS. A branch Ref is an ordinary target; see merge.go.
 
 // CommitIntent is COMMIT before CAS is filled from the current Ref.
 type CommitIntent struct {

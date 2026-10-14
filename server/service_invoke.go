@@ -80,7 +80,7 @@ func (f *httpFacade) executeTyped(w http.ResponseWriter, r *http.Request, name, 
 // journal), so independent fixed-basis reads may share the read lock.
 // Component/fixture serving retains the legacy adoption path where every
 // invocation installs its request journal on the shared Home (observeHome →
-// SetJournal fans out to Writer, Reader, ControlPlane and registry);
+// SetJournal fans out to Writer, Reader and registry);
 // concurrent reads there would race on that shared state and could observe
 // another request's stamp, so fixture-mode reads serialize with mutations.
 // This is a process-safety boundary, not a Repository locking protocol;

@@ -3,7 +3,7 @@
 Writer 是② Object 写入面：一次一个 target、一种 Surface、一个 `command_id`。字面路径写入由 [Snapshot RawWriter](../../snapshot/write_contract.go) 承担。
 
 ```text
-COMMIT / PROPOSAL  → Object tree codec → snapshot.TreeStore authority
+COMMIT [--ref] / MERGE → Object tree codec → snapshot.TreeStore authority
 ChangeSet          → PUT / REMOVE Address
 ```
 

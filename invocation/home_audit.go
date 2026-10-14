@@ -155,7 +155,7 @@ func auditRefs(command string, flags map[string]invoke.FlagValue, result any) ma
 	refs := map[string]any{}
 	for _, name := range []string{
 		"repo", "object", "command-id", "dataset",
-		"proposal", "preview", "proposal-id", "aspect", "trace-id", "implementation",
+		"aspect", "trace-id", "implementation",
 	} {
 		if v := invoke.FlagString(flags, name); v != "" {
 			refs[name] = v
@@ -175,7 +175,7 @@ func auditRefs(command string, flags map[string]invoke.FlagValue, result any) ma
 			raw := asRefMap(result)
 			for _, k := range []string{
 				"repositoryId", "head", "setId", "commitId",
-				"id", "disposition", "commandId", "proposalId", "previewId", "reportId",
+				"id", "disposition", "commandId",
 				"dataset", "retired", "archived",
 			} {
 				if val, ok := raw[k]; ok && val != nil && val != "" && val != false {

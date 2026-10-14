@@ -2,7 +2,6 @@ package invocation
 
 import (
 	"encoding/json"
-	"kc/invoke"
 	objectmodel "kc/object"
 	"net/http/httptest"
 	"strings"
@@ -32,13 +31,6 @@ func TestWriterJSONIngressPreservesLargeInteger(t *testing.T) {
 			t.Fatal(err)
 		}
 		assertValue(t, change.Operations[0].Value)
-	})
-	t.Run("proposal", func(t *testing.T) {
-		operations, err := ProposeOperations(map[string]invoke.FlagValue{"payload": "[" + operation + "]"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		assertValue(t, operations[0].Value)
 	})
 	t.Run("typed-service-request", func(t *testing.T) {
 		var target struct {

@@ -236,7 +236,7 @@ func errorStatus(err error) int {
 		return http.StatusServiceUnavailable
 	case kernel.ErrNonFastForward, kernel.ErrIdempotencyConflict, kernel.ErrPreconditionFailed,
 		kernel.ErrEventIDConflict, kernel.ErrCandidateMoved,
-		kernel.ErrGateUnsatisfied, kernel.ErrRepositoryArchived,
+		kernel.ErrRepositoryArchived,
 		kernel.ErrSchemaIncompatible:
 		return http.StatusConflict
 	default:

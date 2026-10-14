@@ -24,7 +24,7 @@
 | [LiveAccess](design/liveaccess.md) | 外部取值、逐值失败、身份传递、证据 |
 | [Affordance](design/affordance.md) | 对象与系统的说明、命令行规则 |
 | [服务](design/service.md) | 请求入口、跨模块任务、恢复、证据、部署 |
-| [治理](design/governance.md) | 反馈、提案、Gate、Hook |
+| [治理](design/governance.md) | 反馈、工作分支、条件合并、Hook |
 
 ## 工程
 
