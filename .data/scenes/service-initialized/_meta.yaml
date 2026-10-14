@@ -100,7 +100,7 @@ evidence:
       - "TestLocalSystemPublishSeedsLakeFSAuthority"
       - "TestPublishSystemSeedsEmptyTreeAndRefusesOverwrite"
     verifies:
-      - claim: "knowledge#U1"
+      - claim: "object#U1"
         detail: "初始化夹具登记 System Repository；已认证主体可读，Writer 写入被拒；发布 digest 与内置信任根一致，重复发布不重写且篡改后拒绝发布。"
     title: "初始化发布并登记可读且不可写的 System Repository"
   - id: "system-self-description"
@@ -116,7 +116,7 @@ evidence:
       - "TestPublishSystemRejectsSelfDescriptionDrift"
       - "TestPublishSystemRejectsUnexpectedFiles"
     verifies:
-      - claim: "knowledge#U8"
+      - claim: "object#U8"
         detail: "已认证主体在无搜索投影时读回导读、概念、任务与能力切面；Dataset 文件交付保持原始字节和 pin，调用入口与实际叶子 help 同源核对，篡改、缺失或额外出版物内容被发布与恢复检查拒绝。"
     title: "系统仓交付固定版本自描述知识并拒绝出版物漂移"
   - id: "object-model-existing-help-and-publication"
@@ -128,7 +128,7 @@ evidence:
       - "TestEveryPublicHelpExplainsUseEffectsAndRecoveryWithoutExecuting"
       - "TestSystemKnowledgeCanBeReadThroughAuthenticatedServer"
     verifies:
-      - claim: "object-refactor-guideline#U1"
+      - claim: "object#U9"
         detail: "叶子 help 无网络／本机产物，已认证 Server 可读取系统导读和 Object 定义的固定 commit；根 help 概念、联系、例子及零知识走读仍为明确 gap。"
 probes:
   - file: "probe-status.feature"
@@ -203,7 +203,7 @@ probes:
     views:
       - "access-control"
     verifies:
-      - claim: "knowledge#U1"
+      - claim: "object#U1"
         detail: "普通主体 bot 对 System Repository 的 Writer PUT 返回 FORBIDDEN。"
     title: "普通主体写 System Repository 被拒绝"
   - file: "probe-system-immutable-privileged.feature"
@@ -211,7 +211,7 @@ probes:
     views:
       - "access-control"
     verifies:
-      - claim: "knowledge#U1"
+      - claim: "object#U1"
         detail: "夹具管理主体对 System Repository 的 Writer PUT 仍返回 FORBIDDEN，覆盖已获权后的不可写边界。"
     title: "管理主体写 System Repository 仍被拒绝"
   - file: "identity-request-binds-principal.feature"

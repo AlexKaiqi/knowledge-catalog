@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"html"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -15,30 +14,12 @@ import (
 // product. This checks syntax without logging in, opening stores or issuing
 // requests; domain values and successful journeys remain conformance's job.
 func TestProductDocumentationUsesCurrentCommands(t *testing.T) {
-	for _, path := range []string{"README.md", "docs/product.html", "docs/reviewed/mvp-acceptance.md"} {
-		t.Run(path, func(t *testing.T) {
-			raw, err := os.ReadFile(filepath.Join("..", path))
-			if err != nil {
-				t.Fatal(err)
-			}
-			pattern := "(?s)```(?:bash|sh|shell)\\n(.*?)```"
-			if filepath.Ext(path) == ".html" {
-				pattern = `(?s)<pre\b[^>]*>\s*<code[^>]*>(.*?)</code>\s*</pre>`
-			}
+	groups := map[string][]string{"README.md": {"README.md"}, "doc": documentationMarkdown(t, filepath.Join("..", "doc"))}
+	for name, paths := range groups {
+		t.Run(name, func(t *testing.T) {
 			count := 0
-			for _, block := range regexp.MustCompile(pattern).FindAllStringSubmatch(string(raw), -1) {
-				text := strings.ReplaceAll(html.UnescapeString(block[1]), "\\\n", " ")
-				for _, line := range strings.Split(text, "\n") {
-					line = strings.TrimSpace(line)
-					if !strings.HasPrefix(line, "kc ") {
-						continue
-					}
-					line, _, _ = strings.Cut(line, " #")
-					count++
-					if err := validateDocumentedCommand(line); err != nil {
-						t.Errorf("example %q: %v", line, err)
-					}
-				}
+			for _, path := range paths {
+				count += checkDocumentedCommands(t, path)
 			}
 			if count == 0 {
 				t.Fatal("no executable kc examples checked")
@@ -46,6 +27,52 @@ func TestProductDocumentationUsesCurrentCommands(t *testing.T) {
 			t.Logf("checked %d command examples against the product surface", count)
 		})
 	}
+}
+
+func documentationMarkdown(t *testing.T, root string) []string {
+	t.Helper()
+	var paths []string
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !entry.IsDir() && filepath.Ext(path) == ".md" {
+			rel, _ := filepath.Rel("..", path)
+			paths = append(paths, rel)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) == 0 {
+		t.Fatalf("no Markdown under %s", root)
+	}
+	return paths
+}
+
+func checkDocumentedCommands(t *testing.T, path string) int {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("..", path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, block := range regexp.MustCompile("(?s)```(?:bash|sh|shell)\\n(.*?)```").FindAllStringSubmatch(string(raw), -1) {
+		text := strings.ReplaceAll(block[1], "\\\n", " ")
+		for _, line := range strings.Split(text, "\n") {
+			line = strings.TrimSpace(line)
+			if !strings.HasPrefix(line, "kc ") {
+				continue
+			}
+			line, _, _ = strings.Cut(line, " #")
+			count++
+			if err := validateDocumentedCommand(line); err != nil {
+				t.Errorf("%s: example %q: %v", path, line, err)
+			}
+		}
+	}
+	return count
 }
 
 func validateDocumentedCommand(line string) error {

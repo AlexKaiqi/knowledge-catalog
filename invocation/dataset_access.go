@@ -84,7 +84,7 @@ func PickDatasets(ws *kchome.Home, _ map[string]invoke.FlagValue) (dataset.Servi
 // EnsureWorkspace returns the Registry recipe for setID, adopting a hitchhiking
 // .kc-dataset.yaml from an attached member (or a local unanchored copy) when
 // this machine has never defined it. Registry remains the operational store;
-// the yaml is how the recipe travels with git (docs/reviewed/dataset.md).
+// the yaml is how the recipe travels with git (doc/design/dataset.md).
 func EnsureWorkspace(ws *kchome.Home, home string, cat dataset.Service, setID string) (dataset.KnowledgeSet, error) {
 	def, orig := cat.Set(setID)
 	if ws.Deployment != nil {

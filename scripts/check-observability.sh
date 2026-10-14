@@ -8,7 +8,7 @@ if [[ -z "${KC_VALIDATION_RUN_ID:-}" ]]; then
   exec python3 ./scripts/validation.py run --scope observability:rules -- "$repo_root/scripts/check-observability.sh" "$@"
 fi
 
-rules_dir="$repo_root/docs/observability"
+rules_dir="$repo_root/scripts/deploy/observability/rules"
 if command -v promtool >/dev/null 2>&1; then
   runner=(promtool)
 elif command -v docker >/dev/null 2>&1; then

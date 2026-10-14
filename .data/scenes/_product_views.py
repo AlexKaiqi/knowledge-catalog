@@ -1,28 +1,19 @@
 """Product claim discovery and declaration checks, without executing evidence."""
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 import re
 
 
-def document_registry(repo: Path, errors: list[str]) -> dict:
-    registry = {}
-    for path in sorted((repo / "docs/graph/documents").glob("*.okf")):
-        try:
-            raw = path.read_text(encoding="utf-8")
-            # OKF has a YAML envelope and a JSON document object.
-            parts = re.split(r"^---\s*$", raw, maxsplit=2, flags=re.MULTILINE)
-            data = json.loads(parts[2] if len(parts) == 3 else raw)
-            document_id = data["id"]
-            if document_id in registry:
-                errors.append(f"duplicate document id {document_id} in {path}")
-            else:
-                registry[document_id] = data
-        except (ValueError, KeyError, TypeError, OSError) as exc:
-            errors.append(f"document registry {path}: {exc}")
-    return registry
+DESIGN_DIR = "doc/design"
+DOCUMENT_ID = re.compile(r"^[a-z][a-z0-9-]*$")
+
+
+def design_document(repo: Path, document_id: str) -> tuple[str, Path]:
+    """A product document id names one design chapter: doc/design/<id>.md."""
+    relative = f"{DESIGN_DIR}/{document_id}.md"
+    return relative, repo / relative
 
 
 def section_claims(path: Path, section: str) -> list[tuple[str, str, int]]:
@@ -76,7 +67,6 @@ def load_claims(repo: Path, registrations, errors: list[str]) -> list[dict]:
         return []
     if not registrations:
         return []
-    registry = document_registry(repo, errors)
     claims = []
     for document_id, config in registrations.items():
         if not isinstance(config, dict) or set(config) - {"section", "gaps"}:
@@ -86,17 +76,12 @@ def load_claims(repo: Path, registrations, errors: list[str]) -> list[dict]:
         if not isinstance(section, str) or not section.strip():
             errors.append(f"{document_id}: a nonempty section is required")
             continue
-        document = registry.get(document_id)
-        if document is None:
-            errors.append(f"{document_id}: document is not registered in docs/graph/documents")
+        if not isinstance(document_id, str) or not DOCUMENT_ID.match(document_id):
+            errors.append(f"{document_id}: product document id must name a chapter in {DESIGN_DIR}/")
             continue
-        relative = document.get("path")
-        if not isinstance(relative, str) or not relative:
-            errors.append(f"{document_id}: registered document has no path")
-            continue
-        path = (repo / relative).resolve()
-        if not path.is_relative_to(repo) or Path(relative).is_absolute() or path.suffix.lower() != ".md":
-            errors.append(f"{document_id}: source must be an in-repository Markdown owner, got {relative}")
+        relative, path = design_document(repo, document_id)
+        if not path.is_file():
+            errors.append(f"{document_id}: design document {relative} does not exist")
             continue
         try:
             extracted = section_claims(path, section)

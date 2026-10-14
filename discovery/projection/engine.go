@@ -132,7 +132,7 @@ type ContextRetriever interface {
 	RetrieveContext(context.Context, RetrieveRequest) (CandidatePage, error)
 }
 
-// SemanticWindowRetriever is the optional vector-window port (docs/reviewed/retrieval.md
+// SemanticWindowRetriever is the optional vector-window port (doc/design/discovery.md
 // §8.1). A provider that cannot serve a derived k-NN window simply does not
 // implement it; callers must then fail closed instead of downgrading to
 // lexical recall. A window is one bounded top-K request: no continuation, and

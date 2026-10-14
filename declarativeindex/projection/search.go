@@ -64,7 +64,7 @@ func (idx *Index) SearchAtContext(ctx context.Context, repo objectmodel.Reposito
 }
 
 // SemanticWindowAtContext serves one approximate k-NN window on the fixed
-// repository version (docs/reviewed/retrieval.md). Eligibility (a ready vector
+// repository version (doc/design/discovery.md). Eligibility (a ready vector
 // projection) is checked before any recall work; the result keeps partial
 // completeness and the vector lane's approximate evidence, and the caller
 // (discovery/service) adds the envelope disclosures. No continuation: a window is

@@ -18,7 +18,7 @@ import (
 // consumers may use its fixed version coordinate, but the file module never
 // interprets its body or derives knowledge identity from its path.
 // Path "" (a non-nil pointer to the empty string) is the root mount: the
-// fallback for files that match no other mount. See docs/reviewed/dataset.md.
+// fallback for files that match no other mount. See doc/design/dataset.md.
 // One repository may have several Path entries only when they share one
 // selector/baseRev and project disjoint SubPaths; the resolved pin still has
 // one commit coordinate for that repository.
@@ -37,7 +37,7 @@ type KnowledgeSetSource struct {
 	// File marks a per-file entry (U10): File is the repository-relative
 	// source file path and Target is the delivered path in the composed
 	// tree. A file entry never declares a mount Path, and every entry of
-	// one repository shares the same frozen commit (docs/reviewed/dataset.md,
+	// one repository shares the same frozen commit (doc/design/dataset.md,
 	// "同一来源的多个片段继续使用一致的固定版本").
 	File   string `json:"file,omitempty"`
 	Target string `json:"target,omitempty"`

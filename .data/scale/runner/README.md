@@ -18,7 +18,7 @@
 - 结果写 `<evidenceDir>/smoke-<runId>/`：`manifest.json`、`samples.ndjson`、
   `report.json`（含 `expectationChecks` 与 `PASSED/FAILED/INVALID` 总体判定）。
   smoke 期望值来自 env 配置 `expectations:`，是本地冒烟阈值，**不是**
-  `docs/reviewed/scale-benchmark.md` 资格线。
+  资格线（资格门槛尚未登记）。
 
 ## 运行
 
@@ -41,7 +41,7 @@ env 配置沿用 [`../scenes/env.example.yaml`](../scenes/env.example.yaml) 的�
 
 - 边界：closed-loop 串行（concurrency=1）；只覆盖 client-timer 可测子集；
   发压端 CPU 采样仅 runner 进程自身（`os.times`，机器级 resource-sample 归 L2）；
-  门槛重登记前不做资格判定，只出曲线与正确性对账。
+  资格门槛登记前不做资格判定，只出曲线与正确性对账。
 - **L2 最小归因（已接）**：env 声明 `observability.prometheusURL` 时，runner 在
   整轮窗口批量拉 `kc_writer_duration_seconds_{sum,count}` 与
   `kc_snapshot_operation_duration_seconds_sum`（⓪ adapter 各操作：commit/diff/

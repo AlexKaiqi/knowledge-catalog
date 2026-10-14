@@ -45,4 +45,4 @@ KC_TEST_OPENSEARCH_URL=http://127.0.0.1:9200 go test ./declarativeindex/opensear
 投影在生成索引里加入 `semantic_vector` knn_vector 字段（hnsw/lucene，cosinesimil），构建批次内
 以一次 embeddings 调用为每个对象正文派生向量；无正文对象（如关系）不入语义窗口。模型或维度
 未配置的引擎保持纯 lexical 投影。语义窗口是单次有界 top-K 查询，候选携带 approximate 证据；
-这是派生投影，不是第二权威（docs/reviewed/retrieval.md）。
+这是派生投影，不是第二权威（doc/design/discovery.md）。

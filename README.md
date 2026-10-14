@@ -9,16 +9,15 @@ LiveAccess；Affordance 同时说明对象和系统自身怎样使用。大文�
 
 接入方维护自己的内容、模型和来源；消费者采用需要的范围，并保留所用版本与引用依据。
 普通文件可先组合交付，需要结构化知识、查询或动态资源时再增加相应能力。
-产品价值、Agent 使用闭环及结构化架构图由[架构总览](docs/reviewed/core-architecture.md)拥有。
+愿景、核心概念与架构见 [`doc/`](doc/README.md)。
 申请访问衔接资源拥有者或既有业务流程；通用自主申请与 Wield 等后续扩展仍属设计方向。
 
 ## 当前 MVP
 
-当前版本是**预配置与既有授权下可用的单实例 Server/Client 参考实现**：即使部署在一台机器上，Connector、`kc`、`kcfs` 也只通过 typed API 进入 KC Server；Store 和 Retrieval provider 可以本机部署，但不能绕过知识、授权、证据和索引语义。核心入口已实现，不代表全程自助、所有 adapter 或宿主已完成验收。共享服务试点有条件可用，多实例生产服务尚未验收；边界见 [`docs/reviewed/mvp-acceptance.md`](docs/reviewed/mvp-acceptance.md)，验证结论须对应具体运行范围与源码版本。
+当前版本是**预配置与既有授权下可用的单实例 Server/Client 参考实现**：即使部署在一台机器上，`kc`、`kcfs` 也只通过 typed API 进入 KC Server；Store 和 Retrieval provider 可以本机部署，但不能绕过知识、授权、证据和索引语义。核心入口已实现，不代表全程自助、所有 adapter 或宿主已完成验收。共享服务试点有条件可用，多实例生产服务尚未验收；边界见[路线](doc/roadmap.md)，验证结论须对应具体运行范围与源码版本。
 
-完整产品设计与使用书：[`docs/product.html`](docs/product.html)（由 owner 文档派生，不进文档图）。
-正文覆盖对象注册与环境管理、Agent 使用闭环和结构化架构图；单个文件即可离线打开、直接分享，也支持打印为 PDF。
-在仓库中一起阅读手册和设计 Markdown（UTF-8 HTML）：`make docs-serve`，然后打开提示的地址（默认 `http://127.0.0.1:8766/docs/product.html`）。
+完整设计从 [`doc/README.md`](doc/README.md) 开始：愿景、概念、架构、各篇设计与路线。
+本机阅读（UTF-8 HTML）：`make docs-serve`，然后打开提示的地址（默认 `http://127.0.0.1:8766/doc/README.md`）。
 
 先按角色进入，不必先读完整设计：
 
@@ -36,9 +35,9 @@ Knowledge Repository 中版本化 Domain Schema；Writer 会校验 Schema 文档
 `POST /knowledge/v1/schemas:list`（CLI `kc schema list`）可在选择知识集前分页列出一个固定 Repository 已发布的实体。面向
 人、IDE 与通用 Agent 文件工具的默认投影是 Semantic YAML view（例如
 `object/semantic/metrics/*.yaml`），Canonical 单元信封只属于维护/存储形状。产品设计和
-用例见 [`docs/reviewed/knowledge.md`](docs/reviewed/knowledge.md)。
+用例见 [`doc/design/object.md`](doc/design/object.md)。
 
-**Knowledge Catalog 语义只有一套**：身份、版本、来源、写边界、知识集组合、维护闭环、联邦读取。不同的是 store adapter。协议分层 ⓪–③（[`docs/reviewed/core-architecture.md`](docs/reviewed/core-architecture.md)；不要和介质梯子混名）：
+**Knowledge Catalog 语义只有一套**：身份、版本、来源、写边界、知识集组合、维护闭环、联邦读取。不同的是 store adapter。协议分层 ⓪–③（[`doc/architecture.md`](doc/architecture.md)；不要和介质梯子混名）：
 
 ```text
 ③ 检索派生     AccessSpec / RetrievalPlan / CandidateRef / 完整回读
@@ -57,7 +56,7 @@ M 访问物化      StateLookup 端口 + 外部 State / Stream runtime（上层�
 - **身份**（RESOLVE，②）：`ObjectIdentity ≠ path`，身份在文件内容（frontmatter），Address = `object_id` + aspect + member。
 - **来源**（GET_PROVENANCE，②）：精确 commit 坐标 + 各单元信封；不是 git log。
 - **写**：`COMMIT`/`PROPOSAL` → Snapshot；State/Stream 是 Aspect Binding 的观察面，不是 Writer Surface。
-- **目标 store**：当前通过 `snapshot` 根包接入 lakeFS，具体后端在 `snapshot/internal/lakefsimpl`；Dataset、权限、HTTP 与完整控制台分别归具名一级模块。Gitea/filegit/Dolt 存储 adapter 已退役删除；独立身份认证不受影响。`declarativeindex/opensearch` 提供可重建 Snapshot/State 派生。未配置检索时仍提供 Snapshot 精确 READ/VFS，但 SEARCH/RELATIONS 明确缺能力；Bound State READ 与动态字段 SEARCH 通过独立 runtime 服务。见 [`docs/reviewed/core-architecture.md`](docs/reviewed/core-architecture.md)。
+- **目标 store**：当前通过 `snapshot` 根包接入 lakeFS，具体后端在 `snapshot/internal/lakefsimpl`；Dataset、权限、HTTP 与完整控制台分别归具名一级模块。Gitea/filegit/Dolt 存储 adapter 已退役删除；独立身份认证不受影响。`declarativeindex/opensearch` 提供可重建 Snapshot/State 派生。未配置检索时仍提供 Snapshot 精确 READ/VFS，但 SEARCH/RELATIONS 明确缺能力；Bound State READ 与动态字段 SEARCH 通过独立 runtime 服务。见 [`doc/architecture.md`](doc/architecture.md)。
 
 ### 概念与动词
 
@@ -110,7 +109,6 @@ systemrepo/         # 完整平台出版物的显式发布与核对
 controlplane/       # PROPOSAL → Preview → validate → Merge
 gate/               # merge 证据清单
 hook/               # CLI 出站 pre/post
-connector/          # Collector 的 STATE Address 对账 helper
 observability/      # access→retrieval→refine→feedback 证据链、trace、派生 hitmap/training
 datasetfs/         # Linux go-fuse 宿主投影；只消费固定的应用层文件计划
 cli/  cmd/kc/       # 全局上下文、五模块 CLI 装配、部署与服务进程入口
@@ -122,14 +120,11 @@ internal/
 ├── jsonfile/       # 原子 JSON 落盘
 ├── testkit/        # T12 / Writer 契约与测试装置
 └── arch/           # 分层守卫：把架构总览的 import 规则跑成测试
-docs/
-├── README.md         # 文档地图
-├── product.html      # 派生产品手册（不进文档图）
-├── graph/            # 文档节点与关系的 OKF 知识单元
-├── observability/    # 派生告警 / recording 规则
-└── reviewed/         # 设计书与资料（唯一权威）
-    ├── core-architecture.md … service.md  # 按组件的设计章
-    └── terminology.md、test-catalog.md 等 # 验证、研究、规模与过程资料
+doc/
+├── README.md         # 文档入口与阅读顺序
+├── vision.md concepts.md architecture.md roadmap.md
+├── design/           # 按能力的设计篇，含用例与进度
+└── engineering/      # 测试、质量闭环、测试目录与架构不变量
 ```
 
 生产 `kc` 的业务请求经各模块 SDK 进入 Server；handler/stage 的内部登记、Invocation 遥测
@@ -146,7 +141,7 @@ CLI/服务测试保存，根保留全局 argv、认证上下文、跨模块旅�
 - 消费读 / `object_id` 在 `reader.Serving`，不在 登记空间。没有公开全量枚举或宿主直写式 snapshot export；未来若提供导出，必须是显式 typed streaming API，且不是消费 fallback
 - Linux 上用 `kcfs mount --dataset <id> --root <现有项目>` 把已发布 Dataset 的消费 YAML 投影挂入用户工作区，让本地 Agent 像读普通文件一样访问。当前只读，仅适合本机容量能容纳的数据集，不用于超大 Dataset 的本地挂载。入口与身份沿用当前 Client 会话，kcfs 在挂载时内部冻结版本。目录和文件经 typed Knowledge Set File Gateway 读取，客户端不持有 Repository 机器凭证
 
-Writer 幂等日志在配置 `stateDir` 下的 `writer.db`。登记空间 当前态看 `kc show`，权威历史看 `kc registry audit`。`system.jsonl` / `audit.jsonl` 过程账与访问、反馈、检索原始证据同属耐久状态；hitmap 和检索投影可以重建。配置、登记空间 Snapshot 权威、知识 Snapshot 与服务状态都需要独立恢复来源；客户端登录态、配方和 pin 由客户端保存。文件职责见 [`home/README.md`](home/README.md)、[`snapshot/dataset/README.md`](snapshot/dataset/README.md) 与 [`docs/reviewed/service.md`](docs/reviewed/service.md)。
+Writer 幂等日志在配置 `stateDir` 下的 `writer.db`。登记空间 当前态看 `kc show`，权威历史看 `kc registry audit`。`system.jsonl` / `audit.jsonl` 过程账与访问、反馈、检索原始证据同属耐久状态；hitmap 和检索投影可以重建。配置、登记空间 Snapshot 权威、知识 Snapshot 与服务状态都需要独立恢复来源；客户端登录态、配方和 pin 由客户端保存。文件职责见 [`home/README.md`](home/README.md)、[`snapshot/dataset/README.md`](snapshot/dataset/README.md) 与 [`doc/design/service.md`](doc/design/service.md)。
 
 ## 运行
 
@@ -205,7 +200,7 @@ Agent 使用同一分组 `kc` CLI 和普通 shell/文件工具，经 Server 与�
 枚举或 SEARCH→LIST 降级；可选只读文件挂载由 `kcfs` 提供，不存在 KC 服务端 Session Store。
 本仓库 DSH 宿主集成及专属模型验收运行器已退役。通用 Agent 的概念解释、入口选择、恢复与
 任务效果仍需独立的真实模型证据，当前未执行；验收边界见
-[MVP 验收](docs/reviewed/mvp-acceptance.md)。
+[测试与验证](doc/engineering/testing.md)。
 
 ```bash
 # 运维：预先准备 登记空间 Snapshot 权威与托管存储池，配置可恢复的部署输入及显式创建者策略。
@@ -285,19 +280,18 @@ kc serve --config deployment.yaml # auth: gitea / authURL / bootstrapPrincipal �
 | Hook / Gate | pre 非 0 无 commit；REPLAYED 不打 hook；post 只含指针；缺 suite 不能 merge；Preview 变了旧 PASSED 作废 |
 | Collector helper | `patch` 不误删；`reconcile` 只在 Observed∩Scope 上 REMOVE；超 Scope 拒绝；预览可 COMMIT |
 | End-to-end journey | `cli/mvp_acceptance_test.go` 固定接入方/消费方最短闭环；`cli/user_journey_test.go` 再覆盖 HTTP 读写、proposal、权限和生命周期 |
-| Layering | `internal/arch`：[`docs/reviewed/core-architecture.md`](docs/reviewed/core-architecture.md) 的 import 与类型归属跑成断言。`snapshot/dataset → snapshot`；②不得依赖③；Snapshot adapter 不得依赖 Object/format/Discovery；ObjectID/Address/Provenance 由 `object` 声明 |
+| Layering | `internal/arch`：[`doc/architecture.md`](doc/architecture.md) 的 import 与类型归属跑成断言。`snapshot/dataset → snapshot`；②不得依赖③；Snapshot adapter 不得依赖 Object/format/Discovery；ObjectID/Address/Provenance 由 `object` 声明 |
 | CLI surface | 各模块 CLI 合同与根 `cli/command_test.go`：Help、输入与命令表对齐；退役动词仍报替代品；嵌入测试的 stage 归属保持；公开参数边界与 Server 集成分别验证 |
 
 ## 文档
 
-- [`docs/product.html`](docs/product.html)：给人读的派生产品说明（不进文档图）。本机 `make docs-serve` 把设计 Markdown 渲染成 UTF-8 HTML，产品页「继续阅读」可点进去。
-- [`docs/README.md`](docs/README.md)：人类文档地图、文件类型分工和维护规则。
-- [`docs/graph/`](docs/graph/)：文档节点与关系的 OKF 知识单元（主题所有权、`depends_on` / `refines` / `verifies` 等）。关系信封由 `object.DecodeRelation` 校验。
-- [`docs/reviewed/terminology.md`](docs/reviewed/terminology.md) → [`docs/reviewed/core-architecture.md`](docs/reviewed/core-architecture.md)：系统设计主干。
-- [`docs/reviewed/walkthrough.md`](docs/reviewed/walkthrough.md)：当前 CLI 操作旅程；[`docs/reviewed/mvp-acceptance.md`](docs/reviewed/mvp-acceptance.md) 与 [`docs/reviewed/test-catalog.md`](docs/reviewed/test-catalog.md)：状态和证据。
+- [`doc/README.md`](doc/README.md)：文档入口，给出阅读顺序和全部设计篇。本机 `make docs-serve` 渲染为 UTF-8 HTML。
+- [`doc/vision.md`](doc/vision.md) → [`doc/concepts.md`](doc/concepts.md) → [`doc/architecture.md`](doc/architecture.md)：系统设计主干。
+- `doc/design/`：按能力的设计篇，每篇含用例与进度，目录见 `doc/README.md` 的“设计”表。
+- [`doc/engineering/testing.md`](doc/engineering/testing.md) 与 [`doc/engineering/test-catalog.md`](doc/engineering/test-catalog.md)：验证入口、用例与证据。
 
-新增或删除顶层文档后运行 `make check-docs`；漏登记、重复主题所有权、悬空关系、循环依赖或设计类文档缺少 Goal / Non-Goals 五段标题都会失败。包级具体契约继续放在对应目录的 README，不复制到设计索引。执行接力棒是根目录 `TASK.md`，不是文档图节点。
+改文档后运行 `make check-docs`：`doc/` 下每篇以标题开头、不带 frontmatter、能从 `doc/README.md` 经链接走到，仓内 Markdown 链接不悬空。包级具体契约放在对应目录的 README，不复制到设计篇。执行接力棒是根目录 `TASK.md`。
 
 ## Store 扩展
 
-权威 Adapter 实现 Snapshot capability，并与上层 Reader/Writer 组合验证同一 conformance；当前生产实现为 lakeFS，夹具与真实部署的通过范围分别以运行证据为准。具体 adapter 只在 `home/authority_drivers.go` 装配。检索引擎实现 `Retriever` / `ProjectionMaintainer`，Relation 候选同样只能来自 exact-basis Retriever，再按候选 ID 回读 Canonical。见 [`docs/reviewed/core-architecture.md`](docs/reviewed/core-architecture.md)。
+权威 Adapter 实现 Snapshot capability，并与上层 Reader/Writer 组合验证同一 conformance；当前生产实现为 lakeFS，夹具与真实部署的通过范围分别以运行证据为准。具体 adapter 只在 `home/authority_drivers.go` 装配。检索引擎实现 `Retriever` / `ProjectionMaintainer`，Relation 候选同样只能来自 exact-basis Retriever，再按候选 ID 回读 Canonical。见 [`doc/architecture.md`](doc/architecture.md)。

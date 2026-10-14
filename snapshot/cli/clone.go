@@ -19,11 +19,11 @@ import (
 // file-system projection uses, so authorization and the frozen file list are
 // identical to ordinary consumption. It never writes outside the target
 // directory and it refuses a non-empty target: a clone does not overwrite
-// existing project files (docs/reviewed/dataset.md, U8, "不复制、不覆盖").
+// existing project files (doc/design/dataset.md, U8, "不复制、不覆盖").
 //
 // The receipt prints the version coordinates instead of writing a manifest:
 // the accepted publication record stays the server-side authority for what
-// was consumed, and consumers do not manage pin files (docs/reviewed/cli.md).
+// was consumed, and consumers do not manage pin files (doc/design/affordance.md).
 const (
 	cloneChunkSize = 512 << 10
 	clonePageLimit = 256
@@ -72,7 +72,7 @@ func runRemoteDatasetClone(ctx context.Context, client kcclient.Client, flags ma
 
 // cloneCoordinate resolves the Dataset version exactly once and freezes it
 // as the pin every subsequent gateway call replays. Product argv does not
-// carry --pin (docs/reviewed/cli.md): clone consumes the current serving version, and
+// carry --pin (doc/design/affordance.md): clone consumes the current serving version, and
 // historical review goes through the server-side task pin, not this verb.
 func cloneCoordinate(ctx context.Context, client kcclient.Client, setID string, options kcclient.RequestOptions) (kcclient.WorkspaceFileCoordinate, dataset.ResolvedKnowledgeSet, error) {
 	var pin dataset.ResolvedKnowledgeSet

@@ -5,14 +5,13 @@ import "testing"
 func TestAllowedRel(t *testing.T) {
 	ok := []string{
 		"README.md",
-		"docs/product.html",
-		"docs/reviewed/terminology.md",
-		"docs/reviewed/terminology.md",
-		"docs/reviewed/README.md",
-		"docs/graph/README.md",
-		"docs/assets/architecture.svg",
-		"docs/assets/nested/architecture.png",
-		"docs/assets/architecture.SVG",
+		"doc/README.md",
+		"doc/concepts.md",
+		"doc/design/object.md",
+		"doc/engineering/test-catalog.md",
+		"doc/assets/architecture.svg",
+		"doc/assets/nested/architecture.png",
+		"doc/assets/architecture.SVG",
 	}
 	for _, p := range ok {
 		if !allowedRel(p) {
@@ -23,18 +22,20 @@ func TestAllowedRel(t *testing.T) {
 		"../README.md",
 		"cmd/kc/main.go",
 		".env",
-		"docs/../README.md",
-		"docs/graph/documents/x.okf",
+		"doc/../README.md",
+		"doc/index.html",
+		"doc/design/x.okf",
+		"docs/README.md",
 		"/etc/passwd",
 		"",
 		"architecture.svg",
-		"docs/reviewed/architecture.svg",
-		"docs/architecture.png",
-		"docs/assets-other/architecture.svg",
-		"docs/assets/architecture.gif",
-		"docs/assets/architecture.webp",
-		"docs/assets/architecture.svg.js",
-		"docs/assets/../architecture.svg",
+		"doc/design/architecture.svg",
+		"doc/architecture.png",
+		"doc/assets-other/architecture.svg",
+		"doc/assets/architecture.gif",
+		"doc/assets/architecture.webp",
+		"doc/assets/architecture.svg.js",
+		"doc/assets/../architecture.svg",
 	}
 	for _, p := range deny {
 		if allowedRel(p) {

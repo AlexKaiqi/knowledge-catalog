@@ -3,15 +3,15 @@
     "path": "concepts/address/definition.md",
     "bases": [
       {
-        "owner": "docs/graph/documents/knowledge.okf",
-        "topic": "knowledge-repository-layout-and-consumer-file-view",
-        "term": "Address",
+        "owner": "doc/design/object.md",
+        "topic": "模型",
+        "term": "地址",
         "source": "object/address.go",
         "symbol": "Address"
       },
       {
-        "owner": "docs/graph/documents/object-refactor-guideline.okf",
-        "topic": "object-module-urn-and-content-locator-access",
+        "owner": "doc/design/object.md",
+        "topic": "身份：URN 不感知 repo",
         "term": "URN",
         "source": "object/reference.go",
         "symbol": "Reference"
@@ -22,8 +22,8 @@
     "path": "concepts/aspect/definition.md",
     "bases": [
       {
-        "owner": "docs/graph/documents/knowledge.okf",
-        "topic": "knowledge-repository-layout-and-consumer-file-view",
+        "owner": "doc/design/object.md",
+        "topic": "模型",
         "term": "Aspect",
         "source": "object/address.go",
         "symbol": "KindAspect"
@@ -34,8 +34,8 @@
     "path": "concepts/dataset/definition.md",
     "bases": [
       {
-        "owner": "docs/graph/documents/dataset.okf",
-        "topic": "repository-registration-and-dataset-composition-and-pin",
+        "owner": "doc/design/dataset.md",
+        "topic": "目标",
         "term": "Dataset",
         "source": "snapshot/dataset/definition.go",
         "symbol": "KnowledgeSet"
@@ -46,8 +46,8 @@
     "path": "concepts/index-declaration/definition.md",
     "bases": [
       {
-        "owner": "docs/graph/documents/declarative-index.okf",
-        "topic": "aspect-addressing-and-access-spec",
+        "owner": "doc/design/liveaccess.md",
+        "topic": "合同",
         "term": "access",
         "source": "object/schema.go",
         "symbol": "SchemaFieldDefinition"
@@ -58,8 +58,8 @@
     "path": "concepts/member/definition.md",
     "bases": [
       {
-        "owner": "docs/graph/documents/knowledge.okf",
-        "topic": "knowledge-repository-layout-and-consumer-file-view",
+        "owner": "doc/design/object.md",
+        "topic": "模型",
         "term": "Member",
         "source": "object/address.go",
         "symbol": "KindMember"
@@ -70,8 +70,8 @@
     "path": "concepts/meta-schema/definition.md",
     "bases": [
       {
-        "owner": "docs/graph/documents/knowledge.okf",
-        "topic": "system-and-domain-schema-lifecycle",
+        "owner": "doc/design/object.md",
+        "topic": "系统仓",
         "term": "Meta Schema",
         "source": "object/schema.go",
         "symbol": "MetaSchemaV1"
@@ -82,15 +82,15 @@
     "path": "concepts/object/definition.md",
     "bases": [
       {
-        "owner": "docs/graph/documents/core-architecture.okf",
-        "topic": "knowledge-identity",
+        "owner": "doc/architecture.md",
+        "topic": "分层",
         "term": "对象",
         "source": "object/identity.go",
         "symbol": "ObjectID"
       },
       {
-        "owner": "docs/graph/documents/object-refactor-guideline.okf",
-        "topic": "object-module-urn-and-content-locator-access",
+        "owner": "doc/design/object.md",
+        "topic": "身份：URN 不感知 repo",
         "term": "URN",
         "source": "object/reference.go",
         "symbol": "Reference"
@@ -101,8 +101,8 @@
     "path": "concepts/object-interface/definition.md",
     "bases": [
       {
-        "owner": "docs/graph/documents/object-interface.okf",
-        "topic": "object-interface-contracts",
+        "owner": "doc/design/affordance.md",
+        "topic": "对象的 Affordance",
         "term": "Interface",
         "source": "interfaces/definition.go",
         "symbol": "InterfaceDefinition"
@@ -113,8 +113,8 @@
     "path": "concepts/pin/definition.md",
     "bases": [
       {
-        "owner": "docs/graph/documents/dataset.okf",
-        "topic": "repository-registration-and-dataset-composition-and-pin",
+        "owner": "doc/design/dataset.md",
+        "topic": "目标",
         "term": "固定",
         "source": "snapshot/dataset/resolve.go",
         "symbol": "ResolvedKnowledgeSet"
@@ -125,8 +125,8 @@
     "path": "concepts/provenance/definition.md",
     "bases": [
       {
-        "owner": "docs/graph/documents/core-architecture.okf",
-        "topic": "version-and-provenance",
+        "owner": "doc/architecture.md",
+        "topic": "分层",
         "term": "来源",
         "source": "object/provenance.go",
         "symbol": "ProvenanceEnvelope"
@@ -137,8 +137,8 @@
     "path": "concepts/relation/definition.md",
     "bases": [
       {
-        "owner": "docs/graph/documents/knowledge.okf",
-        "topic": "knowledge-repository-layout-and-consumer-file-view",
+        "owner": "doc/design/object.md",
+        "topic": "模型",
         "term": "Relation",
         "source": "object/relation.go",
         "symbol": "CanonicalRelation"
@@ -149,8 +149,8 @@
     "path": "concepts/repository/definition.md",
     "bases": [
       {
-        "owner": "docs/graph/documents/terminology.okf",
-        "topic": "public-vocabulary",
+        "owner": "doc/concepts.md",
+        "topic": "存放与交付",
         "term": "Repository",
         "source": "object/repository.go",
         "symbol": "Repository"
@@ -161,8 +161,8 @@
     "path": "concepts/schema/definition.md",
     "bases": [
       {
-        "owner": "docs/graph/documents/knowledge.okf",
-        "topic": "system-and-domain-schema-lifecycle",
+        "owner": "doc/design/object.md",
+        "topic": "目标",
         "term": "Schema",
         "source": "object/schema.go",
         "symbol": "SchemaDefinition"
@@ -173,8 +173,8 @@
     "path": "concepts/system-repository/definition.md",
     "bases": [
       {
-        "owner": "docs/graph/documents/knowledge.okf",
-        "topic": "system-self-description-publication",
+        "owner": "doc/design/object.md",
+        "topic": "系统仓",
         "term": "系统仓",
         "source": "object/schema.go",
         "symbol": "SystemRepositoryID"
@@ -185,8 +185,8 @@
     "path": "concepts/version/definition.md",
     "bases": [
       {
-        "owner": "docs/graph/documents/core-architecture.okf",
-        "topic": "version-and-provenance",
+        "owner": "doc/architecture.md",
+        "topic": "分层",
         "term": "不可变版本",
         "source": "kernel/identity.go",
         "symbol": "CommitID"
@@ -197,9 +197,9 @@
     "path": "interfaces/cli/definition.md",
     "bases": [
       {
-        "owner": "docs/graph/documents/cli.okf",
-        "topic": "product-cli-argv-help-and-operands",
-        "term": "CLI",
+        "owner": "doc/design/affordance.md",
+        "topic": "命令行的设计规则",
+        "term": "命令行",
         "source": "cli/run.go",
         "symbol": "Run"
       }
@@ -209,8 +209,8 @@
     "path": "interfaces/writer/definition.md",
     "bases": [
       {
-        "owner": "docs/graph/documents/core-architecture.okf",
-        "topic": "write-and-read-semantics",
+        "owner": "doc/architecture.md",
+        "topic": "分层",
         "term": "Writer",
         "source": "object/writer/writer.go",
         "symbol": "Writer"
@@ -221,8 +221,8 @@
     "path": "mechanisms/audit/definition.md",
     "bases": [
       {
-        "owner": "docs/graph/documents/service.okf",
-        "topic": "versioned-access-evidence-and-agent-feedback",
+        "owner": "doc/design/service.md",
+        "topic": "目标",
         "term": "访问证据",
         "source": "observability/access.go",
         "symbol": "AccessEvent"
@@ -233,15 +233,15 @@
     "path": "mechanisms/authorization/definition.md",
     "bases": [
       {
-        "owner": "docs/graph/documents/permissions.okf",
-        "topic": "authentication-authorization-and-repository-security",
-        "term": "主体",
+        "owner": "doc/design/permissions.md",
+        "topic": "目标",
+        "term": "身份",
         "source": "kernel/identity_context.go",
         "symbol": "IdentityContext"
       },
       {
-        "owner": "docs/graph/documents/permissions.okf",
-        "topic": "authentication-authorization-and-repository-security",
+        "owner": "doc/design/permissions.md",
+        "topic": "目标",
         "term": "授权",
         "source": "invocation/allow.go",
         "symbol": "AllowRule"
@@ -252,23 +252,23 @@
     "path": "mechanisms/dynamic-access/definition.md",
     "bases": [
       {
-        "owner": "docs/graph/documents/resource-access.okf",
-        "topic": "binding-and-observation-semantics",
+        "owner": "doc/design/liveaccess.md",
+        "topic": "目标",
         "term": "声明",
         "source": "object/binding.go",
         "symbol": "BindingDeclaration"
       },
       {
-        "owner": "docs/graph/documents/resource-access.okf",
-        "topic": "binding-and-observation-semantics",
+        "owner": "doc/design/liveaccess.md",
+        "topic": "目标",
         "term": "观察",
         "source": "object/observation.go",
         "symbol": "UnitObservation"
       },
       {
-        "owner": "docs/graph/documents/terminology.okf",
-        "topic": "resource-access-collector-observer-boundary",
-        "term": "Resource Access",
+        "owner": "doc/concepts.md",
+        "topic": "扩展能力",
+        "term": "LiveAccess",
         "source": "object/origin.go",
         "symbol": "ResourceAccessEndpoint"
       }
@@ -278,15 +278,15 @@
     "path": "mechanisms/governance/definition.md",
     "bases": [
       {
-        "owner": "docs/graph/documents/hooks-and-gates.okf",
-        "topic": "merge-evidence-gates",
+        "owner": "doc/design/governance.md",
+        "topic": "目标",
         "term": "提案",
         "source": "controlplane/proposal.go",
         "symbol": "Proposal"
       },
       {
-        "owner": "docs/graph/documents/hooks-and-gates.okf",
-        "topic": "merge-evidence-gates",
+        "owner": "doc/design/governance.md",
+        "topic": "目标",
         "term": "Gate",
         "source": "gate/check.go",
         "symbol": "Check"
@@ -297,8 +297,8 @@
     "path": "mechanisms/hook/definition.md",
     "bases": [
       {
-        "owner": "docs/graph/documents/hooks-and-gates.okf",
-        "topic": "outbound-action-extension",
+        "owner": "doc/design/governance.md",
+        "topic": "目标",
         "term": "Hook",
         "source": "hook/store.go",
         "symbol": "Binding"
@@ -309,8 +309,8 @@
     "path": "mechanisms/object-interface-dispatch/definition.md",
     "bases": [
       {
-        "owner": "docs/graph/documents/object-interface.okf",
-        "topic": "object-interface-dispatch",
+        "owner": "doc/design/affordance.md",
+        "topic": "对象的 Affordance",
         "term": "分派",
         "source": "interfaces/registry.go",
         "symbol": "InterfaceRegistry"
@@ -321,9 +321,9 @@
     "path": "mechanisms/projection/definition.md",
     "bases": [
       {
-        "owner": "docs/graph/documents/index-control.okf",
-        "topic": "snapshot-and-state-projection-control",
-        "term": "投影",
+        "owner": "doc/design/discovery.md",
+        "topic": "目标",
+        "term": "索引",
         "source": "declarativeindex/projection/plan.go",
         "symbol": "ProjectionSpec"
       }
@@ -333,8 +333,8 @@
     "path": "mechanisms/snapshot/definition.md",
     "bases": [
       {
-        "owner": "docs/graph/documents/core-architecture.okf",
-        "topic": "snapshot-authority-and-derived-media",
+        "owner": "doc/architecture.md",
+        "topic": "分层",
         "term": "Snapshot",
         "source": "snapshot/store.go",
         "symbol": "Store"
@@ -345,8 +345,8 @@
     "path": "concepts/registration/definition.md",
     "bases": [
       {
-        "owner": "docs/graph/documents/core-architecture.okf",
-        "topic": "layer-ownership-and-import-direction",
+        "owner": "doc/design/snapshot.md",
+        "topic": "登记、供给与连接",
         "term": "登记空间",
         "source": "snapshot/dataset/contract.go",
         "symbol": "Service"

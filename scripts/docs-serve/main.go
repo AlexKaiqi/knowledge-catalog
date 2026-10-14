@@ -23,7 +23,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "docs-serve: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Printf("docs: http://%s/docs/product.html\n", ln.Addr().String())
+	fmt.Printf("docs: http://%s/doc/README.md\n", ln.Addr().String())
 	log.Fatal(http.Serve(ln, newMux(root)))
 }
 

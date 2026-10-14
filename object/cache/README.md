@@ -1,9 +1,9 @@
 # object/cache
 
 可装配的固定对象正文缓存，实现 `object.Hydrator`。设计归属
-[`docs/reviewed/service.md`](../../docs/reviewed/service.md)、
-[`docs/reviewed/core-architecture.md`](../../docs/reviewed/core-architecture.md) 与
-[`docs/reviewed/index-control.md`](../../docs/reviewed/index-control.md)。
+[`doc/design/service.md`](../../doc/design/service.md)、
+[`doc/architecture.md`](../../doc/architecture.md) 与
+[`doc/design/discovery.md`](../../doc/design/discovery.md)。
 
 Goal：减少固定版本的重复正文回源，并为主动维护提供有界预热。Non-Goals：Reader/Snapshot
 持有语义缓存、缓存动态 State observation、替代授权、从索引文档提供正文、全仓预热或缓存 READY

@@ -1,33 +1,25 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
-func TestMainAcceptsDesignDocumentsWithoutFixedSections(t *testing.T) {
+func documentationFixture(t *testing.T) string {
+	t.Helper()
 	root := t.TempDir()
 	writeMarkdownFixture(t, root, "go.mod", "module documentation-fixture\n")
-	for _, class := range []string{"entrypoint", "foundation", "decision", "runtime", "evolution"} {
-		path := "docs/reviewed/" + class + ".md"
-		if class == "entrypoint" {
-			path = "README.md"
-		}
-		writeMarkdownFixture(t, root, path, "# 重构目标\n\n沿已有契约接入插件，读取时返回实际数据。\n")
-		body, err := json.Marshal(catalogEntry{
-			ID: class, Path: path, Title: "重构目标", Class: class,
-			Lifecycle: "active", OwnerTopics: []string{class + "-topic"},
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		unit := fmt.Sprintf("---\nobject_id: documentation/%s\naspect_name: catalog-entry\nkind: Aspect\n---\n%s\n", class, body)
-		writeMarkdownFixture(t, root, "docs/graph/documents/"+class+".okf", unit)
-	}
+	writeMarkdownFixture(t, root, "README.md", "# 入口\n\n[文档](doc/README.md)\n")
+	writeMarkdownFixture(t, root, "doc/README.md", "# 文档\n\n[愿景](vision.md)、[对象](design/object.md)\n")
+	writeMarkdownFixture(t, root, "doc/vision.md", "# 愿景\n\n见[对象](design/object.md)。\n")
+	writeMarkdownFixture(t, root, "doc/design/object.md", "# 对象\n\n回到[愿景](../vision.md)。\n")
+	return root
+}
+
+func TestMainAcceptsReachableDesignDocuments(t *testing.T) {
+	root := documentationFixture(t)
 	previous, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -40,61 +32,92 @@ func TestMainAcceptsDesignDocumentsWithoutFixedSections(t *testing.T) {
 			t.Errorf("restore working directory: %v", err)
 		}
 	})
-	// Exercise the command, including graph and link checks. Reintroducing a
-	// mandatory section here must fail even when lower-level checks still pass.
+	// Exercise the command, including shape, reachability and link checks.
 	main()
 }
 
-func TestValidateCatalogKeepsOwnershipAndCycleChecks(t *testing.T) {
-	root := t.TempDir()
-	writeMarkdownFixture(t, root, "README.md", "入口\n")
-	writeMarkdownFixture(t, root, "docs/topic.md", "目标：透明读取。\n")
-	docs := map[string]catalogEntry{
-		"root":  {Path: "README.md", OwnerTopics: []string{"entry"}},
-		"topic": {Path: "docs/topic.md", OwnerTopics: []string{"entry"}},
+func TestCheckDocumentationRejectsBrokenStructure(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		setup func(t *testing.T, root string)
+		want  string
+	}{
+		{"missing index", func(t *testing.T, root string) {
+			if err := os.Remove(filepath.Join(root, "doc/README.md")); err != nil {
+				t.Fatal(err)
+			}
+		}, "doc/README.md is missing"},
+		{"unreachable document", func(t *testing.T, root string) {
+			writeMarkdownFixture(t, root, "doc/design/orphan.md", "# 孤立\n")
+		}, "doc/design/orphan.md"},
+		{"frontmatter", func(t *testing.T, root string) {
+			writeMarkdownFixture(t, root, "doc/vision.md", "---\ntitle: 愿景\n---\n# 愿景\n")
+		}, "frontmatter"},
+		{"missing title", func(t *testing.T, root string) {
+			writeMarkdownFixture(t, root, "doc/vision.md", "愿景正文\n")
+		}, "must start with a # title"},
+		{"stray root Markdown", func(t *testing.T, root string) {
+			writeMarkdownFixture(t, root, "DESIGN.md", "# 设计\n")
+		}, "root Markdown DESIGN.md"},
+		{"broken design link", func(t *testing.T, root string) {
+			writeMarkdownFixture(t, root, "doc/vision.md", "# 愿景\n\n[旧文档](../docs/product.md)、[对象](design/object.md)\n")
+		}, "doc/vision.md -> ../docs/product.md"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := documentationFixture(t)
+			if _, err := checkDocumentation(root); err != nil {
+				t.Fatalf("baseline fixture failed: %v", err)
+			}
+			tc.setup(t, root)
+			_, err := checkDocumentation(root)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("want error containing %q, got %v", tc.want, err)
+			}
+		})
 	}
-	if err := validateCatalog(root, docs, nil); err == nil || !strings.Contains(err.Error(), `ownerTopic "entry" duplicated`) {
-		t.Fatalf("duplicate topic ownership was not rejected: %v", err)
-	}
-	docs["topic"] = catalogEntry{Path: "docs/topic.md", OwnerTopics: []string{"topic"}}
-	if err := validateCatalog(root, docs, nil); err != nil {
-		t.Fatalf("distinct ownership failed: %v", err)
-	}
-	cycle := []edge{
-		{Type: "depends_on", From: "root", To: "topic"},
-		{Type: "depends_on", From: "topic", To: "root"},
-	}
-	if err := validateCatalog(root, docs, cycle); err == nil || !strings.Contains(err.Error(), "depends_on graph has a cycle") {
-		t.Fatalf("dependency cycle was not rejected: %v", err)
+}
+
+func TestReachabilityFollowsLinksBetweenDesignDocuments(t *testing.T) {
+	root := documentationFixture(t)
+	writeMarkdownFixture(t, root, "doc/design/plugins.md", "# 插件\n")
+	writeMarkdownFixture(t, root, "doc/design/object.md", "# 对象\n\n[插件](plugins.md)\n")
+	if _, err := checkDocumentation(root); err != nil {
+		t.Fatalf("document linked through another design document is reachable: %v", err)
 	}
 }
 
 func TestValidateMarkdownLinksMaintainedDocuments(t *testing.T) {
 	for _, tc := range []struct {
-		name  string
-		path  string
-		owner bool
+		name string
+		path string
 	}{
 		{name: "package README", path: "component/nested/README.md"},
 		{name: "root task", path: "TASK.md"},
-		{name: "migration record", path: "component/HTTP_REFACTOR.md"},
-		{name: "graph owner", path: "docs/reviewed/topic.md", owner: true},
+		{name: "agent rules", path: "AGENTS.md"},
+		{name: "maintained note", path: "cli/SURFACE.md"},
+		{name: "design document", path: "doc/design/topic.md"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			// A checkout can itself have a hidden name; only child directories
 			// are excluded from the maintained-document scan.
 			root := filepath.Join(t.TempDir(), ".checkout")
 			writeMarkdownFixture(t, root, tc.path, "[contract](contract.md)\n")
-			docs := map[string]catalogEntry{}
-			if tc.owner {
-				docs["topic"] = catalogEntry{Path: tc.path}
+			var docs []string
+			if strings.HasPrefix(tc.path, "doc/") {
+				docs = []string{tc.path}
 			}
-			err := validateMarkdownLinks(root, docs)
-			if err == nil || !strings.Contains(err.Error(), tc.path+" -> contract.md") {
+			check := func() error {
+				files, err := markdownLinkFiles(root, docs)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return validateMarkdownLinks(root, files)
+			}
+			if err := check(); err == nil || !strings.Contains(err.Error(), tc.path+" -> contract.md") {
 				t.Fatalf("broken maintained-document link was not reported: %v", err)
 			}
 			writeMarkdownFixture(t, root, filepath.Join(filepath.Dir(tc.path), "contract.md"), "contract\n")
-			if err := validateMarkdownLinks(root, docs); err != nil {
+			if err := check(); err != nil {
 				t.Fatalf("repaired maintained-document link failed: %v", err)
 			}
 		})
@@ -107,9 +130,9 @@ func TestValidateMarkdownLinksIgnoresUnmaintainedTrees(t *testing.T) {
 	writeMarkdownFixture(t, root, "contract.md", "contract\n")
 	for _, rel := range []string{
 		".validation/README.md",
-		"component/.cache/HTTP_REFACTOR.md",
+		"component/.cache/README.md",
 		"node_modules/dependency/README.md",
-		"component/node_modules/dependency/REFACTOR.md",
+		"component/node_modules/dependency/README.md",
 		"vendor/dependency/README.md",
 		"dist/README.md",
 		"dist-ssr/README.md",
@@ -122,7 +145,11 @@ func TestValidateMarkdownLinksIgnoresUnmaintainedTrees(t *testing.T) {
 	} {
 		writeMarkdownFixture(t, root, rel, "[stale reference](missing.md)\n")
 	}
-	if err := validateMarkdownLinks(root, nil); err != nil {
+	files, err := markdownLinkFiles(root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateMarkdownLinks(root, files); err != nil {
 		t.Fatalf("unmaintained references contaminated the link check: %v", err)
 	}
 }

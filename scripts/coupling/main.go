@@ -1,6 +1,6 @@
 // Command coupling computes structural coupling metrics for this repository's
 // top-level units from the go list import graph. It is the 观层/闸层 tooling for
-// docs/reviewed/quality-loop.md §7, not a product surface. Report mode is
+// doc/engineering/quality.md, not a product surface. Report mode is
 // observation only. -strict is the hard ratchet used by make quality: it fails
 // when the propagation cost exceeds the recorded baseline, when a unit's
 // Instability drifts by 0.05 or more, or when a unit is missing from the

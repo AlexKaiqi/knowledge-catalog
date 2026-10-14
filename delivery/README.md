@@ -15,4 +15,4 @@
 | `chain.go` | `Envelope`、`Chain`、身份冻结 |
 | `read.go` | 仓读权屏蔽 |
 
-政策由 `docs/reviewed/permissions.md` §7.2 拥有。应用装配在 `invocation` 缝注入 `Allowed`（CAP-ORG-01 B6 起动词执行体统一在此装配；消费方见 arch `TestCapabilityConsumerSets`）。
+政策由 `doc/design/permissions.md` 拥有。应用装配在 `invocation` 缝注入 `Allowed`（CAP-ORG-01 B6 起动词执行体统一在此装配；消费方见 arch `TestCapabilityConsumerSets`）。

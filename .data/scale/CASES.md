@@ -1,9 +1,9 @@
 # 数仓知识提供方独立压测用例
 
 状态：用例已重构为**性能场景树**（[`.data/scenes/`](scenes/README.md) 的组织方式，视角是
-性能测试）；load runner 仍待实现。Dolt 原生规模路线已退役，规模介质为 lakeFS；
-总体模型、档位与历史门槛仍以 [`docs/reviewed/scale-benchmark.md`](../../docs/reviewed/scale-benchmark.md) 为准，
-其 §10 数值门槛重登记前只作默认参考。
+性能测试）；load runner 仍待实现。规模介质为 lakeFS；规模原则见
+[`doc/engineering/testing.md`](../../doc/engineering/testing.md) 的“规模”一节。资格门槛尚未登记，
+`scenes/metrics.yaml` 的 gateRef 只作默认参考。
 
 本文件不再是逐条用例的唯一清单。用例本体（状态、construct、探针、量级阶梯、指标、
 清理与 runner 能力需求）按场景树组织在 [`scenes/`](scenes/README.md)；本文件保留四件

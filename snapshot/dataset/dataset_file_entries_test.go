@@ -10,7 +10,7 @@ import (
 	catalog "kc/snapshot/dataset"
 )
 
-// Per-file dataset entries (docs/reviewed/dataset.md U10): publish carries
+// Per-file dataset entries (doc/design/dataset.md U10): publish carries
 // them as DatasetItemFile items with one frozen commit per repository, and
 // the delivered-target rules reject ambiguous layouts at publish instead of
 // resolving them by source order.

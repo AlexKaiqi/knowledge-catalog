@@ -118,7 +118,7 @@ func datasetItemFromSource(src KnowledgeSetSource, commits map[kernel.Repository
 	return item, nil
 }
 
-// validateDeliveredTargets enforces docs/reviewed/dataset.md's target rules
+// validateDeliveredTargets enforces doc/design/dataset.md's target rules
 // across item kinds. Prefix items deliver whole directories; file items
 // deliver one file each. A file may land inside a delivered directory
 // (mixing sources into one organized directory), but it must not take a

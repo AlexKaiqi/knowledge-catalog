@@ -8,7 +8,7 @@ import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-RULES = ROOT / "docs" / "observability"
+RULES = ROOT / "scripts" / "deploy" / "observability" / "rules"
 OVERVIEW = ROOT / "scripts" / "deploy" / "observability" / "grafana" / "kc-overview.json"
 
 

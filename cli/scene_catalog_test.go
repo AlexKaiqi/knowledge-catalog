@@ -361,7 +361,7 @@ func TestSceneRepositoryVerificationCasesStayOnAttachedState(t *testing.T) {
 			t.Errorf("%s verifies an attached repository; it must not introduce a reusable state", id)
 		}
 	}
-	for _, capability := range []string{"access.rules", "collector.preview"} {
+	for _, capability := range []string{"access.rules"} {
 		if !contains(state.Publishes, capability) {
 			t.Errorf("repository-attached lost verification capability %s", capability)
 		}
@@ -375,7 +375,6 @@ func TestSceneRepositoryVerificationCasesStayOnAttachedState(t *testing.T) {
 			"TestDeclaredSystemRepositoryUsesAuthenticatedDefault",
 			"TestRuntimeWriterRefusesSystemRepository",
 		},
-		"collector.preview": {"connector/preview_test.go", "TestPreviewThenCommit"},
 	}
 	for source, names := range wantEvidence {
 		for _, name := range names {

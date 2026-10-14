@@ -1,10 +1,12 @@
-// Command check-docs validates the git-tracked documentation graph.
-// Nodes are Aspect OKF units; edges are Canonical Relation OKF units.
-// Protocol shape is objectmodel.DecodeRelation / repofile.Parse, not a parallel JSON schema.
+// Command check-docs validates the maintained documentation.
+//
+// The design documents live under doc/. Every document there is reachable from
+// doc/README.md, starts with a title instead of frontmatter, and only links to
+// local files that exist. Root, task and package documents get the same link
+// check so that moving or deleting a design document cannot leave dead links.
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -12,65 +14,62 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-
-	objectmodel "kc/object"
-	repofile "kc/object/format"
 )
 
 const (
-	documentationRepository = "kr://kc/documentation"
-	documentPrefix          = "documentation/"
-	catalogAspect           = "catalog-entry"
+	docRoot  = "doc"
+	docIndex = "doc/README.md"
 )
 
 var (
-	allowedClass = map[string]struct{}{
-		"entrypoint": {}, "foundation": {}, "decision": {}, "runtime": {},
-		"evolution": {}, "validation": {}, "guide": {},
+	mdLink = regexp.MustCompile(`\]\(([^)#\s]+)`)
+	// rootMarkdown is the closed set of Markdown files allowed at the repository root.
+	rootMarkdown = map[string]struct{}{"README.md": {}, "AGENTS.md": {}, "TASK.md": {}}
+	// maintainedMarkdown lists tracked notes outside doc/ that are not README files.
+	maintainedMarkdown = []string{"cli/SURFACE.md"}
+	skippedDirectories = map[string]struct{}{
+		"node_modules": {}, "vendor": {}, "dist": {}, "dist-ssr": {}, "build": {},
+		"coverage": {}, "test-results": {}, "playwright-report": {},
 	}
-	allowedLifecycle = map[string]struct{}{
-		"normative": {}, "active": {}, "draft": {}, "planned": {},
-	}
-	allowedRelation = map[string]struct{}{
-		"depends_on": {}, "refines": {}, "verifies": {},
-		"operationalizes": {}, "measures": {}, "catalogs": {},
-	}
-	mdLink = regexp.MustCompile(`\]\(([^)#]+)`)
 )
-
-type catalogEntry struct {
-	ID          string   `json:"id"`
-	Path        string   `json:"path"`
-	Title       string   `json:"title"`
-	Class       string   `json:"class"`
-	Lifecycle   string   `json:"lifecycle"`
-	Audience    []string `json:"audience"`
-	OwnerTopics []string `json:"ownerTopics"`
-}
-
-type edge struct {
-	Type string
-	From string
-	To   string
-}
 
 func main() {
 	root, err := repoRoot()
 	if err != nil {
 		fatal(err)
 	}
-	docs, rels, err := loadGraph(filepath.Join(root, "docs", "graph"))
+	docs, err := checkDocumentation(root)
 	if err != nil {
 		fatal(err)
 	}
-	if err := validateCatalog(root, docs, rels); err != nil {
-		fatal(err)
+	fmt.Printf("documentation: PASS (%d documents under %s/, reachable from %s, no frontmatter, valid links)\n",
+		docs, docRoot, docIndex)
+}
+
+func checkDocumentation(root string) (int, error) {
+	docs, err := designDocuments(root)
+	if err != nil {
+		return 0, err
 	}
-	if err := validateMarkdownLinks(root, docs); err != nil {
-		fatal(err)
+	if err := validateRootMarkdown(root); err != nil {
+		return 0, err
 	}
-	fmt.Printf("documentation graph: PASS (%d documents, %d relations, unique topics, valid links, acyclic depends_on)\n",
-		len(docs), len(rels))
+	for _, doc := range docs {
+		if err := validateDocumentShape(root, doc); err != nil {
+			return 0, err
+		}
+	}
+	if err := validateReachable(root, docs); err != nil {
+		return 0, err
+	}
+	files, err := markdownLinkFiles(root, docs)
+	if err != nil {
+		return 0, err
+	}
+	if err := validateMarkdownLinks(root, files); err != nil {
+		return 0, err
+	}
+	return len(docs), nil
 }
 
 func repoRoot() (string, error) {
@@ -88,229 +87,130 @@ func repoRoot() (string, error) {
 	}
 }
 
-func loadGraph(graphDir string) (map[string]catalogEntry, []edge, error) {
-	docs := map[string]catalogEntry{}
-	var rels []edge
-	err := filepath.WalkDir(graphDir, func(path string, d fs.DirEntry, err error) error {
+// designDocuments lists every Markdown file under doc/, relative to root.
+func designDocuments(root string) ([]string, error) {
+	var docs []string
+	err := filepath.WalkDir(filepath.Join(root, docRoot), func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() || !strings.HasSuffix(d.Name(), ".okf") {
-			return nil
-		}
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		unit := repofile.Parse(string(raw))
-		if unit == nil {
-			return fmt.Errorf("%s: not a knowledge unit", relPath(graphDir, path))
-		}
-		rel := relPath(graphDir, path)
-		switch unit.Address.Kind {
-		case objectmodel.KindAspect:
-			entry, err := decodeDocument(*unit, rel)
-			if err != nil {
-				return err
-			}
-			if _, dup := docs[entry.ID]; dup {
-				return fmt.Errorf("duplicate document id %s", entry.ID)
-			}
-			docs[entry.ID] = entry
-		case objectmodel.KindRelation:
-			got, err := decodeEdge(*unit, rel)
-			if err != nil {
-				return err
-			}
-			rels = append(rels, got)
-		default:
-			return fmt.Errorf("%s: documentation graph only accepts Aspect catalog-entry or Relation units", rel)
+		if !d.IsDir() && strings.HasSuffix(d.Name(), ".md") {
+			docs = append(docs, relPath(root, path))
 		}
 		return nil
 	})
-	return docs, rels, err
-}
-
-func decodeDocument(unit repofile.Unit, rel string) (catalogEntry, error) {
-	if unit.Address.AspectName != catalogAspect {
-		return catalogEntry{}, fmt.Errorf("%s: document Aspect must be %s", rel, catalogAspect)
-	}
-	want := objectmodel.ObjectID(documentPrefix + strings.TrimPrefix(string(unit.ObjectID), documentPrefix))
-	if unit.ObjectID != want || !strings.HasPrefix(string(unit.ObjectID), documentPrefix) {
-		return catalogEntry{}, fmt.Errorf("%s: object_id must be documentation/<id>", rel)
-	}
-	body, err := json.Marshal(unit.Value)
 	if err != nil {
-		return catalogEntry{}, fmt.Errorf("%s: %w", rel, err)
+		return nil, fmt.Errorf("%s/: %w", docRoot, err)
 	}
-	var entry catalogEntry
-	if err := json.Unmarshal(body, &entry); err != nil {
-		return catalogEntry{}, fmt.Errorf("%s: catalog-entry JSON: %w", rel, err)
+	sort.Strings(docs)
+	for _, doc := range docs {
+		if doc == docIndex {
+			return docs, nil
+		}
 	}
-	id := strings.TrimPrefix(string(unit.ObjectID), documentPrefix)
-	if entry.ID != id {
-		return catalogEntry{}, fmt.Errorf("%s: id %q must match object_id suffix %q", rel, entry.ID, id)
-	}
-	if entry.Path == "" || entry.Title == "" {
-		return catalogEntry{}, fmt.Errorf("%s: path and title are required", rel)
-	}
-	if _, ok := allowedClass[entry.Class]; !ok {
-		return catalogEntry{}, fmt.Errorf("%s: unknown class %q", rel, entry.Class)
-	}
-	if _, ok := allowedLifecycle[entry.Lifecycle]; !ok {
-		return catalogEntry{}, fmt.Errorf("%s: unknown lifecycle %q", rel, entry.Lifecycle)
-	}
-	if len(entry.OwnerTopics) == 0 {
-		return catalogEntry{}, fmt.Errorf("%s: ownerTopics must not be empty", rel)
-	}
-	return entry, nil
+	return nil, fmt.Errorf("%s is missing", docIndex)
 }
 
-func decodeEdge(unit repofile.Unit, rel string) (edge, error) {
-	decoded, err := objectmodel.DecodeRelation(unit.Address, unit.Value)
-	if err != nil {
-		return edge{}, fmt.Errorf("%s: %w", rel, err)
-	}
-	if unit.SchemaRef != string(objectmodel.CoreRelationSchemaV1) {
-		return edge{}, fmt.Errorf("%s: schema_ref must be %s", rel, objectmodel.CoreRelationSchemaV1)
-	}
-	if decoded.Direction != objectmodel.RelationDirected {
-		return edge{}, fmt.Errorf("%s: documentation relations are DIRECTED", rel)
-	}
-	if _, ok := allowedRelation[decoded.RelationType]; !ok {
-		return edge{}, fmt.Errorf("%s: unknown relationType %q", rel, decoded.RelationType)
-	}
-	from, to := "", ""
-	for _, endpoint := range decoded.Endpoints {
-		if string(endpoint.ObjectRef.Repository) != documentationRepository {
-			return edge{}, fmt.Errorf("%s: objectRef.repository must be %s", rel, documentationRepository)
-		}
-		if !strings.HasPrefix(string(endpoint.ObjectRef.Object), documentPrefix) {
-			return edge{}, fmt.Errorf("%s: endpoint object must be documentation/<id>", rel)
-		}
-		id := strings.TrimPrefix(string(endpoint.ObjectRef.Object), documentPrefix)
-		switch endpoint.Role {
-		case "from":
-			from = id
-		case "to":
-			to = id
-		default:
-			return edge{}, fmt.Errorf("%s: endpoint role must be from or to", rel)
-		}
-	}
-	if from == "" || to == "" {
-		return edge{}, fmt.Errorf("%s: relation needs from and to endpoints", rel)
-	}
-	return edge{Type: decoded.RelationType, From: from, To: to}, nil
-}
-
-func validateCatalog(root string, docs map[string]catalogEntry, rels []edge) error {
-	if len(docs) == 0 {
-		return fmt.Errorf("docs/graph has no document units")
-	}
-	paths := map[string]string{}
-	topics := map[string]string{}
-	for id, doc := range docs {
-		if other, dup := paths[doc.Path]; dup {
-			return fmt.Errorf("path %s owned by both %s and %s", doc.Path, other, id)
-		}
-		paths[doc.Path] = id
-		abs := filepath.Join(root, filepath.FromSlash(doc.Path))
-		if _, err := os.Stat(abs); err != nil {
-			return fmt.Errorf("document does not exist: %s", doc.Path)
-		}
-		for _, topic := range doc.OwnerTopics {
-			if other, dup := topics[topic]; dup {
-				return fmt.Errorf("ownerTopic %q duplicated by %s and %s", topic, other, id)
-			}
-			topics[topic] = id
-		}
-	}
-	actual, err := listedMarkdown(root)
+func validateRootMarkdown(root string) error {
+	entries, err := os.ReadDir(root)
 	if err != nil {
 		return err
-	}
-	for _, path := range actual {
-		if _, ok := paths[path]; !ok {
-			return fmt.Errorf("top-level Markdown not registered in docs/graph/documents: %s", path)
-		}
-	}
-	for path := range paths {
-		dir := filepath.Dir(path)
-		if dir != "." && dir != "docs" && dir != "docs/reviewed" {
-			return fmt.Errorf("document path %s must live at README.md, docs/ or docs/reviewed/", path)
-		}
-	}
-	for _, rel := range rels {
-		if _, ok := docs[rel.From]; !ok {
-			return fmt.Errorf("relation from unknown document %s", rel.From)
-		}
-		if _, ok := docs[rel.To]; !ok {
-			return fmt.Errorf("relation to unknown document %s", rel.To)
-		}
-	}
-	return acyclicDepends(docs, rels)
-}
-
-func listedMarkdown(root string) ([]string, error) {
-	var out []string
-	out = append(out, "README.md")
-	entries, err := os.ReadDir(filepath.Join(root, "docs"))
-	if err != nil {
-		return nil, err
 	}
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
 			continue
 		}
-		out = append(out, "docs/"+entry.Name())
-	}
-	sort.Strings(out)
-	return out, nil
-}
-
-func acyclicDepends(docs map[string]catalogEntry, rels []edge) error {
-	incoming := map[string]int{}
-	outgoing := map[string][]string{}
-	for id := range docs {
-		incoming[id] = 0
-	}
-	for _, rel := range rels {
-		if rel.Type != "depends_on" {
-			continue
+		if _, ok := rootMarkdown[entry.Name()]; !ok {
+			return fmt.Errorf("root Markdown %s is not allowed; design documents belong under %s/", entry.Name(), docRoot)
 		}
-		outgoing[rel.To] = append(outgoing[rel.To], rel.From)
-		incoming[rel.From]++
-	}
-	var ready []string
-	for id, n := range incoming {
-		if n == 0 {
-			ready = append(ready, id)
-		}
-	}
-	seen := 0
-	for len(ready) > 0 {
-		id := ready[0]
-		ready = ready[1:]
-		seen++
-		for _, next := range outgoing[id] {
-			incoming[next]--
-			if incoming[next] == 0 {
-				ready = append(ready, next)
-			}
-		}
-	}
-	if seen != len(docs) {
-		return fmt.Errorf("depends_on graph has a cycle")
 	}
 	return nil
 }
 
-func validateMarkdownLinks(root string, docs map[string]catalogEntry) error {
-	files, err := markdownLinkFiles(root, docs)
+// validateDocumentShape keeps design documents parseable as plain Markdown:
+// the first non-empty line is a level-one title, never a YAML frontmatter fence.
+func validateDocumentShape(root, doc string) error {
+	raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(doc)))
 	if err != nil {
 		return err
 	}
+	for _, line := range strings.Split(string(raw), "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case line == "":
+			continue
+		case line == "---":
+			return fmt.Errorf("%s starts with frontmatter; design documents start with a # title", doc)
+		case strings.HasPrefix(line, "# "):
+			return nil
+		default:
+			return fmt.Errorf("%s must start with a # title", doc)
+		}
+	}
+	return fmt.Errorf("%s is empty", doc)
+}
+
+// validateReachable requires every design document to be linked, directly or
+// through other design documents, from doc/README.md.
+func validateReachable(root string, docs []string) error {
+	known := map[string]struct{}{}
+	for _, doc := range docs {
+		known[doc] = struct{}{}
+	}
+	seen := map[string]struct{}{docIndex: {}}
+	queue := []string{docIndex}
+	for len(queue) > 0 {
+		doc := queue[0]
+		queue = queue[1:]
+		targets, err := localLinks(root, doc)
+		if err != nil {
+			return err
+		}
+		for _, target := range targets {
+			if _, ok := known[target]; !ok {
+				continue
+			}
+			if _, ok := seen[target]; ok {
+				continue
+			}
+			seen[target] = struct{}{}
+			queue = append(queue, target)
+		}
+	}
+	var unreachable []string
+	for _, doc := range docs {
+		if _, ok := seen[doc]; !ok {
+			unreachable = append(unreachable, doc)
+		}
+	}
+	if len(unreachable) > 0 {
+		return fmt.Errorf("design documents not reachable from %s:\n  %s", docIndex, strings.Join(unreachable, "\n  "))
+	}
+	return nil
+}
+
+// localLinks returns the repository-relative targets of relative links in doc.
+func localLinks(root, doc string) ([]string, error) {
+	raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(doc)))
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, match := range mdLink.FindAllStringSubmatch(string(raw), -1) {
+		target := match[1]
+		if external(target) || strings.HasPrefix(target, "/") {
+			continue
+		}
+		out = append(out, filepath.ToSlash(filepath.Clean(filepath.Join(filepath.Dir(doc), filepath.FromSlash(target)))))
+	}
+	return out, nil
+}
+
+func external(target string) bool {
+	return strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") || strings.HasPrefix(target, "mailto:")
+}
+
+func validateMarkdownLinks(root string, files []string) error {
 	var broken []string
 	for _, rel := range files {
 		raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
@@ -319,14 +219,11 @@ func validateMarkdownLinks(root string, docs map[string]catalogEntry) error {
 		}
 		for _, match := range mdLink.FindAllStringSubmatch(string(raw), -1) {
 			target := match[1]
-			switch {
-			case strings.HasPrefix(target, "http://"), strings.HasPrefix(target, "https://"), strings.HasPrefix(target, "mailto:"):
+			if external(target) {
 				continue
 			}
-			var resolved string
-			if strings.HasPrefix(target, "/") {
-				resolved = target
-			} else {
+			resolved := target
+			if !strings.HasPrefix(target, "/") {
 				resolved = filepath.Join(root, filepath.Dir(filepath.FromSlash(rel)), filepath.FromSlash(target))
 			}
 			if _, err := os.Stat(resolved); err != nil {
@@ -340,14 +237,17 @@ func validateMarkdownLinks(root string, docs map[string]catalogEntry) error {
 	return nil
 }
 
-// markdownLinkFiles adds maintained source documents to the graph's link check.
-// Discovery does not register owners or relationships; those remain graph-only.
-func markdownLinkFiles(root string, docs map[string]catalogEntry) ([]string, error) {
+// markdownLinkFiles adds root, task, package and other maintained notes to the
+// design documents for the link check. Hidden and generated trees are skipped.
+func markdownLinkFiles(root string, docs []string) ([]string, error) {
 	root = filepath.Clean(root)
 	paths := map[string]struct{}{}
 	for _, doc := range docs {
-		if strings.HasSuffix(doc.Path, ".md") {
-			paths[doc.Path] = struct{}{}
+		paths[doc] = struct{}{}
+	}
+	for _, rel := range maintainedMarkdown {
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel))); err == nil {
+			paths[rel] = struct{}{}
 		}
 	}
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -358,17 +258,13 @@ func markdownLinkFiles(root string, docs map[string]catalogEntry) ([]string, err
 			if path == root {
 				return nil
 			}
-			if strings.HasPrefix(d.Name(), ".") {
-				return filepath.SkipDir
-			}
-			switch d.Name() {
-			case "node_modules", "vendor", "dist", "dist-ssr", "build", "coverage", "test-results", "playwright-report":
+			if _, skip := skippedDirectories[d.Name()]; skip || strings.HasPrefix(d.Name(), ".") {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 		rel := relPath(root, path)
-		if rel == "TASK.md" || d.Name() == "README.md" || strings.HasSuffix(d.Name(), "REFACTOR.md") {
+		if _, ok := rootMarkdown[rel]; ok || d.Name() == "README.md" {
 			paths[rel] = struct{}{}
 		}
 		return nil

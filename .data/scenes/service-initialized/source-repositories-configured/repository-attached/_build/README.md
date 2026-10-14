@@ -8,4 +8,3 @@
 
 - 库存发现与正文隔离：`TestCatalogReadDiscoversWithoutKnowledgeRead`、`TestCatalogInventoryDoesNotHideReposWithoutKnowledgeRead`。
 - 仓可声明已认证默认可读动作；未声明仍 fail closed，且不放行写或发权。InitHome 夹具没有 Deployment `repositoryAccess`，授权器不得按 System Repository ID 短路。证据为 `TestUndeclaredSystemRepositoryStillRequiresGrant`、`TestAuthenticatedPrincipalReadsDeclaredRepositoryWithoutGrant`、`TestDeclaredSystemRepositoryUsesAuthenticatedDefault`、`TestRuntimeWriterRefusesSystemRepository`。
-- 墙外 Collector 对账后产生 ChangeSet（`connector.Preview`），确认后才 Writer COMMIT；没有在 登记空间 注册 runtime。证据为 `connector/preview_test.go`、`TestPreviewThenCommit`。常驻容器与对账程序仍放在 `domain-schema-published/access-handle-published/_materials/accessor/`。

@@ -46,7 +46,7 @@ check_absent "legacy verb HTTP implementation" 'Handle(Func)?\("(GET |POST )?/v1
 check_absent "untyped client invocation" 'client\.Invoke\(|(^|[^[:alnum:]_])Invoke\(' client snapshot/client "${HTTP_ROUTE_PATHS[@]}"
 check_absent "public Knowledge list operation" '"list"[[:space:]]*:[[:space:]]*\{stage:|func[[:space:]]+verbList|type[[:space:]]+ListPage' \
 	cli snapshot/cli object --glob '!object/maintenance/**' --glob '!**/*_test.go'
-DOC_CLI_PATHS=(README.md docs cli/README.md snapshot/README.md snapshot/dataset/README.md snapshot/access/README.md snapshot/service/README.md snapshot/console/README.md snapshot/cli/README.md snapshot/client/README.md liveaccess/README.md)
+DOC_CLI_PATHS=(README.md doc cli/README.md snapshot/README.md snapshot/dataset/README.md snapshot/access/README.md snapshot/service/README.md snapshot/console/README.md snapshot/cli/README.md snapshot/client/README.md liveaccess/README.md)
 check_absent "stale flat CLI examples" $'kc (init|catalog-add|repo-add|store-set|store-ls|status|allow|revoke|allowed|define-workspace|retire-workspace|archive-catalog|archive-repo|put|remove|commit|ingest|receipt|propose|preview|validate|record-validation|merge|hook-|gate-|access-log|trace|hitmap|record-feedback|describe-index|index-sync|describe-access|describe-schema|inspect|checkout|resolve-binding)([[:space:]`]|$)' \
   "${DOC_CLI_PATHS[@]}"
 check_absent "retired knowledge CLI prefix" $'kc knowledge[[:space:]]' \

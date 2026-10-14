@@ -12,7 +12,7 @@ func newMux(root string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" {
-			http.Redirect(w, r, "/docs/product.html", http.StatusFound)
+			http.Redirect(w, r, "/doc/README.md", http.StatusFound)
 			return
 		}
 		serveDoc(root, w, r)
@@ -35,8 +35,6 @@ func serveDoc(root string, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch strings.ToLower(filepath.Ext(rel)) {
-	case ".html":
-		serveRaw(w, r, abs, "text/html; charset=utf-8")
 	case ".svg":
 		serveRaw(w, r, abs, "image/svg+xml")
 	case ".png":

@@ -1,6 +1,6 @@
 - id: liveaccess-independent-module
   title: 实现与公开依赖保持独立归属
-  claims: ["resource-access#U13"]
+  claims: ["liveaccess#U13"]
   given:
     - 仓库包含 LiveAccess 实现、公开合同和对象基础包。
   when:
@@ -13,7 +13,7 @@
 
 - id: liveaccess-selected-plugin-result
   title: 来源声明选中的插件真实调用并贡献读取结果
-  claims: ["resource-access#U14", "resource-access#U10"]
+  claims: ["liveaccess#U14", "liveaccess#U10"]
   given:
     - R1、R2 分别配置 A、B，Server 按仓装配；两仓通过 Writer 发布固定取值声明，A、B 返回不同值并记录调用目标。
     - 一个 Dataset 组合这两个来源，Dataset 自身不另设插件采用。
@@ -26,7 +26,7 @@
 
 - id: liveaccess-replacement-keeps-declaration
   title: 更换运行实例不改固定来源声明
-  claims: ["resource-access#U14", "resource-access#U11"]
+  claims: ["liveaccess#U14", "liveaccess#U11"]
   given:
     - 来源 Repo 配置 A，已完成一次读取；固定声明明确目标、Schema 和 origin，兼容的 C 返回可区分的新值。
   when:
@@ -38,7 +38,7 @@
 
 - id: liveaccess-no-compatible-plugin
   title: 未匹配或不支持固定声明时不偷偷回退
-  claims: ["resource-access#U14", "resource-access#U12", "resource-access#U15"]
+  claims: ["liveaccess#U14", "liveaccess#U12", "liveaccess#U15"]
   given:
     - 对象包含固定值和外部值；来源 Repo 已配置访问实例，外部值有固定声明，另有可计数的旧全局实现和来源。
     - 独立变体分别为指定实例缺失，以及实例存在但不能满足声明的协议或版本。
@@ -51,7 +51,7 @@
 
 - id: liveaccess-mixed-values
   title: 同一对象的成功、合法空值与取值失败分别呈现
-  claims: ["resource-access#U15"]
+  claims: ["liveaccess#U15"]
   given:
     - 经 Writer 发布同一对象，含固定值、返回 31 的外部值、带合法 Basis 的 null，以及另一个外部值。
     - 最后一个位置的独立变体为来源错误、null 搭配非法 Basis、返回值违反固定 Schema；每次从同一前态独立开始。
@@ -65,7 +65,7 @@
 
 - id: liveaccess-request-identity-isolation
   title: 交错请求自动传递各自身份与认证
-  claims: ["resource-access#U16"]
+  claims: ["liveaccess#U16"]
   given:
     - alice、bob 具有不同的适用认证证明、requestId 和 trace，访问同一外部目标；来源记录每次收到的主体、证明和请求关联。
   when:
@@ -77,7 +77,7 @@
 
 - id: liveaccess-credential-target-boundary
   title: 不向不适用或不受信任的目标传递凭证
-  claims: ["resource-access#U16", "resource-access#U7"]
+  claims: ["liveaccess#U16", "liveaccess#U7"]
   given:
     - 主体的证明适用于受信任目标 A；另有可计数接收端 B，它不在信任或证明适用范围内。
     - B 要求其适用认证，调用者没有该证明；读取对象另含正常固定值。
@@ -91,7 +91,7 @@
 
 - id: liveaccess-redirect-credential-boundary
   title: 重定向不扩大凭证范围
-  claims: ["resource-access#U16", "resource-access#U7"]
+  claims: ["liveaccess#U16", "liveaccess#U7"]
   given:
     - 主体证明仅适用于受信任来源 A；A 将访问重定向到不适用接收端 B，两端均可核对收到的证明。
     - 读取对象另含正常固定值。
@@ -104,7 +104,7 @@
 
 - id: liveaccess-no-credential-in-results-or-evidence
   title: 凭证不进入对象、日志或审计
-  claims: ["resource-access#U16"]
+  claims: ["liveaccess#U16"]
   given:
     - 使用可精确检出的认证证明，来源可验证已经收到它；来源成功和失败为独立变体。
   when:
@@ -116,7 +116,7 @@
 
 - id: liveaccess-audit-original-result
   title: 源更新和重启后独立复核原请求结果
-  claims: ["resource-access#U17"]
+  claims: ["liveaccess#U17"]
   given:
     - r1 读取混合对象并保存当次正常返回：固定值、31、合法 null 与一个失败说明；证据记录主体、时间、位置、requestId、固定声明及原依据。
     - r1 的 Snapshot 固定版本仍在承诺期内可读。
@@ -131,7 +131,7 @@
 
 - id: liveaccess-audit-separate-authorization
   title: 普通读取与完整审计的授权分别生效
-  claims: ["resource-access#U17"]
+  claims: ["liveaccess#U17"]
   given:
     - 主体可正常读取混合对象，但没有完整审计查询权限；另有显式获准的审计主体。
   when:
@@ -143,7 +143,7 @@
 
 - id: liveaccess-evidence-persistence-failure
   title: 必需证据未可靠保存时不宣称交付成功
-  claims: ["resource-access#U18"]
+  claims: ["liveaccess#U18"]
   given:
     - 读取混合对象，含成功值、合法 null 和预设单值失败；独立故障分别使访问关联记录无法保存，或必需的实际值、逐值失败、原依据无法可靠保留。
   when:
@@ -155,7 +155,7 @@
 
 - id: liveaccess-retained-evidence-lost
   title: 承诺期内原结果丢失必须可识别
-  claims: ["resource-access#U18"]
+  claims: ["liveaccess#U18"]
   given:
     - r1 已可靠留证，仍在保留期内；访问关联记录仍在，独立变体分别丢失实际值、逐值失败说明或原依据，来源已有新值。
   when:
@@ -167,7 +167,7 @@
 
 - id: liveaccess-evidence-expired
   title: 正常到期与保留期内丢失分别说明
-  claims: ["resource-access#U18"]
+  claims: ["liveaccess#U18"]
   given:
     - r1 曾完整留证，随后正常达到其保留期限；来源仍可返回最新值。
   when:
@@ -179,7 +179,7 @@
 
 - id: liveaccess-plugin-help
   title: 模块说明可读取且不会执行取值
-  claims: ["resource-access#U19"]
+  claims: ["liveaccess#U19"]
   given:
     - LiveAccess 模块从自身目录登记可区分的说明，客户端连接 Server；业务来源和处理器可计数。
   when:
@@ -192,7 +192,7 @@
 
 - id: liveaccess-indexed-member
   title: LiveAccess Member 的实际值进入索引并按原观察回读
-  claims: ["resource-access#U20"]
+  claims: ["liveaccess#U20"]
   given:
     - 来源 Repo 配置 LiveAccess；经 Writer 发布可索引的 Member，其值 Schema 和 access 允许已有字段查询，取值使用固定来源声明。
     - 独立前态分别为来源返回 31 和合法观察 g1，以及首次取值失败且没有该 Member 的成功观察。

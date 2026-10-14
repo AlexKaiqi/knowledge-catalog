@@ -23,6 +23,6 @@ evidence:
       - "TestMergeGateMissingSuiteAndPreviewMove"
     title: "源仓推进后旧预览不能批准新组合，需重建预览与证据"
     verifies:
-      - claim: "knowledge#U4"
+      - claim: "object#U4"
         detail: "评审固定预览后 candidate 变更（v2→v3）：旧预览 merge 以 CANDIDATE_MOVED 拒绝、缺套件证据以 GATE_UNSATISFIED 拒绝；为最新 candidate 重建预览并记录 PASSED 证据后合并落在新 candidate commit，已接受版本不被失败改写。"
 fixture: "PR-scene 的候选分支含 text 为 proposed 的 note/hello，主分支仍为 hi。"

@@ -14,7 +14,7 @@ operation:
     cooldown: 0m
 metrics: [write.commit.latency, write.receipt.latency, search.latency, index.update.commit_to_visible, cap.rss_growth_slope, resil.first_event_batching_wait]
 correctness:
-  - "事件→Receipt、事件→检索可见的 P99 达到声明门槛（历史参考）"
+  - "事件→Receipt、事件→检索可见的 P99 达到声明门槛"
   - "duplicate 不产生额外 revision；丢事件为 0"
 cleanup: 无临时资源
 requires: [long-window]

@@ -2,7 +2,7 @@
 // set, its handler registrations, authorization enforcement, and telemetry.
 // CAP-ORG-01 B4 lands the contract first; the cli service handlers move in
 // B5-B7 (API-01: CLI and HTTP keep running the same typed application
-// executors). See docs/reviewed/capability-organization.md §3.2.
+// executors). See doc/architecture.md
 package server
 
 import (

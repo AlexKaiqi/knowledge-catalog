@@ -1,38 +1,36 @@
 product_documents:
-  object-refactor-guideline:
-    section: 重构验收用例
-  knowledge:
-    section: 方向性用例
+  object:
+    section: 用例
     gaps:
       U1: 现有非法声明用例同时含未知 type 与 access，尚未分别证明两类声明都会被拒绝且 HEAD 不变；缺字段用例未单独钉 HEAD 不变，场景成功回读也未同时核对写回执 commit 与 schema_ref；同批成功分支尚未分别回读 Schema 与实例并断言二者属于同一 commit。
       U3: breaking 迁移分支仍待决策；局部兼容性与重建测试不证明完整演进旅程。
       U7: 尚无现行场景绑定与执行证据。
       U8: 已覆盖认证读取、文件交付、help 同源与出版物漂移拒绝；尚未执行真实 Agent 从任务说明自主选择能力和处理就绪或授权失败的语义验收。
   dataset:
-    section: 方向性用例
+    section: 用例
     gaps:
       U8: 现有服务端 plan 与 Gateway 证据未证明已有项目中的一次 Resolve、用户确认后只读挂载与原文件保持不变的完整交互。
   service:
-    section: 方向性用例
+    section: 用例
     gaps:
       U2: 尚无现行场景绑定与执行证据。
       U3: Gateway 用例未显式核对 YAML 中的 Repository 与 commit，没有真实 Agent 经语义文件挂载执行 rg 的完整旅程，界面隐藏入口保持挂载、pin、权限和 Agent 访问不变也没有具体验证。
       U4: 尚无现行场景绑定与执行证据。
       U5: 现有关联未完整证明发现响应的 basis、coverage 与权限裁剪要求。
       U6: 当前场景没有连接状态零扫描、从插件到 authority 的分段耗时、分页与本机 p95 100ms 目标的同次运行证据。
-  cli:
-    section: 方向性用例
+  affordance:
+    section: 用例
     gaps:
       U1: 现有关联未完整证明封装客户端登录与 README 的 SEARCH。
-      U2: 判定与证据归 cli-evaluation.md，尚未建立 .data/scenes 现行旅程绑定。
-      U3: 判定与证据归 cli-evaluation.md，尚未建立 .data/scenes 现行旅程绑定。
-      U4: 判定与证据归 cli-evaluation.md，尚未建立 .data/scenes 现行旅程绑定。
-      U5: 判定与证据归 cli-evaluation.md，尚未建立 .data/scenes 现行旅程绑定。
-      U6: 判定与证据归 cli-evaluation.md，尚未建立 .data/scenes 现行旅程绑定。
+      U2: 尚未建立 .data/scenes 旅程绑定。
+      U3: 尚未建立 .data/scenes 旅程绑定。
+      U4: 尚未建立 .data/scenes 旅程绑定。
+      U5: 尚未建立 .data/scenes 旅程绑定。
+      U6: 尚未建立 .data/scenes 旅程绑定。
       U7: 插件包、实例与目标绑定的管理入口尚待选定公开合同；当前没有启用、停用及解绑发现插件的执行旅程，已有发现入口不证明这些新增管理能力。
       U8: 新增基础帮助到目标插件说明的方向用例尚无具名场景关联；离线帮助、Repo/Dataset 实际选用说明与模块帮助的完整走读仍需独立验收。
-  resource-access:
-    section: 方向性用例
+  liveaccess:
+    section: 用例
     gaps:
       U1: 尚未证明丢通知后的查询范围级覆盖与时效，尤其是零命中、过期响应与分页期间后台更新的组合。
       U2: 已有取值、空值与失败的局部断言；尚未证明刷新失败后旧观察是否满足请求时效，以及信号载荷不能替代缺失取值能力的完整交付旅程。
@@ -41,13 +39,13 @@ product_documents:
       U5: 已有发布范围和声明版本检查；未证明 HEAD 前进后旧 Dataset 声明的独立维护、动态就绪及旧 runtime 退役处理。
       U6: 尚未证明后台身份可见而消费方不可见、撤权后旧观察拒绝，以及接入方显式授权共享观察的交付边界。
       U7: 现有测试只证明身份透传、凭证不进请求正文与缺主体拒绝；目标信任、凭证适用范围、重定向和后台身份隔离尚无证据。
-      U8: 现有增量测试只证明单对象重取次数与新值可检索；未证明观察复制、摘要与索引写入的整体成本，或失败来源不阻塞独立工作；整体成本判据由 index-control#U2 统一说明。
+      U8: 现有增量测试只证明单对象重取次数与新值可检索；未证明观察复制、摘要与索引写入的整体成本，或失败来源不阻塞独立工作；整体成本判据尚未写入用例。
       U9: 普通 READ 拒绝 Stream 已有局部证据；有界窗口、顺序、迟到、保留缺口与持续订阅属于后续设计，尚无可执行入口。
       U10: 尚无同一 Dataset 按各来源固定声明聚合索引与访问实例、动态索引显式桥接来源访问实例，以及不相容共享观察拒绝混用的执行旅程；现有固定检索和身份透传不能证明来源匹配合同。
       U11: 尚无重启后改选 LiveAccess 实例仍访问固定 origin、使用新实例自身执行身份，以及不支持声明时明确失败的证据；已有部署恢复不证明访问实例替换。
       U12: 旧 State Binding 与 ResourceDescriptor 已有局部执行合同；尚无所选 LiveAccess 实例承接兼容声明及不支持实现版本时在调用源前拒绝、且不回退或扫描替代声明的完整旅程。
-  declarative-index:
-    section: 验收用例与执行顺序
+  discovery:
+    section: 用例
     gaps:
       U1: 验收规格已定义；已有字段原语与标量类型断言，新插件公开查询入口仍待接入。
       U2: 已有范围、授权及组合原语断言；固定来源采用到 A/B 插件的匹配、缺失/重复/歧义与不回退、帮助读取及跨实例组合尚待真实接入。Dataset 不另选或覆盖来源采用。

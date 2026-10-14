@@ -1,6 +1,6 @@
 # 协议旅程场景
 
-协议用例怎么组织、维护、执行、怎么写断言。覆盖格子（状态 × 操作、已定位/partial/gap）仍以 [`docs/reviewed/test-catalog.md`](../../docs/reviewed/test-catalog.md) 为准。架构不变量 ID 以 [`docs/reviewed/architecture-invariants.md`](../../docs/reviewed/architecture-invariants.md) 为准。清河茶铺走查夹具写在 `named-repositories-created` 叶上，不要另起独立数仓黑盒套件。
+协议用例怎么组织、维护、执行、怎么写断言。覆盖格子（状态 × 操作、已定位/partial/gap）仍以 [`doc/engineering/test-catalog.md`](../../doc/engineering/test-catalog.md) 为准。架构不变量 ID 以 [`doc/engineering/architecture-invariants.md`](../../doc/engineering/architecture-invariants.md) 为准。清河茶铺走查夹具写在 `named-repositories-created` 叶上，不要另起独立数仓黑盒套件。
 
 这不是检索应用的故事包，也不是 `cli/testdata/`。
 
@@ -59,14 +59,14 @@ python3 .data/scenes/tree.py --check-states
 
 ### 1.2 与产品文档对应的视图
 
-从产品任务了解用例时，先看 `--family product`。`_views.yaml` 的 `product_documents` 只指定已在 `docs/graph/` 登记的 owner 文档 ID 和用例章节；工具按文档顺序提取稳定条目 ID 与标题，生成 `product/<文档 ID>/<条目 ID>` 视图。用例条目可以是三级标题，或 `1. **U1 标题：**说明` 的有序列表，代码块里的例子不算条目。当前来源包括 `knowledge`、`dataset`、`service`、`cli` 与 `resource-access` 各篇的「方向性用例」；条目来自各 owner 正文，ID 在文档内稳定，不另抄任务清单。派生 `docs/product.html` 不作为关联的权威来源。
+从产品任务了解用例时，先看 `--family product`。`_views.yaml` 的 `product_documents` 只指定 `doc/design/` 下的设计篇（文档 ID 即文件名）和用例章节；工具按文档顺序提取稳定条目 ID 与标题，生成 `product/<文档 ID>/<条目 ID>` 视图。用例条目可以是三级标题，或 `1. **U1 标题：**说明` 的有序列表，代码块里的例子不算条目。当前来源包括 `object`、`dataset`、`service`、`affordance`、`liveaccess` 与 `discovery` 各篇的「用例」一节；条目来自设计篇正文，ID 在文档内稳定，不另抄任务清单。
 
 设计书写方向性任务与不可接受的结果，场景树承接具体前态、操作和断言。尚未实现的能力现在就把
 验收规格放入最近相关宿主的 `_specs/*.yaml`，同时保留明确缺口；不创建没有真实构建过程的状态或不能执行的 feature。动态 State 的独立 Go 证据继续
 挂在 `repository-attached`，不因为增加设计用例就虚构一个动态服务已就绪的共享状态。
 
 规格文件为列表，每项包含全库唯一 `id`、`title`、`risk`，以及非空列表 `claims`、`given`、
-`when`、`then`。`claims` 指向既有 owner 的稳定用例 ID；其余字段给出具体条件、动作、可证伪
+`when`、`then`。`claims` 指向设计篇的稳定用例 ID；其余字段给出具体条件、动作、可证伪
 预期及删除后会漏检的风险。每条规格只负责一种风险，变体各自从前态独立开始，不传递临时后态。
 `--family product` 和相应产品视图直接展示规格，`--check-product` 检查格式、唯一 ID 与引用。
 规格不填不存在的测试名、不报 pass 或 skip，也不计入可执行用例、命令覆盖或证据并集；
@@ -76,25 +76,25 @@ python3 .data/scenes/tree.py --check-states
 
 ```yaml
 verifies:
-  - claim: "knowledge#U1"
+  - claim: "object#U1"
     detail: 同时含非法 type 与 access 的声明被拒绝，Repository HEAD 保持不变
 ```
 
 `detail` 只描述该用例实际证明的范围。构建中已有明确后态断言时，可在节点上用 `construct_verifies` 按同样结构关联；仅有状态名称不能充当验证。普通节点级 `verifies`、手写产品视图成员标签和引用整个 Go 文件都不能替代具体验证。
 
-产品视图由这些关联自动选中用例，补齐宿主与真实构建前置，不继承同节点其它 probe。一个用例可以关联多个产品条目。`--probes-at` 可反查用例对应的条目。文档之间的依赖、细化和验证关系仍只维护在 `docs/graph/`。
+产品视图由这些关联自动选中用例，补齐宿主与真实构建前置，不继承同节点其它 probe。一个用例可以关联多个产品条目。`--probes-at` 可反查用例对应的条目。文档之间的关系写在各篇正文的链接里。
 
 ```bash
 python3 .data/scenes/tree.py --family product
-python3 .data/scenes/tree.py --view product/knowledge/U1
-python3 .data/scenes/tree.py --view product/knowledge/U1 --from repository-attached --json
-python3 .data/scenes/tree.py --view product/resource-access/U3
+python3 .data/scenes/tree.py --view product/object/U1
+python3 .data/scenes/tree.py --view product/object/U1 --from repository-attached --json
+python3 .data/scenes/tree.py --view product/liveaccess/U3
 python3 .data/scenes/tree.py --check-product
 ```
 
 产品视图检查引用有效、断言说明非空、入库规格完整，且每个文档条目都有验证入口或明确缺口。规格关联不能代替执行证据或清除 gap。无入口的新条目、失效引用和伪造构建证据会报错。`product_documents` 的 `gaps` 只记录尚未由关联证据证明的具体范围，允许与局部证据并存，不保存节点或用例清单。
 
-输出中的 `linked` 只表示已有关联，`gap` 表示已声明缺口；两者都不等于完整覆盖或测试通过。`execution_status: not_evaluated` 明确说明该工具没有执行用例。产品验收仍按 `docs/reviewed/test-catalog.md` 读取同次运行证据；工程并集与产品声明完整性分别检查。
+输出中的 `linked` 只表示已有关联，`gap` 表示已声明缺口；两者都不等于完整覆盖或测试通过。`execution_status: not_evaluated` 明确说明该工具没有执行用例。产品验收仍按 `doc/engineering/test-catalog.md` 读取同次运行证据；工程并集与产品声明完整性分别检查。
 
 具名 bundle 写在入口节点的 `_bundles.yaml`：声明从该既有状态开始的任务。执行器复用祖先夹具，用户步骤无需从初始化重复。
 
@@ -155,7 +155,7 @@ make deploy-local-goto NODE=qinghe-knowledge-published PROBE=probe-publish-datas
 开始/结束时间和观察步骤。同次 run 重跑相同 Test/node 也保留各次结果，不覆盖前次失败。
 节点 `latest.json` 只是方便就近查看的副本；无 run-id 的直接运行文件不具有版本绑定能力。
 完整库存由 `make validation-inventory` 读取覆盖表与场景目录生成；结果与 skip/未观测的区别
-统一遵循 `docs/reviewed/test-catalog.md` §0.2，不在本 README 维护第二张执行状态表。
+统一遵循 `doc/engineering/test-catalog.md` §0.2，不在本 README 维护第二张执行状态表。
 
 ## 4. 用例规范
 
@@ -238,7 +238,7 @@ Then the output has:
 
 ## 6. 功能面
 
-树上看哪段状态，不另编功能点 id。Help 三主题只是分组。没有名为 `connector-registered` 的状态：runtime / 凭证在墙外。
+树上看哪段状态，不另编功能点 id。Help 三主题只是分组。外部采集程序和凭证在墙外，经普通 Writer 提交，不在树上建状态。
 
 功能树与关注点子图均由上面的 `tree.py` 命令实时生成，不在 README 再维护一份全树清单。
 

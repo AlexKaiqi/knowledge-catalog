@@ -173,7 +173,7 @@ go run ./cmd/kc -- schema describe --repo kr://acme/public/core --object Table:t
 仓级入口使用 `--repo`。宿主文件体验用 `kcfs --dataset --root` 经 Workspace File Gateway
 在挂载时内部冻结；没有公开 checkout 或 `refine` 命令。
 
-协议与 Aspect 读策略见 [架构总览](../../docs/reviewed/core-architecture.md) 第 7 章、[声明式索引](../../docs/reviewed/declarative-index.md)。
+协议与 Aspect 读策略见 [架构总览](../../doc/architecture.md)、[声明式索引](../../doc/design/discovery.md)。
 
 
 `DescribeRepoSchema` 通过固定 commit 的有界 Schema locator 解释逻辑类型与字段 access。

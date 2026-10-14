@@ -14,7 +14,7 @@ func RepositoryPath(subPath, relative string) (string, error) {
 	// Normalization must not move the result outside the selected subtree:
 	// a relative path whose parent-directory segments clean away the subPath
 	// prefix (e.g. "scratch/../..") escapes the published file list even
-	// though it never begins with "../" (docs/reviewed/dataset.md, C-21).
+	// though it never begins with "../" (doc/design/dataset.md, C-21).
 	if subPath != "" && joined != "" && joined != strings.Trim(subPath, "/") &&
 		!strings.HasPrefix(joined, strings.Trim(subPath, "/")+"/") {
 		return "", kernel.Fail(kernel.ErrUsageInvalid, "mount-relative path %q escapes the selected subtree", relative)

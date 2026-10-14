@@ -1,6 +1,6 @@
 {
   "annotations": {"list": []},
-  "description": "System Status：窗口内 Writer/READ/SEARCH 次数与可用性、证据、投影积压。无合格流量保持 No data，不把 0% 当成故障。Grafana 是人机投影；Agent 读 docs/observability/agent-signals.json。",
+  "description": "System Status：窗口内 Writer/READ/SEARCH 次数与可用性、证据、投影积压。无合格流量保持 No data，不把 0% 当成故障。Grafana 是人机投影；Agent 读 scripts/deploy/observability/rules/agent-signals.json。",
   "editable": false,
   "graphTooltip": 1,
   "links": [

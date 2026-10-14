@@ -3,8 +3,8 @@
 压测用例按**场景树**组织：目录是共享测量前态，`_build` 建立状态，`_probes` 从状态出发
 做一次测量。它借用 [`.data/scenes/`](../../scenes/README.md) 协议旅程树的组织方式，
 但视角不同：协议树回答「行为是否正确」，本树回答「在声明的数据量、并发和持续时间下，
-吞吐、时延、资源、追赶和恢复如何随量级变化」。总体规模模型、档位与历史门槛仍以
-[`docs/reviewed/scale-benchmark.md`](../../../docs/reviewed/scale-benchmark.md) 为准；环境配置合同见
+吞吐、时延、资源、追赶和恢复如何随量级变化」。规模原则见
+[`doc/engineering/testing.md`](../../../doc/engineering/testing.md)，资格门槛尚未登记；环境配置合同见
 [`ENVIRONMENT.md`](../ENVIRONMENT.md)；指标唯一登记表是本目录
 [`metrics.yaml`](metrics.yaml)。
 
@@ -27,7 +27,7 @@
    （量级阶梯），阶梯定义在环境配置 `profile.ladders`，缺省值见
    [`env.example.yaml`](env.example.yaml)。
 5. **指标 id 只在 `metrics.yaml` 登记**。探针与 construct 引用登记过的 id；
-   数值门槛引用 `docs/reviewed/scale-benchmark.md` §10 / §14，重登记前只作默认参考
+   指标的 gateRef 只作默认参考
    （见 §6 资格状态）。
 6. **凭证只以环境变量引用名出现**。环境配置不出现密钥值；引用名经
    `perf_tree.py --env` 校验形状。
@@ -59,8 +59,8 @@
 
 - 测试阶段：本地栈由人启动（不新增编排放进本树），`serverURL` 指向本地。
 - 生产阶段：同一份树、另一份环境配置；凭证走环境变量引用，原始值不进仓库。
-- 证据写入 `.data/scale/runs/<run-id>/`（gitignore），格式沿用
-  `docs/reviewed/scale-benchmark.md` §13。
+- 证据写入 `.data/scale/runs/<run-id>/`（gitignore），每次运行至少包含
+  `manifest.json`、原始样本与 `report.json`。
 
 ## 4. 执行合同（runner）
 
@@ -77,8 +77,7 @@ runner 尚未实现；每条 probe 的 `requires` 列出它需要的能力，合
 | `resource-sampling` | 发压端与被测端 CPU/RSS/IO/disk 样本采集 |
 | `server-metrics` | 只读抓取 Prometheus 指标与运维快照（可选增强） |
 
-单次运行阶段、停止条件、`PASSED/FAILED/INVALID` 判据沿用 `CASES.md` §2 与
-`docs/reviewed/scale-benchmark.md` §7/§14：预热只填缓存不判定；测量中禁止改变被测配置；
+单次运行阶段、停止条件、`PASSED/FAILED/INVALID` 判据沿用 `CASES.md` §2：预热只填缓存不判定；测量中禁止改变被测配置；
 发压端饱和、采样缺口、数据量不符、正确性门禁失败即停止或判无效。
 
 ## 5. 树与阅读
@@ -95,9 +94,7 @@ python3 .data/scale/scenes/perf_tree.py --check      # 结构与引用检查
 ## 6. 资格状态
 
 - 本树当前是**用例规格**：runner 未实现，没有任何一条探针产生过资格结论。
-- `docs/reviewed/scale-benchmark.md` §10 的数值门槛按 native Dolt 路线编写；该路线已退役，
-  介质为 lakeFS，资格线与实测入口待按 `docs/reviewed/core-architecture.md` 重新登记。重登记前
-  这些数值只作默认参考，不构成 lakeFS 部署的承诺或通过线。
+- 资格线与实测入口尚未登记；`metrics.yaml` 的 gateRef 数值只作默认参考，不构成 lakeFS 部署的承诺或通过线。
 - `history-aged` 节点依赖真实历史档生成（`history-generation`），生成器未实现前
   该节点不可构建；`_meta.yaml` 的 `gaps` 显式记录。代际 rollover 结论待 REVIEW-01
   选定方案后补充，不预先建状态。

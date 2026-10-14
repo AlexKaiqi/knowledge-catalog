@@ -148,8 +148,16 @@ var cliSurface = map[string]commandSurface{"read": {"knowledge-read", "knowledge
 	}
 }
 
-func TestInventoryChecksRefactorAcceptanceEvidence(t *testing.T) {
-	if !slices.Contains(validationEvidenceDocuments(), "docs/reviewed/refactor-acceptance.md") {
-		t.Fatal("refactor acceptance Test references are outside the checked evidence inventory")
+func TestInventoryChecksEvidenceTablesThatExist(t *testing.T) {
+	documents := validationEvidenceDocuments()
+	for _, required := range []string{"doc/engineering/test-catalog.md", "doc/engineering/architecture-invariants.md"} {
+		if !slices.Contains(documents, required) {
+			t.Errorf("%s Test references are outside the checked evidence inventory", required)
+		}
+	}
+	for _, document := range documents {
+		if _, err := os.Stat(filepath.Join("..", "..", document)); err != nil {
+			t.Errorf("evidence document %s is not readable: %v", document, err)
+		}
 	}
 }

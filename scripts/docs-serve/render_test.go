@@ -51,7 +51,7 @@ func TestRenderMarkdownImages(t *testing.T) {
 		want string
 	}{
 		{"relative asset", `![Agent 环境](../assets/architecture.svg)`, `<img src="../assets/architecture.svg" alt="Agent 环境">`},
-		{"empty alternative", `![](/docs/assets/architecture.png)`, `<img src="/docs/assets/architecture.png" alt="">`},
+		{"empty alternative", `![](/doc/assets/architecture.png)`, `<img src="/doc/assets/architecture.png" alt="">`},
 		{"code in alternative", "![文 `\" <x>`](../assets/architecture.svg)", `<img src="../assets/architecture.svg" alt="文 &#34; &lt;x&gt;">`},
 		{"escape attributes", `![" onload="bad <b> & **说明**](../assets/architecture.svg?x="a"&y=<b>)`, `<img src="../assets/architecture.svg?x=&#34;a&#34;&amp;y=&lt;b&gt;" alt="&#34; onload=&#34;bad &lt;b&gt; &amp; **说明**">`},
 		{"escape source quote", `![图](../assets/architecture.svg" onerror="bad)`, `<img src="../assets/architecture.svg&#34; onerror=&#34;bad" alt="图">`},
@@ -83,7 +83,7 @@ func TestRenderMarkdownImagesRemainLiteralInCode(t *testing.T) {
 }
 
 func TestWrapPageImagesFitReadingWidth(t *testing.T) {
-	page := wrapPage("设计书", "docs/reviewed/core-architecture.md", "")
+	page := wrapPage("设计书", "doc/architecture.md", "")
 	rule := regexp.MustCompile(`main img\s*\{([^}]*)\}`).FindStringSubmatch(page)
 	if rule == nil || !regexp.MustCompile(`max-width\s*:\s*100%\s*;`).MatchString(rule[1]) ||
 		!regexp.MustCompile(`height\s*:\s*auto\s*;`).MatchString(rule[1]) {

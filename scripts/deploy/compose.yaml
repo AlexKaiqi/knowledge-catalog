@@ -126,8 +126,8 @@ services:
       - ./observability/prometheus.yaml:/otel-lgtm/prometheus.yaml:ro
       - ./observability/grafana-datasources.yaml:/otel-lgtm/grafana/conf/provisioning/datasources/kc.yaml:ro
       - ./observability/grafana-dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/custom.yaml:ro
-      - ../../docs/observability/prometheus-recording-rules.yaml:/otel-lgtm/rules/kc-recording-rules.yaml:ro
-      - ../../docs/observability/prometheus-alert-rules.yaml:/otel-lgtm/rules/kc-alert-rules.yaml:ro
+      - ./observability/rules/prometheus-recording-rules.yaml:/otel-lgtm/rules/kc-recording-rules.yaml:ro
+      - ./observability/rules/prometheus-alert-rules.yaml:/otel-lgtm/rules/kc-alert-rules.yaml:ro
       - ./observability/grafana/kc-overview.json:/otel-lgtm/grafana/conf/provisioning/dashboards/custom/kc-overview.json:ro
       - ./observability/grafana/kc-search-analysis.json:/otel-lgtm/grafana/conf/provisioning/dashboards/custom/kc-search-analysis.json:ro
       - ./observability/grafana/kc-runtime-health.json:/otel-lgtm/grafana/conf/provisioning/dashboards/custom/kc-runtime-health.json:ro

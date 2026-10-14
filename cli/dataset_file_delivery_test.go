@@ -17,7 +17,7 @@ import (
 	"kc/snapshot/dataset"
 )
 
-// docs/reviewed/dataset.md U10: per-file entries publish as item truth and
+// doc/design/dataset.md U10: per-file entries publish as item truth and
 // the File Gateway enumerates and reads the composed delivered tree — renamed
 // files, files from another source mixed into one delivered directory, and
 // file entries outside every mount. Delivery-time content conflicts refuse
@@ -531,7 +531,7 @@ func TestDatasetCloneMaterializesDeliveredTree(t *testing.T) {
 
 func (f *directoryDelivery) clone(t *testing.T, dir string) (map[string]any, error) {
 	t.Helper()
-	// Product argv rejects --pin (docs/reviewed/cli.md), so there is nothing to pass.
+	// Product argv rejects --pin (doc/design/affordance.md), so there is nothing to pass.
 	// TestDatasetCloneJourney owns the literal-argv evidence; this helper keeps
 	// the deep assertions compact by reusing the same production Run entry.
 	result := kcRemote(t, f.serverURL, "agent:consumer", "dataset", "clone", "delivery", dir)

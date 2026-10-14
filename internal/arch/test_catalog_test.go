@@ -15,11 +15,11 @@ var (
 	implementedTest = regexp.MustCompile(`(?m)^func (Test[A-Za-z0-9_]+)\(`)
 )
 
-// TestCatalogIsMachineCheckable keeps docs/reviewed/test-catalog.md useful as an
+// TestCatalogIsMachineCheckable keeps doc/engineering/test-catalog.md useful as an
 // acceptance manifest instead of a hand-maintained status essay.
 func TestCatalogIsMachineCheckable(t *testing.T) {
 	root := moduleRoot(t)
-	path := filepath.Join(root, "docs", "reviewed", "test-catalog.md")
+	path := filepath.Join(root, "doc", "engineering", "test-catalog.md")
 	body, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -67,7 +67,7 @@ func TestCatalogIsMachineCheckable(t *testing.T) {
 
 func TestArchitectureInvariantsHaveExecutableEvidence(t *testing.T) {
 	root := moduleRoot(t)
-	path := filepath.Join(root, "docs", "reviewed", "architecture-invariants.md")
+	path := filepath.Join(root, "doc", "engineering", "architecture-invariants.md")
 	body, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)

@@ -12,7 +12,7 @@ import (
 )
 
 // Traversal executes the bounded neighborhood closure contract from
-// docs/reviewed/core-architecture.md: the scope is fixed before execution,
+// doc/architecture.md: the scope is fixed before execution,
 // every hop reuses the one-hop relation execution lane at the pinned basis,
 // authorization is checked before each expansion, and pages are disjoint
 // deltas whose union is the closure. Edges only come from the expanding

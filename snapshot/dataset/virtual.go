@@ -13,7 +13,7 @@ import (
 // virtual path the caller asked for, which member/commit it routed to, and
 // the bytes there. RouteDatasetFile compiles the fixed published file list;
 // write-back mount routing remains separate. This is the primitive a virtual
-// filesystem (no real checkout on disk, docs/reviewed/dataset.md's TreeStore)
+// filesystem (no real checkout on disk, doc/design/dataset.md's TreeStore)
 // needs for a single file.
 type VirtualFile struct {
 	Path       string              `json:"path"`

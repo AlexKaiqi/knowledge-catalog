@@ -26,21 +26,21 @@ func TestServeArchitectureImageAssets(t *testing.T) {
 		body        string
 	}
 	assets := []imageAsset{
-		{"/docs/assets/architecture.svg", "image/svg+xml", svg},
-		{"/docs/assets/nested/architecture.png", "image/png", pngBody.String()},
+		{"/doc/assets/architecture.svg", "image/svg+xml", svg},
+		{"/doc/assets/nested/architecture.png", "image/png", pngBody.String()},
 	}
 	for _, asset := range assets {
 		mustWrite(t, filepath.Join(root, asset.path[1:]), asset.body)
 	}
-	if err := os.Symlink(filepath.Join(root, "docs/assets/architecture.svg"), filepath.Join(root, "docs/assets/alias.svg")); err != nil {
+	if err := os.Symlink(filepath.Join(root, "doc/assets/architecture.svg"), filepath.Join(root, "doc/assets/alias.svg")); err != nil {
 		t.Fatal(err)
 	}
-	assets = append(assets, imageAsset{"/docs/assets/alias.svg", "image/svg+xml", svg})
-	mustWrite(t, filepath.Join(root, "docs/reviewed/core-architecture.md"), "# 架构\n\n![对象环境](../assets/architecture.svg)\n\n![PNG](../assets/nested/architecture.png)\n")
+	assets = append(assets, imageAsset{"/doc/assets/alias.svg", "image/svg+xml", svg})
+	mustWrite(t, filepath.Join(root, "doc/design/architecture.md"), "# 架构\n\n![对象环境](../assets/architecture.svg)\n\n![PNG](../assets/nested/architecture.png)\n")
 	srv := httptest.NewServer(newMux(root))
 	t.Cleanup(srv.Close)
 
-	page := readBody(t, get(t, srv.URL+"/docs/reviewed/core-architecture.md"))
+	page := readBody(t, get(t, srv.URL+"/doc/design/architecture.md"))
 	for _, ref := range []string{
 		`<img src="../assets/architecture.svg" alt="对象环境">`,
 		`<img src="../assets/nested/architecture.png" alt="PNG">`,
@@ -76,23 +76,23 @@ func TestServeRejectsImagePaths(t *testing.T) {
 	root := t.TempDir()
 	paths := []string{
 		"/architecture.svg",
-		"/docs/reviewed/architecture.svg",
-		"/docs/architecture.png",
-		"/docs/assets-other/architecture.svg",
-		"/docs/assets/architecture.gif",
-		"/docs/assets/architecture.webp",
-		"/docs/assets/architecture.svg.js",
-		"/docs/assets/architecture.okf",
+		"/doc/design/architecture.svg",
+		"/doc/architecture.png",
+		"/doc/assets-other/architecture.svg",
+		"/doc/assets/architecture.gif",
+		"/doc/assets/architecture.webp",
+		"/doc/assets/architecture.svg.js",
+		"/doc/assets/architecture.okf",
 	}
 	for _, path := range paths {
 		mustWrite(t, filepath.Join(root, path[1:]), "private")
 	}
 	outside := filepath.Join(t.TempDir(), "private.svg")
 	mustWrite(t, outside, "outside")
-	if err := os.Symlink(outside, filepath.Join(root, "docs/assets/escaped.svg")); err != nil {
+	if err := os.Symlink(outside, filepath.Join(root, "doc/assets/escaped.svg")); err != nil {
 		t.Fatal(err)
 	}
-	paths = append(paths, "/docs/assets/escaped.svg", "/docs/assets/../reviewed/architecture.svg")
+	paths = append(paths, "/doc/assets/escaped.svg", "/doc/assets/../design/architecture.svg")
 	srv := httptest.NewServer(newMux(root))
 	t.Cleanup(srv.Close)
 	for _, path := range paths {

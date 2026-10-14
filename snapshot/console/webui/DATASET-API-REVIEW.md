@@ -15,10 +15,10 @@ Setup 与原登录保留，依赖独立 lakeFS 后端和用户自己的 lakeFS �
 KC Server 不原生提供所有 lakeFS API；生产分流与凭证边界见 [KC-VENDOR](KC-VENDOR.md)。
 
 本轮 Goal 是用 KC 已选定合同补齐可复用的控制台交互，清楚记录与官方 API 的差距。
-Non-Goals 沿用 [Dataset owner](../../../docs/reviewed/dataset.md) 的文件层边界与
-[Service owner](../../../docs/reviewed/service.md) 的同一应用入口：不增加发布权威、跨仓事务、
+Non-Goals 沿用 [Dataset owner](../../../doc/design/dataset.md) 的文件层边界与
+[Service owner](../../../doc/design/service.md) 的同一应用入口：不增加发布权威、跨仓事务、
 隐式发权、新的文件直读通道或声称 wire 兼容。对应不变量是
-[KS-01 / KS-02 / AUTH-02 / API-01 / IX-01](../../../docs/reviewed/architecture-invariants.md)。
+[KS-01 / KS-02 / AUTH-02 / API-01 / IX-01](../../../doc/engineering/architecture-invariants.md)。
 接口锚点为 [Snapshot Dataset 合同](../../../snapshot/dataset/README.md)、
 [Dataset 文件来源类型](../../../snapshot/dataset/definition.go)、
 [DatasetItem](../../../snapshot/dataset/dataset.go) 和 [Server 管理详情](../../../server/README.md)。
@@ -50,7 +50,7 @@ Non-Goals 沿用 [Dataset owner](../../../docs/reviewed/dataset.md) 的文件层
 `versions` 沿用整数数组，但不再无界返回所有历史：复用 `PageLimit` 的默认 50 /
 上限 200 及 `limit` / `continuation` 词汇，游标绑定登记权威、Dataset 和服务版基点。
 后续发布后要求重新打开历史；单个 revision 点查不受页面限制。
-管理读取保留 [权限 owner](../../../docs/reviewed/permissions.md) 的当前选择：登记库存对部署中的已认证主体可发现；登记审计仍检查 `registry.audit.read`，历史来源不赋予文件正文权。
+管理读取保留 [权限 owner](../../../doc/design/permissions.md) 的当前选择：登记库存对部署中的已认证主体可发现；登记审计仍检查 `registry.audit.read`，历史来源不赋予文件正文权。
 进一步统一历史 / 来源可见性的策略仍是 owner 已记录的待 review 事项，本轮不暗中选定。
 
 为这些改动增加的定向回归：

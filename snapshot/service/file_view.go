@@ -141,7 +141,7 @@ func (v *fileView) List(request FileDirectoryRequest) (FileDirectoryResponse, er
 // directory pages derived children first, then its owning source's pages.
 // A name shared between a per-file entry and delivered source content is a
 // conflict, never an order-based override
-// (docs/reviewed/dataset.md, "冲突不得按挂载顺序覆盖").
+// (doc/design/dataset.md, "冲突不得按挂载顺序覆盖").
 func (v *fileView) listDelivered(request FileDirectoryRequest) (FileDirectoryResponse, error) {
 	if !v.delivered {
 		return FileDirectoryResponse{}, kernel.Fail(kernel.ErrUsageInvalid, "delivered paths address the repository view; the semantic view has no per-file entries")

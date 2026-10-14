@@ -23,14 +23,13 @@ class ProductViewsTest(unittest.TestCase):
         self.repo = Path(self.temp.name)
         self.root = self.repo / ".data/scenes"
         self.root.mkdir(parents=True)
-        (self.repo / "docs/graph/documents").mkdir(parents=True)
-        (self.repo / "docs/product.md").write_text(
+        (self.repo / "doc/design").mkdir(parents=True)
+        (self.repo / "doc/design/product.md").write_text(
             "# Product\n\n## 1. Introduction\n### U9: Outside section\n"
             "## 8. 用例\n### U1：发现已有知识\nThe consumer discovers knowledge.\n"
             "### U2：发表领域 Schema\nPublish through Writer.\n"
             "### U3：跨客户端消费\nA known missing journey.\n"
             "## 9. Invariants\n### U8: Outside section\n", encoding="utf-8")
-        self.graph("product", "docs/product.md")
         self.config()
         self.node("root")
         self.node("root/attached", extra=(
@@ -44,10 +43,6 @@ class ProductViewsTest(unittest.TestCase):
         probes.mkdir()
         for name in ("discover.feature", "unrelated.feature"):
             (probes / name).write_text("Feature: case\n", encoding="utf-8")
-
-    def graph(self, document, path, *, filename="product.okf"):
-        content = "---\nobject_id: documentation/" + document + "\n---\n" + json.dumps({"id": document, "path": path})
-        (self.repo / "docs/graph/documents" / filename).write_text(content, encoding="utf-8")
 
     def config(self, suffix=""):
         (self.root / "_views.yaml").write_text(
@@ -137,7 +132,7 @@ class ProductViewsTest(unittest.TestCase):
         self.assertEqual(tree.check_views(model)["totals"], {"nodes": 2, "edges": 1, "probes": 2, "evidence": 0})
 
     def test_new_owner_claim_is_automatically_reported_as_unlinked(self):
-        path = self.repo / "docs/product.md"
+        path = self.repo / "doc/design/product.md"
         path.write_text(path.read_text().replace("## 9. Invariants", "### U11：New promise\n## 9. Invariants"), encoding="utf-8")
         self.assertIn("product#U11", self.errors())
 
@@ -149,29 +144,27 @@ class ProductViewsTest(unittest.TestCase):
         self.assertIn("product#U404", errors)
         self.assertIn("U405", errors)
 
-    def test_duplicate_document_and_claim_ids_are_rejected(self):
-        self.graph("product", "docs/product.md", filename="duplicate.okf")
-        self.assertIn("duplicate", self.errors())
-        (self.repo / "docs/graph/documents/duplicate.okf").unlink()
-        path = self.repo / "docs/product.md"
+    def test_duplicate_claim_ids_are_rejected(self):
+        path = self.repo / "doc/design/product.md"
         path.write_text(path.read_text().replace("### U2", "### U1"), encoding="utf-8")
         self.assertIn("duplicate", self.errors())
 
-    def test_missing_document_path_or_section_is_a_broken_source(self):
-        for path, section in (("docs/missing.md", "8. 用例"), ("docs/product.md", "9. Missing")):
-            with self.subTest(path=path, section=section):
-                self.graph("product", path)
+    def test_missing_section_is_a_broken_source(self):
+        config = self.root / "_views.yaml"
+        config.write_text(config.read_text().replace("8. 用例", "9. Missing"), encoding="utf-8")
+        self.assertIn("9. Missing", self.errors())
+
+    def test_missing_design_document_is_rejected(self):
+        (self.repo / "doc/design/product.md").unlink()
+        self.assertIn("doc/design/product.md does not exist", self.errors())
+
+    def test_document_id_cannot_escape_the_design_directory(self):
+        for document_id in ("../product", "design/product", "Product"):
+            with self.subTest(document_id=document_id):
                 config = self.root / "_views.yaml"
                 self.config()
-                config.write_text(config.read_text().replace("8. 用例", section), encoding="utf-8")
-                self.assertTrue(self.errors())
-
-    def test_unregistered_document_and_non_markdown_source_are_rejected(self):
-        (self.repo / "docs/graph/documents/product.okf").unlink()
-        self.assertIn("product", self.errors())
-        (self.repo / "docs/product.html").write_text("derived", encoding="utf-8")
-        self.graph("product", "docs/product.html")
-        self.assertIn("Markdown", self.errors())
+                config.write_text(config.read_text().replace("  product:\n    section", "  '" + document_id + "':\n    section"), encoding="utf-8")
+                self.assertIn("must name a chapter in doc/design/", self.errors())
 
     def test_node_level_verifies_and_handwritten_product_membership_are_rejected(self):
         self.node("root", extra="verifies:\n  - claim: 'product#U1'\n    detail: Fake evidence on a state.\n")
@@ -311,13 +304,13 @@ class ProductViewsTest(unittest.TestCase):
         self.assertLess(out.getvalue().index("Product"), out.getvalue().index("Engineering"))
 
     def test_headings_inside_fenced_examples_are_not_product_claims(self):
-        path = self.repo / "docs/product.md"
+        path = self.repo / "doc/design/product.md"
         path.write_text(path.read_text().replace("### U2", "```markdown\n### U999: Example\n```\n### U2"), encoding="utf-8")
         self.assertEqual(self.errors(), "")
         self.assertEqual(len(self.model()["product"]["claims"]), 3)
 
     def test_bold_u_items_in_an_ordered_list_are_stable_owner_claims(self):
-        path = self.repo / "docs/product.md"
+        path = self.repo / "doc/design/product.md"
         path.write_text(
             "# Product\n1. **U9 Outside：**Not in the registered section.\n"
             "## 8. 用例\n1. **U1 字段：**Compare sets and returned values.\n"
@@ -332,7 +325,7 @@ class ProductViewsTest(unittest.TestCase):
         self.assertEqual(model["product"]["claims"][0]["source"]["line"], 4)
 
     def test_ordered_list_claim_ids_share_the_heading_duplicate_guard(self):
-        path = self.repo / "docs/product.md"
+        path = self.repo / "doc/design/product.md"
         for duplicate in ("2. **U1 第二项：**Duplicate ordered claim.", "### U1：Duplicate heading"):
             with self.subTest(duplicate=duplicate):
                 path.write_text("# Product\n## 8. 用例\n1. **U1 字段：**First claim.\n" + duplicate + "\n", encoding="utf-8")
@@ -344,7 +337,7 @@ class LiveAccessLibrarySpecificationsTest(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         claims = {claim["ref"]: claim for claim in tree.build_view(root)["product"]["claims"]}
         for number in range(13, 21):
-            reference = f"resource-access#U{number}"
+            reference = f"liveaccess#U{number}"
             with self.subTest(reference=reference):
                 self.assertIn(reference, claims)
                 self.assertTrue(claims[reference]["specifications"],
@@ -354,7 +347,7 @@ class LiveAccessLibrarySpecificationsTest(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         claims = {claim["ref"]: claim for claim in tree.build_view(root)["product"]["claims"]}
         for number in range(13, 21):
-            reference = f"resource-access#U{number}"
+            reference = f"liveaccess#U{number}"
             with self.subTest(reference=reference):
                 self.assertTrue(any(link.get("tests") for link in claims[reference]["links"]),
                                 f"{reference} needs executable assertions, not only prepared specifications")

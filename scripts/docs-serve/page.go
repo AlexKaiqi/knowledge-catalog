@@ -115,8 +115,8 @@ func wrapPage(title, rel, body string) string {
 </head>
 <body>
   <header class="bar">
-    <a href="/docs/product.html">产品说明</a>
-    <a href="/docs/README.md">文档地图</a>
+    <a href="/doc/README.md">文档首页</a>
+    <a href="/README.md">仓库说明</a>
     <span class="here">%s</span>
   </header>
   <main>

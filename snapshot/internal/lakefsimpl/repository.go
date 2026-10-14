@@ -466,7 +466,7 @@ func (r *Repository) ListFiles(commit kernel.CommitID) ([]string, error) {
 // A directory continuation is bound to the directory that issued it: the
 // token carries the issuing directory plus the provider after-key, and a
 // replay against any other directory fails closed instead of paging a
-// different subtree (docs/reviewed/dataset.md, fixed-range reads).
+// different subtree (doc/design/dataset.md, fixed-range reads).
 type directoryContinuation struct {
 	Directory string `json:"directory"`
 	After     string `json:"after"`

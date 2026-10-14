@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+// allowedRel is the closed set docs-serve renders: the repository README and
+// the Markdown under doc/, plus SVG/PNG images under doc/assets/.
 func allowedRel(rel string) bool {
 	rel = filepath.ToSlash(rel)
 	if rel == "" || strings.Contains(rel, "..") || strings.HasPrefix(rel, "/") {
@@ -13,14 +15,14 @@ func allowedRel(rel string) bool {
 	if rel == "README.md" {
 		return true
 	}
-	if !strings.HasPrefix(rel, "docs/") {
+	if !strings.HasPrefix(rel, "doc/") {
 		return false
 	}
 	switch strings.ToLower(filepath.Ext(rel)) {
-	case ".md", ".html":
+	case ".md":
 		return true
 	case ".svg", ".png":
-		return strings.HasPrefix(rel, "docs/assets/")
+		return strings.HasPrefix(rel, "doc/assets/")
 	default:
 		return false
 	}

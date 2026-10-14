@@ -7,7 +7,7 @@ import (
 	objectmodel "kc/object"
 )
 
-// Traverse access semantics (design: docs/reviewed/retrieval.md):
+// Traverse access semantics (design: doc/design/discovery.md):
 // a bounded, typed neighborhood closure over stored Relation objects. The
 // scope (dataset manifest pin or single-repository pin) is fixed before
 // execution; traversal never widens it. Results are a closure, not an

@@ -79,37 +79,19 @@ func TestSystemExplanationsHaveExistingDesignAndPublicContracts(t *testing.T) {
 
 func assertSystemTopicBasis(t *testing.T, root string, basis systemTopicBasis) {
 	t.Helper()
-	if !strings.HasPrefix(basis.Owner, "docs/graph/documents/") || basis.Topic == "" || basis.Term == "" {
-		t.Fatal("explanation basis must reference an existing document-graph owner and vocabulary")
+	if !strings.HasPrefix(basis.Owner, "doc/") || filepath.Ext(basis.Owner) != ".md" || basis.Topic == "" || basis.Term == "" {
+		t.Fatal("explanation basis must reference a design document section and vocabulary")
 	}
-	raw, err := os.ReadFile(filepath.Join(root, basis.Owner))
+	document, err := os.ReadFile(filepath.Join(root, basis.Owner))
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, body, found := strings.Cut(string(raw), "\n---\n")
+	section, found := markdownSection(string(document), basis.Topic)
 	if !found {
-		t.Fatal("document-graph owner lacks Canonical frontmatter")
+		t.Fatalf("%s has no section %q", basis.Owner, basis.Topic)
 	}
-	var owner struct {
-		Path        string   `json:"path"`
-		OwnerTopics []string `json:"ownerTopics"`
-	}
-	if err := json.Unmarshal([]byte(body), &owner); err != nil {
-		t.Fatal(err)
-	}
-	owned := false
-	for _, topic := range owner.OwnerTopics {
-		owned = owned || topic == basis.Topic
-	}
-	if !owned {
-		t.Fatalf("%s does not own %s", basis.Owner, basis.Topic)
-	}
-	document, err := os.ReadFile(filepath.Join(root, owner.Path))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.HasPrefix(owner.Path, "docs/reviewed/") || !strings.Contains(string(document), basis.Term) {
-		t.Fatal("explanation basis must refer to vocabulary in an existing reviewed owner")
+	if !strings.Contains(section, basis.Term) {
+		t.Fatalf("%s section %q does not use %q", basis.Owner, basis.Topic, basis.Term)
 	}
 	if !ast.IsExported(basis.Symbol) || strings.HasSuffix(basis.Source, "_test.go") || strings.HasPrefix(basis.Source, "knowledge/system") {
 		t.Fatal("explanation basis must refer to a public system declaration outside the publication")
@@ -121,6 +103,27 @@ func assertSystemTopicBasis(t *testing.T, root string, basis systemTopicBasis) {
 	if !hasPublicSystemDeclaration(source, basis.Symbol) {
 		t.Fatalf("%s no longer declares public %s", basis.Source, basis.Symbol)
 	}
+}
+
+// markdownSection returns the heading and body of one "## " section, ignoring
+// headings inside fenced code.
+func markdownSection(document, heading string) (string, bool) {
+	var section strings.Builder
+	active, found, fenced := false, false, false
+	for _, line := range strings.Split(document, "\n") {
+		if strings.HasPrefix(line, "```") {
+			fenced = !fenced
+		}
+		if !fenced && strings.HasPrefix(line, "## ") {
+			active = strings.TrimSpace(line[3:]) == heading
+			found = found || active
+		}
+		if active {
+			section.WriteString(line)
+			section.WriteByte('\n')
+		}
+	}
+	return section.String(), found
 }
 
 func hasPublicSystemDeclaration(file *ast.File, symbol string) bool {

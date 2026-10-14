@@ -259,7 +259,7 @@ exec(sys.stdin.read(), {"__name__": "__main__"})
             root = pathlib.Path(temp)
             for directory in ("scripts", "cli", "client", "liveaccess", "object",
                               "snapshot/cli", "snapshot/client",
-                              "snapshot/dataset", "snapshot/access", "snapshot/service", "snapshot/console", "docs", "server", "cmd", ".github"):
+                              "snapshot/dataset", "snapshot/access", "snapshot/service", "snapshot/console", "doc", "server", "cmd", ".github"):
                 (root / directory).mkdir(parents=True, exist_ok=True)
             for name in ("README.md", "cli/README.md", "snapshot/README.md", "snapshot/dataset/README.md", "snapshot/access/README.md", "snapshot/service/README.md", "snapshot/console/README.md",
                          "snapshot/cli/README.md", "snapshot/client/README.md",

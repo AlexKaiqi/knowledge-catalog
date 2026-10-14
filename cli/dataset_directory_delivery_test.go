@@ -29,7 +29,7 @@ const (
 	deliveryData    = "kr://delivery/data"
 )
 
-// docs/reviewed/dataset.md, KS-01/02 and AUTH-01–03: publish through the Server, then
+// doc/design/dataset.md, KS-01/02 and AUTH-01–03: publish through the Server, then
 // consume only selected subtrees under new paths with a Dataset-only grant.
 // This exercises the lakeFS adapter against its in-process fixture, not FUSE
 // or a deployed lakeFS service. It does not claim per-file remapping support.

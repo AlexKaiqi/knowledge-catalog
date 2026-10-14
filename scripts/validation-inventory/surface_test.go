@@ -62,7 +62,7 @@ func surfaceFixture(t *testing.T) string {
 		".github/fixture.yml":        "",
 		"cmd/fixture.go":             "package main\n",
 		"README.md":                  "",
-		"docs/fixture.md":            "",
+		"doc/fixture.md":             "",
 		"cli/README.md":              "",
 		"client/client.go":           "package client\n",
 		"snapshot/client/client.go":  "package client\n",

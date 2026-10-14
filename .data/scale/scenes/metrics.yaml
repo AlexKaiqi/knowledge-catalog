@@ -1,7 +1,7 @@
 # 性能指标登记表（唯一来源）
 # families: write 上传与写入 | read 访问速度 | index 索引速度与更新时延 | search 检索 | capacity 容量与资源 | resilience 故障与恢复
 # collect: client-timer 公开 surface 客户端计时 | server-metrics 只读抓取服务指标 | ops-api 只读运维 API | resource-sample 资源采样 | derived 由其它指标推导
-# gateRef: docs/reviewed/scale-benchmark.md §10/§14 的历史数值门槛，重登记前只作默认参考（见本目录 README §6）
+# gateRef: 默认参考数值，资格门槛尚未登记（见本目录 README §6）
 families:
   write:
     title: 上传与写入
@@ -29,7 +29,7 @@ families:
         unit: ms
         dims: [uploadFileCount, scaleProfile]
         collect: client-timer
-        gateRef: "SCALE_BENCHMARK §10.2 received→Receipt P99 ≤ 2s（历史参考）"
+        gateRef: "received→Receipt P99 ≤ 2s"
       write.receipt.recovery:
         title: 结果未知后凭 command-id 恢复回执的成功率与耗时
         unit: ratio,s
@@ -62,7 +62,7 @@ families:
         unit: count
         dims: []
         collect: client-timer
-        gateRef: "SCALE_BENCHMARK §10.1 必须为 0"
+        gateRef: "必须为 0"
   read:
     title: 访问速度
     metrics:
@@ -72,19 +72,19 @@ families:
         dims: [scaleProfile, coldHot]
         collect: client-timer
         quantiles: [P50, P95, P99]
-        gateRef: "SCALE_BENCHMARK §10.3 current Read P99 ≤ 100ms（历史参考）"
+        gateRef: "current Read P99 ≤ 100ms"
       read.point.latency_historical:
         title: 历史 commit 点读时延
         unit: ms
         dims: [scaleProfile, historyDepth]
         collect: client-timer
-        gateRef: "SCALE_BENCHMARK §10.3 historical Read P99 ≤ 250ms（历史参考）"
+        gateRef: "historical Read P99 ≤ 250ms"
       read.readmany.latency:
         title: 批量读时延
         unit: ms
         dims: [readManySize, scaleProfile]
         collect: client-timer
-        gateRef: "SCALE_BENCHMARK §10.3 ReadMany(100) P99 ≤ 500ms（历史参考）"
+        gateRef: "ReadMany(100) P99 ≤ 500ms"
       read.resolve.latency:
         title: resolve 存在性与 commit 解析时延
         unit: ms
@@ -101,19 +101,19 @@ families:
         unit: ms
         dims: [pageSize, scaleProfile]
         collect: client-timer
-        gateRef: "SCALE_BENCHMARK §10.3 page(100) P99 ≤ 250ms（历史参考）"
+        gateRef: "page(100) P99 ≤ 250ms"
       read.diff.latency:
         title: from→to 差异计算时延
         unit: ms
         dims: [commitGap, scaleProfile]
         collect: client-timer
-        gateRef: "SCALE_BENCHMARK §10.3 10k gap P99 ≤ 1s（历史参考）"
+        gateRef: "10k gap P99 ≤ 1s"
       read.log.latency:
         title: 对象 log 时延
         unit: ms
         dims: [limit, historyDepth]
         collect: client-timer
-        gateRef: "SCALE_BENCHMARK §10.3 log(limit=20) P99 ≤ 500ms（历史参考）"
+        gateRef: "log(limit=20) P99 ≤ 500ms"
       read.file_delivery.throughput:
         title: Dataset 文件交付读取吞吐
         unit: bytes/s
@@ -142,7 +142,7 @@ families:
         unit: count
         dims: []
         collect: server-metrics
-        gateRef: "SCALE_BENCHMARK §10.5 必须为 0"
+        gateRef: "必须为 0"
   index:
     title: 索引速度与更新时延
     metrics:
@@ -163,7 +163,7 @@ families:
         dims: [commitBatchFiles, scaleProfile]
         collect: client-timer
         quantiles: [P50, P95, P99]
-        gateRef: "SCALE_BENCHMARK §10.2 received→Search visible P99 ≤ 5s（历史参考）"
+        gateRef: "received→Search visible P99 ≤ 5s"
       index.update.refresh_to_visible:
         title: refresh 到可见的时延分解
         unit: ms
@@ -204,7 +204,7 @@ families:
         dims: [queryType, limit, concurrency, scaleProfile]
         collect: client-timer
         quantiles: [P50, P95, P99]
-        gateRef: "旧 CASES KC-PERF-07 P95 ≤ 1s / P99 ≤ 3s（历史参考）"
+        gateRef: "旧 CASES KC-PERF-07 P95 ≤ 1s / P99 ≤ 3s"
       search.qps:
         title: 目标并发下检索吞吐
         unit: req/s
@@ -220,7 +220,7 @@ families:
         unit: count
         dims: []
         collect: client-timer
-        gateRef: "SCALE_BENCHMARK §10.1 必须为 0"
+        gateRef: "必须为 0"
       search.non_ok_ratio:
         title: partial、拒绝与错误占比（不得剔除后美化分位数）
         unit: ratio
@@ -249,13 +249,13 @@ families:
         unit: s
         dims: [historyDepth]
         collect: client-timer
-        gateRef: "SCALE_BENCHMARK §10.4 H4 ≤ 60s（历史参考）"
+        gateRef: "H4 ≤ 60s"
       cap.rss_growth_slope:
         title: 稳态 RSS 增长斜率
         unit: bytes/h
         dims: [phase]
         collect: resource-sample
-        gateRef: "SCALE_BENCHMARK §10.4 24h 内不得随总量线性爬升（历史参考）"
+        gateRef: "24h 内不得随总量线性爬升"
       cap.generator_cpu:
         title: 发压端 CPU 占用
         unit: percent
@@ -276,19 +276,19 @@ families:
         unit: events/s
         dims: [phase]
         collect: client-timer
-        gateRef: "SCALE_BENCHMARK §10.2 ≥12 events/s 持续 30min（历史参考）"
+        gateRef: "≥12 events/s 持续 30min"
       resil.backlog_drain_time:
         title: 停止加压后积压清零时间
         unit: s
         dims: []
         collect: client-timer
-        gateRef: "SCALE_BENCHMARK §10.2 ≤ 10min（历史参考）"
+        gateRef: "≤ 10min"
       resil.first_event_batching_wait:
         title: 低流量首事件 batching 等待
         unit: ms
         dims: []
         collect: client-timer
-        gateRef: "SCALE_BENCHMARK §10.2 必须为 0（历史参考）"
+        gateRef: "必须为 0"
       resil.recovery_time:
         title: 故障后服务恢复时间（RTO）
         unit: s
@@ -304,4 +304,4 @@ families:
         unit: count
         dims: []
         collect: client-timer
-        gateRef: "SCALE_BENCHMARK §10.1 必须为 0"
+        gateRef: "必须为 0"

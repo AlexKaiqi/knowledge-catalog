@@ -8,7 +8,6 @@ publishes:
   - "writer.snapshot"
   - "knowledge.readme"
   - "access.rules"
-  - "collector.preview"
   - "catalog.lifecycle"
   - "control.proposal"
   - "resource.handle"
@@ -24,9 +23,9 @@ evidence:
     tests:
       - "TestServerLiveAccessRepoSelectionMixedValuesAndDataset"
     verifies:
-      - claim: "resource-access#U14"
+      - claim: "liveaccess#U14"
         detail: "真实 Writer、Repo metadata、SDK/Server 与来源 HTTP 验证两仓/组合、重启改选、固定声明不变及指定贡献缺失/不兼容不回退。"
-      - claim: "resource-access#U15"
+      - claim: "liveaccess#U15"
         detail: "Repo/Dataset 同对象保留固定值、31、合法 null 与独立 Member；来源、Basis、Schema 三类错误只影响失败位置，失败无成功观察。"
   - id: "liveaccess-current-caller-and-credential-boundaries"
     title: "当前认证自动传递，目标与重定向不扩权"
@@ -38,7 +37,7 @@ evidence:
       - "TestHTTPPolicyCustomRedirectCannotRewriteValidatedOrigin"
       - "TestHTTPPolicySameOriginRedirectKeepsCurrentProofAfterClientCallback"
     verifies:
-      - claim: "resource-access#U16"
+      - claim: "liveaccess#U16"
         detail: "真实认证 READ 交错 alice/bob，主体/证明/request/trace 各自对应；初始及变化目标、307、源值/依据/转义错误反射均验证局部失败、无越界源调用且对象/请求正文/日志/审计无证明。"
   - id: "liveaccess-original-read-audit"
     title: "更新和重启后经独立权限复核当次结果"
@@ -47,7 +46,7 @@ evidence:
     tests:
       - "TestServerLiveAccessAuditRestoresOriginalReadAndRechecksSeparatePermission"
     verifies:
-      - claim: "resource-access#U17"
+      - claim: "liveaccess#U17"
         detail: "真实 READ 留下31/null/失败、固定坐标和原依据；源与Snapshot推进、进程替换、源离线后审计还原r1且零来源尝试。普通结果不附证据，读权/审计权及撤权独立生效，旧Snapshot按固定commit复核。"
   - id: "liveaccess-reliable-original-result-evidence"
     title: "实际介质留证失败、丢失与到期分别可辨"
@@ -59,7 +58,7 @@ evidence:
       - "TestRetainedValueFailureAndBasisLossFailWithinRetention"
       - "TestCorruptPayloadCannotEndRetentionEarly"
     verifies:
-      - claim: "resource-access#U18"
+      - claim: "liveaccess#U18"
         detail: "真实过程账或payload写入失败阻止交付；保留期内实际值/失败/原依据丢失及摘要损坏不伪成功；合法历史承诺正常到期区别于丢失，审计不重取当前来源补证。"
   - id: "liveaccess-module-owned-implementation-and-cli"
     title: "实现、CLI 和依赖方向归所属模块"
@@ -72,7 +71,7 @@ evidence:
       - "TestLiveAccessOwnershipGuardRejectsCopiedImplementationsAndShims"
       - "TestLiveAccessCLIHostOwnershipGuardRejectsScatteredLeaves"
     verifies:
-      - claim: "resource-access#U13"
+      - claim: "liveaccess#U13"
         detail: "实际AST/依赖图验证专属实现及CLI定义、参数、帮助、输出在liveaccess目录，宿主只装配；毒化复制、shim和间接反向依赖反例钉守卫，不能用路径存在代替。"
   - id: "liveaccess-product-plugin-help"
     title: "公开插件帮助同源且无业务取值"
@@ -81,7 +80,7 @@ evidence:
     tests:
       - "TestServerLiveAccessHelpUsesProductCLIWithoutHomeRuntime"
     verifies:
-      - claim: "resource-access#U19"
+      - claim: "liveaccess#U19"
         detail: "真实 cli.Run→SDK→Server 返回LiveAccess模块协议、用法及承诺，未知名称明确失败；仅授权文件无Home/runtime仍可读说明，业务构造/取值计数为零。"
   - id: "liveaccess-member-index-original-observation"
     title: "所选 Member 的真实值可检索，命中正文沿原观察"
@@ -91,7 +90,7 @@ evidence:
       - "TestSelectedLiveAccessMemberProjectionRetainsOriginalObservation"
       - "TestFailedLiveAccessMemberCannotPublishStateProjection"
     verifies:
-      - claim: "resource-access#U20"
+      - claim: "liveaccess#U20"
         detail: "真实Writer、所选LiveAccess/索引Entry和OpenSearch以Schema/access建立Member观察31/g1；来源变47后固定StateRevision查询及命中正文仍31/原Schema/原来源。首次来源/Basis/Schema/未采用失败无成功projection，不索引7占位或失败说明，不伪完整零命中。"
   - id: "published-image-discovery"
     source: "writer.snapshot"
@@ -103,11 +102,11 @@ evidence:
       - "TestPublishedImageDiscoveryKeepsBusinessIdentity"
     title: "图片说明按业务身份发现，路径迁移不改变固定读回"
     verifies:
-      - claim: "knowledge#U1"
+      - claim: "object#U1"
         detail: "图片说明、普通能力成员与字段 access Schema 经公开 Writer 同批发布；Schema 与发现/读回都核对回执 commit，没有安装图片处理器。"
-      - claim: "knowledge#U2"
+      - claim: "object#U2"
         detail: "显式迁移图片 definition 的物理路径后业务 ObjectID、完整对象值及兄弟 interfaces 成员保持，旧 commit 仍读回原值。"
-      - claim: "object-refactor-guideline#U2"
+      - claim: "object#U10"
         detail: "实际图片路径迁移前后按同一来源 ObjectID 读回完整值和兄弟成员，旧 commit 仍原值；不证明新 URN 解析或跨仓同名输入。"
   - id: "published-dispersed-module-discovery"
     source: "writer.snapshot"
@@ -118,7 +117,7 @@ evidence:
       - "TestPublishedModuleDiscoveryKeepsDispersedResourceReferences"
     title: "分散模块声明可被发现，资源集合不自动扩大仓权限"
     verifies:
-      - claim: "knowledge#U1"
+      - claim: "object#U1"
         detail: "模块说明经公开 Writer/Server 发布及按字段 access 发现；源码、向量及另一仓许可证的实际 commit/path 原样保留，另一仓 HEAD 不动且消费方仍不能读取其私有对象。"
   - id: "published-external-table-discovery"
     source: "writer.snapshot"
@@ -130,9 +129,9 @@ evidence:
       - "TestObjectPublicationDoesNotRequireIndexOrInstalledHandler"
     title: "外部表离线与未安装能力不成为对象发布门槛"
     verifies:
-      - claim: "knowledge#U1"
+      - claim: "object#U1"
         detail: "来源返回不可用、处理器未安装时外部表说明及能力声明仍可发布与固定读回，字段 access 支持发现且来源请求计数为零；无索引则显式缺查询能力，不扫描兜底。"
-      - claim: "object-refactor-guideline#U11"
+      - claim: "object#U19"
         detail: "无索引或未装配处理器、外部源离线时，声明仍经 Writer 发布并固定读回，源请求计数为零；新统一引用由独立 CLI／服务证据承担。"
   - source: "writer.snapshot"
     views:
@@ -147,9 +146,9 @@ evidence:
       - "TestAspectModificationKeepsSiblingAndIdentity"
     title: "切面级修改保持兄弟切面原值与对象身份"
     verifies:
-      - claim: "knowledge#U2"
+      - claim: "object#U2"
         detail: "同一对象的 definition 切面改为 v2 后 runtime 切面保持原值；两个切面读取都落在同一 object_id 并各自命名切面（消费方可按切面选择）。"
-      - claim: "object-refactor-guideline#U5"
+      - claim: "object#U13"
         detail: "现有完整 Aspect 更新保持兄弟 Aspect 与身份；Member 替换／删除和根全部删除由另一个具名回归分别验证。"
   - source: "writer.snapshot"
     views:
@@ -158,7 +157,7 @@ evidence:
       - "TestLostResponseRecoversFromReceiptAndRefusesContentSwap"
     title: "同一命令身份拒绝换内容，回执暴露已接受事实"
     verifies:
-      - claim: "knowledge#U5"
+      - claim: "object#U5"
         detail: "相同命令身份相同内容重放得到 REPLAYED；同身份另一份内容以 IDEMPOTENCY_CONFLICT 拒绝且 HEAD 不动；writer receipt 按 command-id 暴露 status/digest/commit 回执，响应丢失时无需重写。"
   - source: "writer.snapshot"
     views:
@@ -167,7 +166,7 @@ evidence:
       - "TestCrossRepositoryRelationPublishKeepsEndpointRepoUntouched"
     title: "跨仓关系发布不写端点仓、不扩大读权、保留端点坐标"
     verifies:
-      - claim: "knowledge#U6"
+      - claim: "object#U6"
         detail: "在 core 发布 owned-by 关系、owner 端点指向 other 仓 Team:finance：other 的 HEAD 与授权规则不变；关系对象经精确读取保留两端点坐标与存储来源（无索引时精确读仍成立）。"
   - source: "snapshot.authority"
     views:
@@ -219,16 +218,8 @@ evidence:
       - "TestDeclaredSystemRepositoryUsesAuthenticatedDefault"
       - "TestRuntimeWriterRefusesSystemRepository"
     verifies:
-      - claim: "knowledge#U1"
+      - claim: "object#U1"
         detail: "正式配置初始化后，已认证 viewer 经 Server 可浏览 System Schema，但 Writer PUT 返回 FORBIDDEN；运行时 Writer 也拒绝 System 仓。"
-  - id: "collector-preview-before-commit"
-    title: "确认墙外采集预览后才提交"
-    views:
-      - "publication"
-    source: "collector.preview"
-    tests:
-      - "connector/preview_test.go"
-      - "TestPreviewThenCommit"
   - source: "access.rules"
     views:
       - "access-control"
@@ -275,9 +266,9 @@ evidence:
     id: "notice-validates-and-refreshes-observation"
     title: "State notice 拒绝正文并按固定 Binding 刷新观察"
     verifies:
-      - claim: "resource-access#U2"
+      - claim: "liveaccess#U2"
         detail: "成功观察 null 可支持 MISSING；后续 runtime 失败使 refresh 失败并保留原已发布 revision，不证明旧结果仍满足时效要求。"
-      - claim: "resource-access#U3"
+      - claim: "liveaccess#U3"
         detail: "通知正文被拒绝；显式 notice 后重新取值并更新动态检索，Snapshot 保持不变，不证明丢通知或重启后的恢复。"
   - source: "projection.index"
     views:
@@ -292,7 +283,7 @@ evidence:
     id: "state-refresh-preserves-snapshot-head"
     title: "动态观察更新索引且不移动 Snapshot HEAD"
     verifies:
-      - claim: "resource-access#U8"
+      - claim: "liveaccess#U8"
         detail: "单对象刷新只增加一次 lookup，并能检索到新值；未断言观察复制、摘要计算和物理索引写入成本。"
   - id: "state-read-distinguishes-value-and-failure"
     title: "状态读取保留双依据，缺 runtime 或无效观察不能返回业务值"
@@ -307,9 +298,9 @@ evidence:
       - "TestBusinessNullContrastsPlaceholderAndNeverFallsBackToScan"
       - "TestDirectResourceAccessValidatesPinnedObservation"
     verifies:
-      - claim: "resource-access#U2"
+      - claim: "liveaccess#U2"
         detail: "成功读取保留声明 commit/digest 与 observation basis；缺 runtime、连接失败和不完整 basis 分别被拒绝，不返回占位空值。"
-      - claim: "resource-access#U15"
+      - claim: "liveaccess#U15"
         detail: "公共 Dataset READ 实际取值，成功外部值与固定值保留；合法 null 有依据，单地址来源错误、非法依据或违反固定 Schema 不冒充业务空值。尚未验证同对象混合多个成功与失败的公共结果。"
   - id: "state-observation-checks-published-declaration"
     title: "动态观察只能使用 Dataset 发布范围内的同版本声明"
@@ -320,7 +311,7 @@ evidence:
       - "TestDatasetStatePlanningUsesPublishedSchemaScope"
       - "TestDatasetStateObservationRequiresPublishedDeclaration"
     verifies:
-      - claim: "resource-access#U5"
+      - claim: "liveaccess#U5"
         detail: "动态规划只使用发布范围内的 Schema；观察对应声明未发布或 commit 不同则拒绝，不证明旧声明持续维护或 runtime 退役处理。"
   - id: "state-runtime-transports-caller-identity"
     title: "资源访问携带调用方身份且凭证不进入请求正文"
@@ -332,9 +323,9 @@ evidence:
       - "TestHTTPStateLookupRequiresCallerPrincipal"
       - "TestTypedKnowledgeReadForwardsTaihuCallerAuthentication"
     verifies:
-      - claim: "resource-access#U7"
+      - claim: "liveaccess#U7"
         detail: "认证证明在请求头中传递、主体随调用保留，证明不进入请求正文；缺主体时拒绝调用，不证明目标信任、audience 或后台身份隔离。"
-      - claim: "resource-access#U16"
+      - claim: "liveaccess#U16"
         detail: "公共对象 READ 的调用方证明经 Server 到达来源，返回实际数据；证明不进资源请求正文，未证明不适用目标或重定向的政策。"
   - id: "liveaccess-module-ownership"
     title: "LiveAccess 实现与公开依赖保持独立归属"
@@ -346,9 +337,9 @@ evidence:
       - "TestObjectCapabilityPublicDepth"
       - "TestObjectRootsDoNotImportTheirDependentImplementations"
     verifies:
-      - claim: "resource-access#U13"
+      - claim: "liveaccess#U13"
         detail: "结构守卫检查 LiveAccess 实现目录、公开依赖深度及对象基础包不反向依赖实现；不宣称运行接入。"
-      - claim: "object-refactor-guideline#U12"
+      - claim: "object#U20"
         detail: "真实 Object 相关模块与 imports 检查实现目录、公开入口深度及根包依赖方向；不以该结构结果证明业务或唯一声明解释已经迁移。"
   - id: "liveaccess-existing-handler-integration"
     title: "既有 LiveAccess 处理器真实访问来源并采用结果"
@@ -359,7 +350,7 @@ evidence:
       - "TestPublicInvokeLiveAccessUsesPublishedContract"
       - "TestLiveAccessUsesPinnedTargetAndSeparatesObservation"
     verifies:
-      - claim: "resource-access#U14"
+      - claim: "liveaccess#U14"
         detail: "既有公开处理器调用实际来源并采用返回值与观察依据；不证明新插件入口、A/B 目标选用或替换。"
   - id: "liveaccess-access-evidence"
     title: "直接访问保留真实目标、请求关联及无凭证的成功失败证据"
@@ -373,11 +364,11 @@ evidence:
       - "TestAccessReceiptIsGeneratedOnlyAfterDurableAppend"
       - "TestLatestOnlyRecordLossAndExpiryFailDistinguishably"
     verifies:
-      - claim: "resource-access#U16"
+      - claim: "liveaccess#U16"
         detail: "直接访问的本次认证证明到达 HTTP 来源，成功及来源失败的访问/审计记录不含证明。"
-      - claim: "resource-access#U17"
+      - claim: "liveaccess#U17"
         detail: "访问证据关联本次主体、请求、固定目标和原观察依据；没有实际原值/逐值失败及按请求历史回读的完整旅程。"
-      - claim: "resource-access#U18"
+      - claim: "liveaccess#U18"
         detail: "必需留证失败不成功，耐久回执可点查；保留端口返回完整原值/依据，丢失与到期错误可区分，未证明真实保留介质。"
   - id: "ordinary-state-read-rejects-stream"
     title: "普通读取遇到 Stream 时明确缺能力且不调用 State runtime"
@@ -387,7 +378,7 @@ evidence:
     tests:
       - "TestOrdinaryReadRejectsStreamBinding"
     verifies:
-      - claim: "resource-access#U9"
+      - claim: "liveaccess#U9"
         detail: "普通 READ 拒绝 Stream Binding 且不调用 State lookup；未覆盖未来窗口、断档恢复或订阅。"
   - source: "access.rules"
     views:
@@ -414,9 +405,9 @@ evidence:
       - "TestUsageInvalidShowsReasonAndLeafUsage"
       - "TestRemoteTypedDispatchRoutesSupportedOperations"
     verifies:
-      - claim: "object-refactor-guideline#U1"
+      - claim: "object#U9"
         detail: "无认证客户端时根帮助含概念、联系、能力及例子，叶帮助说明输入／恢复且无业务执行；保留根帮助禁止完整参数表的断言。指定参数旅程不证明独立使用者自主选择。"
-      - claim: "object-refactor-guideline#U12"
+      - claim: "object#U20"
         detail: "Object 模块维护单一对象引用的帮助与产品输出；READ 保留维护依据和逐单元来源，resolve 保留自身任务的产品形状，Schema report 不混入 READ 证据字段。正式 typed 分派用每叶合法参数验证 DTO／路由，生产未知参数拒绝规则不放宽。"
   - id: "object-urn-reference-identity"
     title: "身份编码与内容 Pointer 分开往返并先绑定真实目标"
@@ -430,7 +421,7 @@ evidence:
       - "TestReferenceCoordinatesAreBoundBeforeAuthorization"
       - "TestReferenceFragmentTravelsAsJSONAndNullIsExplicit"
     verifies:
-      - claim: "object-refactor-guideline#U2"
+      - claim: "object#U10"
         detail: "完整 Repo／ObjectID 的保留字符、百分号、中文独立编码往返，URN 前缀大小写不改变身份；身份与 Pointer 冲突明确拒绝，授权前归一化来源坐标。fragment 作为 JSON 请求数据送达，null 不丢失。"
   - id: "object-fixed-and-bounded-read"
     title: "固定对象与 Pointer 选择提前限制维护单元读取"
@@ -448,9 +439,9 @@ evidence:
       - "TestReferenceReadRejectsCoordinatesThatDisagreeWithUnit"
       - "TestReferenceSelectionRejectsLegacyLocatorBeforeReadingBodies"
     verifies:
-      - claim: "object-refactor-guideline#U3"
+      - claim: "object#U11"
         detail: "根、Aspect、Member、deep 的确值与响应不含兄弟正文；转义／空键／null／数组非法位置独立 Oracle；正文加载中 HEAD 推进不改变固定依据，无关单元毒化且无 scan。旧索引缺坐标在读正文前报缺能力，不全扫猜测。"
-      - claim: "object-refactor-guideline#U4"
+      - claim: "object#U12"
         detail: "集合可读取但没有可写的单个完整维护摘要，不把集合或 leaf 内容摘要当独立写单元。"
   - id: "object-native-selected-read-boundary"
     title: "Native 只读适配保留窄读口并拒绝无依据坐标"
@@ -468,9 +459,9 @@ evidence:
       - "TestReferencePlanUsesMaintenanceMetadataWithoutReadingBodies"
       - "TestNativeReferencePlanRejectsUnprovenOrConflictingCoordinates"
     verifies:
-      - claim: "object-refactor-guideline#U3"
+      - claim: "object#U11"
         detail: "实际只读包装保留 Native 有界选择／计划能力；缺窄口不退回完整对象加载，leaf 尚不存在时仍先取实际所属单元，冲突身份／摘要／选择失败。"
-      - claim: "object-refactor-guideline#U8"
+      - claim: "object#U16"
         detail: "授权计划仅使用固定维护元数据，无正文预读；Native 无坐标、空坐标、多重归属、错误身份和模型冲突拒绝，不按路径深度发权。"
   - id: "object-reference-cli-http-maintenance"
     title: "同一 URN 经真实 CLI 与 HTTP 读改删并保留维护依据"
@@ -484,13 +475,13 @@ evidence:
       - "TestSelectiveReadKeepsConditionalMaintenanceEvidence"
       - "TestReferenceWriteDoesNotGuessMaintenanceFromPointer"
     verifies:
-      - claim: "object-refactor-guideline#U2"
+      - claim: "object#U10"
         detail: "正式 CLI→HTTP 用同一 Member URN 创建、读取、完整替换和删除；deep fragment、固定版本、Address 与维护摘要完整到达，不拆成另一目标。"
-      - claim: "object-refactor-guideline#U4"
+      - claim: "object#U12"
         detail: "deep 与完整 Member 同摘要；其他字段变化而 leaf 未变时摘要仍改变，旧摘要拒绝后 commit／内容保持，无需 resolve。"
-      - claim: "object-refactor-guideline#U5"
+      - claim: "object#U13"
         detail: "完整替换移除遗漏字段，删除 Member 保持兄弟确值，根删除后对象不可读且旧版本仍读原 Member。"
-      - claim: "object-refactor-guideline#U11"
+      - claim: "object#U19"
         detail: "基础引用读改删无需安装发现或外部处理器；模块不猜 locator 深度来建立维护模型，固定读写不请求外部值。"
   - id: "object-repository-identity-isolation"
     title: "同一 Reader 读取两仓同名对象保持来源和版本"
@@ -500,7 +491,7 @@ evidence:
     tests:
       - "TestReaderKeepsSameObjectIDInDifferentRepositoriesIndependent"
     verifies:
-      - claim: "object-refactor-guideline#U2"
+      - claim: "object#U10"
         detail: "真实 Registry、Writer 及同一 Reader 分别核对两仓同 ObjectID 的来源／commit／独立确值；更新 A 不动 B，A 旧版保留。新 URN 输入由独立编码与 CLI 证据承担。"
   - id: "object-maintenance-lifecycle"
     title: "完整 Member 替换、单元删除与对象根全部删除"
@@ -517,9 +508,9 @@ evidence:
       - "TestReferenceMaintenanceRequiresAnExplicitNewMemberModel"
       - "TestReferenceMaintenancePreservesExistingRelationKind"
     verifies:
-      - claim: "object-refactor-guideline#U4"
+      - claim: "object#U12"
         detail: "返回完整维护摘要直接用于 PUT，深字段不换 leaf 摘要；组合根摘要覆盖全内容，旧摘要在当前仓基点拒绝。"
-      - claim: "object-refactor-guideline#U5"
+      - claim: "object#U13"
         detail: "整体／Aspect／Member 的完整写入与删除按真实模型保持兄弟和另一对象；根删除逐一核对全部原单元缺失及旧版完整。新 Member 模型须显式建立，既有 Relation 不被默认 Entity 或新 Kind 重解释。原根删除红例保留全部删除 Oracle 并修复。"
   - id: "object-final-representation"
     title: "最终 Aspect 表示冲突拒绝及显式转换"
@@ -530,7 +521,7 @@ evidence:
       - "TestWriterRejectsConflictingFinalAspectRepresentation"
       - "TestWriterAllowsExplicitAspectRepresentationConversion"
     verifies:
-      - claim: "object-refactor-guideline#U6"
+      - claim: "object#U14"
         detail: "冲突的批内两顺序／既有表示分别拒绝且 Ref、正文、回执保持，无 APPLIED；显式 REMOVE 后转换准确组装。原四红例保留后态 Oracle 并修复，不以断言存在报告通过。"
   - id: "object-schema-contract"
     title: "Schema 固定浏览、完整约束与既有引用者检查"
@@ -557,7 +548,7 @@ evidence:
       - "TestTreeSchemaReferrerMetadataRequiresExplicitRebuild"
       - "TestTreeSchemaRemovalRejectsNewReferrerInSameBatch"
     verifies:
-      - claim: "object-refactor-guideline#U7"
+      - claim: "object#U15"
         detail: "固定 Schema 名单及 Definition 完整约束／变化摘要；更新继承、同批非法实例、既有引用者及新引用者检查保持。合法可选演进和解除引用删除核对新后态及旧版，tree／native 最终引用者集合有界并支持显式重建。合法同批声明／实例准确回读同一 NewCommit，并核对 Address、实际 Schema 声明及描述依据；不只检查成功回执。"
   - id: "object-public-dataset-read-boundaries"
     title: "正式引用读取固定来源、当前授权与解释材料范围"
@@ -575,7 +566,7 @@ evidence:
       - "TestDatasetReferenceKeepsAcceptedSourceVersionAndCurrentPermissions"
       - "TestObjectReferencePreservesActualAspectAuthorization"
     verifies:
-      - claim: "object-refactor-guideline#U8"
+      - claim: "object#U16"
         detail: "源同对象更新后旧发布仍旧值／旧 commit；额外源版本冲突、撤权后旧引用及消费权写源仓拒绝。部分对象／辅助材料不补读，真实 Aspect 授权允许 Member／deep 并禁止根与整体 blob 同名字段冒充 Aspect。"
   - id: "object-writer-failure-and-recovery"
     title: "写入原子性、并发拒绝与原命令恢复"
@@ -598,7 +589,7 @@ evidence:
       - "TestMaintenanceDeterministicRejectionNeverPolls"
       - "TestMaintenanceRecoveryRejectsAnotherCommandsReceipt"
     verifies:
-      - claim: "object-refactor-guideline#U9"
+      - claim: "object#U17"
         detail: "仓 CAS／单元条件及批内失败无泄漏，同命令重放同 commit，提案不动 main，次级证据失败保留已接受结果。真实 Writer 已提交后丢 HTTP 响应仅一个 POST，恢复原回执并按其 commit 回读；确定失败不轮询，其他命令回执不冒充结果。耐久 ledger 与真实部署分层判读。"
   - id: "object-history-diff-and-provenance"
     title: "按对象身份复核固定历史、两版内容与独立来源信封"
@@ -614,9 +605,9 @@ evidence:
       - "TestCacheClonesPerAddressRecordedProvenance"
       - "TestCollectionProductViewKeepsEachUnitsOwnSource"
     verifies:
-      - claim: "object-refactor-guideline#U10"
+      - claim: "object#U18"
         detail: "固定两版正文、对象 Log 分页及 REMOVED 修订保持；不同 Members 的 SOURCE／DERIVATION 信封在根／集合／单 Member／deep 各自保留旧依据，来源正文毒化也不递归读取，缓存及产品输出不合并或共享 mutable 来源。不是目录 diff 或外部事实证明。"
-      - claim: "object-refactor-guideline#U3"
+      - claim: "object#U11"
         detail: "HEAD 更新来源后旧 commit 仍返回当时各维护单元自己的完整记录，合法所选范围不借来源引用扩大读取。"
   - id: "object-reference-logical-state-compatibility"
     title: "统一 Dataset 引用保留原逻辑 State 效果及范围"
@@ -633,9 +624,9 @@ evidence:
       - "TestLogicalVirtualBoundReferenceRequiresPublishedObjectAndSchemaEvidence"
       - "TestReadProductViewPreservesLogicalObservationBasis"
     verifies:
-      - claim: "object-refactor-guideline#U3"
+      - claim: "object#U11"
         detail: "旧／新引用实际对照保持逻辑 State 的确值和观察依据，selected deep 在所属单元执行后再取 leaf，不重复完整对象读取；实体／Schema 不被扩为外部执行。"
-      - claim: "object-refactor-guideline#U8"
+      - claim: "object#U16"
         detail: "缺 runtime 与 Stream 在外呼前拒绝；虚拟 Bound Aspect 仅在范围内已出版对象类型依据及 Schema 齐备时成立，private 类型材料不补读，不按 locator 发明任意切面。专属执行是受影响兼容证据，不计入 Object 基础外部能力。"
   - id: "object-readonly-and-provider-neutral-contract"
     title: "实际 Reader 只读且唯一模块不携带存储形状"
@@ -650,7 +641,7 @@ evidence:
       - "TestObjectRootsDoNotImportTheirDependentImplementations"
       - "TestObjectSDKDependencyGuardRejectsWriterImplementation"
     verifies:
-      - claim: "object-refactor-guideline#U12"
+      - claim: "object#U20"
         detail: "Require／Wrap 的 tree／native 实际返回值及可导出字段均不能取得 CreateRef／Merge／Archive，包含 Native Require／Wrap／Member 的字段泄漏先红后绿；原四红例保留断言并修复；Unit 无路径／文件／字节字段，模块实现／公开深度／根依赖和 SDK 禁止 Writer 实现 import 各自验证。静态结构绿色不表示业务或部署验收。"
 probes:
   - file: "probe-hooks.feature"

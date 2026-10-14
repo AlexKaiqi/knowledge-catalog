@@ -340,10 +340,8 @@ func generate(check bool) error {
 
 func validationEvidenceDocuments() []string {
 	return []string{
-		"docs/reviewed/test-catalog.md",
-		"docs/reviewed/architecture-invariants.md",
-		"docs/reviewed/mvp-acceptance.md",
-		"docs/reviewed/refactor-acceptance.md",
+		"doc/engineering/test-catalog.md",
+		"doc/engineering/architecture-invariants.md",
 	}
 }
 

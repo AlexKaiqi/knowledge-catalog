@@ -24,7 +24,7 @@ transport 腿汇总。粒度 caveat：Prometheus 抓取间隔（默认 5s）内�
   resource-sample 归 L2 其余部分；
 - bulk 配对点的有效性依赖被测 Server 构建包含 LAKEFS-04：旧构建会响亮拒绝
   bulkIngest（strict decode → USAGE_INVALID），报告把 /health 原文存档。
-- 门槛重登记前（scale-benchmark §10 仍为历史参考）本 runner 不做资格判定，
+- 资格门槛尚未登记，本 runner 不做资格判定，
   只出曲线与正确性对账；资格判定归资格档运行。
 """
 from __future__ import annotations

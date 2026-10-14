@@ -12,12 +12,10 @@ Goal 是保留原控制台全部管理入口，并把 KC 既有的主体查权�
 身份映射与同源部署边界见 [接线说明](KC-VENDOR.md)、
 [控制台验证范围](CONSOLE-VALIDATION.md) 和 [Dataset review](DATASET-API-REVIEW.md)。
 
-依据 `docs/graph` 的 `authentication-authorization-and-repository-security` owner
-及 Service → Permissions 直接关系，沿用
-[权限 owner](../../../docs/reviewed/permissions.md) 与 [Service owner](../../../docs/reviewed/service.md)。
+依据[权限](../../../doc/design/permissions.md)与[服务](../../../doc/design/service.md)设计。
 Non-Goals 是新增 KC 用户目录、组、角色、命名策略对象、对象 ACL、deny 语言、
 隐式授权继承、lakeFS 与 KC 授权同步，或申请/审批队列。
-对应不变量为 [AUTH-01 / AUTH-02 / AUTH-03 / API-01](../../../docs/reviewed/architecture-invariants.md)。
+对应不变量为 [AUTH-01 / AUTH-02 / AUTH-03 / API-01](../../../doc/engineering/architecture-invariants.md)。
 
 已选定形状与执行边界以 [AllowRule / AllowQuery](../../../snapshot/access/rule.go)、
 [Snapshot 授权管理](../../../snapshot/access/grants.go)、[Client GrantRequest](../../../client/management.go)、

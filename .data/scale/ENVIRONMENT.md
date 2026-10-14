@@ -1,7 +1,7 @@
 # 压测环境：配置合同与就绪性
 
-> 状态：Dolt 原生规模路线已退役；规模介质为 lakeFS，档位资源要求待按
-> `docs/reviewed/scale-benchmark.md` 与 `docs/reviewed/core-architecture.md` 重新登记。§5 的 2026-08-31
+> 状态：规模介质为 lakeFS，档位资源要求尚未登记（规模原则见
+> `doc/engineering/testing.md`）。§5 的 2026-08-31
 > 审计保留为历史记录，其中 Dolt 专属条目不再代表当前部署。
 
 压测用例按场景树组织在 [`scenes/`](scenes/README.md)，用例入口与运行合同见
@@ -40,7 +40,7 @@
 `READY` 只表示该 run 可产出可复算证据；发压端饱和、采样缺口、配置漂移和数据量
 不符在测量中出现时结果判 `INVALID`（见 `CASES.md` §3）。
 
-## 3. 资源参考档（待重登记）
+## 3. 资源参考档（尚未登记）
 
 以下参考档沿自旧设计，介质中立转写；**数值未经 lakeFS 部署实测校准前只作申请
 资源的起点，不构成资格线**：
@@ -53,8 +53,7 @@
   磁盘利用率目标不超过 60%，并容纳新旧 generation 共存。
 - H 档必须由真实变更提交构成，禁止空 commit 或只在 manifest 声明目标数。
 
-正式资源与资格线由 `docs/reviewed/scale-benchmark.md` 重登记拥有；重登记前 §2 的门禁与
-`CASES.md` §3 的合同优先。
+正式资源与资格线尚未登记；登记前 §2 的门禁与 `CASES.md` §3 的合同优先。
 
 ## 4. 可观测与证据留存
 
