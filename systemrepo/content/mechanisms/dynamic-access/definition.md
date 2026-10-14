@@ -6,7 +6,7 @@ path_hint: mechanisms/dynamic-access/definition.md
 ---
 # 动态资源访问
 
-LiveAccess 是访问当前状态与已声明操作的对象 Interface。版本化实现声明说明怎样访问外部资源，每次取值另有观察依据。
+LiveAccess 是访问当前状态与已声明操作的内置插件。版本化实现声明说明怎样访问外部资源，每次取值另有观察依据。
 
 ## 动态访问声明（Binding）
 
@@ -26,4 +26,4 @@ LiveAccess 是访问当前状态与已声明操作的对象 Interface。版本�
 
 对象读权不授予业务数据或执行权限。调用前确认声明、操作形状、源侧准入与委托条件；资源凭证不写入正文。
 
-相关说明：[对象能力分派](../object-interface-dispatch/definition.md)、[LiveAccess 合同](../../object-interfaces/live-access/definition.yaml)、[Schema](../../concepts/schema/definition.md)、[版本](../../concepts/version/definition.md)、[身份认证与授权](../authorization/definition.md)。
+相关说明：[LiveAccess 合同](../../object-interfaces/live-access/definition.yaml)、[Schema](../../concepts/schema/definition.md)、[版本](../../concepts/version/definition.md)、[身份认证与授权](../authorization/definition.md)。

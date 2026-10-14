@@ -1,9 +1,9 @@
-package interfaces_test
+package handler_test
 
 import (
 	"context"
-	"kc/interfaces"
-	interfaceservice "kc/interfaces/service"
+	"kc/liveaccess/dispatch"
+	interfaces "kc/liveaccess/handler"
 	"testing"
 
 	"kc/internal/testkit"
@@ -67,7 +67,7 @@ func TestObjectInterfaceAccessEvolutionReusesHandlerAndRetainsFullSchemaBasis(t 
 	for _, access := range [][]string{{"filter"}, nil} {
 		head = applyInterfaceOperations(t, state, head, []objectmodel.Operation{{Op: objectmodel.OpPut, Address: schemaAddress, Value: interfaceAccessSchema("string", access)}})
 		base, current := fixedInterfaceAccessReader(t, contracts, state, contractCommit, head)
-		result, err := interfaceservice.Open(base, registry, caller).Call(context.Background(), request)
+		result, err := dispatch.Open(base, registry, caller).Call(context.Background(), request)
 		if err != nil {
 			t.Fatalf("access-only schema change required handler reinstallation: %v", err)
 		}
@@ -82,7 +82,7 @@ func TestObjectInterfaceAccessEvolutionReusesHandlerAndRetainsFullSchemaBasis(t 
 		}
 		previousDigest = current.ImplementationSchemaDigest
 	}
-	old, err := interfaceservice.Open(firstReader, registry, caller).Call(context.Background(), request)
+	old, err := dispatch.Open(firstReader, registry, caller).Call(context.Background(), request)
 	if err != nil || old.Basis.ImplementationSchemaDigest != first.ImplementationSchemaDigest || old.Basis.ImplementationSchema != first.ImplementationSchema {
 		t.Fatalf("historical full schema basis drifted: %#v %v", old, err)
 	}
@@ -95,7 +95,7 @@ func TestObjectInterfaceAccessEvolutionReusesHandlerAndRetainsFullSchemaBasis(t 
 	})
 	typedReader, _ := fixedInterfaceAccessReader(t, contracts, typed, contractCommit, typedHead)
 	request.Repository = typed.RepositoryID
-	_, err = interfaceservice.Open(typedReader, registry, caller).Call(context.Background(), request)
+	_, err = dispatch.Open(typedReader, registry, caller).Call(context.Background(), request)
 	if kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied || handler.calls != 3 {
 		t.Fatalf("value type change reused handler: %v calls=%d", err, handler.calls)
 	}

@@ -71,7 +71,7 @@ func (f *httpFacade) executeTyped(w http.ResponseWriter, r *http.Request, name, 
 	if opened.LiveAccess != nil && opened.LiveAccess.Configured() {
 		access = opened.LiveAccess
 	}
-	invoke.WriteInvoke(w, inv.InvokeApplicationWithTelemetryAtHome(ctx, f.runtime, name, action, operation, flags, observeStateLookup(access, f.runtime), opened, f.options.ObjectInterfaces))
+	invoke.WriteInvoke(w, inv.InvokeApplicationWithTelemetryAtHome(ctx, f.runtime, name, action, operation, flags, observeStateLookup(access, f.runtime), opened))
 }
 
 // lockTypedInvocation decides the invocation lock from the facade's serving

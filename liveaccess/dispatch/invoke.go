@@ -1,9 +1,9 @@
-package service
+package dispatch
 
 import (
 	"context"
-	"kc/interfaces"
 	"kc/kernel"
+	interfaces "kc/liveaccess/handler"
 	objectmodel "kc/object"
 	"kc/object/reader"
 )

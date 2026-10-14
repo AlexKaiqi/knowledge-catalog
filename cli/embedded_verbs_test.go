@@ -55,13 +55,12 @@ func datasetVerbs() map[string]inv.Command {
 
 func homeVerbs() map[string]inv.Command {
 	return map[string]inv.Command{
-		"help":                        {Stage: invoke.StageHome, Run: verbHelp},
-		"registry-audit":              {Stage: invoke.StageHome, Run: inv.VerbAudit},
-		"deployment-init":             {Stage: invoke.StageHome, Run: verbClientOperation},
-		"deployment-status":           {Stage: invoke.StageHome, Run: verbClientOperation},
-		"deployment-system-publish":   {Stage: invoke.StageHome, Run: verbClientOperation},
-		"deployment-identity-migrate": {Stage: invoke.StageHome, Run: verbClientOperation},
-		"dataset-overlay":             {Stage: invoke.StageHome, Run: verbClientOperation},
+		"help":                      {Stage: invoke.StageHome, Run: verbHelp},
+		"registry-audit":            {Stage: invoke.StageHome, Run: inv.VerbAudit},
+		"deployment-init":           {Stage: invoke.StageHome, Run: verbClientOperation},
+		"deployment-status":         {Stage: invoke.StageHome, Run: verbClientOperation},
+		"deployment-system-publish": {Stage: invoke.StageHome, Run: verbClientOperation},
+		"dataset-overlay":           {Stage: invoke.StageHome, Run: verbClientOperation},
 	}
 }
 

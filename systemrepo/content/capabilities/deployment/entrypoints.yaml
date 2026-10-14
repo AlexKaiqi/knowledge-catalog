@@ -8,12 +8,6 @@ schema_ref: schema/system/capability-entrypoints/v1
 {
   "commands": [
     {
-      "action": "deployment.identity.migrate",
-      "command": "kc deployment identity migrate",
-      "description": "迁移历史身份绑定",
-      "help": "kc help deployment identity migrate"
-    },
-    {
       "action": "deployment.init",
       "command": "kc deployment init",
       "description": "初始化部署",

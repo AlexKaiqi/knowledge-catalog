@@ -6,7 +6,7 @@ path_hint: capabilities/resource-access/definition.md
 ---
 # 访问动态资源
 
-读取访问声明，向独立 runtime 请求动态值。当前状态与已声明操作通过 [LiveAccess](../../object-interfaces/live-access/definition.yaml) 和 [对象能力](../object-interfaces/definition.md) 统一组织，历史访问入口继续兼容。
+读取访问声明，向独立 runtime 请求动态值。当前状态与已声明操作由 [LiveAccess](../../object-interfaces/live-access/definition.yaml) 插件统一组织，`kc invoke` 调用插件操作。
 
 相关说明：[动态资源访问](../../mechanisms/dynamic-access/definition.md)。
 

@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	common "kc/discovery/plugin"
-	"kc/interfaces"
 	"kc/kernel"
 	"kc/liveaccess"
+	interfaces "kc/liveaccess/handler"
 	objectmodel "kc/object"
 )
 

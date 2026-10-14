@@ -1,4 +1,4 @@
-package interfaces
+package handler
 
 import (
 	"strings"
@@ -40,11 +40,11 @@ type InterfaceImplementation struct {
 func ParseInterfaceImplementation(value any) (InterfaceImplementation, error) {
 	body, ok := value.(map[string]any)
 	if !ok {
-		return InterfaceImplementation{}, kernel.Fail(kernel.ErrSchemaInstanceInvalid, "object interface implementation must be an object")
+		return InterfaceImplementation{}, kernel.Fail(kernel.ErrSchemaInstanceInvalid, "plugin implementation must be an object")
 	}
 	ref, ok := body["interfaceRef"].(string)
 	if !ok || strings.TrimSpace(ref) == "" {
-		return InterfaceImplementation{}, kernel.Fail(kernel.ErrSchemaInstanceInvalid, "object interface implementation requires interfaceRef")
+		return InterfaceImplementation{}, kernel.Fail(kernel.ErrSchemaInstanceInvalid, "plugin implementation requires interfaceRef")
 	}
 	return InterfaceImplementation{InterfaceRef: strings.TrimSpace(ref), Value: body}, nil
 }

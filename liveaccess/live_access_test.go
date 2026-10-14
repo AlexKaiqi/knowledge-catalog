@@ -3,9 +3,9 @@ package liveaccess_test
 import (
 	"context"
 	"encoding/json"
-	"kc/interfaces"
-	interfaceservice "kc/interfaces/service"
 	liveaccesscontract "kc/liveaccess/contract"
+	"kc/liveaccess/dispatch"
+	interfaces "kc/liveaccess/handler"
 	"kc/systemrepo"
 	"net/http"
 	"net/http/httptest"
@@ -99,7 +99,7 @@ func TestLiveAccessRegistrationUsesPublicationAndWriteAuthorization(t *testing.T
 	if err := serving.RegisterLiveAccess(interfaces.NewInterfaceRegistry(), changed, accessor); kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
 		t.Fatalf("edited contract accepted: %v", err)
 	}
-	service := interfaceservice.Open(declarations, registry, objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "agent"}})
+	service := dispatch.Open(declarations, registry, objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "agent"}})
 	request := interfaces.InterfaceRequest{Repository: s.RepositoryID, Object: "table/orders", Implementation: "live", Operation: "invoke", Input: map[string]any{}}
 	if _, err := service.Call(context.Background(), request); kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied || accessor.calls != 0 {
 		t.Fatalf("write reached runtime without authorization: %v calls=%d", err, accessor.calls)

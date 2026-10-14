@@ -1,8 +1,8 @@
-package service
+package dispatch
 
 import (
 	"encoding/json"
-	"kc/interfaces"
+	interfaces "kc/liveaccess/handler"
 
 	"kc/kernel"
 )

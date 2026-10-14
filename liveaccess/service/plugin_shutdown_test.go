@@ -10,9 +10,9 @@ import (
 	"time"
 
 	common "kc/discovery/plugin"
-	"kc/interfaces"
 	"kc/kernel"
 	"kc/liveaccess"
+	interfaces "kc/liveaccess/handler"
 )
 
 type pluginAccessorFunc func(context.Context, liveaccess.ResourceOperationRequest) (any, error)

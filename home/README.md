@@ -162,7 +162,7 @@ Server 的 `BeginShutdown` 先拒绝新工作，再调用 `StopMaintenance` 取�
 
 仓的 `ShareActions` 是供给时冻结的消费动作白名单，与 `CreatorActions` 分开。Server 还检查发起人当前拥有的整仓能力，只有两者交集可以分享。分享管理权自身不在可分享动作中。带 `ShareID`/`SharedBy` 的仓级规则与管理员规则共存；按仓和 share ID 撤销，不删除其他仓或无分享来源的规则。
 
-历史托管请求的 principal 不重写。显式用户迁移在身份账登记核验过的旧主体归属别名，`ListManagedRepositories`/`GetOwnedManagedRepository` 将 owner 解析成规范用户名。原 command 或原 name 的重试核对别名后仍使用原请求摘要，保留仓身份、管理地址、allocation 与初始发权回执；其他字段变化及同名歧义拒绝。归属解析不发权，实际业务请求继续验证当前 grant。
+托管请求的 principal 不重写，owner 即规范用户名。原 command 或原 name 的重试仍使用原请求摘要，保留仓身份、管理地址、allocation 与初始发权回执；其他字段变化及同名歧义拒绝。归属解析不发权，实际业务请求继续验证当前 grant。
 
 ## 自有 Snapshot 连接
 

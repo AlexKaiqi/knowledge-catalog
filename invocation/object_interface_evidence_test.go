@@ -2,7 +2,7 @@ package invocation
 
 import (
 	"context"
-	"kc/interfaces"
+	interfaces "kc/liveaccess/handler"
 	"os"
 	"path/filepath"
 	"testing"

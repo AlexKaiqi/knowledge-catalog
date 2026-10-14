@@ -1,7 +1,7 @@
 package invocation
 
 import (
-	"kc/interfaces"
+	interfaces "kc/liveaccess/handler"
 	objectmodel "kc/object"
 
 	"kc/observability"

@@ -45,9 +45,10 @@ func TestLiveAccessOwnershipGuardRejectsCopiedImplementationsAndShims(t *testing
 }
 
 func TestLiveAccessDependencyGuardPreservesCoreDenominator(t *testing.T) {
-	// These six existing base prohibitions cannot disappear when new module
-	// SDKs or evidence paths are admitted as explicit public capabilities.
-	for _, owner := range []string{"object", "object/reader", "object/writer", "object/service", "interfaces", "discovery/projection"} {
+	// These base prohibitions cannot disappear when new module SDKs or
+	// evidence paths are admitted as explicit public capabilities. The handler
+	// contract now lives inside LiveAccess and is checked as an owner below.
+	for _, owner := range []string{"object", "object/reader", "object/writer", "object/service", "discovery/projection"} {
 		t.Run(owner, func(t *testing.T) {
 			good := depGraph{owner: {"independent-port"}, "independent-port": {"kernel"}}
 			if signals := liveAccessDependencySignals(good); len(signals) != 0 {

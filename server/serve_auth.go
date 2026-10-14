@@ -1,7 +1,6 @@
 package server
 
 import (
-	"kc/interfaces"
 	inv "kc/invocation"
 	"kc/invoke"
 
@@ -39,9 +38,6 @@ type HTTPServerOptions struct {
 	// LiveAccessCredentialOrigins is the deployment's trusted proof audience
 	// set. Object Schema origin and redirects cannot extend this set.
 	LiveAccessCredentialOrigins []string
-	// ObjectInterfaces installs independent object capability handlers. Nil
-	// enables only the verified, published LiveAccess reference implementation.
-	ObjectInterfaces *interfaces.InterfaceRegistry
 	// Embedder is an optional request-time query-vector provider for semantic
 	// recall. Nil keeps semantic recall fail-closed (CAPABILITY_UNSATISFIED).
 	Embedder retrieval.Embedder

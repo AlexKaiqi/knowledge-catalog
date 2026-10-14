@@ -8,9 +8,9 @@ import (
 	"sync"
 
 	common "kc/discovery/adoption"
-	"kc/interfaces"
 	"kc/kernel"
 	"kc/liveaccess"
+	interfaces "kc/liveaccess/handler"
 )
 
 // PluginContribution contains the typed access ports actually supplied by one

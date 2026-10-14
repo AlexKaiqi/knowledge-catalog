@@ -1,4 +1,4 @@
-package interfaces
+package handler
 
 import (
 	"context"
@@ -55,7 +55,7 @@ func (r *InterfaceRegistry) Resolve(implementation ResolvedInterface) (Interface
 
 func (r *InterfaceRegistry) Register(registration InterfaceRegistration) error {
 	if r == nil {
-		return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "object interface handler registry is unavailable")
+		return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "plugin handler registry is unavailable")
 	}
 	if registration.Contract.Repository == "" || registration.Contract.Commit == "" || registration.Contract.Object == "" || registration.ContractDigest == "" || registration.ImplementationSchemaStructureDigest == "" || registration.HandlerRevision == "" || registration.Handler == nil {
 		return kernel.Fail(kernel.ErrUsageInvalid, "interface registration requires pinned contract, contract/schema structure digests, handler revision and handler")
@@ -77,7 +77,7 @@ func registrationKey(r InterfaceRegistration) string {
 
 func (r *InterfaceRegistry) resolve(implementation ResolvedInterface) (InterfaceRegistration, error) {
 	if r == nil {
-		return InterfaceRegistration{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "object interface handler registry is unavailable")
+		return InterfaceRegistration{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "plugin handler registry is unavailable")
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()

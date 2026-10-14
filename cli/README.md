@@ -185,9 +185,9 @@ Taihu 资源方配置使用 `KC_SERVICE_CLIENT_SECRET` 作 introspection 应用�
 
 已验证人类身份的 `principal` 是 `identity.CanonicalUsername` 接受的用户名，例如 `kaiqidong`；Gitea numeric ID、Taihu subject 和认证 issuer 只进入内部可信绑定，不作为公开身份或授权键。Taihu 有 actor 的委托保留 `agent:<id>`，`onBehalfOf` 为用户名；无用户且只有 client 时保留 `service:<client_id>`。Gitea/Taihu 认证器构造 `HTTPIdentity.User`，Server 在授权前通过 `identity/` 核对 `stateDir/identities.json`。同名不同 subject/provider/issuer、同 subject 改名均拒绝，不通过重新登录接管权限。网关必须提供 HMAC 签名、用户名与稳定 subject；裸 `X-Tai-User` 和未签名身份头不再是认证方式。
 
-新部署初始化身份账，旧部署显式 `deployment init` 才建立该账；已有初始化回执后的缺失或损坏只能恢复。旧 `gitea:<id>` / `taihu:<username>` 授权不在登录时自动搬迁。运营者停服核实可信绑定后执行 `kc deployment identity migrate --config deployment.yaml --file migration.json`；文件为 `{"legacyPrincipal":"gitea:42","user":{"username":"kaiqidong","provider":"gitea","issuer":"https://id.example","subject":"42"}}`。迁移只更名仍存在的规则，并与一次迁移回执原子保存；重放不恢复撤销、不改初始授权回执、不能改为另一身份。此入口不支持自动改名或替换已占用的可信绑定。
+新部署初始化身份账，旧部署显式 `deployment init` 才建立该账；已有初始化回执后的缺失或损坏只能恢复。旧 `gitea:<id>` / `taihu:<username>` 形式的主体不再被接受，也没有迁移入口。
 
-同一显式迁移在身份账中保留旧主体到已核验用户的归属别名。历史托管仓的 mine/get/原命令重试据此恢复新用户名的归属，原仓身份、后台地址、Request/digest、分配与首次发权回执不改写。尚未发放的首次规则可以写给新主体，但完成过的规则绝不重发。别名先于当前授权迁移原子落盘；中间崩溃不因归属查找而取得权限，重跑同一迁移完成后半段。纯 Taihu 网关模式同样必须配置可信 `authURL`；签名身份没有可信 issuer 时拒绝绑定。
+纯 Taihu 网关模式同样必须配置可信 `authURL`；签名身份没有可信 issuer 时拒绝绑定。
 
 `kc login` 按入口优先级发现服务模式，再进行配对；已签发 Bearer 可通过 `KC_AUTH_TOKEN`
 提供。`--server` 只是覆盖入口，不是登录专属日常操作数。身份验证和本机持久化都成功后才

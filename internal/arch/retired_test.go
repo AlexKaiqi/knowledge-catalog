@@ -12,7 +12,7 @@ import (
 // retiredPaths are capabilities the design removed. They must not come back
 // under the old name; a successor gets a new name and a design entry.
 var retiredPaths = []string{
-	"catalog", "repository", "retrieval", "index",
+	"catalog", "repository", "retrieval", "index", "interfaces",
 	"connector", "integrationruntime", "cmd/kc-integration",
 	"snapshot/gitea", "snapshot/filegit", "snapshot/lakefs", "snapshot/treewriter",
 	"snapshot/commandlog", "snapshot/stamp", "snapshot/internal/giteaimpl",

@@ -46,7 +46,6 @@
 | `cli/` 里的合同测试按所测模块搬回各自目录 | `cli` 测试代码约是生产代码的 6 倍 |
 | `controlplane/` 与 `gate/` 合并为 `governance/` | 提案与合并检查是同一件事；先定提案流程的去留 |
 | 拆分 `home/` | 装配入口承担了过多职责 |
-| `interfaces/` 收进 `liveaccess/` | 对外只保留插件概念，处理器合同是 LiveAccess 的内部机制 |
 | 可选：给 `invoke/` 改个更清楚的名字 | 和 `invocation/` 太像 |
 
 ## 未到：愿景里有，暂时还没走到

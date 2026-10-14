@@ -24,5 +24,5 @@ func (f *httpFacade) pluginHelp(w http.ResponseWriter, r *http.Request) {
 	defer unlock()
 	// Run the same authorized application task without eager source mounting.
 	invoke.WriteInvoke(w, inv.InvokeApplicationWithTelemetryAtHome(r.Context(), f.runtime, "object-plugin-help", "inventory.read",
-		inv.Command{Stage: invoke.StageHome, Run: inv.VerbPluginHelp}, flags, nil, nil, nil))
+		inv.Command{Stage: invoke.StageHome, Run: inv.VerbPluginHelp}, flags, nil, nil))
 }

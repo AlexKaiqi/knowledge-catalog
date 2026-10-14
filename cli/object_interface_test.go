@@ -3,7 +3,6 @@ package cli_test
 import (
 	"context"
 	"encoding/json"
-	"kc/interfaces"
 	liveaccesscontract "kc/liveaccess/contract"
 	livefixture "kc/liveaccess/fixture"
 	"kc/systemrepo"
@@ -19,12 +18,6 @@ import (
 	"kc/observability"
 	serv "kc/server"
 )
-
-type echoObjectInterface struct{ calls int }
-
-func (h *echoObjectInterface) ValidateImplementation(context.Context, interfaces.ResolvedInterface) error {
-	return nil
-}
 
 func TestPublicInvokeLiveAccessUsesPublishedContract(t *testing.T) {
 	homeDir := testkit.TempDir(t)
@@ -111,42 +104,26 @@ func adoptLiveAccessFixture(t *testing.T, directory, repository string) {
 	}
 	t.Fatalf("explicit LiveAccess fixture source %s has no declared lakeFS DSN", repository)
 }
-func (h *echoObjectInterface) Execute(_ context.Context, call interfaces.InterfaceCall) (interfaces.InterfaceResult, error) {
-	h.calls++
-	return interfaces.InterfaceResult{Value: map[string]any{"text": call.Implementation.Implementation["prefix"].(string) + call.Input.(map[string]any)["text"].(string)}}, nil
-}
 
-func TestPublicInvokeDispatchesIndependentObjectInterfaceAtFixedCommit(t *testing.T) {
+// The handler contract is internal to plugins. A published contract that no
+// installed plugin handles is refused at the public entry, and a server has no
+// option to install an ad-hoc handler; LiveAccess keeps working beside it.
+func TestPublicInvokeRefusesContractsNoPluginHandles(t *testing.T) {
 	homeDir := testkit.TempDir(t)
-	repositoryID := "kr://test/interfaces"
+	repositoryID := "kr://test/handlers"
 	body(t, kc(homeDir, "init"))
 	seedRepo(t, homeDir, repositoryID)
 	body(t, kc(homeDir, "grant", "add", "--principal", "maintainer", "--action", "resource.access", "--repo", repositoryID))
 	values := []struct{ object, value string }{
 		{"schema/echo-implementation/v1", `{"entity":"Object","aspect":"interfaces","pattern":"keyed_collection","fields":{"interfaceRef":{"type":"string","required":true},"prefix":{"type":"string","required":true}}}`},
 		{"schema/echo-input/v1", `{"entity":"Input","fields":{"text":{"type":"string","required":true}}}`},
-		{"interface/echo/v1", `{"name":"Echo","meaning":"An independently installed extension.","operations":{"read":{"effect":"read","inputSchemaRef":"schema/echo-input/v1","resultSchemaRef":"schema/echo-input/v1"}}}`},
+		{"interface/echo/v1", `{"name":"Echo","meaning":"A contract without an installed plugin.","operations":{"read":{"effect":"read","inputSchemaRef":"schema/echo-input/v1","resultSchemaRef":"schema/echo-input/v1"}}}`},
 	}
 	for n, value := range values {
 		body(t, kc(homeDir, "put", testObjectReference(t, repositoryID, value.object, ""), "--command-id", "echo-schema-"+string(rune('a'+n)), "--value", value.value))
 	}
 	body(t, kc(homeDir, "put", testObjectReference(t, repositoryID, "object/message", "/interfaces/echo"), "--command-id", "echo-implementation", "--schema-ref", "schema/echo-implementation/v1", "--value", `{"interfaceRef":"interface/echo/v1","prefix":"Old "}`, "--kind", "Member"))
 	pinned := asMap(t, body(t, kc(homeDir, "read", testObjectReference(t, repositoryID, "object/message", ""))))["commit"].(string)
-	opened, err := apphome.Open(homeDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer opened.Close()
-	implementation, err := interfaces.ResolveObjectInterface(opened.Reader, kernel.RepositoryID(repositoryID), kernel.CommitID(pinned), "object/message", "echo")
-	if err != nil {
-		t.Fatal(err)
-	}
-	handler := &echoObjectInterface{}
-	registry := interfaces.NewInterfaceRegistry()
-	if err := registry.Register(interfaces.InterfaceRegistration{Contract: implementation.Contract, ContractDigest: implementation.ContractDigest, ImplementationSchemaStructureDigest: implementation.ImplementationSchemaStructureDigest, HandlerRevision: "echo/v1", Handler: handler}); err != nil {
-		t.Fatal(err)
-	}
-	body(t, kc(homeDir, "put", testObjectReference(t, repositoryID, "object/message", "/interfaces/echo"), "--command-id", "echo-new-head", "--schema-ref", "schema/echo-implementation/v1", "--value", `{"interfaceRef":"interface/echo/v1","prefix":"New "}`, "--kind", "Member"))
 	publishLiveAccessDefinitions(t, homeDir, repositoryID)
 	var liveCalls int
 	runtime := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -159,35 +136,18 @@ func TestPublicInvokeDispatchesIndependentObjectInterfaceAtFixedCommit(t *testin
 		t.Fatal(err)
 	}
 	body(t, kc(homeDir, "put", testObjectReference(t, repositoryID, "table/orders", "/interfaces/live"), "--command-id", "shared-live-implementation", "--schema-ref", string(liveaccesscontract.LiveAccessImplementationSchemaV1), "--value", string(live), "--kind", "Member"))
-	serverHandler := serv.HTTPHandlerWithOptions(homeDir, serv.HTTPServerOptions{ObjectInterfaces: registry})
+	serverHandler := serv.HTTPHandlerWithOptions(homeDir, serv.HTTPServerOptions{})
 	if closer, ok := serverHandler.(interface{ Close() error }); ok {
 		defer closer.Close()
 	}
 	server := httptest.NewServer(serverHandler)
 	defer server.Close()
-	result := asMap(t, body(t, kcRemote(t, server.URL, "maintainer", "invoke", "--repo", repositoryID, "--commit", pinned, "--object", "object/message", "--implementation", "echo", "--operation", "read", "--input", `{"text":"World"}`)))
-	if asMap(t, result["value"])["text"] != "Old World" || asMap(t, result["basis"])["declarationCommit"] != pinned || handler.calls != 1 {
-		t.Fatalf("pinned public dispatch: %#v calls=%d", result, handler.calls)
-	}
-	assertInterfaceAccessEvidence(t, homeDir, repositoryID, "object/message", "echo", result)
-	invalid := kcRemote(t, server.URL, "maintainer", "invoke", "--repo", repositoryID, "--commit", pinned, "--object", "object/message", "--implementation", "echo", "--operation", "read", "--input", `{"text":12}`)
-	if invalid.Status == 0 || handler.calls != 1 {
-		t.Fatalf("invalid input dispatched: %#v calls=%d", invalid, handler.calls)
-	}
-	unknown := kcRemote(t, server.URL, "maintainer", "invoke", "--repo", repositoryID, "--object", "object/message", "--implementation", "echo", "--operation", "read", "--input", `{"text":"World"}`)
-	if unknown.Status == 0 || handler.calls != 1 {
-		t.Fatalf("new release silently used old handler: %#v", unknown)
-	}
+	expectCode(t, kcRemote(t, server.URL, "maintainer", "invoke", "--repo", repositoryID, "--commit", pinned, "--object", "object/message", "--implementation", "echo", "--operation", "read", "--input", `{"text":"World"}`), "CAPABILITY_UNSATISFIED")
 	liveResult := asMap(t, body(t, kcRemote(t, server.URL, "maintainer", "invoke", "--repo", repositoryID, "--object", "table/orders", "--implementation", "live", "--operation", "read", "--input", "{}")))
 	if asMap(t, liveResult["value"])["count"] != float64(9) || liveCalls != 1 {
-		t.Fatalf("installing Echo removed built-in LiveAccess: %#v calls=%d", liveResult, liveCalls)
+		t.Fatalf("refusing an unhandled contract removed LiveAccess: %#v calls=%d", liveResult, liveCalls)
 	}
 	assertInterfaceAccessEvidence(t, homeDir, repositoryID, "table/orders", "live", liveResult)
-	// The built-in request must not install a new handler in the shared registry.
-	result = asMap(t, body(t, kcRemote(t, server.URL, "maintainer", "invoke", "--repo", repositoryID, "--commit", pinned, "--object", "object/message", "--implementation", "echo", "--operation", "read", "--input", `{"text":"Again"}`)))
-	if asMap(t, result["value"])["text"] != "Old Again" || handler.calls != 2 {
-		t.Fatalf("LiveAccess composition changed installed extension: %#v calls=%d", result, handler.calls)
-	}
 }
 
 func assertInterfaceAccessEvidence(t *testing.T, homeDir, repository, object, member string, result map[string]any) {

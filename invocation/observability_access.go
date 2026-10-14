@@ -2,7 +2,7 @@ package invocation
 
 import (
 	"encoding/json"
-	"kc/interfaces"
+	interfaces "kc/liveaccess/handler"
 	"strings"
 
 	"kc/internal/journal"

@@ -30,7 +30,7 @@
 | 底座 | `kernel/` | 所有层都能用的最小概念：错误信封、摘要、仓和版本坐标 |
 | 存储层 | `snapshot/` | 根包是存储合同；`dataset/`、`access/`、`service/`、`console/`、`client/`、`cli/` 是它的子能力；lakeFS 实现在 `snapshot/internal/` |
 | 对象层 | `object/`、`systemrepo/` | 对象合同与读写；平台自描述出版物 |
-| 插件层 | `discovery/`、`declarativeindex/`、`liveaccess/`、`interfaces/` | 通用发现合同与插件采用；按 Schema 声明维护的索引（OpenSearch）；外部取值；`interfaces/` 是 LiveAccess 的处理器合同，近期收进 `liveaccess/` |
+| 插件层 | `discovery/`、`declarativeindex/`、`liveaccess/` | 通用发现合同与插件采用；按 Schema 声明维护的索引（OpenSearch）；外部取值，其处理器合同在 `liveaccess/handler/`，不对外暴露 |
 | 服务层 | `server/`、`invocation/`、`home/`、`identity/`、`delivery/`、`observability/`、`hook/`、`controlplane/`、`gate/` | HTTP 处理与授权；应用调用载体；装配；身份；结果交付；访问证据；出站 Hook；提案与合并检查 |
 | 入口层 | `cli/`、`client/`、`invoke/`、`datasetfs/`、`cmd/` | 产品命令；调用方 SDK 与会话；命令与 HTTP 共用的调用词汇；只读挂载；可执行入口 |
 

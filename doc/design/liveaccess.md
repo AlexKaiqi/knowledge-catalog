@@ -87,6 +87,8 @@ SchemaRef、来源、身份、追踪和请求标识；成功返回值和依据�
 | `liveaccess/` | 声明解释、取值与认证适用政策 |
 | `liveaccess/service/` | 值采用和逐值失败 |
 | `liveaccess/plugin/` | 插件入口 |
+| `liveaccess/handler/` | 处理器合同、实现声明与注册表（内部机制） |
+| `liveaccess/dispatch/` | 处理器调用任务：解析实现、授权、调用与结果校验 |
 | `liveaccess/evidence/` | 原结果保留 |
 
 ## 进度

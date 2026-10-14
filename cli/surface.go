@@ -24,15 +24,14 @@ type commandSurface struct {
 }
 
 var cliSurface = composeLiveAccessCLICommands(accesscli.Commands(), composeDeclarativeIndexCLICommands(declarativeindexcli.Commands(), composeDiscoveryCLICommands(discoverycli.Commands(), composeObjectCLICommands(objectcli.Commands(), composeCLICommands(snapshotcli.Commands(), map[string]commandSurface{
-	"deployment init":             {"deployment-init", "deployment.init"},
-	"deployment status":           {"deployment-status", "deployment.read"},
-	"deployment system publish":   {"deployment-system-publish", "deployment.system.publish"},
-	"deployment identity migrate": {"deployment-identity-migrate", "deployment.identity.migrate"},
-	"create":                      {"create", "repositories.create"},
-	"login":                       {"login", "identity.login"},
-	"logout":                      {"logout", "identity.logout"},
-	"whoami":                      {"whoami", "identity.read"},
-	"admission show":              {"admission-show", "identity.read"},
+	"deployment init":           {"deployment-init", "deployment.init"},
+	"deployment status":         {"deployment-status", "deployment.read"},
+	"deployment system publish": {"deployment-system-publish", "deployment.system.publish"},
+	"create":                    {"create", "repositories.create"},
+	"login":                     {"login", "identity.login"},
+	"logout":                    {"logout", "identity.logout"},
+	"whoami":                    {"whoami", "identity.read"},
+	"admission show":            {"admission-show", "identity.read"},
 
 	"diff":                         {"diff", "writer.preview"},
 	"writer commit":                {"writer-commit", "writer.commit"},

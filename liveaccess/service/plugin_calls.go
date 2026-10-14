@@ -5,9 +5,9 @@ import (
 	"sort"
 
 	common "kc/discovery/adoption"
-	"kc/interfaces"
 	"kc/kernel"
 	"kc/liveaccess"
+	interfaces "kc/liveaccess/handler"
 	"kc/object/reader"
 )
 
@@ -58,7 +58,7 @@ func (p *Plugins) InterfaceRegistryFor(implementation interfaces.ResolvedInterfa
 	registry := instance.services.Interfaces
 	if missingPluginPort(instance.services.Accessor) {
 		if registry == nil {
-			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "configured access plugin has no object interface contribution")
+			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "configured access plugin has no handler contribution")
 		}
 	} else {
 		registry, err = liveaccess.WithLiveAccess(registry, implementation, instance.services.Accessor)

@@ -3,8 +3,8 @@ package liveaccess
 import (
 	"context"
 	"encoding/json"
-	"kc/interfaces"
 	liveaccesscontract "kc/liveaccess/contract"
+	interfaces "kc/liveaccess/handler"
 	"strings"
 
 	"kc/kernel"

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	common "kc/discovery/adoption"
-	"kc/interfaces"
 	"kc/kernel"
 	"kc/liveaccess"
 	accesscli "kc/liveaccess/cli"
@@ -20,7 +19,6 @@ type Options struct {
 	// OpenLookup may construct an embedding adapter and immediately register
 	// owned resources through scope.Own. Nil uses resource-access/v1 HTTP.
 	OpenLookup        func(common.PluginScope) (liveaccess.StateLookup, error)
-	Interfaces        *interfaces.InterfaceRegistry
 	CredentialOrigins []string
 }
 
@@ -54,7 +52,7 @@ func Entry(options Options) service.PluginEntry {
 		for _, repo := range scope.Repositories {
 			allowed[repo] = true
 		}
-		contribution := service.PluginContribution{Lookup: scopedLookup{lookup: lookup, allowed: allowed}, Interfaces: options.Interfaces.Snapshot()}
+		contribution := service.PluginContribution{Lookup: scopedLookup{lookup: lookup, allowed: allowed}}
 		if accessor != nil {
 			contribution.Accessor = scopedAccessor{accessor: accessor, allowed: allowed}
 		}

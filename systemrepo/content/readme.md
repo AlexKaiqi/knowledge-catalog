@@ -6,7 +6,7 @@ path_hint: README.md
 ---
 # Knowledge Catalog 系统仓（KC 协议仓）
 
-这里发布 Knowledge Catalog 关于自身的对象：模型、操作入口、运行机制、能力说明、使用指南、对象能力合同、导航关系与带逻辑访问声明的基础 Schema。人和 Agent 从这份导读进入，按要做的事情选择需要的内容。
+这里发布 Knowledge Catalog 关于自身的对象：模型、操作入口、运行机制、能力说明、使用指南、插件合同、导航关系与带逻辑访问声明的基础 Schema。人和 Agent 从这份导读进入，按要做的事情选择需要的内容。
 
 ## 开始阅读
 
@@ -22,7 +22,7 @@ kc read 'urn:kc:object:kr%3A%2F%2Fkc%2Fsystem:kc%2Fsystem#/readme'
 kc read 'urn:kc:object:kr%3A%2F%2Fkc%2Fsystem:kc%2Fconcept%2Fobject#/definition'
 ```
 
-第一次使用，先阅读 [第一次读取对象](guides/first-read/guide.md)。准备建模时从 [对象](concepts/object/definition.md)、[切面](concepts/aspect/definition.md)、[关系](concepts/relation/definition.md)、[Schema](concepts/schema/definition.md)、[对象 Interface](concepts/object-interface/definition.md) 和 [声明式索引](concepts/index-declaration/definition.md) 开始。做具体工作时直接选择下方使用指南。
+第一次使用，先阅读 [第一次读取对象](guides/first-read/guide.md)。准备建模时从 [对象](concepts/object/definition.md)、[切面](concepts/aspect/definition.md)、[关系](concepts/relation/definition.md)、[Schema](concepts/schema/definition.md)和 [声明式索引](concepts/index-declaration/definition.md) 开始。做具体工作时直接选择下方使用指南。
 
 ## 使用指南
 
@@ -36,8 +36,6 @@ kc read 'urn:kc:object:kr%3A%2F%2Fkc%2Fsystem:kc%2Fconcept%2Fobject#/definition'
 - [向消费者交付 Dataset](guides/share-a-dataset/guide.md) — `kc/guide/share-a-dataset`
 - [恢复结果不明的发布](guides/recover-a-write/guide.md) — `kc/guide/recover-a-write`
 - [使用动态资源值](guides/use-dynamic-values/guide.md) — `kc/guide/use-dynamic-values`
-- [为对象实现共同能力](guides/implement-object-interface/guide.md) — `kc/guide/implement-object-interface`
-- [使用对象能力](guides/use-object-interface/guide.md) — `kc/guide/use-object-interface`
 
 ## 能力入口
 
@@ -52,7 +50,6 @@ kc read 'urn:kc:object:kr%3A%2F%2Fkc%2Fsystem:kc%2Fconcept%2Fobject#/definition'
 - [组合与采用 Dataset](capabilities/datasets/definition.md) — `kc/capability/datasets`
 - [查询与管理授权](capabilities/permissions/definition.md) — `kc/capability/permissions`
 - [评审与合入变更](capabilities/governance/definition.md) — `kc/capability/governance`
-- [使用对象能力](capabilities/object-interfaces/definition.md) — `kc/capability/object-interfaces`
 - [访问动态资源](capabilities/resource-access/definition.md) — `kc/capability/resource-access`
 - [维护查询投影](capabilities/projections/definition.md) — `kc/capability/projections`
 - [配置 Hook 与 Gate](capabilities/extensions/definition.md) — `kc/capability/extensions`
@@ -73,7 +70,6 @@ kc read 'urn:kc:object:kr%3A%2F%2Fkc%2Fsystem:kc%2Fconcept%2Fobject#/definition'
 - [关系](concepts/relation/definition.md) — `kc/concept/relation`
 - [对象地址](concepts/address/definition.md) — `kc/concept/address`
 - [Schema](concepts/schema/definition.md) — `kc/concept/schema`
-- [对象 Interface](concepts/object-interface/definition.md) — `kc/concept/object-interface`
 - [声明式索引](concepts/index-declaration/definition.md) — `kc/concept/index-declaration`
 - [Meta Schema](concepts/meta-schema/definition.md) — `kc/concept/meta-schema`
 
@@ -103,16 +99,15 @@ kc read 'urn:kc:object:kr%3A%2F%2Fkc%2Fsystem:kc%2Fconcept%2Fobject#/definition'
 
 - [版本底座（Snapshot）](mechanisms/snapshot/definition.md) — `kc/mechanism/snapshot`
 - [身份认证与授权（Principal、Permission）](mechanisms/authorization/definition.md) — `kc/mechanism/authorization`
-- [对象能力分派](mechanisms/object-interface-dispatch/definition.md) — `kc/mechanism/object-interface-dispatch`
 - [动态资源访问（Binding、Observation）](mechanisms/dynamic-access/definition.md) — `kc/mechanism/dynamic-access`
 - [变更评审与合并（Proposal、Gate）](mechanisms/governance/definition.md) — `kc/mechanism/governance`
 - [出站扩展（Hook）](mechanisms/hook/definition.md) — `kc/mechanism/hook`
 - [派生投影](mechanisms/projection/definition.md) — `kc/mechanism/projection`
 - [访问审计](mechanisms/audit/definition.md) — `kc/mechanism/audit`
 
-## 能力合同与查询声明
+## 插件合同与查询声明
 
-[LiveAccess 合同](object-interfaces/live-access/definition.yaml) 是首个内置对象 Interface，承接当前状态与已声明操作。独立扩展在普通仓发布合同和 Schema，由部署装配处理器，不在运行时追加系统仓。基本对象读取不依赖对象实现能力。
+[LiveAccess 合同](object-interfaces/live-access/definition.yaml) 是内置 LiveAccess 插件的合同，承接当前状态与已声明操作。插件按对象 Schema 生效，由部署安装处理器，不在运行时追加系统仓。基本对象发现与读取不依赖插件。
 
 [声明式索引](concepts/index-declaration/definition.md) 使用 Schema 字段 access 说明正文与声明字段允许怎样查询，这是唯一书写形式。Schema 的结构校验与查询合同解释分别处理，投影实现与就绪由运行环境维护；声明不自动授权，也不表示外部运行值已经可搜索。
 
@@ -126,4 +121,4 @@ kc read 'urn:kc:object:kr%3A%2F%2Fkc%2Fsystem:kc%2Fconcept%2Fobject#/definition'
 
 ## 文件与对象
 
-`concepts/` 解释模型与依据，`interfaces/` 解释操作入口，`mechanisms/` 解释运行机制，`capabilities/` 说明用途，`guides/` 提供使用步骤。主体与权限、声明与观察、提案与合并检查放在相应机制中解释；目录划分只组织说明内容，不增加 登记空间 的领域类型。模型、入口与机制说明使用同一种正文 Schema。内容按一对象一目录、一切面一文件发布；`_schemas/` 发布 Schema，`object-interfaces/` 发布可解释的能力合同，`relations/` 发布独立导航关系。文件路径用于阅读，frontmatter 中的对象标识与切面名确定身份；相关对象也可以按稳定身份精确读取。关系文件可作为对象读取，图查询需要可用的同依据投影。
+`concepts/` 解释模型与依据，`interfaces/` 解释操作入口，`mechanisms/` 解释运行机制，`capabilities/` 说明用途，`guides/` 提供使用步骤。主体与权限、声明与观察、提案与合并检查放在相应机制中解释；目录划分只组织说明内容，不增加 登记空间 的领域类型。模型、入口与机制说明使用同一种正文 Schema。内容按一对象一目录、一切面一文件发布；`_schemas/` 发布 Schema，`object-interfaces/` 发布插件合同，`relations/` 发布独立导航关系。文件路径用于阅读，frontmatter 中的对象标识与切面名确定身份；相关对象也可以按稳定身份精确读取。关系文件可作为对象读取，图查询需要可用的同依据投影。

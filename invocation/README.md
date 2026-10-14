@@ -19,7 +19,7 @@ Inventory discovery 请求验证标记；任务 pin 上下文归一（`--pin`/`-
 不拥有：flag/JSON/观测词汇（`invoke`，保持纯）；模块叶参数、帮助与产品结果（各模块 `cli`）；
 全局 argv 与会话（根 `cli`/`client`）；路由闭集与 wire 形状（`server`）；
 业务规则本身（`object/service`、`discovery/service`、`discovery/datasets`、
-`interfaces/service`、`liveaccess/service`、`snapshot/service` 等所属能力）；
+`liveaccess/dispatch`、`liveaccess/service`、`snapshot/service` 等所属能力）；
 任何 transport 打开的 Home 的生命周期——它只持有被递进来的句柄。
 
 ## 最小用法

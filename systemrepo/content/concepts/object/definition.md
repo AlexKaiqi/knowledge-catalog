@@ -20,6 +20,6 @@ kc read 'urn:kc:object:kr%3A%2F%2Fscene%2Fobject:table%2Forders#/columns/order_i
 
 READ、PUT、REMOVE 共用对象 URN 与 locator。Writer 创建、替换或删除所指的完整维护单元；替换不会合并旧字段。整体值、完整 Aspect、Member 是维护粒度，深字段读取不产生任意字段 PATCH，按 Aspects 或 Members 组合的对象不能用组装结果整体覆盖。
 
-对象不等于文件。定义可以描述含义、边界和组成，引用分散的内部对象、固定文件或领域外部标识；definition 是推荐组织约定，不强制统一资源集合结构。对象按需要实现共同能力，基本对象读写不以 Interface 为前提。
+对象不等于文件。定义可以描述含义、边界和组成，引用分散的内部对象、固定文件或领域外部标识；definition 是推荐组织约定，不强制统一资源集合结构。插件可以按 Schema 为对象增加访问能力，基本对象发现与读写不以插件为前提。
 
-相关说明：[对象 Interface](../object-interface/definition.md)、[切面](../aspect/definition.md)、[关系](../relation/definition.md)、[对象地址](../address/definition.md)、[Schema](../schema/definition.md)。
+相关说明：[切面](../aspect/definition.md)、[关系](../relation/definition.md)、[对象地址](../address/definition.md)、[Schema](../schema/definition.md)。

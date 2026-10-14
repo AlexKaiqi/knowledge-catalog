@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"kc/interfaces"
-	interfaceservice "kc/interfaces/service"
+	"kc/liveaccess/dispatch"
+	interfaces "kc/liveaccess/handler"
 	"strings"
 
 	"kc/invoke"
@@ -53,16 +53,20 @@ func invokeObjectInterfaceAt(cx *Invocation, declarations *reader.Serving, repos
 		return nil, err
 	}
 	accessor, _ := lookup.(serving.ResourceOperationAccessor)
-	registry := cx.ObjectInterfaces
-	if implementation.Contract.Object == accesscontract.LiveAccessInterfaceV1 && cx.WS.LiveAccess != nil {
+	// Handler contracts belong to plugins; only LiveAccess installs one.
+	if implementation.Contract.Object != accesscontract.LiveAccessInterfaceV1 {
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "no installed plugin handles contract %s", implementation.Contract.Object)
+	}
+	var registry *interfaces.InterfaceRegistry
+	if cx.WS.LiveAccess != nil {
 		registry, err = cx.WS.LiveAccess.InterfaceRegistryFor(implementation)
 	} else {
-		registry, err = serving.WithLiveAccess(registry, implementation, accessor)
+		registry, err = serving.WithLiveAccess(interfaces.NewInterfaceRegistry(), implementation, accessor)
 	}
 	if err != nil {
 		return nil, err
 	}
-	service := interfaceservice.Open(declarations, registry, request)
+	service := dispatch.Open(declarations, registry, request)
 	service.SetAuthorizer(func(_ context.Context, _ interfaces.InterfaceCall) error {
 		observation := invoke.NoObservationTelemetry(cx.Observation)
 		return Authorize(cx.Home, "resource.access", AuthorizationFlags(cx), observation.Authorization, cx.WS)

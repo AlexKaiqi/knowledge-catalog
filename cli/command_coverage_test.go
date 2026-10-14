@@ -49,7 +49,6 @@ func TestRequiredAssertedBoundariesFollowSemanticRisk(t *testing.T) {
 		{"writer.commit", 2},
 		{"writer.preview", 2},
 		{"deployment.init", 2},
-		{"deployment.identity.migrate", 2},
 		{"identity.admission.request", 2},
 		{"repository.shares.manage", 2},
 		{"repositories.manage", 2},

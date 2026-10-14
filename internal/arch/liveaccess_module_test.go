@@ -110,7 +110,7 @@ func productionSourceFiles(t *testing.T, selected func(string) bool) map[string]
 }
 
 func liveAccessOwnershipScope(owner string) bool {
-	for _, scope := range []string{"liveaccess", "object", "interfaces", "discovery/plugin", "discovery/adoption", "declarativeindex/cli", "invocation", "cli"} {
+	for _, scope := range []string{"liveaccess", "object", "discovery/plugin", "discovery/adoption", "declarativeindex/cli", "invocation", "cli"} {
 		if deniedMatch(scope, owner) {
 			return true
 		}
@@ -191,7 +191,7 @@ func liveAccessDependencySignals(graph depGraph) []string {
 			}
 		}
 	}
-	for _, owner := range []string{"liveaccess/service", "liveaccess/plugin", "liveaccess/evidence"} {
+	for _, owner := range []string{"liveaccess/service", "liveaccess/plugin", "liveaccess/evidence", "liveaccess/handler"} {
 		for _, target := range []string{"home", "invocation", "server", "httpsurface", "cli", "client", "identity", "object/writer", "discovery/plugin"} {
 			if trail, blocked := reachDenied(graph.reachable(owner), target); blocked {
 				signals = append(signals, fmt.Sprintf("LiveAccess owner %s depends on host %s through %v", owner, target, trail))

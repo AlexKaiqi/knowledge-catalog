@@ -111,8 +111,7 @@ kc writer receipt --command-id <id>
 - 运维：Projection、AccessSpec、Hook、Gate、访问审计和反馈；根 help 不铺开进阶叶子。
   `operations audit hitmap` 的 `source` 是 `hitmap`，与访问账的 `source:access` 分开。
   `operations access-spec describe` 接受 `--repo` 或 `--dataset`。
-- 部署：`deployment init|status|system publish`、`deployment identity migrate` 和
-  `serve --config`。部署操作不属于普通业务旅程。
+- 部署：`deployment init|status|system publish` 和 `serve --config`。部署操作不属于普通业务旅程。
 
 ## Help
 

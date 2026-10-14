@@ -15,13 +15,13 @@ import (
 // publication/discovery journey. Missing modules are not business failures.
 func TestObjectCapabilityModulesOwnTheirImplementations(t *testing.T) {
 	root := filepath.Join("..", "..")
-	for _, module := range []string{"object", "interfaces", "liveaccess", "discovery", "systemrepo"} {
+	for _, module := range []string{"object", "liveaccess/handler", "liveaccess", "discovery", "systemrepo"} {
 		files, err := filepath.Glob(filepath.Join(root, module, "*.go"))
 		if err != nil || len(files) == 0 {
 			t.Errorf("target owner %s has no implementation: %v", module, err)
 		}
 	}
-	for _, obsolete := range []string{"retrieval", "index"} {
+	for _, obsolete := range []string{"retrieval", "index", "interfaces"} {
 		if _, err := os.Stat(filepath.Join(root, obsolete)); !os.IsNotExist(err) {
 			t.Errorf("obsolete owner %s still exists; a forwarding layer is not the target architecture", obsolete)
 		}
@@ -62,10 +62,9 @@ func TestObjectCapabilityPublicDepth(t *testing.T) {
 	root := moduleRoot(t)
 	public := map[string]map[string]bool{
 		"object":           {"reader": true, "writer": true, "service": true, "format": true, "semanticview": true, "cache": true, "maintenance": true, "client": true, "cli": true},
-		"interfaces":       {"service": true},
 		"discovery":        {"adoption": true, "service": true, "plugin": true, "projection": true, "datasets": true, "llmhttp": true, "client": true, "cli": true},
 		"declarativeindex": {"client": true, "cli": true, "plugin": true, "projection": true, "control": true, "opensearch": true},
-		"liveaccess":       {"contract": true, "service": true, "discovery": true, "cli": true, "client": true, "evidence": true, "plugin": true, "fixture": true},
+		"liveaccess":       {"contract": true, "service": true, "discovery": true, "cli": true, "client": true, "evidence": true, "plugin": true, "fixture": true, "handler": true, "dispatch": true},
 		"systemrepo":       {},
 	}
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
@@ -110,7 +109,7 @@ func TestObjectCapabilityPublicDepth(t *testing.T) {
 }
 func TestObjectRootsDoNotImportTheirDependentImplementations(t *testing.T) {
 	graph := loadGraph(t)
-	for _, root := range []string{"object", "interfaces", "discovery", "liveaccess", "systemrepo"} {
+	for _, root := range []string{"object", "liveaccess/handler", "discovery", "liveaccess", "systemrepo"} {
 		for _, dependency := range graph[root] {
 			if !strings.HasPrefix(dependency, root+"/") {
 				continue

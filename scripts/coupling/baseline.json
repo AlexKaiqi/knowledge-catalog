@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-14T11:59:24Z",
+  "generatedAt": "2026-10-14T15:04:58Z",
   "depth": 2,
   "unitPolicy": "path-depth=2;named-subtree=;version=1",
   "propagationCost": 0.14946445959104188,
@@ -96,16 +96,16 @@
     },
     {
       "unit": "server",
-      "ce": 23,
+      "ce": 22,
       "ca": 1,
-      "instability": 0.9583333333333334,
+      "instability": 0.9565217391304348,
       "abstractness": 0,
-      "mainSeqDistance": 0.04166666666666663,
-      "publicPerKLoc": 15.534842432312471,
+      "mainSeqDistance": 0.04347826086956519,
+      "publicPerKLoc": 15.552099533437012,
       "interfaces": 0,
       "totalTypes": 52,
       "exportedDecls": 70,
-      "prodLines": 4506,
+      "prodLines": 4501,
       "testLines": 4773,
       "transitiveReach": 59
     },
@@ -116,27 +116,27 @@
       "instability": 0.9428571428571428,
       "abstractness": 0,
       "mainSeqDistance": 0.05714285714285716,
-      "publicPerKLoc": 41.13457760314342,
+      "publicPerKLoc": 41.22947784224169,
       "interfaces": 0,
-      "totalTypes": 36,
-      "exportedDecls": 335,
-      "prodLines": 8144,
+      "totalTypes": 35,
+      "exportedDecls": 334,
+      "prodLines": 8101,
       "testLines": 1991,
       "transitiveReach": 54
     },
     {
       "unit": "cli",
-      "ce": 23,
+      "ce": 22,
       "ca": 2,
-      "instability": 0.92,
+      "instability": 0.9166666666666666,
       "abstractness": 0,
-      "mainSeqDistance": 0.07999999999999996,
-      "publicPerKLoc": 3.875968992248062,
+      "mainSeqDistance": 0.08333333333333337,
+      "publicPerKLoc": 3.5519772673454892,
       "interfaces": 0,
-      "totalTypes": 22,
-      "exportedDecls": 17,
-      "prodLines": 4386,
-      "testLines": 25006,
+      "totalTypes": 20,
+      "exportedDecls": 15,
+      "prodLines": 4223,
+      "testLines": 24763,
       "transitiveReach": 64
     },
     {
@@ -221,12 +221,12 @@
       "instability": 0.8484848484848485,
       "abstractness": 0,
       "mainSeqDistance": 0.1515151515151515,
-      "publicPerKLoc": 22.295463357890654,
+      "publicPerKLoc": 22.615535889872174,
       "interfaces": 0,
       "totalTypes": 38,
       "exportedDecls": 115,
-      "prodLines": 5158,
-      "testLines": 2885,
+      "prodLines": 5085,
+      "testLines": 2783,
       "transitiveReach": 42
     },
     {
@@ -275,7 +275,7 @@
       "transitiveReach": 19
     },
     {
-      "unit": "interfaces/service",
+      "unit": "liveaccess/dispatch",
       "ce": 4,
       "ca": 1,
       "instability": 0.8,
@@ -333,21 +333,6 @@
       "prodLines": 579,
       "testLines": 280,
       "transitiveReach": 14
-    },
-    {
-      "unit": "liveaccess/plugin",
-      "ce": 6,
-      "ca": 2,
-      "instability": 0.75,
-      "abstractness": 0,
-      "mainSeqDistance": 0.25,
-      "publicPerKLoc": 41.23711340206185,
-      "interfaces": 0,
-      "totalTypes": 3,
-      "exportedDecls": 4,
-      "prodLines": 97,
-      "testLines": 1198,
-      "transitiveReach": 21
     },
     {
       "unit": "object/cli",
@@ -408,6 +393,21 @@
       "prodLines": 275,
       "testLines": 593,
       "transitiveReach": 10
+    },
+    {
+      "unit": "liveaccess/plugin",
+      "ce": 5,
+      "ca": 2,
+      "instability": 0.7142857142857143,
+      "abstractness": 0,
+      "mainSeqDistance": 0.2857142857142857,
+      "publicPerKLoc": 42.10526315789474,
+      "interfaces": 0,
+      "totalTypes": 3,
+      "exportedDecls": 4,
+      "prodLines": 95,
+      "testLines": 1198,
+      "transitiveReach": 21
     },
     {
       "unit": "delivery",
@@ -680,6 +680,21 @@
       "transitiveReach": 6
     },
     {
+      "unit": "liveaccess/handler",
+      "ce": 3,
+      "ca": 4,
+      "instability": 0.42857142857142855,
+      "abstractness": 0.06666666666666667,
+      "mainSeqDistance": 0.5047619047619047,
+      "publicPerKLoc": 48.07692307692307,
+      "interfaces": 1,
+      "totalTypes": 15,
+      "exportedDecls": 25,
+      "prodLines": 520,
+      "testLines": 570,
+      "transitiveReach": 9
+    },
+    {
       "unit": "object/writer",
       "ce": 5,
       "ca": 7,
@@ -800,19 +815,19 @@
       "transitiveReach": 5
     },
     {
-      "unit": "interfaces",
-      "ce": 3,
-      "ca": 6,
+      "unit": "identity",
+      "ce": 2,
+      "ca": 4,
       "instability": 0.3333333333333333,
-      "abstractness": 0.06666666666666667,
-      "mainSeqDistance": 0.6000000000000001,
-      "publicPerKLoc": 48.07692307692307,
-      "interfaces": 1,
-      "totalTypes": 15,
-      "exportedDecls": 25,
-      "prodLines": 520,
-      "testLines": 570,
-      "transitiveReach": 9
+      "abstractness": 0,
+      "mainSeqDistance": 0.6666666666666667,
+      "publicPerKLoc": 45.45454545454545,
+      "interfaces": 0,
+      "totalTypes": 6,
+      "exportedDecls": 14,
+      "prodLines": 308,
+      "testLines": 105,
+      "transitiveReach": 2
     },
     {
       "unit": "internal/treepath",
@@ -843,21 +858,6 @@
       "prodLines": 521,
       "testLines": 53,
       "transitiveReach": 10
-    },
-    {
-      "unit": "identity",
-      "ce": 2,
-      "ca": 5,
-      "instability": 0.2857142857142857,
-      "abstractness": 0,
-      "mainSeqDistance": 0.7142857142857143,
-      "publicPerKLoc": 39.50617283950617,
-      "interfaces": 0,
-      "totalTypes": 6,
-      "exportedDecls": 16,
-      "prodLines": 405,
-      "testLines": 144,
-      "transitiveReach": 2
     },
     {
       "unit": "declarativeindex/client",
@@ -926,12 +926,12 @@
       "instability": 0.16666666666666666,
       "abstractness": 0,
       "mainSeqDistance": 0.8333333333333334,
-      "publicPerKLoc": 46.18117229129663,
+      "publicPerKLoc": 45.955882352941174,
       "interfaces": 0,
       "totalTypes": 6,
-      "exportedDecls": 26,
-      "prodLines": 563,
-      "testLines": 645,
+      "exportedDecls": 25,
+      "prodLines": 544,
+      "testLines": 644,
       "transitiveReach": 1
     },
     {
@@ -1051,7 +1051,7 @@
       "totalTypes": 0,
       "exportedDecls": 0,
       "prodLines": 0,
-      "testLines": 5465,
+      "testLines": 5496,
       "transitiveReach": 0
     },
     {

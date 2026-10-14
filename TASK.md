@@ -10,6 +10,21 @@
 
 ## 1. 项目路线与进展
 
+### REFACTOR-OBJECT-MODEL-01 · 对象模型重构与最终验收（2026-10-14，分支 `refactor/object-model`）
+
+用户决定的顺序 2→1→5→6→3→4→7，最后做验收；开发阶段不做兼容，不推送，按阶段本地提交。
+
+- [x] 阶段 2（5f9ac0e）：存储只留 lakeFS（保留 Gitea 登录），删除旧存储残留与旧身份迁移；守卫加退役路径与失效守卫名检查。
+- [x] 阶段 1（70b9c82）：全仓只说 object / Dataset（`knowledge`、`KnowledgeSet` 退役）；删除 grant `cmds` 与 `dataset.consume` 迁移；术语守卫 `TestObjectIsTheOnlyNameForCatalogContent`。
+- [x] 阶段 5：`interfaces/` 收进 `liveaccess/handler`（合同、实现、注册表）与 `liveaccess/dispatch`（调用任务）；删除部署注入额外处理器的入口（`ObjectInterfaces` 选项与可变参数），非 LiveAccess 合同以 `CAPABILITY_UNSATISFIED` 拒绝（`TestPublicInvokeRefusesContractsNoPluginHandles` 取代原 echo 处理器用例）。系统仓删除对外 Interface 说明（概念、分派机制、能力、两篇指南及其关系），`kc invoke` 归入资源访问能力；用户可见文案改为"插件"。顺带清除阶段 2 遗留的 `deployment identity migrate` 命令面登记与文档。
+  - 守卫：新增 `liveaccess/dispatch` 依赖规则，`liveaccess/handler` 禁止反向依赖 dispatch；层表与公开深度白名单同步。
+  - 耦合基线：显式 `-write-baseline`。传播成本 14.95% 不变；`liveaccess/handler` 不稳定度 0.33→0.43 是注入口删除后入向依赖 6→4 的预期结果，出向依赖不变。
+- [ ] 阶段 6：删除 controlplane / gate / 提案命令；Snapshot 公开分支与条件合并；Writer 写指定分支；合并前 Object 校验；保留合并前后 Hook。
+- [ ] 阶段 3：URN `urn:kc:object:<namespace>/<name>`，方面冲突检测，拒绝旧格式。
+- [ ] 阶段 4：插件按 Schema 生效、按仓关闭、跨仓按类型发现并按 ID 合并；Dataset 收窄为范围、版本与消费权限。
+- [ ] 阶段 7：目录重组与无生产者错误码清理。
+- [ ] 最终验收。
+
 ### CLEANUP-04 · 删除 connector 链，Interface 降为插件内部机制（2026-10-14）
 
 - [x] 按用户决定删除 `connector/`、`integrationruntime/`、`cmd/kc-integration` 及唯一跨包旅程 `cli/integration_runtime_journey_test.go`；架构守卫只去掉这三个已删除包的条目与专属规则（其余包规则不变）；场景 `repository-attached` 去掉随之消失的 `collector.preview` 能力与证据；test-catalog 去掉 N 节。场景素材里的 Python 采集样例走普通 Writer，与本包无关，保留。

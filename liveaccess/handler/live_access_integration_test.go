@@ -1,9 +1,9 @@
-package interfaces_test
+package handler_test
 
 import (
 	"context"
-	"kc/interfaces"
 	liveaccesscontract "kc/liveaccess/contract"
+	interfaces "kc/liveaccess/handler"
 	"kc/systemrepo"
 	"sync"
 	"testing"

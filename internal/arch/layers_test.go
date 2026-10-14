@@ -29,12 +29,13 @@ var forbidden = []struct {
 	why    string
 }{
 
-	{pkg: "object", denied: []string{"interfaces", "liveaccess", "systemrepo"}, why: "Object owns minimal pure contracts, not ability implementations or complete publication"},
-	{pkg: "object/reader", denied: []string{"interfaces", "liveaccess", "systemrepo"}, why: "fixed reads do not install or invoke abilities"},
-	{pkg: "object/writer", denied: []string{"interfaces", "liveaccess", "systemrepo"}, why: "basic publication does not require ability execution or complete platform publication"},
+	{pkg: "object", denied: []string{"liveaccess", "systemrepo"}, why: "Object owns minimal pure contracts, not ability implementations or complete publication"},
+	{pkg: "object/reader", denied: []string{"liveaccess", "systemrepo"}, why: "fixed reads do not install or invoke abilities"},
+	{pkg: "object/writer", denied: []string{"liveaccess", "systemrepo"}, why: "basic publication does not require ability execution or complete platform publication"},
 
-	{pkg: "object/service", denied: []string{"interfaces", "liveaccess", "discovery", "declarativeindex", "systemrepo", "home", "cli", "server", "client"}, why: "basic object tasks use fixed read/write and injected delivery ports"},
-	{pkg: "interfaces", denied: []string{"liveaccess", "discovery", "declarativeindex", "systemrepo", "home", "cli", "server", "client", "object/writer"}, why: "ordinary Interface contracts and dispatch are independent of concrete abilities"},
+	{pkg: "object/service", denied: []string{"liveaccess", "discovery", "declarativeindex", "systemrepo", "home", "cli", "server", "client"}, why: "basic object tasks use fixed read/write and injected delivery ports"},
+	{pkg: "liveaccess/handler", denied: []string{"liveaccess/dispatch", "liveaccess/service", "liveaccess/plugin", "liveaccess/cli", "liveaccess/client", "liveaccess/discovery", "liveaccess/fixture", "discovery", "declarativeindex", "systemrepo", "home", "cli", "server", "client", "object/writer"}, why: "the plugin-internal handler contract and dispatch stay independent of LiveAccess wiring, transports and other plugins"},
+	{pkg: "liveaccess/dispatch", denied: []string{"liveaccess/service", "liveaccess/plugin", "liveaccess/cli", "liveaccess/client", "liveaccess/discovery", "liveaccess/fixture", "discovery", "declarativeindex", "systemrepo", "home", "cli", "server", "client", "object/writer"}, why: "the plugin call task resolves, authorizes and checks one fixed handler call without source I/O or publication"},
 	{pkg: "discovery/projection", denied: []string{"liveaccess", "systemrepo"}, why: "projection consumes verified observations; the source bridge owns I/O"},
 	{
 		pkg:    "kernel",
@@ -313,7 +314,7 @@ func TestArchitectureGuardIncludesProductionScripts(t *testing.T) {
 func TestProtocolLayersDoNotDependOnClient(t *testing.T) {
 	graph := loadGraph(t)
 	for _, pkg := range []string{
-		"interfaces", "interfaces/service", "liveaccess/service", "liveaccess/contract", "liveaccess/discovery", "object/cache", "object/format", "systemrepo",
+		"liveaccess/handler", "liveaccess/dispatch", "liveaccess/service", "liveaccess/contract", "liveaccess/discovery", "object/cache", "object/format", "systemrepo",
 		"kernel", "snapshot", "snapshot/dataset", "snapshot/access", "object", "object/writer", "object/reader", "liveaccess",
 		"discovery", "discovery/projection", "controlplane", "hook", "gate",
 		"declarativeindex/projection", "declarativeindex/control", "declarativeindex/opensearch", "declarativeindex/opensearch/internal/opensearchimpl", "discovery/llmhttp", "observability",
@@ -385,7 +386,7 @@ func architectureLayer(pkg string) (string, bool) {
 		return "snapshot", true
 	case "snapshot/dataset":
 		return "dataset", true
-	case "object/format", "object", "object/maintenance", "object/reader", "object/semanticview", "object/writer", "object/cache", "interfaces", "liveaccess/contract", "liveaccess/evidence", "interfaces/service":
+	case "object/format", "object", "object/maintenance", "object/reader", "object/semanticview", "object/writer", "object/cache", "liveaccess/handler", "liveaccess/dispatch", "liveaccess/contract", "liveaccess/evidence":
 		return "object", true
 	case "discovery", "discovery/llmhttp", "liveaccess", "discovery/projection", "declarativeindex/projection", "declarativeindex/control", "declarativeindex/opensearch", "declarativeindex/opensearch/internal/opensearchimpl":
 		return "discovery", true

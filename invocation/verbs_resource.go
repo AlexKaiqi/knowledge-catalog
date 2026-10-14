@@ -251,7 +251,7 @@ func RefineEventFromExecution(cx *Invocation, execution retrieval.RerankExecutio
 func VerbResourceAccess(cx *Invocation) (any, error) {
 	if cx.Flag("operation") != "" || cx.Flag("input") != "" || cx.Flag("implementation") != "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid,
-			"access hydrates a Binding with --aspect; use kc invoke for an object Interface operation")
+			"access hydrates a Binding with --aspect; use kc invoke for a plugin operation")
 	}
 	address, err := bindingAddress(cx)
 	if err != nil {

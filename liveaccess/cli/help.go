@@ -62,11 +62,11 @@ func leafHelpEntries() map[string]helpEntry {
   例：kc access --dataset scene-set --object table/orders --aspect stats`,
 		},
 		"invoke": {
-			Description: "调用对象声明的 Interface 能力或兼容的 ResourceDescriptor 操作",
+			Description: "调用对象声明的插件操作（LiveAccess）或兼容的 ResourceDescriptor 操作",
 			Usage: `kc invoke (--repo <id> | --dataset <id>) --object <object-id> --implementation <member-key> --operation <name> --input <json>
 
 用途：
-  根据对象已声明的能力和固定合同，调用匹配的处理器或源操作。
+  根据对象已声明的插件实现和固定合同，调用已安装插件的处理器或源操作。
 用法与参数：
   --implementation 选择 interfaces 切面中的实现；--operation 必填，--input 必须是一个完整 JSON 值，用单引号包住。
   不接受 --aspect/--member。省略 implementation 时走兼容的 ResourceDescriptor access 操作声明。
@@ -75,9 +75,9 @@ func leafHelpEntries() map[string]helpEntry {
   已认证并有目标范围的 resource.access；Dataset file.read 不蕴含此调用权，单仓不另要求 object.read。
   命名 Dataset 还须通过选择范围的完整读取检查，整范围 file.read 可满足，不另要求来源仓对象动作。
   另行解析 Dataset pin 需 dataset.resolve；操作已声明，相关对象/合同可解析，运行时已装配且源允许调用。
-  Interface 合同、实现 Schema 与处理器须按固定版本匹配；声明存在不等于处理器可用或外部操作已获授权。
+  插件合同、实现 Schema 与处理器须按固定版本匹配；声明存在不等于插件已安装或外部操作已获授权。
 结果：
-  JSON 返回处理器或源操作输出；Interface 结果附固定声明与合同依据，LiveAccess read 的当前值另带观察依据。
+  JSON 返回处理器或源操作输出；插件结果附固定声明与合同依据，LiveAccess read 的当前值另带观察依据。
   兼容 ResourceDescriptor 路径按其声明调用源并返回源结果，不等于读取对象固定正文。
 后果：
   立即执行选定能力；read 可访问实时源，其它操作可能修改外部状态、排队任务或产生外部费用。
@@ -86,7 +86,7 @@ func leafHelpEntries() map[string]helpEntry {
   代价和可逆性由具体操作合同决定，执行前需读清输入、输出和副作用；请求 id 只是关联依据，不是通用幂等键。
   超时、响应丢失或执行后输出校验失败都不能推出“源未执行”，盲目重试可能重复写入或重复扣费。
 失败恢复：
-  用法/合同不匹配时先核对对象实现、操作和输入；能力未满足时请部署或源维护者提供匹配处理器。
+  用法/合同不匹配时先核对对象实现、操作和输入；能力未满足时请部署或源维护者安装匹配插件。
   执行结果不明时用请求追踪及源侧状态确认是否已完成，再按操作自己的恢复约定处理；不要默认重发安全。
 示例：
   例：kc invoke --repo kr://scene/object --object table/orders --implementation live --operation read --input '{}'

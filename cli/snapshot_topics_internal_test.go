@@ -67,8 +67,8 @@ func TestSnapshotHelpTopicNavigationIsReachableFromRoot(t *testing.T) {
 
 func TestSnapshotHelpTopicsDoNotRegisterBusinessCommands(t *testing.T) {
 	snapshotTopicHelpEnvironment(t)
-	if got := len(CLICommandsForTest()); got != 62 {
-		t.Fatalf("static teaching topics changed the selected 62-leaf business surface including plugin explanation: %d", got)
+	if got := len(CLICommandsForTest()); got != 61 {
+		t.Fatalf("static teaching topics changed the selected 61-leaf business surface including plugin explanation: %d", got)
 	}
 	for topic := range snapshotcli.HelpTopics() {
 		t.Run(topic, func(t *testing.T) {

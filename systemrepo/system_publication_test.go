@@ -1,8 +1,8 @@
 package systemrepo_test
 
 import (
-	"kc/interfaces"
 	"kc/internal/testkit"
+	interfaces "kc/liveaccess/handler"
 	"os"
 	"path"
 	"path/filepath"
@@ -90,7 +90,7 @@ func TestSystemPublicationMatchesCanonicalFilesAndSchemas(t *testing.T) {
 			t.Fatalf("object %s differs from shared assembly: %v", id, err)
 		}
 	}
-	for _, id := range []objectmodel.ObjectID{"kc/concept/object", "kc/concept/aspect", "kc/concept/relation", "kc/interface/writer", "kc/interface/cli", "kc/mechanism/governance", "kc/mechanism/hook", "kc/capability/read-object", "kc/capability/publish-object", "kc/guide/first-publication", "kc/guide/share-a-dataset", "kc/concept/object-interface", "kc/concept/index-declaration", "kc/mechanism/object-interface-dispatch", "interface/live-access/v1", "kc/capability/object-interfaces", "kc/guide/implement-object-interface", "kc/guide/use-object-interface"} {
+	for _, id := range []objectmodel.ObjectID{"kc/concept/object", "kc/concept/aspect", "kc/concept/relation", "kc/interface/writer", "kc/interface/cli", "kc/mechanism/governance", "kc/mechanism/hook", "kc/capability/read-object", "kc/capability/publish-object", "kc/guide/first-publication", "kc/guide/share-a-dataset", "kc/concept/index-declaration", "kc/mechanism/dynamic-access", "interface/live-access/v1"} {
 		if _, exists := byObject[id]; !exists {
 			t.Errorf("required self-description object %s is missing", id)
 		}
@@ -220,7 +220,7 @@ func TestSystemRepositoryDirectoryPaginationKeepsBasis(t *testing.T) {
 		}
 		request.Continuation = page.Continuation
 	}
-	if len(names) != 17 {
+	if len(names) != 16 {
 		t.Fatalf("capability navigation incomplete: %v", names)
 	}
 	request.Commit = "another-version"

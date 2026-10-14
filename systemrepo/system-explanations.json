@@ -97,18 +97,6 @@
       }
     ]
   },
-  "kc/concept/object-interface": {
-    "path": "concepts/object-interface/definition.md",
-    "bases": [
-      {
-        "owner": "doc/design/affordance.md",
-        "topic": "对象的 Affordance",
-        "term": "Interface",
-        "source": "interfaces/definition.go",
-        "symbol": "InterfaceDefinition"
-      }
-    ]
-  },
   "kc/concept/pin": {
     "path": "concepts/pin/definition.md",
     "bases": [
@@ -302,18 +290,6 @@
         "term": "Hook",
         "source": "hook/store.go",
         "symbol": "Binding"
-      }
-    ]
-  },
-  "kc/mechanism/object-interface-dispatch": {
-    "path": "mechanisms/object-interface-dispatch/definition.md",
-    "bases": [
-      {
-        "owner": "doc/design/affordance.md",
-        "topic": "对象的 Affordance",
-        "term": "分派",
-        "source": "interfaces/registry.go",
-        "symbol": "InterfaceRegistry"
       }
     ]
   },

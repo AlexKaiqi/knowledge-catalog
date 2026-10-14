@@ -9,7 +9,6 @@ package invocation
 
 import (
 	"context"
-	"kc/interfaces"
 	"strings"
 
 	kchome "kc/home"
@@ -22,7 +21,7 @@ import (
 // executeApplicationOperation is the shared application-service boundary.
 // CLI resolves a grouped command before calling it; typed HTTP handlers pass
 // an explicit command value and never consult either CLI registry.
-func ExecuteApplicationOperation(ctx context.Context, name, action string, cmd Command, flags map[string]invoke.FlagValue, state objectserving.StateLookup, opened *kchome.Home, home string, observation *invoke.ObservationTelemetry, interfaces ...*interfaces.InterfaceRegistry) (any, error) {
+func ExecuteApplicationOperation(ctx context.Context, name, action string, cmd Command, flags map[string]invoke.FlagValue, state objectserving.StateLookup, opened *kchome.Home, home string, observation *invoke.ObservationTelemetry) (any, error) {
 	if _, supplied := flags["catalog"]; supplied {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "Catalog selection is not supported; this service has one registry")
 	}
@@ -34,9 +33,6 @@ func ExecuteApplicationOperation(ctx context.Context, name, action string, cmd C
 	}
 	observation = invoke.NoObservationTelemetry(observation)
 	cx := &Invocation{Command: name, Home: home, WS: opened, Flags: flags, Context: ctx, State: state, Observation: observation}
-	if len(interfaces) > 0 {
-		cx.ObjectInterfaces = interfaces[0]
-	}
 	if cmd.Stage == invoke.StageHome {
 		if observesInventory(name) {
 			if err := AuthorizeInventory(home, flags, observation.Authorization, opened); err != nil {
@@ -121,7 +117,7 @@ func observesInventory(name string) bool {
 // invokeApplicationWithTelemetryAtHome is the typed-service application
 // boundary. Unlike the CLI dispatcher it receives an explicit operation and
 // therefore never consults the CLI command registry.
-func InvokeApplicationWithTelemetryAtHome(ctx context.Context, runtime *telemetry.Runtime, name, action string, op Command, flags map[string]invoke.FlagValue, state objectserving.StateLookup, opened *kchome.Home, interfaces ...*interfaces.InterfaceRegistry) invoke.RunResult {
+func InvokeApplicationWithTelemetryAtHome(ctx context.Context, runtime *telemetry.Runtime, name, action string, op Command, flags map[string]invoke.FlagValue, state objectserving.StateLookup, opened *kchome.Home) invoke.RunResult {
 	if flags == nil {
 		flags = map[string]invoke.FlagValue{}
 	}
@@ -187,7 +183,7 @@ func InvokeApplicationWithTelemetryAtHome(ctx context.Context, runtime *telemetr
 	var result any
 	executed := false
 	if invokeErr == nil {
-		result, invokeErr = ExecuteApplicationOperation(ctx, name, action, op, flags, state, opened, home, observation, interfaces...)
+		result, invokeErr = ExecuteApplicationOperation(ctx, name, action, op, flags, state, opened, home, observation)
 		executed = true
 	}
 	domainElapsed := TelemetrySince(operationStarted.At)

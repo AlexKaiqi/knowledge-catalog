@@ -92,7 +92,7 @@
 | `discovery/plugin/` | 声明式索引类插件的登记与来源选择 |
 | `declarativeindex/plugin/` | 声明式索引插件入口 |
 | `liveaccess/plugin/` | LiveAccess 插件入口 |
-| `interfaces/` | 现为顶层；近期收进 LiveAccess 作为其内部的处理器合同 |
+| `liveaccess/handler/`、`liveaccess/dispatch/` | LiveAccess 内部的处理器合同与调用任务，不对外暴露 |
 | `home/` | 按配置加载插件入口，连接系统依赖，统一启停 |
 
 ## 进度
@@ -101,6 +101,6 @@
 |---|---|
 | 已有 | 插件登记、按仓选择、多实例、说明读取与访问概览的接线 |
 | 近期 | 插件按 Schema 声明生效、仓可关闭；Dataset 不参与插件配置；两个插件完成改接 |
-| 近期 | `interfaces/` 降为 LiveAccess 内部机制，对外不再有 Interface 概念 |
+| 已有 | 处理器合同收进 `liveaccess/handler/` 与 `liveaccess/dispatch/`，对外不再有 Interface 概念，部署不能注入额外处理器 |
 | 近期 | 按类型跨仓发现，结果按对象 ID 合并并列出未就绪与关闭的范围 |
 | 未到 | 插件之间的优先级与覆盖 |

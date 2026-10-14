@@ -1,9 +1,9 @@
-package interfaces_test
+package handler_test
 
 import (
 	"context"
-	"kc/interfaces"
-	interfaceservice "kc/interfaces/service"
+	"kc/liveaccess/dispatch"
+	interfaces "kc/liveaccess/handler"
 	"testing"
 
 	"kc/internal/testkit"
@@ -69,7 +69,7 @@ func TestIndependentObjectInterfaceDispatch(t *testing.T) {
 	if err := registry.Register(interfaces.InterfaceRegistration{Contract: impl.Contract, ContractDigest: impl.ContractDigest, ImplementationSchemaStructureDigest: impl.ImplementationSchemaStructureDigest, HandlerRevision: "prefix-handler-v1", Handler: handler}); err != nil {
 		t.Fatal(err)
 	}
-	service := interfaceservice.Open(base, registry, objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "agent"}})
+	service := dispatch.Open(base, registry, objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "agent"}})
 	result, err := service.Call(context.Background(), interfaces.InterfaceRequest{Repository: impl.Repository, Object: impl.Address.ObjectID, Implementation: "friendly", Operation: "read", Input: map[string]any{"text": "World"}})
 	if err != nil {
 		t.Fatal(err)
@@ -90,7 +90,7 @@ func TestObjectInterfaceDiscoveryAndNoImplicitHandler(t *testing.T) {
 		t.Fatalf("implementations %#v error %v", implementations, err)
 	}
 	registry := interfaces.NewInterfaceRegistry()
-	service := interfaceservice.Open(base, registry, objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "agent"}})
+	service := dispatch.Open(base, registry, objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "agent"}})
 	_, err = service.Call(context.Background(), interfaces.InterfaceRequest{Repository: impl.Repository, Object: impl.Address.ObjectID, Implementation: "friendly", Operation: "read", Input: map[string]any{"text": "World"}})
 	if kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
 		t.Fatalf("missing handler: %v", err)
@@ -117,7 +117,7 @@ func TestObjectInterfaceKeepsHistoricalContractAfterHeadAdvance(t *testing.T) {
 		t.Fatal(err)
 	}
 	handler := &prefixInterfaceHandler{}
-	service := interfaceservice.Open(base, registerPrefix(t, impl, handler), objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "agent"}})
+	service := dispatch.Open(base, registerPrefix(t, impl, handler), objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "agent"}})
 	result, err := service.Call(context.Background(), interfaces.InterfaceRequest{Repository: impl.Repository, Object: impl.Address.ObjectID, Implementation: "friendly", Operation: "read", Input: map[string]any{"text": "World"}})
 	if err != nil || result.Value.(map[string]any)["text"] != "Hello World" || result.Basis.Contract != impl.Contract || result.Basis.ContractDigest != impl.ContractDigest {
 		t.Fatalf("historical drift: %#v %v", result, err)
@@ -127,7 +127,7 @@ func TestObjectInterfaceKeepsHistoricalContractAfterHeadAdvance(t *testing.T) {
 func TestObjectInterfaceOperationAuthorizationAndOutputValidation(t *testing.T) {
 	base, impl := interfaceFixture(t)
 	handler := &prefixInterfaceHandler{invalid: true}
-	service := interfaceservice.Open(base, registerPrefix(t, impl, handler), objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "agent"}})
+	service := dispatch.Open(base, registerPrefix(t, impl, handler), objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "agent"}})
 	request := interfaces.InterfaceRequest{Repository: impl.Repository, Object: impl.Address.ObjectID, Implementation: "friendly", Operation: "write", Input: map[string]any{"text": "World"}}
 	_, err := service.Call(context.Background(), request)
 	if kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied || handler.calls != 0 {
@@ -166,7 +166,7 @@ func TestObjectInterfaceRegistrationRejectsAmbiguityAndWrongBasis(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	service := interfaceservice.Open(base, registry, objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "agent"}})
+	service := dispatch.Open(base, registry, objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "agent"}})
 	_, err = service.Call(context.Background(), interfaces.InterfaceRequest{Repository: impl.Repository, Object: impl.Address.ObjectID, Implementation: "friendly", Operation: "read", Input: map[string]any{"text": "World"}})
 	if kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied || handler.calls != 0 {
 		t.Fatalf("wrong contract support accepted: %v calls %d", err, handler.calls)
@@ -206,7 +206,7 @@ func TestObjectInterfaceDependenciesCannotEscapeDatasetSlice(t *testing.T) {
 func TestObjectInterfaceRequestedCapabilityMustMatch(t *testing.T) {
 	base, impl := interfaceFixture(t)
 	handler := &prefixInterfaceHandler{}
-	service := interfaceservice.Open(base, registerPrefix(t, impl, handler), objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "agent"}})
+	service := dispatch.Open(base, registerPrefix(t, impl, handler), objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "agent"}})
 	request := interfaces.InterfaceRequest{Repository: impl.Repository, Object: impl.Address.ObjectID, Implementation: "friendly", InterfaceRef: "interface/another/v1", Operation: "read", Input: map[string]any{"text": "World"}}
 	_, err := service.Call(context.Background(), request)
 	if kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied || handler.calls != 0 {
@@ -242,7 +242,7 @@ func TestObjectInterfaceCallbacksCannotMutatePinnedValuesOrCallerInput(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	service := interfaceservice.Open(base, registry, objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "agent"}})
+	service := dispatch.Open(base, registry, objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "agent"}})
 	service.SetAuthorizer(func(_ context.Context, call interfaces.InterfaceCall) error {
 		call.Input.(map[string]any)["text"] = "authorization mutated input"
 		call.Implementation.Implementation["prefix"] = "authorization mutated "

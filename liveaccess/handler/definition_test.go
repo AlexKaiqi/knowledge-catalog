@@ -1,11 +1,11 @@
-package interfaces_test
+package handler_test
 
 import (
 	"testing"
 
 	"kc/kernel"
 
-	"kc/interfaces"
+	interfaces "kc/liveaccess/handler"
 )
 
 func TestInterfaceContractValidationAndImplementationPreservation(t *testing.T) {

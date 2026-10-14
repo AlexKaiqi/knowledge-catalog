@@ -18,7 +18,7 @@ serve/service_routes/handlers/授权/遥测/就绪探测搬入（B6/B7）。生�
 就绪探测（B7 已迁入：`server/internal/readiness` 持探测/缓存/指纹与证据写探针；search 后端经 `Providers.SearchBackend` 端口注入——探测函数由装配根 `home` 的 `NewSearchBackendProbe` 绑定具体 adapter，本包与 readiness 包都不 import 具体 provider，A-01 守卫 `TestProviderAdaptersImportedOnlyAtAssembly` 钉住）。
 
 不拥有：业务规则与执行器（`object/service`、`discovery/service`、`discovery/datasets`、
-`interfaces/service`、`liveaccess/service`、`snapshot/service` 等所属能力）、装配与 provider
+`liveaccess/dispatch`、`liveaccess/service`、`snapshot/service` 等所属能力）、装配与 provider
 选择（`home`）、模块任务的参数/帮助/产品结果（各模块 `cli`）、全局 argv 与会话（根
 `cli`/`client`）、声明本身（Object ②）。请求语义沿所属模块公开合同执行。
 

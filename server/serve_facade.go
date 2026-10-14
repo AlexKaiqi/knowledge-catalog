@@ -190,7 +190,6 @@ func (f *httpFacade) startProjectionWorker(ws *Home) error {
 	if ws.Plugins != nil {
 		entries := map[string]liveservice.PluginEntry{"liveaccess": accessplugin.Entry(accessplugin.Options{
 			CredentialOrigins: f.options.LiveAccessCredentialOrigins,
-			Interfaces:        f.options.ObjectInterfaces,
 			OpenLookup:        f.liveAccessAdapter(),
 		})}
 		for name, entry := range f.options.LiveAccessPlugins {

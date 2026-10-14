@@ -96,10 +96,10 @@ ref 直推：Reader 按文件 frontmatter 解释，live 投影对 HEAD 对账。
 
 Binding 声明在 Domain Schema Canonical `origin` 上；运行状态、cursor、watermark 和凭证留在墙外 Materialization Runtime。`kc access` 用 origin + 实体 `object_id` 取回该 Aspect，不另存空实例。ResourceDescriptor `origin` 给 `kc invoke`。消费侧 `liveaccess/service` 可通过注入的 State 端口返回观察值及 observation basis，但不会把它写回 Repository 或伪装成 commit 中的值。
 
-对象定义直接描述含义、边界与组成，不增加通用资源包装。实现能力的声明组织为
-`interfaces` 集合的 Member，每个实现由同仓 Schema 约束并明确引用 Interface 合同。
-`interfaces.InterfaceDefinition` 描述操作及可选输入/结果 Schema；`interfaces` 固定声明、合同与 Schema 依据，`interfaces/service` 按登记合同和实现形式分派。
-`liveaccess/contract.LiveAccessInterfaceV1` 是首个内置合同，运行时由宿主安装；旧 ResourceDescriptor 保留兼容。
+对象定义直接描述含义、边界与组成，不增加通用资源包装。插件实现声明组织为
+`interfaces` 集合的 Member，每个实现由 Schema 约束并引用插件合同；合同、实现与调用任务是
+LiveAccess 插件的内部机制（`liveaccess/handler`、`liveaccess/dispatch`），对象层不认识它们。
+`liveaccess/contract.LiveAccessInterfaceV1` 是唯一已安装的合同；ResourceDescriptor 仍是 `kc access` 的声明形式。
 声明可读、Schema 合法、处理器存在、调用获准及运行可用分别证明。
 
 system 的 `object-interfaces/` 出版机器合同，`interfaces/` 仍解释 Writer/CLI 操作入口；

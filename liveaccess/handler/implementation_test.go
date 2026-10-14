@@ -1,7 +1,7 @@
-package interfaces_test
+package handler_test
 
 import (
-	"kc/interfaces"
+	interfaces "kc/liveaccess/handler"
 	"testing"
 
 	"kc/internal/testkit"

@@ -13,7 +13,6 @@ package invocation
 import (
 	"context"
 	"fmt"
-	"kc/interfaces"
 
 	"kc/controlplane"
 	"kc/home"
@@ -28,14 +27,13 @@ import (
 // struct and its readers are the execution contract shared by the CLI front
 // end and the typed service surface.
 type Invocation struct {
-	Command          string
-	Home             string
-	Flags            map[string]invoke.FlagValue
-	WS               *home.Home
-	Context          context.Context
-	State            objectserving.StateLookup
-	ObjectInterfaces *interfaces.InterfaceRegistry
-	Observation      *invoke.ObservationTelemetry
+	Command     string
+	Home        string
+	Flags       map[string]invoke.FlagValue
+	WS          *home.Home
+	Context     context.Context
+	State       objectserving.StateLookup
+	Observation *invoke.ObservationTelemetry
 }
 
 // Flag reads the flag's effective string value.

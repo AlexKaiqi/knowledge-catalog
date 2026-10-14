@@ -28,9 +28,6 @@ func TestSystemCLIEntrypoints(t *testing.T) {
 	for _, path := range paths {
 		surface := cliSurface[path]
 		group := systemCapabilityGroup(surface.Action)
-		if path == "invoke" {
-			group = "object-interfaces"
-		}
 		if path == "serve" {
 			group = "deployment"
 		}

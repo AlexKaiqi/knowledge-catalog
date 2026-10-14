@@ -18,6 +18,12 @@ schema_ref: schema/system/capability-entrypoints/v1
       "command": "kc binding show",
       "description": "查看 Binding 声明",
       "help": "kc help binding show"
+    },
+    {
+      "action": "resource.access",
+      "command": "kc invoke",
+      "description": "调用对象声明的插件操作（LiveAccess）或兼容的 ResourceDescriptor 操作",
+      "help": "kc help invoke"
     }
   ]
 }

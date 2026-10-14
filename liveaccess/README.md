@@ -66,9 +66,9 @@ State 与 Stream 沿已有声明区分，普通读取不将 Stream 隐式数组�
 
 ## 已声明操作与说明
 
-已有 `binding show`、`access`、`invoke` 保持公开任务与 wire。标准 LiveAccess Interface
-由所选 Repo 实例匹配固定合同及实现 Schema；普通独立 Object Interface 沿其既有登记。
-共同 Interface 合同见 [interfaces](../interfaces/README.md)，模块入口不修改共享处理器表。
+已有 `binding show`、`access`、`invoke` 保持公开任务与 wire。LiveAccess 实现由所选 Repo
+实例匹配固定合同及实现 Schema；其他合同没有已安装插件处理，调用明确拒绝。
+处理器合同与调用任务是本插件的内部机制，见 [handler](handler/README.md) 与 [dispatch](dispatch/README.md)。
 
 `kc plugin liveaccess help` 返回 [CLI 同源说明](cli/README.md)，不读取仓配置或调用来源。
 说明不是当前目标已启用或来源可用的证明。
