@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"strings"
 
+	retrieval "kc/discovery"
 	"kc/invoke"
 	"kc/kernel"
-	knowledge "kc/knowledge"
-	"kc/retrieval"
+	objectmodel "kc/object"
 )
 
 // targetRef is the write target, defaulting to the protocol branch.
@@ -55,27 +55,27 @@ func UsesAddress(flags map[string]invoke.FlagValue) bool {
 
 // addressFrom builds the write/read unit key: object_id plus optional aspect and
 // member. --member without --aspect is not an address.
-func AddressFrom(flags map[string]invoke.FlagValue) (knowledge.Address, error) {
+func AddressFrom(flags map[string]invoke.FlagValue) (objectmodel.Address, error) {
 	objectID, err := invoke.RequireFlag(flags, "object")
 	if err != nil {
-		return knowledge.Address{}, err
+		return objectmodel.Address{}, err
 	}
 	aspect := invoke.FlagString(flags, "aspect")
 	member := invoke.FlagString(flags, "member")
 	if member != "" {
 		if aspect == "" {
-			return knowledge.Address{}, kernel.Fail(kernel.ErrUsageInvalid, "member address requires --aspect and --member")
+			return objectmodel.Address{}, kernel.Fail(kernel.ErrUsageInvalid, "member address requires --aspect and --member")
 		}
-		return knowledge.Address{Kind: knowledge.KindMember, ObjectID: knowledge.ObjectID(objectID), AspectName: aspect, MemberKey: member}, nil
+		return objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: objectmodel.ObjectID(objectID), AspectName: aspect, MemberKey: member}, nil
 	}
 	if aspect != "" {
-		return knowledge.Address{Kind: knowledge.KindAspect, ObjectID: knowledge.ObjectID(objectID), AspectName: aspect}, nil
+		return objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: objectmodel.ObjectID(objectID), AspectName: aspect}, nil
 	}
-	kind := knowledge.AddressKind(invoke.FlagString(flags, "kind"))
+	kind := objectmodel.AddressKind(invoke.FlagString(flags, "kind"))
 	if kind == "" {
-		kind = knowledge.KindEntity
+		kind = objectmodel.KindEntity
 	}
-	return knowledge.Address{Kind: kind, ObjectID: knowledge.ObjectID(objectID)}, nil
+	return objectmodel.Address{Kind: kind, ObjectID: objectmodel.ObjectID(objectID)}, nil
 }
 
 func SearchRequestFromFlags(flags map[string]invoke.FlagValue) (retrieval.SearchRequest, error) {
@@ -200,7 +200,7 @@ func SearchFieldClause(clause retrieval.SearchClause, raw string) retrieval.Sear
 	if len(parts) != 3 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[2]) == "" {
 		return clause
 	}
-	ref := retrieval.FieldRef{Schema: knowledge.ObjectID(strings.TrimSpace(parts[0])), Aspect: strings.TrimSpace(parts[1]), Path: strings.TrimSpace(parts[2])}
+	ref := retrieval.FieldRef{Schema: objectmodel.ObjectID(strings.TrimSpace(parts[0])), Aspect: strings.TrimSpace(parts[1]), Path: strings.TrimSpace(parts[2])}
 	clause.Field = &ref
 	clause.Path = ""
 	return clause

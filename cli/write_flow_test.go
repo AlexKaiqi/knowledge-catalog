@@ -30,7 +30,7 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 	if ids := businessRepositories(state); len(ids) != 0 || !hasRepository(state, "kr://kc/system") {
 		t.Fatal("new registration space must contain only the System Repository", state)
 	}
-	expectMsg(t, kc(h, "read"), "missing --repo")
+	expectMsg(t, kc(h, "read"), "object URN")
 	expectMsg(t, kc(h, "read-catalog"), "unknown command read-catalog")
 	expectMsg(t, kc(h, "read-release"), "unknown command read-release")
 	hist := asMap(t, body(t, kc(h, "registry", "audit")))
@@ -38,7 +38,7 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 		t.Fatalf("registry history must record initialization: %#v", hist)
 	}
 	expectCode(t, kc(h, "log", "--catalog", "old"), "USAGE_INVALID")
-	expectMsg(t, kc(h, "writer", "put", "--dataset", "agent", "--command-id", "x", "--object", "note/x", "--value", `{}`), "rejects --dataset")
+	expectMsg(t, kc(h, "writer", "put", testObjectReference(t, core, "note/x", ""), "--dataset", "agent", "--command-id", "x", "--value", `{}`), "rejects --dataset")
 	expectCode(t, kc(h, "init", "--namespace", "acme"), "USAGE_INVALID")
 	expectCode(t, kc(h, "catalog-add"), "USAGE_INVALID")
 	empty := asMap(t, body(t, kc(h, "status")))
@@ -76,23 +76,8 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 		t.Fatal("explicit attach must expose source in inventory")
 	}
 
-	body(t, kc(h, "put",
-		"--command-id", "schema-policy",
-		"--repo", core,
-		"--object", "schema/policy",
-		"--value", `{"entity":"Policy","pattern":"record"}`,
-	))
-	put := asMap(t, body(t, kc(h, "put",
-		"--command-id", "seed-a",
-		"--repo", core,
-		"--object", "policy/A",
-		"--value", `{"v":1}`,
-		"--if-absent",
-		"--schema-ref", "schema/policy",
-		"--origin-kind", "SOURCE",
-		"--source-ref", "handbook",
-		"--actor-ref", "alice",
-	)))
+	body(t, kc(h, "put", testObjectReference(t, core, "schema/policy", ""), "--command-id", "schema-policy", "--value", `{"entity":"Policy","pattern":"record"}`))
+	put := asMap(t, body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--command-id", "seed-a", "--value", `{"v":1}`, "--if-absent", "--schema-ref", "schema/policy", "--origin-kind", "SOURCE", "--source-ref", "handbook", "--actor-ref", "alice")))
 	if put["disposition"] != "APPLIED" || put["surface"] != "COMMIT" {
 		t.Fatal(put)
 	}
@@ -100,48 +85,20 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 	if mainAfterPut == head {
 		t.Fatal("put did not move main")
 	}
-	replay := asMap(t, body(t, kc(h, "put",
-		"--command-id", "seed-a",
-		"--repo", core,
-		"--object", "policy/A",
-		"--value", `{"v":1}`,
-		"--if-absent",
-		"--schema-ref", "schema/policy",
-		"--origin-kind", "SOURCE",
-		"--source-ref", "handbook",
-		"--actor-ref", "alice",
-	)))
+	replay := asMap(t, body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--command-id", "seed-a", "--value", `{"v":1}`, "--if-absent", "--schema-ref", "schema/policy", "--origin-kind", "SOURCE", "--source-ref", "handbook", "--actor-ref", "alice")))
 	if replay["disposition"] != "REPLAYED" {
 		t.Fatal(replay)
 	}
 	if asMap(t, replay["result"])["newCommit"] != mainAfterPut {
 		t.Fatal("replay moved commit", replay["result"])
 	}
-	expectCode(t, kc(h, "put",
-		"--command-id", "stale-cas",
-		"--repo", core,
-		"--object", "policy/A",
-		"--value", `{"v":2}`,
-		"--expected", head,
-	), "NON_FAST_FORWARD")
+	expectCode(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--command-id", "stale-cas", "--value", `{"v":2}`, "--expected", head), "NON_FAST_FORWARD")
 
-	aspect := asMap(t, body(t, kc(h, "put",
-		"--command-id", "seed-io",
-		"--repo", core,
-		"--object", "ETLTask:job-1",
-		"--aspect", "io",
-		"--value", `{"inputs":["a"]}`,
-		"--origin-kind", "SOURCE",
-	)))
+	aspect := asMap(t, body(t, kc(h, "put", testObjectReference(t, core, "ETLTask:job-1", "/io"), "--command-id", "seed-io", "--value", `{"inputs":["a"]}`, "--origin-kind", "SOURCE")))
 	if aspect["disposition"] != "APPLIED" {
 		t.Fatal(aspect)
 	}
-	body(t, kc(h, "put",
-		"--command-id", "seed-b",
-		"--repo", core,
-		"--object", "policy/B",
-		"--value", `{"tmp":true}`,
-	))
+	body(t, kc(h, "put", testObjectReference(t, core, "policy/B", ""), "--command-id", "seed-b", "--value", `{"tmp":true}`))
 	draft := filepath.Join(h, "draft")
 	if err := os.MkdirAll(draft, 0o755); err != nil {
 		t.Fatal(err)
@@ -167,11 +124,7 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 		t.Fatal(receipt)
 	}
 
-	removed := asMap(t, body(t, kc(h, "remove",
-		"--command-id", "drop-b",
-		"--repo", core,
-		"--object", "policy/B",
-	)))
+	removed := asMap(t, body(t, kc(h, "remove", testObjectReference(t, core, "policy/B", ""), "--command-id", "drop-b")))
 	if removed["disposition"] != "APPLIED" {
 		t.Fatal(removed)
 	}
@@ -193,23 +146,23 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 		t.Fatal("propose moved main", afterPropose["repos"])
 	}
 
-	alive := asMap(t, body(t, kc(h, "read", "--repo", core, "--object", "policy/A", "--commit", mainHead)))
+	alive := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--commit", mainHead)))
 	if asMap(t, alive["value"])["v"] != float64(1) {
 		t.Fatal(alive)
 	}
-	candidate := asMap(t, body(t, kc(h, "read", "--repo", core, "--object", "policy/A", "--ref", "refs/heads/candidates/PR-1")))
+	candidate := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--ref", "refs/heads/candidates/PR-1")))
 	if asMap(t, candidate["value"])["v"] != float64(99) {
 		t.Fatal(candidate)
 	}
-	oncall := asMap(t, body(t, kc(h, "read", "--repo", core, "--object", "runbooks/oncall", "--ref", "refs/heads/main")))
+	oncall := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "runbooks/oncall", ""), "--ref", "refs/heads/main")))
 	if asMap(t, oncall["value"])["text"] != "check freeze" {
 		t.Fatal(oncall)
 	}
-	io := asMap(t, body(t, kc(h, "read", "--repo", core, "--object", "ETLTask:job-1", "--aspect", "io", "--ref", "refs/heads/main")))
+	io := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "ETLTask:job-1", "/io"), "--ref", "refs/heads/main")))
 	if asMap(t, io["value"])["inputs"].([]any)[0] != "a" {
 		t.Fatal(io)
 	}
-	expectCode(t, kc(h, "read", "--repo", core, "--object", "policy/B", "--ref", "refs/heads/main"), "KNOWLEDGE_REF_UNRESOLVED")
+	expectCode(t, kc(h, "read", testObjectReference(t, core, "policy/B", ""), "--ref", "refs/heads/main"), "KNOWLEDGE_REF_UNRESOLVED")
 }
 
 func hasRepository(status map[string]any, repoID string) bool {
@@ -282,23 +235,17 @@ func TestCatalogRepoWriteErrors(t *testing.T) {
 	body(t, kc(h, "register", "--repo", core))
 	body(t, kc(h, "register", "--repo", core))
 
-	expectMsg(t, kc(h, "put", "--repo", core, "--object", "a", "--value", "1"), "missing --command-id")
-	expectMsg(t, kc(h, "put", "--command-id", "x", "--object", "a", "--value", "1"), "missing --repo")
-	expectMsg(t, kc(h, "put", "--command-id", "x", "--repo", core, "--object", "a"), "put requires --file or --value")
-	expectMsg(t, kc(h, "put", "--command-id", "x", "--repo", "kr://no/such", "--object", "a", "--value", "1"), "unknown repository")
+	expectMsg(t, kc(h, "put", testObjectReference(t, core, "a", ""), "--value", "1"), "missing --command-id")
+	expectMsg(t, kc(h, "put", "--command-id", "x", "--value", "1"), "object URN")
+	expectMsg(t, kc(h, "put", testObjectReference(t, core, "a", ""), "--command-id", "x"), "put requires --file or --value")
+	expectMsg(t, kc(h, "put", testObjectReference(t, "kr://no/such", "a", ""), "--command-id", "x", "--value", "1"), "unknown repository")
 	expectMsg(t, kc(h, "receipt", "--command-id", "missing"), "unknown command-id")
 	expectMsg(t, kc(h, "commit", "--command-id", "missing-dir", "--repo", core, "--dir", filepath.Join(h, "no-such-dir")), "no such file")
 
-	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "a", "--value", `{"v":1}`))
-	expectCode(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "a", "--value", `{"v":2}`), "IDEMPOTENCY_CONFLICT")
-	expectCode(t, kc(h, "put", "--command-id", "absent", "--repo", core, "--object", "a", "--value", `{"v":3}`, "--if-absent"), "PRECONDITION_FAILED")
-	expectCode(t, kc(h, "put",
-		"--command-id", "derived-bad",
-		"--repo", core,
-		"--object", "derived/x",
-		"--value", `{"v":1}`,
-		"--origin-kind", "DERIVATION",
-	), "PRECONDITION_FAILED")
+	body(t, kc(h, "put", testObjectReference(t, core, "a", ""), "--command-id", "seed", "--value", `{"v":1}`))
+	expectCode(t, kc(h, "put", testObjectReference(t, core, "a", ""), "--command-id", "seed", "--value", `{"v":2}`), "IDEMPOTENCY_CONFLICT")
+	expectCode(t, kc(h, "put", testObjectReference(t, core, "a", ""), "--command-id", "absent", "--value", `{"v":3}`, "--if-absent"), "PRECONDITION_FAILED")
+	expectCode(t, kc(h, "put", testObjectReference(t, core, "derived/x", ""), "--command-id", "derived-bad", "--value", `{"v":1}`, "--origin-kind", "DERIVATION"), "PRECONDITION_FAILED")
 
 	empty := filepath.Join(h, "empty.json")
 	if err := os.WriteFile(empty, []byte(`{"targetRepository":"kr://acme/public/core","targetRef":"refs/heads/main","operations":[]}`), 0o644); err != nil {
@@ -309,10 +256,10 @@ func TestCatalogRepoWriteErrors(t *testing.T) {
 	h2 := testkit.TempDir(t)
 	body(t, kc(h2, "init"))
 	seedRepo(t, h2, core)
-	expectCode(t, kc(h2, "put", "--as", "other", "--command-id", "y", "--repo", core, "--object", "a", "--value", "1"), "FORBIDDEN")
+	expectCode(t, kc(h2, "put", testObjectReference(t, core, "a", ""), "--as", "other", "--command-id", "y", "--value", "1"), "FORBIDDEN")
 
 	body(t, kc(h, "detach", "--repo", core))
-	body(t, kc(h, "put", "--command-id", "after-detach", "--repo", core, "--object", "z", "--value", `{"v":1}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "z", ""), "--command-id", "after-detach", "--value", `{"v":1}`))
 	state := asMap(t, body(t, kc(h, "show")))
 	if hasRepository(state, core) {
 		t.Fatalf("detached repository must disappear from show: %#v", state)
@@ -324,9 +271,8 @@ func TestSearchAfterPutIsIncremental(t *testing.T) {
 	core := "kr://acme/public/core"
 	body(t, kc(h, "init"))
 	seedRepo(t, h, core)
-	body(t, kc(h, "put", "--command-id", "schema-body", "--repo", core, "--object", "schema/policy.body",
-		"--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`))
-	put1 := asMap(t, body(t, kc(h, "put", "--command-id", "i1", "--repo", core, "--object", "policy/A", "--value", `{"body":"needs a runbook"}`)))
+	body(t, kc(h, "put", testObjectReference(t, core, "schema/policy.body", ""), "--command-id", "schema-body", "--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`))
+	put1 := asMap(t, body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--command-id", "i1", "--value", `{"body":"needs a runbook"}`)))
 	if put1["disposition"] != "APPLIED" {
 		t.Fatal(put1)
 	}
@@ -335,7 +281,7 @@ func TestSearchAfterPutIsIncremental(t *testing.T) {
 	if hits := search1["hits"].([]any); len(hits) != 1 {
 		t.Fatalf("%#v", search1)
 	}
-	put2 := asMap(t, body(t, kc(h, "put", "--command-id", "i2", "--repo", core, "--object", "policy/B", "--value", `{"body":"second runbook"}`)))
+	put2 := asMap(t, body(t, kc(h, "put", testObjectReference(t, core, "policy/B", ""), "--command-id", "i2", "--value", `{"body":"second runbook"}`)))
 	if put2["disposition"] != "APPLIED" {
 		t.Fatal(put2)
 	}

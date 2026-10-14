@@ -16,15 +16,14 @@ import (
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
+	retrieval "kc/discovery"
 	apphome "kc/home"
 	"kc/internal/telemetry"
 	"kc/internal/testkit"
 	inv "kc/invocation"
-	"kc/knowledge"
-	"kc/knowledge/reader"
-	knowledgeserving "kc/knowledge/serving"
+	knowledgeserving "kc/liveaccess"
+	objectmodel "kc/object"
 	"kc/observability"
-	"kc/retrieval"
 	"kc/server/internal/readiness"
 )
 
@@ -43,8 +42,8 @@ func (telemetryAuthenticator) Authenticate(context.Context, http.Header) (inv.HT
 type telemetryStateLookup struct{}
 
 func (telemetryStateLookup) LookupState(_ context.Context, _ knowledgeserving.StateLookupRequest) (knowledgeserving.StateObservation, error) {
-	return knowledgeserving.StateObservation{Value: "ready", Basis: knowledge.ObservationBasis{
-		BindingGeneration: "generation-1", Consistency: knowledge.ObservationRepeatable,
+	return knowledgeserving.StateObservation{Value: "ready", Basis: objectmodel.ObservationBasis{
+		BindingGeneration: "generation-1", Consistency: objectmodel.ObservationRepeatable,
 		SourceRevision: "revision-1", ObservedAt: time.Now().Add(-2 * time.Second).UTC().Format(time.RFC3339Nano),
 	}}, nil
 }
@@ -69,7 +68,7 @@ func TestAuthenticationAndBindingBoundariesExportMetricsAndChildSpans(t *testing
 	}
 	runtime.RecordIdentity(ctx, identity.Provider, inv.PrincipalKind(identity.Principal), false)
 	lookup := observeStateLookup(telemetryStateLookup{}, runtime)
-	_, err = lookup.LookupState(ctx, knowledgeserving.StateLookupRequest{Binding: reader.ResolvedBinding{Mode: knowledge.BindingState}})
+	_, err = lookup.LookupState(ctx, knowledgeserving.StateLookupRequest{Binding: knowledgeserving.ResolvedBinding{Mode: objectmodel.BindingState}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -274,7 +273,7 @@ func TestTypedHTTPCollectsApplicationMetricsAndChildSpan(t *testing.T) {
 	t.Cleanup(func() { _ = facade.closeReadHome() })
 
 	request := httptest.NewRequest(http.MethodPost, "/knowledge/v1/objects:read",
-		bytes.NewBufferString(`{"dataset":"missing","object":"Policy:missing"}`))
+		bytes.NewBufferString(`{"dataset":"missing","reference":"urn:kc:object:kr%3A%2F%2Facme%2Ftelemetry:Policy%3Amissing"}`))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("X-Kc-As", "agent:telemetry-test")
 	response := httptest.NewRecorder()

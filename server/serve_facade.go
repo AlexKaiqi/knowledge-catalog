@@ -1,8 +1,15 @@
 package server
 
 import (
+	commonplugin "kc/discovery/plugin"
 	inv "kc/invocation"
 	"kc/invoke"
+	"kc/kernel"
+	"kc/liveaccess"
+	sourcebridge "kc/liveaccess/discovery"
+	accessplugin "kc/liveaccess/plugin"
+	liveservice "kc/liveaccess/service"
+	objectmodel "kc/object"
 	"kc/snapshot"
 
 	"context"
@@ -22,15 +29,17 @@ import (
 // registration is kept out of serve.go so process lifecycle and transport
 // policy can evolve independently.
 type httpFacade struct {
-	home       string
-	options    HTTPServerOptions
-	runtime    *telemetry.Runtime
-	ready      *readiness.Cache
-	invoke     sync.RWMutex
-	homeMu     sync.Mutex
-	readHome   *Home
-	openHome   func() (*Home, error)
-	deployment *apphome.DeploymentConfig
+	home           string
+	options        HTTPServerOptions
+	runtime        *telemetry.Runtime
+	ready          *readiness.Cache
+	invoke         sync.RWMutex
+	homeMu         sync.Mutex
+	readHome       *Home
+	workersStarted bool
+	closed         bool
+	openHome       func() (*Home, error)
+	deployment     *apphome.DeploymentConfig
 }
 
 // HTTPHandlerWithOptions adds a trusted authentication boundary to the typed
@@ -67,11 +76,6 @@ func newHTTPHandlerWithRuntime(home string, options HTTPServerOptions, opened *H
 		facade.deployment = opened.Deployment
 		facade.openHome = func() (*Home, error) { return apphome.OpenDeployment(*facade.deployment) }
 		facade.readHome = opened
-		inv.BindHomeTelemetry(runtime, opened, map[string]FlagValue{"home": home})
-		if opened.Projection != nil {
-			opened.Projection.SetStateLookup(options.StateLookup)
-			opened.Projection.Start(context.Background())
-		}
 		facade.ready.BindProbe(func(surface string) readiness.Result {
 			facade.invoke.RLock()
 			defer facade.invoke.RUnlock()
@@ -93,7 +97,9 @@ func newHTTPHandlerWithRuntime(home string, options HTTPServerOptions, opened *H
 	mux := http.NewServeMux()
 	facade.registerStatusRoutes(mux)
 	facade.registerServiceRoutes(mux)
-	return &ManagedHTTPHandler{Handler: observedHTTPHandler(runtime, mux), runtime: runtime, closeHome: facade.closeReadHome}
+	return &ManagedHTTPHandler{Handler: observedHTTPHandler(runtime, mux), runtime: runtime, closeHome: facade.closeReadHome, stopHome: facade.stopReadHome,
+		activate: func() error { _, err := facade.readHomeForRequest(); return err },
+	}
 }
 
 func (f *httpFacade) registerStatusRoutes(mux *http.ServeMux) {
@@ -141,6 +147,9 @@ func (f *httpFacade) metrics(w http.ResponseWriter, r *http.Request) {
 func (f *httpFacade) readHomeForRequest() (*Home, error) {
 	f.homeMu.Lock()
 	defer f.homeMu.Unlock()
+	if f.closed {
+		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "HTTP runtime has closed")
+	}
 	if f.deployment != nil {
 		if err := apphome.ValidateDeploymentState(*f.deployment); err != nil {
 			return nil, err
@@ -150,6 +159,14 @@ func (f *httpFacade) readHomeForRequest() (*Home, error) {
 		}
 	}
 	if f.readHome != nil {
+		if !f.workersStarted {
+			if err := f.startProjectionWorker(f.readHome); err != nil {
+				_ = f.readHome.Close()
+				f.readHome = nil
+				return nil, err
+			}
+			f.workersStarted = true
+		}
 		return f.readHome, nil
 	}
 	open := f.openHome
@@ -160,18 +177,93 @@ func (f *httpFacade) readHomeForRequest() (*Home, error) {
 	if err != nil {
 		return nil, err
 	}
-	f.readHome = ws
-	inv.BindHomeTelemetry(f.runtime, ws, map[string]FlagValue{"home": f.home})
-	if ws.Projection != nil {
-		// The worker belongs to this process-lifetime Home. Open() itself must
-		// not Start: one-shot CLI search would otherwise CatchUp (P-01).
-		ws.Projection.SetStateLookup(f.options.StateLookup)
-		ws.Projection.Start(context.Background())
+	if err := f.startProjectionWorker(ws); err != nil {
+		_ = ws.Close()
+		return nil, err
 	}
+	f.readHome = ws
+	f.workersStarted = true
 	return ws, nil
 }
 
+func (f *httpFacade) startProjectionWorker(ws *Home) error {
+	if ws.Plugins != nil {
+		entries := map[string]liveservice.PluginEntry{"liveaccess": accessplugin.Entry(accessplugin.Options{
+			CredentialOrigins: f.options.LiveAccessCredentialOrigins,
+			Interfaces:        f.options.ObjectInterfaces,
+			OpenLookup:        f.liveAccessAdapter(),
+		})}
+		for name, entry := range f.options.LiveAccessPlugins {
+			entries[name] = entry
+		}
+		if ws.Plugins.Unactivated() {
+			if err := ws.SetLiveAccessEntries(entries); err != nil {
+				return err
+			}
+		}
+		if err := ws.VerifyIndexPlugins(); err != nil {
+			return err
+		}
+	}
+	// Read native Repository configuration before decorating task I/O. The
+	// verified selection stays fixed while requests borrow observed views.
+	inv.BindHomeTelemetry(f.runtime, ws, map[string]FlagValue{"home": f.home})
+	// Request-time runtime availability does not install a worker identity.
+	// Background observation needs its own explicitly configured service principal.
+	if ws.Plugins != nil {
+		ws.Plugins.SetObservationSource(nil)
+	}
+	if identity := f.options.ServiceIdentity; ws.LiveAccess != nil && identity != nil && strings.TrimSpace(identity.Principal) != "" {
+		if ws.Plugins != nil {
+			ws.Plugins.SetObservationSource(sourcebridge.Source{Lookup: ws.LiveAccess, Request: objectmodel.RequestContext{
+				Identity: kernel.IdentityContext{Principal: identity.Principal},
+			}})
+		}
+	}
+	if ws.LiveAccess != nil {
+		if err := ws.LiveAccess.Start(context.Background()); err != nil {
+			return err
+		}
+	}
+	// The worker belongs to this process-lifetime Home. Open() itself must not
+	// Start: one-shot CLI search would otherwise CatchUp (P-01).
+	if ws.Plugins != nil {
+		if err := ws.Plugins.Start(context.Background()); err != nil {
+			return err
+		}
+	}
+	if ws.ObjectMaintenance != nil {
+		ws.ObjectMaintenance.Start(context.Background())
+	}
+	return nil
+}
+
+func (f *httpFacade) liveAccessAdapter() func(commonplugin.PluginScope) (liveaccess.StateLookup, error) {
+	if f.options.StateLookup == nil {
+		return nil
+	}
+	return func(commonplugin.PluginScope) (liveaccess.StateLookup, error) {
+		if adapter, ok := f.options.StateLookup.(*liveaccess.HTTPStateLookup); ok && f.options.LiveAccessCredentialOrigins != nil {
+			return adapter.WithCredentialOrigins(f.options.LiveAccessCredentialOrigins)
+		}
+		return f.options.StateLookup, nil
+	}
+}
+
+func (f *httpFacade) stopReadHome() {
+	f.homeMu.Lock()
+	f.closed = true
+	opened := f.readHome
+	f.homeMu.Unlock()
+	// Cancel workers before draining typed requests that may be waiting for
+	// a worker's lock. Query resources remain owned until requests finish.
+	if opened != nil {
+		opened.StopMaintenance()
+	}
+}
+
 func (f *httpFacade) closeReadHome() error {
+	f.stopReadHome()
 	// Shutdown must not close adapters borrowed by an in-flight typed or file read.
 	f.invoke.Lock()
 	defer f.invoke.Unlock()
@@ -182,6 +274,7 @@ func (f *httpFacade) closeReadHome() error {
 	}
 	err := f.readHome.Close()
 	f.readHome = nil
+	f.workersStarted = false
 	return err
 }
 
@@ -234,6 +327,9 @@ func HTTPHandlerFromConfig(path string, options HTTPServerOptions) (http.Handler
 	cfg, err := apphome.ReadDeployment(path)
 	if err != nil {
 		return nil, err
+	}
+	if options.LiveAccessCredentialOrigins == nil && cfg.LiveAccess.CredentialOrigins != nil {
+		options.LiveAccessCredentialOrigins = append([]string{}, cfg.LiveAccess.CredentialOrigins...)
 	}
 	if options.AuthMode == "" && options.Authenticator == nil {
 		auth, err := HTTPServerOptionsFromFlags(map[string]FlagValue{"auth": cfg.Auth, "auth-url": cfg.AuthURL})

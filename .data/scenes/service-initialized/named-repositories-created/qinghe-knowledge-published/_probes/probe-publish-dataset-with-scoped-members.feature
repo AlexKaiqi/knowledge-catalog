@@ -23,21 +23,20 @@ Feature: publish scoped Dataset and read admitted members
       | datasets[].revision | 1 |
       | repositories[].id | table-meta |
       | repositories[].id | sales-semantic |
-    When I run `kc read --dataset qinghe-sales --object table/shop.orders`
+    When I run `kc read urn:kc:object:table-meta:table%2Fshop.orders --dataset qinghe-sales`
     Then the output has:
-      | 0.objectId | table/shop.orders |
-      | 0.repository | table-meta |
-      | 0.commit | nonempty |
-    When I run `kc read --dataset qinghe-sales --object semantic-model/shop.sales`
+      | objectId | table/shop.orders |
+      | repository | table-meta |
+      | commit | nonempty |
+    When I run `kc read urn:kc:object:sales-semantic:semantic-model%2Fshop.sales --dataset qinghe-sales`
     Then the output has:
-      | 0.objectId | semantic-model/shop.sales |
-      | 0.repository | sales-semantic |
-      | 0.commit | nonempty |
-    When I run `kc read --dataset qinghe-sales --object metric/shop.gmv`
+      | objectId | semantic-model/shop.sales |
+      | repository | sales-semantic |
+      | commit | nonempty |
+    When I run `kc read urn:kc:object:sales-semantic:metric%2Fshop.gmv --dataset qinghe-sales`
     Then the output has:
-      | 0.objectId | metric/shop.gmv |
-      | 0.repository | sales-semantic |
-      | 0.commit | nonempty |
-    When I run `kc read --dataset qinghe-sales --object data-job/shop.refresh_sales_mart`
-    Then the output has:
-      |  | [] |
+      | objectId | metric/shop.gmv |
+      | repository | sales-semantic |
+      | commit | nonempty |
+    When I run `kc read urn:kc:object:table-meta:data-job%2Fshop.refresh_sales_mart --dataset qinghe-sales`
+    Then error FORBIDDEN

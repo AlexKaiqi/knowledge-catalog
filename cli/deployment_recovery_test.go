@@ -15,7 +15,7 @@ import (
 	"kc/hook"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 	"kc/snapshot"
 )
 
@@ -98,7 +98,7 @@ func TestDeploymentSurvivesInstanceReplacement(t *testing.T) {
 	sink := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusServiceUnavailable) }))
 	defer sink.Close()
 	body(t, call("operations", "hook", "add", "--on", "writer.commit", "--phase", "post", "--url", sink.URL))
-	receipt := body(t, call("writer", "put", "--command-id", "recovery-write", "--repo", "kr://recover/source", "--object", "note/recover", "--value", `{"text":"durable"}`))
+	receipt := body(t, call("writer", "put", testObjectReference(t, "kr://recover/source", "note/recover", ""), "--command-id", "recovery-write", "--value", `{"text":"durable"}`))
 	body(t, call("dataset", "define", "incident", "--revision", "2", "--source", "kr://recover/source"))
 	body(t, call("governance", "proposal", "create", "--proposal-id", "recovery-proposal", "--repo", "kr://recover/source", "--target", snapshot.DefaultRef, "--candidate", "refs/heads/candidates/recovery", "--object", "note/recover", "--value", `{"text":"proposed"}`))
 	preview := asMap(t, body(t, call("governance", "preview", "create", "--proposal", "recovery-proposal", "--dataset", "incident")))
@@ -148,11 +148,11 @@ func TestDeploymentSurvivesInstanceReplacement(t *testing.T) {
 	if got := body(t, call("operations", "gate", "list")); !reflect.DeepEqual(got, gates) {
 		t.Fatal("gates lost on replacement")
 	}
-	replay := asMap(t, body(t, call("writer", "put", "--command-id", "recovery-write", "--repo", "kr://recover/source", "--object", "note/recover", "--value", `{"text":"durable"}`)))
+	replay := asMap(t, body(t, call("writer", "put", testObjectReference(t, "kr://recover/source", "note/recover", ""), "--command-id", "recovery-write", "--value", `{"text":"durable"}`)))
 	if replay["disposition"] != "REPLAYED" {
 		t.Fatalf("idempotency receipt lost: original=%#v replay=%#v", receipt, replay)
 	}
-	expectCode(t, kcRemote(t, server.URL, "agent:reader", "writer", "put", "--command-id", "forbidden-recovery", "--repo", "kr://recover/source", "--object", "note/recover", "--value", `{}`), "FORBIDDEN")
+	expectCode(t, kcRemote(t, server.URL, "agent:reader", "writer", "put", testObjectReference(t, "kr://recover/source", "note/recover", ""), "--command-id", "forbidden-recovery", "--value", `{}`), "FORBIDDEN")
 	body(t, call("governance", "proposal", "merge", "--proposal", "recovery-proposal", "--preview", previewID, "--validation", validation["reportId"].(string)))
 }
 
@@ -179,7 +179,7 @@ func TestDeploymentMissingDurableStateFailsClosed(t *testing.T) {
 func TestDeploymentSystemPublishUsesDeclaredBinding(t *testing.T) {
 	cfg, path := declaredDeployment(t, false)
 	fake := testkit.NewLakeFSFake(t)
-	cfg.Repositories = []apphome.RepositoryBinding{{ID: string(knowledge.SystemRepositoryID), Driver: "lakefs", DSN: fake.DSN(fake.NewRepo())}}
+	cfg.Repositories = []apphome.RepositoryBinding{{ID: string(objectmodel.SystemRepositoryID), Driver: "lakefs", DSN: fake.DSN(fake.NewRepo())}}
 	writeDeployment(t, path, cfg)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", path))
 	first := asMap(t, body(t, deploymentCommand(t, "deployment", "system", "publish", "--config", path)))

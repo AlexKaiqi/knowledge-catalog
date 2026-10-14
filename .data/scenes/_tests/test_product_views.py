@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import contextlib
+import copy
 import importlib.util
 import io
 import json
@@ -67,6 +68,28 @@ class ProductViewsTest(unittest.TestCase):
 
     def errors(self):
         return "\n".join(tree.check_product(self.model())["errors"])
+
+    def specification(self, *, case_id="liveaccess-read", claims=None):
+        return {"id": case_id, "title": "Read the selected external value",
+                "claims": claims or ["product#U3"], "given": ["An external value is declared."],
+                "when": ["Read the object through the public entry."],
+                "then": ["Observe value: running."], "risk": "The implementation returns a declaration instead of data."}
+
+    def write_specifications(self, cases, *, relative="root/attached", filename="liveaccess.yaml"):
+        directory = self.root / relative / "_specs"
+        directory.mkdir(parents=True, exist_ok=True)
+        lines = []
+        for case in cases:
+            for index, (key, value) in enumerate(case.items()):
+                prefix = "- " if index == 0 else "  "
+                if isinstance(value, list) and value:
+                    lines.append(prefix + key + ":")
+                    lines.extend("    - " + json.dumps(item, ensure_ascii=False) for item in value)
+                else:
+                    lines.append(prefix + key + ": " + json.dumps(value, ensure_ascii=False))
+        path = directory / filename
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return path
 
     def test_owner_headings_generate_views_and_gap_without_manual_members(self):
         model = self.model()
@@ -197,6 +220,83 @@ class ProductViewsTest(unittest.TestCase):
         self.assertTrue(claim["links"])
         self.assertTrue(claim["gap"])
 
+    def test_specifications_are_discoverable_without_becoming_execution_evidence(self):
+        before = self.model()
+        case = self.specification()
+        self.write_specifications([case])
+        model = self.model()
+        claim = next(item for item in model["product"]["claims"] if item["id"] == "U3")
+        specification, = claim["specifications"]
+        self.assertEqual(specification["id"], case["id"])
+        self.assertEqual(specification["then"], case["then"])
+        self.assertEqual(specification["state"], "attached")
+        self.assertEqual(specification["file"], "root/attached/_specs/liveaccess.yaml")
+        self.assertEqual(specification["execution_status"], "not_evaluated")
+        self.assertEqual(claim["status"], "gap")
+        self.assertEqual(claim["links"], [])
+        self.assertEqual(tree.check_product(model)["errors"], [])
+        self.assertEqual(tree.case_ids(model["states"]), tree.case_ids(before["states"]))
+        self.assertEqual(tree.check_views(model)["totals"], tree.check_views(before)["totals"])
+        text = tree.product_tools.inventory_text(model["product"])
+        self.assertIn("specification liveaccess-read", text)
+        self.assertIn(case["then"][0], text)
+        self.assertIn("not_evaluated", text)
+
+    def test_specifications_do_not_replace_explicit_missing_execution_gaps(self):
+        self.write_specifications([self.specification()])
+        self.config()
+        path = self.root / "_views.yaml"
+        path.write_text(path.read_text().replace("      U3: The cross-client journey is not yet declared.\n", ""), encoding="utf-8")
+        self.assertIn("neither an actual case link nor an explicit gap", self.errors())
+
+    def test_specification_shape_rejects_blank_steps_unknown_claims_and_runtime_fields(self):
+        original = self.specification()
+        invalid = [{"id": ""}, {"title": " "}, {"risk": ""}, {"claims": []},
+                   {"claims": ["product#U404"]}, {"claims": ["product#U3", "product#U3"]},
+                   {"given": []}, {"when": "Read the object."}, {"then": [""]},
+                   {"then": [False]}, {"tests": ["TestFakePass"]},
+                   {"verifies": []}, {"status": "PASS"}]
+        for replacement in invalid:
+            with self.subTest(replacement=replacement):
+                case = copy.deepcopy(original)
+                case.update(replacement)
+                self.write_specifications([case])
+                self.assertTrue(self.errors())
+
+    def test_duplicate_specification_ids_across_hosts_are_rejected(self):
+        self.write_specifications([self.specification()])
+        self.write_specifications([self.specification()], relative="root")
+        self.assertIn("duplicate specification id", self.errors())
+
+    def test_specifications_require_existing_executable_hosts(self):
+        path = self.write_specifications([self.specification()], relative="root/_materials/unhosted")
+        self.assertIn("existing executable scene host", self.errors())
+        path.unlink()
+        self.node("root/runtime", surface="go-test", construct=False)
+        self.write_specifications([self.specification()], relative="root/runtime")
+        self.assertIn("existing executable scene host", self.errors())
+
+    def test_specification_parse_errors_are_reported_by_product_check(self):
+        path = self.write_specifications([self.specification()])
+        path.write_text("- id: first\n  id: duplicate\n", encoding="utf-8")
+        self.assertIn("duplicate key", self.errors())
+
+    def test_product_selection_shows_specs_on_their_hosts_and_respects_boundaries(self):
+        self.write_specifications([self.specification()])
+        self.write_specifications([self.specification(case_id="root-read")], relative="root")
+        model = self.model()
+        view = tree.project_view(model, view_id="product/product/U3", from_id="attached")
+        state, = view["states"]
+        self.assertEqual(state["id"], "attached")
+        self.assertTrue(state["context"])
+        self.assertFalse(state["construct_selected"])
+        self.assertEqual(state["processes"], [])
+        self.assertEqual(view["product_claim"]["selected_link_count"], 0)
+        self.assertEqual(view["product_claim"]["declared_specification_count"], 2)
+        self.assertEqual(view["product_claim"]["selected_specification_count"], 1)
+        self.assertEqual(view["product_claim"]["specifications"][0]["id"], "liveaccess-read")
+        self.assertEqual(len(model["product"]["claims"][2]["specifications"]), 2)
+
     def test_cli_product_family_is_inventory_not_execution_and_product_lists_first(self):
         out = io.StringIO()
         with patch.object(tree, "ROOT", self.root), patch("sys.argv", ["tree.py", "--family", "product", "--json"]), contextlib.redirect_stdout(out):
@@ -215,6 +315,49 @@ class ProductViewsTest(unittest.TestCase):
         path.write_text(path.read_text().replace("### U2", "```markdown\n### U999: Example\n```\n### U2"), encoding="utf-8")
         self.assertEqual(self.errors(), "")
         self.assertEqual(len(self.model()["product"]["claims"]), 3)
+
+    def test_bold_u_items_in_an_ordered_list_are_stable_owner_claims(self):
+        path = self.repo / "docs/product.md"
+        path.write_text(
+            "# Product\n1. **U9 Outside：**Not in the registered section.\n"
+            "## 8. 用例\n1. **U1 字段：**Compare sets and returned values.\n"
+            "```markdown\n2. **U99 Example：**A fenced example.\n```\n"
+            "2. **U2 来源选用：**Select the source implementation.\n"
+            "3. **U3 更新恢复：**Recover the selected source.\n"
+            "## 9. Other\n1. **U8 Outside：**Not a registered claim.\n", encoding="utf-8")
+        model = self.model()
+        self.assertEqual(tree.check_product(model)["errors"], [])
+        self.assertEqual([(item["id"], item["title"]) for item in model["product"]["claims"]],
+                         [("U1", "U1：字段"), ("U2", "U2：来源选用"), ("U3", "U3：更新恢复")])
+        self.assertEqual(model["product"]["claims"][0]["source"]["line"], 4)
+
+    def test_ordered_list_claim_ids_share_the_heading_duplicate_guard(self):
+        path = self.repo / "docs/product.md"
+        for duplicate in ("2. **U1 第二项：**Duplicate ordered claim.", "### U1：Duplicate heading"):
+            with self.subTest(duplicate=duplicate):
+                path.write_text("# Product\n## 8. 用例\n1. **U1 字段：**First claim.\n" + duplicate + "\n", encoding="utf-8")
+                self.assertIn("duplicate claim id U1", self.errors())
+
+
+class LiveAccessLibrarySpecificationsTest(unittest.TestCase):
+    def test_current_liveaccess_targets_keep_prepared_library_cases(self):
+        root = Path(__file__).resolve().parents[1]
+        claims = {claim["ref"]: claim for claim in tree.build_view(root)["product"]["claims"]}
+        for number in range(13, 21):
+            reference = f"resource-access#U{number}"
+            with self.subTest(reference=reference):
+                self.assertIn(reference, claims)
+                self.assertTrue(claims[reference]["specifications"],
+                                f"{reference} must keep its prepared library specification, not only a gap")
+
+    def test_current_liveaccess_targets_have_named_execution_assertions(self):
+        root = Path(__file__).resolve().parents[1]
+        claims = {claim["ref"]: claim for claim in tree.build_view(root)["product"]["claims"]}
+        for number in range(13, 21):
+            reference = f"resource-access#U{number}"
+            with self.subTest(reference=reference):
+                self.assertTrue(any(link.get("tests") for link in claims[reference]["links"]),
+                                f"{reference} needs executable assertions, not only prepared specifications")
 
 
 if __name__ == "__main__":

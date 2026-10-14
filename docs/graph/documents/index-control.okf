@@ -17,6 +17,7 @@ path_hint: docs/graph/documents/index-control.okf
   ],
   "ownerTopics": [
     "snapshot-and-state-projection-control",
-    "derived-consumer-reconciliation"
+    "derived-consumer-reconciliation",
+    "declarative-index-plugin-maintenance-and-recovery"
   ]
 }

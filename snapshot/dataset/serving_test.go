@@ -5,7 +5,7 @@ import (
 
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 	catalog "kc/snapshot/dataset"
 )
 
@@ -23,7 +23,7 @@ func TestOpenKnowledgeSetDoesNotFollowLaterCommitUntilRepublish(t *testing.T) {
 		t.Fatal("publish must freeze source commits")
 	}
 	head := testkit.MustHead(t, s.publicRepo, "refs/heads/main")
-	later, err := s.publicRepo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
+	later, err := s.publicRepo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
 		TargetRepository: "kr://acme/public/core", TargetRef: "refs/heads/main",
 		BaseCommit: head, ExpectedTargetCommit: head,
 		Operations: testkit.PutEntity("policy/P-103", map[string]any{"statement": "later"}, ""),
@@ -131,7 +131,7 @@ func TestOpenedKnowledgeSetPinDoesNotMoveWithLaterCommit(t *testing.T) {
 	}
 	opened := serving.Pin().Repositories["kr://acme/public/core"]
 	head := testkit.MustHead(t, s.publicRepo, "refs/heads/main")
-	if _, err := s.publicRepo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
+	if _, err := s.publicRepo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
 		TargetRepository: "kr://acme/public/core", TargetRef: "refs/heads/main",
 		BaseCommit: head, ExpectedTargetCommit: head,
 		Operations: testkit.PutEntity("policy/P-103", map[string]any{"statement": "after-open"}, ""),

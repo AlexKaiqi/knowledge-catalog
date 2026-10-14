@@ -215,7 +215,7 @@ keep 且合格（不要顺手改）：
 | `POST …/traces:get` | `POST …/traces:query` | rename | `operations audit trace` |
 | `POST …/hitmap:query` | 同左 | keep | `operations audit hitmap` |
 | `POST …/feedback` | 同左 | keep | `operations feedback record` |
-| 四条 retrieval/refine/rerank `:query` | 同左 | keep | **HTTP-only** |
+| 四条 discovery/refine/rerank `:query` | 同左 | keep | **HTTP-only** |
 
 ---
 
@@ -312,7 +312,7 @@ CLI 远程        cli/remote_*.go（只换 client 调用，不换 argv）
                 凡写死旧 URL 的 cli/*_test.go
 文档示例        README.md、MVP_ACCEPTANCE、WALKTHROUGH、TEST_CATALOG、
                 DEPLOY_AUTH、SERVICE_ARCHITECTURE（禁止新复制全表，只改已有示例句）
-                catalog/README.md、knowledge/reader/README.md、client 包注释
+                catalog/README.md、object/reader/README.md、client 包注释
 插件/脚本       dsh-plugin；scripts/deploy docker curl；scripts/*.sh
 ```
 

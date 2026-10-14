@@ -1,5 +1,5 @@
 // Package observability defines non-canonical evidence produced when principals
-// access versioned knowledge.
+// access versioned objectmodel.
 package observability
 
 import "context"

@@ -169,7 +169,7 @@ KC_DEPLOY_TTYD_PORT=${KC_DEPLOY_TTYD_PORT}
 KC_PUBLIC_URL=${KC_PUBLIC_URL}
 KC_LAKEFS_PUBLIC_URL=${KC_LAKEFS_PUBLIC_URL:-}
 KC_OPENSEARCH_PUBLIC_URL=${KC_OPENSEARCH_PUBLIC_URL:-}
-KC_CATALOG=${KC_CATALOG:-kr://acme/catalog}
+KC_REGISTRY_ID=${KC_REGISTRY_ID:-kr://acme/catalog}
 KC_AS=${KC_AS:-admin}
 KC_MINIO_USER=${KC_MINIO_USER:-kcminio}
 KC_MINIO_PASSWORD=${KC_MINIO_PASSWORD:-kcminio-secret}
@@ -195,7 +195,7 @@ compose() {
 }
 
 print_access() {
-  local catalog="${KC_CATALOG:-kr://acme/catalog}"
+  local registry_id="${KC_REGISTRY_ID:-kr://acme/catalog}"
   local minio_user="${KC_MINIO_USER:-kcminio}"
   local minio_password="${KC_MINIO_PASSWORD:-kcminio-secret}"
   local lakefs_key="${KC_LAKEFS_ACCESS_KEY:-AKIAKOSLOCALEXAMPLE}"
@@ -229,7 +229,7 @@ print_access() {
 kc 观察台（产品前端：Catalog、成员仓、Dataset、检索投影、Snapshot 权威）
   http://${url_host}:${KC_DEPLOY_SERVER_PORT}/console
   本地登录用户名          admin
-  Catalog                 ${catalog}
+  登记权威                ${registry_id}
   System                  kr://kc/system
   typed API 根路径        http://${url_host}:${KC_DEPLOY_SERVER_PORT}/  是 404，前端在 /console
 
@@ -442,7 +442,7 @@ cmd_goto() {
     exit 2
   fi
   export KC_SERVER_URL="http://127.0.0.1:${KC_DEPLOY_SERVER_PORT}"
-  export KC_CATALOG="${KC_CATALOG:-kr://acme/catalog}"
+  export KC_REGISTRY_ID="${KC_REGISTRY_ID:-kr://acme/catalog}"
   export KC_AS="${KC_AS:-admin}"
   python3 "$ROOT/.data/scenes/goto.py" "$@"
 }

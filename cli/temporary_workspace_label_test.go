@@ -26,8 +26,7 @@ func TestHTTPTemporaryWorkspaceLabelCannotImpersonatePublishedWorkspace(t *testi
 	repositoryDSN := lakeFSRepoDSN(t)
 	body(t, kc(home, "local", "repository", "attach", "--repo", repositoryID, "--dsn", repositoryDSN))
 	body(t, kc(home, "attach", "--repo", repositoryID, "--dsn", repositoryDSN))
-	body(t, kc(home, "writer", "put", "--command-id", "temporary-label-seed", "--repo", repositoryID,
-		"--object", "Policy:label", "--value", `{"body":"fixed label content"}`))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "Policy:label", ""), "--command-id", "temporary-label-seed", "--value", `{"body":"fixed label content"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", label, "--revision", "1", "--source", repositoryID))
 	body(t, kc(home, "grant", "add", "--principal", namedReader,
 		"--action", "dataset.resolve,file.read", "--dataset", label))
@@ -64,16 +63,16 @@ func TestHTTPTemporaryWorkspaceLabelCannotImpersonatePublishedWorkspace(t *testi
 	definition := map[string]any{"setId": label, "revision": 1, "sources": sources}
 	pinWithDefinition := cloneJSONMap(t, asMap(t, temporaryPin))
 	pinWithDefinition["definition"] = definition
-	read := map[string]any{"pin": pinWithDefinition, "object": "Policy:label"}
+	read := map[string]any{"pin": pinWithDefinition, "reference": testObjectReference(t, repositoryID, "Policy:label", "")}
 	status, result, _ := httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:read", read, memberReader)
 	if status != http.StatusOK {
 		t.Fatalf("fixed temporary pin must replay with its original label: %d %#v", status, result)
 	}
-	values, ok := result.([]any)
-	if !ok || len(values) != 1 {
-		t.Fatalf("temporary read omitted the seeded content: %#v", result)
+	value := asMap(t, result)
+	if value["reference"] != testObjectReference(t, repositoryID, "Policy:label", "") {
+		t.Fatalf("temporary read omitted the selected source: %#v", result)
 	}
-	value := asMap(t, values[0])
+
 	if asMap(t, value["value"])["body"] != "fixed label content" || value["commit"] != asMap(t, asMap(t, temporaryPin)["repositories"])[repositoryID] {
 		t.Fatalf("temporary read changed content or fixed authority version: %#v", value)
 	}
@@ -85,7 +84,7 @@ func TestHTTPTemporaryWorkspaceLabelCannotImpersonatePublishedWorkspace(t *testi
 	}
 	delete(saved, "definition")
 	delete(saved, "catalog")
-	replayed := cli.Run([]string{"--server", server.URL, "--as", memberReader, "read", "--pin", string(raw), "--object", "Policy:label"})
+	replayed := cli.Run([]string{"--server", server.URL, "--as", memberReader, "read", testObjectReference(t, repositoryID, "Policy:label", ""), "--pin", string(raw)})
 	if replayed.Status == 0 || !strings.Contains(replayed.Stdout, "rejects --pin") {
 		t.Fatalf("product CLI must reject --pin; use HTTP resolve/read for temporary replay: %s", replayed.Stdout)
 	}
@@ -94,7 +93,7 @@ func TestHTTPTemporaryWorkspaceLabelCannotImpersonatePublishedWorkspace(t *testi
 		t.Fatalf("temporary pin must not borrow published Workspace consume: %d %#v", status, rejected)
 	}
 	status, rejected, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:read", map[string]any{
-		"dataset": label, "definition": definition, "pin": temporaryPin, "object": "Policy:label",
+		"dataset": label, "definition": definition, "pin": temporaryPin, "reference": testObjectReference(t, repositoryID, "Policy:label", ""),
 	}, memberReader)
 	if status != http.StatusBadRequest {
 		t.Fatalf("explicit named selector mixed with temporary definition was accepted: %d %#v", status, rejected)

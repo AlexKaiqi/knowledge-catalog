@@ -28,7 +28,7 @@
 
 ## 选定方案 / 被否决方案
 
-- 选定：layer ② `knowledge/dolt` 增量 ChangeSet；每源事件可 commit；Repository generation 归档旧仓。
+- 选定：layer ② `object/dolt` 增量 ChangeSet；每源事件可 commit；Repository generation 归档旧仓。
 - 否决：周期扫描换吞吐；Writer 重写全部 `writer.json`；返回 receipt 前同步刷新 OpenSearch；押注单个 Dolt commit graph 无限增长。
 
 ## 接口契约 / 状态机
@@ -41,7 +41,7 @@
 规模 profile 不能通过“优化几条 SQL”达成目标，必须同时具备五条基础通路：
 
 1. **Dolt scale Repository 不再用 `kc_files` 保存知识。** `kc_units` 是唯一 Canonical 内容表；`kc_objects` 只是同 commit 的对象清单。Relation endpoint/type/role 不在 authority 建定位表。
-2. **Writer/Reader 不再经过全树解释。** Dolt 由 layer ② `knowledge/dolt` 直接实现增量 ChangeSet、点读、分页和历史能力；Gitea 使用文件 codec。
+2. **Writer/Reader 不再经过全树解释。** Dolt 由 layer ② `object/dolt` 直接实现增量 ChangeSet、点读、分页和历史能力；Gitea 使用文件 codec。
 3. **每个源事务或逻辑表变更立即 commit。** 不增加固定时间窗口，不用周期扫描换吞吐；只有队列已经积压时才允许零等待合并，且必须保留每个源事件证据。
 4. **Relation 查询、维护扫描和宿主物化必须有界。** Relation 查询使用候选分页；重建、导出与内部 checkout 使用维护侧分页或流式处理。公开消费面不提供对象实例 LIST，也不以“已经分页”为理由开放它。
 5. **幂等账本和 Projection Controller 改为按键持久化、异步追赶。** Writer 不再重写全部 `writer.json`，也不在返回 receipt 前同步刷新 OpenSearch。
@@ -119,7 +119,7 @@
   -> connector.Preview(PATCH/局部 RECONCILE)
   -> Writer COMMIT
        -> keyed command ledger reserve
-       -> knowledge/dolt 原生事务
+       -> object/dolt 原生事务
             kc_units                 Canonical
             kc_objects               object manifest
             Dolt commit/ref
@@ -151,9 +151,9 @@ Consumer
 
 `snapshot/dolt` 保留为通用 layer ⓪ TreeStore 参考实现，但不再是 scale profile 的知识读写入口。
 
-### 5.2 新增 layer ② `knowledge/dolt`
+### 5.2 新增 layer ② `object/dolt`
 
-`knowledge/dolt.Repository` 是组合对象：
+`object/dolt.Repository` 是组合对象：
 
 - 对外实现 `snapshot.Store`，ref/merge/archive 委托 Dolt backend；
 - 原生实现 `knowledge.Repository` 和批量读；
@@ -161,9 +161,9 @@ Consumer
 - 实现精确知识读取、SchemaLocator、FastChanges 和对象历史能力；
 - 不实现 `snapshot.TreeStore`，避免 raw path 写绕过知识不变量。
 
-精确知识读取不包含对象枚举。原生增量写入、批量读取、声明定位和维护扫描是各自独立的能力；缺少其中一种，不能通过另一条全量路径掩盖。底层全 Snapshot 遍历进入 `knowledge/maintenance` 的显式 SPI；Relation 候选发现属于③，Schema 使用声明定位能力，避免让消费 Reader 对所有 Repository 强制扫描。公开能力类型由 [`knowledge/repository.go`](../../knowledge/repository.go) 与 [`knowledge/maintenance`](../../knowledge/maintenance) 拥有。
+精确知识读取不包含对象枚举。原生增量写入、批量读取、声明定位和维护扫描是各自独立的能力；缺少其中一种，不能通过另一条全量路径掩盖。底层全 Snapshot 遍历进入 `object/maintenance` 的显式 SPI；Relation 候选发现属于③，Schema 使用声明定位能力，避免让消费 Reader 对所有 Repository 强制扫描。公开能力类型由 [`object/repository.go`](../../object/repository.go) 与 [`object/maintenance`](../../object/maintenance) 拥有。
 
-`SnapshotScanner` 只供 projection rebuild、迁移、显式 export 和 conformance；不能被 READ、SEARCH、Schema 或 Relations 当 fallback。Relations 合同位于 `retrieval/`，continuation 绑定 provider、repository、basis、query 与 generation，候选在同一 basis 回读 Canonical。
+`SnapshotScanner` 只供 projection rebuild、迁移、显式 export 和 conformance；不能被 READ、SEARCH、Schema 或 Relations 当 fallback。Relations 合同位于 `discovery/`，continuation 绑定 provider、repository、basis、query 与 generation，候选在同一 basis 回读 Canonical。
 
 Reader 优先使用明确提供的完整原生知识能力，否则在具备固定版本文件访问能力时使用文件解释器；两者都缺失时明确报告能力不足。Writer 同样区分原生增量写入与文件编码，但 COMMIT/PROPOSAL 的公开语义、CAS 与 Receipt 不变。具体能力选择由 Reader/Writer 的公开类型和实现拥有，不在本文复制装配代码。
 
@@ -174,14 +174,14 @@ Gitea 可以提供维护扫描，但该能力不进入消费 Repository、Servin
 PUT/REMOVE 的单元布局、前置条件、对象删除与 Schema/ValueSource 继承规则必须独立于文件序列化；否则新增原生 provider 就会复制第二套知识代数。职责应拆成：
 
 - provider-neutral `Unit`/`ObjectState` 和 Operation apply；
-- `internal/repofile` 只负责文件编码、path hint 和 tree changes；
-- `knowledge/dolt` 负责行编码和 SQL changes。
+- `object/format` 只负责文件编码、path hint 和 tree changes；
+- `object/dolt` 负责行编码和 SQL changes。
 
 两种 provider 对同一 ChangeSet 序列必须产生相同 KnowledgeValue、Resolution、Diff 和 Provenance，这是迁移的核心差分测试。
 
 ### 5.4 Dolt backend 机制
 
-连接、branch/ref、commit、merge、archive 和 SQL transaction 由不认识知识语义的底层机制承担。`snapshot/dolt` 与 `knowledge/dolt` 复用这些机制，但只有后者定义知识编码；具体包拆分不能改变这一所有权。
+连接、branch/ref、commit、merge、archive 和 SQL transaction 由不认识知识语义的底层机制承担。`snapshot/dolt` 与 `object/dolt` 复用这些机制，但只有后者定义知识编码；具体包拆分不能改变这一所有权。
 
 scale profile 使用 `dolt sql-server` 的 MySQL-compatible 长连接和连接池；CLI/Docker-per-call 只用于本地 conformance。Dolt 官方支持 SQL Server、历史 `AS OF`、row diff 和 SQL `DOLT_COMMIT()`，分别见 [SQL Server](https://www.dolthub.com/docs/sql-reference/server/)、[Querying history](https://www.dolthub.com/docs/sql-reference/version-control/querying-history/)、[SQL functions](https://www.dolthub.com/docs/sql-reference/version-control/dolt-sql-functions/) 与 [SQL procedures](https://www.dolthub.com/docs/sql-reference/version-control/dolt-sql-procedures/)。并发设计不假设 `SELECT FOR UPDATE`，其当前支持状态见 [Supported statements](https://www.dolthub.com/docs/sql-reference/sql-support/supported-statements/)。
 
@@ -195,7 +195,7 @@ scale profile 使用 `dolt sql-server` 的 MySQL-compatible 长连接和连接�
 
 一行对应一个独立维护的 Address，保存完整身份、业务值、Schema 引用、ValueSource 与来源信封。必须能按 Address 点读，也能按对象定位其组成单元；正文不再同时编码为第二份权威文件。
 
-摘要基于 KC canonical JSON 语义，不依赖数据库 JSON 重排。路径提示只用于可读表示和导出，不参与身份。具体列名、SQL 类型、键编码和索引定义由 `knowledge/dolt/repository.go` 与 `knowledge/dolt/codec.go` 拥有；本节约束它们需要保证的语义，不冻结另一份 SQL schema。
+摘要基于 KC canonical JSON 语义，不依赖数据库 JSON 重排。路径提示只用于可读表示和导出，不参与身份。具体列名、SQL 类型、键编码和索引定义由 `object/dolt/repository.go` 与 `object/dolt/codec.go` 拥有；本节约束它们需要保证的语义，不冻结另一份 SQL schema。
 
 hash 只是物理键。每次命中必须比对完整 Address/ObjectID；同 hash 不同完整身份时失败关闭，不静默覆盖。
 
@@ -289,7 +289,7 @@ relation endpoints = 2 + 31 = 33
 
 对象点读先在固定 commit 定位清单，核对完整身份，再读取同 commit 的组成单元；数量与摘要一致后才拼装结果。Address 点读直接定位该单元，不经过全对象或全仓枚举。
 
-批量读按有上限的对象批次执行，工作量只与这些目标对象的组成单元相关。摘要键仅用于定位，不能取代完整身份和一致性检查。原生读取实现见 `knowledge/dolt/read.go`。
+批量读按有上限的对象批次执行，工作量只与这些目标对象的组成单元相关。摘要键仅用于定位，不能取代完整身份和一致性检查。原生读取实现见 `object/dolt/read.go`。
 
 ### 9.2 分页
 
@@ -306,11 +306,11 @@ layer ③ 投影；消费请求先要求指定 commit 的 projection READY，再
 
 ### 9.4 Schema
 
-Schema 描述从原生对象清单定位声明 namespace，不遍历普通知识对象。编译后的 AccessSpec 可以复用，但必须固定 Repository、commit 与声明摘要，不能把旧编译结果带到另一版本。具体定位能力见 `knowledge/dolt/schema.go`。
+Schema 描述从原生对象清单定位声明 namespace，不遍历普通知识对象。编译后的 AccessSpec 可以复用，但必须固定 Repository、commit 与声明摘要，不能把旧编译结果带到另一版本。具体定位能力见 `object/dolt/schema.go`。
 
 ### 9.5 变化识别
 
-在两个固定 commit 的对象清单之间求差，只返回内容、声明或存在状态发生变化的对象身份；不为一次追赶逐 commit 回放或解释全仓正文。Dolt 原生差分的实现入口见 `knowledge/dolt/history.go`。
+在两个固定 commit 的对象清单之间求差，只返回内容、声明或存在状态发生变化的对象身份；不为一次追赶逐 commit 回放或解释全仓正文。Dolt 原生差分的实现入口见 `object/dolt/history.go`。
 
 ### 9.6 Object LOG
 
@@ -330,11 +330,11 @@ Object LOG 必须在版本历史中按目标身份定位并有界返回；Diff �
 4. 一次发布新的 projection basis。
 5. 长寿命 serve 启动时、以及之后的周期 tick，比较 projection basis、controller desired 与 Repository published HEAD；不同则 `Desire(HEAD)` 再追赶。这是坐标比较，不是源系统扫描，也不把 `controller.db` 的 READY 当成真相。
 
-provider 必须支持分批建立新 generation，在发布前完成追赶，并允许构建失败时放弃候选 generation。切换前旧 generation 继续服务，发布后新 generation 的 basis 必须可验证。具体 generation writer 合同由 `index/` 与 `index/opensearch/` 拥有。
+provider 必须支持分批建立新 generation，在发布前完成追赶，并允许构建失败时放弃候选 generation。切换前旧 generation 继续服务，发布后新 generation 的 basis 必须可验证。具体 generation writer 合同由 `declarativeindex/projection/` 与 `declarativeindex/opensearch/` 拥有。
 
 增量 Apply 不得为每个 commit 执行全索引计数或强制刷新。完整计数与校验由重建发布或明确的运维任务承担；写入可以等待正常刷新策略使结果可见，但不能以一次全索引操作换取该承诺。具体请求参数由 provider 拥有，度量仍需反映 commit 到可检索状态的延迟。
 
-消除增量计数或强制刷新，只解决固定的全索引成本；规模资格还要求变化识别、编译、提交端到端有界，以及跨进程 Controller 的协调与恢复。局部优化通过不能替代完整负载验收。物理配置、代际接口与实现证据分别见 [`index/opensearch`](../../index/opensearch)、[`index/README.md`](../../index/README.md) 和 `scale-benchmark.md`。
+消除增量计数或强制刷新，只解决固定的全索引成本；规模资格还要求变化识别、编译、提交端到端有界，以及跨进程 Controller 的协调与恢复。局部优化通过不能替代完整负载验收。物理配置、代际接口与实现证据分别见 [`declarativeindex/opensearch`](../../declarativeindex/opensearch)、[`declarativeindex/projection/README.md`](../../declarativeindex/projection/README.md) 和 `scale-benchmark.md`。
 
 Schema AccessDigest 或 physical mapping 变化时构建新 generation；旧 active index 在 Publish 前持续服务。
 
@@ -496,7 +496,7 @@ native layout 变化也通过新 generation 迁移，不在数千万行 active �
 
 - **S-01**：scale Dolt 以 `kc_units` 为唯一 Canonical，不再保存 `kc_files` 正文。
 - **S-02（废止）**：Dolt 不再维护 `kc_relation_endpoints` 或 `kc_objects.relation_type`；历史定位表只能在显式迁移流程中清理。接入与恢复只读验证已有 authority，不能顺带修改表或推进 ref；缺失或不兼容的知识能力必须明确报告。
-- **S-03**：规模能力位于 layer ② `knowledge/dolt`；`snapshot.Store` 和 Dataset 登记服务 不认识知识语义。
+- **S-03**：规模能力位于 layer ② `object/dolt`；`snapshot.Store` 和 Dataset 登记服务 不认识知识语义。
 - **S-04**：Gitea 保留文件 codec；Dolt/Gitea 共享 unit 代数和 conformance。
 - **S-05**：每个源事务/逻辑表变化立即 commit；不设置固定 batching interval。
 - **S-06**：signal 后 FULL scan 不算事件驱动；稳态必须 table-family targeted pull。

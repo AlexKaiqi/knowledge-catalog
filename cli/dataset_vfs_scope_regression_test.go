@@ -2,7 +2,11 @@ package cli_test
 
 import (
 	"encoding/base64"
+	"gopkg.in/yaml.v3"
 	"kc/internal/testkit"
+	"kc/kernel"
+	objectmodel "kc/object"
+	"kc/object/semanticview"
 	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
@@ -17,8 +21,8 @@ func TestDatasetRegressionSemanticVFSMustRespectDatasetScope(t *testing.T) {
 	repoDSN := lakeFSRepoDSN(t)
 	body(t, kc(home, "local", "repository", "attach", "--repo", repo, "--dsn", repoDSN))
 	body(t, kc(home, "attach", "--repo", repo, "--dsn", repoDSN))
-	body(t, kc(home, "writer", "put", "--command-id", "public", "--repo", repo, "--object", "public", "--path-hint", "public/a.yaml", "--value", `{"body":"public"}`))
-	body(t, kc(home, "writer", "put", "--command-id", "private", "--repo", repo, "--object", "secret", "--path-hint", "private/a.yaml", "--value", `{"body":"OUTSIDE_VFS_DATASET"}`))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repo, "public", ""), "--command-id", "public", "--path-hint", "public/a.yaml", "--value", `{"body":"public"}`))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repo, "secret", ""), "--command-id", "private", "--path-hint", "private/a.yaml", "--value", `{"body":"OUTSIDE_VFS_DATASET"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", "public-only", "--revision", "1", "--source", repo+"=refs/heads/main@docs@public"))
 	body(t, kc(home, "grant", "add", "--principal", principal, "--action", "dataset.resolve,file.read", "--dataset", "public-only"))
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
@@ -38,26 +42,34 @@ func TestDatasetRegressionSemanticVFSMustRespectDatasetScope(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("list %d %#v", status, result)
 	}
-	foundPublic := false
-	for _, entry := range asMap(t, result)["entries"].([]any) {
-		name := asMap(t, entry)["name"].(string)
-		if strings.HasPrefix(name, "public--") {
-			foundPublic = true
-		}
-		if !strings.HasPrefix(name, "secret--") {
-			continue
-		}
-		delete(request, "directory")
-		request["file"] = "objects/" + name
-		status, result, _ = httpSurfaceRequest(t, server, http.MethodPost, "/snapshot/v1/files/file:read", request, principal)
-		if status == http.StatusOK {
-			raw, _ := base64.StdEncoding.DecodeString(asMap(t, result)["content"].(string))
-			if strings.Contains(string(raw), "OUTSIDE_VFS_DATASET") {
-				t.Fatalf("semantic VFS returned excluded file content: %s", raw)
-			}
-		}
+	entries := asMap(t, result)["entries"].([]any)
+	if len(entries) != 1 || asMap(t, entries[0])["kind"] != "file" || !strings.HasPrefix(asMap(t, entries[0])["name"].(string), "public--") || asMap(t, result)["exhausted"] != true {
+		t.Fatalf("semantic listing must expose exactly the permitted file: %#v", result)
 	}
-	if !foundPublic {
-		t.Fatalf("semantic scope discarded the permitted object: %#v", result)
+	delete(request, "directory")
+	request["file"] = "objects/" + asMap(t, entries[0])["name"].(string)
+	status, result, _ = httpSurfaceRequest(t, server, http.MethodPost, "/snapshot/v1/files/file:read", request, principal)
+	if status != http.StatusOK {
+		t.Fatalf("permitted semantic file was not readable: HTTP %d %#v", status, result)
+	}
+	raw, err := base64.StdEncoding.DecodeString(asMap(t, result)["content"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]any
+	if err := yaml.Unmarshal(raw, &document); err != nil {
+		t.Fatal(err)
+	}
+	meta := asMap(t, document["_kc"])
+	if document["body"] != "public" || meta["object_id"] != "public" || meta["repository"] != repo ||
+		meta["commit"] != asMap(t, asMap(t, mounts["pin"])["repositories"])[repo] {
+		t.Fatalf("semantic file lost its permitted content or frozen source: %s", raw)
+	}
+	// The private object's deterministic semantic address is still forbidden
+	// when requested directly, even though it was absent from enumeration.
+	request["file"] = semanticview.Path(objectmodel.KnowledgeValue{Address: objectmodel.Address{ObjectID: "secret"}}, "")
+	status, result, _ = httpSurfaceRequest(t, server, http.MethodPost, "/snapshot/v1/files/file:read", request, principal)
+	if status != http.StatusNotFound || asMap(t, asMap(t, result)["error"])["code"] != string(kernel.ErrKnowledgeRefUnresolved) {
+		t.Fatalf("excluded semantic file did not fail its scope contract: HTTP %d %#v", status, result)
 	}
 }

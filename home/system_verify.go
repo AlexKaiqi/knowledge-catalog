@@ -1,11 +1,12 @@
 package home
 
 import (
-	"kc/internal/repofile"
 	"kc/kernel"
-	"kc/knowledge"
-	"kc/knowledge/reader"
+	objectmodel "kc/object"
+	repofile "kc/object/format"
+	"kc/object/reader"
 	"kc/snapshot"
+	"kc/systemrepo"
 )
 
 func verifySystemAuthority(source snapshot.Store) error {
@@ -20,8 +21,8 @@ func verifySystemAuthority(source snapshot.Store) error {
 	return verifySystemPublication(repo, source, head)
 }
 
-func verifySystemPublication(repo knowledge.ReadStore, source snapshot.Store, commit kernel.CommitID) error {
-	operations := knowledge.SystemPublicationOperations()
+func verifySystemPublication(repo objectmodel.ReadStore, source snapshot.Store, commit kernel.CommitID) error {
+	operations := systemrepo.SystemPublicationOperations()
 	for _, expected := range operations {
 		current, err := repo.ReadAddress(expected.Address, commit)
 		if err != nil {
@@ -31,9 +32,9 @@ func verifySystemPublication(repo knowledge.ReadStore, source snapshot.Store, co
 		if err != nil {
 			return err
 		}
-		actual := knowledge.Operation{Op: knowledge.OpPut, Address: current.Address, SchemaRef: resolved.SchemaRef, PathHint: resolved.PathHint, Value: current.Value}
+		actual := objectmodel.Operation{Op: objectmodel.OpPut, Address: current.Address, SchemaRef: resolved.SchemaRef, PathHint: resolved.PathHint, Value: current.Value}
 		if kernel.CanonicalDigest(actual) != kernel.CanonicalDigest(expected) {
-			return kernel.Fail(kernel.ErrPreconditionFailed, "System publication differs from the binary publication at %s", knowledge.AddressKey(expected.Address))
+			return kernel.Fail(kernel.ErrPreconditionFailed, "System publication differs from the binary publication at %s", objectmodel.AddressKey(expected.Address))
 		}
 	}
 	tree, ok := snapshot.TreeReaderOf(source)

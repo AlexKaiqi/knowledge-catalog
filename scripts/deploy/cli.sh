@@ -2,7 +2,7 @@
 set -euo pipefail
 
 export KC_SERVER_URL="${KC_SERVER_URL:-http://kc-server:7380}"
-export KC_CATALOG="${KC_CATALOG:-kr://acme/catalog}"
+export KC_REGISTRY_ID="${KC_REGISTRY_ID:-kr://acme/catalog}"
 unset KC_AS
 
 mkdir -p /workspace

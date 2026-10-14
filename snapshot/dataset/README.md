@@ -26,9 +26,34 @@
 
 ## 发布与消费
 
+`ParseSourceMappings([]string)` 与 `ParseFileMappings([]string)` 解析便携来源坐标，供
+argv 或其它输入 adapter 使用，不读取 flags、环境或 Home。目录形式为
+`repository[=selector][@path[@subPath]]`；单文件形式为
+`repository[=selector]@file@target`。省略 selector 使用 `snapshot.DefaultRef`；省略目录
+`@path` 与显式根映射 `@` 保持区别。解析不冻结版本、登记成员或授权，发布仍走下面的服务。
+
 `PrepareKnowledgeSet` 冻结候选来源；`PublishKnowledgeSet` 原子接受发布记录并推进当前
 版本；`DefineKnowledgeSet` 是这两步的纯文件组合入口。新 revision 必须大于当前版，
 不得覆盖已接受版本或倒退。源分支前进不会改变已发布 Dataset，知识投影准备由上层负责。
+准备与发布均核对逐文件选择的冻结源文件可读性，并按目标路径核对与目录来源的真实内容
+冲突；失败不推进当前版本、发布历史或登记 HEAD。冲突探测只读取可能相撞的路径及其
+祖先，并用 `DirectoryReader` 的单项页检查目标下是否存在内容，不扫描来源 prefix。
+需要目录探测但来源缺该能力时明确拒绝，不能用 `ListFiles` 模拟。
+根 fallback 与显式 prefix 并存时，还用根来源固定 commit 的 `TreeReader.ReadFile`
+点查显式目录目标及其祖先，直到已选根子树边界；真实文件不能占用声明目录位置。
+该检查不枚举任何 prefix，也不读取显式挂载的文件；缺少点读能力失败关闭。
+未声明交付目录的 `Path: nil` 来源保持原有坐标语义。
+
+`RouteDatasetFile(items, deliveredPath)` 从已固定清单编译单文件来源坐标：精确单文件条目
+优先，其余路径按显式 prefix 或根 fallback 路由。返回既有 `DatasetItem` 的副本；prefix
+结果保留原映射字段，并把映射后的原仓路径放在 `File`。无匹配返回
+`KNOWLEDGE_REF_UNRESOLVED`，空或逃逸路径返回 `USAGE_INVALID`。该纯 helper 不读取正文
+或证明文件存在。显式单文件占用根 fallback 的精确目标；源祖先文件或目标下的源内容
+仍不能造成文件与目录冲突。`ReadVirtualFileAt` 复用该编译并核对固定 commit；旧虚拟读取
+入口的未归属路径继续返回 `USAGE_INVALID`。
+`CheckDatasetFileConflict(items, deliveredPath, source)` 共享发布时的路径/目录判定，供
+消费者对旧清单失败关闭；它只检查该显式文件目标，不枚举 prefix。调用方须先授权
+冲突依据来源，再提供取得 Store 的回调。
 
 `KnowledgeSet.Metadata` 是可选的字符串键值 map，与文件选择一起固定在发布 revision 中。
 调用方可以在 `PrepareKnowledgeSet` 返回的候选上设置 metadata，再交给 `PublishKnowledgeSet`；
@@ -45,10 +70,15 @@ metadata 不读取、识别或处理 README，不增加任何来源或文件范�
 核对客户端坐标与文件清单；客户端摘要不能授权自己。`ReplayDefinition` 仅用于另行授权
 的临时配方，不能借命名 Dataset grant 扩大范围。成员准入、退役和当前权限继续约束旧 pin。
 空清单不是整仓别名，父目录跳转与未选入文件不能扩大范围。
+`ReplayPublished` 只复核当前成员、来源生命周期与固定 commit，不读取文件正文。
+完整 `CheckResolved` 另外核对逐文件可用性；其调用方须先完成消费授权，不能把该正文
+检查塞进文件授权之前的 pin 恢复或目录请求。
 
 `ReadView` 固定本次已接受状态，拥有独立状态映射、审计上下文和身份印记；不重新加载
-远端，不订阅推进事件，不写权威。`Log(LogQuery)` 读取登记 Snapshot 历史，可以按 Dataset
-文件筛选；这是登记历史，不是来源仓正文历史。
+远端，不订阅推进事件，不写权威。`Log(LogQuery)` 返回 `(History, error)`，读取登记 Snapshot
+历史，可以按 Dataset 文件筛选；这是登记历史，不是来源仓正文历史。缺失历史能力、历史
+读取和可用提交元数据回读的错误明确返回，不能当作成功的空历史；不提供元数据能力时
+仍保留真实提交坐标。
 
 ## 持久格式与恢复
 
@@ -60,9 +90,18 @@ metadata 不读取、识别或处理 README，不增加任何来源或文件范�
 | `dataset-<token>.yaml` | 当前完整 Dataset，包含命名、正整数 revision 与冻结来源 |
 | `release-<setId SHA256>-v<revision>.yaml` | 不可变已接受发布记录，不保存当前退役政策 |
 
-`Registry.Save` 在读取的 expected-old 上执行 Snapshot CAS；拒绝或持久化失败不改变
-可见状态与 HEAD，陈旧句柄不能覆盖新状态。并发读取或启动不会初始化、迁移或重建权威。
+`Registry.Save` 在读取的 expected-old 上执行 Snapshot CAS；提交前已证明未发布的拒绝
+不改变可见状态与 HEAD，陈旧句柄不能覆盖新状态。发布后的应答丢失可能已经推进 HEAD，
+旧句柄不会伪造接受，后续需核对或重开实际权威。并发读取或启动不会初始化、迁移或重建权威。
+`SetObserver` 配置的 observer 接收登记持久化的实际操作结果：原操作失败时，无论回调返回
+nil 或其它错误，都原样保留原失败及错误码；原操作成功后，记录失败明确返回给调用方。
+记录错误不回滚已接受的成员或 Dataset，也不证明登记 HEAD 未推进。`PublishKnowledgeSet`
+在返回错误时可以不返回定义；调用方应核对 `DumpState` 或重开实际权威的已接受记录，
+再决定是否重试，不能把 observer 错误解释为未发布。
 缺失、错误类型、未知字段、重复键、null、多个 YAML 文档、身份或文件名不匹配均失败。
+显式创建仅接受全树为空且 `HistoryStore` 证明当前 commit 是无父初始根的 authority；
+已有历史、外来文件或无法证明初始根均拒绝。已接受登记的 YAML 全部丢失仍是损坏，
+不能凭当前空树重建空账。
 
 旧唯一登记账的 `catalog.yaml` 和旧 `repository-*.yaml` 仅为恢复兼容读取。旧 metadata 的
 非空 `id` 必须匹配实际 Snapshot 的 `store.ID()`，但不成为请求选择参数；已有 Dataset 版本、
@@ -79,3 +118,10 @@ metadata 不读取、识别或处理 README，不增加任何来源或文件范�
 权威身份、失败保持、并发 CAS 和只读旧账恢复。上层依赖仅进入公开根包/一级能力；
 本包不依赖 Knowledge、索引、Home、Invocation、Server 或具体 Snapshot adapter。
 包内夹具验证不等于真实 lakeFS 部署验收。
+
+## 按已接受发布选择消费范围
+
+命名历史消费复用 `DatasetVersion` 与 `ReplayPublished`：
+版本记录先受当前退役政策约束，仅从已接受记录的冻结来源建立候选 pin，再按已接受记录和当前
+成员、来源状态复核。调用方不从管理详情自行拼装 pin，也不通过临时定义借用命名
+Dataset grant。该路径没有扩大 `Service` 接口；传输层的发布版选择归相邻 service。

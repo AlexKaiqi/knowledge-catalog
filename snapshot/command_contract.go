@@ -7,6 +7,8 @@ import (
 
 // CommandLedger owns the shared durable command namespace. Both literal file
 // writes and knowledge writes use the same instance and replay semantics.
+// Execute retains PENDING on an unknown apply outcome. Only WriteNotApplied
+// proves that an apply error can release the claim and permit another attempt.
 type CommandLedger interface {
 	Lookup(string) (CommandEntry, bool)
 	Entries() []CommandEntry

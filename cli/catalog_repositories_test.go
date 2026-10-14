@@ -2,16 +2,17 @@ package cli_test
 
 import (
 	"encoding/json"
+	"kc/systemrepo"
 	"testing"
 
 	"kc/internal/testkit"
-	"kc/knowledge"
+	objectmodel "kc/object"
 )
 
 func readmeSchemaJSON(t *testing.T) string {
 	t.Helper()
-	for _, operation := range knowledge.SystemSchemaOperations() {
-		if operation.Address.ObjectID == knowledge.CoreReadmeSchemaV1 {
+	for _, operation := range systemrepo.SystemSchemaOperations() {
+		if operation.Address.ObjectID == objectmodel.CoreReadmeSchemaV1 {
 			raw, err := json.Marshal(operation.Value)
 			if err != nil {
 				t.Fatal(err)
@@ -39,18 +40,15 @@ func TestCatalogShowRepositoriesStayIdentityAndReadmeIsKnowledge(t *testing.T) {
 	}
 	listed := inventoryRepository(t, before, repo)
 	assertNoInventoryDescription(t, listed)
-	system := inventoryRepository(t, before, string(knowledge.SystemRepositoryID))
+	system := inventoryRepository(t, before, string(objectmodel.SystemRepositoryID))
 	assertNoInventoryDescription(t, system)
-	if system["schemaCount"] != float64(len(knowledge.SystemSchemaOperations())) {
+	if system["schemaCount"] != float64(len(systemrepo.SystemSchemaOperations())) {
 		t.Fatalf("System Repository schemaCount: %#v", system)
 	}
 
-	body(t, kc(home, "writer", "put", "--command-id", "readme-schema", "--repo", repo,
-		"--object", string(knowledge.CoreReadmeSchemaV1),
-		"--value", readmeSchemaJSON(t)))
-	body(t, kc(home, "writer", "put", "--command-id", "readme", "--repo", repo,
-		"--object", "payments", "--aspect", knowledge.ReadmeAspect,
-		"--schema-ref", string(knowledge.CoreReadmeSchemaV1),
+	body(t, kc(home, "writer", "put", testObjectReference(t, repo, string(objectmodel.CoreReadmeSchemaV1), ""), "--command-id", "readme-schema", "--value", readmeSchemaJSON(t)))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repo, "payments", testObjectLocator(objectmodel.ReadmeAspect)), "--command-id", "readme",
+		"--schema-ref", string(objectmodel.CoreReadmeSchemaV1),
 		"--value", `{"body":"# Payments warehouse\n\nPublished metrics and tables for payments."}`))
 
 	after := asMap(t, body(t, kc(home, "show")))
@@ -59,7 +57,7 @@ func TestCatalogShowRepositoriesStayIdentityAndReadmeIsKnowledge(t *testing.T) {
 	if present["schemaCount"] != float64(1) {
 		t.Fatalf("schemaCount must count schema/*: %#v", present)
 	}
-	readme := asMap(t, body(t, kc(home, "read", "--repo", repo, "--object", "payments", "--aspect", knowledge.ReadmeAspect)))
+	readme := asMap(t, body(t, kc(home, "read", testObjectReference(t, repo, "payments", testObjectLocator(objectmodel.ReadmeAspect)))))
 	if asMap(t, readme["value"])["body"] != "# Payments warehouse\n\nPublished metrics and tables for payments." {
 		t.Fatalf("README is a knowledge object: %#v", readme)
 	}

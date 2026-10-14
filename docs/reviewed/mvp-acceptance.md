@@ -77,12 +77,12 @@ Dataset 登记服务 接入在 Server 内只读验证已配置的 Repository，�
 
 ### 知识接入方
 
-已登记且具备仓维护和回读权限时，接入方可通过 Client 自行完成 `kc writer commit --dir → kc read --repo`。Dataset 面向消费组合，不是写入前置条件。接入方只提交自己的知识源 id 和草稿，不必命名 Snapshot ref。Client 对照当前版本求差后提交；可选 `kc diff --dir` 看同一对照，不是提交前必经步骤，也不写出 ChangeSet。
+已登记且具备仓维护和回读权限时，接入方可通过 Client 自行完成目录提交，再按对象引用读回。Dataset 面向消费组合，不是写入前置条件。接入方提交完整对象内容，不必命名 Snapshot ref。Client 对照当前版本求差后提交；可选 `kc diff --dir` 看同一对照，不是提交前必经步骤，也不写出 ChangeSet。
 
 ```bash
 kc writer commit --command-id source-1 --repo kr://acme/public/core --dir ./drafts
 kc writer head --repo kr://acme/public/core
-kc read --repo kr://acme/public/core --object runbook/payment-oncall
+kc read 'urn:kc:object:kr%3A%2F%2Facme%2Fpublic%2Fcore:runbook%2Fpayment-oncall'
 kc provenance --repo kr://acme/public/core --object runbook/payment-oncall
 ```
 
@@ -120,10 +120,10 @@ kc show                         # 发现服务的唯一库存
 kc show                                 # 发现知识源与已有知识集
 kc schema list --repo <发现的源>
 kc search --repo <发现的源> --query 冻结窗口
-kc read --repo <发现的源> --object <search 命中的 object-id>
+kc read <命中来源对象的URN[#/locator]>
 ```
 
-普通 SEARCH/READ 使用 `--repo` 或 `--dataset`；`--source` 属于 Dataset 发布配方，
+SEARCH 使用 Repo 或 Dataset 范围；READ 使用完整对象引用，可另限定 Dataset。来源选择属于 Dataset 发布配方，
 不是消费命令的临时选源入口。获准维护者先用 `dataset define` 发布组合，消费者随后按
 名称使用；宿主可保存固定任务上下文，不要求 FUSE 或产品 argv 中的 pin 文件。
 
@@ -197,10 +197,10 @@ make test-all      # 夹具、真实 lakeFS 部署、混合合同、Server Web �
 - `cli/temporary_knowledge_test.go`：`TestProductRepoCommitFreezesKnowledgeAndCurrentPermissions` 验证产品 `--repo --commit` 历史消费、上游更新隔离与当前权限；`cli/remote_knowledge_basis_test.go` 验证所有 Knowledge DTO 传递同一任务定义和 pin；
 - `cli/server_client_only_test.go`：`TestRemoteProviderReadBackAndConsumerDiscovery` 按部署 → 接入方发布 → 治理方 compose/grant → 消费方发现 的顺序，用产品 `--server` Client 走 commit/read 与 list/show/schema list/search/read；`TestServeProjectionWorkerCatchesCommitWithoutSync` 证明长寿命 serve 在无手工 `projection sync` 时仍能追上 published HEAD；角色命令与库存 JSON 不得出现 `--home`、宿主路径或 Snapshot selector，显式任务 pin 另承载固定版本；消费 SEARCH 失败不得教运维命令；
 - `cli/service_roles_live_test.go`：真实 Gitea 认证、lakeFS/OpenSearch 上的 provider/consumer 独立身份、固定 pin 与更新隔离；
-- `knowledge/writer/*_test.go`：P2–P7；
+- `object/writer/*_test.go`：P2–P7；
 - `snapshot/command*_test.go`：跨写面的 command-id claim、重放和冲突；
 - `snapshot/dataset/*_test.go`、`cli/consume_flow_test.go`：C1–C7；
-- `index/*_test.go`、`retrieval/*_test.go`：候选回读、basis、能力与 continuation；
+- `discovery/projection/*_test.go`、`discovery/*_test.go`：候选回读、basis、能力与 continuation；
 - `cli/user_journey_test.go`：通过测试专用 embedded seam 验证共享应用语义；`cli/serve*_test.go` 和 remote CLI 测试验证产品 Server/Client 边界；
 - `cli/command_evidence_test.go`：以生产 `cliSurface` 为分母的逐命令成功与风险分级边界报告；
 - `cli/http_contract_inventory_internal_test.go`、`cli/http_surface_coverage_test.go`：以生产 route registry
@@ -229,11 +229,11 @@ DSH 宿主集成及专属真实模型运行器已退役，不再构成当前执�
 - **查权与外部申请入口**：`admission show` 只返回调用方当前 grants、当前授权管理员和部署声明的外部申请 URL；KC 不维护 admission 请求/审批队列，授权管理员使用 `grant add` 发权。验证见 `TestAdmissionReportsOnlyCallerGrantsAndCurrentAdministrators`、`TestAdmissionCLIReportsCurrentGrantsAndExternalRequestRoute`、`TestRemovedCommandsAreRejected`。认证、登记、便携配方和 pin 本身不发权。
 - **库存发现 typed 合同**：库存范围 SEARCH 已从产品 CLI 退役；HTTP 内部保留受信的库存发现合同，供批准的发现入口把配置的 `discoveryWorkspaceId` 解析为固定 pin。Server 验证精确配置语境，结果逐仓按当前正文权限交付；其他 Dataset、临时定义和缺 pin 不可冒用该语境。验证见 `TestInventoryDiscoveryContextRequiresExactPublishedWorkspaceAndAction`、`TestInventoryDiscoveryActualServerPinsSelectedSourcesAndMasksBodies`。普通用户 SEARCH 只接受 `--repo` 或 `--dataset`，不存在 Catalog 选择维度。
 - **墙外 Connector runtime**：`integrationruntime` 与 `kc-integration` 已提供 build、activate、run、status、pause/resume、daemon，复用保存的 KC 登录，通过 typed Writer 发布。源客户端与领域映射保留在接入方 integration repo；运行方管理进程，不把运行宿主宣称为云端托管服务。验证见 `TestCommandBuildActivateRunReusesKCLogin`、`TestIntegrationRuntimePublishesThroughAuthenticatedWriterHTTP`、`TestPendingRecoveryKeepsCommandAndCheckpoint`、`TestCredentialsStayOutsideLedgerAndRotateAtRuntime`；完整操作与状态恢复合同见 `integrationruntime/README.md`。
-- **SEARCH 召回策略合同（2026-09）**：请求级召回策略闭集 `lexical`/`semantic`/`hybrid`（`retrieval/recall.go`，`SearchRequest.Recall`，省略即 lexical）已落：`ValidateSearch` 拒绝未知策略与 reserved `hybrid`（USAGE_INVALID），`semantic` 要求 MATCH 文本叶（legacy/typed expression 同规则）；缺少向量投影或 embedding 提供方时失败关闭，不静默降级 lexical。Dataset 通道授权先行，召回资格门由 `embedSemanticQuery` 与 Dataset 执行器的 `Authorize` 前置表达。验证见 `TestValidateSearchRecallStrategyClosedSet`、`TestValidateSearchHybridReserved`、`TestValidateSearchSemanticRequiresMatchText`、`TestSearchExecutorFailsClosedOnSemanticRecall`、`TestDatasetSearchExecutorSemanticAuthorizesFirstThenFailsClosedWithoutProvider`。向量投影、embedding 与 Approximate 路径已由下述垂直切片接入。
+- **SEARCH 召回策略合同（2026-09）**：请求级召回策略闭集 `lexical`/`semantic`/`hybrid`（`discovery/recall.go`，`SearchRequest.Recall`，省略即 lexical）已落：`ValidateSearch` 拒绝未知策略与 reserved `hybrid`（USAGE_INVALID），`semantic` 要求 MATCH 文本叶（legacy/typed expression 同规则）；缺少向量投影或 embedding 提供方时失败关闭，不静默降级 lexical。Dataset 通道授权先行，召回资格门由 `embedSemanticQuery` 与 Dataset 执行器的 `Authorize` 前置表达。验证见 `TestValidateSearchRecallStrategyClosedSet`、`TestValidateSearchHybridReserved`、`TestValidateSearchSemanticRequiresMatchText`、`TestSearchExecutorFailsClosedOnSemanticRecall`、`TestDatasetSearchExecutorSemanticAuthorizesFirstThenFailsClosedWithoutProvider`。向量投影、embedding 与 Approximate 路径已由下述垂直切片接入。
 - **SEARCH 语义召回垂直切片（2026-09，第二批）**：embedding 提供方合同（`retrieval.Embedder` +
   llmhttp embeddings 适配器，OpenAI 兼容 /embeddings，环境配置不落盘）与 OpenSearch k-NN 派生投影（`semantic_vector` knn_vector 字段，构建批次派生向量，模型/维度环境配置）已落。单仓 `semantic` 路径：执行器取查询向量 → `index.SemanticWindowAtContext` → k-NN top-K 窗口（单次有界，approximate lane 证据）→ 授权内 hydrate；`MarkApproximate` 强制 partial 并披露窗口与模型身份。验证见 fake embeddings 服务 + 真 OpenSearch 的 `TestSemanticWindowRecallApproximateEnvelopeAndFailClosed`（fail-closed ×3、近似信封、最近邻排序）、`TestSemanticExecutorEndToEndOverVectorProjection`（执行器端到端）与 llmhttp 适配器测试。Dataset 成员窗口、证据披露及 HTTP 链路已有下述第三批实现；真实 embedding 模型的部署验收仍属独立入口的合同，环境接线测试不能代替它。
 - **TRAVERSE 有界邻域闭包（2026-09）**：`kc traverse` 与 `POST /knowledge/v1/traverse:query`（Dataset pin 与单仓 commit 两个范围通道，client SDK `KnowledgeService.Traverse` 与远程 typed 分发同接入）按[检索](retrieval.md)的关系遍历设计提供有界类型化遍历：nodes 按对象去重带最小跳深、edges 保留关系坐标与完整端点、范围外 frontier 显式 boundary、游标续传闭包增量且绑定清单摘要；不枚举路径、不扩大授权。验证见 `TestTraverseClosureDeduplicatesAndReportsBoundaries`、`TestTraverseHopCeilingAndMinHopsFilter`、`TestTraverseContinuationBoundToDatasetScope`、`TestTraverseStartOutsideScopeFailsClosed`、`TestRepoTraverseStopsAtRepositoryBoundary`、`TestTraverseNeighborhoodClosureAcrossChannels`（OpenSearch live 夹具）与场景 probe `traverse-closure-follows-relations.feature`（`dataset-query-principals-granted`）。`retrieval.jsonl` 证据 lane 已接入 `RetrievalOperatorTraverse`，见下述证据覆盖。
-- **统一访问第三批（2026-09）：Dataset 语义扇出、检索证据 lane 补全、HTTP 部署链路**：Dataset 通道 `semantic` 已落（`knowledgeapp/dataset_search_semantic.go`）：授权先行，一次查询向量，每个固定成员各取一次有界向量窗口（成员无向量面或 State 成员整体失败关闭，不静默降级），按成员序 rank interleave 合并（k-NN 分数只局部可比，不声明跨成员全局排序），Approximate 交付并披露成员窗口数与模型。检索证据 lane：`observability.RetrievalOperatorTraverse` 接入（候选窗 = 节点身份摘要 + 关系体摘要，completeness 按页契约 exhausted/partial），语义召回在 SEARCH 事件 logicalRequest 披露 `recall` 策略、claims 披露近似与模型；证据覆盖行已更新（[服务边界](service.md)）。HTTP 部署链路：`TestHTTPDatasetSemanticRecallServesMemberVectorWindows` 走真实 `HTTPHandlerWithOptions` + 环境 embedding 能力 + 真 OpenSearch 向量投影（近似信封、lane 证据、lexical 不变、无提供方 fail-closed），`TestHTTPServerOptionsFromEnvBuildsEmbeddingProvider` 锁 serve 环境接线。质量闸：QUALITY-01 收口（含 DTO 信封共享 embed 类型收敛，JSON wire 契约不变），`make quality` 全绿。
+- **统一访问第三批（2026-09）：Dataset 语义扇出、检索证据 lane 补全、HTTP 部署链路**：Dataset 通道 `semantic` 已落（`discovery/service/dataset_search_semantic.go`）：授权先行，一次查询向量，每个固定成员各取一次有界向量窗口（成员无向量面或 State 成员整体失败关闭，不静默降级），按成员序 rank interleave 合并（k-NN 分数只局部可比，不声明跨成员全局排序），Approximate 交付并披露成员窗口数与模型。检索证据 lane：`observability.RetrievalOperatorTraverse` 接入（候选窗 = 节点身份摘要 + 关系体摘要，completeness 按页契约 exhausted/partial），语义召回在 SEARCH 事件 logicalRequest 披露 `recall` 策略、claims 披露近似与模型；证据覆盖行已更新（[服务边界](service.md)）。HTTP 部署链路：`TestHTTPDatasetSemanticRecallServesMemberVectorWindows` 走真实 `HTTPHandlerWithOptions` + 环境 embedding 能力 + 真 OpenSearch 向量投影（近似信封、lane 证据、lexical 不变、无提供方 fail-closed），`TestHTTPServerOptionsFromEnvBuildsEmbeddingProvider` 锁 serve 环境接线。质量闸：QUALITY-01 收口（含 DTO 信封共享 embed 类型收敛，JSON wire 契约不变），`make quality` 全绿。
 
 ## 当前已知缺口
 
@@ -247,9 +247,9 @@ DSH 宿主集成及专属真实模型运行器已退役，不再构成当前执�
 | 完善顺序与位置 | 现有基础与缺口 | 需要交付的可观察结果 |
 |---|---|---|
 | 先确定供给范式：领域 Schema、普通 Aspect/Member、系统说明 | Writer 已有身份、结构与来源校验，但尚无统一的业务供给角色、最小描述及可供性发布约定；合同记录不能自动充当业务对象 | 图片、分散模块、外部表能表达边界、用途、组成/来源、能力与选择信息；对象角色由声明解释，不从目录或文件数推断；系统说明同步而不虚构运行能力 |
-| 再明确可解释发布保证：[Writer](../../knowledge/writer/README.md)、[Interface 解析](../../knowledge/reader/object_interface.go) | Writer 的结构校验与 Reader 的固定合同/Schema 解析分别存在；尚未形成对象供给的统一依赖检查保证 | 发布的供给在明确固定范围内可解释，普通 Schema 同仓、跨仓合同采用保留来源；结构非法、解释依赖缺失、处理器未装配分别有证据；不检查所有关系端点或要求外部源在线 |
-| 选定能力发现写法：[Schema](../../knowledge/schema.go)、[查询合同](../../retrieval/spec.go) | 字段 access 与类型化过滤已有；内置 LiveAccess 的实现引用可过滤，独立实现未有统一查询约定 | 按实际实现声明发现能力，说明里仅提及能力不命中；字段上下文、成员解释、合同来源与采用版本明确；固定范围内解析到同一合同依据的合法引用不因字面不同漏匹配，跨来源同名合同或不同采用版本不自动合并；仍只有字段 access 一种索引写法 |
-| 完成发现交付与新用例：[结果合同](../../retrieval/result.go)、[场景规范](../../.data/scenes/README.md) | SEARCH 已有对象候选和同依据回读，已知对象也可有界发现 Interface；异构供给的用途/能力发现与固定回读任务尚无完整证据 | 同一消费者经 Server、显式主体完成发布后的检索、读回与关系定位；结果分清业务对象和合同记录，保留命中单元及版本；未就绪不冒充零命中，旧 pin 仍按旧供给解释 |
+| 再明确可解释发布保证：[Writer](../../object/writer/README.md)、[Interface 解析](../../interfaces/implementation.go) | Writer 的结构校验与 Reader 的固定合同/Schema 解析分别存在；尚未形成对象供给的统一依赖检查保证 | 发布的供给在明确固定范围内可解释，普通 Schema 同仓、跨仓合同采用保留来源；结构非法、解释依赖缺失、处理器未装配分别有证据；不检查所有关系端点或要求外部源在线 |
+| 选定能力发现写法：[Schema](../../object/schema.go)、[查询合同](../../discovery/spec.go) | 字段 access 与类型化过滤已有；内置 LiveAccess 的实现引用可过滤，独立实现未有统一查询约定 | 按实际实现声明发现能力，说明里仅提及能力不命中；字段上下文、成员解释、合同来源与采用版本明确；固定范围内解析到同一合同依据的合法引用不因字面不同漏匹配，跨来源同名合同或不同采用版本不自动合并；仍只有字段 access 一种索引写法 |
+| 完成发现交付与新用例：[结果合同](../../discovery/result.go)、[场景规范](../../.data/scenes/README.md) | SEARCH 已有对象候选和同依据回读，已知对象也可有界发现 Interface；异构供给的用途/能力发现与固定回读任务尚无完整证据 | 同一消费者经 Server、显式主体完成发布后的检索、读回与关系定位；结果分清业务对象和合同记录，保留命中单元及版本；未就绪不冒充零命中，旧 pin 仍按旧供给解释 |
 
 精确读、字段查询、关系与 Interface 分派是可复用机制，不等于上述对象范式已经验收。
 供给声明发现不为证明运行可用性探测来源，也不取得租约或推导执行权限；既有显式动态
@@ -285,7 +285,7 @@ DSH 宿主集成及专属真实模型运行器已退役，不再构成当前执�
 - command-id 能覆盖当前进程/共享日志的知识写面重试；PENDING 可经显式 resolve/abandon
   核对，Bolt 保留清理不在启动时加载历史，ledger 读失败不会重放。多实例协调、分布式租约、
   灾难恢复，以及 attach/grant 等管理写入的统一重放，尚未形成生产验收。
-- 已有 Go typed client。Dataset 登记服务/命名知识集发现走 `/snapshot/v1` 与 `kc show`，单仓 Schema 发现走固定 basis 的 `/knowledge/v1/schemas:list` 与 `kc schema list`；维护读回走 `kc read --repo`；消费读走 `kc read --dataset`。精确历史重放抄回执 `--repo --commit`。
+- 已有 Go typed client。Dataset 登记服务/命名知识集发现走 Snapshot 入口，单仓 Schema 发现走固定版本的目录；维护读回与消费读共用对象 URN＋locator，消费读可另限定 Dataset。精确历史读取保留对象引用与回执中的 commit。
 - Linux 宿主 VFS 是可选文件体验，不是接入或消费协议成立的前提。VFS 不是 Writer，也不是 Dataset 登记服务 成员条件；只读是选定的宿主投影合同。Plain 仓只解释组合阶梯。
 - lakeFS authority 的真实服务能力需要对应部署入口的证据；默认 `make test` 使用 lakeFS HTTP 假服务与真实 OpenSearch，不能替代真实 authority 验收、其它合同或生产容量、备份、升级和故障演练。
 
@@ -312,7 +312,7 @@ VFS 的目标是把 Dataset 的多个 Repository 子树投影到已有项目目�
 | V5 | 固定版本 | mount 期间上游 ref 推进不改变 bytes；同一 Dataset 修订重启 `kcfs` 仍是发布冻 commit；要新数据须 `dataset define --revision` 再挂 |
 | V6 | 只读 | create/write/truncate/rename/remove 均失败，Repository ref 和原文件不变 |
 | V7 | 授权 | 先检查 `dataset.resolve`，再检查已发布 Dataset 范围的当前 `file.read`；无权成员不进入 plan/mount |
-| V8 | 消费语义视图 | `--view semantic` 不要求 Repository mount path；固定 pin 生成 `knowledge/<source>/<entity-plural>/*.yaml`，保留 `_kc` 坐标且不暴露 Canonical 单元信封 |
+| V8 | 消费语义视图 | `--view semantic` 不要求 Repository mount path；固定 pin 生成 `object/<source>/<entity-plural>/*.yaml`，保留 `_kc` 坐标且不暴露 Canonical 单元信封 |
 | V9 | 原宿主文件视图已退役 | 退出当前宿主执行分母；原集成缺省保存固定版本上下文，显式开启文件视图才挂载，已有挂载可显示/隐藏或移除。文件开关不发权、不改变固定版本的约束保留，当前无宿主开关验收证据 |
 | V10 | 无 Agent 专用 VFS | Agent 使用标准 filesystem/search 工具与公开 CLI，不引入第二套模型专用文件访问面 |
 | V11 | 原宿主发现后添加已退役 | 退出当前宿主执行分母；原集成无默认 Dataset 也可发现来源、添加自选来源或命名集并固定版本，文件挂载可选。核心 CLI/HTTP 发现仍在；检查更新与采用更新分开、失败保留旧上下文的宿主要求保留，当前无替代宿主验收 |

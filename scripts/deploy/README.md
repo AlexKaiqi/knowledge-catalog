@@ -77,14 +77,14 @@ make deploy-dev-down
 make deploy-dev-reset
 ```
 
-`deployment init` 只建 Catalog 登记表和 System 信任根，不创建业务知识 Snapshot。lakeFS 启动时只有 `kc-catalog` 与 `kc-system`。业务仓由 `kc create --name` 从 `managedStores.lakefs` 分配。Graveler 名、协议 `--repo` 都是 `--name`（例如 `table-meta`）。对象前缀是 `{root}/{name}`（本机 root 为 `s3://kc-authority/tianqiong`，所以 `table-meta` 的 namespace 是 `s3://kc-authority/tianqiong/table-meta`）。`--name` 必须是 lakeFS 允许的小写字母、数字和连字符。
+`deployment init` 只建唯一登记权威和 System 信任根，不创建业务知识 Snapshot。lakeFS 启动时只有 `kc-catalog` 与 `kc-system`。业务仓由 `kc create --name` 从 `managedStores.lakefs` 分配。Graveler 名、协议 `--repo` 都是 `--name`（例如 `table-meta`）。对象前缀是 `{root}/{name}`（本机 root 为 `s3://kc-authority/tianqiong`，所以 `table-meta` 的 namespace 是 `s3://kc-authority/tianqiong/table-meta`）。`--name` 必须是 lakeFS 允许的小写字母、数字和连字符。
 
 ttyd 预置 `KC_SERVER_URL` 与当前 `kc`。在里面：
 
 ```bash
 kc login --mode local --as admin
 kc whoami
-kc catalog list
+kc show
 kc schema list --repo kr://kc/system
 ```
 

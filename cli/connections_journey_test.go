@@ -98,7 +98,7 @@ func TestRepositoryConnectionCLIRecoversExpiredCredentialsWithoutRebinding(t *te
 	putCredential("access:wrong-secret")
 	repositoryConnectionRotateExpect(t, server.URL, "kaiqidong", repo, secretFile, "PRECONDITION_FAILED")
 	repositoryConnectionCheck(t, server.URL, "kaiqidong", repo)
-	expectCode(t, provide("read", "--repo", repo, "--commit", "c0", "--object", "any"), "FORBIDDEN")
+	expectCode(t, provide("read", testObjectReference(t, repo, "any", ""), "--commit", "c0"), "FORBIDDEN")
 	stop()
 	mu.Lock()
 	token = "access:external-rotated-secret"

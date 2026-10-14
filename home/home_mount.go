@@ -5,10 +5,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"kc/index"
-	"kc/index/opensearch"
+	"kc/declarativeindex/opensearch"
+	index "kc/discovery/projection"
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 	"kc/snapshot"
 )
 
@@ -52,7 +52,7 @@ type repoAddRequest struct {
 // Store Directory. It does not touch the Registry: attaching is ⓪, registering is ①.
 func (ws *Home) attachRepository(spec repoAddRequest) (snapshot.Store, error) {
 	repositoryID := spec.ID
-	if repositoryID == string(knowledge.SystemRepositoryID) {
+	if repositoryID == string(objectmodel.SystemRepositoryID) {
 		return nil, kernel.Fail(kernel.ErrForbidden, "%s is the immutable platform System Repository", repositoryID)
 	}
 	{

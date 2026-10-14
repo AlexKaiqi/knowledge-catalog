@@ -76,6 +76,32 @@ func snapshotRegistry(store snapshot.Store, ref string) (*registry, error) {
 	return &registry{authority: store, tree: tree, ref: ref}, nil
 }
 
+// An empty current tree is not evidence of an uninitialized authority: an
+// accepted registry may have been erased. Only the empty, parentless initial
+// Snapshot can precede explicit creation, using the same authority's history.
+func (g *registry) requireVirginAuthority() error {
+	commit := kernel.CommitID(g.head)
+	paths, err := g.tree.ListFiles(commit)
+	if err != nil {
+		return err
+	}
+	if len(paths) != 0 {
+		return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "registry metadata is missing from a nonempty authority")
+	}
+	history, ok := snapshot.HistoryStoreOf(g.authority)
+	if !ok {
+		return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "empty registry authority requires history to prove initial creation")
+	}
+	commits, err := history.CommitHistory(commit, 2)
+	if err != nil {
+		return err
+	}
+	if len(commits) != 1 || commits[0] != commit {
+		return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "registry metadata is missing from an existing authority")
+	}
+	return nil
+}
+
 func (g *registry) snapshotYAML() (map[string][]byte, error) {
 	if g.head == "" {
 		return map[string][]byte{}, nil

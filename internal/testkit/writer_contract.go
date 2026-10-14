@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"kc/kernel"
-	"kc/knowledge"
-	"kc/knowledge/writer"
+	objectmodel "kc/object"
+	"kc/object/writer"
 	"kc/snapshot"
 )
 
@@ -21,7 +21,7 @@ func WriterContract[R snapshot.Store](t *testing.T, create func(t *testing.T, id
 	t.Run("replays the same command_id and rejects a digest conflict", func(t *testing.T) {
 		w, repo := writerOn(t, create, "kr://conformance/writer/idem")
 		root := MustHead(t, repo, "refs/heads/main")
-		cs := knowledge.CommitChangeSet{
+		cs := objectmodel.CommitChangeSet{
 			TargetRepository: repo.ID(), TargetRef: "refs/heads/main",
 			BaseCommit: root, ExpectedTargetCommit: root,
 			Operations: PutEntity("a", 1, ""),
@@ -49,21 +49,21 @@ func WriterContract[R snapshot.Store](t *testing.T, create func(t *testing.T, id
 	t.Run("accepts schema_ref in the same changeset and rejects a missing schema", func(t *testing.T) {
 		w, repo := writerOn(t, create, "kr://conformance/writer/schema")
 		root := MustHead(t, repo, "refs/heads/main")
-		_, err := w.Commit("bad-ref", knowledge.CommitChangeSet{
+		_, err := w.Commit("bad-ref", objectmodel.CommitChangeSet{
 			TargetRepository: repo.ID(), TargetRef: "refs/heads/main",
 			BaseCommit: root, ExpectedTargetCommit: root,
-			Operations: []knowledge.Operation{{
-				Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "policy/A"},
+			Operations: []objectmodel.Operation{{
+				Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "policy/A"},
 				Value: map[string]any{"v": 1}, SchemaRef: "schema/policy",
 			}},
 		})
 		ExpectCode(t, err, kernel.ErrSchemaRevisionUnresolved)
-		if _, err := w.Commit("boot", knowledge.CommitChangeSet{
+		if _, err := w.Commit("boot", objectmodel.CommitChangeSet{
 			TargetRepository: repo.ID(), TargetRef: "refs/heads/main",
 			BaseCommit: root, ExpectedTargetCommit: root,
-			Operations: []knowledge.Operation{
-				{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/policy"}, Value: map[string]any{"entity": "Policy", "pattern": "record"}},
-				{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "policy/A"}, Value: map[string]any{"v": 1}, SchemaRef: "schema/policy"},
+			Operations: []objectmodel.Operation{
+				{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/policy"}, Value: map[string]any{"entity": "Policy", "pattern": "record"}},
+				{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "policy/A"}, Value: map[string]any{"v": 1}, SchemaRef: "schema/policy"},
 			},
 		}); err != nil {
 			t.Fatal(err)

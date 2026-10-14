@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	snapshotclient "kc/snapshot/client"
 	"strings"
 
 	kcclient "kc/client"
@@ -9,25 +10,34 @@ import (
 )
 
 func runRemoteRequest(ctx context.Context, client *kcclient.Client, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
+	if objectCommandPath(path) {
+		return executeObjectCommand(ctx, client, path, flags, options)
+	}
+	if snapshotCommandPath(path) {
+		return executeSnapshotCommand(ctx, client, path, flags, options)
+	}
+	if discoveryCommandPath(path) {
+		return executeDiscoveryCommand(ctx, client, path, flags, options)
+	}
+	if declarativeIndexCommandPath(path) {
+		return executeDeclarativeIndexCommand(ctx, client, path, flags, options)
+	}
+	if liveAccessCommandPath(path) {
+		return executeLiveAccessCommand(ctx, client, path, flags, options)
+	}
 	switch {
 	case path == "admission show":
 		return runRemoteAdmissionSharing(ctx, client, path, flags, options)
 	case path == "whoami":
 		return client.IdentityService().WhoAmI(ctx, options)
-	case path == "show" || path == "attach" || path == "create" || path == "detach" || strings.HasPrefix(path, "registry "):
-		return runRemoteRegistry(ctx, client, path, flags, options)
-	case knowledgeCLIPath(path):
-		return runRemoteKnowledge(ctx, client, path, flags, options)
+	case path == "create":
+		return runRemoteRepositoryCreate(ctx, client, flags, options)
 	case path == "diff":
 		return runRemoteDesiredDiff(ctx, client, flags, options)
-	case path == "pin" || path == "pin check" || strings.HasPrefix(path, "dataset ") || strings.HasPrefix(path, "workspace "):
-		return runRemoteWorkspace(ctx, client, path, flags, options)
 	case strings.HasPrefix(path, "writer "):
 		return runRemoteWriter(ctx, client, path, flags, options)
 	case strings.HasPrefix(path, "governance "):
 		return runRemoteGovernance(ctx, client, path, flags, options)
-	case strings.HasPrefix(path, "grant "):
-		return runRemoteAdmin(ctx, client, path, flags, options)
 	case strings.HasPrefix(path, "operations "):
 		return runRemoteOperations(ctx, client, path, flags, options)
 	default:
@@ -38,7 +48,7 @@ func runRemoteRequest(ctx context.Context, client *kcclient.Client, path string,
 func runRemoteAdmissionSharing(ctx context.Context, client *kcclient.Client, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
 	var out any
 	if path == "admission show" {
-		err := client.IdentityService().Admission(ctx, options, &out)
+		err := client.AdminService().Admission(ctx, snapshotclient.RequestOptions{RequestID: options.RequestID}, &out)
 		return out, err
 	}
 	return nil, kernel.Fail(kernel.ErrUsageInvalid, "unknown admission operation")

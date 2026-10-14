@@ -19,6 +19,7 @@ path_hint: docs/graph/documents/object-refactor-plan.okf
   "ownerTopics": [
     "object-module-refactor-phases",
     "object-module-refactor-transition-and-checkpoints",
-    "object-plugin-migration-and-validation"
+    "object-module-consumer-compatibility-validation",
+    "object-and-plugin-independent-validation-slices"
   ]
 }

@@ -42,7 +42,7 @@ func TestDeploymentConcurrentTypedReadsKeepRequestStateIsolated(t *testing.T) {
 		{http.MethodGet, catalogPath + "/inventory", ""},
 		{http.MethodPost, catalogPath + "/datasets/system/resolve", `{}`},
 		{http.MethodPost, catalogPath + "/datasets/system/check", `{}`},
-		{http.MethodPost, "/knowledge/v1/objects:read", `{"repository":"kr://kc/system","object":"schema/meta/schema-definition/v1"}`},
+		{http.MethodPost, "/knowledge/v1/objects:read", `{"reference":"urn:kc:object:kr%3A%2F%2Fkc%2Fsystem:schema%2Fmeta%2Fschema-definition%2Fv1"}`},
 		{http.MethodPost, "/snapshot/v1/files/mounts:list", `{"dataset":"system","view":"semantic"}`},
 	}
 	start := make(chan struct{})

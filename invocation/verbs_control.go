@@ -2,14 +2,14 @@ package invocation
 
 import (
 	"fmt"
+	governanceservice "kc/controlplane/service"
 	"os"
 
 	"kc/controlplane"
 	kchome "kc/home"
 	"kc/invoke"
 	"kc/kernel"
-	knowledge "kc/knowledge"
-	knowledgeapp "kc/knowledgeapp"
+	objectmodel "kc/object"
 )
 
 func VerbPropose(cx *Invocation) (any, error) {
@@ -43,13 +43,13 @@ func VerbPropose(cx *Invocation) (any, error) {
 		}
 		base = string(head)
 	}
-	return (knowledgeapp.ProposalExecutor{
+	return (governanceservice.ProposalExecutor{
 		Control: cx.WS.ControlPlane,
 		Save: func(proposal controlplane.Proposal) error {
 			cx.WS.Control.Proposals[proposal.ProposalID] = proposal
 			return PersistControl(cx.WS)
 		},
-	}).Execute(cx.Context, knowledgeapp.ProposalRequest{
+	}).Execute(cx.Context, governanceservice.ProposalRequest{
 		Input: controlplane.ProposeInput{
 			ProposalID:   proposalID,
 			RepositoryID: kernel.RepositoryID(repositoryID),
@@ -86,13 +86,13 @@ func VerbPreview(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return (knowledgeapp.PreviewExecutor{
+	return (governanceservice.PreviewExecutor{
 		Control: plane,
 		Save: func(preview controlplane.Preview) error {
 			cx.WS.Control.Previews[preview.PreviewID] = preview
 			return PersistControl(cx.WS)
 		},
-	}).Execute(cx.Context, knowledgeapp.PreviewRequest{
+	}).Execute(cx.Context, governanceservice.PreviewRequest{
 		Resolved: resolved,
 		Proposal: proposal,
 	})
@@ -109,13 +109,13 @@ func VerbValidate(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return (knowledgeapp.ValidatePreviewExecutor{
+	return (governanceservice.ValidatePreviewExecutor{
 		Control: plane,
 		Save: func(report controlplane.ValidationReport) error {
 			cx.WS.Control.Validations[report.ReportID] = report
 			return PersistControl(cx.WS)
 		},
-	}).Execute(cx.Context, knowledgeapp.ValidatePreviewRequest{Preview: preview})
+	}).Execute(cx.Context, governanceservice.ValidatePreviewRequest{Preview: preview})
 }
 
 // VerbRecordValidation only binds an outcome someone else produced. It never
@@ -140,13 +140,13 @@ func VerbRecordValidation(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return (knowledgeapp.RecordValidationExecutor{
+	return (governanceservice.RecordValidationExecutor{
 		Control: plane,
 		Save: func(report controlplane.ValidationReport) error {
 			cx.WS.Control.Validations[report.ReportID] = report
 			return PersistControl(cx.WS)
 		},
-	}).Execute(cx.Context, knowledgeapp.RecordValidationRequest{
+	}).Execute(cx.Context, governanceservice.RecordValidationRequest{
 		Preview:       preview,
 		SuiteRevision: suite,
 		Outcome:       outcome,
@@ -177,9 +177,9 @@ func VerbMerge(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return (knowledgeapp.MergeProposalExecutor{Control: plane}).Execute(
+	return (governanceservice.MergeProposalExecutor{Control: plane}).Execute(
 		cx.Context,
-		knowledgeapp.MergeProposalRequest{
+		governanceservice.MergeProposalRequest{
 			Proposal:       proposal,
 			Preview:        preview,
 			Validation:     validation,
@@ -197,14 +197,14 @@ func PlaneFor(ws *kchome.Home, _ map[string]invoke.FlagValue) (*controlplane.Con
 
 // ProposeOperations reads the change set for a PROPOSAL: a whole operations file,
 // or a single PUT assembled from --value plus the address flags.
-func ProposeOperations(flags map[string]invoke.FlagValue) ([]knowledge.Operation, error) {
+func ProposeOperations(flags map[string]invoke.FlagValue) ([]objectmodel.Operation, error) {
 	file := invoke.FlagString(flags, "changeset")
 	payload := invoke.FlagString(flags, "payload")
 	if file != "" && payload != "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "use only one of --changeset or typed payload")
 	}
 	if payload != "" {
-		var operations []knowledge.Operation
+		var operations []objectmodel.Operation
 		if err := kernel.UnmarshalJSON([]byte(payload), &operations); err != nil || len(operations) == 0 {
 			return nil, kernel.Fail(kernel.ErrUsageInvalid, "typed proposal payload must contain operations")
 		}
@@ -215,12 +215,12 @@ func ProposeOperations(flags map[string]invoke.FlagValue) ([]knowledge.Operation
 		if err != nil {
 			return nil, err
 		}
-		var asOps []knowledge.Operation
+		var asOps []objectmodel.Operation
 		if kernel.UnmarshalJSON(body, &asOps) == nil && len(asOps) > 0 {
 			return asOps, nil
 		}
 		var wrapped struct {
-			Operations []knowledge.Operation `json:"operations"`
+			Operations []objectmodel.Operation `json:"operations"`
 		}
 		if err := kernel.UnmarshalJSON(body, &wrapped); err != nil || len(wrapped.Operations) == 0 {
 			return nil, fmt.Errorf("changeset must include operations")
@@ -234,9 +234,9 @@ func ProposeOperations(flags map[string]invoke.FlagValue) ([]knowledge.Operation
 	if !ok {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "governance proposal create requires --value, --file or --changeset")
 	}
-	op, err := WriteOperation(flags, knowledge.OpPut, value)
+	op, err := WriteOperation(flags, objectmodel.OpPut, value)
 	if err != nil {
 		return nil, err
 	}
-	return []knowledge.Operation{op}, nil
+	return []objectmodel.Operation{op}, nil
 }

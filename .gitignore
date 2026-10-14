@@ -14,6 +14,12 @@ __pycache__/
 !.data/scale/
 .session_tmps/
 
+# Session-scoped CLI run output (recreated by test/scene runs); the root
+# webui/ holds only a stray node_modules — console sources live under
+# snapshot/console/webui/.
+/output/
+/webui/
+
 # Archify visual-review sidecars are local QA evidence, not source artifacts.
 docs/*.visual-check.*.png
 docs/*.visual-check.html

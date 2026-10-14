@@ -55,6 +55,29 @@ run_go_test() {
   fi
 }
 
+run_named_go_test() {
+  local package="$1" test_name="$2"
+  shift 2
+  local declarations candidate found=0
+  if declarations="$("$go_bin" test -list "^${test_name}$" "$package")"; then
+    while IFS= read -r candidate; do
+      if [[ "$candidate" == "$test_name" ]]; then
+        found=1
+        break
+      fi
+    done <<< "$declarations"
+  else
+    local list_status=$?
+    printf '%s\n' "$declarations" >&2
+    return "$list_status"
+  fi
+  if [[ "$found" != 1 ]]; then
+    printf 'FAIL: test %s is not declared in %s\n' "$test_name" "$package" >&2
+    return 1
+  fi
+  run_go_test "$@" -run "^${test_name}$" "$package"
+}
+
 run_component() {
   local component_packages=()
   local package
@@ -80,7 +103,7 @@ run_e2e() {
 }
 
 run_race() {
-  run_go_test -short -race -count=1 -timeout=30m ./snapshot ./hook ./knowledge/reader ./retrieval/cache ./index ./home ./cli
+  run_go_test -short -race -count=1 -timeout=30m ./snapshot ./hook ./object/reader ./object/cache ./object/maintenance ./discovery/projection ./declarativeindex/projection ./declarativeindex/control ./declarativeindex/plugin ./home ./cli
 }
 
 run_coverage() {
@@ -98,7 +121,7 @@ run_service_e2e() {
 }
 
 run_taihu_live() {
-  KC_LIVE_TAIHU=1 run_go_test -count=1 -timeout=2m -run TestLiveTaihuAuthentication ./cli
+  KC_LIVE_TAIHU=1 run_named_go_test ./server TestLiveTaihuAuthentication -count=1 -timeout=2m
 }
 
 run_opensearch() {

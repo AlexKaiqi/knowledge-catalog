@@ -21,20 +21,50 @@ import (
 )
 
 type datasetHTTPSource struct {
-	id   kernel.RepositoryID
-	head kernel.CommitID
+	id          kernel.RepositoryID
+	head        kernel.CommitID
+	inspections int
+	files       map[kernel.CommitID]map[string][]byte
 }
 
-func (s *datasetHTTPSource) ID() kernel.RepositoryID                 { return s.id }
-func (s *datasetHTTPSource) Head(string) (kernel.CommitID, error)    { return s.head, nil }
-func (s *datasetHTTPSource) GetRef(string) (kernel.CommitID, bool)   { return s.head, true }
-func (s *datasetHTTPSource) HasCommit(id kernel.CommitID) bool       { return id == "c1" || id == "c2" }
+func (s *datasetHTTPSource) ID() kernel.RepositoryID { return s.id }
+func (s *datasetHTTPSource) Head(string) (kernel.CommitID, error) {
+	s.inspections++
+	return s.head, nil
+}
+func (s *datasetHTTPSource) GetRef(string) (kernel.CommitID, bool) {
+	s.inspections++
+	return s.head, true
+}
+func (s *datasetHTTPSource) HasCommit(id kernel.CommitID) bool {
+	s.inspections++
+	return id == "c1" || id == "c2"
+}
 func (s *datasetHTTPSource) CreateRef(string, kernel.CommitID) error { return nil }
 func (s *datasetHTTPSource) Merge(string, kernel.CommitID, kernel.CommitID) (kernel.CommitID, error) {
 	return "", fmt.Errorf("unused")
 }
-func (s *datasetHTTPSource) Archived() bool { return false }
+func (s *datasetHTTPSource) Archived() bool {
+	s.inspections++
+	return false
+}
 func (s *datasetHTTPSource) Archive() error { return nil }
+
+func (s *datasetHTTPSource) ReadFile(file string, commit kernel.CommitID) ([]byte, error) {
+	body, ok := s.files[commit][file]
+	if !ok {
+		return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "file %s is missing from %s", file, commit)
+	}
+	return append([]byte{}, body...), nil
+}
+
+func (s *datasetHTTPSource) ListFiles(commit kernel.CommitID) ([]string, error) {
+	files := []string{}
+	for file := range s.files[commit] {
+		files = append(files, file)
+	}
+	return files, nil
+}
 
 type datasetHTTPRules struct{ rules []access.Rule }
 
@@ -52,16 +82,18 @@ type datasetHTTPFixture struct {
 	source    *datasetHTTPSource
 	rules     *datasetHTTPRules
 	resources service.Resources
+	authority snapshot.Store
 }
 
 func newDatasetHTTPFixture(t *testing.T) *datasetHTTPFixture {
 	t.Helper()
 	store := snapshot.NewRegistry()
-	source := &datasetHTTPSource{id: "kr://files/source", head: "c1"}
+	source := &datasetHTTPSource{id: "kr://files/source", head: "c1", files: map[kernel.CommitID]map[string][]byte{"c1": {"plain.txt": []byte("plain version one")}, "c2": {"plain.txt": []byte("plain version two")}}}
 	if err := store.Add(source); err != nil {
 		t.Fatal(err)
 	}
-	registry, err := dataset.CreateSnapshotRegistry(testkit.MakeTreeStore(t, "kr://fixture/A-authority"), "")
+	authority := testkit.MakeTreeStore(t, "kr://fixture/A-authority")
+	registry, err := dataset.CreateSnapshotRegistry(authority, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,8 +104,13 @@ func newDatasetHTTPFixture(t *testing.T) *datasetHTTPFixture {
 	if err := cat.RegisterRepository(source.ID()); err != nil {
 		t.Fatal(err)
 	}
-	rules := &datasetHTTPRules{rules: []access.Rule{{ID: "allowed", Principal: "alice", Actions: []string{"inventory.read", "dataset.manage", "dataset.resolve", "file.read"}}}}
-	return &datasetHTTPFixture{catalog: cat, source: source, rules: rules, resources: service.Resources{Datasets: cat, Sources: store, Access: access.NewService(rules)}}
+	// Ordinary read and Dataset management do not permit publishing a private
+	// source. This fixture explicitly permits its one source branch.
+	rules := &datasetHTTPRules{rules: []access.Rule{
+		{ID: "allowed", Principal: "alice", Actions: []string{"inventory.read", "dataset.manage", "dataset.resolve", "file.read"}},
+		{ID: "source-publication", Principal: "alice", Repo: string(source.ID()), Ref: snapshot.DefaultRef, Actions: []string{access.RepositoryDatasetPublish}},
+	}}
+	return &datasetHTTPFixture{catalog: cat, source: source, rules: rules, authority: authority, resources: service.Resources{Datasets: cat, Sources: store, Access: access.NewService(rules)}}
 }
 
 func (f *datasetHTTPFixture) handler() service.Handler {
@@ -108,6 +145,26 @@ func datasetHTTPCall(t *testing.T, handler http.Handler, method, target string, 
 
 func datasetHTTPDefinition(revision int, source kernel.RepositoryID) map[string]any {
 	return map[string]any{"dataset": "files", "revision": revision, "sources": []dataset.KnowledgeSetSource{{Repository: source, Selector: snapshot.DefaultRef, File: "plain.txt", Target: "docs/plain.txt"}}}
+}
+
+func assertDatasetHTTPState(t *testing.T, f *datasetHTTPFixture, before dataset.State) {
+	t.Helper()
+	if after := dataset.NormalizeState(f.catalog.DumpState()); !reflect.DeepEqual(after, before) {
+		t.Fatalf("request changed Dataset authority: before=%#v after=%#v", before, after)
+	}
+}
+
+func datasetHTTPPin(t *testing.T, response map[string]any) dataset.ResolvedKnowledgeSet {
+	t.Helper()
+	raw, err := json.Marshal(response)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pin dataset.ResolvedKnowledgeSet
+	if err := dataset.DecodeJSON(raw, &pin); err != nil {
+		t.Fatal(err)
+	}
+	return pin
 }
 
 func TestDatasetHTTPStandaloneManagementLifecycle(t *testing.T) {
@@ -156,19 +213,28 @@ func TestDatasetHTTPStandaloneManagementLifecycle(t *testing.T) {
 	}
 }
 
-func TestDatasetHTTPTemporaryLabelCannotBorrowNamedGrant(t *testing.T) {
+func TestDatasetHTTPTemporaryFileGrantDoesNotAuthorizeResolve(t *testing.T) {
 	f := newDatasetHTTPFixture(t)
-	f.rules.rules = []access.Rule{{ID: "named", Principal: "alice", Dataset: "files", Actions: []string{"dataset.resolve", "file.read"}}}
+	before := dataset.NormalizeState(f.catalog.DumpState())
+	f.source.inspections = 0
+	f.rules.rules = []access.Rule{{ID: "read", Principal: "alice", Repo: string(f.source.ID()), Actions: []string{"file.read"}}}
 	datasetHTTPCall(t, f.handler(), "POST", "/snapshot/v1/datasets:resolve", datasetHTTPDefinition(1, f.source.ID()), 403)
-	f.rules.rules = []access.Rule{{ID: "resolve", Principal: "alice", Repo: string(f.source.ID()), Actions: []string{"dataset.resolve"}}}
-	datasetHTTPCall(t, f.handler(), "POST", "/snapshot/v1/datasets:resolve", datasetHTTPDefinition(1, f.source.ID()), 403)
-	f.rules.rules[0].Actions = append(f.rules.rules[0].Actions, "file.read")
-	datasetHTTPCall(t, f.handler(), "POST", "/snapshot/v1/datasets:resolve", datasetHTTPDefinition(1, f.source.ID()), 200)
+	assertDatasetHTTPState(t, f, before)
+	if f.source.inspections != 0 {
+		t.Fatal("file-only grant bypassed source resolution authorization")
+	}
+	f.rules.rules[0].Actions = append(f.rules.rules[0].Actions, "dataset.resolve")
+	pin := datasetHTTPPin(t, datasetHTTPCall(t, f.handler(), "POST", "/snapshot/v1/datasets:resolve", datasetHTTPDefinition(1, f.source.ID()), 200))
+	if pin.SetID != "files" || pin.Revision != 1 || pin.Repositories[f.source.ID()] != "c1" || len(pin.Items) != 1 || pin.Items[0].Target != "docs/plain.txt" {
+		t.Fatalf("temporary source grant did not resolve its fixed scope: %#v", pin)
+	}
+	assertDatasetHTTPState(t, f, before)
 }
 
 func TestDatasetHTTPTemporarySourceCheckIsCompleteAndPolicyPluggable(t *testing.T) {
 	f := newDatasetHTTPFixture(t)
-	second := &datasetHTTPSource{id: "kr://files/other", head: "c1"}
+	f.source.files["c1"]["a"] = []byte("first selected file")
+	second := &datasetHTTPSource{id: "kr://files/other", head: "c2", files: map[kernel.CommitID]map[string][]byte{"c2": {"b": []byte("second selected file")}}}
 	store := f.resources.Sources.(snapshot.Registry)
 	if err := store.Add(second); err != nil {
 		t.Fatal(err)
@@ -178,30 +244,56 @@ func TestDatasetHTTPTemporarySourceCheckIsCompleteAndPolicyPluggable(t *testing.
 	}
 	body := datasetHTTPDefinition(1, f.source.ID())
 	body["sources"] = []dataset.KnowledgeSetSource{{Repository: f.source.ID(), Selector: snapshot.DefaultRef, File: "a", Target: "a"}, {Repository: second.ID(), Selector: snapshot.DefaultRef, File: "b", Target: "b"}}
+	before := dataset.NormalizeState(f.catalog.DumpState())
 	f.rules.rules = []access.Rule{{ID: "one", Principal: "alice", Repo: string(f.source.ID()), Actions: []string{"dataset.resolve", "file.read"}}}
 	datasetHTTPCall(t, f.handler(), "POST", "/snapshot/v1/datasets:resolve", body, 403)
-	f.rules.rules = append(f.rules.rules, access.Rule{ID: "two", Principal: "alice", Repo: string(second.ID()), Actions: []string{"dataset.resolve", "file.read"}})
-	datasetHTTPCall(t, f.handler(), "POST", "/snapshot/v1/datasets:resolve", body, 200)
-	var checked bool
+	assertDatasetHTTPState(t, f, before)
+	// All sources can resolve, but the second source cannot be consumed.
+	// This must fail in the distinct fixed-pin file.read authorization phase.
+	f.rules.rules = append(f.rules.rules, access.Rule{ID: "two", Principal: "alice", Repo: string(second.ID()), Actions: []string{"dataset.resolve"}})
+	datasetHTTPCall(t, f.handler(), "POST", "/snapshot/v1/datasets:resolve", body, 403)
+	assertDatasetHTTPState(t, f, before)
+	f.rules.rules[1].Actions = append(f.rules.rules[1].Actions, "file.read")
+	wantRepositories := map[kernel.RepositoryID]kernel.CommitID{f.source.ID(): "c1", second.ID(): "c2"}
+	wantItems := []dataset.DatasetItem{{Target: "a", Repository: f.source.ID(), Commit: "c1", Kind: dataset.DatasetItemFile, File: "a"}, {Target: "b", Repository: second.ID(), Commit: "c2", Kind: dataset.DatasetItemFile, File: "b"}}
+	assertPin := func(pin dataset.ResolvedKnowledgeSet) {
+		t.Helper()
+		if pin.SetID != "files" || pin.Revision != 1 || !reflect.DeepEqual(pin.Repositories, wantRepositories) || !reflect.DeepEqual(pin.Items, wantItems) {
+			t.Fatalf("temporary policy or response lost exact fixed scope: %#v", pin)
+		}
+	}
+	assertPin(datasetHTTPPin(t, datasetHTTPCall(t, f.handler(), "POST", "/snapshot/v1/datasets:resolve", body, 200)))
+	assertDatasetHTTPState(t, f, before)
+	checks := []string{}
 	f.resources.Authorize = func(_ context.Context, request service.Authorization) error {
-		if request.Query.Dataset != "" || request.Definition == nil {
+		checks = append(checks, request.Query.Action)
+		if request.Caller.Principal != "alice" || request.Query.Dataset != "" || request.Definition == nil {
 			t.Fatalf("temporary label became a grant selector: %#v", request)
 		}
 		if request.Query.Action == "file.read" {
-			checked = true
-			if request.Pin == nil || len(request.Pin.Repositories) != 2 {
+			if request.Pin == nil {
 				t.Fatalf("policy did not get fixed source coordinates: %#v", request)
 			}
+			assertPin(*request.Pin)
 		}
 		return nil
 	}
 	datasetHTTPCall(t, f.handler(), "POST", "/snapshot/v1/datasets:resolve", body, 200)
-	if !checked {
-		t.Fatal("temporary source consumption bypassed authorization")
+	if !reflect.DeepEqual(checks, []string{"dataset.resolve", "file.read"}) {
+		t.Fatalf("temporary source phases bypassed configured policy: %v", checks)
 	}
+	assertDatasetHTTPState(t, f, before)
+	f.resources.Authorize = func(_ context.Context, request service.Authorization) error {
+		if request.Query.Action == "file.read" {
+			return kernel.Fail(kernel.ErrForbidden, "configured temporary consumption policy refused")
+		}
+		return nil
+	}
+	datasetHTTPCall(t, f.handler(), "POST", "/snapshot/v1/datasets:resolve", body, 403)
+	assertDatasetHTTPState(t, f, before)
 }
 
-func TestDatasetHTTPDiscoveryMarkerIsNotAFileGrant(t *testing.T) {
+func TestDatasetHTTPDiscoveryMarkerReachesPolicyOnlyForResolve(t *testing.T) {
 	f := newDatasetHTTPFixture(t)
 	if _, err := f.catalog.DefineKnowledgeSet("files", 1, []dataset.KnowledgeSetSource{{Repository: f.source.ID(), Selector: snapshot.DefaultRef}}); err != nil {
 		t.Fatal(err)
@@ -291,44 +383,87 @@ func TestDatasetHTTPNamedResolveDoesNotGrantTemporarySources(t *testing.T) {
 	if _, err := f.catalog.DefineKnowledgeSet("files", 1, []dataset.KnowledgeSetSource{{Repository: f.source.ID(), Selector: snapshot.DefaultRef}}); err != nil {
 		t.Fatal(err)
 	}
-	f.rules.rules = []access.Rule{{ID: "named", Principal: "alice", Dataset: "files", Actions: []string{"dataset.resolve"}}}
-	datasetHTTPCall(t, f.handler(), "POST", "/snapshot/v1/datasets/files/resolve", map[string]any{}, 200)
+	before := dataset.NormalizeState(f.catalog.DumpState())
+	f.rules.rules = []access.Rule{{ID: "named", Principal: "alice", Dataset: "files", Actions: []string{"dataset.resolve", "file.read"}}}
+	pin := datasetHTTPPin(t, datasetHTTPCall(t, f.handler(), "POST", "/snapshot/v1/datasets/files/resolve", map[string]any{}, 200))
+	if pin.SetID != "files" || pin.Revision != 1 || pin.Repositories[f.source.ID()] != "c1" {
+		t.Fatalf("named grant did not resolve the accepted release: %#v", pin)
+	}
 	datasetHTTPCall(t, f.handler(), "POST", "/snapshot/v1/datasets:resolve", datasetHTTPDefinition(1, f.source.ID()), 403)
+	assertDatasetHTTPState(t, f, before)
+}
+
+func TestDatasetHTTPManagementGrantDoesNotCrossDatasetTargets(t *testing.T) {
+	f := newDatasetHTTPFixture(t)
+	h := f.handler()
+	base := "/snapshot/v1/datasets"
+	datasetHTTPCall(t, h, http.MethodPost, base, datasetHTTPDefinition(1, f.source.ID()), http.StatusOK)
+	other := datasetHTTPDefinition(1, f.source.ID())
+	other["dataset"] = "other"
+	datasetHTTPCall(t, h, http.MethodPost, base, other, http.StatusOK)
+	f.rules.rules = []access.Rule{{ID: "manage-files", Principal: "alice", Dataset: "files", Actions: []string{"dataset.manage"}}, sourcePublicationGrant(f)}
+	datasetHTTPCall(t, h, http.MethodPost, base, datasetHTTPDefinition(2, f.source.ID()), http.StatusOK)
+	accepted, err := f.catalog.DatasetVersion("files", 2)
+	if err != nil || accepted.SetID != "files" || accepted.Revision != 2 || len(accepted.Items) != 1 {
+		t.Fatalf("Dataset manager did not publish its own target: %#v %v", accepted, err)
+	}
+	before := dataset.NormalizeState(f.catalog.DumpState())
+	f.source.inspections = 0
+	other["revision"] = 2
+	datasetHTTPCall(t, h, http.MethodPost, base, other, http.StatusForbidden)
+	assertDatasetHTTPState(t, f, before)
+	datasetHTTPCall(t, h, http.MethodPost, base+"/other/retire", map[string]any{}, http.StatusForbidden)
+	assertDatasetHTTPState(t, f, before)
+	if f.source.inspections != 0 {
+		t.Fatal("cross-Dataset management reached source preparation")
+	}
+	datasetHTTPCall(t, h, http.MethodPost, base+"/files/retire", map[string]any{}, http.StatusOK)
+	current, err := f.catalog.Set("files")
+	untouched, otherErr := f.catalog.Set("other")
+	if err != nil || !current.Retired || otherErr != nil || untouched.Revision != 1 || untouched.Retired {
+		t.Fatalf("scoped retirement changed another Dataset: own=%#v err=%v other=%#v err=%v", current, err, untouched, otherErr)
+	}
 }
 
 func TestDatasetHTTPBeforePublishCannotRedirectOrContinueAfterRevocation(t *testing.T) {
-	for _, mode := range []string{"identity", "revoked", "invalid-revision"} {
+	for _, mode := range []string{"identity", "revision", "revoked", "invalid-revision"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newDatasetHTTPFixture(t)
+			before := dataset.NormalizeState(f.catalog.DumpState())
 			called := false
+			inspectionsAtCallback := 0
 			f.resources.BeforePublish = func(_ context.Context, _ identity.HTTPIdentity, _ dataset.Service, definition dataset.KnowledgeSet) (dataset.KnowledgeSet, map[string]any, error) {
 				called = true
+				inspectionsAtCallback = f.source.inspections
 				if mode == "identity" {
 					definition.SetID = "other"
+				} else if mode == "revision" {
+					definition.Revision++
 				} else {
 					f.rules.rules = nil
 				}
 				return definition, nil, nil
 			}
 			revision, status := 1, 403
-			if mode == "identity" {
+			if mode == "identity" || mode == "revision" {
 				status = 409
 			}
 			if mode == "invalid-revision" {
 				revision, status = 0, 400
 			}
 			datasetHTTPCall(t, f.handler(), "POST", "/snapshot/v1/datasets", datasetHTTPDefinition(revision, f.source.ID()), status)
-			if mode == "invalid-revision" && called {
-				t.Fatal("invalid candidate caused a portable-recipe side effect")
+			if called != (mode != "invalid-revision") {
+				t.Fatalf("publication preparation entered the wrong phase: mode=%s called=%v", mode, called)
 			}
-			if state := f.catalog.DumpState(); len(state.KnowledgeSets) != 0 || len(state.DatasetVersions) != 0 {
-				t.Fatalf("rejected preparation accepted a release: %#v", state)
+			if called && f.source.inspections != inspectionsAtCallback {
+				t.Fatal("rejected portable preparation continued inspecting sources")
 			}
+			assertDatasetHTTPState(t, f, before)
 		})
 	}
 }
 
-func TestDatasetHTTPBodyLabelsAreDiagnosticScopeOnly(t *testing.T) {
+func TestDatasetHTTPDiagnosticBodyScopeDoesNotSelectTemporaryGrants(t *testing.T) {
 	f := newDatasetHTTPFixture(t)
 	observed := []string{}
 	f.resources.Authorize = func(_ context.Context, request service.Authorization) error {

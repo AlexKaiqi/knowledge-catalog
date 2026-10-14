@@ -10,15 +10,47 @@ import (
 	"time"
 
 	"kc/internal/telemetry"
+	inv "kc/invocation"
 	"kc/invoke"
+	"kc/kernel"
 )
 
 type ManagedHTTPHandler struct {
 	http.Handler
 	runtime   *telemetry.Runtime
 	closeHome func() error
+	stopHome  func()
+	activate  func() error
+	lifeMu    sync.Mutex
+	closed    bool
+	beginOnce sync.Once
 	once      sync.Once
 	err       error
+}
+
+// Start activates the long-lived runtime after cold handler construction.
+// kc serve calls it before listening; embedded tasks use the same facade root.
+func (h *ManagedHTTPHandler) Start() error {
+	h.lifeMu.Lock()
+	defer h.lifeMu.Unlock()
+	if h.closed {
+		return kernel.Fail(kernel.ErrPreconditionFailed, "HTTP handler has closed")
+	}
+	if h.activate != nil {
+		return h.activate()
+	}
+	return nil
+}
+
+func (h *ManagedHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.lifeMu.Lock()
+	closed := h.closed
+	h.lifeMu.Unlock()
+	if closed {
+		invoke.WriteInvoke(w, inv.ErrorResult(kernel.Fail(kernel.ErrPreconditionFailed, "HTTP handler has closed")))
+		return
+	}
+	h.Handler.ServeHTTP(w, r)
 }
 
 func HTTPServerOptionsFromFlags(flags map[string]FlagValue) (HTTPServerOptions, error) {

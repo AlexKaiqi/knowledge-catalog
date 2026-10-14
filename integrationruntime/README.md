@@ -1,6 +1,6 @@
 # integrationruntime/
 
-墙外 Collector 的构建与运行宿主。它复用 KC 登录，通过 typed Writer API 获取基点、提交变更；源协议和 Address 映射仍在接入方自己的 integration repo。所有权见 [外部资源访问](../docs/reviewed/resource-access.md) §4；纯对账合同见 [`connector/README.md`](../connector/README.md)。
+墙外 Collector 的构建与运行宿主。它复用 KC 登录，通过 typed Writer API 获取基点、提交变更；源协议和 Address 映射仍在接入方自己的 integration repo。外部访问的身份与审计边界见 [LiveAccess 插件重构的“身份与审计”](../docs/reviewed/resource-access.md#身份与审计)；Collector 的纯对账合同见 [`connector/README.md`](../connector/README.md)。
 
 ## 接入与运行
 

@@ -21,7 +21,7 @@ type History struct {
 	Commits      []Commit `json:"commits"`
 }
 
-func (c *service) Log(query LogQuery) History {
+func (c *service) Log(query LogQuery) (History, error) {
 	path := ""
 	if query.Dataset != "" {
 		path = KnowledgeSetYAML(query.Dataset)
@@ -32,11 +32,13 @@ func (c *service) Log(query LogQuery) History {
 		limit = 20
 	}
 	commits, err := c.registry.history(limit, path)
-	if err != nil || commits == nil {
-		return history
+	if err != nil {
+		return history, err
 	}
-	history.Commits = commits
-	return history
+	if commits != nil {
+		history.Commits = commits
+	}
+	return history, nil
 }
 
 func (g *registry) history(limit int, path string) ([]Commit, error) {

@@ -12,7 +12,7 @@ import (
 )
 
 // Product Run -> typed HTTP -> application. Exact historical replay is
-// --repo --commit from a prior hit; consumers do not manage pin files.
+// the source object's URN and prior commit; consumers do not manage pin files.
 func TestProductRepoCommitFreezesKnowledgeAndCurrentPermissions(t *testing.T) {
 	home := testkit.TempDir(t)
 
@@ -35,14 +35,14 @@ func TestProductRepoCommitFreezesKnowledgeAndCurrentPermissions(t *testing.T) {
 	govern := func(args ...string) kcRunResult { return invoke(admin, args...) }
 	body(t, govern("grant", "add", "--principal", consumer, "--action", "inventory.read,dataset.resolve,file.read"))
 	grant := asMap(t, body(t, govern("grant", "add", "--principal", consumer, "--action", "knowledge.read,knowledge.provenance,knowledge.history.read,knowledge.search", "--repo", repo)))
-	body(t, govern("writer", "put", "--command-id", "temp-schema", "--repo", repo, "--object", "schema/note", "--value", `{"entity":"Note","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
-	first := publishedCommit(t, asMap(t, body(t, govern("writer", "put", "--command-id", "temp-first", "--repo", repo, "--object", "note/one", "--schema-ref", "schema/note", "--value", `{"body":"first"}`))))
+	body(t, govern("writer", "put", testObjectReference(t, repo, "schema/note", ""), "--command-id", "temp-schema", "--value", `{"entity":"Note","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+	first := publishedCommit(t, asMap(t, body(t, govern("writer", "put", testObjectReference(t, repo, "note/one", ""), "--command-id", "temp-first", "--schema-ref", "schema/note", "--value", `{"body":"first"}`))))
 	searchAvailable := os.Getenv("KC_TEST_OPENSEARCH_URL") != ""
 	if searchAvailable {
 		body(t, govern("operations", "projection", "sync", "--repo", repo))
 	}
 	before := asMap(t, body(t, govern("show")))
-	body(t, govern("writer", "put", "--command-id", "temp-second", "--repo", repo, "--object", "note/one", "--schema-ref", "schema/note", "--value", `{"body":"second"}`))
+	body(t, govern("writer", "put", testObjectReference(t, repo, "note/one", ""), "--command-id", "temp-second", "--schema-ref", "schema/note", "--value", `{"body":"second"}`))
 	if searchAvailable {
 		body(t, govern("operations", "projection", "sync", "--repo", repo))
 		for _, args := range [][]string{
@@ -60,24 +60,16 @@ func TestProductRepoCommitFreezesKnowledgeAndCurrentPermissions(t *testing.T) {
 	} else {
 		expectCode(t, invoke(consumer, "search", "--repo", repo, "--commit", first, "--query", "first"), "CAPABILITY_UNSATISFIED")
 	}
-	firstHit := func(t *testing.T, value any) map[string]any {
-		t.Helper()
-		if items, ok := value.([]any); ok {
-			if len(items) != 1 {
-				t.Fatalf("want one object, got %#v", value)
-			}
-			return asMap(t, items[0])
-		}
-		return asMap(t, value)
-	}
-	for _, operation := range []string{"read", "resolve", "provenance"} {
-		got := firstHit(t, body(t, invoke(consumer, operation, "--repo", repo, "--commit", first, "--object", "note/one")))
-		if got["commit"] != first {
+	for _, operation := range []string{"resolve", "provenance"} {
+		got := asMap(t, body(t, invoke(consumer, operation, "--repo", repo, "--commit", first, "--object", "note/one")))
+		if got["repository"] != repo || got["commit"] != first {
 			t.Fatalf("%s drifted from --repo --commit: %#v", operation, got)
 		}
 	}
-	read := firstHit(t, body(t, invoke(consumer, "read", "--repo", repo, "--commit", first, "--object", "note/one")))
-	if asMap(t, read["value"])["body"] != "first" {
+	reference := testObjectReference(t, repo, "note/one", "")
+	read := asMap(t, body(t, invoke(consumer, "read", reference, "--commit", first)))
+	if read["reference"] != reference || read["repository"] != repo || read["commit"] != first ||
+		asMap(t, read["address"])["objectId"] != "note/one" || asMap(t, read["value"])["body"] != "first" {
 		t.Fatalf("historical read latest: %#v", read)
 	}
 	after := asMap(t, body(t, govern("show")))
@@ -87,6 +79,6 @@ func TestProductRepoCommitFreezesKnowledgeAndCurrentPermissions(t *testing.T) {
 		t.Fatalf("repo --commit consume published a Dataset: %s -> %s", a, b)
 	}
 	body(t, govern("grant", "remove", "--id", grant["id"].(string)))
-	expectCode(t, invoke(consumer, "read", "--repo", repo, "--commit", first, "--object", "note/one"), "FORBIDDEN")
-	expectCode(t, invoke(consumer, "read", "--repo", repo, "--object", "note/one"), "FORBIDDEN")
+	expectCode(t, invoke(consumer, "read", testObjectReference(t, repo, "note/one", ""), "--commit", first), "FORBIDDEN")
+	expectCode(t, invoke(consumer, "read", testObjectReference(t, repo, "note/one", "")), "FORBIDDEN")
 }

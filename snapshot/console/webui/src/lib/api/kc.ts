@@ -66,6 +66,7 @@ export const kc = {
     repositories: (signal?: AbortSignal) => request<{ repositories: RegisteredRepository[] }>('/snapshot/v1/repositories', undefined, signal),
     datasets: (signal?: AbortSignal) => request<{ datasets: DatasetSummary[] }>('/snapshot/v1/datasets', undefined, signal),
     dataset: (dataset: string, revision?: number, signal?: AbortSignal, history?: HistoryPage) => request<DatasetDetail>(detailPath(dataset, revision, history), undefined, signal),
+    resolve: (dataset: string, revision?: number, signal?: AbortSignal) => request<ResolvedPin>(`${datasetPath(dataset)}/resolve`, revision === undefined ? {} : {revision}, signal),
     preview: (body: { dataset: string; revision: number; sources: SourceInput[]; metadata?: Metadata }, signal?: AbortSignal) => request<ResolvedPin>('/snapshot/v1/datasets:resolve', body, signal),
     define: (body: { dataset: string; revision: number; sources: SourceInput[]; metadata?: Metadata }, signal?: AbortSignal) => request<unknown>('/snapshot/v1/datasets', body, signal),
     retire: (dataset: string, signal?: AbortSignal) => request<unknown>(`${datasetPath(dataset)}/retire`, {}, signal),

@@ -52,9 +52,9 @@
 
 ## 接口契约 / 状态机
 
-本文不定义新字段、错误码、命令或状态机。现有具体合同见 [retrieval 包](../../retrieval/README.md)、
-[AccessPlan](../../retrieval/accessplan.go)、[RelationQuery](../../retrieval/relation.go)、
-[索引端口与就绪检查](../../index/README.md)、[Reader](../../knowledge/reader/README.md) 和
+本文不定义新字段、错误码、命令或状态机。现有具体合同见 [retrieval 包](../../discovery/README.md)、
+[AccessPlan](../../discovery/accessplan.go)、[RelationQuery](../../discovery/relation.go)、
+[索引端口与就绪检查](../../declarativeindex/projection/README.md)、[Reader](../../object/reader/README.md) 和
 [交付链](../../delivery/README.md)；逐项验证入口由 [验证目录](test-catalog.md) 维护。
 
 研究中的“模糊锚定”不改变精确 RESOLVE；“模型阅读”不改变 Refine 的引用守恒；
@@ -175,8 +175,8 @@ hybrid 支持分数归一化或按排名融合；近邻内部过滤与外部 pos
 核对时 PGRetriever 汇总子检索结果后按文本去重；RRF 存在于单独的融合检索器，
 不是属性图检索默认附带的成本优化器。
 资料：[属性图指南](https://developers.llamaindex.ai/python/framework/module_guides/indexing/lpg_index_guide/)、
-[PGRetriever 源码](https://github.com/run-llama/llama_index/blob/main/llama-index-core/llama_index/core/indices/property_graph/retriever.py)、
-[融合源码](https://github.com/run-llama/llama_index/blob/main/llama-index-core/llama_index/core/retrievers/fusion_retriever.py)。
+[PGRetriever 源码](https://github.com/run-llama/llama_discovery/projection/blob/main/llama-index-core/llama_discovery/projection/core/indices/property_graph/retriever.py)、
+[融合源码](https://github.com/run-llama/llama_discovery/projection/blob/main/llama-index-core/llama_discovery/projection/core/retrievers/fusion_retriever.py)。
 
 **本项目推论与边界：**借鉴按任务组合定位、读取与关系导航；不按文本去重替代 KnowledgeRef，
 不把 LLM 同义词生成等同于完成实体消歧。框架集成不提供底层数据库的全部保证，
@@ -221,7 +221,7 @@ LLM 抽取结果也不能绕过既有写入及来源流程成为知识事实。
 ### 3.3 语义判断、重排与候选扩展
 
 已在上下文的材料可以由模型理解、比较和筛选，不需要预先索引所有可问的问题。
-但输入窗口之外的对象不会因为执行重排自动出现。核对时 [Refine](../../retrieval/README.md)
+但输入窗口之外的对象不会因为执行重排自动出现。核对时 [Refine](../../discovery/README.md)
 保持输入引用集合；其候选内完整评判不是语料召回完整性。
 
 扩大候选可以依靠词表辅助、查询改写、多次查询、关系导航和进一步读取，并不必然要求向量。
@@ -319,7 +319,7 @@ Go JSON 大整数往返精度。其余结论来自代码与后端官方合同核
 ### 6.1 声明和原语：保留范围，补齐语义
 
 建议 MVP 继续保留现有三个逻辑访问声明，具体定义由 Aspect 访问与检索 owner、
-[Schema 公开类型](../../knowledge/schema.go) 和 [查询公开类型](../../retrieval/searchop.go) 拥有。
+[Schema 公开类型](../../object/schema.go) 和 [查询公开类型](../../discovery/searchop.go) 拥有。
 
 - `text` 用于分词后的文本发现；名称、别名和说明可按需要选用。
 - `filter` 用于类型化条件；编码、概念引用、枚举与范围条件不必依赖向量。
@@ -349,32 +349,32 @@ MVP 的工作在于建立统一的“逻辑类型 × 访问方式”校验，贯
 
 ### 6.2 先修当前正确性缺口
 
-**声明到类型化投影没有完全贯通。** [Schema 解析](../../knowledge/schema.go) 接受的类型列表没有
-date/datetime/timestamp，[标量规范化](../../retrieval/scalar.go) 却已支持这些类型；临时程序分别调用两个
+**声明到类型化投影没有完全贯通。** [Schema 解析](../../object/schema.go) 接受的类型列表没有
+date/datetime/timestamp，[标量规范化](../../discovery/scalar.go) 却已支持这些类型；临时程序分别调用两个
 公开入口，确认前者拒绝、后者接受相同时间类型。解析器还接受 object/array 搭配 filter，
-而 [投影编译](../../index/extract.go) 无法把这些类型当作受支持标量处理。后一点是静态路径核对，
+而 [投影编译](../../declarativeindex/projection/extract.go) 无法把这些类型当作受支持标量处理。后一点是静态路径核对，
 未将该样例完整走过 Writer。修复需要从真实 Schema 发布开始验证，不能只用手工构造的 AccessSpec
 证明能力存在，也不能用实现缺口收窄 owner 已选定的时间范围能力。
 
-**text-only 仍产生整值 keyword。** [projectionCell](../../index/extract.go) 对所有 string 填入
-StringValue，[适配器编码](../../index/internal/opensearchimpl/projection.go) 将其写入
-[keyword mapping](../../index/internal/opensearchimpl/client.go)，即使只声明了 text。
+**text-only 仍产生整值 keyword。** [projectionCell](../../declarativeindex/projection/extract.go) 对所有 string 填入
+StringValue，[适配器编码](../../declarativeindex/opensearch/internal/opensearchimpl/projection.go) 将其写入
+[keyword mapping](../../declarativeindex/opensearch/internal/opensearchimpl/client.go)，即使只声明了 text。
 除多建索引外，长正文还可能超过 Lucene 单词项的字节限制，导致整个文档写入失败。
 参照 [OpenSearch keyword](https://docs.opensearch.org/latest/mappings/supported-field-types/keyword/)
 和 [Lucene 常量](https://lucene.apache.org/core/10_4_0/core/constant-values.html)。
 建议按 access 生成所需物理槽位；对 filter/sort 长字符串另行证明支持范围，不能简单静默截断或
 设置忽略阈值后继续报告精确。先测仅 text 的长正文及 UTF-8 多字节边界。
 
-**HTTP 成功被等同于检索完整。** [搜索响应解析](../../index/internal/opensearchimpl/search.go) 与
-[关系响应解析](../../index/internal/opensearchimpl/relations.go) 未处理超时和分片失败信息，可能把部分 hits
+**HTTP 成功被等同于检索完整。** [搜索响应解析](../../declarativeindex/opensearch/internal/opensearchimpl/search.go) 与
+[关系响应解析](../../declarativeindex/opensearch/internal/opensearchimpl/relations.go) 未处理超时和分片失败信息，可能把部分 hits
 按完整候选处理；请求也未显式禁止部分搜索结果。
 [OpenSearch Search API](https://docs.opensearch.org/latest/api-reference/search-apis/search/)
 默认允许部分返回。建议统一响应完整性校验，遵循当前必需部分失败与显式 best-effort 的区别；
 覆盖 HTTP 200 下超时、分片失败、空结果及非空结果，不能把缺少候选当普通零命中。
 
-**整数和时间在链路中失去精度。** [OpenSearch sort 解码及游标](../../index/internal/opensearchimpl/search.go)
+**整数和时间在链路中失去精度。** [OpenSearch sort 解码及游标](../../declarativeindex/opensearch/internal/opensearchimpl/search.go)
 使用普通 JSON 解码到 any，临时程序确认整数 9007199254740993 往返后变为 9007199254740992。
-[知识集比较](../../cli/dataset_search.go) 和 [剩余条件范围比较](../../index/residual.go) 也有转 float64
+[知识集比较](../../discovery/service/dataset_search.go) 和 [剩余条件范围比较](../../discovery/residual.go) 也有转 float64
 的路径。另有时间规范化保留纳秒而物理 date 使用毫秒的差异；目前时间 Schema 入口尚有上述阻断，
 不能把它描述为已正常发布的时间字段必现问题。建议使用贯穿解码、游标和联邦排序的无损类型化比较；
 时间物理表示同时满足选定精度与日期范围，不能只换 date_nanos 就忽略支持范围。
@@ -382,7 +382,7 @@ StringValue，[适配器编码](../../index/internal/opensearchimpl/projection.g
 [OpenSearch date](https://docs.opensearch.org/latest/mappings/supported-field-types/date/)。
 验证 2^53 两侧、int64 边界、同毫秒不同纳秒，以及分页不漏不重；本轮没有跑真实引擎分页复现。
 
-**增量发布的可见性屏障不完整。** [增量 bulk](../../index/internal/opensearchimpl/projection.go) 每 500 条分批，
+**增量发布的可见性屏障不完整。** [增量 bulk](../../declarativeindex/opensearch/internal/opensearchimpl/projection.go) 每 500 条分批，
 只等待最后一批 refresh，随后发布新 basis 就绪；
 [官方 Bulk 合同](https://docs.opensearch.org/latest/api-reference/document-apis/bulk/#refresh)
 说明一次请求的刷新只覆盖它涉及的分片。前批涉及、末批不涉及的分片尚未可搜索时，就可能提前发布。
@@ -395,13 +395,13 @@ StringValue，[适配器编码](../../index/internal/opensearchimpl/projection.g
 无需因为代码由 AI 辅助生成就整体推倒。值得检查的是跨层承诺能否由失败反例证明。
 当前 fragment 主要记录能力解释，不能据此宣称已经实现通用多引擎物理调度或成本优化器。
 
-**预算与取消优先于成本优化器。** [搜索循环](../../index/search.go) 限制输出命中数，但没有完整的
-候选总数、页数和总时间预算；[Retriever 端口](../../index/engine.go) 与后端 HTTP 也未贯通调用方取消。
+**预算与取消优先于成本优化器。** [搜索循环](../../declarativeindex/projection/search.go) 限制输出命中数，但没有完整的
+候选总数、页数和总时间预算；[Retriever 端口](../../discovery/projection/engine.go) 与后端 HTTP 也未贯通调用方取消。
 先为持续前进但始终被补判淘汰的候选流，以及取消后不再访问后端建立证据；按 owner 既有语义处理
 预算耗尽与可继续位置。单次 HTTP 超时不能替代整个查询的预算。
 
 **剩余条件补判必须保持完整表达式语义。** 当前只要存在 Superset，
-[residual](../../index/residual.go) 就重判整棵原请求，包括本来 Exact 的 MATCH；其字符串包含与自行
+[residual](../../discovery/residual.go) 就重判整棵原请求，包括本来 Exact 的 MATCH；其字符串包含与自行
 处理标点不能一般地等价于后端 analyzed term/phrase。例如 cat 与 concatenate、hello world 与
 hello-world 的判断会出现差异。当前 OpenSearch 主线宣称 Exact，不经过这一分支；这是加入
 Superset/source-pushdown 提供方前必须解决的扩展风险。应形成明确补判计划；无法证明等价时拒绝支持，
@@ -409,14 +409,14 @@ Superset/source-pushdown 提供方前必须解决的扩展风险。应形成明�
 参照 [DataFusion 下推合同](https://datafusion.apache.org/library-user-guide/custom-table-providers.html)，
 特别是 Inexact filter 与 LIMIT 的执行关系。
 
-**把批量化落实到真实 I/O。** [知识集合并](../../cli/dataset_search.go) 每次向成员取一条，
-初始成员串行访问；[tree ReadMany](../../knowledge/reader/repository_service.go) 内部仍逐对象定位，
+**把批量化落实到真实 I/O。** [知识集合并](../../discovery/service/dataset_search.go) 每次向成员取一条，
+初始成员串行访问；[tree ReadMany](../../object/reader/repository_service.go) 内部仍逐对象定位，
 默认 locator 每次读取并解码完整 manifest。建议成员小批缓冲、有界并发首批读取，并在同一固定版本
 批次内复用定位数据。验收统计后端搜索、manifest 与正文读取次数，不能只统计是否调用了 ReadMany。
 这些调用放大已由代码定位，性能收益仍需测量。
 
-**兑现无变化不重写。** [编译器](../../index/extract.go) 已计算投影摘要，但
-[增量同步](../../index/sync.go) 没有据此排除内容相同的 upsert。可复用旧投影摘要或批量摘要读取，
+**兑现无变化不重写。** [编译器](../../declarativeindex/projection/extract.go) 已计算投影摘要，但
+[增量同步](../../declarativeindex/projection/sync.go) 没有据此排除内容相同的 upsert。可复用旧投影摘要或批量摘要读取，
 让非索引内容变化只推进 basis，检索内容变化才重写；这是投影 owner 已有要求。
 同时验证删除、撤销字段访问和 rebuild/apply 最终文档集一致。
 
@@ -456,7 +456,7 @@ Superset/source-pushdown 提供方前必须解决的扩展风险。应形成明�
 无命中且无真实续页进展时明确失败；补判推进与旧偏移回放仍可继续。恢复已有批内偏移仍使用有界批次，
 避免用逐条往返实现重放。对应低预算、101 成员、重放 I/O 和并发检查纳入实现测试。
 
-[真实 Schema 到索引的集成](../../index/mvp_consumption_test.go) 覆盖长正文、相邻大整数、纳秒与稳定分页，
+[真实 Schema 到索引的集成](../../declarativeindex/projection/mvp_consumption_test.go) 覆盖长正文、相邻大整数、纳秒与稳定分页，
 并用明确的消费决策验证词表定位、概念过滤、关系导航及 HEAD 前进后的固定版本回读。
 它证明既有原语能组成这些消费步骤，尚未证明模型会选对词、分支或停止点。
 模型质量、查询策略比较和规模容量仍按 §5 的实验条件推进；未引入向量或第二检索引擎。

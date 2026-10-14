@@ -202,7 +202,7 @@ func DatasetVersionRef(revision int) string {
 func (c *service) CheckResolved(resolved ResolvedKnowledgeSet) KnowledgeSetCheck {
 	issues := []KnowledgeSetIssue{}
 	for repositoryID, commit := range resolved.Repositories {
-		issues = append(issues, c.checkResolvedRepository(repositoryID, commit)...)
+		issues = append(issues, c.checkResolvedItems(resolved, repositoryID, commit)...)
 	}
 	return knowledgeSetCheck(resolved.SetID, issues)
 }
@@ -222,6 +222,26 @@ func (c *service) CheckResolvedRepository(resolved ResolvedKnowledgeSet, reposit
 		}})
 	}
 	return knowledgeSetCheck(resolved.SetID, c.checkResolvedRepository(repositoryID, commit))
+}
+
+func (c *service) checkResolvedItems(resolved ResolvedKnowledgeSet, repositoryID kernel.RepositoryID, commit kernel.CommitID) []KnowledgeSetIssue {
+	issues := c.checkResolvedRepository(repositoryID, commit)
+	if len(issues) != 0 {
+		return issues
+	}
+	for _, item := range resolved.Items {
+		if item.Repository != repositoryID || item.Kind != DatasetItemFile {
+			continue
+		}
+		if item.Commit != commit {
+			issues = append(issues, KnowledgeSetIssue{Repository: repositoryID, Code: kernel.ErrKnowledgeSetInvalid, Message: "selected file disagrees with resolved repository commit"})
+			continue
+		}
+		if err := c.validateSelectedFile(item); err != nil {
+			issues = append(issues, KnowledgeSetIssue{Repository: repositoryID, Code: kernel.CodeOf(err), Message: err.Error()})
+		}
+	}
+	return issues
 }
 
 func (c *service) checkResolvedRepository(repositoryID kernel.RepositoryID, commit kernel.CommitID) []KnowledgeSetIssue {

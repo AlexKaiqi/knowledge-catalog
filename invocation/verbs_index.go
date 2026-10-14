@@ -1,14 +1,15 @@
 package invocation
 
 import (
-	knowledgeserving "kc/knowledge/serving"
+	discoveryservice "kc/discovery/service"
+	knowledgeserving "kc/liveaccess"
 
-	"kc/index"
+	index "kc/discovery/projection"
 	"kc/invoke"
 	"kc/kernel"
-	knowledge "kc/knowledge"
-	knowledgeapp "kc/knowledgeapp"
-	"kc/retrieval"
+	objectmodel "kc/object"
+
+	retrieval "kc/discovery"
 	"kc/snapshot"
 	"kc/snapshot/dataset"
 )
@@ -30,11 +31,11 @@ func VerbSearch(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	out, err := (knowledgeapp.SearchExecutor{
+	out, err := (discoveryservice.SearchExecutor{
 		Repositories: cx.WS.Reader,
 		Projection:   cx.WS.Index,
 		Embedder:     embedder,
-	}).Execute(cx.Context, knowledgeapp.SearchRequest{
+	}).Execute(cx.Context, discoveryservice.SearchRequest{
 		Repository: repositoryID, Commit: commitID, Query: req,
 	})
 	if err != nil {
@@ -48,10 +49,10 @@ func VerbDescribeIndex(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return (knowledgeapp.ProjectionDescribeExecutor{
+	return (discoveryservice.ProjectionDescribeExecutor{
 		Repositories: cx.WS.Reader,
 		Projection:   cx.WS.Index,
-	}).Execute(cx.Context, knowledgeapp.ProjectionDescribeRequest{
+	}).Execute(cx.Context, discoveryservice.ProjectionDescribeRequest{
 		Repository: repoID,
 		Commit:     commitID,
 	})
@@ -62,18 +63,18 @@ func VerbIndexSync(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	result, err := (knowledgeapp.ProjectionSyncExecutor{
+	result, err := (discoveryservice.ProjectionSyncExecutor{
 		Repositories: cx.WS.Reader,
 		Projection:   cx.WS.Index,
-		Controller:   cx.WS.Projection,
+		Controller:   cx.WS.Plugins,
 		Observe: func() func() {
 			return ObserveProjectionExecution(cx)
 		},
-	}).Execute(cx.Context, knowledgeapp.ProjectionSyncRequest{
+	}).Execute(cx.Context, discoveryservice.ProjectionSyncRequest{
 		Repository: repositoryID,
 		Commit:     commitID,
 		State:      cx.State,
-		StateRequest: func() (knowledgeserving.RequestContext, error) {
+		StateRequest: func() (objectmodel.RequestContext, error) {
 			return stateRequestContextFrom(cx)
 		},
 	})
@@ -94,7 +95,7 @@ func VerbIndexNotify(cx *Invocation) (any, error) {
 	if _, err := RequireRepo(cx.WS, string(notice.Repository)); err != nil {
 		return nil, err
 	}
-	if cx.WS.Projection == nil {
+	if cx.WS.Plugins == nil {
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "projection controller is not configured")
 	}
 	lookup, err := ResourceLookup(cx)
@@ -105,11 +106,11 @@ func VerbIndexNotify(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return (knowledgeapp.ProjectionNoticeExecutor{
+	return (discoveryservice.ProjectionNoticeExecutor{
 		Repositories: cx.WS.Reader,
 		Projection:   cx.WS.Index,
-		Controller:   cx.WS.Projection,
-	}).Execute(cx.Context, knowledgeapp.ProjectionNoticeRequest{
+		Controller:   cx.WS.Plugins,
+	}).Execute(cx.Context, discoveryservice.ProjectionNoticeRequest{
 		Notice:  notice,
 		State:   lookup,
 		Request: request,
@@ -127,16 +128,16 @@ func ChangeNoticeFromFlags(flags map[string]invoke.FlagValue) (index.ChangeNotic
 		SourceRevision: invoke.FlagString(flags, "source-revision"),
 	}
 	if object := invoke.FlagString(flags, "object"); object != "" {
-		kind := knowledge.AddressKind(invoke.FlagString(flags, "kind"))
+		kind := objectmodel.AddressKind(invoke.FlagString(flags, "kind"))
 		if kind == "" {
 			if invoke.FlagString(flags, "aspect") != "" {
-				kind = knowledge.KindAspect
+				kind = objectmodel.KindAspect
 			} else {
-				kind = knowledge.KindEntity
+				kind = objectmodel.KindEntity
 			}
 		}
-		notice.Address = &knowledge.Address{
-			Kind: kind, ObjectID: knowledge.ObjectID(object), AspectName: invoke.FlagString(flags, "aspect"),
+		notice.Address = &objectmodel.Address{
+			Kind: kind, ObjectID: objectmodel.ObjectID(object), AspectName: invoke.FlagString(flags, "aspect"),
 		}
 	}
 	return notice, index.ValidateChangeNotice(notice)
@@ -169,19 +170,29 @@ func VerbDescribeAccess(cx *Invocation) (any, error) {
 	if err := RequireCompleteWorkspaceRead(cx.Home, cx.Flags, pin, ""); err != nil {
 		return nil, err
 	}
-	return (knowledgeapp.AccessDescribeExecutor{
+	result, err := (discoveryservice.AccessDescribeExecutor{
 		Repositories: cx.WS.Reader.Lookup(cat.Require),
-	}).Execute(cx.Context, knowledgeapp.AccessDescribeRequest{Pin: pin})
+		Plugins:      cx.WS.Plugins,
+	}).Execute(cx.Context, discoveryservice.AccessDescribeRequest{Pin: pin})
+	if err != nil {
+		return nil, err
+	}
+	plugins, err := cx.WS.LiveAccess.Overview(pin)
+	if err != nil {
+		return nil, err
+	}
+	result.Plugins = append(result.Plugins, plugins...)
+	return result, nil
 }
 
-// ResourceLookup returns the state lookup injected by the composing transport.
-// Without an injected lookup the seam falls back to the origin-bound HTTP
-// adapter: the call target is the Schema origin pinned on each Binding, never
-// a seam-invented address. The adapter itself reports TEMPORARY_UNAVAILABLE
-// when a request carries no origin. (B6 曾把回退误改为硬失败，复核恢复原合同。)
+// ResourceLookup uses an explicit component port or the Repository-selected
+// LiveAccess registry. A static read needs no external lookup.
 func ResourceLookup(cx *Invocation) (knowledgeserving.StateLookup, error) {
 	if cx.State != nil {
 		return cx.State, nil
 	}
-	return knowledgeserving.NewHTTPStateLookup(nil), nil
+	if cx.WS != nil && cx.WS.LiveAccess != nil {
+		return cx.WS.LiveAccess, nil
+	}
+	return nil, nil
 }

@@ -6,9 +6,9 @@ import (
 	"kc/connector"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/knowledge"
-	"kc/knowledge/reader"
-	"kc/knowledge/writer"
+	objectmodel "kc/object"
+	"kc/object/reader"
+	"kc/object/writer"
 	"kc/snapshot"
 	"kc/snapshot/dataset"
 )
@@ -130,7 +130,7 @@ func TestConnectorChangeJourney(t *testing.T) {
 	assertSource(t, live, a.ObjectID, "source://snapshot/S2")
 
 	// Preview validation failures are pure: neither scope escape nor a missing
-	// SOURCE reference can move the knowledge.
+	// SOURCE reference can move the objectmodel.
 	headBeforeRejects := testkit.MustHead(t, s.Repo, snapshot.DefaultRef)
 	badScope := connector.Plan{
 		ConnectorID: "source-structure", Mode: connector.ModePatch,
@@ -159,11 +159,11 @@ func TestConnectorChangeJourney(t *testing.T) {
 		Observed:   []connector.Observed{{Address: a, Digest: kernel.CanonicalDigest(v2a)}},
 		SourceRefs: []string{"source://snapshot/stale"},
 	})
-	external, err := s.Writer.Commit("external-between-pull-and-commit", knowledge.CommitChangeSet{
+	external, err := s.Writer.Commit("external-between-pull-and-commit", objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: headBeforeRejects, ExpectedTargetCommit: headBeforeRejects,
-		Operations: []knowledge.Operation{{
-			Op: knowledge.OpPut, Address: structure("Table:source.external"),
+		Operations: []objectmodel.Operation{{
+			Op: objectmodel.OpPut, Address: structure("Table:source.external"),
 			Value: map[string]any{"version": "EXTERNAL"},
 		}},
 	})
@@ -209,7 +209,7 @@ func mustResolve(t *testing.T, cat dataset.Service, setID string) dataset.Resolv
 	return resolved
 }
 
-func assertVersion(t *testing.T, serving *reader.Serving, objectID knowledge.ObjectID, want string) {
+func assertVersion(t *testing.T, serving *reader.Serving, objectID objectmodel.ObjectID, want string) {
 	t.Helper()
 	values, err := serving.Read(objectID, nil)
 	if err != nil || len(values) != 1 {
@@ -225,7 +225,7 @@ func assertVersion(t *testing.T, serving *reader.Serving, objectID knowledge.Obj
 	}
 }
 
-func assertSource(t *testing.T, serving *reader.Serving, objectID knowledge.ObjectID, want string) {
+func assertSource(t *testing.T, serving *reader.Serving, objectID objectmodel.ObjectID, want string) {
 	t.Helper()
 	traces, err := serving.GetProvenance(objectID)
 	if err != nil || len(traces) != 1 || len(traces[0].Chain) == 0 {

@@ -50,7 +50,7 @@ def main() -> int:
             output = "\n".join(view["errors"]) + "\n" if view["errors"] else "Every state builds a declared fixture reused by multiple scene probes.\n"
         elif args.check_product:
             view = check_product(model)
-            output = "\n".join(view["errors"]) + "\n" if view["errors"] else "Product claim links and explicit gaps are consistent; execution not evaluated.\n"
+            output = "\n".join(view["errors"]) + "\n" if view["errors"] else "Product claims, specifications and explicit gaps are consistent; execution not evaluated.\n"
         elif args.check_views:
             view = check_views(model)
             output = "\n".join(view["errors"]) + "\n" if view["errors"] else "View union covers every node, edge, probe and Go evidence reference.\n"
@@ -82,7 +82,7 @@ def build_view(root: Path) -> dict:
         state["executable"] = state["scene_construct"] and not state["unbuildable_ancestors"]
     definitions = load_views(root)
     config = load_yaml_file(root / VIEWS) if (root / VIEWS).is_file() else {}
-    product = product_tools.build_product(root, config.get("product_documents", {}), states)
+    product = product_tools.build_product(root, config.get("product_documents", {}), states, load_yaml_file)
     generated = product_tools.product_definitions(product)
     if any(name.startswith("product/") for name in definitions):
         product["errors"].append("handwritten product view definitions are forbidden; product claims come from their owner document")
@@ -226,6 +226,8 @@ def project_view(model: dict, *, view_id: str | None = None, from_id: str | None
                         if (any(link["claim"] == claim_ref for link in proc["verifies"]) if claim_ref
                             else view_id is None or view_id in proc["views"])] for name in scope}
     visible = selected | {name for name, cases in processes.items() if cases}
+    selected_specifications = [spec for spec in product_claim["specifications"] if spec["state"] in scope] if product_claim else []
+    visible.update(spec["state"] for spec in selected_specifications)
     for name in list(visible):
         visible.update(parent for parent in ancestry[name] if parent in scope)
     states = [dict(state, processes=processes.get(state["id"], []),
@@ -238,7 +240,9 @@ def project_view(model: dict, *, view_id: str | None = None, from_id: str | None
         case_ids.update(f"{name}::construct" for name in selected)
         selected_links = [link for link in product_claim["links"] if link["case_id"] in case_ids]
         product_claim = dict(product_claim, links=selected_links, declared_link_count=len(product_claim["links"]),
-                             selected_link_count=len(selected_links))
+                             selected_link_count=len(selected_links), specifications=selected_specifications,
+                             declared_specification_count=len(product_claim["specifications"]),
+                             selected_specification_count=len(selected_specifications))
     hidden = {parent for name in visible for parent in ancestry[name]} - visible
     # Go evidence groups are standalone test references, not fixture consumers.
     required = {parent for name in visible if by_id[name]["scene_construct"]
@@ -609,7 +613,7 @@ def _parse_list(lines, i, indent):
             value, i = _parse_nested(lines, i, indent)
             result.append(value)
             continue
-        if ":" in rest:
+        if ":" in rest and not rest.startswith(("'", '"')):
             key, val = rest.split(":", 1)
             item = {key.strip(): _scalar(val.strip()) if val.strip() else None}
             if i < len(lines) and lines[i][1] > indent:

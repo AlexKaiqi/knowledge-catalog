@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 	"kc/observability"
 )
 
@@ -14,10 +14,10 @@ func TestFileStoreTraceAndVersionedHitmap(t *testing.T) {
 	store := datedFileStore(t)
 	identity := observability.IdentityContext{Principal: "agent:finance", OnBehalfOf: "user:kai"}
 	trace := observability.TraceContext{TraceID: "trace-1", SpanID: "span-1"}
-	address := knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Metric:gmv", AspectName: "definition"}
+	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Metric:gmv", AspectName: "definition"}
 	target := observability.KnowledgeAccess{
-		KnowledgeRef: knowledge.PinnedKnowledgeRef{
-			KnowledgeRef: knowledge.KnowledgeRef{Repository: "kr://acme/semantics", Object: "Metric:gmv"},
+		KnowledgeRef: objectmodel.PinnedKnowledgeRef{
+			KnowledgeRef: objectmodel.KnowledgeRef{Repository: "kr://acme/semantics", Object: "Metric:gmv"},
 			Commit:       "commit-v1",
 		},
 		Address: &address,
@@ -114,17 +114,17 @@ func TestAccessReceiptIsGeneratedOnlyAfterDurableAppend(t *testing.T) {
 
 func TestFileStoreAccessQueryByTimeRepositoryPrincipalAndContinuation(t *testing.T) {
 	store := datedFileStore(t)
-	repoA := knowledge.PinnedKnowledgeRef{
-		KnowledgeRef: knowledge.KnowledgeRef{Repository: "kr://acme/semantics", Object: "Metric:gmv"},
+	repoA := objectmodel.PinnedKnowledgeRef{
+		KnowledgeRef: objectmodel.KnowledgeRef{Repository: "kr://acme/semantics", Object: "Metric:gmv"},
 		Commit:       "c1",
 	}
-	repoB := knowledge.PinnedKnowledgeRef{
-		KnowledgeRef: knowledge.KnowledgeRef{Repository: "kr://acme/runbooks", Object: "runbook/refund"},
+	repoB := objectmodel.PinnedKnowledgeRef{
+		KnowledgeRef: objectmodel.KnowledgeRef{Repository: "kr://acme/runbooks", Object: "runbook/refund"},
 		Commit:       "c1",
 	}
 	agent := observability.IdentityContext{Principal: "agent:finance"}
 	user := observability.IdentityContext{Principal: "user:kai"}
-	write := func(at string, identity observability.IdentityContext, ref knowledge.PinnedKnowledgeRef) string {
+	write := func(at string, identity observability.IdentityContext, ref objectmodel.PinnedKnowledgeRef) string {
 		t.Helper()
 		id, err := store.RecordAccessReceipt(observability.AccessEvent{
 			OccurredAt: at, Identity: identity, Action: "read", Decision: "ALLOW", Result: "RESOLVED",

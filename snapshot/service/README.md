@@ -35,7 +35,7 @@ func mountSnapshot(mux *http.ServeMux, config service.Config) {
 }
 ```
 
-`Register` 挂载已有身份发现/自查、授权规则、来源库存、Dataset 和文件交付路由，
+`Register` 挂载已有身份发现/自查、授权规则、登记库存与审计、来源关联/解绑、Dataset 和文件交付路由，
 以及 `/ui/` 静态控制台。路由和 DTO 由公开 Go 类型、实现与回归拥有。
 控制台仍使用原 lakeFS API；同源网关需要将 native API、登录/退出和 S3 路径交给真实 lakeFS，
 将本模块 API 交给此 handler。完整可审阅配置见
@@ -74,6 +74,20 @@ HTTP 路由借用资源。架构守卫
 RepositoryID 对应的原仓名，不得返回凭据。它只是导航元数据，不赋予原仓读权；
 原 Repository Compare 使用原 API 与调用方自己的会话。独立文件服务可以不提供此值。
 
+`GET /snapshot/v1/inventory` 返回同一登记 authority 的 Repository 描述和 Dataset 摘要，
+不枚举全部已连接 Store，也不读取来源字节。`Resources.DiscoveryWorkspaceID` 是宿主可选的
+导航说明，不建立另一个登记空间或授权决定。`POST /snapshot/v1/repositories` 只登记已经
+由 `Sources` 提供且未归档的来源；可选 `BeforeAttach` 先核对宿主耐久连接/绑定，不能代替
+模块接受登记或隐式发权。`DELETE /snapshot/v1/repositories/{repository}` 只移除登记，
+保留来源文件和已接受 Dataset 历史，之后旧 pin 同样受当前成员准入约束。两项变更都需
+该 Repository 范围的 `repositories.manage`，并在前置 Hook 后重新核对当前权限。
+KC 的供给、归档与保留 System Repository 的政策仍由宿主装配，文件模块不解释知识身份。
+
+`GET /snapshot/v1/audit` 需独立的 `registry.audit.read`，返回原 `source`、`authorityId` 和
+`entries` 形状。`limit` 默认 50、最大 200，0 采用默认；不提供续页游标，非空
+`continuation` 明确拒绝。历史能力缺失、来源历史读取或提交元数据回读错误直接返回失败，
+不能伪装成成功的空历史。它读取登记提交，不读取来源 Repository 的正文或提交历史。
+
 `PUT /admin/v1/grants/{grant}` 原子修改一条规则。请求中的 `principal`、`actions`、
 `repository` 或 `dataset` 以及可选限定字段表达新规则；`expected` 包含旧规则的同名字段、
 `id`、`sharedBy` 和 `shareId`。URL、旧快照与当前耐久规则必须指向同一唯一 ID，旧范围与
@@ -111,7 +125,7 @@ GET 本身不代表只读，例如 staging/backing 需要单独的导入能力�
 网关保留原请求与响应，不写入登记账、不冻结到来源 commit、不从文件生成值；
 所有键都作为不解释的字符串处理，不用于身份、来源选择或授权。
 
-认证复用现有验证器与耐久身份绑定。Taihu/Gitea 等外部认证模式下，
+认证复用现有验证器与耐久身份绑定。Taihu/Gitea 等外部认证模式及显式本地测试身份下，
 `Config.NativeCredential` 只在服务端提供私有存储证明；每个请求先验证真实主体，再检查
 当前产品授权。改写后删除用户 Authorization、Cookie、X-Kc、X-Tai 与转发身份头，
 仅对固定 native origin 设置存储证明，绝不把该证明返回浏览器。
@@ -119,6 +133,9 @@ GET 本身不代表只读，例如 staging/backing 需要单独的导入能力�
 native 账号、凭据、策略、组、初始化接口拒绝转发。账号入口由已有认证系统承接。
 遗留 `auth: lakefs` 显式模式才按原调用者证明转发，并保留其原认证器限制。
 认证管理员、存储管理员或组成员资格均不产生本模块 grant。
+KC 只在明确 `auth: local` 且可信本地身份成立时接入同一私网证明路径；空模式或未配置
+身份不借用私网凭据。既有 lakeFS 身份模式不扩大；服务身份的 setup/config 显示既有
+提供方，不要求使用者初始化私有存储账号或填写 vendor 用户配置。
 Repo 查询不使用库存默认政策、Dataset、Object 或 Aspect 规则；Ref 是精确范围，
 文件路径不进入 Object 字段。库存按当前元数据权限过滤，游标仅来自可见仓。
 
@@ -148,5 +165,78 @@ creatorActions 显式选择初始权限，重试不恢复撤权；创建、导�
 使恢复失败，因此不能将此入口写成已完成。原控制台保留删除入口及明确错误，后续需
 由宿主提供完整解绑流程，不能删除账或假造成功。已有分支、标签及文件删除照常执行。
 
+原生 GC 设置读取仍按 `repository.settings.read`。PUT / DELETE `settings/gc_rules`
+先核对 `repository.settings.manage`，再以 HTTP 409 拒绝：当前没有证明已提交历史及
+Dataset 固定依据仍可回读的策略验证能力，不能直接转发时间保留或默认 GC 策略。
+拒绝发生在私网请求之前，不执行真实 GC。私网直接管理须遵循部署保留合同，此代理
+拒绝不能保护绕过产品入口的存储管理员操作。
+
 
 宿主 Authorize 适配还需保留实际 Store 的只读/归档边界。KC 原仓写操作检查字面文件写入能力，原 API 不得绕过只读 system 或只读连接；这不改变读取授权。
+
+## Dataset 发布的来源许可
+
+发布分别检查目标 `dataset.manage` 与每个来源的 `repository.dataset.publish`。来源许可
+以 Repo、目标 Dataset 与选定 Ref 求值；显式 Commit 使用该 Commit，未固定来源使用
+selector（空值为 `snapshot.DefaultRef`）。普通仓读取、Dataset 管理和 `dataset.*` 不隐含
+分享来源权。独立服务与 KC 宿主的自定义授权都使用 `access.MatchSourcePublication`。
+
+来源授权先于来源检查与可选 portable-recipe 副作用；外部 before-hook、`BeforePublish`
+及 `PreparePublication` 之后再次求值。selector 被服务器冻结为 Commit 后，最终复查仍
+使用调用方的原选定坐标；`BeforePublish` 返回的新选择要重新授权，最终准备不能原地
+替换冻结的来源。撤权或替换失败不接受发布、不推进登记权威和当前版；之前独立源提交
+仍成立。可信 programmatic Dataset 端口不携带 principal，强制检查由产品服务承担。
+
+此许可仅保护发布接受，已发布版本的 resolve、pin 与文件消费沿用当前 Dataset 授权和
+已接受文件范围，不逐读追加源发布许可。来源 grant 的管理边界与明确 CreatorActions
+选择见 [`access/README.md`](../access/README.md#dataset-来源发布许可)。
+
+KC HTTP 的 `EnsureDataset` 只确认已接受定义，非部署 Home 也不从消费请求自动采用
+portable recipe。缺失定义返回原错误；首次采用须经显式 `dataset define` 完成目标管理与
+来源发布授权。可信 embedded Invocation 的配方采用端口仍保留。其它宿主若通过可选
+`Resources.EnsureDataset` 采用配方，也须在一次性接受前完成同样的发布授权，不能借
+消费许可创建发布；正常消费不重复检查源发布权。
+
+## 命名 Dataset 的发布版本选择
+
+`POST /snapshot/v1/datasets/{dataset}/resolve` 可带正整数 `revision`，从已接受
+发布记录重建固定来源与文件范围；省略仍选择当前版。`revision` 与 `pin` 互斥，
+显式 null、零、负数或非整数拒绝，且输入校验先于可选配方采用。`check` 保留既有
+pin 校验合同，不接受 `revision`。正文可用性检查先从已接受发布重建可信 pin，再逐个
+固定来源按实际 Repository/commit 核对当前 `file.read`；零或部分消费许可均在任何正文
+探测前拒绝，不借用管理或来源发布许可。解析仍需当前 `dataset.resolve`，历史选择不借用
+管理详情、不要求额外 `inventory.read`，也不绕过当前退役、成员登记或来源可用性。
+显式发布版不会触发配方首次采用或创建发布记录；省略版号解析当前已接受版。可选宿主
+协调不改变上述首次发布许可，KC HTTP 消费始终不隐式创建发布。
+
+现有详情 GET 的 `revision`、`limit`、`continuation` 仍属于管理记录读取：详情采用
+选定发布的属性与来源，历史名单只列已接受版本，当前退役政策继续显示。消费解析
+与管理详情分别授权，取得详情不授予文件读取权。
+
+## 交付目录分页
+
+`tree:list` 的交付寻址只枚举一个目录的直接子项。每页最多返回 `limit` 个子项，
+零使用既有来源默认大小 500，负数拒绝；不新增 HTTP 页大小上限。固定顺序是先按名称
+分页交付声明派生的子项，再沿来源 `DirectoryReader` 的原有分页顺序继续，不要求来源
+提供全局字典序。来源段每次最多请求一页；不全量读取来源树，也不读取文件正文。
+
+交付游标只保存位置，绑定 Dataset、已接受 revision、pin、目录、完整占用范围与本次可见文件范围。
+跨范围游标拒绝；当前可见范围变化时要求重新开始，游标不保存或授权旧可见子项。
+纯 prefix 的挂载相对寻址继续使用来源自己的游标。literal 布局在该目录包含逐文件选择
+或显式挂载遮蔽时，挂载相对坐标先经 `RepositoryPath` 检查，再映射到相同的交付目录与
+合成分页；混用交付 `path` 和挂载相对坐标明确拒绝。外部语义视图仍使用自己的字节和
+目录端口，不转入 literal 路由。
+完整清单的显式挂载和逐文件条目也占用其祖先目录；当前权限隐藏条目后，祖先不能
+退回根来源的同名文件。文件读取在正文探测前拒绝隐藏声明目录，目录页根据已授权来源
+返回的子项类型过滤被排除的祖先文件；实际目录内其它获准根来源文件仍可消费。
+
+来源与派生项的同名目录只交付一次；文件同名或文件与目录冲突在遇到该来源页时拒绝。
+未完成分页不证明整个目录没有冲突，直接文件读取仍独立拒绝冲突字节交付。来源返回
+超过请求条数、不同 generation 或未完成却缺失/重复的续页位置时失败关闭；空页只有
+来源位置实际推进时才可续。最终 `exhausted` 只在两个段都完成后成立。
+
+文件读取的两种地址复用 Dataset 的固定来源编译与有界冲突检查。完整已接受 pin 决定
+占用与排除范围，当前可见 mount/item 决定可以交付的内容；隐藏显式文件或挂载仍遮蔽
+根 fallback，不因过滤权限改读另一来源。旧坏清单的同名、祖先文件和后代目录冲突
+在读取时失败关闭；冲突依据来源不可读时拒绝，不探读隐藏来源。
+resolve、mounts 与正常目录分页只复核已接受坐标，不以正文探测代替消费授权。

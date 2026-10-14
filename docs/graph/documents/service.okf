@@ -26,6 +26,7 @@ path_hint: docs/graph/documents/service.okf
     "managed-repository-provisioning",
     "native-repository-resource-metadata-integration",
     "versioned-access-evidence-and-agent-feedback",
-    "metrics-logs-traces-health-and-slo"
+    "metrics-logs-traces-health-and-slo",
+    "snapshot-module-sdk-and-authenticated-transport"
   ]
 }

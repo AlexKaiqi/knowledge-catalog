@@ -1,12 +1,12 @@
 Feature: Descriptor 已发表但调用能力缺失时返回 CAPABILITY_UNSATISFIED
 
   Scenario: Descriptor 已发表但调用能力缺失时返回 CAPABILITY_UNSATISFIED
-    When I run `kc writer put --command-id publish-orders-sql --repo kr://scene/knowledge --object resource/orders-sql --value '{"kind":"ResourceDescriptor","runtime":"sql","protocol":"resource-access/v1","access":{"query":{"call":"sql.query"}}}'`
+    When I run `kc writer put urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:resource%2Forders-sql --command-id publish-orders-sql --value '{"kind":"ResourceDescriptor","runtime":"sql","protocol":"resource-access/v1","access":{"query":{"call":"sql.query"}}}'`
     Then the output has:
       | disposition         | APPLIED |
       | result.repositoryId | kr://scene/knowledge |
       | result.newCommit    | nonempty |
-    When I run `kc read --repo kr://scene/knowledge --object resource/orders-sql`
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:resource%2Forders-sql`
     Then the output has:
       | objectId | resource/orders-sql |
       | value.kind          | ResourceDescriptor |

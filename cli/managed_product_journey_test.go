@@ -82,7 +82,7 @@ func managedHumanJourney(t *testing.T) {
 	repositoryShareAdd := func(client *kcclient.Client, repository, principal, actions string) kcclient.RepositoryShare {
 		t.Helper()
 		var share kcclient.RepositoryShare
-		if err := client.SnapshotService().ShareRepository(context.Background(), repository, kcclient.RepositoryShareRequest{
+		if err := client.RepositoryManagementService().ShareRepository(context.Background(), repository, kcclient.RepositoryShareRequest{
 			Principal: principal, Actions: shareActions(actions),
 		}, kcclient.RequestOptions{}, &share); err != nil {
 			t.Fatal(err)
@@ -92,21 +92,21 @@ func managedHumanJourney(t *testing.T) {
 	repositoryShareList := func(client *kcclient.Client, repository string) kcclient.RepositoryShares {
 		t.Helper()
 		var listed kcclient.RepositoryShares
-		if err := client.SnapshotService().RepositoryShares(context.Background(), repository, kcclient.RequestOptions{}, &listed); err != nil {
+		if err := client.RepositoryManagementService().RepositoryShares(context.Background(), repository, kcclient.RequestOptions{}, &listed); err != nil {
 			t.Fatal(err)
 		}
 		return listed
 	}
 	repositoryShareRemove := func(client *kcclient.Client, repository, shareID string) {
 		t.Helper()
-		if err := client.SnapshotService().RevokeRepositoryShare(context.Background(), repository, shareID, kcclient.RequestOptions{}, &struct{}{}); err != nil {
+		if err := client.RepositoryManagementService().RevokeRepositoryShare(context.Background(), repository, shareID, kcclient.RequestOptions{}, &struct{}{}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	expectRepositoryShareCode := func(client *kcclient.Client, repository, principal, actions, code string) {
 		t.Helper()
 		var share kcclient.RepositoryShare
-		err := client.SnapshotService().ShareRepository(context.Background(), repository, kcclient.RepositoryShareRequest{
+		err := client.RepositoryManagementService().ShareRepository(context.Background(), repository, kcclient.RepositoryShareRequest{
 			Principal: principal, Actions: shareActions(actions),
 		}, kcclient.RequestOptions{}, &share)
 		if string(kernel.CodeOf(err)) != code {
@@ -116,14 +116,14 @@ func managedHumanJourney(t *testing.T) {
 	expectRepositorySharesCode := func(client *kcclient.Client, repository, code string) {
 		t.Helper()
 		var listed kcclient.RepositoryShares
-		err := client.SnapshotService().RepositoryShares(context.Background(), repository, kcclient.RequestOptions{}, &listed)
+		err := client.RepositoryManagementService().RepositoryShares(context.Background(), repository, kcclient.RequestOptions{}, &listed)
 		if string(kernel.CodeOf(err)) != code {
 			t.Fatalf("want error code %s, got %v", code, err)
 		}
 	}
 	expectRepositoryShareRevokeCode := func(client *kcclient.Client, repository, shareID, code string) {
 		t.Helper()
-		err := client.SnapshotService().RevokeRepositoryShare(context.Background(), repository, shareID, kcclient.RequestOptions{}, &struct{}{})
+		err := client.RepositoryManagementService().RevokeRepositoryShare(context.Background(), repository, shareID, kcclient.RequestOptions{}, &struct{}{})
 		if string(kernel.CodeOf(err)) != code {
 			t.Fatalf("want error code %s, got %v", code, err)
 		}
@@ -170,7 +170,7 @@ func managedHumanJourney(t *testing.T) {
 	if len(items) != 1 || asMap(t, items[0])["managementURL"] != management {
 		t.Fatalf("own inventory lost management URL: %#v", mine)
 	}
-	put := []string{"writer", "put", "--repo", repository, "--command-id", "human-first-publication", "--object", "note/one", "--if-absent", "--value", `{"text":"published by kaiqidong"}`}
+	put := []string{"writer", "put", testObjectReference(t, repository, "note/one", ""), "--command-id", "human-first-publication", "--if-absent", "--value", `{"text":"published by kaiqidong"}`}
 	commit := publishedCommit(t, asMap(t, body(t, run(put...))))
 	detail := ownedRepository(t, providerClient, repository)
 	readiness := asMap(t, detail["readiness"])
@@ -208,11 +208,11 @@ func managedHumanJourney(t *testing.T) {
 	expectRepositoryShareCode(consumerClient, repository, "another-reader", "knowledge.read", "FORBIDDEN")
 	expectRepositorySharesCode(consumerClient, repository, "FORBIDDEN")
 	expectRepositoryShareRevokeCode(consumerClient, repository, shareID, "FORBIDDEN")
-	read := asMap(t, body(t, run("read", "--repo", repository, "--commit", commit, "--object", "note/one")))
+	read := asMap(t, body(t, run("read", testObjectReference(t, repository, "note/one", ""), "--commit", commit)))
 	if read["commit"] != commit {
 		t.Fatal("consumer did not read the published basis")
 	}
-	body(t, run("read", "--repo", repository, "--object", "note/one"))
+	body(t, run("read", testObjectReference(t, repository, "note/one", "")))
 	expectCode(t, run("writer", "receipt", "--command-id", "human-first-publication"), "FORBIDDEN")
 	t.Setenv("KC_CONFIG_DIR", providerConfig)
 	expectRepositorySharesCode(providerClient, "kr://another-owner/unrelated", "FORBIDDEN")
@@ -232,7 +232,7 @@ func managedHumanJourney(t *testing.T) {
 	}
 	body(t, run("writer", "receipt", "--command-id", "human-first-publication"))
 	t.Setenv("KC_CONFIG_DIR", consumerConfig)
-	expectCode(t, run("read", "--repo", repository, "--object", "note/one"), "FORBIDDEN")
+	expectCode(t, run("read", testObjectReference(t, repository, "note/one", "")), "FORBIDDEN")
 	// Optional local visual inspection keeps this exact verified service alive.
 	if marker := os.Getenv("KC_PRODUCT_UI_MARKER"); marker != "" {
 		raw, _ := json.Marshal(map[string]string{"url": management, "server": server.URL, "repository": repository, "username": "kaiqidong"})

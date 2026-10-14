@@ -4,12 +4,12 @@ import (
 	"strconv"
 	"strings"
 
+	retrieval "kc/discovery"
 	"kc/internal/journal"
 	"kc/invoke"
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 	"kc/observability"
-	"kc/retrieval"
 )
 
 type traverseObservationRequest struct {
@@ -168,13 +168,13 @@ func populateSearchRetrievalEvent(event *observability.RetrievalEvent, result re
 		HydrateMillis: result.Stats.HydrateDuration.Milliseconds(),
 	}
 	for i, hit := range result.Hits {
-		ref := knowledge.PinnedKnowledgeRef{
-			KnowledgeRef: knowledge.KnowledgeRef{Repository: hit.Knowledge.Repository, Object: hit.Knowledge.Address.ObjectID},
+		ref := objectmodel.PinnedKnowledgeRef{
+			KnowledgeRef: objectmodel.KnowledgeRef{Repository: hit.Knowledge.Repository, Object: hit.Knowledge.Address.ObjectID},
 			Commit:       hit.Knowledge.Commit,
 		}
 		event.Candidates = append(event.Candidates, observability.RetrievalCandidate{
 			KnowledgeRef: ref, Rank: i + 1, ValueDigest: kernel.CanonicalDigest(hit.Knowledge.Value),
-			Evidence: retrievalLaneEvidence(hit.Evidence), Observations: append([]knowledge.UnitObservation(nil), hit.Version.Observations...),
+			Evidence: retrievalLaneEvidence(hit.Evidence), Observations: append([]objectmodel.UnitObservation(nil), hit.Version.Observations...),
 		})
 	}
 }
@@ -189,7 +189,7 @@ func populateRelationRetrievalEvent(event *observability.RetrievalEvent, result 
 	event.Execution = observability.RetrievalExecution{Candidates: len(result.Hits), Hydrated: len(result.Hits)}
 	for i, hit := range result.Hits {
 		event.Candidates = append(event.Candidates, observability.RetrievalCandidate{
-			KnowledgeRef: knowledge.PinnedKnowledgeRef{KnowledgeRef: hit.KnowledgeRef, Commit: hit.Commit}, Rank: i + 1,
+			KnowledgeRef: objectmodel.PinnedKnowledgeRef{KnowledgeRef: hit.KnowledgeRef, Commit: hit.Commit}, Rank: i + 1,
 			ValueDigest: kernel.CanonicalDigest(hit.Relation), Evidence: retrievalLaneEvidence(hit.Evidence),
 			MatchedRoles: append([]string(nil), hit.MatchedRoles...),
 		})
@@ -219,8 +219,8 @@ func populateTraverseRetrievalEvent(event *observability.RetrievalEvent, result 
 	for _, node := range result.Nodes {
 		rank++
 		event.Candidates = append(event.Candidates, observability.RetrievalCandidate{
-			KnowledgeRef: knowledge.PinnedKnowledgeRef{
-				KnowledgeRef: knowledge.KnowledgeRef{Repository: node.Repository, Object: node.ObjectID},
+			KnowledgeRef: objectmodel.PinnedKnowledgeRef{
+				KnowledgeRef: objectmodel.KnowledgeRef{Repository: node.Repository, Object: node.ObjectID},
 				Commit:       result.SearchView.Snapshots[node.Repository],
 			},
 			Rank:        rank,
@@ -230,8 +230,8 @@ func populateTraverseRetrievalEvent(event *observability.RetrievalEvent, result 
 	for _, edge := range result.Edges {
 		rank++
 		event.Candidates = append(event.Candidates, observability.RetrievalCandidate{
-			KnowledgeRef: knowledge.PinnedKnowledgeRef{
-				KnowledgeRef: knowledge.KnowledgeRef{Repository: edge.Repository, Object: edge.ObjectID},
+			KnowledgeRef: objectmodel.PinnedKnowledgeRef{
+				KnowledgeRef: objectmodel.KnowledgeRef{Repository: edge.Repository, Object: edge.ObjectID},
 				Commit:       edge.Commit,
 			},
 			Rank:        rank,

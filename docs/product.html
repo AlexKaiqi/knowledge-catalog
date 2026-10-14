@@ -3,12 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Knowledge Catalog 让不同团队维护的知识能独立发布、按任务组合，并供人、应用和 Agent 带依据使用、持续修正。本手册说明产品价值、采用范围、发布与消费路径，以及当前能力与待完善的闭环。">
+  <meta name="description" content="Knowledge Catalog 产品设计与使用书：供给方注册对象，环境连接其定义、材料与适用能力，让 Agent 发现、获准访问、使用并留痕。Snapshot 支撑协作与生产，Object 组织内容和元数据，插件按作用域扩展业务；本书区分设计目标、当前基础与采用条件。">
   <meta name="color-scheme" content="light">
-  <title>Knowledge Catalog · 产品使用手册</title>
+  <title>Knowledge Catalog · 产品设计与使用书</title>
   <!--
-    单文件派生手册，不进入文档权威图，不承载独有决策。
+    单文件产品设计与使用书；设计决策沿 docs/graph 的 owner，不承载独有合同。
     产品原则 owner：docs/reviewed/core-architecture.md；知识读写 owner：docs/reviewed/knowledge.md；术语：docs/reviewed/terminology.md。
+    对象环境与使用闭环 owner：docs/reviewed/object-system.md；插件接入与作用域 owner：docs/reviewed/plugin-extension.md。
     直接依赖：docs/reviewed/core-architecture.md、docs/reviewed/dataset.md、docs/reviewed/permissions.md、
     docs/reviewed/declarative-index.md、docs/reviewed/resource-access.md、docs/reviewed/service.md。
     操作形状核对 cli/help.go、cli/SURFACE.md、Reader/Writer 公开合同与 Conformance；
@@ -29,7 +30,7 @@
     @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
     @page{size:A4;margin:16mm 15mm}
     @media print{html{scroll-behavior:auto}body{background:white;color:#222;font-size:10pt;line-height:1.7}.layout{display:block;max-width:none;padding:0}.sidebar,.toolbar,.copy,.skip,.reading-note{display:none!important}.main{padding:0}.topline{margin-bottom:15px}.hero{padding-bottom:18px}.hero .intro{font-size:11pt}h1{font-size:28pt}h2{font-size:18pt}h3{font-size:12pt}section{padding-top:24px}a{color:inherit;text-decoration:none}.role-link,.role-link.primary{background:white;color:#222;border-color:#bbb}.role-link.primary h3,.role-link.primary .cta,.role-link.primary .role-label{color:#222}.role-link{padding:14px}.role-link p{font-size:9pt}.role-link .arrow{display:none}.value-grid{gap:15px}.value-card p,.panel p,.panel ul,.answer,.step>p{font-size:9pt}.code-block{background:#f5f6f4;color:#222;border-color:#bbb}.code-head{color:#555;border-color:#ccc}.code-block pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:8pt;padding:12px}.step{margin:18px 0;padding-left:35px}.note,.example{background:#f6f7f3}table{font-size:9pt}th,td{padding:8px 10px}.table-scroll{overflow:visible}thead{display:table-header-group}h2,h3,h4,summary{break-after:avoid}p,li{orphans:3;widows:3}.role-link,.value-card,.code-block,.system-map,.note,.example,.panel,tr,.timeline-row{break-inside:avoid}details::details-content{content-visibility:visible!important;height:auto!important}details .answer{display:block!important}summary{padding:13px 0;font-size:10pt}summary:after{display:none}.footer{font-size:8pt;margin-top:20px}.topline,.status-label,.eyebrow{color:#444}.section-no{color:#555}}
-    /* The capability panorama follows the same four layers as the architecture. */
+    /* Capability cards follow the architecture's ownership boundaries. */
     .hero{padding-bottom:24px}.hero h1{font-size:clamp(32px,3.5vw,44px)}.hero .intro{margin-bottom:14px;max-width:850px}.topline{margin-bottom:28px}
     .architecture-map{margin:20px 0 18px;padding:22px;border:1px solid #cbdad1;border-radius:12px;background:#fff;line-height:1.6}
     .architecture-map figcaption{display:flex;justify-content:space-between;gap:15px;font-size:12px;font-weight:650;color:var(--ink);padding-bottom:15px;border-bottom:1px solid var(--line)}.architecture-map figcaption span{font-weight:400;color:var(--muted);font-size:11px}
@@ -45,7 +46,7 @@
     @media(max-width:600px){.architecture-map{padding:13px}.architecture-map figcaption{display:block}.architecture-map figcaption span{display:block;margin-top:4px}.architecture-access,.architecture-link{margin-right:0}.architecture-row{grid-template-columns:1fr;gap:12px}.architecture-group-label{display:block}.architecture-group-label span{display:block;margin-top:3px}.architecture-layer{grid-template-columns:25px minmax(0,1fr)}.architecture-extension{margin-left:26px;padding:12px 14px}.architecture-extension:before{top:-13px;left:18px;width:0;height:12px;border-top:0;border-left:1px dashed #9db5a7}.architecture-extension p{margin-bottom:6px}.architecture-boundary{display:block;padding:16px 0 10px}.architecture-boundary span{display:block;margin-top:4px}.capability-grid{grid-template-columns:1fr}.capability-card{padding:20px}.adoption-paths a{padding:11px}.adoption-paths strong{font-size:17px}}
     @media print{.hero h1{font-size:25pt}.architecture-map{padding:13px;break-inside:avoid;page-break-inside:avoid}.architecture-map figcaption{font-size:9pt}.architecture-map figcaption span{font-size:8pt}.architecture-audience{padding:8px 0 5px;font-size:9pt}.architecture-access{padding:8px 12px}.architecture-access strong{font-size:11pt}.architecture-access>span,.architecture-access>small{font-size:8pt}.architecture-layer{padding:9px 11px}.architecture-layer h3{font-size:11pt}.architecture-layer h3 small{display:inline-block;margin-left:5px;font-size:8pt}.architecture-layer p{font-size:8pt}.layer-benefit{font-size:8pt}.knowledge-group,.foundation-group{padding:9px}.architecture-extension{padding:10px}.architecture-extension h3{font-size:10pt}.architecture-extension p,.architecture-extension a,.extension-limit{font-size:8pt}.adoption-paths{grid-template-columns:repeat(4,minmax(0,1fr));break-inside:avoid}.adoption-paths a{padding:9px;font-size:8pt}.adoption-paths strong{font-size:12pt}.adoption-paths small{font-size:8pt}.capability-card{padding:16px;break-inside:avoid}.capability-card h3{font-size:12pt}.capability-card p,.capability-fit{font-size:9pt}}
     @media print{.topline{margin-bottom:9px}.hero{padding-bottom:10px}.hero .eyebrow{font-size:8pt;margin-bottom:6px}.hero h1{font-size:19pt;line-height:1.3;margin-bottom:9px}.hero h1 br{display:none}.hero .intro{font-size:9pt;line-height:1.5;margin:0}#overview{padding-top:14px}#overview h2{font-size:15pt;margin-bottom:7px}#overview>.section-intro{font-size:9pt;line-height:1.5;margin-bottom:10px}.architecture-map{margin:10px 0;padding:10px}.architecture-map figcaption{padding-bottom:8px}.architecture-layer .layer-benefit{display:none}.architecture-layer h3{margin-bottom:3px}.architecture-row{gap:16px;grid-template-columns:minmax(0,1fr) 24%}.architecture-access,.architecture-link{margin-right:calc(24% + 16px)}.inner-link{margin-right:0;padding:3px 0}.architecture-group-label{padding-bottom:6px}.architecture-boundary{padding:8px 0}.adoption-paths{margin:10px 0}.adoption-paths strong{margin:3px 0}#overview>.result{font-size:8pt!important}}
-    /* Cross-cutting dimensions complement the existing four-layer panorama. */
+    /* Cross-cutting dimensions complement the responsibility panorama. */
     .architecture-body{display:grid;grid-template-columns:minmax(0,1fr) 78px;gap:16px;margin-top:12px}.architecture-main{min-width:0}.architecture-dimensions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}.architecture-dimension{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:16px 5px;border:1px solid #d5dfd7;border-radius:6px;background:#f0f5f1}.architecture-dimension strong,.architecture-dimension span{writing-mode:vertical-rl;letter-spacing:.12em}.architecture-dimension strong{font-size:13px;color:var(--green)}.architecture-dimension span{font-size:10px;color:var(--muted)}.architecture-dimension:nth-child(2){background:#eef3f7;border-color:#d3dee5}.architecture-notice{border-top:1px dashed var(--line);padding-top:9px;margin-top:10px}.architecture-notice strong{display:block;font-size:11px;margin-bottom:4px}.architecture-ingress{margin-top:14px;border:1px dashed #bccbd7;border-radius:7px;background:#f5f8fa;padding:10px 14px}.architecture-ingress strong{font-size:11px;color:#41647c}.architecture-ingress p{margin:4px 0 0;font-size:11px}.vfs-extension{align-self:start;margin-top:12px}.vfs-extension:before{top:42px}
     @media(max-width:1050px){.architecture-body{grid-template-columns:minmax(0,1fr) 70px;gap:12px}.architecture-dimension{padding:12px 3px}.architecture-dimension strong{font-size:12px}.architecture-row{grid-template-columns:minmax(0,1fr) 27%}.architecture-access,.architecture-link{margin-right:calc(27% + 16px)}.inner-link{margin-right:0}}
     @media(max-width:600px){.architecture-body{grid-template-columns:1fr;gap:16px}.architecture-dimensions{gap:7px}.architecture-dimension{padding:12px 7px;gap:8px;justify-content:flex-start;text-align:center}.architecture-dimension strong,.architecture-dimension span{writing-mode:horizontal-tb;letter-spacing:0}.architecture-dimension span{font-size:10px}.architecture-row{grid-template-columns:1fr}.architecture-access,.architecture-link{margin-right:0}.vfs-extension{margin-top:0}.vfs-extension:before{top:-13px}.architecture-ingress{padding:10px 12px}}
@@ -66,197 +67,362 @@
 <body>
   <a class="skip" href="#content">跳到正文</a>
   <div class="layout">
-    <aside class="sidebar" aria-label="手册导航">
-      <div class="brand"><span class="brand-mark" aria-hidden="true">KC</span><div>Knowledge Catalog<small>产品使用手册</small></div></div>
-      <p class="nav-label">产品说明与使用指南</p>
+    <aside class="sidebar" aria-label="设计与使用书导航">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">KC</span><div>Knowledge Catalog<small>产品设计与使用书</small></div></div>
+      <p class="nav-label">产品设计 · 采用路径 · 使用指南</p>
       <nav class="toc" aria-label="章节目录">
-        <a href="#value"><span>01</span> 产品价值与目标</a>
-        <a href="#overview"><span>02</span> 能力与架构全景</a>
-        <a href="#concepts"><span>03</span> 分层职责与能力边界</a>
-        <a href="#knowledge"><span>04</span> 什么是知识</a>
-        <a href="#connect"><span>05</span> 开始之前</a>
-        <a href="#consume"><span>06</span> 消费：读取与查找</a>
-        <a href="#provide"><span>07</span> 接入：组织并交付</a>
-        <a href="#retrieval"><span>08</span> 声明式索引与访问</a>
-        <a href="#changes"><span>09</span> 发布、版本与更新</a>
-        <a href="#dynamic-state"><span>10</span> 解决方案：瞬时状态接入</a>
-        <a href="#project"><span>11</span> 只读 VFS</a>
-        <a href="#trust"><span>12</span> 权限与可信依据</a>
-        <a href="#faq"><span>13</span> 常见问题</a>
-        <a href="#reference"><span>14</span> 当前能力与规划</a>
+        <a href="#value"><span>01</span> 设计愿景与产品价值</a>
+        <a href="#object-registration"><span>02</span> 对象注册与环境装配</a>
+        <a href="#overview"><span>03</span> 能力与架构全景</a>
+        <a href="#concepts"><span>04</span> 分层职责与能力边界</a>
+        <a href="#knowledge"><span>05</span> 什么是知识</a>
+        <a href="#connect"><span>06</span> 开始之前</a>
+        <a href="#consume"><span>07</span> 消费：读取与查找</a>
+        <a href="#provide"><span>08</span> 接入：组织并交付</a>
+        <a href="#retrieval"><span>09</span> 声明式索引与访问</a>
+        <a href="#changes"><span>10</span> 发布、版本与更新</a>
+        <a href="#dynamic-state"><span>11</span> 解决方案：瞬时状态接入</a>
+        <a href="#project"><span>12</span> 只读 VFS</a>
+        <a href="#trust"><span>13</span> 权限与可信依据</a>
+        <a href="#faq"><span>14</span> 常见问题</a>
+        <a href="#reference"><span>15</span> 当前能力与规划</a>
       </nav>
       <div class="sidebar-foot">面向数据接入方、消费方<br>以及应用与 Agent 开发者<br><br>单文件 · 离线可读<br><a href="#reference">采用条件与能力边界 ↗</a></div>
     </aside>
     <main class="main" id="content" tabindex="-1">
-      <div class="topline"><div class="edition"><span class="dot" aria-hidden="true"></span>产品与使用指南 / 2026.09</div><div class="toolbar"><span>独立 HTML</span><button type="button" id="print-button" hidden>打印 / 存为 PDF</button></div></div>
+      <div class="topline"><div class="edition"><span class="dot" aria-hidden="true"></span>产品设计与使用书 / 2026-10-14</div><div class="toolbar"><span>独立 HTML</span><button type="button" id="print-button" hidden>打印 / 存为 PDF</button></div></div>
       <header class="hero">
         <p class="eyebrow">KNOWLEDGE CATALOG</p>
-        <h1>让知识独立供给<br>让使用有据可查</h1>
-        <p class="intro">Knowledge Catalog 让不同团队维护的知识能独立发布、按任务组合，供人、应用和 Agent 使用并持续修正。供给方维护内容、业务模型和来源；使用者选择需要的范围，保留本次任务所用的版本与引用依据。</p>
-        <p>Knowledge Catalog 协议的 Go 参考实现，提供可部署的知识发布与消费服务。在 lakeFS 等已有存储之上组织 Dataset、知识模型与统一访问；大规模使用的容量、吞吐与恢复能力按部署验证。</p>
+        <h1>面向 Agent 的对象环境<br>让使用有据可查</h1>
+        <p class="intro">Knowledge Catalog 让不同团队发布、维护和组合自己的业务对象，供人、应用和 Agent 发现、理解、获准使用，并留下可复核记录。供给方维护内容、元数据与使用说明，交接实际材料或能力；使用问题可以回到修订与发布。</p>
+        <p>这是 Knowledge Catalog 协议的 Go 参考实现。Snapshot 支撑多团队协作与生产发布，Object 组织对象知识内容及元数据，插件在 Repo 作用域内扩展业务能力；lakeFS 保存内容与版本。大规模使用的容量、吞吐与恢复能力按部署验证。</p>
+        <p class="reading-note">本书先说明对象环境的产品设计，再提供产品使用手册；设计目标、当前基础与采用条件分别标明。</p>
       </header>
 
       <section id="value" aria-labelledby="value-title">
-        <div class="section-heading"><span class="section-no">01</span><h2 id="value-title">从知识供给到任务使用</h2></div>
-        <p class="section-intro">一份知识可以供多个任务复用，一个任务也可以采用多个来源。发布、交付和消费保留各来源的维护责任、版本与权限，使用中发现的问题可以回到明确的修订流程。</p>
+        <div class="section-heading"><span class="section-no">01</span><h2 id="value-title">从对象供给到获准使用</h2></div>
+        <p class="section-intro">供给方维护对象及其知识表示，使用方按任务发现与选择。一个任务可以采用多个来源，组合仍保留各来源的维护责任、版本和权限。</p>
         <div class="split">
-          <article class="panel"><h3>维护者独立供给</h3><p>按自己的业务模型发布和修订知识，在授权范围内分享。日常工作通过客户端完成，不需要部署方逐仓代办。</p></article>
-          <article class="panel"><h3>按任务组合与交付</h3><p>选取所需文件与目录，组合成有名称、有版本的 Dataset。同一来源可以服务不同用途，消费权与源仓维护权分别管理。</p></article>
-          <article class="panel"><h3>使用者保留依据</h3><p>已知对象直接读取，需要定位时再查找或展开关系。结果带来源与版本；动态值另外说明观察依据，供人和 Agent 引用、复核。</p></article>
+          <article class="panel"><h3>维护者独立供给</h3><p>按业务模型维护对象内容、元数据与可供性（Affordance），发布修订并在授权范围内分享。日常工作通过客户端完成，不需要部署方逐仓代办。</p></article>
+          <article class="panel"><h3>团队协作与生产交付</h3><p>Snapshot 以条件提交保护并发修订并保留历史版本，Dataset 选择文件范围和发布版。同一来源可以服务不同用途，消费权与源仓维护权分别管理。</p></article>
+          <article class="panel"><h3>Agent 获准使用并留痕</h3><p>从对象与系统能力的 Affordance 理解用途和条件，获准后按合同读取或执行已声明操作，保留知识版本、实际观察与结果依据。</p></article>
           <article class="panel"><h3>问题回到修订流程</h3><p>根据实际使用的知识和访问依据核对问题，再经发布或提案形成修订。消费者采用新版，历史任务仍保留原依据。</p></article>
         </div>
         <h3>目标体验：通过同一产品完成日常工作</h3>
-        <p>接入方连接或申请 Repository，发布、修改并分享；消费方发现来源，使用单仓或已发布 Dataset；治理方管理授权、提案和发布；运维方管理就绪、追赶和恢复。CLI/API、宿主插件和人用界面共用产品规则，业务内容、交付范围与引用依据首先可见。</p>
+        <p>接入方连接或申请 Repository，发布、修改并分享；消费方与 Agent 发现对象及系统能力，从 Affordance 理解入口、条件与效果。需要许可时，衔接资源拥有者或既有业务流程，批准后由管理者受控发权；实际调用重新检查当前授权。CLI/API、宿主插件和人用界面共用产品规则，业务内容、交付范围与引用依据首先可见。</p>
+        <p class="result">这是设计闭环目标。下文示例基于已配置服务、适用插件与相应授权；已有权限可直接使用。平台不托管申请或审批队列，申请、业务批准与发权分别完成。</p>
         <h3>按需要增加能力</h3>
         <div class="table-scroll"><table aria-label="采用范围"><thead><tr><th scope="col">需要完成什么</th><th scope="col">采用什么</th><th scope="col">需要准备什么</th></tr></thead><tbody>
           <tr><td>选择并交付已有文件</td><td>版本化存储 + Dataset</td><td>来源、文件范围、目录布局与消费授权；普通文件无需知识 Schema。</td></tr>
-          <tr><td>理解、读取和查询业务知识</td><td>知识模型 + 相应查询能力</td><td>身份、Schema、来源；需要搜索时声明查询字段并准备检索服务。</td></tr>
-          <tr><td>结合当前状态或调用外部资源</td><td>资源访问与动态观察</td><td>获准的源侧运行服务、访问声明和可核对的观察依据；时效与恢复另行验收。</td></tr>
+          <tr><td>组织、读取和发现业务对象</td><td>Object；搜索按需采用声明式索引</td><td>身份、Schema、来源与使用说明；需要搜索时声明查询字段，并在来源 Repo 配置插件。</td></tr>
+          <tr><td>结合当前状态或调用外部资源</td><td>LiveAccess 插件与动态观察</td><td>Repo 采用配置、访问声明、获准的源侧运行服务和观察依据；时效与恢复另行验收。</td></tr>
         </tbody></table></div>
         <p><strong>一条完整任务的目标：</strong>处理订单服务告警时，读取服务定义和值班说明，找到负责团队，按获准声明查看当前健康状态，随处理结果保存知识版本与观察依据。发现说明过时后反馈具体依据，维护者修订发布，后续任务采用新版。组成能力和完整任务闭环的验证范围见<a href="#reference">当前能力与待完善项</a>。</p>
         <p class="note"><strong>可信依据可以核对。</strong>身份、来源、版本和权限明确，帮助使用者检查结论。Schema 校验说明符合声明，业务口径和事实正确性仍由知识维护者与使用者核对；反馈或模型推断须经正常发布流程才能成为知识。</p>
       </section>
 
+      <section id="object-registration" aria-labelledby="object-registration-title">
+        <div class="section-heading"><span class="section-no">02</span><h2 id="object-registration-title">注册对象，让 Agent 发现与访问</h2></div>
+        <p class="section-intro">把面向对象的组织方式延伸到协作与使用环境：供给方注册可引用的业务对象，环境连接其定义、材料与适用能力，Agent 沿对象及系统的 Affordance 自主选择并获准使用。这里借鉴 Spring 式的组件定义、装配和管理思路，面向 Agent 的对象环境是 Knowledge Catalog 的延伸设计。</p>
+        <div class="table-scroll"><table aria-label="对象注册、环境管理与 Agent 使用的责任交接"><thead><tr><th scope="col">责任交接</th><th scope="col">负责完成什么</th><th scope="col">交付什么依据</th></tr></thead><tbody>
+          <tr><td>供给方注册对象</td><td>定义业务身份与边界，经 Writer 发布版本化定义、元数据、组成、来源和 Affordance；关联实际材料或适用能力的合同与接点。</td><td>可引用的对象供给与固定知识版本；材料可以由 Snapshot 或明确的外部来源承载。</td></tr>
+          <tr><td>环境装配与管理</td><td>按来源 Repo 的 scope 采用声明式索引、LiveAccess 等插件；宿主管理实例依赖、启停与释放，任务服务确定身份与范围，核验实际支持、就绪和当前授权。</td><td>符合具体作用域的受控入口，以及实际调用、结果核验和证据交付责任。</td></tr>
+          <tr><td>Agent 发现与使用</td><td>阅读对象与系统能力说明，发现、比较并选择对象，固定适用合同与依据；确认本次许可后读取材料或调用已声明操作，保存结果与使用记录。</td><td>知识版本、实际材料或观察及执行结果；权限不足时衔接资源拥有者或业务流程，获准后重新鉴权。</td></tr>
+        </tbody></table></div>
+        <p>注册沿既有对象身份与 Writer 知识发布成立。Snapshot 保存字节与版本，Object 组织内容及元数据；已装配实例的依赖、启停与释放归宿主和插件管理。对象定义、能力装配及一次执行分别交接，实际动作由明确实现承担，调用时按其真实合同核验支持、就绪、当前授权及范围，执行后核验结果、留证与交付。</p>
+        <p class="note"><strong>从说明走到实际使用。</strong>对象可被发现不等于实现已装配或当前可用；已有权限可直接使用，每次实际请求仍检查当前授权。现有操作使用已配置服务及所属任务合同；扩展任务还需来源 Repo 采用插件，基础固定读写独立成立。Wield 等是未来扩展方向。<a href="#reference">查看当前基础与采用条件 →</a></p>
+        <p class="reading-note">类比依据：Spring Framework 官方容器说明，<code>https://docs.spring.io/spring-framework/reference/core/beans/basics.html</code>。引用其组件组织思路，不把 Spring 本身描述为 Agent 对象平台。</p>
+      </section>
+
       <section id="overview" aria-labelledby="overview-title">
-        <div class="section-heading"><span class="section-no">02</span><h2 id="overview-title">能力与架构全景</h2></div>
-        <p class="section-intro">系统按存储、文件组合、知识解释与检索组织能力；文件组合属于 Snapshot 模块。⓪ 通过适配器接入已有版本化存储；① 在其上组织和发布 Dataset；② 解释知识声明；③ 编排索引维护与检索。底层存储引擎承担文件、版本和容量，Knowledge Catalog 负责其上的数据组织、知识语义与访问流程。</p>
+        <div class="section-heading"><span class="section-no">03</span><h2 id="overview-title">能力与架构全景</h2></div>
+        <p class="section-intro">Snapshot 承担协作、版本与文件交付，Object 组织知识内容和元数据。声明式索引与 LiveAccess 按来源 Repo 的 scope 参与任务，Dataset 沿用来源配置；Affordance 同时说明对象与系统能力。共同服务边界负责本次身份、范围、授权和记录，宿主管理装配与生命周期。</p>
         <figure class="architecture-map" aria-labelledby="architecture-caption">
-          <figcaption id="architecture-caption">核心架构<span>接入方 → 平台能力 → 消费入口</span></figcaption>
+          <figcaption id="architecture-caption">核心保证与扩展边界<span>逻辑协作 · 当前能力与未来扩展分开</span></figcaption>
           <div class="architecture-canvas" tabindex="0" role="region" aria-label="完整架构图，窄屏可横向滚动">
-            <svg class="architecture-diagram" viewBox="0 0 1120 910" role="img" aria-labelledby="architecture-svg-title architecture-svg-desc">
-              <title id="architecture-svg-title">接入、索引控制、四层能力与消费入口</title>
-              <desc id="architecture-svg-desc">统一访问原语包括 DISCOVER、BROWSE、DESCRIBE_SCHEMA、SEARCH、RESOLVE、READ、READ_ADDRESS、RELATIONS、GET_PROVENANCE、LOG、RESOLVE_BINDING、ACCESS 和 INVOKE。外部状态源通过 Resource Access 提供当前值，通过 Observer 提供变化通知；两者属于同一来源接入的不同职责。Resource Access 同时为统一访问和索引控制层提供状态取值。Observer 通知与 Snapshot 已发布分支的 commit 推进进入索引控制层，由控制层读取知识声明、回源取值并维护索引。业务已有仓沿用原生提交与发布流程；KC CLI/API 经服务端提交。两条路径都形成 Snapshot commit，发布分支推进后驱动索引控制。知识发布须经过一致的校验。Dataset 选择固定版本的文件范围，供只读 VFS 消费；知识模型可读取单仓或 Dataset 范围。版本和权限贯穿相应接口。</desc>
-              <text class="lane-label" x="18" y="28">接入方</text>
-              <text class="lane-label" x="330" y="28">KNOWLEDGE CATALOG</text>
-              <text class="lane-label" x="876" y="28">消费方</text>
-
-              <rect class="access-box" x="330" y="55" width="480" height="130" rx="9"/>
-              <text class="access-title" x="350" y="84">统一访问</text>
-              <text class="access-copy" x="350" y="107">发现：DISCOVER / BROWSE · DESCRIBE_SCHEMA</text>
-              <text class="access-copy" x="350" y="130">定位与读取：SEARCH · RESOLVE · READ / READ_ADDRESS</text>
-              <text class="access-copy" x="350" y="153">关联与溯源：RELATIONS · GET_PROVENANCE · LOG</text>
-              <text class="access-copy" x="350" y="176">外部访问：RESOLVE_BINDING · ACCESS · INVOKE</text>
-              <rect class="consumer-box" x="876" y="60" width="170" height="88" rx="9"/>
-              <text class="node-title" x="896" y="98">人 / 应用 / Agent</text>
-              <text class="node-copy" x="896" y="127">通过统一接口消费</text>
-              <path class="flow" d="M810 104 H876"/><polygon points="876,104 867,100 867,108" fill="#567565"/>
-
-              <rect class="external-state-group" x="8" y="75" width="210" height="315" rx="11"/>
-              <text class="source-group-title" x="22" y="103">外部状态源</text>
-              <text class="node-small" x="22" y="274">同一来源，两项接入职责</text>
-              <a href="#dynamic-state" aria-label="Resource Access 提供当前值">
-                <rect class="source-box" x="18" y="124" width="186" height="108" rx="9"/>
-                <text class="node-title" x="34" y="158">Resource Access</text>
-                <text class="node-small" x="34" y="190">按声明提供当前值</text>
-              </a>
-              <path class="flow both" d="M204 171 H245 V104 H330"/><polygon points="330,104 321,100 321,108" fill="#567565"/><polygon points="204,171 213,175 213,167" fill="#567565"/>
-              <text class="wire-label" x="259" y="91">状态访问</text>
-              <text class="wire-label" x="260" y="262">回源取值</text>
-              <circle class="junction" cx="245" cy="171" r="3"/>
-
-              <rect class="knowledge-box" x="330" y="190" width="480" height="212" rx="9"/>
-              <a href="#layer-retrieval"><text class="layer-title" x="350" y="219">③ 索引与加速</text></a>
-              <rect class="control-box" x="350" y="238" width="208" height="140" rx="7"/>
-              <text class="node-title" x="366" y="269">索引控制层</text>
-              <text class="node-copy" x="366" y="299">识别变化 · 按声明取值</text>
-              <text class="node-copy" x="366" y="326">调度更新 · 追赶与恢复</text>
-              <text class="node-small" x="366" y="354">静态内容与动态状态索引</text>
-              <path class="flow" d="M245 171 V275 H350"/><polygon points="350,275 341,271 341,279" fill="#567565"/>
-              <rect class="node-box" x="604" y="238" width="186" height="90" rx="7"/>
-              <text class="node-title" x="620" y="269">检索索引</text>
-              <text class="node-small" x="620" y="302">构建 / 增量更新 / 重建</text>
-              <path class="flow" d="M558 283 H604"/><polygon points="604,283 595,279 595,287" fill="#567565"/>
-              <rect class="node-box" x="604" y="345" width="186" height="33" rx="6"/>
-              <text class="node-small" x="620" y="367">正文缓存 · 独立预热</text>
-              <path class="flow" d="M697 238 V185"/><polygon points="697,185 693,194 701,194" fill="#567565"/>
-              <text class="wire-label" x="710" y="207">检索</text>
-
-              <rect class="source-box" x="18" y="302" width="186" height="76" rx="9"/>
-              <text class="node-title" x="34" y="332">Observer</text>
-              <text class="node-copy" x="34" y="360">动态变化通知</text>
-              <path class="change-flow" d="M204 338 H350"/><polygon points="350,338 341,334 341,342" fill="#b18439"/>
-              <text class="wire-label" x="222" y="326">通知</text>
-
-              <a href="#layer-knowledge">
-                <rect class="knowledge-box" x="330" y="447" width="480" height="86" rx="9"/>
-                <text class="layer-title" x="350" y="479">② 知识模型</text>
-                <text class="node-copy" x="350" y="500">业务声明：Schema · Entity · Aspect · Relation · origin</text>
-                <text class="node-copy" x="350" y="522">索引声明：text（全文） · filter（过滤） · sort（排序）</text>
-              </a>
-              <path class="flow" d="M454 447 V378"/><polygon points="454,378 450,387 458,387" fill="#567565"/>
-              <text class="wire-label label-paper" x="465" y="429">知识声明与内容</text>
-              <path class="flow" d="M810 490 H840 V131 H810"/><polygon points="810,131 819,135 819,127" fill="#567565"/>
-              <text class="wire-label" transform="translate(857 375) rotate(-90)">对象读取</text>
-
-              <a href="#layer-dataset">
-                <rect class="foundation-box" x="330" y="580" width="480" height="86" rx="9"/>
-                <text class="layer-title" x="350" y="613">① Snapshot Dataset</text>
-                <text class="node-copy" x="350" y="642">来源登记 · 范围选取 · 跨仓组合 · 发布</text>
-              </a>
-              <path class="flow" d="M760 580 V533"/><polygon points="760,533 756,542 764,542" fill="#567565"/>
-              <text class="wire-label" x="350" y="562">知识模型可读取单仓或 Dataset 选定范围</text>
-              <a href="#vfs">
-                <rect class="vfs-box" x="876" y="580" width="170" height="86" rx="9"/>
-                <text class="node-title" x="896" y="613">只读 VFS</text>
-                <text class="node-copy" x="896" y="642">Dataset 文件视图</text>
-              </a>
-              <path class="flow" d="M810 623 H876"/><polygon points="876,623 867,619 867,627" fill="#567565"/>
-              <rect class="consumer-box" x="876" y="725" width="170" height="70" rx="9"/>
-              <text class="node-title" x="892" y="753">本地工具 / Agent</text>
-              <text class="node-small" x="892" y="779">目录浏览与文件读取</text>
-              <path class="flow" d="M961 666 V725"/><polygon points="961,725 965,716 957,716" fill="#567565"/>
-
-              <a href="#layer-snapshot">
-                <rect class="foundation-box" x="330" y="714" width="480" height="174" rx="9"/>
-                <text class="layer-title" x="350" y="746">⓪ Snapshot Store</text>
-                <text class="node-copy" x="350" y="777">文件 · 目录 · 分支 · 版本历史</text>
-                <rect class="node-box" x="350" y="795" width="440" height="44" rx="6"/>
-                <text class="node-title" x="367" y="823">提交 commit → 发布分支推进</text>
-                <text class="node-small" x="350" y="869">存储适配：lakeFS + 对象存储 / Gitea</text>
-              </a>
-              <path class="flow" d="M570 714 V666"/><polygon points="570,666 566,675 574,675" fill="#567565"/>
-              <text class="wire-label" x="582" y="695">选取并固定来源版本</text>
-              <path class="change-flow" d="M350 817 H290 V365 H350"/><polygon points="350,365 341,361 341,369" fill="#b18439"/>
-              <text class="change-label" transform="translate(278 658) rotate(-90)">已发布 commit 推进 → 索引控制层</text>
-
-              <rect class="source-box" x="18" y="678" width="186" height="92" rx="9"/>
-              <text class="node-title" x="34" y="706">业务已有仓</text>
-              <text class="node-copy" x="34" y="734">Git / 存储原生接口</text>
-              <text class="node-small" x="34" y="758">沿用提交与发布流程</text>
-              <path class="flow" d="M204 726 H260 V759 H330"/><polygon points="330,759 321,755 321,763" fill="#567565"/>
-              <text class="wire-label" x="214" y="714">原生提交</text>
-              <rect class="source-box" x="18" y="804" width="186" height="84" rx="9"/>
-              <text class="node-title" x="34" y="832">KC CLI / API</text>
-              <text class="node-copy" x="34" y="859">服务端校验与提交</text>
-              <text class="node-small" x="34" y="880">知识发布经 Writer</text>
-              <path class="flow" d="M204 855 H330"/><polygon points="330,855 321,851 321,859" fill="#567565"/>
-              <text class="wire-label" x="213" y="845">服务端提交</text>
-
-              <rect class="version-rail" x="1066" y="60" width="22" height="828" rx="6"/>
-              <rect class="permission-rail" x="1095" y="60" width="22" height="828" rx="6"/>
-              <text class="rail-title" x="1077" y="420" text-anchor="middle">版<tspan x="1077" dy="26">本</tspan></text>
-              <text class="rail-title" x="1106" y="420" text-anchor="middle">权<tspan x="1106" dy="26">限</tspan></text>
-            </svg>
+            <svg id="handbook-core" class="architecture-diagram" xmlns="http://www.w3.org/2000/svg" width="1720" height="1370" viewBox="0 0 1720 1370" role="img" aria-labelledby="handbook-core-title handbook-core-description">
+  <title id="handbook-core-title">Knowledge Catalog：核心保证与扩展边界</title>
+  <desc id="handbook-core-description">设计职责图。人、应用、Agent、Web、kcfs 与墙外采集器经 Server 进入同一受控任务边界。Object 解释知识，Snapshot 保存固定内容并承接仓与 Dataset 权限；按来源仓采用索引和 LiveAccess 插件。索引可重建，外部资源不成为 Snapshot 权威。Affordance 横向描述对象供给与系统能力。</desc>
+  <style>
+    #handbook-core text { font-family: 'PingFang SC', 'Hiragino Sans GB', sans-serif; fill: #203247; }
+    #handbook-core .muted { fill: #65778C; }
+    #handbook-core .code { font-family: Menlo, monospace; fill: #65778C; }
+    #handbook-core .connector { fill: none; stroke: #62748A; stroke-width: 2.3; stroke-linejoin: round; }
+    #handbook-core .future-connector { fill: none; stroke: #8971AA; stroke-width: 2.3; stroke-dasharray: 8 6; stroke-linejoin: round; }
+  </style>
+  <rect width="100%" height="100%" fill="#FFFFFF"/>
+  <g id="handbook-core-heading">
+    <text x="50" y="72" font-size="43" font-weight="600" text-anchor="start">Knowledge Catalog｜核心保证与扩展边界</text>
+    <text x="50" y="116" font-size="25" font-weight="400" text-anchor="start" class="muted">设计职责视图 · 稳定核心独立成立 · 按任务采用扩展</text>
+  </g>
+  <g id="handbook-core-entrypoints">
+    <rect x="50" y="153" width="630" height="126" rx="12" fill="#F6F8FB" stroke="#D5DFE9" stroke-width="1.5"/>
+    <text x="76" y="199" font-size="30" font-weight="600" text-anchor="start">人 / 应用 / Agent</text>
+    <text x="76" y="244" font-size="24" font-weight="400" text-anchor="start">统一 CLI 与模块 SDK · 全局身份与任务上下文</text>
+    <rect x="710" y="153" width="380" height="126" rx="12" fill="#F6F8FB" stroke="#D5DFE9" stroke-width="1.5"/>
+    <text x="736" y="199" font-size="30" font-weight="600" text-anchor="start">Web / kcfs</text>
+    <text x="736" y="244" font-size="24" font-weight="400" text-anchor="start">控制台与只读文件交付</text>
+    <rect x="1120" y="153" width="560" height="126" rx="12" fill="#FFF8ED" stroke="#DBC8A8" stroke-width="1.5"/>
+    <text x="1146" y="199" font-size="30" font-weight="600" text-anchor="start">墙外接入方运行时</text>
+    <text x="1146" y="235" font-size="22" font-weight="400" text-anchor="start" class="code">integrationruntime / Collector</text>
+    <text x="1146" y="263" font-size="22" font-weight="400" text-anchor="start">来源采集与对账 → typed Writer 显式发布</text>
+    <path class="connector" d="M 365 279 L 365 345"/>
+    <path d="M -9 -5 L 1 0 L -9 5 Z" fill="#62748A" stroke="none" transform="translate(365 345) rotate(90) scale(1.84)"/>
+    <path class="connector" d="M 900 279 L 900 345"/>
+    <path d="M -9 -5 L 1 0 L -9 5 Z" fill="#62748A" stroke="none" transform="translate(900 345) rotate(90) scale(1.84)"/>
+    <path class="connector" d="M 1400 279 L 1400 345"/>
+    <path d="M -9 -5 L 1 0 L -9 5 Z" fill="#62748A" stroke="none" transform="translate(1400 345) rotate(90) scale(1.84)"/>
+  </g>
+  <g id="handbook-core-shared-server-boundary">
+    <rect x="50" y="345" width="1630" height="171" rx="12" fill="#EDF7F7" stroke="#B6D4D6" stroke-width="1.5"/>
+    <text x="76" y="391" font-size="31" font-weight="600" text-anchor="start">Server｜共同请求保证</text>
+    <text x="1654" y="391" font-size="22" font-weight="400" text-anchor="end" class="muted">home：按配置装配与生命周期</text>
+    <rect x="76" y="415" width="384" height="80" rx="8" fill="#FFFFFF" stroke="#C8DFE1" stroke-width="1.5"/>
+    <text x="93" y="447" font-size="24" font-weight="500" text-anchor="start">认证与调用上下文</text>
+    <text x="93" y="478" font-size="22" font-weight="400" text-anchor="start" class="muted">实际主体 · 固定目标与范围</text>
+    <rect x="474" y="415" width="384" height="80" rx="8" fill="#FFFFFF" stroke="#C8DFE1" stroke-width="1.5"/>
+    <text x="491" y="447" font-size="24" font-weight="500" text-anchor="start">当前授权检查</text>
+    <text x="491" y="478" font-size="22" font-weight="400" text-anchor="start" class="muted">平台范围 · 外部来源权限</text>
+    <rect x="872" y="415" width="384" height="80" rx="8" fill="#FFFFFF" stroke="#C8DFE1" stroke-width="1.5"/>
+    <text x="889" y="447" font-size="24" font-weight="500" text-anchor="start">同源任务执行</text>
+    <text x="889" y="478" font-size="22" font-weight="400" text-anchor="start" class="muted">所属模块持有业务规则</text>
+    <rect x="1270" y="415" width="384" height="80" rx="8" fill="#FFFFFF" stroke="#C8DFE1" stroke-width="1.5"/>
+    <text x="1287" y="447" font-size="24" font-weight="500" text-anchor="start">记录与可靠交付</text>
+    <text x="1287" y="478" font-size="22" font-weight="400" text-anchor="start" class="muted">结果 · 实际依据 · 访问证据</text>
+    <path class="connector" d="M 600 516 L 600 595"/>
+    <path d="M -9 -5 L 1 0 L -9 5 Z" fill="#62748A" stroke="none" transform="translate(600 595) rotate(90) scale(1.84)"/>
+    <path class="connector" d="M 1135 516 L 1135 551"/>
+    <path d="M -9 -5 L 1 0 L -9 5 Z" fill="#62748A" stroke="none" transform="translate(1135 551) rotate(90) scale(1.84)"/>
+    <path class="connector" d="M 78 516 L 78 1070 L 120 1070"/>
+    <path d="M -9 -5 L 1 0 L -9 5 Z" fill="#62748A" stroke="none" transform="translate(120 1070) rotate(0) scale(1.84)"/>
+    <text x="63" y="911" font-size="22" font-weight="400" text-anchor="start" class="muted" transform="rotate(-90 63 911)">文件与 Dataset 可独立使用</text>
+  </g>
+  <g id="handbook-core-lane-labels">
+    <text x="120" y="565" font-size="25" font-weight="500" text-anchor="start" class="muted">稳定核心：对象、内容与协作</text>
+    <text x="950" y="539" font-size="25" font-weight="500" text-anchor="start" class="muted">扩展能力</text>
+    <rect x="950" y="551" width="370" height="36" rx="7" fill="#FFFFFF" stroke="#CCBDDE" stroke-width="1.5"/>
+    <text x="1135" y="577" font-size="21" font-weight="400" text-anchor="middle" class="muted">按来源 Repo scope 采用</text>
+    <text x="1370" y="565" font-size="25" font-weight="500" text-anchor="start" class="muted">横向说明与可选流程</text>
+  </g>
+  <g id="handbook-core-object-core">
+    <rect x="120" y="595" width="730" height="245" rx="12" fill="#EDF4FF" stroke="#BFD0E7" stroke-width="1.5"/>
+    <text x="146" y="642" font-size="31" font-weight="600" text-anchor="start">Object｜对象组织与基本读写</text>
+    <text x="146" y="676" font-size="23" font-weight="400" text-anchor="start" class="muted">object/ · 注册对象供给 · 固定身份与知识解释</text>
+    <rect x="146" y="700" width="212" height="76" rx="8" fill="#FFFFFF" stroke="#CEDBED" stroke-width="1.5"/>
+    <text x="160" y="729" font-size="24" font-weight="500" text-anchor="start">身份与表示</text>
+    <text x="160" y="759" font-size="21" font-weight="400" text-anchor="start" class="muted">Object / Reference</text>
+    <rect x="379" y="700" width="212" height="76" rx="8" fill="#FFFFFF" stroke="#CEDBED" stroke-width="1.5"/>
+    <text x="393" y="729" font-size="24" font-weight="500" text-anchor="start">结构与说明</text>
+    <text x="393" y="759" font-size="21" font-weight="400" text-anchor="start" class="muted">Schema / 元数据</text>
+    <rect x="612" y="700" width="212" height="76" rx="8" fill="#FFFFFF" stroke="#CEDBED" stroke-width="1.5"/>
+    <text x="626" y="729" font-size="24" font-weight="500" text-anchor="start">读写与来源</text>
+    <text x="626" y="759" font-size="21" font-weight="400" text-anchor="start" class="muted">Reader / Writer</text>
+    <text x="146" y="813" font-size="23" font-weight="400" text-anchor="start">发布经校验与条件提交；知识内容和版本由 Snapshot 保存。</text>
+    <path class="connector" d="M 485 840 L 485 925"/>
+    <path d="M -9 -5 L 1 0 L -9 5 Z" fill="#62748A" stroke="none" transform="translate(485 925) rotate(90) scale(1.84)"/>
+    <text x="507" y="887" font-size="22" font-weight="400" text-anchor="start" class="muted">固定读取 / 单仓发布</text>
+  </g>
+  <g id="handbook-core-snapshot-core">
+    <rect x="120" y="925" width="730" height="280" rx="12" fill="#F1F4F8" stroke="#C6D1DE" stroke-width="1.5"/>
+    <text x="146" y="972" font-size="31" font-weight="600" text-anchor="start">Snapshot｜协作、版本与交付</text>
+    <text x="146" y="1008" font-size="23" font-weight="400" text-anchor="start" class="muted">snapshot/ · Repository 是维护与权限边界</text>
+    <rect x="146" y="1031" width="212" height="74" rx="8" fill="#FFFFFF" stroke="#D1DAE4" stroke-width="1.5"/>
+    <text x="160" y="1059" font-size="23" font-weight="500" text-anchor="start">多团队独立供给</text>
+    <text x="160" y="1089" font-size="21" font-weight="400" text-anchor="start" class="muted">各自维护来源仓</text>
+    <rect x="379" y="1031" width="212" height="74" rx="8" fill="#FFFFFF" stroke="#D1DAE4" stroke-width="1.5"/>
+    <text x="393" y="1059" font-size="23" font-weight="500" text-anchor="start">不可变发布版本</text>
+    <text x="393" y="1089" font-size="21" font-weight="400" text-anchor="start" class="muted">历史引用可复核</text>
+    <rect x="612" y="1031" width="212" height="74" rx="8" fill="#FFFFFF" stroke="#D1DAE4" stroke-width="1.5"/>
+    <text x="626" y="1059" font-size="23" font-weight="500" text-anchor="start">当前权限边界</text>
+    <text x="626" y="1089" font-size="21" font-weight="400" text-anchor="start" class="muted">仓与 Dataset 范围</text>
+    <text x="146" y="1141" font-size="23" font-weight="400" text-anchor="start">Dataset：组合固定文件与版本，不扩大来源授权</text>
+    <text x="146" y="1174" font-size="22" font-weight="400" text-anchor="start">Store：单仓 CAS · 条件推进   /   lakeFS 底座</text>
+  </g>
+  <g id="handbook-core-declarative-index-plugin">
+    <rect x="950" y="595" width="370" height="185" rx="12" fill="#F5F0FB" stroke="#CCBDDE" stroke-width="1.5"/>
+    <text x="975" y="635" font-size="29" font-weight="600" text-anchor="start">声明式索引</text>
+    <text x="975" y="665" font-size="18" font-weight="400" text-anchor="start" class="code">discovery / declarativeindex</text>
+    <text x="975" y="698" font-size="24" font-weight="400" text-anchor="start">候选查询 · 派生维护</text>
+    <path class="connector" d="M 1135 706 L 1135 727"/>
+    <path d="M -9 -5 L 1 0 L -9 5 Z" fill="#62748A" stroke="none" transform="translate(1135 727) rotate(90) scale(1.84)"/>
+    <rect x="975" y="735" width="320" height="31" rx="6" fill="#FFFFFF" stroke="#D7CCE4" stroke-width="1.5"/>
+    <text x="1135" y="757" font-size="21" font-weight="400" text-anchor="middle">OpenSearch｜可重建投影</text>
+    <path class="connector" d="M 950 690 L 850 690"/>
+    <path d="M -9 -5 L 1 0 L -9 5 Z" fill="#62748A" stroke="none" transform="translate(850 690) rotate(180) scale(1.84)"/>
+    <text x="900" y="642" font-size="21" font-weight="400" text-anchor="middle" class="muted">同依据</text>
+    <text x="900" y="669" font-size="21" font-weight="400" text-anchor="middle" class="muted">回读正文</text>
+  </g>
+  <g id="handbook-core-liveaccess-plugin">
+    <rect x="950" y="820" width="370" height="185" rx="12" fill="#F5F0FB" stroke="#CCBDDE" stroke-width="1.5"/>
+    <text x="975" y="860" font-size="29" font-weight="600" text-anchor="start">LiveAccess</text>
+    <text x="975" y="890" font-size="20" font-weight="400" text-anchor="start" class="code">liveaccess/</text>
+    <text x="975" y="923" font-size="23" font-weight="400" text-anchor="start">透明取值 · 观察与访问证据</text>
+    <path class="connector" d="M 1135 931 L 1135 952"/>
+    <path d="M -9 -5 L 1 0 L -9 5 Z" fill="#62748A" stroke="none" transform="translate(1135 952) rotate(90) scale(1.84)"/>
+    <rect x="975" y="960" width="320" height="31" rx="6" fill="#FFF8ED" stroke="#DBC8A8" stroke-width="1.5"/>
+    <text x="1135" y="982" font-size="21" font-weight="400" text-anchor="middle">外部资源｜保留源方授权</text>
+  </g>
+  <g id="handbook-core-future-plugins">
+    <rect x="950" y="1045" width="370" height="160" rx="12" fill="#FCFAFF" stroke="#BCAACE" stroke-width="1.5" stroke-dasharray="8 6"/>
+    <text x="975" y="1085" font-size="26" font-weight="500" text-anchor="start">后续能力（设计扩展）</text>
+    <text x="975" y="1125" font-size="26" font-weight="400" text-anchor="start">Wield 等</text>
+    <text x="975" y="1162" font-size="23" font-weight="400" text-anchor="start" class="muted">按所属合同接入对象使用</text>
+    <text x="975" y="1189" font-size="20" font-weight="400" text-anchor="start" class="muted">不是已交付的通用执行器</text>
+  </g>
+  <g id="handbook-core-affordance">
+    <rect x="1370" y="595" width="310" height="410" rx="12" fill="#F0F8F3" stroke="#BED6C5" stroke-width="1.5"/>
+    <text x="1395" y="637" font-size="29" font-weight="600" text-anchor="start">Affordance</text>
+    <text x="1395" y="677" font-size="24" font-weight="500" text-anchor="start">对象与系统的能力说明</text>
+    <text x="1395" y="720" font-size="23" font-weight="400" text-anchor="start">用途 · 条件 · 输入</text>
+    <text x="1395" y="755" font-size="23" font-weight="400" text-anchor="start">效果 · 成本 · 风险</text>
+    <text x="1395" y="790" font-size="23" font-weight="400" text-anchor="start">合同引用 · 使用示例</text>
+    <rect x="1395" y="817" width="260" height="157" rx="8" fill="#FFFFFF" stroke="#D1E2D7" stroke-width="1.5"/>
+    <text x="1411" y="850" font-size="24" font-weight="500" text-anchor="start">分别核对</text>
+    <text x="1411" y="883" font-size="21" font-weight="400" text-anchor="start">声明 · 装配 · 当前就绪</text>
+    <text x="1411" y="916" font-size="21" font-weight="400" text-anchor="start">本次权限 · 实际结果</text>
+    <text x="1411" y="954" font-size="21" font-weight="400" text-anchor="start" class="muted">说明读取不运行能力</text>
+  </g>
+  <g id="handbook-core-optional-application-flow">
+    <rect x="1370" y="1045" width="310" height="160" rx="12" fill="#FAFBFC" stroke="#D3DCE6" stroke-width="1.5"/>
+    <text x="1395" y="1085" font-size="25" font-weight="500" text-anchor="start">可选应用流程</text>
+    <text x="1395" y="1120" font-size="22" font-weight="400" text-anchor="start" class="code">controlplane</text>
+    <text x="1395" y="1158" font-size="23" font-weight="400" text-anchor="start">提案 · 预览 · 证据核对</text>
+    <text x="1395" y="1188" font-size="21" font-weight="400" text-anchor="start" class="muted">按需采用，仍经 Writer 发布</text>
+  </g>
+  <g id="handbook-core-legend-and-boundaries">
+    <text x="50" y="1258" font-size="24" font-weight="400" text-anchor="start">索引用于候选定位；知识正文按同一依据回读。动态观察与 Snapshot 版本分别留证。</text>
+    <path d="M 50 1304 L 92 1304" stroke="#62748A" stroke-width="2.3"/>
+    <text x="108" y="1313" font-size="22" font-weight="400" text-anchor="start" class="muted">已选职责与协作</text>
+    <path d="M 330 1304 L 372 1304" stroke="#8971AA" stroke-width="2.3" stroke-dasharray="8 6"/>
+    <text x="388" y="1313" font-size="22" font-weight="400" text-anchor="start" class="muted">后续扩展</text>
+    <text x="1680" y="1313" font-size="22" font-weight="400" text-anchor="end" class="muted">逻辑协作图 · 不表示精确 import 或独立部署进程</text>
+  </g>
+</svg>
           </div>
-          <p class="architecture-legend"><span>实线：访问与数据流</span><span>虚线：变化通知与版本推进</span><span class="architecture-scroll-hint">窄屏可横向滚动查看完整连线</span></p>
+          <p class="architecture-legend"><span>实线：已选职责与协作</span><span>虚线：后续扩展</span><span><a href="#layer-snapshot">Snapshot Store</a> · <a href="#layer-dataset">Dataset</a> · <a href="#layer-knowledge">Object</a> · <a href="#layer-retrieval">声明式索引</a> · <a href="#dynamic-state">LiveAccess</a> · <a href="#vfs">只读 VFS</a></span><span class="architecture-scroll-hint">窄屏可横向滚动查看完整图</span></p>
         </figure>
         <p class="note"><strong>先提交，再跟踪发布版本。</strong>索引控制层读取的是发布分支从旧 commit 到新 commit 的变化；草稿修改或仅创建未发布的 commit 不会推进当前发布版本。知识解释和索引维护由服务端完成，不依赖提交是否来自 KC CLI。<a href="#snapshot-publishing">查看两种提交路径 →</a></p>
-        <p class="result">逻辑分层不限定服务的部署数量。Knowledge 可直接读取单仓 Snapshot，也可通过 Dataset 读取组合后的文件范围。动态状态由外部运行时提供；VFS 将固定版本的数据集呈现为本地只读文件。</p>
+        <p class="result">图表示设计职责，不限定 import 或部署数量。Object 可读取单仓或 Dataset 的固定范围；插件登记、说明可见、实际就绪与本次授权分别成立。Wield 等仅是未来扩展方向，不能由名称推导运行合同或已可调用。</p>
+        <details><summary>Agent 怎样从发现走到获准使用与记录？</summary><div class="answer">
+          <p>下面是设计目标。权限不足时，查明外部申请渠道并衔接资源拥有者或业务流程；批准后受控发权，再重新检查当前授权。已有权限可直接进入使用，记录与资源释放按所属任务合同执行。</p>
+          <div class="architecture-canvas" tabindex="0" role="region" aria-label="Agent 使用闭环图，窄屏可横向滚动">
+<svg id="handbook-loop" class="architecture-diagram" xmlns="http://www.w3.org/2000/svg" width="1720" height="1100" viewBox="0 0 1720 1100" role="img" aria-labelledby="handbook-loop-title handbook-loop-description">
+  <title id="handbook-loop-title">Agent 使用闭环：从发现到可核验结果与修订</title>
+  <desc id="handbook-loop-description">六步设计闭环：发现对象与可供性、理解并固定依据、核对当前权限与执行条件、执行并核验结果、使用见证与释放、反馈修订再发现。权限不足时进入资源 owner 的外部授权流程；这属于设计闭环目标，不表示平台托管审批或自动发权。</desc>
+  <style>
+    #handbook-loop text { font-family: 'PingFang SC', 'Hiragino Sans GB', sans-serif; fill: #203247; }
+    #handbook-loop .muted { fill: #65778C; }
+    #handbook-loop .code { font-family: Menlo, monospace; fill: #65778C; }
+    #handbook-loop .connector { fill: none; stroke: #62748A; stroke-width: 2.3; stroke-linejoin: round; }
+    #handbook-loop .future-connector { fill: none; stroke: #8971AA; stroke-width: 2.3; stroke-dasharray: 8 6; stroke-linejoin: round; }
+  </style>
+  <rect width="100%" height="100%" fill="#FFFFFF"/>
+  <g id="handbook-loop-heading">
+    <text x="50" y="72" font-size="43" font-weight="600" text-anchor="start">Agent 使用闭环｜从发现到可核验结果与修订</text>
+    <text x="50" y="116" font-size="25" font-weight="400" text-anchor="start" class="muted">任务顺序与责任交接 · 固定知识依据和当前授权共同成立</text>
+  </g>
+  <g id="handbook-loop-discover">
+    <rect x="50" y="210" width="480" height="205" rx="12" fill="#EDF4FF" stroke="#C3D3E5" stroke-width="1.5"/>
+    <rect x="72" y="232" width="38" height="38" rx="8" fill="#FFFFFF" stroke="#C7D6E7" stroke-width="1.5"/>
+    <text x="91" y="259" font-size="25" font-weight="600" text-anchor="middle">1</text>
+    <text x="127" y="260" font-size="28" font-weight="600" text-anchor="start">发现对象与可供性</text>
+    <text x="76" y="306" font-size="24" font-weight="400" text-anchor="start">库存、查询、关系与 help</text>
+    <text x="76" y="347" font-size="24" font-weight="400" text-anchor="start">取得对象供给和系统能力说明</text>
+    <text x="76" y="388" font-size="24" font-weight="400" text-anchor="start">发现说明不执行所述能力</text>
+  </g>
+  <g id="handbook-loop-understand">
+    <rect x="620" y="210" width="480" height="205" rx="12" fill="#EDF4FF" stroke="#C3D3E5" stroke-width="1.5"/>
+    <rect x="642" y="232" width="38" height="38" rx="8" fill="#FFFFFF" stroke="#C7D6E7" stroke-width="1.5"/>
+    <text x="661" y="259" font-size="25" font-weight="600" text-anchor="middle">2</text>
+    <text x="697" y="260" font-size="28" font-weight="600" text-anchor="start">理解并固定依据</text>
+    <text x="646" y="306" font-size="24" font-weight="400" text-anchor="start">Reference · Schema · 发布版本</text>
+    <text x="646" y="347" font-size="24" font-weight="400" text-anchor="start">确认明确实现与输入结果合同</text>
+    <text x="646" y="388" font-size="24" font-weight="400" text-anchor="start">保留来源、材料和观察依据</text>
+  </g>
+  <g id="handbook-loop-authorize">
+    <rect x="1190" y="210" width="480" height="205" rx="12" fill="#EDF4FF" stroke="#C3D3E5" stroke-width="1.5"/>
+    <rect x="1212" y="232" width="38" height="38" rx="8" fill="#FFFFFF" stroke="#C7D6E7" stroke-width="1.5"/>
+    <text x="1231" y="259" font-size="25" font-weight="600" text-anchor="middle">3</text>
+    <text x="1267" y="260" font-size="28" font-weight="600" text-anchor="start">确认访问与执行条件</text>
+    <text x="1216" y="306" font-size="24" font-weight="400" text-anchor="start">Server 核对实际主体、动作与范围</text>
+    <text x="1216" y="347" font-size="24" font-weight="400" text-anchor="start">检查支持、就绪与当前权限</text>
+    <text x="1216" y="388" font-size="24" font-weight="400" text-anchor="start">外部资源仍检查源方授权</text>
+  </g>
+  <g id="handbook-loop-execute">
+    <rect x="1190" y="720" width="480" height="205" rx="12" fill="#EDF7F7" stroke="#C3D3E5" stroke-width="1.5"/>
+    <rect x="1212" y="742" width="38" height="38" rx="8" fill="#FFFFFF" stroke="#C7D6E7" stroke-width="1.5"/>
+    <text x="1231" y="769" font-size="25" font-weight="600" text-anchor="middle">4</text>
+    <text x="1267" y="770" font-size="28" font-weight="600" text-anchor="start">执行并核验结果</text>
+    <text x="1216" y="816" font-size="24" font-weight="400" text-anchor="start">按固定合同调用 Reader / Plugin</text>
+    <text x="1216" y="857" font-size="24" font-weight="400" text-anchor="start">区分成功、失败与结果未知</text>
+    <text x="1216" y="898" font-size="24" font-weight="400" text-anchor="start">无法兑现保证时明确失败</text>
+  </g>
+  <g id="handbook-loop-use-witness-release">
+    <rect x="620" y="720" width="480" height="205" rx="12" fill="#EDF7F7" stroke="#C3D3E5" stroke-width="1.5"/>
+    <rect x="642" y="742" width="38" height="38" rx="8" fill="#FFFFFF" stroke="#C7D6E7" stroke-width="1.5"/>
+    <text x="661" y="769" font-size="25" font-weight="600" text-anchor="middle">5</text>
+    <text x="697" y="770" font-size="28" font-weight="600" text-anchor="start">使用、见证与释放</text>
+    <text x="646" y="816" font-size="24" font-weight="400" text-anchor="start">成果引用实际知识与观察依据</text>
+    <text x="646" y="857" font-size="24" font-weight="400" text-anchor="start">持有临时资源时按合同释放</text>
+    <text x="646" y="898" font-size="24" font-weight="400" text-anchor="start">区分模型推断与已发布知识</text>
+  </g>
+  <g id="handbook-loop-feedback">
+    <rect x="50" y="720" width="480" height="205" rx="12" fill="#EDF7F7" stroke="#C3D3E5" stroke-width="1.5"/>
+    <rect x="72" y="742" width="38" height="38" rx="8" fill="#FFFFFF" stroke="#C7D6E7" stroke-width="1.5"/>
+    <text x="91" y="769" font-size="25" font-weight="600" text-anchor="middle">6</text>
+    <text x="127" y="770" font-size="28" font-weight="600" text-anchor="start">反馈并修订</text>
+    <text x="76" y="816" font-size="24" font-weight="400" text-anchor="start">问题定位到具体内容与使用依据</text>
+    <text x="76" y="857" font-size="24" font-weight="400" text-anchor="start">经 Writer 或提案显式发布新版</text>
+    <text x="76" y="898" font-size="24" font-weight="400" text-anchor="start">保留历史引用与版本可复核性</text>
+  </g>
+  <g id="handbook-loop-task-sequence">
+    <path class="connector" d="M 530 312 L 620 312"/>
+    <path d="M -9 -5 L 1 0 L -9 5 Z" fill="#62748A" stroke="none" transform="translate(620 312) rotate(0) scale(1.84)"/>
+    <path class="connector" d="M 1100 312 L 1190 312"/>
+    <path d="M -9 -5 L 1 0 L -9 5 Z" fill="#62748A" stroke="none" transform="translate(1190 312) rotate(0) scale(1.84)"/>
+    <path class="connector" d="M 1430 415 L 1430 720"/>
+    <path d="M -9 -5 L 1 0 L -9 5 Z" fill="#62748A" stroke="none" transform="translate(1430 720) rotate(90) scale(1.84)"/>
+    <text x="1453" y="574" font-size="23" font-weight="400" text-anchor="start" class="muted">获准后使用</text>
+    <path class="connector" d="M 1190 822 L 1100 822"/>
+    <path d="M -9 -5 L 1 0 L -9 5 Z" fill="#62748A" stroke="none" transform="translate(1100 822) rotate(180) scale(1.84)"/>
+    <path class="connector" d="M 620 822 L 530 822"/>
+    <path d="M -9 -5 L 1 0 L -9 5 Z" fill="#62748A" stroke="none" transform="translate(530 822) rotate(180) scale(1.84)"/>
+    <path class="connector" d="M 290 720 L 290 415"/>
+    <path d="M -9 -5 L 1 0 L -9 5 Z" fill="#62748A" stroke="none" transform="translate(290 415) rotate(-90) scale(1.84)"/>
+    <text x="315" y="574" font-size="23" font-weight="400" text-anchor="start" class="muted">再发现新版</text>
+  </g>
+  <g id="handbook-loop-external-authorization-goal">
+    <rect x="650" y="493" width="450" height="159" rx="12" fill="#FCFAFF" stroke="#BCAACE" stroke-width="1.5" stroke-dasharray="8 6"/>
+    <text x="675" y="533" font-size="25" font-weight="500" text-anchor="start">权限不足：查明外部申请路径</text>
+    <text x="675" y="569" font-size="24" font-weight="400" text-anchor="start">资源 owner 决定并显式发权</text>
+    <text x="675" y="605" font-size="23" font-weight="400" text-anchor="start">获准后重新执行授权检查</text>
+    <text x="675" y="635" font-size="20" font-weight="400" text-anchor="start" class="muted">设计闭环目标 · 平台不托管审批</text>
+    <path class="future-connector" d="M 1190 360 L 1150 360 L 1150 555 L 1100 555"/>
+    <path d="M -9 -5 L 1 0 L -9 5 Z" fill="#8971AA" stroke="none" transform="translate(1100 555) rotate(180) scale(1.84)"/>
+  </g>
+  <g id="handbook-loop-cross-cutting-guarantees">
+    <rect x="50" y="983" width="1620" height="71" rx="12" fill="#F6F8FB" stroke="#D5DFE9" stroke-width="1.5"/>
+    <text x="76" y="1027" font-size="25" font-weight="600" text-anchor="start">贯穿保证</text>
+    <text x="236" y="1027" font-size="26" font-weight="400" text-anchor="start">逐次授权 · 固定范围 · 输入结果核验 · 访问证据 · 按合同恢复</text>
+  </g>
+</svg>
+          </div>
+        </div></details>
       </section>
 
       <section id="concepts" aria-labelledby="concepts-title">
-        <div class="section-heading"><span class="section-no">03</span><h2 id="concepts-title">分层职责与能力边界</h2></div>
+        <div class="section-heading"><span class="section-no">04</span><h2 id="concepts-title">分层职责与能力边界</h2></div>
         <div class="capability-grid">
-          <article class="capability-card" id="layer-snapshot"><span class="capability-number">⓪ SNAPSHOT STORE</span><h3>底层存储集成</h3><p>Snapshot Store 是统一的存储适配接口。文件、快照、分支与提交由 lakeFS 底层引擎提供；Knowledge Catalog 将这些能力接入数据集发布和知识读写流程。</p><p>普通文件的版本管理可由 Git 承担。大文件、大量文件的存储采用 lakeFS 与对象存储方案，其规模能力来自底层组件；系统整体的容量、吞吐与恢复能力仍需部署实测。</p></article>
+          <article class="capability-card" id="layer-snapshot"><span class="capability-number">⓪ SNAPSHOT STORE</span><h3>团队协作与版本底座</h3><p>Snapshot Store 保存文件与不可变版本，以 Repository 划分维护和权限边界，条件提交保护并发修订。生产存储实现为 lakeFS；Object 在其上组织业务知识。</p><p>大文件、大量文件由 lakeFS 与对象存储承载；系统整体的容量、吞吐与恢复能力仍需部署实测，存储条目不决定业务对象身份。</p></article>
           <article class="capability-card" id="layer-dataset"><span class="capability-number">① SNAPSHOT DATASET</span><h3>数据集组合与交付</h3><p>从一个仓选取部分文件，或把多个仓的内容组合成 Dataset。服务唯一登记空间保存来源与 Dataset 发布记录；源内容与历史仍保留在各仓。</p><p>Dataset 有自己的消费授权与发布版本，同一份源数据可按用途交付给不同使用者。发布固定选定范围与来源版本，源仓后续修改不会改写已发布版本。</p></article>
-          <article class="capability-card" id="layer-knowledge"><span class="capability-number">② KNOWLEDGE</span><h3>知识模型与读写</h3><p>自定义 Schema 声明数据类型、字段与关系。同一个业务对象可以有不同方面，例如服务的定义、负责人和运行说明。</p><p>系统据此校验、解释和读取知识，保留对象标识与来源。文件改名不改变业务对象的标识，引用与关联不依赖文件路径。<a href="#knowledge">了解 Entity、Aspect 与 Relation →</a></p></article>
-          <article class="capability-card" id="layer-retrieval"><span class="capability-number">③ RETRIEVAL</span><h3>声明式索引与检索</h3><p>在 Schema 中声明哪些字段支持全文搜索、过滤与排序，系统完成索引构建、更新与重建，并用同版本缓存和预热加速访问。</p><p>消费者通过统一入口查找对象、获取对应正文；接入方无需逐次操作检索引擎。可用查询能力取决于声明和部署，索引与缓存不替代源数据。</p></article>
+          <article class="capability-card" id="layer-knowledge"><span class="capability-number">② OBJECT / KNOWLEDGE</span><h3>内容、元数据与基本读写</h3><p>Object 组织身份、知识表示、Schema、关系及来源。同一个业务对象可以有不同方面，例如服务的定义、负责人、运行说明及可供性。</p><p>系统按固定依据校验、解释和读取知识；字节与版本的权威仍归 Snapshot。文件改名不改变业务对象标识，引用不依赖文件路径。<a href="#knowledge">了解 Entity、Aspect 与 Relation →</a></p></article>
+          <article class="capability-card" id="layer-retrieval"><span class="capability-number">③ DISCOVERY / PLUGINS</span><h3>按作用域接入业务能力</h3><p>声明式索引按 Schema 的全文、过滤与排序声明维护可重建投影，消费者通过统一入口定位对象并按同依据回读正文。</p><p>Repo 配置插件并限定 scope，Dataset 使用来源仓的配置；LiveAccess 提供来源取值与已声明操作。实际使用仍核验支持、就绪和当前授权，索引不替代源知识。</p></article>
         </div>
-        <div class="split"><article class="panel"><h3>文件底座与知识层的分界</h3><p>⓪、① 处理文件、范围和版本，不解析业务对象或 Schema。② 依据知识声明解释和校验内容，不自动理解未声明的普通文件。③ 依赖已声明的查询能力及相应检索服务，索引与缓存不替代源数据。</p></article><article class="panel"><h3>统一访问与持续发布</h3><p>消费者使用稳定的 Dataset 入口，默认采用最新已发布版。启用检索时，正式发布入口先准备固定版本投影再采用新版；未启用时文件交付仍可成立。完整部署恢复和动态时效分别验收。<a href="#changes">查看发布与更新 →</a></p></article></div>
+        <div class="split"><article class="panel"><h3>内容权威与扩展的分界</h3><p>⓪、① 处理文件、范围和版本，不解析业务对象或 Schema。② 按固定声明解释和校验知识。③ 按来源 scope 采用真实贡献；可供性说明不安装插件、不发权，也不证明当前就绪。</p></article><article class="panel"><h3>统一访问与持续发布</h3><p>消费者使用稳定的 Dataset 入口，默认采用最新已发布版。启用检索时，正式发布入口先准备固定版本投影再采用新版；未启用时文件交付仍可成立。完整部署恢复和动态时效分别验收。<a href="#changes">查看发布与更新 →</a></p></article></div>
       </section>
 
       <section id="knowledge" aria-labelledby="knowledge-title">
-        <div class="section-heading"><span class="section-no">04</span><h2 id="knowledge-title">什么是知识：实体、方面与关系</h2></div>
+        <div class="section-heading"><span class="section-no">05</span><h2 id="knowledge-title">什么是知识：实体、方面与关系</h2></div>
         <p class="section-intro">知识是对业务对象及其关联的明确描述，并保留可追溯的身份、版本与来源。例如“订单服务由交易团队负责，发生故障时按值班说明处理”：这里有服务和团队，有关于服务的说明，也有它们之间的关系。</p>
         <div class="value-grid">
           <article class="value-card"><span class="small-label">ENTITY · 实体</span><h3>描述的是谁或什么</h3><p>实体是有稳定身份的业务对象，例如一个服务、一张表、一个指标、一份文档或一个团队。订单服务改名、说明文件移动后，仍可通过原来的对象身份引用它。</p></article>
@@ -355,7 +521,7 @@ fields:
       </section>
 
       <section id="connect" aria-labelledby="connect-title">
-        <div class="section-heading"><span class="section-no">05</span><h2 id="connect-title">开始之前：确认身份与使用范围</h2></div>
+        <div class="section-heading"><span class="section-no">06</span><h2 id="connect-title">开始之前：确认身份与使用范围</h2></div>
         <p class="section-intro">部署方准备服务、存储和授权策略。日常使用通过已配置服务入口的客户端完成；登录后查看服务唯一登记空间中的来源与 Dataset，再选择自己的使用范围。</p>
         <div class="code-block"><div class="code-head"><span>已配置服务入口 / 按部署要求完成登录</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc login
 kc whoami
@@ -363,12 +529,12 @@ kc admission show
 kc show
 kc show</code></pre></div>
         <p class="result"><strong>检查结果</strong>当前身份正确；已连接目标服务；能看到登记的仓与 Dataset。示例 ID 请替换为实际值。</p>
-        <p class="note"><strong>登录、发现与读取是不同条件。</strong>登录不自动授予数据读权。<code>admission show</code> 显示当前授权和部署提供的申请入口；缺少权限时按该入口联系授权方。服务库存不等于知识搜索结果。</p>
+        <p class="note"><strong>登录、发现与使用是不同条件。</strong>登录不自动授予读权或操作权。<code>admission show</code> 显示当前授权和部署提供的外部申请入口；缺少权限时联系资源拥有者或既有业务流程，获准后由管理者受控发权。Agent 申请不触发平台自动批准，实际使用仍重新鉴权。服务库存不等于知识搜索结果。</p>
         <details><summary>第一次配置客户端时，在哪里填写服务地址？</summary><div class="answer"><p>服务入口可由交付的客户端预设。原生客户端首次登录可用 <code>kc login --server 'https://kc.example.com'</code>，认证方式以该服务要求为准；登录后复用保存的会话。开发环境的 local 认证不是生产身份方案。后续参数以 <code>kc help login</code> 为准。</p></div></details>
       </section>
 
       <section id="consume" aria-labelledby="consume-title">
-        <div class="section-heading"><span class="section-no">06</span><h2 id="consume-title">消费：选择范围，读取与查找知识</h2></div>
+        <div class="section-heading"><span class="section-no">07</span><h2 id="consume-title">消费：选择范围，读取与查找知识</h2></div>
         <p class="section-intro">选择获准单仓或已发布 Dataset。已知对象身份时直接读取，需要定位时再搜索；精确读取不依赖搜索索引，也不要求手工管理 pin 文件。下面以具备知识声明与全文检索能力的 Dataset 为例。</p>
         <div class="step"><span class="step-number">1</span><h3>找到要用的 Dataset</h3><p>从当前目录库存或维护者的交付说明获得 Dataset 名称、内容范围和示例对象。文件型 Dataset 不会自动获得知识搜索能力。</p>
           <div class="code-block"><div class="code-head"><span>查看服务 的库存</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc show</code></pre></div>
@@ -377,20 +543,20 @@ kc show</code></pre></div>
           <div class="code-block"><div class="code-head"><span>oncall 已发布、已授权且具备全文检索字段</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc search --dataset oncall --query '值班'</code></pre></div>
           <p class="result"><strong>检查结果</strong>CLI 列出命中对象的身份、Repository 和 commit。搜索结果用于定位，正文通过读取打开。</p>
         </div>
-        <div class="step"><span class="step-number">3</span><h3>读取内容，按需要保留依据</h3><p>使用搜索返回的对象 ID。Dataset 下同一身份可能来自不同仓，读取结果保留各自来源。</p>
-          <div class="code-block"><div class="code-head"><span>将对象 ID 替换为实际搜索命中</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc read --dataset oncall --object runbooks/oncall</code></pre></div>
+        <div class="step"><span class="step-number">3</span><h3>读取内容，按需要保留依据</h3><p>使用搜索返回的来源仓与对象 ID 构造对象 URN。Dataset 限定交付范围，URN 明确选中一个来源；不同仓的同名对象分别读取。</p>
+          <div class="code-block"><div class="code-head"><span>将来源仓与对象 ID 替换为实际搜索命中</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc read 'urn:kc:object:kr%3A%2F%2Facme%2Foperations:runbooks%2Foncall' --dataset oncall</code></pre></div>
           <p class="result"><strong>检查结果</strong>确认正文、所属仓与返回的 commit。需要引用时将它们随任务结果保存。</p>
         </div>
         <p class="note"><strong>默认最新以每次操作为单位。</strong>两条独立命令之间可能发布新版。上面的 Dataset READ 会采用该次请求的已发布版；复核上次搜索原文时，保留命中仓、对象与 commit，使用下方固定版本读法。它仍需要对应仓级读权，Dataset 消费权不自动授予它；长任务固定上下文由支持该能力的宿主保存。<a href="#trust">了解权限边界 →</a></p>
-        <div class="code-block"><div class="code-head"><span>历史复核 / 替换为搜索实际返回的仓、对象和 commit，并确认仓级读权</span></div><pre tabindex="0" aria-label="固定版本读取示例"><code>kc read --repo kr://acme/operations --commit SEARCH_COMMIT \
-  --object runbooks/oncall
+        <div class="code-block"><div class="code-head"><span>历史复核 / 替换为搜索实际返回的仓、对象和 commit，并确认仓级读权</span></div><pre tabindex="0" aria-label="固定版本读取示例"><code>kc read 'urn:kc:object:kr%3A%2F%2Facme%2Foperations:runbooks%2Foncall' \
+  --commit SEARCH_COMMIT
 kc provenance --repo kr://acme/operations --commit SEARCH_COMMIT \
   --object runbooks/oncall</code></pre></div>
-        <details><summary>只使用一个源仓，或已经知道对象身份</summary><div class="answer"><p>具备仓级权限时，可直接使用 <code>kc read --repo kr://acme/operations --object runbooks/oncall</code>，无需先定义 Dataset。查看类型用 <code>kc schema list --repo kr://acme/operations</code>；查询字段用 <code>kc schema describe --repo kr://acme/operations --object schema/runbook</code>，其中 Schema ID 应来自实际库存。</p></div></details>
+        <details><summary>只使用一个源仓，或已经知道对象身份</summary><div class="answer"><p>具备仓级权限时，可直接使用 <code>kc read 'urn:kc:object:kr%3A%2F%2Facme%2Foperations:runbooks%2Foncall'</code>，无需先定义 Dataset。查看类型用 <code>kc schema list --repo kr://acme/operations</code>；查询字段用 <code>kc schema describe --repo kr://acme/operations --object schema/runbook</code>，其中 Schema ID 应来自实际库存。</p></div></details>
       </section>
 
       <section id="provide" aria-labelledby="provide-title">
-        <div class="section-heading"><span class="section-no">07</span><h2 id="provide-title">接入：从源仓组织出可交付的 Dataset</h2></div>
+        <div class="section-heading"><span class="section-no">08</span><h2 id="provide-title">接入：从源仓组织出可交付的 Dataset</h2></div>
         <p class="section-intro">接入方负责内容、结构与持续维护；Dataset 维护者决定交付范围和发布节奏。先完成文件与 Dataset 底座，再按需要增加知识能力。</p>
         <div class="path-strip" aria-label="接入与交付步骤"><b>创建或连接仓</b><span aria-hidden="true">→</span><b>登记到服务</b><span aria-hidden="true">→</span><b>准备并发布内容</b><span aria-hidden="true">→</span><b>发布 Dataset</b><span aria-hidden="true">→</span><b>授权消费</b></div>
         <div class="step"><span class="step-number">1</span><h3>创建或连接源仓，再登记</h3><p>选择部署提供的存储池，或连接允许接入的自有仓。创建或连接成功后，再将返回的 Repository ID 登记到服务。</p>
@@ -438,7 +604,7 @@ kc writer commit --command-id oncall-content-001 \
       </section>
 
       <section id="retrieval" aria-labelledby="retrieval-title">
-        <div class="section-heading"><span class="section-no">08</span><h2 id="retrieval-title">声明数据与查询需求，系统维护索引</h2></div>
+        <div class="section-heading"><span class="section-no">09</span><h2 id="retrieval-title">声明数据与查询需求，系统维护索引</h2></div>
         <p class="section-intro">接入方描述“这是什么数据、需要怎样查”；系统负责把已发布内容变成可检索的索引，并维护更新与缓存加速。消费者使用同一套访问方式。</p>
         <div class="table-scroll"><table><thead><tr><th scope="col">接入方声明</th><th scope="col">系统承担</th><th scope="col">消费者获得</th></tr></thead><tbody>
           <tr><td>类型、字段、身份与来源</td><td>解释和校验知识，保留版本依据</td><td>按业务对象读取，理解字段与来源</td></tr>
@@ -505,7 +671,7 @@ kc schema describe --repo kr://acme/services \
 kc search --dataset oncall \
   --eq 'schema/service.definition::definition::team=payments' \
   --sort 'schema/service.definition::definition::priority:asc'
-kc read --dataset oncall --object Service:orders</code></pre></div>
+kc read 'urn:kc:object:kr%3A%2F%2Facme%2Fservices:Service%3Aorders#/definition' --dataset oncall</code></pre></div>
         <p class="result"><strong>检查结果</strong>在这个示例中，全文可命中含“支付”的服务定义；团队条件可匹配 <code>payments</code>，排序使用 <code>priority</code> 的整数值；READ 正文仍可包含未声明查询能力的 <code>notes</code>。</p>
         <p>统一访问复用各来源的声明、权限和版本依据。普通文件的全文扫描、任意 SQL、向量检索和自然语言问答不能由这个入口的存在推导为已支持。</p>
         <div class="split"><article class="panel"><h3>索引会持续维护</h3><p>知识发布后，后台追踪新版本并更新索引；Schema 的访问声明变化可能需要重建。接入方维护数据模型，不负责逐次操作搜索引擎。</p></article><article class="panel"><h3>查询必须说明依据</h3><p>检索和正文回读使用相应版本依据。遇到能力不足或索引未就绪时，应根据返回状态处理，不能把不可用当成“没有匹配数据”。</p></article></div>
@@ -513,7 +679,7 @@ kc read --dataset oncall --object Service:orders</code></pre></div>
       </section>
 
       <section id="changes" aria-labelledby="changes-title">
-        <div class="section-heading"><span class="section-no">09</span><h2 id="changes-title">维护者发布版本，消费者持续使用同一入口</h2></div>
+        <div class="section-heading"><span class="section-no">10</span><h2 id="changes-title">维护者发布版本，消费者持续使用同一入口</h2></div>
         <p class="section-intro">源仓版本回答“内容改了什么”；Dataset 版本回答“这次向消费者交付哪组内容”。两者的发布节奏可以不同。</p>
         <div class="timeline">
           <div class="timeline-row"><span class="time-label">Dataset v1</span><p><code>oncall</code> 固定手册 A1 与服务定义 B1。消费者通过这个 Dataset 查询和读取。</p></div>
@@ -535,7 +701,7 @@ kc read --dataset oncall --object Service:orders</code></pre></div>
       </section>
 
       <section id="dynamic-state" aria-labelledby="dynamic-state-title">
-        <div class="section-heading"><span class="section-no">10</span><h2 id="dynamic-state-title">解决方案：瞬时状态接入</h2></div>
+        <div class="section-heading"><span class="section-no">11</span><h2 id="dynamic-state-title">解决方案：瞬时状态接入</h2></div>
         <p class="section-intro">瞬时状态接入将版本化的知识定义与持续变化的外部值关联起来，通过统一访问读取外部当前观察。</p>
         <p>服务健康、作业进度、表统计等状态会频繁变化。例如，同一个服务对象的负责人和运行说明随知识版本发布，健康状态则在访问时从源侧服务取得。Schema 关联对象与动态访问来源，应用按同一个对象标识访问这些信息，不必把每次状态变化都提交成新的文件版本。</p>
         <div class="code-block"><div class="code-head"><span>源已接通 / Schema 已声明对应 Aspect 的 origin</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc access --dataset oncall --object Service:orders --aspect health</code></pre></div>
@@ -545,7 +711,7 @@ kc read --dataset oncall --object Service:orders</code></pre></div>
       </section>
 
       <section id="project" aria-labelledby="project-title">
-        <div class="section-heading"><span class="section-no">11</span><h2 id="project-title">只读 VFS</h2></div>
+        <div class="section-heading"><span class="section-no">12</span><h2 id="project-title">只读 VFS</h2></div>
         <p class="section-intro" id="vfs">只读 VFS 将已发布 Dataset 暴露为本地文件视图，供 Agent 和现有文件工具使用。</p>
         <p>把 Dataset 挂载到本机后，本地 Agent、编辑器和文件工具可以浏览目录、打开文件、查找内容，复用已有文件访问方式，无需为读取这些文件专门适配知识接口。</p>
         <div class="note warning"><strong>适用范围与限制</strong><ul><li><strong>Dataset 必须是本机放得下的。</strong>受本机存储与资源容量约束，不适合特别大的数据集。按需读取也不扩大这一产品适用范围。</li><li><strong>目前只读。</strong>不能通过挂载目录修改、删除或写回知识。需要修改时，另行准备草稿并走发布流程。</li><li><strong>挂载固定一版内容。</strong>Dataset 更新后已有挂载不会自动漂移，采用新版需显式更新或重新挂载。</li><li><strong>需要受支持的宿主环境。</strong>当前挂载入口基于 Linux FUSE，并经服务读取；挂载不等于把全部内容下载好，也不保证离线可用。</li></ul></div>
@@ -562,7 +728,7 @@ kcfs mount --dataset oncall --root /work/my-project</code></pre></div>
       </section>
 
       <section id="trust" aria-labelledby="trust-title">
-        <div class="section-heading"><span class="section-no">12</span><h2 id="trust-title">交付范围、维护权限与引用依据各自明确</h2></div>
+        <div class="section-heading"><span class="section-no">13</span><h2 id="trust-title">交付范围、维护权限与引用依据各自明确</h2></div>
         <p class="section-intro">Dataset 将“能使用这一份交付内容”与“能访问或维护整个源仓”分开。版本坐标说明读到了什么，当前权限决定现在是否仍能读取。</p>
         <div class="table-scroll"><table><thead><tr><th scope="col">边界</th><th scope="col">用户能得到什么</th><th scope="col">不能由此推导什么</th></tr></thead><tbody>
           <tr><td>库存发现</td><td>查看获准发现的目录库存</td><td>自动读取所有成员内容或扩大搜索范围</td></tr>
@@ -573,7 +739,7 @@ kcfs mount --dataset oncall --root /work/my-project</code></pre></div>
         <p>Dataset 定义与发布不隐式发权；授权变更后，后续访问重新检查。外部系统的受保护操作仍由外部系统强制，能够读到相关知识不等于能够执行源系统操作。</p>
         <h3>回答“我依据的是什么”</h3><p>引用知识时保留对象身份、Repository 和 commit。来源说明内容从哪里来，历史说明内容怎样变化；涉及动态状态时再保留观察时间与来源版本。应用和 Agent 应明确区分读取失败、无权限、结果不完整与确实没有匹配。</p>
         <details><summary>按固定版本复核单仓知识</summary><div class="answer"><p>具备仓级读取与相应追溯权限时，把返回的 commit 用于后续读取。Dataset-only 消费者需要使用其获准的消费接口，不能通过此例绕过源仓权限。</p>
-          <div class="code-block"><div class="code-head"><span>将示例 commit 替换为要复核的实际版本</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc read --repo kr://acme/operations --object runbooks/oncall \
+          <div class="code-block"><div class="code-head"><span>将示例 commit 替换为要复核的实际版本</span></div><pre tabindex="0" aria-label="命令示例，可横向滚动"><code>kc read 'urn:kc:object:kr%3A%2F%2Facme%2Foperations:runbooks%2Foncall' \
   --commit '替换为实际返回的commit'
 kc provenance --repo kr://acme/operations --object runbooks/oncall \
   --commit '替换为实际返回的commit'</code></pre></div>
@@ -581,7 +747,7 @@ kc provenance --repo kr://acme/operations --object runbooks/oncall \
       </section>
 
       <section id="faq" aria-labelledby="faq-title">
-        <div class="section-heading"><span class="section-no">13</span><h2 id="faq-title">常见问题</h2></div>
+        <div class="section-heading"><span class="section-no">14</span><h2 id="faq-title">常见问题</h2></div>
         <div class="faq">
           <details><summary>我只需要组织和分享文件，必须使用 Schema 吗？</summary><div class="answer"><p>不需要。Snapshot Store 与 Dataset 可以独立使用。需要按业务对象读取、结构化查询或知识检索时，再采用知识声明。普通文件不会因被登记或挂载就自动具备知识语义。</p></div></details>
           <details><summary>Dataset 是把多个仓复制到一个新仓吗？</summary><div class="answer"><p>Dataset 记录选定文件范围与固定来源版本，保留各源的身份与历史。组合不制造跨仓写事务；内容修改仍回到相应源仓，之后再发布新的 Dataset 版本。</p></div></details>
@@ -596,15 +762,17 @@ kc provenance --repo kr://acme/operations --object runbooks/oncall \
       </section>
 
       <section id="reference" aria-labelledby="reference-title">
-        <div class="section-heading"><span class="section-no">14</span><h2 id="reference-title">已有基础、采用条件与规划目标</h2></div>
+        <div class="section-heading"><span class="section-no">15</span><h2 id="reference-title">已有基础、采用条件与规划目标</h2></div>
         <p class="section-intro">下面区分产品方向与当前可依赖的基础。“已有”表示参考实现具备相应能力，不代表任意部署、容量或端到端运行条件均已验证。</p>
         <div class="table-scroll"><table aria-label="能力与交付边界"><thead><tr><th scope="col">能力</th><th scope="col">已有基础</th><th scope="col">采用条件或后续目标</th></tr></thead><tbody>
-          <tr><td>底层存储集成</td><td>已有 Gitea、lakeFS 适配，复用其文件与版本能力</td><td>大文件、大量文件由 lakeFS 与对象存储承载；这是底层组件能力，系统整体的吞吐、容量、并发与恢复资格需实测。</td></tr>
+          <tr><td>协作与存储底座</td><td>lakeFS 生产实现、文件与版本、仓与 Dataset 范围授权</td><td>大文件、大量文件由 lakeFS 与对象存储承载；系统整体的吞吐、容量、并发与恢复资格需实测。</td></tr>
           <tr><td>Dataset</td><td>文件范围组合、发布时冻结来源版本、独立消费授权</td><td>发布与发权分别完成；默认消费最新已发布版，上游更新后需重新发布。</td></tr>
           <tr><td>知识声明</td><td>身份、Schema、Aspect、关系、来源与版本化维护</td><td>由接入方描述业务模型；未声明文件不会自动被理解或索引。</td></tr>
           <tr><td>索引与统一访问</td><td>声明查询字段、后台维护投影、同依据回读与正文缓存基础</td><td>配置对应检索服务；延迟、追赶速度与大规模服务能力需验证。</td></tr>
           <tr><td>统一版本切换</td><td>固定发布版；启用检索时，正式入口准备成员静态投影后采用新版</td><td>未启用检索仍可交付文件；完整部署故障恢复、旧版持续服务和动态就绪分别验证。</td></tr>
           <tr><td>瞬时状态</td><td>State 精确读取、独立动态投影与观察依据</td><td>源侧运行服务、通知恢复和完整动态部署需验收；不承诺零延迟或自动保留所有历史。</td></tr>
+          <tr><td>对象与系统可供性</td><td>对象知识与 Schema、模块帮助、插件说明及目标概览基础</td><td>用途和合同说明不证明实现支持、当前就绪或本次授权；系统按来源 Repo 配置采用贡献。</td></tr>
+          <tr><td>Agent 使用闭环</td><td>已配置服务与插件上的发现、授权查询、受控访问和记录基础</td><td>自主发现、外部申请衔接到使用与修正是设计目标；不提供中央审批队列。Wield 等为未来扩展，合同待实际需求选定。</td></tr>
           <tr><td>本地 VFS</td><td>Linux FUSE 只读文件消费入口</td><td><strong>仅本机放得下的 Dataset，目前只读。</strong>不面向特别大的数据集，不保证离线使用。</td></tr>
         </tbody></table></div>
         <h3 class="subhead" id="selfservice-status">运行依赖</h3>
@@ -617,9 +785,9 @@ kc provenance --repo kr://acme/operations --object runbooks/oncall \
           <tr><td>按明确规模与恢复承诺运行</td><td>版本化存储适配、有界访问和可恢复单实例基础</td><td>数据量、历史、并发、备份与故障下的实测支持范围；不从存储组件名称外推容量。</td></tr>
         </tbody></table></div>
         <div class="help-command"><div><code>kc help consume</code>选择范围、搜索和读取</div><div><code>kc help write</code>准备变更、提交与回读</div><div><code>kc help compose</code>登记、组合和授权</div><div><code>kcfs help</code>本地只读挂载与生命周期</div></div>
-        <div class="note"><strong>分享这份手册</strong><p>直接发送此 HTML 文件即可，阅读无需代码仓库、网络字体或外部资源。顶部按钮可打印或保存为 PDF。实际执行示例仍需客户端、可用服务与相应授权；地址、身份、对象和草稿均须替换为自己的内容。</p></div>
+        <div class="note"><strong>分享这份设计与使用书</strong><p>直接发送此 HTML 文件即可，阅读无需代码仓库、网络字体或外部资源。顶部按钮可打印或保存为 PDF。实际执行示例仍需客户端、可用服务与相应授权；地址、身份、对象和草稿均须替换为自己的内容。</p></div>
       </section>
-      <footer class="footer"><p>Knowledge Catalog · 产品使用手册<br>产品价值、任务路径与使用边界 / 2026-10-12</p><p>内容、样式与交互均包含在此文件中<br><a href="#content">回到开头 ↑</a></p></footer>
+      <footer class="footer"><p>Knowledge Catalog · 产品设计与使用书<br>对象环境、任务路径与使用边界 / 2026-10-14</p><p>内容、样式与交互均包含在此文件中<br><a href="#content">回到开头 ↑</a></p></footer>
     </main>
   </div>
   <div id="copy-status" class="screen-reader" role="status" aria-live="polite"></div>

@@ -1,0 +1,23 @@
+---
+object_id: schema/published-object.definition/v1
+---
+entity: PublishedObject
+description: 本组用例自行采用的对象说明结构；不注册业务类型或执行资源。
+aspect: definition
+pattern: record
+fields:
+  title:
+    type: string
+    required: true
+    access: [text, filter]
+  kind:
+    type: string
+    required: true
+    access: [filter]
+  summary:
+    type: string
+    access: [text]
+  resources:
+    type: array
+  internalNote:
+    type: string

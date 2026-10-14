@@ -7,23 +7,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"maps"
-	"os"
-	"path/filepath"
+
 	"strings"
 
 	"kc/internal/telemetry"
 	"kc/kernel"
-	"kc/snapshot"
 )
 
 // Entry point and result shaping. Public grouped commands are resolved by
 // surface.go into internal application operations.
-
-const (
-	// defaultRef is snapshot.DefaultRef, re-exported for local readability.
-	defaultRef = snapshot.DefaultRef
-)
 
 // RunResult is the shared invocation result; the shape lives in kc/invoke so
 // the CLI front and the embedded server can both depend on it without a cycle.
@@ -35,41 +27,65 @@ func Run(argv []string) RunResult {
 	return RunWithTelemetry(argv, nil)
 }
 
-// RunWithTelemetry is the process entry used by cmd/kc. Library callers can
-// keep using Run/Invoke without installing an SDK runtime.
+// RunWithTelemetry is the process entry used by cmd/kc. Business commands use
+// the authenticated Server transport; deployment and host tasks stay local.
 func RunWithTelemetry(argv []string, runtime *telemetry.Runtime) RunResult {
-	return runWithTelemetryMode(argv, runtime, false)
+	return decorateCLIUsage(argv, dispatchCLI(argv, runtime))
 }
 
-// runWithTelemetryMode keeps the embedded application path available to the
-// package's conformance tests without exposing it as a product transport. A
-// real CLI invocation is a deployment operation, client preprocessing, a
-// server process, or a typed client of KC Server.
-func runWithTelemetryMode(argv []string, runtime *telemetry.Runtime, allowEmbedded bool) RunResult {
-	return decorateCLIUsage(argv, dispatchCLI(argv, runtime, allowEmbedded))
+type cliRequest struct {
+	path    string
+	surface commandSurface
+	flags   map[string]FlagValue
 }
 
-func dispatchCLI(argv []string, runtime *telemetry.Runtime, allowEmbedded bool) RunResult {
-	parsed, err := ParseArgs(argv)
-	if err != nil {
+func dispatchCLI(argv []string, runtime *telemetry.Runtime) RunResult {
+	request, completed := prepareCLI(argv)
+	if completed != nil {
+		return *completed
+	}
+	if request.path == "serve" {
+		return runServe(request.flags)
+	}
+	if err := validateCLIRequest(request); err != nil {
 		return inv.ErrorResult(err)
 	}
-	if parsed.Command == "help" || flagBool(parsed.Flags, "help") || parsed.Command == "--help" || parsed.Command == "-h" {
+	if clientOperationPath(request.path) {
+		return runClientOperationWithTelemetry(context.Background(), runtime, request.path, request.surface.Handler, request.flags)
+	}
+	if server := inv.RemoteServerURL(request.flags); server != "" {
+		return encodeCLIProduct(request.path, request.flags, runRemoteCLI(context.Background(), server, request.path, request.flags))
+	}
+	return inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid,
+		"%s requires KC Server; obtain an existing service address and set --server or KC_SERVER_URL; see kc help login (deployment owners: kc help deployment)", request.path))
+}
+
+// prepareCLI owns the common argv contract. Execution is selected only after
+// this preparation, so a fixture can reuse parsing without entering production.
+func prepareCLI(argv []string) (cliRequest, *RunResult) {
+	stop := func(result RunResult) (cliRequest, *RunResult) {
+		return cliRequest{}, &result
+	}
+	parsed, err := ParseArgs(argv)
+	if err != nil {
+		return stop(inv.ErrorResult(err))
+	}
+	if parsed.Command == "help" || invoke.FlagBool(parsed.Flags, "help") || parsed.Command == "--help" || parsed.Command == "-h" {
 		topic := strings.Join(parsed.Args, " ")
 		if parsed.Command != "help" && parsed.Command != "--help" && parsed.Command != "-h" {
 			topic = strings.TrimSpace(parsed.Command + " " + topic)
 		}
 		help, err := helpFor(topic)
 		if err != nil {
-			return inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid, "%v", err))
+			return stop(inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid, "%v", err)))
 		}
-		return RunResult{Stdout: help}
+		return stop(RunResult{Stdout: help})
 	}
 	if parsed.Command == "serve" {
 		if len(parsed.Args) != 0 {
-			return inv.ErrorResult(fmt.Errorf("unexpected argument %s", parsed.Args[0]))
+			return stop(inv.ErrorResult(fmt.Errorf("unexpected argument %s", parsed.Args[0])))
 		}
-		return runServe(parsed.Flags)
+		return cliRequest{path: "serve", flags: parsed.Flags}, nil
 	}
 
 	surface, positionals, err := resolveCLICommand(parsed.Command, parsed.Args)
@@ -78,70 +94,67 @@ func dispatchCLI(argv []string, runtime *telemetry.Runtime, allowEmbedded bool) 
 		if topic, ok := incompletePublicFamily(parts); ok {
 			help, helpErr := helpFor(topic)
 			if helpErr != nil {
-				return inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid, "%v", err))
+				return stop(inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid, "%v", err)))
 			}
-			return RunResult{Status: 1, Stdout: help}
+			return stop(RunResult{Status: 1, Stdout: help})
 		}
-		return inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid, "%v", err))
+		return stop(inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid, "%v", err)))
 	}
 	if err := applyPositionals(surface.Handler, parsed.Flags, positionals); err != nil {
-		return inv.ErrorResult(err)
+		return stop(inv.ErrorResult(err))
 	}
 	publicPath := strings.Join(append([]string{parsed.Command}, parsed.Args[:len(parsed.Args)-len(positionals)]...), " ")
-	if err := rejectPublicSurfaceFlags(publicPath, parsed.Flags); err != nil {
-		return inv.ErrorResult(err)
+	return cliRequest{path: publicPath, surface: surface, flags: parsed.Flags}, nil
+}
+
+func clientOperationPath(path string) bool {
+	return strings.HasPrefix(path, "deployment ") || path == "dataset overlay"
+}
+
+func validateCLIRequest(request cliRequest) error {
+	if err := rejectPublicSurfaceFlags(request.path, request.flags); err != nil {
+		return err
 	}
-	if (publicPath == "log" || publicPath == "provenance") && usesAddress(parsed.Flags) {
-		if publicPath == "log" {
-			return inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid, "log is object history; do not pass --aspect or --member"))
-		}
-		return inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid, "provenance is object-level; do not pass --aspect or --member"))
+	request.flags["_action"] = request.surface.Action
+	if clientOperationPath(request.path) {
+		return nil
 	}
-	parsed.Flags["_action"] = surface.Action
-	if strings.HasPrefix(publicPath, "deployment ") || publicPath == "dataset overlay" {
-		flags := parsed.Flags
-		if allowEmbedded {
-			flags = maps.Clone(flags)
-			delete(flags, "home")
-		}
-		return runClientOperationWithTelemetry(context.Background(), runtime, publicPath, surface.Handler, flags)
+	if err := rejectHostFlags(request.path, request.flags); err != nil {
+		return err
 	}
-	if err := rejectUnknownFlags(parsed.Flags); err != nil {
-		return inv.ErrorResult(err)
+	if err := inv.RejectServeOnlyFlags(request.flags); err != nil {
+		return err
 	}
-	if err := rejectServeOnlyFlags(parsed.Flags); err != nil {
-		return inv.ErrorResult(err)
+	if _, ok := request.flags["config"]; ok {
+		return kernel.Fail(kernel.ErrUsageInvalid, "--config is only valid for deployment operations and kc serve")
 	}
-	if _, ok := parsed.Flags["config"]; ok {
-		return inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid, "--config is only valid for deployment operations and kc serve"))
-	}
-	if allowEmbedded {
-		if _, explicitServer := parsed.Flags["server"]; !explicitServer {
-			// An explicitly embedded fixture owns its Home. Client defaults and
-			// saved sessions belong to the separate product transport; an explicit
-			// --server still takes the normal mutually-exclusive validation path.
-			return encodeCLIProduct(publicPath, parsed.Flags, invokeWithTelemetry(context.Background(), runtime, surface.Handler, parsed.Flags))
-		}
-	}
-	if server := inv.RemoteServerURL(parsed.Flags); server != "" {
-		return encodeCLIProduct(publicPath, parsed.Flags, runRemoteCLI(context.Background(), server, publicPath, parsed.Flags))
-	}
-	if !allowEmbedded {
-		return inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid,
-			"%s requires KC Server; set --server or KC_SERVER_URL (use kc deployment init --config for deployment setup)", publicPath))
-	}
-	return encodeCLIProduct(publicPath, parsed.Flags, invokeWithTelemetry(context.Background(), runtime, surface.Handler, parsed.Flags))
+	return nil
 }
 
 func applyPositionals(command string, flags map[string]FlagValue, args []string) error {
 	if len(args) == 0 {
 		return nil
 	}
+	if entry, module := objectCommandByHandler(command); module {
+		return bindObjectOperands(entry, flags, args)
+	}
+	if entry, module := snapshotCommandByHandler(command); module {
+		return bindSnapshotOperands(entry, flags, args)
+	}
+	if entry, module := discoveryCommandByHandler(command); module {
+		return bindDiscoveryOperands(entry, flags, args)
+	}
+	if entry, module := declarativeIndexCommandByHandler(command); module {
+		return bindDeclarativeIndexOperands(entry, flags, args)
+	}
+	if entry, module := liveAccessCommandByHandler(command); module {
+		return bindModuleOperands(entry.Operands, flags, args)
+	}
 	assign := func(flag string) error {
 		if len(args) > 1 {
 			return fmt.Errorf("unexpected argument %s", args[1])
 		}
-		if flagString(flags, flag) != "" {
+		if invoke.FlagString(flags, flag) != "" {
 			return fmt.Errorf("unexpected argument %s", args[0])
 		}
 		flags[flag] = args[0]
@@ -150,27 +163,6 @@ func applyPositionals(command string, flags map[string]FlagValue, args []string)
 	switch command {
 	case "help", "--help", "-h":
 		return assign("topic")
-	case "attach", "detach":
-		return assign("repo")
-	case "dataset-retire", "dataset-define":
-		return assign("dataset")
-	case "dataset-clone":
-		if len(args) > 2 {
-			return fmt.Errorf("unexpected argument %s", args[2])
-		}
-		if len(args) > 0 {
-			if flagString(flags, "dataset") != "" {
-				return fmt.Errorf("unexpected argument %s", args[0])
-			}
-			flags["dataset"] = args[0]
-		}
-		if len(args) > 1 {
-			if flagString(flags, "dir") != "" {
-				return fmt.Errorf("unexpected argument %s", args[1])
-			}
-			flags["dir"] = args[1]
-		}
-		return nil
 	default:
 		return fmt.Errorf("unexpected argument %s", args[0])
 	}
@@ -182,6 +174,21 @@ func rejectPublicSurfaceFlags(publicPath string, flags map[string]FlagValue) err
 	}
 	if _, ok := flags["pin"]; ok {
 		return kernel.Fail(kernel.ErrUsageInvalid, "%s rejects --pin; pass --dataset or --repo", publicPath)
+	}
+	if objectCommandPath(publicPath) {
+		return validateObjectFlags(publicPath, flags)
+	}
+	if discoveryCommandPath(publicPath) {
+		return validateDiscoveryFlags(publicPath, flags)
+	}
+	if declarativeIndexCommandPath(publicPath) {
+		return validateDeclarativeIndexFlags(publicPath, flags)
+	}
+	if liveAccessCommandPath(publicPath) {
+		return validateLiveAccessFlags(publicPath, flags)
+	}
+	if err := validateSnapshotFlags(publicPath, flags); err != nil {
+		return err
 	}
 	if knowledgeCLIPath(publicPath) || strings.HasPrefix(publicPath, "writer ") || publicPath == "diff" {
 		if err := inv.RejectMixedKnowledgeBasis(flags); err != nil {
@@ -206,39 +213,15 @@ func rejectPublicSurfaceFlags(publicPath string, flags map[string]FlagValue) err
 				return kernel.Fail(kernel.ErrUsageInvalid, "governance preview create rejects --%s; pass --dataset", name)
 			}
 		}
-		if flagString(flags, "dataset") == "" {
+		if invoke.FlagString(flags, "dataset") == "" {
 			return kernel.Fail(kernel.ErrUsageInvalid, "governance preview create requires --dataset")
 		}
 	case "operations access-spec describe":
-		if (flagString(flags, "dataset") == "") == (flagString(flags, "repo") == "") {
+		if (invoke.FlagString(flags, "dataset") == "") == (invoke.FlagString(flags, "repo") == "") {
 			return kernel.Fail(kernel.ErrUsageInvalid, "operations access-spec describe requires exactly one of --repo or --dataset")
-		}
-	case "access":
-		if flagString(flags, "operation") != "" || flagString(flags, "input") != "" {
-			return kernel.Fail(kernel.ErrUsageInvalid,
-				"access hydrates a Binding with --aspect; use kc invoke for a ResourceDescriptor operation")
-		}
-	case "invoke":
-		if flagString(flags, "aspect") != "" || flagString(flags, "member") != "" {
-			return kernel.Fail(kernel.ErrUsageInvalid,
-				"invoke calls a ResourceDescriptor operation; use kc access --aspect for Binding hydration")
-		}
-		if flagString(flags, "operation") == "" {
-			return kernel.Fail(kernel.ErrUsageInvalid, "invoke requires --operation and --input")
 		}
 	}
 	return nil
-}
-
-func resolveHome(flags map[string]FlagValue) (string, error) {
-	home := flagString(flags, "home")
-	if home == "" {
-		home = strings.TrimSpace(os.Getenv("KC_HOME"))
-		if home == "" {
-			home = inv.DefaultHome
-		}
-	}
-	return filepath.Abs(home)
 }
 
 // decorateCLIUsage turns a USAGE_INVALID FaultJSON into reason + leaf usage.
@@ -295,4 +278,10 @@ func publicPathFromArgv(argv []string) string {
 	return strings.Join(append([]string{parsed.Command}, parsed.Args[:len(parsed.Args)-len(positionals)]...), " ")
 }
 
-func jsonOut(value any) string { return inv.JSONOut(value) }
+// Module-owned flags are checked by their single declaration contract.
+func rejectHostFlags(path string, flags map[string]FlagValue) error {
+	if objectCommandPath(path) || discoveryCommandPath(path) || declarativeIndexCommandPath(path) {
+		return nil
+	}
+	return inv.RejectUnknownFlags(flags)
+}

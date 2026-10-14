@@ -13,13 +13,14 @@ package invocation
 import (
 	"context"
 	"fmt"
+	"kc/interfaces"
 
 	"kc/controlplane"
 	"kc/home"
 	"kc/invoke"
 	"kc/kernel"
-	knowledge "kc/knowledge"
-	knowledgeserving "kc/knowledge/serving"
+	knowledgeserving "kc/liveaccess"
+	objectmodel "kc/object"
 	"kc/snapshot"
 )
 
@@ -33,7 +34,7 @@ type Invocation struct {
 	WS               *home.Home
 	Context          context.Context
 	State            knowledgeserving.StateLookup
-	ObjectInterfaces *knowledgeserving.InterfaceRegistry
+	ObjectInterfaces *interfaces.InterfaceRegistry
 	Observation      *invoke.ObservationTelemetry
 }
 
@@ -94,12 +95,12 @@ func (cx *Invocation) BindingScope() invoke.BindingScope {
 
 // KnowledgeRef builds a knowledge ref from the --object flag under the given
 // repository.
-func (cx *Invocation) KnowledgeRef(repositoryID kernel.RepositoryID) (knowledge.KnowledgeRef, error) {
+func (cx *Invocation) KnowledgeRef(repositoryID kernel.RepositoryID) (objectmodel.KnowledgeRef, error) {
 	objectID, err := cx.Require("object")
 	if err != nil {
-		return knowledge.KnowledgeRef{}, err
+		return objectmodel.KnowledgeRef{}, err
 	}
-	return knowledge.KnowledgeRef{Repository: repositoryID, Object: knowledge.ObjectID(objectID)}, nil
+	return objectmodel.KnowledgeRef{Repository: repositoryID, Object: objectmodel.ObjectID(objectID)}, nil
 }
 
 // Handler is one operation body: it receives the resolved Invocation and

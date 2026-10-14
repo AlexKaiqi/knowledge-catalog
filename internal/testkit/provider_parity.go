@@ -7,10 +7,10 @@ import (
 	"testing"
 
 	"kc/kernel"
-	"kc/knowledge"
-	knowledgemaintenance "kc/knowledge/maintenance"
-	"kc/knowledge/reader"
-	"kc/knowledge/writer"
+	objectmodel "kc/object"
+	knowledgemaintenance "kc/object/maintenance"
+	"kc/object/reader"
+	"kc/object/writer"
 	"kc/snapshot"
 )
 
@@ -29,36 +29,36 @@ func ProviderParityContract(
 
 	type step struct {
 		name       string
-		operations []knowledge.Operation
-		provenance *knowledge.ProvenanceEnvelope
+		operations []objectmodel.Operation
+		provenance *objectmodel.ProvenanceEnvelope
 	}
 	steps := []step{
 		{
 			name: "put entity",
-			operations: []knowledge.Operation{{
-				Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "policy/A"},
+			operations: []objectmodel.Operation{{
+				Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "policy/A"},
 				Value: map[string]any{"version": 1}, PathHint: "policies/A.json",
 			}},
-			provenance: &knowledge.ProvenanceEnvelope{OriginKind: knowledge.OriginSource, SourceRefs: []string{"source://handbook"}},
+			provenance: &objectmodel.ProvenanceEnvelope{OriginKind: objectmodel.OriginSource, SourceRefs: []string{"source://handbook"}},
 		},
 		{
 			name: "move and update entity",
-			operations: []knowledge.Operation{{
-				Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "policy/A"},
+			operations: []objectmodel.Operation{{
+				Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "policy/A"},
 				Value: map[string]any{"version": 2}, PathHint: "archive/A.json",
 			}},
 		},
 		{
 			name: "compose independent aspects",
-			operations: []knowledge.Operation{
-				{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "dataset/T", AspectName: "structure"}, Value: map[string]any{"columns": 2}},
-				{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "dataset/T", AspectName: "ownership"}, Value: map[string]any{"owner": "ops"}},
+			operations: []objectmodel.Operation{
+				{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "dataset/T", AspectName: "structure"}, Value: map[string]any{"columns": 2}},
+				{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "dataset/T", AspectName: "ownership"}, Value: map[string]any{"owner": "ops"}},
 			},
 		},
 		{
 			name: "put relation",
-			operations: []knowledge.Operation{{
-				Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindRelation, ObjectID: "relation/contains"},
+			operations: []objectmodel.Operation{{
+				Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindRelation, ObjectID: "relation/contains"},
 				PathHint: "relations/contains.json",
 				Value: map[string]any{
 					"relationId": "relation/contains", "relationType": "contains", "direction": "DIRECTED",
@@ -71,8 +71,8 @@ func ProviderParityContract(
 		},
 		{
 			name: "update relation with cross-repository references",
-			operations: []knowledge.Operation{{
-				Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindRelation, ObjectID: "relation/contains"},
+			operations: []objectmodel.Operation{{
+				Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindRelation, ObjectID: "relation/contains"},
 				Value: map[string]any{
 					"relationId": "relation/contains", "relationType": "contains", "direction": "DIRECTED",
 					"endpoints": []any{
@@ -84,8 +84,8 @@ func ProviderParityContract(
 		},
 		{
 			name: "remove entity",
-			operations: []knowledge.Operation{{
-				Op: knowledge.OpRemove, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "policy/A"},
+			operations: []objectmodel.Operation{{
+				Op: objectmodel.OpRemove, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "policy/A"},
 			}},
 		},
 	}
@@ -113,7 +113,7 @@ func ProviderParityContract(
 }
 
 type paritySide struct {
-	repo    knowledge.Repository
+	repo    objectmodel.Repository
 	writer  *writer.Writer
 	commits []kernel.CommitID
 }
@@ -149,10 +149,10 @@ func (s *paritySide) head() kernel.CommitID {
 	return s.commits[len(s.commits)-1]
 }
 
-func (s *paritySide) apply(t *testing.T, index int, operations []knowledge.Operation, provenance *knowledge.ProvenanceEnvelope) {
+func (s *paritySide) apply(t *testing.T, index int, operations []objectmodel.Operation, provenance *objectmodel.ProvenanceEnvelope) {
 	t.Helper()
 	base := s.head()
-	receipt, err := s.writer.Commit(parityCommand(index), knowledge.ChangeSet{
+	receipt, err := s.writer.Commit(parityCommand(index), objectmodel.ChangeSet{
 		TargetRepository: s.repo.ID(), TargetRef: snapshot.DefaultRef,
 		BaseCommit: base, ExpectedTargetCommit: base,
 		Operations: operations, Provenance: provenance,
@@ -164,7 +164,7 @@ func (s *paritySide) apply(t *testing.T, index int, operations []knowledge.Opera
 }
 
 func (s *paritySide) staleWriteCode() kernel.ErrorCode {
-	_, err := s.writer.Commit("parity-stale", knowledge.ChangeSet{
+	_, err := s.writer.Commit("parity-stale", objectmodel.ChangeSet{
 		TargetRepository: s.repo.ID(), TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.commits[0], ExpectedTargetCommit: s.commits[0],
 		Operations: PutEntity("stale", 1, ""),
@@ -176,23 +176,23 @@ func parityCommand(index int) string {
 	return "provider-parity-" + string(rune('0'+index))
 }
 
-func readMissing(repo knowledge.Repository, commit kernel.CommitID) error {
+func readMissing(repo objectmodel.Repository, commit kernel.CommitID) error {
 	_, err := repo.Read("missing", commit)
 	return err
 }
 
 type parityObservation struct {
-	Resolutions map[knowledge.ObjectID]knowledge.Resolution
-	Values      map[knowledge.ObjectID]knowledge.KnowledgeValue
-	Provenance  map[knowledge.ObjectID]knowledge.ProvenanceTrace
-	ObjectIDs   []knowledge.ObjectID
-	Changed     []knowledge.ObjectID
-	History     map[knowledge.ObjectID][]parityRevision
+	Resolutions map[objectmodel.ObjectID]objectmodel.Resolution
+	Values      map[objectmodel.ObjectID]objectmodel.KnowledgeValue
+	Provenance  map[objectmodel.ObjectID]objectmodel.ProvenanceTrace
+	ObjectIDs   []objectmodel.ObjectID
+	Changed     []objectmodel.ObjectID
+	History     map[objectmodel.ObjectID][]parityRevision
 }
 
 type parityRevision struct {
 	Step              int
-	Status            knowledge.ResolutionStatus
+	Status            objectmodel.ResolutionStatus
 	Digest            kernel.Digest
 	DeclarationDigest kernel.Digest
 }
@@ -212,12 +212,12 @@ func observeParity(t *testing.T, side *paritySide) parityObservation {
 	t.Helper()
 	current := side.head()
 	out := parityObservation{
-		Resolutions: map[knowledge.ObjectID]knowledge.Resolution{},
-		Values:      map[knowledge.ObjectID]knowledge.KnowledgeValue{},
-		Provenance:  map[knowledge.ObjectID]knowledge.ProvenanceTrace{},
-		History:     map[knowledge.ObjectID][]parityRevision{},
+		Resolutions: map[objectmodel.ObjectID]objectmodel.Resolution{},
+		Values:      map[objectmodel.ObjectID]objectmodel.KnowledgeValue{},
+		Provenance:  map[objectmodel.ObjectID]objectmodel.ProvenanceTrace{},
+		History:     map[objectmodel.ObjectID][]parityRevision{},
 	}
-	ids := []knowledge.ObjectID{"policy/A", "dataset/T", "relation/contains"}
+	ids := []objectmodel.ObjectID{"policy/A", "dataset/T", "relation/contains"}
 	for _, id := range ids {
 		resolution, err := side.repo.Resolve(id, current)
 		if err != nil {
@@ -225,18 +225,18 @@ func observeParity(t *testing.T, side *paritySide) parityObservation {
 		}
 		resolution.Commit = ""
 		out.Resolutions[id] = resolution
-		if resolution.Status == knowledge.StatusResolved {
+		if resolution.Status == objectmodel.StatusResolved {
 			value, err := side.repo.Read(id, current)
 			if err != nil {
 				t.Fatal(err)
 			}
 			value.Commit = ""
 			sort.Slice(value.Units, func(i, j int) bool {
-				return knowledge.AddressKey(value.Units[i]) < knowledge.AddressKey(value.Units[j])
+				return objectmodel.AddressKey(value.Units[i]) < objectmodel.AddressKey(value.Units[j])
 			})
 			sort.Slice(value.Declarations, func(i, j int) bool {
-				return knowledge.AddressKey(value.Declarations[i].Address) <
-					knowledge.AddressKey(value.Declarations[j].Address)
+				return objectmodel.AddressKey(value.Declarations[i].Address) <
+					objectmodel.AddressKey(value.Declarations[j].Address)
 			})
 			out.Values[id] = value
 			trace, err := side.repo.GetProvenance(id, current)
@@ -246,7 +246,7 @@ func observeParity(t *testing.T, side *paritySide) parityObservation {
 			trace.Commit = ""
 			out.Provenance[id] = trace
 		}
-		history, err := side.repo.Log(id, current, knowledge.ObjectLogQuery{})
+		history, err := side.repo.Log(id, current, objectmodel.ObjectLogQuery{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -265,7 +265,7 @@ func observeParity(t *testing.T, side *paritySide) parityObservation {
 	}
 	sort.Slice(out.ObjectIDs, func(i, j int) bool { return out.ObjectIDs[i] < out.ObjectIDs[j] })
 	if len(side.commits) > 1 {
-		fast, ok := side.repo.(knowledge.FastChanges)
+		fast, ok := side.repo.(objectmodel.FastChanges)
 		if !ok {
 			t.Fatalf("provider %T has no FastChanges capability", side.repo)
 		}
@@ -278,7 +278,7 @@ func observeParity(t *testing.T, side *paritySide) parityObservation {
 	return out
 }
 
-func normalizeHistory(history []knowledge.ObjectRevision, commits []kernel.CommitID) []parityRevision {
+func normalizeHistory(history []objectmodel.ObjectRevision, commits []kernel.CommitID) []parityRevision {
 	steps := make(map[kernel.CommitID]int, len(commits))
 	for index, commit := range commits {
 		steps[commit] = index

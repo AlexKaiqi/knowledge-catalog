@@ -3,6 +3,10 @@ package cli_test
 import (
 	"context"
 	"encoding/json"
+	"kc/interfaces"
+	liveaccesscontract "kc/liveaccess/contract"
+	livefixture "kc/liveaccess/fixture"
+	"kc/systemrepo"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,16 +15,14 @@ import (
 	"kc/internal/testkit"
 	"kc/invocation"
 	"kc/kernel"
-	"kc/knowledge"
-	"kc/knowledge/reader"
-	"kc/knowledge/serving"
+	objectmodel "kc/object"
 	"kc/observability"
 	serv "kc/server"
 )
 
 type echoObjectInterface struct{ calls int }
 
-func (h *echoObjectInterface) ValidateImplementation(context.Context, reader.ResolvedInterface) error {
+func (h *echoObjectInterface) ValidateImplementation(context.Context, interfaces.ResolvedInterface) error {
 	return nil
 }
 
@@ -37,14 +39,14 @@ func TestPublicInvokeLiveAccessUsesPublishedContract(t *testing.T) {
 		if r.Header.Get("X-Resource-Principal") != "reader" {
 			t.Errorf("principal: %#v", r.Header)
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"value": map[string]any{"count": 8}, "basis": knowledge.ObservationBasis{BindingGeneration: "table-runtime/v1", Consistency: knowledge.ObservationBounded, SourceRevision: "rows-8", ObservedAt: "2026-10-10T03:00:00Z"}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"value": map[string]any{"count": 8}, "basis": objectmodel.ObservationBasis{BindingGeneration: "table-runtime/v1", Consistency: objectmodel.ObservationBounded, SourceRevision: "rows-8", ObservedAt: "2026-10-10T03:00:00Z"}})
 	}))
 	defer runtime.Close()
-	implementation, err := json.Marshal(map[string]any{"interfaceRef": string(knowledge.LiveAccessInterfaceV1), "runtime": "tables", "protocol": knowledge.ProtocolResourceAccessV1, "origin": runtime.URL, "operations": map[string]any{"read": map[string]any{"call": "orders.state"}}})
+	implementation, err := json.Marshal(map[string]any{"interfaceRef": string(liveaccesscontract.LiveAccessInterfaceV1), "runtime": "tables", "protocol": objectmodel.ProtocolResourceAccessV1, "origin": runtime.URL, "operations": map[string]any{"read": map[string]any{"call": "orders.state"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	body(t, kc(homeDir, "put", "--command-id", "live-implementation", "--repo", repositoryID, "--object", "table/orders", "--aspect", "interfaces", "--member", "live", "--schema-ref", string(knowledge.LiveAccessImplementationSchemaV1), "--value", string(implementation)))
+	body(t, kc(homeDir, "put", testObjectReference(t, repositoryID, "table/orders", "/interfaces/live"), "--command-id", "live-implementation", "--schema-ref", string(liveaccesscontract.LiveAccessImplementationSchemaV1), "--value", string(implementation), "--kind", "Member"))
 	serverHandler := serv.HTTPHandlerWithOptions(homeDir, serv.HTTPServerOptions{})
 	if closer, ok := serverHandler.(interface{ Close() error }); ok {
 		defer closer.Close()
@@ -60,28 +62,58 @@ func TestPublicInvokeLiveAccessUsesPublishedContract(t *testing.T) {
 
 func publishLiveAccessDefinitions(t *testing.T, homeDir, repositoryID string) {
 	t.Helper()
-	for _, operation := range knowledge.SystemPublicationOperations() {
-		id := operation.Address.ObjectID
-		if id != knowledge.LiveAccessImplementationSchemaV1 && id != knowledge.LiveAccessInterfaceV1 && id != "schema/core/object-interface/v1" {
-			continue
+	adoptLiveAccessFixture(t, homeDir, repositoryID)
+	operations := systemrepo.SystemPublicationOperations()
+	// Individual Writer requests require the Schema to exist before its
+	// instances, independently of the complete publication bundle's order.
+	for _, schemas := range []bool{true, false} {
+		for _, operation := range operations {
+			id := operation.Address.ObjectID
+			if id != liveaccesscontract.LiveAccessImplementationSchemaV1 && id != liveaccesscontract.LiveAccessInterfaceV1 && id != "schema/core/object-interface/v1" {
+				continue
+			}
+			if objectmodel.IsSchemaObject(id) != schemas {
+				continue
+			}
+			raw, err := json.Marshal(operation.Value)
+			if err != nil {
+				t.Fatal(err)
+			}
+			locator := ""
+			if operation.Address.AspectName != "" {
+				locator = testObjectLocator(operation.Address.AspectName)
+				if operation.Address.MemberKey != "" {
+					locator = testObjectLocator(operation.Address.AspectName, operation.Address.MemberKey)
+				}
+			}
+			args := []string{"put", testObjectReference(t, repositoryID, string(id), locator), "--command-id", "live-publish-" + string(id), "--value", string(raw), "--kind", string(operation.Address.Kind)}
+			if operation.SchemaRef != "" {
+				args = append(args, "--schema-ref", operation.SchemaRef)
+			}
+			body(t, kc(homeDir, args...))
 		}
-		raw, err := json.Marshal(operation.Value)
-		if err != nil {
-			t.Fatal(err)
-		}
-		args := []string{"put", "--command-id", "live-publish-" + string(id), "--repo", repositoryID, "--object", string(id), "--value", string(raw)}
-		if operation.Address.AspectName != "" {
-			args = append(args, "--aspect", operation.Address.AspectName)
-		}
-		if operation.SchemaRef != "" {
-			args = append(args, "--schema-ref", operation.SchemaRef)
-		}
-		body(t, kc(homeDir, args...))
 	}
 }
-func (h *echoObjectInterface) Execute(_ context.Context, call serving.InterfaceCall) (serving.InterfaceResult, error) {
+
+func adoptLiveAccessFixture(t *testing.T, directory, repository string) {
+	t.Helper()
+	file, err := apphome.ReadHome(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, declared := range file.Repos {
+		if declared.ID == repository && declared.Driver == "lakefs" {
+			if err := livefixture.AdoptRepository(kernel.RepositoryID(repository), declared.DSN, "main"); err != nil {
+				t.Fatal(err)
+			}
+			return
+		}
+	}
+	t.Fatalf("explicit LiveAccess fixture source %s has no declared lakeFS DSN", repository)
+}
+func (h *echoObjectInterface) Execute(_ context.Context, call interfaces.InterfaceCall) (interfaces.InterfaceResult, error) {
 	h.calls++
-	return serving.InterfaceResult{Value: map[string]any{"text": call.Implementation.Implementation["prefix"].(string) + call.Input.(map[string]any)["text"].(string)}}, nil
+	return interfaces.InterfaceResult{Value: map[string]any{"text": call.Implementation.Implementation["prefix"].(string) + call.Input.(map[string]any)["text"].(string)}}, nil
 }
 
 func TestPublicInvokeDispatchesIndependentObjectInterfaceAtFixedCommit(t *testing.T) {
@@ -96,37 +128,37 @@ func TestPublicInvokeDispatchesIndependentObjectInterfaceAtFixedCommit(t *testin
 		{"interface/echo/v1", `{"name":"Echo","meaning":"An independently installed extension.","operations":{"read":{"effect":"read","inputSchemaRef":"schema/echo-input/v1","resultSchemaRef":"schema/echo-input/v1"}}}`},
 	}
 	for n, value := range values {
-		body(t, kc(homeDir, "put", "--command-id", "echo-schema-"+string(rune('a'+n)), "--repo", repositoryID, "--object", value.object, "--value", value.value))
+		body(t, kc(homeDir, "put", testObjectReference(t, repositoryID, value.object, ""), "--command-id", "echo-schema-"+string(rune('a'+n)), "--value", value.value))
 	}
-	body(t, kc(homeDir, "put", "--command-id", "echo-implementation", "--repo", repositoryID, "--object", "object/message", "--aspect", "interfaces", "--member", "echo", "--schema-ref", "schema/echo-implementation/v1", "--value", `{"interfaceRef":"interface/echo/v1","prefix":"Old "}`))
-	pinned := asMap(t, body(t, kc(homeDir, "read", "--repo", repositoryID, "--object", "object/message")))["commit"].(string)
+	body(t, kc(homeDir, "put", testObjectReference(t, repositoryID, "object/message", "/interfaces/echo"), "--command-id", "echo-implementation", "--schema-ref", "schema/echo-implementation/v1", "--value", `{"interfaceRef":"interface/echo/v1","prefix":"Old "}`, "--kind", "Member"))
+	pinned := asMap(t, body(t, kc(homeDir, "read", testObjectReference(t, repositoryID, "object/message", ""))))["commit"].(string)
 	opened, err := apphome.Open(homeDir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer opened.Close()
-	implementation, err := opened.Reader.ResolveObjectInterface(kernel.RepositoryID(repositoryID), kernel.CommitID(pinned), "object/message", "echo")
+	implementation, err := interfaces.ResolveObjectInterface(opened.Reader, kernel.RepositoryID(repositoryID), kernel.CommitID(pinned), "object/message", "echo")
 	if err != nil {
 		t.Fatal(err)
 	}
 	handler := &echoObjectInterface{}
-	registry := serving.NewInterfaceRegistry()
-	if err := registry.Register(serving.InterfaceRegistration{Contract: implementation.Contract, ContractDigest: implementation.ContractDigest, ImplementationSchemaStructureDigest: implementation.ImplementationSchemaStructureDigest, HandlerRevision: "echo/v1", Handler: handler}); err != nil {
+	registry := interfaces.NewInterfaceRegistry()
+	if err := registry.Register(interfaces.InterfaceRegistration{Contract: implementation.Contract, ContractDigest: implementation.ContractDigest, ImplementationSchemaStructureDigest: implementation.ImplementationSchemaStructureDigest, HandlerRevision: "echo/v1", Handler: handler}); err != nil {
 		t.Fatal(err)
 	}
-	body(t, kc(homeDir, "put", "--command-id", "echo-new-head", "--repo", repositoryID, "--object", "object/message", "--aspect", "interfaces", "--member", "echo", "--schema-ref", "schema/echo-implementation/v1", "--value", `{"interfaceRef":"interface/echo/v1","prefix":"New "}`))
+	body(t, kc(homeDir, "put", testObjectReference(t, repositoryID, "object/message", "/interfaces/echo"), "--command-id", "echo-new-head", "--schema-ref", "schema/echo-implementation/v1", "--value", `{"interfaceRef":"interface/echo/v1","prefix":"New "}`, "--kind", "Member"))
 	publishLiveAccessDefinitions(t, homeDir, repositoryID)
 	var liveCalls int
 	runtime := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		liveCalls++
-		_ = json.NewEncoder(w).Encode(map[string]any{"value": map[string]any{"count": 9}, "basis": knowledge.ObservationBasis{BindingGeneration: "table-runtime/v1", Consistency: knowledge.ObservationBounded, SourceRevision: "rows-9", ObservedAt: "2026-10-10T03:00:00Z"}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"value": map[string]any{"count": 9}, "basis": objectmodel.ObservationBasis{BindingGeneration: "table-runtime/v1", Consistency: objectmodel.ObservationBounded, SourceRevision: "rows-9", ObservedAt: "2026-10-10T03:00:00Z"}})
 	}))
 	defer runtime.Close()
-	live, err := json.Marshal(map[string]any{"interfaceRef": string(knowledge.LiveAccessInterfaceV1), "runtime": "tables", "protocol": knowledge.ProtocolResourceAccessV1, "origin": runtime.URL, "operations": map[string]any{"read": map[string]any{"call": "orders.state"}}})
+	live, err := json.Marshal(map[string]any{"interfaceRef": string(liveaccesscontract.LiveAccessInterfaceV1), "runtime": "tables", "protocol": objectmodel.ProtocolResourceAccessV1, "origin": runtime.URL, "operations": map[string]any{"read": map[string]any{"call": "orders.state"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	body(t, kc(homeDir, "put", "--command-id", "shared-live-implementation", "--repo", repositoryID, "--object", "table/orders", "--aspect", "interfaces", "--member", "live", "--schema-ref", string(knowledge.LiveAccessImplementationSchemaV1), "--value", string(live)))
+	body(t, kc(homeDir, "put", testObjectReference(t, repositoryID, "table/orders", "/interfaces/live"), "--command-id", "shared-live-implementation", "--schema-ref", string(liveaccesscontract.LiveAccessImplementationSchemaV1), "--value", string(live), "--kind", "Member"))
 	serverHandler := serv.HTTPHandlerWithOptions(homeDir, serv.HTTPServerOptions{ObjectInterfaces: registry})
 	if closer, ok := serverHandler.(interface{ Close() error }); ok {
 		defer closer.Close()
@@ -160,7 +192,7 @@ func TestPublicInvokeDispatchesIndependentObjectInterfaceAtFixedCommit(t *testin
 
 func assertInterfaceAccessEvidence(t *testing.T, homeDir, repository, object, member string, result map[string]any) {
 	t.Helper()
-	page, err := observability.NewFileStore(homeDir).Access(context.Background(), observability.AccessQuery{Action: "resource.access", Repository: kernel.RepositoryID(repository), Object: knowledge.ObjectID(object)})
+	page, err := observability.NewFileStore(homeDir).Access(context.Background(), observability.AccessQuery{Action: "resource.access", Repository: kernel.RepositoryID(repository), Object: objectmodel.ObjectID(object)})
 	if err != nil || len(page.Entries) != 1 {
 		t.Fatalf("public call has no exact access evidence: %#v %v", page, err)
 	}

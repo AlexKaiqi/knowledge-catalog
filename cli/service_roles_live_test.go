@@ -7,7 +7,7 @@ import (
 	"io"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 	serv "kc/server"
 	"kc/snapshot"
 	"net/http"
@@ -48,6 +48,7 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	seedRepo(t, home, repositoryID)
 	body(t, kc(home, "grant", "add", "--principal", providerLogin, "--action", "writer.commit,projection.manage", "--repo", repositoryID))
 	body(t, kc(home, "grant", "add", "--principal", providerLogin, "--action", "dataset.manage", "--dataset", setID))
+	body(t, kc(home, "grant", "add", "--principal", providerLogin, "--action", "repository.dataset.publish", "--repo", repositoryID, "--dataset", setID, "--ref", snapshot.DefaultRef))
 	body(t, kc(home, "grant", "add", "--principal", consumerLogin, "--action", "file.read,dataset.resolve", "--dataset", setID))
 	body(t, kc(home, "grant", "add", "--principal", consumerLogin, "--action", "knowledge.read,knowledge.search", "--repo", repositoryID))
 
@@ -90,13 +91,13 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	}
 
 	writerPath := "/writer/v1/repositories/" + url.PathEscape(repositoryID) + "/commits"
-	schemaReceipt := liveServiceOK(t, server, writerPath, liveCommitRequest(repositoryID, "schema-"+run, "", knowledge.Operation{
-		Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/runbook.body"},
+	schemaReceipt := liveServiceOK(t, server, writerPath, liveCommitRequest(repositoryID, "schema-"+run, "", objectmodel.Operation{
+		Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/runbook.body"},
 		Value: map[string]any{"entity": "Runbook", "pattern": "record", "fields": map[string]any{"body": map[string]any{"type": "string", "access": []any{"text"}}}},
 	}), providerAuth)
 	schemaCommit := receiptCommit(t, schemaReceipt)
-	firstReceipt := liveServiceOK(t, server, writerPath, liveCommitRequest(repositoryID, "source-1-"+run, schemaCommit, knowledge.Operation{
-		Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "runbook/payment-oncall"},
+	firstReceipt := liveServiceOK(t, server, writerPath, liveCommitRequest(repositoryID, "source-1-"+run, schemaCommit, objectmodel.Operation{
+		Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "runbook/payment-oncall"},
 		SchemaRef: "schema/runbook.body", Value: map[string]any{"body": "切换支付流量前先检查冻结窗口"},
 	}), providerAuth)
 	firstCommit := receiptCommit(t, firstReceipt)
@@ -126,15 +127,15 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	if search["completeness"] != "complete" || len(search["hits"].([]any)) != 1 {
 		t.Fatalf("consumer search: %#v", search)
 	}
-	values := liveServiceOK(t, server, "/knowledge/v1/objects:read", map[string]any{
-		"dataset": setID, "pin": json.RawMessage(pinJSON), "object": "runbook/payment-oncall",
-	}, consumerAuth).([]any)
-	if len(values) != 1 || asMap(t, values[0])["commit"] != firstCommit {
+	values := asMap(t, liveServiceOK(t, server, "/knowledge/v1/objects:read", map[string]any{
+		"dataset": setID, "pin": json.RawMessage(pinJSON), "reference": testObjectReference(t, repositoryID, "runbook/payment-oncall", ""),
+	}, consumerAuth))
+	if values["reference"] != testObjectReference(t, repositoryID, "runbook/payment-oncall", "") || values["commit"] != firstCommit {
 		t.Fatalf("consumer read: %#v", values)
 	}
 
-	secondReceipt := liveServiceOK(t, server, writerPath, liveCommitRequest(repositoryID, "source-2-"+run, firstCommit, knowledge.Operation{
-		Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "runbook/payment-oncall"},
+	secondReceipt := liveServiceOK(t, server, writerPath, liveCommitRequest(repositoryID, "source-2-"+run, firstCommit, objectmodel.Operation{
+		Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "runbook/payment-oncall"},
 		SchemaRef: "schema/runbook.body", Value: map[string]any{"body": "新流程：切换前同时检查冻结窗口和容量水位"},
 	}), providerAuth)
 	secondCommit := receiptCommit(t, secondReceipt)
@@ -162,14 +163,14 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	}
 }
 
-func liveCommitRequest(repositoryID, commandID, expected string, operation knowledge.Operation) map[string]any {
+func liveCommitRequest(repositoryID, commandID, expected string, operation objectmodel.Operation) map[string]any {
 	return map[string]any{
 		"commandId": commandID,
-		"changeSet": knowledge.ChangeSet{
+		"changeSet": objectmodel.ChangeSet{
 			TargetRepository: kernel.RepositoryID(repositoryID), TargetRef: snapshot.DefaultRef,
 			BaseCommit: kernel.CommitID(expected), ExpectedTargetCommit: kernel.CommitID(expected),
-			Operations: []knowledge.Operation{operation},
-			Provenance: &knowledge.ProvenanceEnvelope{OriginKind: knowledge.OriginSource, SourceRefs: []string{"file:///source/runbooks/payment-oncall.md"}},
+			Operations: []objectmodel.Operation{operation},
+			Provenance: &objectmodel.ProvenanceEnvelope{OriginKind: objectmodel.OriginSource, SourceRefs: []string{"file:///source/runbooks/payment-oncall.md"}},
 		},
 	}
 }

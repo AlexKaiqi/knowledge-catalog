@@ -46,7 +46,7 @@ func TestClientCoordinatesIgnoreRetiredHostContext(t *testing.T) {
 						http.Error(w, "duplicate read", http.StatusBadRequest)
 						return
 					}
-					_ = json.NewEncoder(w).Encode([]any{map[string]any{"objectId": "note/current"}})
+					_ = json.NewEncoder(w).Encode(map[string]any{"reference": request["reference"], "repository": "kr://acme/source", "address": map[string]any{"objectId": "note/current"}})
 				}))
 				t.Cleanup(server.Close)
 				root, err := os.Getwd()
@@ -70,7 +70,7 @@ func TestClientCoordinatesIgnoreRetiredHostContext(t *testing.T) {
 				if err := os.WriteFile(filepath.Join(contextDir, "context.json"), context, 0600); err != nil {
 					t.Fatal(err)
 				}
-				args := []string{"read", "--dataset", "current", "--object", "note/current"}
+				args := []string{"read", "urn:kc:object:kr%3A%2F%2Facme%2Fsource:note%2Fcurrent", "--dataset", "current"}
 				switch mode {
 				case "argv":
 					args = append(args, "--server", server.URL, "--as", "agent:consumer")
@@ -78,7 +78,7 @@ func TestClientCoordinatesIgnoreRetiredHostContext(t *testing.T) {
 					t.Setenv("KC_SERVER_URL", server.URL)
 					t.Setenv("KC_AS", "agent:consumer")
 				case "no-server":
-					args = []string{"read", "--object", "note/current"}
+					args = []string{"read", "urn:kc:object:kr%3A%2F%2Facme%2Fsource:note%2Fcurrent"}
 				}
 				result := Run(args)
 				if mode == "no-server" {
@@ -95,7 +95,7 @@ func TestClientCoordinatesIgnoreRetiredHostContext(t *testing.T) {
 					default:
 						t.Fatal("client did not call the configured typed API")
 					}
-					if request["dataset"] != "current" || request["object"] != "note/current" {
+					if request["dataset"] != "current" || request["reference"] != "urn:kc:object:kr%3A%2F%2Facme%2Fsource:note%2Fcurrent" {
 						t.Fatalf("client knowledge coordinates changed: %#v", request)
 					}
 					for _, key := range []string{"catalog", "pin", "definition"} {

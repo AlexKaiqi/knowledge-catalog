@@ -1,0 +1,12 @@
+---
+object_id: schema/inspection.implementation/v1
+---
+entity: Object
+aspect: interfaces
+pattern: keyed_collection
+fields:
+  interfaceRef:
+    type: string
+    required: true
+  purpose:
+    type: string

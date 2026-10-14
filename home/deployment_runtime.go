@@ -3,6 +3,7 @@ package home
 import (
 	"encoding/json"
 	"errors"
+	"kc/systemrepo"
 	"os"
 	"path/filepath"
 
@@ -11,8 +12,7 @@ import (
 	"kc/hook"
 	"kc/internal/jsonfile"
 	"kc/kernel"
-	"kc/knowledge"
-	"kc/knowledge/writer"
+	objectmodel "kc/object"
 	"kc/observability"
 	"kc/snapshot"
 	"kc/snapshot/dataset"
@@ -244,7 +244,7 @@ func ensureRegistryAuthority(store snapshot.Registry, c DeploymentConfig, state 
 			_ = reg.Close()
 			return err
 		}
-		if err := cat.RegisterRepository(knowledge.SystemRepositoryID); err != nil {
+		if err := cat.RegisterRepository(objectmodel.SystemRepositoryID); err != nil {
 			_ = reg.Close()
 			return err
 		}
@@ -386,7 +386,7 @@ func OpenDeployment(c DeploymentConfig) (*Home, error) {
 		if err != nil {
 			return fail(err)
 		}
-		if b.ID == string(knowledge.SystemRepositoryID) {
+		if b.ID == string(objectmodel.SystemRepositoryID) {
 			source, err = readOnlySystemAuthority(source)
 			if err != nil {
 				return fail(err)
@@ -429,7 +429,7 @@ func OpenDeployment(c DeploymentConfig) (*Home, error) {
 			file.Repos = append(file.Repos, record.Binding.homeRepo())
 		}
 	}
-	systemSource, _ := store.Get(knowledge.SystemRepositoryID)
+	systemSource, _ := store.Get(objectmodel.SystemRepositoryID)
 	if err := verifySystemAuthority(systemSource); err != nil {
 		return fail(err)
 	}
@@ -462,7 +462,8 @@ func OpenDeployment(c DeploymentConfig) (*Home, error) {
 	}
 	ws, err := assemble(c.StateDir, file, stores, store, datasets, registry, true)
 	if err != nil {
-		return fail(err)
+		// Ownership transferred to assemble, including its failure cleanup.
+		return nil, err
 	}
 	ws.Deployment = &c
 	return ws, nil
@@ -471,7 +472,15 @@ func OpenDeployment(c DeploymentConfig) (*Home, error) {
 // AttachRepository validates an existing configured Snapshot before admitting
 // its identity in one Registry commit. Source contents are never changed.
 func (ws *Home) AttachRepository(id kernel.RepositoryID) error {
-	cat := ws.Datasets
+	if err := ws.ValidateRepositoryAttachment(id); err != nil {
+		return err
+	}
+	return ws.Datasets.RegisterRepository(id)
+}
+
+// ValidateRepositoryAttachment verifies host-owned durable source bindings.
+// It does not register the source or change its files or access rules.
+func (ws *Home) ValidateRepositoryAttachment(id kernel.RepositoryID) error {
 	if ws.Deployment != nil {
 		if _, err := ws.Deployment.Binding(id); err != nil {
 			if err := ValidateDeploymentState(*ws.Deployment); err != nil {
@@ -496,7 +505,7 @@ func (ws *Home) AttachRepository(id kernel.RepositoryID) error {
 	if _, ok := ws.Store.Get(id); !ok {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "Snapshot %s is unavailable", id)
 	}
-	return cat.RegisterRepository(id)
+	return nil
 }
 
 // PublishDeploymentSystem is explicit provisioning through the System Writer.
@@ -508,7 +517,7 @@ func PublishDeploymentSystem(c DeploymentConfig) (map[string]any, error) {
 	if err := ValidateDeploymentState(c); err != nil {
 		return nil, err
 	}
-	b, err := c.Binding(knowledge.SystemRepositoryID)
+	b, err := c.Binding(objectmodel.SystemRepositoryID)
 	if err != nil {
 		return nil, err
 	}
@@ -521,7 +530,7 @@ func PublishDeploymentSystem(c DeploymentConfig) (map[string]any, error) {
 			_ = closer.Close()
 		}
 	}()
-	published, err := writer.PublishSystem(repo)
+	published, err := systemrepo.PublishSystem(repo)
 	if err != nil {
 		return nil, err
 	}

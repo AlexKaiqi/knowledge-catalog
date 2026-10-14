@@ -3,10 +3,14 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	snapshotclient "kc/snapshot/client"
 
 	kcclient "kc/client"
+	"kc/invoke"
 	"kc/kernel"
 	"kc/snapshot/dataset"
+
+	inv "kc/invocation"
 )
 
 // The inventory-discovery request/verification vocabulary (InventoryDiscoveryFlag,
@@ -23,25 +27,25 @@ func inventorySearchRequested(path string, flags map[string]FlagValue) bool {
 		return false
 	}
 	for _, name := range []string{"repo", "dataset", "pin", "source", "dataset-file", "file", "commit", "ref"} {
-		if flagString(flags, name) != "" {
+		if invoke.FlagString(flags, name) != "" {
 			return false
 		}
 	}
-	return suppliedKnowledgeSet(flags) == nil
+	return inv.SuppliedKnowledgeSet(flags) == nil
 }
 
 func prepareRemoteInventoryDiscovery(ctx context.Context, client *kcclient.Client, flags map[string]FlagValue, options kcclient.RequestOptions) error {
 	var view struct {
 		DiscoverySetID string `json:"discoveryWorkspaceId"`
 	}
-	if err := client.SnapshotService().Show(ctx, options, &view); err != nil {
+	if err := client.SnapshotService().Show(ctx, snapshotRequestOptions(options), &view); err != nil {
 		return err
 	}
 	if view.DiscoverySetID == "" {
 		return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "service has no configured discoveryWorkspaceId")
 	}
 	var pin dataset.ResolvedKnowledgeSet
-	if err := client.SnapshotService().ResolveKnowledgeSet(ctx, view.DiscoverySetID, kcclient.KnowledgeSetResolveRequest{InventoryDiscovery: true}, options, &pin); err != nil {
+	if err := client.SnapshotService().ResolveKnowledgeSet(ctx, view.DiscoverySetID, snapshotclient.KnowledgeSetResolveRequest{InventoryDiscovery: true}, snapshotRequestOptions(options), &pin); err != nil {
 		return err
 	}
 	raw, err := json.Marshal(pin)

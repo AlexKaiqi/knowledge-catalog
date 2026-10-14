@@ -7,6 +7,6 @@ Feature: proposal-preview-created
       | previewId           | nonempty |
       | candidate.commitId  | nonempty |
       | candidate.repositoryId | kr://scene/knowledge |
-    When I run `kc read --repo kr://scene/knowledge --object note/hello`
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:note%2Fhello`
     Then the output has:
       | value.text | hi |

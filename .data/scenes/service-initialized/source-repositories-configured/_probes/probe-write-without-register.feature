@@ -4,12 +4,12 @@
 Feature: probe write without register
 
   Scenario: put does not require catalog admit
-    When I run `kc writer put --command-id probe-unregistered-note --repo kr://scene/knowledge --object note/orphan --value '{"text":"orphan"}'`
+    When I run `kc writer put urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:note%2Forphan --command-id probe-unregistered-note --value '{"text":"orphan"}'`
     Then the output has:
       | disposition         | APPLIED |
       | result.repositoryId | kr://scene/knowledge |
       | result.newCommit    | nonempty |
-    When I run `kc read --repo kr://scene/knowledge --object note/orphan`
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:note%2Forphan`
     Then the output has:
       | objectId | note/orphan |
       | value.text          | orphan |

@@ -2,45 +2,29 @@ package client
 
 import (
 	"context"
-	"encoding/json"
+	declarativeindexclient "kc/declarativeindex/client"
+	discoveryclient "kc/discovery/client"
 )
 
 type OperationsService struct{ client *Client }
 
 func (c *Client) OperationsService() OperationsService { return OperationsService{client: c} }
 
-type ProjectionSyncRequest struct {
-	Repository string `json:"repository"`
-	Commit     string `json:"commit,omitempty"`
-	Ref        string `json:"ref,omitempty"`
-}
+type ProjectionSyncRequest = declarativeindexclient.ProjectionRequest
 
 // AccessSpecDescribeRequest is the Workspace pin or single Repository used to
 // compile logical AccessSpec reports. It is not a Repository projection
 // coordinate.
-type AccessSpecDescribeRequest struct {
-	Dataset    string          `json:"dataset"`
-	Repository string          `json:"repository,omitempty"`
-	Pin        json.RawMessage `json:"pin,omitempty"`
-}
+type AccessSpecDescribeRequest = discoveryclient.AccessSpecDescribeRequest
 
 func (s OperationsService) SyncProjection(ctx context.Context, request ProjectionSyncRequest, options RequestOptions, output any) error {
-	return s.client.doJSON(ctx, "POST", "/operations/v1/projections:sync", request, options, output)
+	return s.client.declarativeIndex.SyncProjection(ctx, request, declarativeindexclient.RequestOptions{RequestID: options.RequestID}, output)
 }
 
-type ProjectionNoticeAddress struct {
-	Kind       string `json:"kind,omitempty"`
-	ObjectID   string `json:"objectId,omitempty"`
-	AspectName string `json:"aspectName,omitempty"`
-}
+type ProjectionNoticeAddress = declarativeindexclient.ProjectionNoticeAddress
 
-type ProjectionNotifyRequest struct {
-	Repository     string                   `json:"repository"`
-	Ref            string                   `json:"ref,omitempty"`
-	Address        *ProjectionNoticeAddress `json:"address,omitempty"`
-	SourceRevision string                   `json:"sourceRevision,omitempty"`
-}
+type ProjectionNotifyRequest = declarativeindexclient.ProjectionNotifyRequest
 
 func (s OperationsService) NotifyProjection(ctx context.Context, request ProjectionNotifyRequest, options RequestOptions, output any) error {
-	return s.client.doJSON(ctx, "POST", "/operations/v1/projections:notice", request, options, output)
+	return s.client.declarativeIndex.NotifyProjection(ctx, request, declarativeindexclient.RequestOptions{RequestID: options.RequestID}, output)
 }

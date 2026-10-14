@@ -7,7 +7,7 @@ Feature: 记录外部通过报告后合并候选并从主分支读回新值
     Then the output has:
       | reportId | nonempty |
       | outcome  | PASSED |
-    When I run `kc read --repo kr://scene/knowledge --object note/hello`
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:note%2Fhello`
     Then the output has:
       | value.text | hi |
 
@@ -15,6 +15,6 @@ Feature: 记录外部通过报告后合并候选并从主分支读回新值
     Then the output has:
       | proposalId | PR-scene |
       | commitId   | nonempty |
-    When I run `kc read --repo kr://scene/knowledge --object note/hello`
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:note%2Fhello`
     Then the output has:
       | value.text | proposed |

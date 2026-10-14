@@ -42,6 +42,7 @@ type lakefsFakeRepo struct {
 	staged           map[string]map[string]*[]byte
 	uploads          map[string][]byte
 	storageNamespace string
+	metadata         map[string]string
 }
 
 type lakefsFakeCommit struct {
@@ -210,6 +211,7 @@ func (f *LakeFSFake) cloneRepo(srcName, dstName string) error {
 		branches: map[string]string{},
 		staged:   map[string]map[string]*[]byte{},
 		uploads:  map[string][]byte{},
+		metadata: maps.Clone(src.metadata),
 	}
 	for id, commit := range src.commits {
 		copy := commit
@@ -230,6 +232,7 @@ func newEmptyLakeFSRepo() *lakefsFakeRepo {
 		branches: map[string]string{"main": "c0"},
 		staged:   map[string]map[string]*[]byte{},
 		uploads:  map[string][]byte{},
+		metadata: map[string]string{},
 	}
 }
 
@@ -291,6 +294,8 @@ func (f *LakeFSFake) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			namespace = "s3://bucket/" + repoName
 		}
 		writeLakeFSJSON(w, http.StatusOK, map[string]any{"id": repoName, "default_branch": "main", "storage_namespace": namespace})
+	case suffix == "/metadata":
+		serveLakeFSRepositoryMetadata(w, r, repo)
 	case suffix == "/branches" && r.Method == http.MethodPost:
 		f.createBranch(w, r, repo)
 	case strings.HasPrefix(suffix, "/branches/"):

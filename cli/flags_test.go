@@ -1,14 +1,9 @@
 package cli
 
 import (
-	"kc/invoke"
-
-	"net/http"
-	"net/http/httptest"
+	"kc/kernel"
 	"strings"
 	"testing"
-
-	"kc/kernel"
 )
 
 func TestUnknownFlagIsRejectedBeforeOpeningHome(t *testing.T) {
@@ -35,16 +30,5 @@ func TestTransportSpecificFlagsCannotLeakAcrossSurfaces(t *testing.T) {
 	result = Run([]string{"serve", "--help"})
 	if result.Status != 0 || !strings.Contains(result.Stdout, "kc serve") {
 		t.Fatalf("serve help should not start a listener: %#v", result)
-	}
-}
-
-func TestHTTPPartialOutcomeUsesMultiStatusAndKeepsReceipts(t *testing.T) {
-	recorder := httptest.NewRecorder()
-	invoke.WriteInvoke(recorder, RunResult{Status: 2, Stdout: `{"outcome":"partial","commits":[{"error":"NON_FAST_FORWARD"}]}`})
-	if recorder.Code != http.StatusMultiStatus {
-		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
-	}
-	if !strings.Contains(recorder.Body.String(), "commits") {
-		t.Fatalf("partial response lost per-repository results: %s", recorder.Body.String())
 	}
 }

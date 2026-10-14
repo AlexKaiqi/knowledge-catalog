@@ -1,0 +1,206 @@
+- id: liveaccess-independent-module
+  title: 实现与公开依赖保持独立归属
+  claims: ["resource-access#U13"]
+  given:
+    - 仓库包含 LiveAccess 实现、公开合同和对象基础包。
+  when:
+    - 执行模块目录、公开依赖深度、依赖方向及专属实现归属的结构检查。
+  then:
+    - LiveAccess 专属实现在独立目录，不留在宿主或对象基础包；消费者通过公开合同使用它。
+    - LiveAccess 新增 CLI 定义、帮助与专属适配归自身目录；统一 CLI 只负责装配和通用调用。
+    - 对象基础包不反向依赖 LiveAccess 实现。
+  risk: 功能可用但实现仍混在宿主或对象基础包，运行用例发现不了归属问题。
+
+- id: liveaccess-selected-plugin-result
+  title: 来源声明选中的插件真实调用并贡献读取结果
+  claims: ["resource-access#U14", "resource-access#U10"]
+  given:
+    - R1、R2 分别配置 A、B，Server 按仓装配；两仓通过 Writer 发布固定取值声明，A、B 返回不同值并记录调用目标。
+    - 一个 Dataset 组合这两个来源，Dataset 自身不另设插件采用。
+  when:
+    - 通过公共对象读取入口分别读取两个 Repository，再从 Dataset 读取所组合的值。
+  then:
+    - 每个值调用来源 Repo 配置的实例，来源、固定声明和最终采用值逐一对应。
+    - A 的返回不会被 B、旧全局处理器或对象中的句柄替代；组合后仍保留每个值的来源依据。
+  risk: 插件只被登记却没被调用，或 Dataset 组合把不同来源错误地路由到同一实现。
+
+- id: liveaccess-replacement-keeps-declaration
+  title: 更换运行实例不改固定来源声明
+  claims: ["resource-access#U14", "resource-access#U11"]
+  given:
+    - 来源 Repo 配置 A，已完成一次读取；固定声明明确目标、Schema 和 origin，兼容的 C 返回可区分的新值。
+  when:
+    - 将来源 Repo 配置改为 C，替换服务进程后发起新的公共对象读取。
+  then:
+    - 新请求只调用 C 并采用 C 返回值，不调用 A。
+    - C 收到同一固定目标、Schema 和 origin，不以运行实例地址覆盖来源声明。
+  risk: 换实例仍调用旧全局实现，或把固定来源与运行实例配置混为一体。
+
+- id: liveaccess-no-compatible-plugin
+  title: 未匹配或不支持固定声明时不偷偷回退
+  claims: ["resource-access#U14", "resource-access#U12", "resource-access#U15"]
+  given:
+    - 对象包含固定值和外部值；来源 Repo 已配置访问实例，外部值有固定声明，另有可计数的旧全局实现和来源。
+    - 独立变体分别为指定实例缺失，以及实例存在但不能满足声明的协议或版本。
+  when:
+    - 各变体独立通过公共对象读取入口访问该对象。
+  then:
+    - 外部值位置说明未匹配或不支持的原因；固定值正常返回。
+    - 不调用旧全局实现或来源，不改用 HEAD 声明、扫描或占位空值。
+  risk: 正常接入能通过，但缺实现或不兼容时暗用另一实现，产生貌似成功的值。
+
+- id: liveaccess-mixed-values
+  title: 同一对象的成功、合法空值与取值失败分别呈现
+  claims: ["resource-access#U15"]
+  given:
+    - 经 Writer 发布同一对象，含固定值、返回 31 的外部值、带合法 Basis 的 null，以及另一个外部值。
+    - 最后一个位置的独立变体为来源错误、null 搭配非法 Basis、返回值违反固定 Schema；每次从同一前态独立开始。
+  when:
+    - 各变体分别通过 Repo 和 Dataset 的公共对象 READ 读取同一对象。
+  then:
+    - 固定值和 31 完整保留；合法 null 仍为 null，并有成功观察依据。
+    - 只有失败位置呈现对应说明，核验失败同样局限于该值。
+    - 失败不成为合法 null、旧值或成功观察；返回对象中不留下未取值的句柄冒充数据。
+  risk: 单地址成功和失败都通过，但混合对象仍被单值错误整体抹掉，或核验失败被伪装成空值。
+
+- id: liveaccess-request-identity-isolation
+  title: 交错请求自动传递各自身份与认证
+  claims: ["resource-access#U16"]
+  given:
+    - alice、bob 具有不同的适用认证证明、requestId 和 trace，访问同一外部目标；来源记录每次收到的主体、证明和请求关联。
+  when:
+    - 两个主体交错通过公共对象 READ 访问该目标，调用者不再为句柄提供第二份认证。
+  then:
+    - 来源每次收到该请求对应的主体与适用证明，requestId 和 trace 仍对应同一请求。
+    - 先前请求或另一主体不覆盖本次身份和证明。
+  risk: 单主体透传正例发现不了共享请求状态造成的身份、证明或请求关联串用。
+
+- id: liveaccess-credential-target-boundary
+  title: 不向不适用或不受信任的目标传递凭证
+  claims: ["resource-access#U16", "resource-access#U7"]
+  given:
+    - 主体的证明适用于受信任目标 A；另有可计数接收端 B，它不在信任或证明适用范围内。
+    - B 要求其适用认证，调用者没有该证明；读取对象另含正常固定值。
+    - 独立变体分别使固定 origin 指向 B，以及读取时遇到已改变的目标地址。
+  when:
+    - 各变体独立通过公共对象 READ 发起取值。
+  then:
+    - B 未收到该主体的认证证明；地址变化不扩大原证明适用范围。
+    - 受影响值返回可解释的取值失败，其他值保留。
+  risk: 正常目标透传正确，却在初始目标或地址变化处向错误接收端泄漏证明。
+
+- id: liveaccess-redirect-credential-boundary
+  title: 重定向不扩大凭证范围
+  claims: ["resource-access#U16", "resource-access#U7"]
+  given:
+    - 主体证明仅适用于受信任来源 A；A 将访问重定向到不适用接收端 B，两端均可核对收到的证明。
+    - 读取对象另含正常固定值。
+  when:
+    - 通过公共对象 READ 触发该重定向。
+  then:
+    - B 未收到对 A 的认证证明，重定向不能替目标扩权。
+    - 该值失败时仅在原位置说明，其他值保留。
+  risk: 初始目标检查正确，但 HTTP 重定向绕过凭证目标限制。
+
+- id: liveaccess-no-credential-in-results-or-evidence
+  title: 凭证不进入对象、日志或审计
+  claims: ["resource-access#U16"]
+  given:
+    - 使用可精确检出的认证证明，来源可验证已经收到它；来源成功和失败为独立变体。
+  when:
+    - 各变体通过公共对象 READ 取值，再经授权入口读取对应访问和审计记录。
+  then:
+    - 成功数据或局部失败说明按契约返回，普通对象结果、来源请求正文、日志和审计均不含认证证明。
+    - 主体、requestId、时间、目标与原因仍可关联；不能用删除关联字段来满足不泄漏。
+  risk: 来源取值正确但返回或留证时复制了敏感证明，成功路径检查发现不了失败路径泄漏。
+
+- id: liveaccess-audit-original-result
+  title: 源更新和重启后独立复核原请求结果
+  claims: ["resource-access#U17"]
+  given:
+    - r1 读取混合对象并保存当次正常返回：固定值、31、合法 null 与一个失败说明；证据记录主体、时间、位置、requestId、固定声明及原依据。
+    - r1 的 Snapshot 固定版本仍在承诺期内可读。
+  when:
+    - 改源值、推进 Snapshot 并产生 r2，再替换服务进程；让来源离线。
+    - 经获准的独立审计入口按已选公开查询合同定位 r1。
+  then:
+    - 审计复核 r1 的原值、null 和逐值失败及全部关联字段，不借 r2 或最新值补证。
+    - Snapshot 按 r1 的固定版本和位置复核；LiveAccess 采用当次保留结果和原依据。
+    - 查询审计不增加来源调用计数；普通 READ 没有夹带完整审计记录。
+  risk: 有访问日志却不能还原实际结果，或审计偷偷实时重取，使更新、失败和合法空值失真。
+
+- id: liveaccess-audit-separate-authorization
+  title: 普通读取与完整审计的授权分别生效
+  claims: ["resource-access#U17"]
+  given:
+    - 主体可正常读取混合对象，但没有完整审计查询权限；另有显式获准的审计主体。
+  when:
+    - 普通读取主体先完成对象 READ，再尝试定位该请求的完整证据；审计主体查询同一记录。
+  then:
+    - 对象 READ 正常返回数据，不附完整证据。
+    - 无审计权查询被拒绝；获准主体能复核同一请求结果。
+  risk: 只测完全无权限的主体，发现不了对象读权被误当作完整审计权限。
+
+- id: liveaccess-evidence-persistence-failure
+  title: 必需证据未可靠保存时不宣称交付成功
+  claims: ["resource-access#U18"]
+  given:
+    - 读取混合对象，含成功值、合法 null 和预设单值失败；独立故障分别使访问关联记录无法保存，或必需的实际值、逐值失败、原依据无法可靠保留。
+  when:
+    - 各故障独立通过公共对象 READ 发起取值。
+  then:
+    - 不宣称已经可靠交付，不返回可用的完整留证回执，留证失败有可解释结果。
+    - 仅保存指针或仅来源取值成功不能冒充必需证据已可靠保存。
+  risk: 访问指针账成功就先交付，但实际值、失败或原观察没有可靠留下。
+
+- id: liveaccess-retained-evidence-lost
+  title: 承诺期内原结果丢失必须可识别
+  claims: ["resource-access#U18"]
+  given:
+    - r1 已可靠留证，仍在保留期内；访问关联记录仍在，独立变体分别丢失实际值、逐值失败说明或原依据，来源已有新值。
+  when:
+    - 经获准独立审计入口复核 r1。
+  then:
+    - 明确报告保留期内证据丢失，区别于正常到期。
+    - 不用最新来源值补证，不返回假空记录或伪造的原观察。
+  risk: 账还在就被误判为证据齐全，介质丢失被掩盖成空结果或正常到期。
+
+- id: liveaccess-evidence-expired
+  title: 正常到期与保留期内丢失分别说明
+  claims: ["resource-access#U18"]
+  given:
+    - r1 曾完整留证，随后正常达到其保留期限；来源仍可返回最新值。
+  when:
+    - 经获准独立审计入口复核 r1。
+  then:
+    - 明确说明正常到期，区别于保留期内证据丢失。
+    - 不重取最新值冒充 r1，不以空记录冒充可复核结果。
+  risk: 只检查查询失败，无法区分正常生命周期结束与违反保留承诺。
+
+- id: liveaccess-plugin-help
+  title: 模块说明可读取且不会执行取值
+  claims: ["resource-access#U19"]
+  given:
+    - LiveAccess 模块从自身目录登记可区分的说明，客户端连接 Server；业务来源和处理器可计数。
+  when:
+    - 执行 kc plugin liveaccess help，再使用不存在的插件名称执行同一说明任务。
+  then:
+    - LiveAccess 帮助返回模块登记的协议、适用条件、结果影响与认证、审计承诺，并关联已有任务入口。
+    - 说明读取不触发业务取值、来源访问或维护，不把正常 Server 说明请求误判为外部取值。
+    - 未知插件明确失败，不返回 LiveAccess 的说明充当成功。
+  risk: 新入口漏接、返回无关静态说明，或读帮助却执行插件业务访问。
+
+- id: liveaccess-indexed-member
+  title: LiveAccess Member 的实际值进入索引并按原观察回读
+  claims: ["resource-access#U20"]
+  given:
+    - 来源 Repo 配置 LiveAccess；经 Writer 发布可索引的 Member，其值 Schema 和 access 允许已有字段查询，取值使用固定来源声明。
+    - 独立前态分别为来源返回 31 和合法观察 g1，以及首次取值失败且没有该 Member 的成功观察。
+  when:
+    - 从正式准备或维护入口建立索引，经公共查询按该 Member 的值匹配，并读取该查询命中的 Member 正文。
+    - 成功变体中源值改成 47 后，以首次查询固定的 StateRevision 再次查询和回读命中正文。
+  then:
+    - 成功变体索引实际采用 31，查询命中正确 Member，回读值、Schema、固定来源和观察依据均对应 g1。
+    - 源已更新仍能回读原观察的 31，不以当前 47、句柄或声明正文替代。
+    - 失败变体明确报告取值或索引不可用，失败说明不成为可检索的业务值，也不成为合法空值或完整零命中。
+  risk: 普通读取能取值却未接入 Member 索引，或索引采用句柄/失败说明，查询与实际回读混用不同观察。

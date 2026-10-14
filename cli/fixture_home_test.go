@@ -6,8 +6,10 @@ import (
 	"kc/internal/telemetry"
 	"kc/internal/testkit"
 	inv "kc/invocation"
+	"kc/invoke"
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
+	"kc/snapshot"
 	"strings"
 	"sync"
 )
@@ -38,15 +40,15 @@ func fixtureHomeOperation(argv []string, runtime *telemetry.Runtime) (RunResult,
 	if err != nil {
 		return inv.ErrorResult(err), true
 	}
-	operations := map[string]command{
-		"local init":              {Stage: stageHome, Run: verbInit},
-		"local status":            {Stage: stageOpen, Run: verbStatus},
-		"local store show":        {Stage: stageHome, Run: verbStoreLs},
-		"local store set":         {Stage: stageOpen, Run: verbStoreSet},
-		"local grant bootstrap":   {Stage: stageHome, Run: verbBootstrapGrant},
-		"local system publish":    {Stage: stageHome, Run: verbSystemPublish},
-		"local repository attach": {Stage: stageOpen, Run: verbRepoAdd},
-		"local dataset overlay":   {Stage: stageOpen, Run: inv.VerbOverlay},
+	operations := map[string]inv.Command{
+		"local init":              {Stage: invoke.StageHome, Run: verbInit},
+		"local status":            {Stage: invoke.StageOpen, Run: verbStatus},
+		"local store show":        {Stage: invoke.StageHome, Run: verbStoreLs},
+		"local store set":         {Stage: invoke.StageOpen, Run: verbStoreSet},
+		"local grant bootstrap":   {Stage: invoke.StageHome, Run: verbBootstrapGrant},
+		"local system publish":    {Stage: invoke.StageHome, Run: verbSystemPublish},
+		"local repository attach": {Stage: invoke.StageOpen, Run: verbRepoAdd},
+		"local dataset overlay":   {Stage: invoke.StageOpen, Run: inv.VerbOverlay},
 	}
 	parts := append([]string{parsed.Command}, parsed.Args...)
 	for n := len(parts); n > 0; n-- {
@@ -56,7 +58,7 @@ func fixtureHomeOperation(argv []string, runtime *telemetry.Runtime) (RunResult,
 			continue
 		}
 		if len(parts[n:]) > 0 {
-			if path == "local repository attach" && len(parts[n:]) == 1 && flagString(parsed.Flags, "repo") == "" {
+			if path == "local repository attach" && len(parts[n:]) == 1 && invoke.FlagString(parsed.Flags, "repo") == "" {
 				parsed.Flags["repo"] = parts[n]
 			} else {
 				return inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid, "unexpected fixture argument")), true
@@ -68,7 +70,7 @@ func fixtureHomeOperation(argv []string, runtime *telemetry.Runtime) (RunResult,
 	return RunResult{}, false
 }
 
-func verbBootstrapGrant(cx *invocation) (any, error) {
+func verbBootstrapGrant(cx *inv.Invocation) (any, error) {
 	if !kchome.Ready(cx.Home) {
 		return nil, kchome.Missing(cx.Home)
 	}
@@ -86,7 +88,7 @@ func verbBootstrapGrant(cx *invocation) (any, error) {
 	}
 	rule := inv.AllowRule{ID: "bootstrap-local-admin", Principal: principal, Actions: []string{"*"}}
 	file.Rules = append(file.Rules, rule)
-	if err := writeAllow(cx.Home, file); err != nil {
+	if err := inv.WriteAllow(cx.Home, file); err != nil {
 		return nil, err
 	}
 	return rule, nil
@@ -96,7 +98,7 @@ func verbBootstrapGrant(cx *invocation) (any, error) {
 // it before staging so an uninitialized home still works; the handler remains
 // useful to table consumers and documents the command's result shape.
 
-func verbInit(cx *invocation) (any, error) {
+func verbInit(cx *inv.Invocation) (any, error) {
 	if cx.Flag("catalog") != "" || cx.Flag("namespace") != "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "init has one registration space; catalog selection is retired")
 	}
@@ -106,7 +108,7 @@ func verbInit(cx *invocation) (any, error) {
 	}
 	bound := false
 	for _, repo := range file.Repos {
-		bound = bound || repo.ID == string(knowledge.SystemRepositoryID)
+		bound = bound || repo.ID == string(objectmodel.SystemRepositoryID)
 	}
 	if !bound {
 		driver, dsn := cx.Flag("driver"), cx.Flag("dsn")
@@ -114,6 +116,9 @@ func verbInit(cx *invocation) (any, error) {
 			driver, dsn = "lakefs", componentSystemDSN()
 		}
 		if _, err := kchome.PublishSystemRepository(cx.Home, driver, dsn, ""); err != nil {
+			return nil, err
+		}
+		if err := ConfigureFixtureIndexSource(cx.Home, objectmodel.SystemRepositoryID, dsn); err != nil {
 			return nil, err
 		}
 	}
@@ -124,8 +129,8 @@ func verbInit(cx *invocation) (any, error) {
 	return map[string]any{"system": inv.SystemRepositoryStatus(systemCommit)}, nil
 }
 
-func verbStoreSet(cx *invocation) (any, error) {
-	updated, err := applyStoreFlags(cx.WS.Stores, cx.Flags)
+func verbStoreSet(cx *inv.Invocation) (any, error) {
+	updated, err := kchome.ApplyStoreFlags(cx.WS.Stores, fixtureStoreFlags(cx.Flags))
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +140,7 @@ func verbStoreSet(cx *invocation) (any, error) {
 	return kchome.PublicStores(updated), nil
 }
 
-func verbStoreLs(cx *invocation) (any, error) {
+func verbStoreLs(cx *inv.Invocation) (any, error) {
 	if _, err := kchome.ReadHome(cx.Home); err != nil {
 		return nil, err
 	}
@@ -146,14 +151,24 @@ func verbStoreLs(cx *invocation) (any, error) {
 	return kchome.PublicStores(file), nil
 }
 
-func verbSystemPublish(cx *invocation) (any, error) {
+func verbSystemPublish(cx *inv.Invocation) (any, error) {
 	if !kchome.Ready(cx.Home) {
 		return nil, kchome.Missing(cx.Home)
 	}
-	return kchome.PublishSystemRepository(cx.Home, cx.Flag("driver"), cx.Flag("dsn"), cx.Flag("dir"))
+	status, err := kchome.PublishSystemRepository(cx.Home, cx.Flag("driver"), cx.Flag("dsn"), cx.Flag("dir"))
+	if err != nil {
+		return nil, err
+	}
+	if status["seeded"] == true {
+		dsn, _ := status["dsn"].(string)
+		if err := ConfigureFixtureIndexSource(cx.Home, objectmodel.SystemRepositoryID, dsn); err != nil {
+			return nil, err
+		}
+	}
+	return status, nil
 }
 
-func verbRepoAdd(cx *invocation) (any, error) {
+func verbRepoAdd(cx *inv.Invocation) (any, error) {
 	repositoryID, err := cx.Require("repo")
 	if err != nil {
 		return nil, err
@@ -169,7 +184,7 @@ func verbRepoAdd(cx *invocation) (any, error) {
 // Catalog's registry head. The protocol-level current state is
 // `kc catalog show`; registry history is `kc catalog audit`.
 
-func verbStatus(cx *invocation) (any, error) {
+func verbStatus(cx *inv.Invocation) (any, error) {
 	ws := cx.WS
 	state := ws.Datasets.DumpState()
 	repos := make([]map[string]any, 0, len(ws.File.Repos))
@@ -182,7 +197,7 @@ func verbStatus(cx *invocation) (any, error) {
 			item["dsn"] = r.DSN
 		}
 		if repo, ok := ws.Store.Get(kernel.RepositoryID(r.ID)); ok {
-			if head, err := repo.Head(defaultRef); err == nil {
+			if head, err := repo.Head(snapshot.DefaultRef); err == nil {
 				item["head"] = head
 			}
 			item["archived"] = repo.Archived()
@@ -206,3 +221,11 @@ func verbStatus(cx *invocation) (any, error) {
 // verbAudit reads either the registry git history or the local process trail.
 // It stays at stageHome so a workspace that will not mount can still be
 // inspected, falling back to the local trail.
+
+func fixtureStoreFlags(flags map[string]FlagValue) map[string]string {
+	out := map[string]string{}
+	for name := range flags {
+		out[name] = invoke.FlagString(flags, name)
+	}
+	return out
+}

@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"kc/discovery/llmhttp"
 	"kc/internal/testkit"
-	"kc/retrieval/llmhttp"
 	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
@@ -82,12 +82,9 @@ func TestHTTPDatasetSemanticRecallServesMemberVectorWindows(t *testing.T) {
 	body(t, kc(home, "store-set", "--index", "opensearch"))
 	body(t, kc(home, "store-set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repository)
-	body(t, kc(home, "put", "--command-id", "semantic-schema", "--repo", repository,
-		"--object", "schema/runbook.semantic", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
-	body(t, kc(home, "put", "--command-id", "semantic-p1", "--repo", repository,
-		"--object", "runbook/refund", "--schema-ref", "schema/runbook.semantic", "--value", `{"body":"refund timeout diagnosis"}`))
-	body(t, kc(home, "put", "--command-id", "semantic-p2", "--repo", repository,
-		"--object", "runbook/deploy", "--schema-ref", "schema/runbook.semantic", "--value", `{"body":"deployment checklist"}`))
+	body(t, kc(home, "put", testObjectReference(t, repository, "schema/runbook.semantic", ""), "--command-id", "semantic-schema", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+	body(t, kc(home, "put", testObjectReference(t, repository, "runbook/refund", ""), "--command-id", "semantic-p1", "--schema-ref", "schema/runbook.semantic", "--value", `{"body":"refund timeout diagnosis"}`))
+	body(t, kc(home, "put", testObjectReference(t, repository, "runbook/deploy", ""), "--command-id", "semantic-p2", "--schema-ref", "schema/runbook.semantic", "--value", `{"body":"deployment checklist"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "1", "--source", repository+"=refs/heads/main@"))
 	body(t, kc(home, "allow", "--principal", "agent:semantic-http", "--cmd", "read-workspace", "--dataset", workspace))
 	body(t, kc(home, "allow", "--principal", "agent:semantic-http", "--action", "knowledge.read,knowledge.search", "--repo", repository))

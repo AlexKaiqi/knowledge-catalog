@@ -15,7 +15,7 @@ import (
 	"kc/client"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 	"kc/observability"
 )
 
@@ -40,7 +40,7 @@ func TestTypedRefineQueryDoesNotUseCurrentRequestTraceAsFilter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ref := knowledge.KnowledgeRef{Repository: "kr://acme/runbooks", Object: "runbook/refund"}
+	ref := objectmodel.KnowledgeRef{Repository: "kr://acme/runbooks", Object: "runbook/refund"}
 	value := map[string]any{"body": "refund timeout"}
 	refineID, err := store.RecordRefineReceipt(observability.RefineEvent{
 		AccessEvidenceID: accessID, Identity: identity, Trace: trace, Action: "knowledge.rerank", Dataset: "agent",
@@ -48,11 +48,11 @@ func TestTypedRefineQueryDoesNotUseCurrentRequestTraceAsFilter(t *testing.T) {
 		Spec:            observability.RefineSpec{SpecRef: "urn:rank:test", Revision: 1, Operator: "SEMANTIC_RERANK", Criterion: "refund relevance"},
 		CandidateDigest: "window-1", ProjectedBytes: 32,
 		Candidates: []observability.RefineCandidate{{
-			KnowledgeRef: knowledge.PinnedKnowledgeRef{KnowledgeRef: ref, Commit: "c1"}, Value: value,
+			KnowledgeRef: objectmodel.PinnedKnowledgeRef{KnowledgeRef: ref, Commit: "c1"}, Value: value,
 			ValueDigest: kernel.CanonicalDigest(value), OriginalRank: 1,
 		}},
 		Outcome: "COMPLETED", ModelOutput: &observability.RefineModelOutput{
-			Provider: "llm-native", Model: "judge", Groups: []observability.RefineRankGroup{{Rank: 1, Refs: []knowledge.KnowledgeRef{ref}}}, Unjudged: []knowledge.KnowledgeRef{},
+			Provider: "llm-native", Model: "judge", Groups: []observability.RefineRankGroup{{Rank: 1, Refs: []objectmodel.KnowledgeRef{ref}}}, Unjudged: []objectmodel.KnowledgeRef{},
 		},
 	})
 	if err != nil {
@@ -122,7 +122,7 @@ func TestTypedRetrievalEvidenceQueryAndTraining(t *testing.T) {
 	store := observability.NewFileStore(home)
 	identity := observability.IdentityContext{Principal: agent}
 	trace := observability.TraceContext{TraceID: "trace-retrieval-training", SpanID: "span-search"}
-	ref := knowledge.KnowledgeRef{Repository: "kr://acme/runbooks", Object: "runbook/refund"}
+	ref := objectmodel.KnowledgeRef{Repository: "kr://acme/runbooks", Object: "runbook/refund"}
 	accessID, err := store.RecordAccessReceipt(observability.AccessEvent{
 		Identity: identity, Trace: trace, Action: "knowledge.search", Dataset: "agent", Decision: "ALLOW", Result: "RESOLVED",
 	})
@@ -131,7 +131,7 @@ func TestTypedRetrievalEvidenceQueryAndTraining(t *testing.T) {
 	}
 	logical := map[string]any{"query": "refund timeout", "limit": 10}
 	candidates := []observability.RetrievalCandidate{{
-		KnowledgeRef: knowledge.PinnedKnowledgeRef{KnowledgeRef: ref, Commit: "c1"}, Rank: 1,
+		KnowledgeRef: objectmodel.PinnedKnowledgeRef{KnowledgeRef: ref, Commit: "c1"}, Rank: 1,
 		ValueDigest: "candidate-value",
 		Evidence:    []observability.RetrievalLaneEvidence{{Provider: "opensearch", Lane: "lexical", Guarantee: "exact", LocalRank: 1}},
 	}}
@@ -153,11 +153,11 @@ func TestTypedRetrievalEvidenceQueryAndTraining(t *testing.T) {
 		Spec:            observability.RefineSpec{SpecRef: "urn:rank:retrieval", Revision: 1, Operator: "SEMANTIC_RERANK", Criterion: "refund relevance"},
 		CandidateDigest: "refine-window", ProjectedBytes: 64,
 		Candidates: []observability.RefineCandidate{{
-			KnowledgeRef: knowledge.PinnedKnowledgeRef{KnowledgeRef: ref, Commit: "c1"}, Value: projected,
+			KnowledgeRef: objectmodel.PinnedKnowledgeRef{KnowledgeRef: ref, Commit: "c1"}, Value: projected,
 			ValueDigest: kernel.CanonicalDigest(projected), OriginalRank: 1,
 		}},
 		Outcome: "COMPLETED", ModelOutput: &observability.RefineModelOutput{
-			Provider: "llm-native", Model: "judge", Groups: []observability.RefineRankGroup{{Rank: 1, Refs: []knowledge.KnowledgeRef{ref}}}, Unjudged: []knowledge.KnowledgeRef{},
+			Provider: "llm-native", Model: "judge", Groups: []observability.RefineRankGroup{{Rank: 1, Refs: []objectmodel.KnowledgeRef{ref}}}, Unjudged: []objectmodel.KnowledgeRef{},
 		},
 	})
 	if err != nil {
@@ -320,8 +320,8 @@ func TestTypedServiceRequestsRejectUnknownFieldsAndTrailingJSON(t *testing.T) {
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	for name, body := range map[string]string{
-		"unknown":  `{"dataset":"agent","object":"x","flags":"must-not-exist"}`,
-		"trailing": `{"dataset":"agent","object":"x"} {}`,
+		"unknown":  `{"dataset":"agent","reference":"urn:kc:object:repo:x","flags":"must-not-exist"}`,
+		"trailing": `{"dataset":"agent","reference":"urn:kc:object:repo:x"} {}`,
 	} {
 		request, err := http.NewRequest(http.MethodPost, server.URL+"/knowledge/v1/objects:read", bytes.NewBufferString(body))
 		if err != nil {
@@ -365,7 +365,7 @@ func TestXKcAsUsesTheSameAuthorizationRulesAsCLI(t *testing.T) {
 	workspace := "agent"
 	body(t, kc(home, "init"))
 	seedRepo(t, home, repository)
-	body(t, kc(home, "put", "--command-id", "seed", "--repo", repository, "--object", "Policy:one", "--value", `{"body":"one"}`))
+	body(t, kc(home, "put", testObjectReference(t, repository, "Policy:one", ""), "--command-id", "seed", "--value", `{"body":"one"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "1", "--source", repository+"=refs/heads/main"))
 	body(t, kc(home, "allow", "--principal", "agent:http", "--cmd", "read-workspace", "--dataset", workspace))
 	body(t, kc(home, "allow", "--principal", "agent:http", "--cmd", "read", "--repo", repository))
@@ -378,7 +378,7 @@ func TestXKcAsUsesTheSameAuthorizationRulesAsCLI(t *testing.T) {
 	t.Cleanup(server.Close)
 	for principal, want := range map[string]int{"agent:http": http.StatusOK, "agent:intruder": http.StatusForbidden} {
 		request, err := http.NewRequest(http.MethodPost, server.URL+"/knowledge/v1/objects:read",
-			bytes.NewBufferString(`{"dataset":"agent","object":"Policy:one"}`))
+			bytes.NewBufferString(`{"dataset":"agent","reference":"urn:kc:object:kr%3A%2F%2Facme%2Fpublic%2Fhttp-auth:Policy%3Aone"}`))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -402,9 +402,9 @@ func TestKnowledgeResolveAndObjectLogOverHTTP(t *testing.T) {
 	principal := "agent:http-log"
 	body(t, kc(home, "init"))
 	seedRepo(t, home, repository)
-	body(t, kc(home, "put", "--command-id", "v1", "--repo", repository, "--object", "Policy:page", "--value", `{"body":"one"}`))
-	body(t, kc(home, "put", "--command-id", "v2", "--repo", repository, "--object", "Policy:page", "--value", `{"body":"two"}`))
-	body(t, kc(home, "put", "--command-id", "io", "--repo", repository, "--object", "ETLTask:job", "--aspect", "io", "--value", `{"inputs":["a"]}`))
+	body(t, kc(home, "put", testObjectReference(t, repository, "Policy:page", ""), "--command-id", "v1", "--value", `{"body":"one"}`))
+	body(t, kc(home, "put", testObjectReference(t, repository, "Policy:page", ""), "--command-id", "v2", "--value", `{"body":"two"}`))
+	body(t, kc(home, "put", testObjectReference(t, repository, "ETLTask:job", "/io"), "--command-id", "io", "--value", `{"inputs":["a"]}`))
 	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "1", "--source", repository+"=refs/heads/main"))
 	body(t, kc(home, "allow", "--principal", principal, "--cmd", "read-workspace", "--dataset", workspace))
 	body(t, kc(home, "allow", "--principal", principal, "--cmd", "read", "--repo", repository))
@@ -534,34 +534,34 @@ func TestKnowledgeResolveAndObjectLogOverHTTP(t *testing.T) {
 	if _, err := typed.Login(context.Background(), client.LoginRequest{Identity: client.Identity{Principal: principal}}); err != nil {
 		t.Fatal(err)
 	}
-	var typedResolved []knowledge.Resolution
+	var typedResolved []objectmodel.Resolution
 	if err := typed.KnowledgeService().Resolve(context.Background(), client.KnowledgeResolveRequest{
 		KnowledgeScope: client.KnowledgeScope{Dataset: workspace}, Object: "Policy:page",
-	}, client.RequestOptions{}, &typedResolved); err != nil || len(typedResolved) != 1 || typedResolved[0].Status != knowledge.StatusResolved {
+	}, client.RequestOptions{}, &typedResolved); err != nil || len(typedResolved) != 1 || typedResolved[0].Status != objectmodel.StatusResolved {
 		t.Fatalf("typed client resolve: %#v err=%v", typedResolved, err)
 	}
-	var typedAspect []knowledge.Resolution
+	var typedAspect []objectmodel.Resolution
 	if err := typed.KnowledgeService().Resolve(context.Background(), client.KnowledgeResolveRequest{
 		KnowledgeScope: client.KnowledgeScope{Dataset: workspace}, Object: "ETLTask:job", Aspect: "io",
 	}, client.RequestOptions{}, &typedAspect); err != nil || len(typedAspect) != 1 || typedAspect[0].Address.AspectName != "io" {
 		t.Fatalf("typed client Address resolve: %#v err=%v", typedAspect, err)
 	}
-	var typedMissing []knowledge.Resolution
+	var typedMissing []objectmodel.Resolution
 	if err := typed.KnowledgeService().Resolve(context.Background(), client.KnowledgeResolveRequest{
 		KnowledgeScope: client.KnowledgeScope{Dataset: workspace}, Object: "missing/nope",
 	}, client.RequestOptions{}, &typedMissing); err != nil || len(typedMissing) != 0 {
 		t.Fatalf("typed client workspace missing resolve: %#v err=%v", typedMissing, err)
 	}
-	var typedMaintainer knowledge.Resolution
+	var typedMaintainer objectmodel.Resolution
 	if err := typed.KnowledgeService().Resolve(context.Background(), client.KnowledgeResolveRequest{
 		KnowledgeScope: client.KnowledgeScope{Repository: repository}, Object: "Policy:page",
-	}, client.RequestOptions{}, &typedMaintainer); err != nil || typedMaintainer.Status != knowledge.StatusResolved {
+	}, client.RequestOptions{}, &typedMaintainer); err != nil || typedMaintainer.Status != objectmodel.StatusResolved {
 		t.Fatalf("typed client maintainer resolve: %#v err=%v", typedMaintainer, err)
 	}
-	var typedMaintainerMissing knowledge.Resolution
+	var typedMaintainerMissing objectmodel.Resolution
 	if err := typed.KnowledgeService().Resolve(context.Background(), client.KnowledgeResolveRequest{
 		KnowledgeScope: client.KnowledgeScope{Repository: repository}, Object: "missing/nope",
-	}, client.RequestOptions{}, &typedMaintainerMissing); err != nil || typedMaintainerMissing.Status != knowledge.StatusUnresolved {
+	}, client.RequestOptions{}, &typedMaintainerMissing); err != nil || typedMaintainerMissing.Status != objectmodel.StatusUnresolved {
 		t.Fatalf("typed client maintainer missing resolve: %#v err=%v", typedMaintainerMissing, err)
 	}
 	if err := typed.KnowledgeService().Resolve(context.Background(), client.KnowledgeResolveRequest{
@@ -592,8 +592,8 @@ func TestHTTPAccessLogQueryFiltersAndPages(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := observability.NewFileStore(home)
-	repo := knowledge.PinnedKnowledgeRef{
-		KnowledgeRef: knowledge.KnowledgeRef{Repository: "kr://acme/semantics", Object: "Metric:gmv"},
+	repo := objectmodel.PinnedKnowledgeRef{
+		KnowledgeRef: objectmodel.KnowledgeRef{Repository: "kr://acme/semantics", Object: "Metric:gmv"},
 		Commit:       "c1",
 	}
 	write := func(at, actor string) {

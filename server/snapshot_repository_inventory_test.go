@@ -8,7 +8,7 @@ import (
 	apphome "kc/home"
 	"kc/internal/testkit"
 	inv "kc/invocation"
-	"kc/knowledge/reader"
+	"kc/object/reader"
 	"kc/snapshot"
 	"kc/snapshot/dataset"
 )
@@ -47,5 +47,17 @@ func TestSnapshotRepositoryInventoryPreservesExternalKnowledgeMetadata(t *testin
 	if !reflect.DeepEqual(listed["repositories"], []any{map[string]any{"id": string(source.ID()), "schemaCount": float64(0)}}) {
 		t.Fatalf("external schema metadata changed after transport relocation: %#v", listed)
 	}
+	inventory := grantRequestForTest(t, mux, "reader", http.MethodGet, "/snapshot/v1/inventory", "", http.StatusOK)
+	if !reflect.DeepEqual(inventory["repositories"], listed["repositories"]) || !reflect.DeepEqual(inventory["datasets"], []any{}) {
+		t.Fatalf("host inventory diverged from module registration and descriptions: %#v", inventory)
+	}
 	grantRequestForTest(t, mux, "ungranted", http.MethodGet, "/snapshot/v1/repositories", "", http.StatusForbidden)
+	if err := inv.WriteAllow(dir, inv.AllowFile{Rules: []inv.AllowRule{{ID: "manage", Principal: "reader", Actions: []string{"repositories.manage"}}}}); err != nil {
+		t.Fatal(err)
+	}
+	before := dataset.NormalizeState(cat.DumpState())
+	grantRequestForTest(t, mux, "reader", http.MethodDelete, "/snapshot/v1/repositories/kr%3A%2F%2Fkc%2Fsystem", "", http.StatusForbidden)
+	if !reflect.DeepEqual(before, dataset.NormalizeState(cat.DumpState())) {
+		t.Fatal("host reserved-source policy changed membership")
+	}
 }

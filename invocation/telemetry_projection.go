@@ -4,8 +4,8 @@ import (
 	"strings"
 	"time"
 
+	index "kc/discovery/projection"
 	kchome "kc/home"
-	"kc/index"
 	"kc/internal/telemetry"
 	"kc/invoke"
 )
@@ -24,7 +24,7 @@ func ObserveProjectionBacklog(cx *Invocation) {
 	if observation.Runtime != nil || observation.Projection == nil {
 		return
 	}
-	if cx.WS == nil || cx.WS.Projection == nil {
+	if cx.WS == nil || cx.WS.Plugins == nil {
 		observation.Projection(0, time.Time{})
 		return
 	}
@@ -39,7 +39,7 @@ func ObserveStandingProjection(runtime *telemetry.Runtime, ws *kchome.Home, flag
 	if runtime == nil || ws == nil {
 		return
 	}
-	if ws.Projection == nil {
+	if ws.Plugins == nil {
 		return
 	}
 	provider := projectionProviderOf(ws, flags)
@@ -58,10 +58,10 @@ func projectionProviderOf(ws *kchome.Home, flags map[string]invoke.FlagValue) st
 }
 
 func projectionBacklog(ws *kchome.Home) (lagging int, oldest time.Time, ok bool) {
-	if ws == nil || ws.Projection == nil {
+	if ws == nil || ws.Plugins == nil {
 		return 0, time.Time{}, true
 	}
-	targets, err := ws.Projection.Targets()
+	targets, err := ws.Plugins.Targets()
 	if err != nil {
 		return 0, time.Time{}, false
 	}

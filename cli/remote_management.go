@@ -5,37 +5,33 @@ import (
 	inv "kc/invocation"
 
 	kcclient "kc/client"
+	"kc/invoke"
 	"kc/kernel"
-	"kc/knowledge/writer"
+	objectcli "kc/object/cli"
+	"kc/object/writer"
 )
 
 func runRemoteWriter(ctx context.Context, client *kcclient.Client, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
 	var output any
 	switch path {
-	case "writer put", "writer remove":
-		request, repository, err := remoteCommitRequest(path, flags)
-		if err != nil {
-			return nil, err
-		}
-		return remoteCommitWithReceiptRecovery(ctx, client, repository, request, options, commitReceiptWaitBudget())
 	case "writer commit":
-		if flagString(flags, "dir") != "" {
+		if invoke.FlagString(flags, "dir") != "" {
 			return runRemoteDesiredCommit(ctx, client, flags, options)
 		}
 		request, repository, err := remoteCommitRequest(path, flags)
 		if err != nil {
 			return nil, err
 		}
-		return remoteCommitWithReceiptRecovery(ctx, client, repository, request, options, commitReceiptWaitBudget())
+		return remoteCommitWithReceiptRecovery(ctx, client, repository, request, options, objectcli.ReceiptWaitBudget())
 	case "writer head":
-		repository, err := requireRemoteFlag(flags, "repo")
+		repository, err := inv.RequireRemoteFlag(flags, "repo")
 		if err != nil {
 			return nil, err
 		}
 		err = client.WriterService().Head(ctx, repository, snapshotRef(flags), options, &output)
 		return output, err
 	case "writer receipt":
-		commandID, err := requireRemoteFlag(flags, "command-id")
+		commandID, err := inv.RequireRemoteFlag(flags, "command-id")
 		if err != nil {
 			return nil, err
 		}
@@ -58,22 +54,22 @@ func runRemoteGovernance(ctx context.Context, client *kcclient.Client, path stri
 		err = service.Proposal(ctx, request, options, &output)
 		return output, err
 	case "governance preview create":
-		if flagString(flags, "dataset") == "" && len(remotePinDocument(flags)) == 0 {
+		if invoke.FlagString(flags, "dataset") == "" && len(remotePinDocument(flags)) == 0 {
 			return nil, kernel.Fail(kernel.ErrUsageInvalid, "governance preview create requires --dataset")
 		}
-		request := kcclient.PreviewRequest{Dataset: flagString(flags, "dataset"), Pin: remotePinDocument(flags), Proposal: flagString(flags, "proposal")}
+		request := kcclient.PreviewRequest{Dataset: invoke.FlagString(flags, "dataset"), Pin: remotePinDocument(flags), Proposal: invoke.FlagString(flags, "proposal")}
 		err := service.Preview(ctx, request, options, &output)
 		return output, err
 	case "governance preview validate":
-		request := kcclient.ValidateRequest{Preview: flagString(flags, "preview")}
+		request := kcclient.ValidateRequest{Preview: invoke.FlagString(flags, "preview")}
 		err := service.Validate(ctx, request, options, &output)
 		return output, err
 	case "governance validation record":
-		request := kcclient.ValidationRequest{Preview: flagString(flags, "preview"), Suite: flagString(flags, "suite"), Outcome: flagString(flags, "outcome")}
+		request := kcclient.ValidationRequest{Preview: invoke.FlagString(flags, "preview"), Suite: invoke.FlagString(flags, "suite"), Outcome: invoke.FlagString(flags, "outcome")}
 		err := service.RecordValidation(ctx, request, options, &output)
 		return output, err
 	case "governance proposal merge":
-		request := kcclient.MergeRequest{Proposal: flagString(flags, "proposal"), Preview: flagString(flags, "preview"), Validation: flagString(flags, "validation")}
+		request := kcclient.MergeRequest{Proposal: invoke.FlagString(flags, "proposal"), Preview: invoke.FlagString(flags, "preview"), Validation: invoke.FlagString(flags, "validation")}
 		err := service.Merge(ctx, request, options, &output)
 		return output, err
 	default:
@@ -82,15 +78,15 @@ func runRemoteGovernance(ctx context.Context, client *kcclient.Client, path stri
 }
 
 func runRemoteDesiredCommit(ctx context.Context, client *kcclient.Client, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
-	commandID, err := requireRemoteFlag(flags, "command-id")
+	commandID, err := inv.RequireRemoteFlag(flags, "command-id")
 	if err != nil {
 		return nil, err
 	}
-	repository, err := requireRemoteFlag(flags, "repo")
+	repository, err := inv.RequireRemoteFlag(flags, "repo")
 	if err != nil {
 		return nil, err
 	}
-	dir, err := requireRemoteFlag(flags, "dir")
+	dir, err := inv.RequireRemoteFlag(flags, "dir")
 	if err != nil {
 		return nil, err
 	}
@@ -107,18 +103,18 @@ func runRemoteDesiredCommit(ctx context.Context, client *kcclient.Client, flags 
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "desired state already matches the current version")
 	}
 	return remoteCommitWithReceiptRecovery(ctx, client, repository,
-		kcclient.CommitRequest{CommandID: commandID, ChangeSet: changeSet}, options, commitReceiptWaitBudget())
+		kcclient.CommitRequest{CommandID: commandID, ChangeSet: changeSet}, options, objectcli.ReceiptWaitBudget())
 }
 
 func runRemoteDesiredDiff(ctx context.Context, client *kcclient.Client, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
-	if flagString(flags, "changeset") != "" || flagString(flags, "payload") != "" {
+	if invoke.FlagString(flags, "changeset") != "" || invoke.FlagString(flags, "payload") != "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "diff uses --dir, not --changeset")
 	}
-	repository, err := requireRemoteFlag(flags, "repo")
+	repository, err := inv.RequireRemoteFlag(flags, "repo")
 	if err != nil {
 		return nil, err
 	}
-	dir, err := requireRemoteFlag(flags, "dir")
+	dir, err := inv.RequireRemoteFlag(flags, "dir")
 	if err != nil {
 		return nil, err
 	}

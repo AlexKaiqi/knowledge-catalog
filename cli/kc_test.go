@@ -42,7 +42,7 @@ func repositoryConnect(t *testing.T, serverURL, principal, catalog, repo, url, c
 	t.Helper()
 	client := productClient(t, serverURL, principal)
 	var out map[string]any
-	err := client.SnapshotService().ConnectRepository(context.Background(), kcclient.ConnectionRequest{
+	err := client.RepositoryManagementService().ConnectRepository(context.Background(), kcclient.ConnectionRequest{
 		Repository: repo, Driver: "lakefs", URL: url, Credential: readCredentialFile(t, credentialFile),
 	}, kcclient.RequestOptions{}, &out)
 	if err != nil {
@@ -55,7 +55,7 @@ func repositoryConnectExpect(t *testing.T, serverURL, principal, catalog, repo, 
 	t.Helper()
 	client := productClient(t, serverURL, principal)
 	var out map[string]any
-	err := client.SnapshotService().ConnectRepository(context.Background(), kcclient.ConnectionRequest{
+	err := client.RepositoryManagementService().ConnectRepository(context.Background(), kcclient.ConnectionRequest{
 		Repository: repo, Driver: "lakefs", URL: url, Credential: readCredentialFile(t, credentialFile),
 	}, kcclient.RequestOptions{}, &out)
 	expectClientCode(t, err, code)
@@ -65,7 +65,7 @@ func repositoryConnectionShow(t *testing.T, serverURL, principal, repo string) m
 	t.Helper()
 	client := productClient(t, serverURL, principal)
 	var out map[string]any
-	if err := client.SnapshotService().RepositoryConnection(context.Background(), repo, kcclient.RequestOptions{}, &out); err != nil {
+	if err := client.RepositoryManagementService().RepositoryConnection(context.Background(), repo, kcclient.RequestOptions{}, &out); err != nil {
 		t.Fatal(err)
 	}
 	return out
@@ -75,14 +75,14 @@ func repositoryConnectionShowExpect(t *testing.T, serverURL, principal, repo, co
 	t.Helper()
 	client := productClient(t, serverURL, principal)
 	var out map[string]any
-	expectClientCode(t, client.SnapshotService().RepositoryConnection(context.Background(), repo, kcclient.RequestOptions{}, &out), code)
+	expectClientCode(t, client.RepositoryManagementService().RepositoryConnection(context.Background(), repo, kcclient.RequestOptions{}, &out), code)
 }
 
 func repositoryConnectionCheck(t *testing.T, serverURL, principal, repo string) map[string]any {
 	t.Helper()
 	client := productClient(t, serverURL, principal)
 	var out map[string]any
-	if err := client.SnapshotService().CheckRepositoryConnection(context.Background(), repo, kcclient.RequestOptions{}, &out); err != nil {
+	if err := client.RepositoryManagementService().CheckRepositoryConnection(context.Background(), repo, kcclient.RequestOptions{}, &out); err != nil {
 		t.Fatal(err)
 	}
 	return out
@@ -92,14 +92,14 @@ func repositoryConnectionCheckExpect(t *testing.T, serverURL, principal, repo, c
 	t.Helper()
 	client := productClient(t, serverURL, principal)
 	var out map[string]any
-	expectClientCode(t, client.SnapshotService().CheckRepositoryConnection(context.Background(), repo, kcclient.RequestOptions{}, &out), code)
+	expectClientCode(t, client.RepositoryManagementService().CheckRepositoryConnection(context.Background(), repo, kcclient.RequestOptions{}, &out), code)
 }
 
 func repositoryConnectionRotate(t *testing.T, serverURL, principal, repo, credentialFile string) map[string]any {
 	t.Helper()
 	client := productClient(t, serverURL, principal)
 	var out map[string]any
-	err := client.SnapshotService().RotateRepositoryConnection(context.Background(), repo, kcclient.ConnectionRotationRequest{
+	err := client.RepositoryManagementService().RotateRepositoryConnection(context.Background(), repo, kcclient.ConnectionRotationRequest{
 		Credential: readCredentialFile(t, credentialFile),
 	}, kcclient.RequestOptions{}, &out)
 	if err != nil {
@@ -112,7 +112,7 @@ func repositoryConnectionRotateExpect(t *testing.T, serverURL, principal, repo, 
 	t.Helper()
 	client := productClient(t, serverURL, principal)
 	var out map[string]any
-	err := client.SnapshotService().RotateRepositoryConnection(context.Background(), repo, kcclient.ConnectionRotationRequest{
+	err := client.RepositoryManagementService().RotateRepositoryConnection(context.Background(), repo, kcclient.ConnectionRotationRequest{
 		Credential: readCredentialFile(t, credentialFile),
 	}, kcclient.RequestOptions{}, &out)
 	expectClientCode(t, err, code)
@@ -130,10 +130,20 @@ func TestHelperRejectsRetiredCatalogShow(t *testing.T) {
 	expectCode(t, kc(home, "catalog-show"), "USAGE_INVALID")
 }
 
-// seedRepo attaches a Snapshot (⓪) and registers it in the default Catalog (①).
-// Without explicit attach flags it provisions a protocol-faithful lakeFS fake
-// authority for this test; the credential stays in the process environment.
+// seedRepo prepares the fixture's selected index capability on a knowledge
+// source, then attaches and registers its Snapshot. With no index backend the
+// source stays unconfigured. Credentials remain in the process environment.
 func seedRepo(t *testing.T, home, repo string, extra ...string) {
+	t.Helper()
+	seedSourceRepository(t, home, repo, true, extra...)
+}
+
+func seedUnindexedRepo(t *testing.T, home, repo string, extra ...string) {
+	t.Helper()
+	seedSourceRepository(t, home, repo, false, extra...)
+}
+
+func seedSourceRepository(t *testing.T, home, repo string, indexed bool, extra ...string) {
 	t.Helper()
 	if len(extra) == 0 {
 		fake := testkit.NewLakeFSFake(t)
@@ -141,6 +151,19 @@ func seedRepo(t *testing.T, home, repo string, extra ...string) {
 		extra = []string{"--driver", "lakefs", "--dsn", fake.DSN(fake.NewRepo())}
 	}
 	args := append([]string{"local", "repository", "attach", "--repo", repo}, extra...)
+	if indexed {
+		parsed, err := cli.ParseArgs(args)
+		if err != nil {
+			t.Fatal(err)
+		}
+		dsn := invoke.FlagString(parsed.Flags, "dsn")
+		if dsn == "" {
+			dsn = invoke.FlagString(parsed.Flags, "link")
+		}
+		if err := cli.ConfigureFixtureIndexSource(home, kernel.RepositoryID(repo), dsn); err != nil {
+			t.Fatal(err)
+		}
+	}
 	body(t, kc(home, args...))
 	body(t, kc(home, "attach", "--repo", repo))
 }
@@ -190,7 +213,7 @@ func productClient(t *testing.T, serverURL, principal string) *kcclient.Client {
 func myRepositories(t *testing.T, client *kcclient.Client) map[string]any {
 	t.Helper()
 	var out map[string]any
-	if err := client.SnapshotService().MyRepositories(context.Background(), kcclient.RequestOptions{}, &out); err != nil {
+	if err := client.RepositoryManagementService().MyRepositories(context.Background(), kcclient.RequestOptions{}, &out); err != nil {
 		t.Fatal(err)
 	}
 	return out
@@ -199,7 +222,7 @@ func myRepositories(t *testing.T, client *kcclient.Client) map[string]any {
 func ownedRepository(t *testing.T, client *kcclient.Client, repository string) map[string]any {
 	t.Helper()
 	var out map[string]any
-	if err := client.SnapshotService().ManagedRepository(context.Background(), repository, kcclient.RequestOptions{}, &out); err != nil {
+	if err := client.RepositoryManagementService().ManagedRepository(context.Background(), repository, kcclient.RequestOptions{}, &out); err != nil {
 		t.Fatal(err)
 	}
 	return out
@@ -504,9 +527,9 @@ func TestUsageInvalidShowsReasonAndLeafUsage(t *testing.T) {
 		{[]string{"grant", "remove"}, "kc grant remove --id"},
 		{[]string{"detach"}, "kc detach --repo"},
 		{[]string{"search"}, "kc search ("},
-		{[]string{"read"}, "kc read ("},
+		{[]string{"read"}, "kc read <object-urn"},
 		{[]string{"schema", "list"}, "kc schema list --repo"},
-		{[]string{"writer", "put"}, "kc writer put --command-id"},
+		{[]string{"writer", "put"}, "kc writer put <object-urn"},
 		{[]string{"writer", "head"}, "kc writer head --repo"},
 		{[]string{"diff"}, "kc diff --repo"},
 		{[]string{"operations", "hook", "remove"}, "kc operations hook remove --id"},
@@ -559,14 +582,14 @@ func TestProtocolErrorJSON(t *testing.T) {
 	h := testkit.TempDir(t)
 	kc(h, "init")
 	seedRepo(t, h, "kr://acme/public/core")
-	expectCode(t, kc(h, "read", "--repo", "kr://acme/public/core", "--object", "missing", "--ref", "refs/heads/main"), "KNOWLEDGE_REF_UNRESOLVED")
+	expectCode(t, kc(h, "read", testObjectReference(t, "kr://acme/public/core", "missing", ""), "--ref", "refs/heads/main"), "KNOWLEDGE_REF_UNRESOLVED")
 }
 
 func TestProposeMergeIsVisibleOnView(t *testing.T) {
 	h := testkit.TempDir(t)
 	kc(h, "init")
 	seedRepo(t, h, "kr://acme/public/core")
-	body(t, kc(h, "put", "--command-id", "seed", "--repo", "kr://acme/public/core", "--object", "policy/P-103", "--value", `{"v":1}`))
+	body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/P-103", ""), "--command-id", "seed", "--value", `{"v":1}`))
 	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"))
 	proposal := asMap(t, body(t, kc(h,
 		"propose", "--proposal-id", "PR-1", "--repo", "kr://acme/public/core",
@@ -584,8 +607,8 @@ func TestProposeMergeIsVisibleOnView(t *testing.T) {
 		t.Fatal(merged, proposal)
 	}
 	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "2", "--source", "kr://acme/public/core=refs/heads/main"))
-	serving := body(t, kc(h, "read", "--dataset", "agent", "--object", "policy/P-103")).([]any)
-	if asMap(t, serving[0])["value"].(map[string]any)["v"] != float64(2) {
+	serving := asMap(t, body(t, kc(h, "read", testObjectReference(t, "kr://acme/public/core", "policy/P-103", ""), "--dataset", "agent")))
+	if asMap(t, serving)["value"].(map[string]any)["v"] != float64(2) {
 		t.Fatal(serving)
 	}
 }
@@ -595,7 +618,7 @@ func TestSingleRegistrationSpacePublishesIndependentDatasets(t *testing.T) {
 	body(t, kc(h, "init"))
 	const repo = "kr://acme/public/core"
 	seedRepo(t, h, repo)
-	body(t, kc(h, "put", "--command-id", "seed", "--repo", repo, "--object", "policy/P-1", "--value", `{ "v": 1 }`))
+	body(t, kc(h, "put", testObjectReference(t, repo, "policy/P-1", ""), "--command-id", "seed", "--value", `{ "v": 1 }`))
 	for _, name := range []string{"ops", "docs"} {
 		body(t, kc(h, "dataset", "define", "--dataset", name, "--revision", "1", "--source", repo))
 	}
@@ -609,8 +632,8 @@ func TestSingleRegistrationSpacePublishesIndependentDatasets(t *testing.T) {
 	expectCode(t, kc(h, "catalog", "list"), "USAGE_INVALID")
 	expectCode(t, kc(h, "catalog", "use", "old"), "USAGE_INVALID")
 	for _, name := range []string{"ops", "docs"} {
-		got := body(t, kc(h, "read", "--dataset", name, "--object", "policy/P-1")).([]any)
-		if len(got) != 1 {
+		got := asMap(t, body(t, kc(h, "read", testObjectReference(t, repo, "policy/P-1", ""), "--dataset", name)))
+		if got["reference"] != testObjectReference(t, repo, "policy/P-1", "") {
 			t.Fatalf("Dataset %s lost its accepted source: %#v", name, got)
 		}
 	}
@@ -624,14 +647,14 @@ func TestWorkspaceAndCatalogLifecycle(t *testing.T) {
 	h := testkit.TempDir(t)
 	kc(h, "init")
 	seedRepo(t, h, "kr://acme/public/core")
-	body(t, kc(h, "put", "--command-id", "seed", "--repo", "kr://acme/public/core", "--object", "policy/P-1", "--value", `{"v":1}`))
+	body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/P-1", ""), "--command-id", "seed", "--value", `{"v":1}`))
 	body(t, kc(h, "dataset", "define", "--dataset", "ops", "--revision", "1", "--source", "kr://acme/public/core=refs/heads/main"))
-	got := body(t, kc(h, "read", "--dataset", "ops", "--object", "policy/P-1")).([]any)
-	if len(got) != 1 {
+	got := asMap(t, body(t, kc(h, "read", testObjectReference(t, "kr://acme/public/core", "policy/P-1", ""), "--dataset", "ops")))
+	if got["reference"] != testObjectReference(t, "kr://acme/public/core", "policy/P-1", "") {
 		t.Fatal(got)
 	}
 	body(t, kc(h, "dataset", "retire", "--dataset", "ops"))
-	expectCode(t, kc(h, "read", "--dataset", "ops", "--object", "policy/P-1"), "KNOWLEDGE_SET_INVALID")
+	expectCode(t, kc(h, "read", testObjectReference(t, "kr://acme/public/core", "policy/P-1", ""), "--dataset", "ops"), "KNOWLEDGE_SET_INVALID")
 	expectMsg(t, kc(h, "pin-workspace", "--dataset", "ops"), "unknown command pin-workspace")
 	expectCode(t, kc(h, "pin-workspace", "--dataset", "ops"), "USAGE_INVALID")
 	expectCode(t, kc(h, "receipt", "--command-id", "missing"), "USAGE_INVALID")
@@ -647,8 +670,8 @@ func TestCatalogIsolationDoesNotShareAllow(t *testing.T) {
 	seedRepo(t, h, pub)
 	seedRepo(t, h, secret)
 	body(t, kc(h, "attach", "--repo", secret))
-	body(t, kc(h, "put", "--command-id", "pub-1", "--repo", pub, "--object", "Table:orders", "--value", `{"src":"public"}`))
-	body(t, kc(h, "put", "--command-id", "sec-1", "--repo", secret, "--object", "Table:orders", "--value", `{"src":"secret"}`))
+	body(t, kc(h, "put", testObjectReference(t, pub, "Table:orders", ""), "--command-id", "pub-1", "--value", `{"src":"public"}`))
+	body(t, kc(h, "put", testObjectReference(t, secret, "Table:orders", ""), "--command-id", "sec-1", "--value", `{"src":"secret"}`))
 	body(t, kc(h, "dataset", "define", "--dataset", "company", "--revision", "1", "--source", pub+"=refs/heads/main"))
 	body(t, kc(h, "dataset", "define", "--dataset", "classif", "--revision", "1", "--source", secret+"=refs/heads/main"))
 
@@ -660,13 +683,13 @@ func TestCatalogIsolationDoesNotShareAllow(t *testing.T) {
 	body(t, kc(h, "allow", "--principal", "classif-bot", "--action", "file.read", "--dataset", "classif"))
 	body(t, kc(h, "allow", "--principal", "classif-bot", "--action", "inventory.read"))
 
-	crew := asMap(t, body(t, kc(h, "read", "--as", "crew-bot", "--repo", pub, "--object", "Table:orders")))
+	crew := asMap(t, body(t, kc(h, "read", testObjectReference(t, pub, "Table:orders", ""), "--as", "crew-bot")))
 	if crew["repository"] != pub {
 		t.Fatalf("%#v", crew)
 	}
-	expectCode(t, kc(h, "read", "--as", "crew-bot", "--repo", secret, "--object", "Table:orders"), "FORBIDDEN")
-	expectCode(t, kc(h, "read", "--as", "classif-bot", "--repo", pub, "--object", "Table:orders"), "FORBIDDEN")
-	classif := asMap(t, body(t, kc(h, "read", "--as", "classif-bot", "--repo", secret, "--object", "Table:orders")))
+	expectCode(t, kc(h, "read", testObjectReference(t, secret, "Table:orders", ""), "--as", "crew-bot"), "FORBIDDEN")
+	expectCode(t, kc(h, "read", testObjectReference(t, pub, "Table:orders", ""), "--as", "classif-bot"), "FORBIDDEN")
+	classif := asMap(t, body(t, kc(h, "read", testObjectReference(t, secret, "Table:orders", ""), "--as", "classif-bot")))
 	if classif["repository"] != secret {
 		t.Fatalf("%#v", classif)
 	}
@@ -679,12 +702,7 @@ func TestForkPublishDoesNotCopyPersonal(t *testing.T) {
 	kc(h, "init")
 	seedRepo(t, h, pub)
 	seedRepo(t, h, alice)
-	draft := asMap(t, asMap(t, body(t, kc(h, "put",
-		"--command-id", "alice-draft",
-		"--repo", alice,
-		"--object", "drafts/metric-x",
-		"--value", `{"text":"alice draft"}`,
-	)))["result"])
+	draft := asMap(t, asMap(t, body(t, kc(h, "put", testObjectReference(t, alice, "drafts/metric-x", ""), "--command-id", "alice-draft", "--value", `{"text":"alice draft"}`)))["result"])
 	source := alice + "@" + draft["newCommit"].(string) + "/drafts/metric-x"
 	body(t, kc(h, "dataset", "define", "--dataset", "semantic", "--revision", "1", "--source", pub+"=refs/heads/main"))
 	proposal := asMap(t, body(t, kc(h,
@@ -703,28 +721,29 @@ func TestForkPublishDoesNotCopyPersonal(t *testing.T) {
 	body(t, kc(h, "merge", "--proposal", proposal["proposalId"].(string), "--preview", preview["previewId"].(string), "--validation", validation["reportId"].(string)))
 	body(t, kc(h, "dataset", "define", "--dataset", "semantic", "--revision", "2", "--source", pub+"=refs/heads/main"))
 
-	live := asMap(t, body(t, kc(h, "read", "--repo", pub, "--object", "metrics/x", "--ref", "refs/heads/main")))
+	live := asMap(t, body(t, kc(h, "read", testObjectReference(t, pub, "metrics/x", ""), "--ref", "refs/heads/main")))
 	if asMap(t, live["value"])["text"] != "published" {
 		t.Fatal(live)
 	}
-	personal := asMap(t, body(t, kc(h, "read", "--repo", alice, "--object", "drafts/metric-x", "--ref", "refs/heads/main")))
+	personal := asMap(t, body(t, kc(h, "read", testObjectReference(t, alice, "drafts/metric-x", ""), "--ref", "refs/heads/main")))
 	if asMap(t, personal["value"])["text"] != "alice draft" {
 		t.Fatal(personal)
 	}
-	expectCode(t, kc(h, "read", "--repo", pub, "--object", "drafts/metric-x", "--ref", "refs/heads/main"), "KNOWLEDGE_REF_UNRESOLVED")
+	expectCode(t, kc(h, "read", testObjectReference(t, pub, "drafts/metric-x", ""), "--ref", "refs/heads/main"), "KNOWLEDGE_REF_UNRESOLVED")
 	prov := asMap(t, body(t, kc(h, "provenance", "--repo", pub, "--object", "metrics/x", "--ref", "refs/heads/main")))
 	chain := prov["chain"].([]any)
 	refs := asMap(t, chain[0])["sourceRefs"].([]any)
 	if len(refs) != 1 || refs[0] != "kc://acme/personals/alice@"+draft["newCommit"].(string)+"/drafts/metric-x" {
 		t.Fatal(prov)
 	}
-	servingNew := body(t, kc(h, "read", "--dataset", "semantic", "--object", "metrics/x")).([]any)
-	if len(servingNew) != 1 {
+	servingNew := asMap(t, body(t, kc(h, "read", testObjectReference(t, pub, "metrics/x", ""), "--dataset", "semantic")))
+	if servingNew["reference"] != testObjectReference(t, pub, "metrics/x", "") {
 		t.Fatal("merged fork must be visible on next read --dataset", servingNew)
 	}
-	servingDraft := body(t, kc(h, "read", "--dataset", "semantic", "--object", "drafts/metric-x")).([]any)
-	if len(servingDraft) != 0 {
-		t.Fatal("personal draft leaked into public workspace", servingDraft)
+	servingDraft := kc(h, "read", testObjectReference(t, alice, "drafts/metric-x", ""), "--dataset", "semantic")
+	expectCode(t, servingDraft, "KNOWLEDGE_REF_UNRESOLVED")
+	if strings.Contains(servingDraft.Stdout, "alice draft") {
+		t.Fatal("personal draft leaked into public workspace", servingDraft.Stdout)
 	}
 }
 
@@ -749,12 +768,7 @@ func TestSchemaRefOnPropose(t *testing.T) {
 		"--object", "policy/A",
 		"--value", `{"v":1}`,
 	), "missing --candidate")
-	body(t, kc(h, "put",
-		"--command-id", "schema-policy",
-		"--repo", core,
-		"--object", "schema/policy",
-		"--value", `{"entity":"Policy","pattern":"record"}`,
-	))
+	body(t, kc(h, "put", testObjectReference(t, core, "schema/policy", ""), "--command-id", "schema-policy", "--value", `{"entity":"Policy","pattern":"record"}`))
 	proposal := asMap(t, body(t, kc(h, "propose",
 		"--proposal-id", "PR-schema-ok",
 		"--repo", core,
@@ -773,39 +787,13 @@ func TestWritePath(t *testing.T) {
 	h := testkit.TempDir(t)
 	kc(h, "init")
 	seedRepo(t, h, "kr://acme/public/core")
-	expectCode(t, kc(h, "put",
-		"--command-id", "missing-schema",
-		"--repo", "kr://acme/public/core",
-		"--object", "policy/A",
-		"--value", `{"v":1}`,
-		"--schema-ref", "schema/policy@c1",
-	), "SCHEMA_REVISION_UNRESOLVED")
-	body(t, kc(h, "put",
-		"--command-id", "schema-policy",
-		"--repo", "kr://acme/public/core",
-		"--object", "schema/policy",
-		"--value", `{"entity":"Policy","pattern":"record"}`,
-	))
-	created := asMap(t, body(t, kc(h, "put",
-		"--command-id", "create-a",
-		"--repo", "kr://acme/public/core",
-		"--object", "policy/A",
-		"--value", `{"v":1}`,
-		"--if-absent",
-		"--schema-ref", "schema/policy",
-		"--origin-kind", "SOURCE",
-		"--actor-ref", "alice",
-	)))
+	expectCode(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/A", ""), "--command-id", "missing-schema", "--value", `{"v":1}`, "--schema-ref", "schema/policy@c1"), "SCHEMA_REVISION_UNRESOLVED")
+	body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "schema/policy", ""), "--command-id", "schema-policy", "--value", `{"entity":"Policy","pattern":"record"}`))
+	created := asMap(t, body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/A", ""), "--command-id", "create-a", "--value", `{"v":1}`, "--if-absent", "--schema-ref", "schema/policy", "--origin-kind", "SOURCE", "--actor-ref", "alice")))
 	if created["disposition"] != "APPLIED" {
 		t.Fatal(created)
 	}
-	dup := kc(h, "put",
-		"--command-id", "create-a-again",
-		"--repo", "kr://acme/public/core",
-		"--object", "policy/A",
-		"--value", `{"v":2}`,
-		"--if-absent",
-	)
+	dup := kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/A", ""), "--command-id", "create-a-again", "--value", `{"v":2}`, "--if-absent")
 	expectCode(t, dup, "PRECONDITION_FAILED")
 	draft := filepath.Join(h, "draft")
 	if err := os.MkdirAll(draft, 0o755); err != nil {
@@ -827,23 +815,9 @@ func TestWritePath(t *testing.T) {
 	if receipt["commandId"] != "ingest-1" || receipt["digest"] == "" {
 		t.Fatal(receipt)
 	}
-	missing := kc(h, "put",
-		"--command-id", "derived-bad",
-		"--repo", "kr://acme/public/core",
-		"--object", "derived/x",
-		"--value", `{"v":1}`,
-		"--origin-kind", "DERIVATION",
-	)
+	missing := kc(h, "put", testObjectReference(t, "kr://acme/public/core", "derived/x", ""), "--command-id", "derived-bad", "--value", `{"v":1}`, "--origin-kind", "DERIVATION")
 	expectCode(t, missing, "PRECONDITION_FAILED")
-	body(t, kc(h, "put",
-		"--command-id", "derived-ok",
-		"--repo", "kr://acme/public/core",
-		"--object", "derived/x",
-		"--value", `{"v":1}`,
-		"--origin-kind", "DERIVATION",
-		"--input-dataset-version", "vr-1",
-		"--algorithm-hash", "abc",
-	))
+	body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "derived/x", ""), "--command-id", "derived-ok", "--value", `{"v":1}`, "--origin-kind", "DERIVATION", "--input-dataset-version", "vr-1", "--algorithm-hash", "abc"))
 }
 
 func TestDiffDirectoryAgainstCurrentVersion(t *testing.T) {
@@ -911,12 +885,7 @@ func TestDesiredDirCommitRequiresWriterCommit(t *testing.T) {
 	kc(h, "init")
 	repo := "kr://acme/public/core"
 	seedRepo(t, h, repo)
-	body(t, kc(h, "put",
-		"--command-id", "schema-secret",
-		"--repo", repo,
-		"--object", "schema/secret",
-		"--value", `{"entity":"Secret","pattern":"record","fields":{"text":{"type":"string","access":["text"]}}}`,
-	))
+	body(t, kc(h, "put", testObjectReference(t, repo, "schema/secret", ""), "--command-id", "schema-secret", "--value", `{"entity":"Secret","pattern":"record","fields":{"text":{"type":"string","access":["text"]}}}`))
 
 	draft := filepath.Join(h, "untrusted-draft")
 	if err := os.MkdirAll(draft, 0o755); err != nil {
@@ -935,13 +904,8 @@ func TestAuditTrail(t *testing.T) {
 	expectMsg(t, kc(h, "repo-add", "--repo", "kr://acme/public/core"), "no component fixture")
 	body(t, kc(h, "init"))
 	seedRepo(t, h, "kr://acme/public/core")
-	body(t, kc(h, "put",
-		"--command-id", "sync-1",
-		"--repo", "kr://acme/public/core",
-		"--object", "policy/P-1",
-		"--value", `{"secret":true}`,
-	))
-	expectCode(t, kc(h, "put", "--as", "other", "--command-id", "x", "--repo", "kr://acme/public/core", "--object", "a", "--value", "1"), "FORBIDDEN")
+	body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/P-1", ""), "--command-id", "sync-1", "--value", `{"secret":true}`))
+	expectCode(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "a", ""), "--as", "other", "--command-id", "x", "--value", "1"), "FORBIDDEN")
 
 	trail := asMap(t, body(t, kc(h, "audit", "--layer", "kc")))
 	entries := trail["entries"].([]any)

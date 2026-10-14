@@ -3,19 +3,19 @@ package testkit
 import (
 	"encoding/base64"
 	"fmt"
-	"kc/retrieval"
+	retrieval "kc/discovery"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
 	"testing"
 
-	"kc/internal/repofile"
 	"kc/kernel"
-	"kc/knowledge"
-	knowledgemaintenance "kc/knowledge/maintenance"
-	"kc/knowledge/reader"
-	"kc/knowledge/writer"
+	objectmodel "kc/object"
+	repofile "kc/object/format"
+	knowledgemaintenance "kc/object/maintenance"
+	"kc/object/reader"
+	"kc/object/writer"
 	"kc/snapshot"
 	"kc/snapshot/dataset"
 )
@@ -51,9 +51,9 @@ func MakeTreeStore(t *testing.T, repositoryID string) snapshot.Store {
 }
 
 // KnowledgeRepository is a test-only application assembly. Production
-// Snapshot adapters intentionally do not implement knowledge.Repository.
+// Snapshot adapters intentionally do not implement objectmodel.Repository.
 type KnowledgeRepository struct {
-	knowledge.Repository
+	objectmodel.Repository
 	raw    snapshot.Store
 	writer *writer.Writer
 	next   int
@@ -78,7 +78,15 @@ func OpenRepository(t *testing.T, raw snapshot.Store) *KnowledgeRepository {
 
 func (r *KnowledgeRepository) Snapshot() snapshot.Store { return r.raw }
 
-func (r *KnowledgeRepository) ApplyKnowledgeCommit(cs knowledge.ChangeSet) (kernel.CommitID, error) {
+func (r *KnowledgeRepository) CreateRef(ref string, at kernel.CommitID) error {
+	return r.raw.CreateRef(ref, at)
+}
+func (r *KnowledgeRepository) Merge(ref string, candidate, expected kernel.CommitID) (kernel.CommitID, error) {
+	return r.raw.Merge(ref, candidate, expected)
+}
+func (r *KnowledgeRepository) Archive() error { return r.raw.Archive() }
+
+func (r *KnowledgeRepository) ApplyKnowledgeCommit(cs objectmodel.ChangeSet) (kernel.CommitID, error) {
 	r.next++
 	receipt, err := r.writer.Commit(fmt.Sprintf("test-fixture-%d", r.next), cs)
 	return receipt.Result.CommitID, err
@@ -89,7 +97,7 @@ func (r *KnowledgeRepository) ReadFile(path string, commit kernel.CommitID) ([]b
 }
 
 func (r *KnowledgeRepository) ReadKnowledgeFile(path string, commit kernel.CommitID) ([]byte, error) {
-	return r.Repository.(knowledge.KnowledgeFileReader).ReadKnowledgeFile(path, commit)
+	return r.Repository.(objectmodel.KnowledgeFileReader).ReadKnowledgeFile(path, commit)
 }
 
 func (r *KnowledgeRepository) ListFiles(commit kernel.CommitID) ([]string, error) {
@@ -100,26 +108,30 @@ func (r *KnowledgeRepository) ReadDirectory(request snapshot.DirectoryRequest) (
 	return r.raw.(snapshot.DirectoryReader).ReadDirectory(request)
 }
 
-func (r *KnowledgeRepository) ObjectUnitPaths(objectID knowledge.ObjectID, commit kernel.CommitID) ([]string, error) {
-	locator, ok := r.raw.(knowledge.UnitLocator)
+func (r *KnowledgeRepository) ObjectUnitPaths(objectID objectmodel.ObjectID, commit kernel.CommitID) ([]string, error) {
+	locator, ok := r.raw.(objectmodel.UnitLocator)
 	if !ok {
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "test repository has no unit locator")
 	}
 	return locator.ObjectUnitPaths(objectID, commit)
 }
 
-func (r *KnowledgeRepository) ReadMany(objectIDs []knowledge.ObjectID, commit kernel.CommitID) (map[knowledge.ObjectID]knowledge.KnowledgeValue, error) {
-	return r.Repository.(knowledge.BatchReadStore).ReadMany(objectIDs, commit)
+func (r *KnowledgeRepository) ReadMany(objectIDs []objectmodel.ObjectID, commit kernel.CommitID) (map[objectmodel.ObjectID]objectmodel.KnowledgeValue, error) {
+	return r.Repository.(objectmodel.BatchReadStore).ReadMany(objectIDs, commit)
 }
 
-func (r *KnowledgeRepository) SchemaObjectIDs(commit kernel.CommitID) ([]knowledge.ObjectID, error) {
+func (r *KnowledgeRepository) AdoptedSchemaRefs(id objectmodel.ObjectID, commit kernel.CommitID) ([]string, error) {
+	return r.Repository.(objectmodel.SchemaAdoptionLocator).AdoptedSchemaRefs(id, commit)
+}
+
+func (r *KnowledgeRepository) SchemaObjectIDs(commit kernel.CommitID) ([]objectmodel.ObjectID, error) {
 	tree, err := testKnowledgeTree(r.raw, commit)
 	if err != nil {
 		return nil, err
 	}
-	ids := make([]knowledge.ObjectID, 0)
+	ids := make([]objectmodel.ObjectID, 0)
 	for id := range tree.ByObject {
-		if knowledge.IsSchemaObject(id) {
+		if objectmodel.IsSchemaObject(id) {
 			ids = append(ids, id)
 		}
 	}
@@ -127,26 +139,26 @@ func (r *KnowledgeRepository) SchemaObjectIDs(commit kernel.CommitID) ([]knowled
 	return ids, nil
 }
 
-func (r *KnowledgeRepository) BindingSchemaObjectIDs(commit kernel.CommitID) ([]knowledge.ObjectID, error) {
+func (r *KnowledgeRepository) BindingSchemaObjectIDs(commit kernel.CommitID) ([]objectmodel.ObjectID, error) {
 	tree, err := testKnowledgeTree(r.raw, commit)
 	if err != nil {
 		return nil, err
 	}
-	seen := map[knowledge.ObjectID]struct{}{}
+	seen := map[objectmodel.ObjectID]struct{}{}
 	for _, unit := range tree.Units {
-		if knowledge.IsSchemaObject(unit.Address.ObjectID) {
-			if definition, parseErr := knowledge.ParseSchemaDefinition(unit.Address.ObjectID, unit.Value); parseErr == nil && definition.Bound() {
+		if objectmodel.IsSchemaObject(unit.Address.ObjectID) {
+			if definition, parseErr := objectmodel.ParseSchemaDefinition(unit.Address.ObjectID, unit.Value); parseErr == nil && definition.Bound() {
 				seen[unit.Address.ObjectID] = struct{}{}
 			}
 		}
-		if unit.ValueSource == nil || unit.ValueSource.Kind != knowledge.ValueSourceBinding {
+		if unit.ValueSource == nil || unit.ValueSource.Kind != objectmodel.ValueSourceBinding {
 			continue
 		}
-		if parsed, ok := knowledge.ParseSchemaRef(unit.SchemaRef); ok {
+		if parsed, ok := objectmodel.ParseSchemaRef(unit.SchemaRef); ok {
 			seen[parsed.Object] = struct{}{}
 		}
 	}
-	ids := make([]knowledge.ObjectID, 0, len(seen))
+	ids := make([]objectmodel.ObjectID, 0, len(seen))
 	for id := range seen {
 		ids = append(ids, id)
 	}
@@ -154,22 +166,22 @@ func (r *KnowledgeRepository) BindingSchemaObjectIDs(commit kernel.CommitID) ([]
 	return ids, nil
 }
 
-func (r *KnowledgeRepository) SchemaReferrerAddresses(schema knowledge.ObjectID, commit kernel.CommitID) ([]knowledge.Address, error) {
+func (r *KnowledgeRepository) SchemaReferrerAddresses(schema objectmodel.ObjectID, commit kernel.CommitID) ([]objectmodel.Address, error) {
 	tree, err := testKnowledgeTree(r.raw, commit)
 	if err != nil {
 		return nil, err
 	}
-	addresses := []knowledge.Address{}
+	addresses := []objectmodel.Address{}
 	for _, unit := range tree.Units {
-		if knowledge.IsSchemaObject(unit.Address.ObjectID) {
+		if objectmodel.IsSchemaObject(unit.Address.ObjectID) {
 			continue
 		}
-		if parsed, ok := knowledge.ParseSchemaRef(unit.SchemaRef); ok && parsed.Object == schema {
+		if parsed, ok := objectmodel.ParseSchemaRef(unit.SchemaRef); ok && parsed.Object == schema {
 			addresses = append(addresses, unit.Address)
 		}
 	}
 	sort.Slice(addresses, func(i, j int) bool {
-		return knowledge.AddressKey(addresses[i]) < knowledge.AddressKey(addresses[j])
+		return objectmodel.AddressKey(addresses[i]) < objectmodel.AddressKey(addresses[j])
 	})
 	return addresses, nil
 }
@@ -191,7 +203,7 @@ func (r *KnowledgeRepository) ChangedPaths(from, to kernel.CommitID) ([]string, 
 }
 
 // ScanSnapshotPage is deliberately test-only plumbing. Production consumers
-// receive knowledge.Repository, whose exact-read contract does not include a
+// receive objectmodel.Repository, whose exact-read contract does not include a
 // maintenance scan capability.
 func (r *KnowledgeRepository) ScanSnapshotPage(commit kernel.CommitID, request knowledgemaintenance.ScanRequest) (knowledgemaintenance.ScanPage, error) {
 	limit, err := knowledgemaintenance.NormalizeScanLimit(request.Limit)
@@ -214,7 +226,7 @@ func (r *KnowledgeRepository) ScanSnapshotPage(commit kernel.CommitID, request k
 	if err != nil {
 		return knowledgemaintenance.ScanPage{}, err
 	}
-	ids := make([]knowledge.ObjectID, 0, len(tree.ByObject))
+	ids := make([]objectmodel.ObjectID, 0, len(tree.ByObject))
 	for id := range tree.ByObject {
 		ids = append(ids, id)
 	}
@@ -230,9 +242,9 @@ func (r *KnowledgeRepository) ScanSnapshotPage(commit kernel.CommitID, request k
 		if assembleErr != nil {
 			return knowledgemaintenance.ScanPage{}, assembleErr
 		}
-		page.Values = append(page.Values, knowledge.KnowledgeValue{
-			KnowledgeRef: knowledge.KnowledgeRef{Repository: r.ID(), Object: id}, Repository: r.ID(),
-			Commit: commit, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: id},
+		page.Values = append(page.Values, objectmodel.KnowledgeValue{
+			KnowledgeRef: objectmodel.KnowledgeRef{Repository: r.ID(), Object: id}, Repository: r.ID(),
+			Commit: commit, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: id},
 			Value: value, Declarations: repofile.Declarations(units),
 		})
 	}
@@ -344,7 +356,9 @@ func RegisterMounted(t *testing.T, cat dataset.Service, store snapshot.Registry)
 	}
 }
 
-func MustHead(t *testing.T, repo snapshot.Store, ref string) kernel.CommitID {
+func MustHead(t *testing.T, repo interface {
+	Head(string) (kernel.CommitID, error)
+}, ref string) kernel.CommitID {
 	t.Helper()
 	head, err := repo.Head(ref)
 	if err != nil {
@@ -363,20 +377,20 @@ func ExpectCode(t *testing.T, err error, code kernel.ErrorCode) {
 	}
 }
 
-func PutEntity(objectID string, value any, pathHint string) []knowledge.Operation {
-	op := knowledge.Operation{
-		Op:      knowledge.OpPut,
-		Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: knowledge.ObjectID(objectID)},
+func PutEntity(objectID string, value any, pathHint string) []objectmodel.Operation {
+	op := objectmodel.Operation{
+		Op:      objectmodel.OpPut,
+		Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: objectmodel.ObjectID(objectID)},
 		Value:   value,
 	}
 	if pathHint != "" {
 		op.PathHint = pathHint
 	}
-	return []knowledge.Operation{op}
+	return []objectmodel.Operation{op}
 }
 
-func CommitChange(repoID kernel.RepositoryID, base kernel.CommitID, objectID string, value any, pathHint string) knowledge.ChangeSet {
-	return knowledge.ChangeSet{
+func CommitChange(repoID kernel.RepositoryID, base kernel.CommitID, objectID string, value any, pathHint string) objectmodel.ChangeSet {
+	return objectmodel.ChangeSet{
 		TargetRepository:     repoID,
 		TargetRef:            "refs/heads/main",
 		BaseCommit:           base,
@@ -409,7 +423,7 @@ func OpenKnowledgeSet(cat dataset.Service, setID string) (*reader.Serving, error
 	return reader.Open(reader.Lookup(cat.Require), KnowledgeSetPin(resolved)), nil
 }
 
-func FederatedRead(cat dataset.Service, setID string, objectID knowledge.ObjectID) ([]reader.FederatedValue, error) {
+func FederatedRead(cat dataset.Service, setID string, objectID objectmodel.ObjectID) ([]objectmodel.FederatedValue, error) {
 	serving, err := OpenKnowledgeSet(cat, setID)
 	if err != nil {
 		return nil, err

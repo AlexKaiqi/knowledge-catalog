@@ -44,7 +44,9 @@ func (r Resources) authorize(ctx context.Context, request Authorization) error {
 		query.Dataset = ""
 	}
 	match := access.Match
-	if request.NativeRepository {
+	if query.Action == access.RepositoryDatasetPublish {
+		match = access.MatchSourcePublication
+	} else if request.NativeRepository {
 		match = access.MatchRepository
 	}
 	if _, ok := match(rules, query); ok {

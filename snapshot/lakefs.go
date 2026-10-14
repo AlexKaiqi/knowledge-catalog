@@ -37,6 +37,20 @@ func OpenLakeFS(id kernel.RepositoryID, dsn, credential string) (Store, error) {
 	return repo, nil
 }
 
+// RecoverLakeFSPublication releases an interrupted publication's coordination
+// branch after all writers to this authority have been stopped. It compares
+// both observed coordinates, never advances the target, and is idempotent
+// when the lock is already absent and the target still matches. This trusted
+// operator operation does not resolve a pending command receipt. Stock lakeFS
+// has no fencing token; callers must keep publishers stopped through recovery.
+func RecoverLakeFSPublication(store Store, targetRef string, expectedTarget, expectedCandidate kernel.CommitID) error {
+	repo, ok := store.(*lakefsimpl.Repository)
+	if !ok {
+		return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "publication recovery requires a direct lakeFS authority")
+	}
+	return repo.RecoverPublication(targetRef, expectedTarget, expectedCandidate)
+}
+
 // CreateManagedLakeFS creates or resumes the named managed allocation and
 // returns its durable storage namespace alongside the Store contract.
 func CreateManagedLakeFS(id kernel.RepositoryID, dsn, credential, allocation, storagePrefix string) (Store, string, error) {

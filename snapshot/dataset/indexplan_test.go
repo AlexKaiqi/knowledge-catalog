@@ -5,7 +5,7 @@ import (
 
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 	"kc/snapshot"
 	catalog "kc/snapshot/dataset"
 )
@@ -19,15 +19,15 @@ func schemaDoc(entity, aspect string, fields map[string]any) map[string]any {
 func commitSchema(t *testing.T, repo *testkit.KnowledgeRepository, objects map[string]any) kernel.CommitID {
 	t.Helper()
 	head := testkit.MustHead(t, repo, "refs/heads/main")
-	var ops []knowledge.Operation
+	var ops []objectmodel.Operation
 	for id, value := range objects {
-		ops = append(ops, knowledge.Operation{
-			Op:      knowledge.OpPut,
-			Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: knowledge.ObjectID(id)},
+		ops = append(ops, objectmodel.Operation{
+			Op:      objectmodel.OpPut,
+			Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: objectmodel.ObjectID(id)},
 			Value:   value,
 		})
 	}
-	head, err := repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
+	head, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
 		TargetRepository: repo.ID(), TargetRef: "refs/heads/main",
 		BaseCommit: head, ExpectedTargetCommit: head, Operations: ops,
 	})

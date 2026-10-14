@@ -14,6 +14,7 @@ var (
 	reFence      = regexp.MustCompile("^```(.*)$")
 	reSepRow     = regexp.MustCompile(`^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$`)
 	reInlineCode = regexp.MustCompile("`([^`]+)`")
+	reImage      = regexp.MustCompile(`!\[([^\]]*)\]\(([^)]+)\)`)
 	reLink       = regexp.MustCompile(`\[([^\]]+)\]\(([^)]+)\)`)
 	reBold       = regexp.MustCompile(`\*\*([^*]+)\*\*`)
 	reItalic     = regexp.MustCompile(`\*([^*]+)\*`)
@@ -226,12 +227,24 @@ func consumeList(lines []string, start int) (string, int) {
 
 func renderInline(s string) string {
 	var slots []string
+	var codeText []string
 	replaced := reInlineCode.ReplaceAllStringFunc(s, func(m string) string {
 		inner := reInlineCode.FindStringSubmatch(m)[1]
 		slots = append(slots, "<code>"+html.EscapeString(inner)+"</code>")
+		codeText = append(codeText, html.EscapeString(inner))
 		return fmt.Sprintf("\x00%d\x00", len(slots)-1)
 	})
 	replaced = html.EscapeString(replaced)
+	replaced = reImage.ReplaceAllStringFunc(replaced, func(m string) string {
+		parts := reImage.FindStringSubmatch(m)
+		alt := parts[1]
+		// Alternative text stays escaped plain text, including any inline code.
+		for i, code := range codeText {
+			alt = strings.ReplaceAll(alt, fmt.Sprintf("\x00%d\x00", i), code)
+		}
+		slots = append(slots, fmt.Sprintf(`<img src="%s" alt="%s">`, safeHref(htmlUnescapeKeep(parts[2])), alt))
+		return fmt.Sprintf("\x00%d\x00", len(slots)-1)
+	})
 	replaced = reLink.ReplaceAllStringFunc(replaced, func(m string) string {
 		parts := reLink.FindStringSubmatch(m)
 		return fmt.Sprintf(`<a href="%s">%s</a>`, safeHref(htmlUnescapeKeep(parts[2])), parts[1])

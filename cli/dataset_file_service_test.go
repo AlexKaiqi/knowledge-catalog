@@ -6,13 +6,14 @@ import (
 	"io"
 	apphome "kc/home"
 	inv "kc/invocation"
+	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 	"kc/snapshot"
 	"kc/snapshot/dataset"
 )
@@ -35,7 +36,7 @@ func TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange(t *testing.T)
 			t.Fatalf("grant failed: %s", result.Stdout)
 		}
 	}
-	handler := httpHandler(home)
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}
@@ -113,15 +114,15 @@ func TestWorkspaceFileGatewayBuildsSemanticYAMLViewWithoutRepositoryMountPaths(t
 	}
 	store, _ := opened.Store.Get(kernel.RepositoryID(repository))
 	base, _ := store.Head(snapshot.DefaultRef)
-	_, err = opened.Writer.Commit("semantic-values", knowledge.CommitChangeSet{
+	_, err = opened.Writer.Commit("semantic-values", objectmodel.CommitChangeSet{
 		TargetRepository: kernel.RepositoryID(repository), TargetRef: snapshot.DefaultRef,
 		BaseCommit: base, ExpectedTargetCommit: base,
-		Operations: []knowledge.Operation{
-			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/metric/definition/v1"}, Value: map[string]any{
-				"metaSchema": string(knowledge.MetaSchemaV1), "entity": "Metric", "aspect": "definition", "pattern": "record",
+		Operations: []objectmodel.Operation{
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/metric/definition/v1"}, Value: map[string]any{
+				"metaSchema": string(objectmodel.MetaSchemaV1), "entity": "Metric", "aspect": "definition", "pattern": "record",
 				"fields": map[string]any{"name": map[string]any{"type": "string", "required": true}, "expression": map[string]any{"type": "string", "required": true}},
 			}},
-			{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "metric/gmv", AspectName: "definition"},
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "metric/gmv", AspectName: "definition"},
 				SchemaRef: "schema/metric/definition/v1", Value: map[string]any{"name": "Gross Merchandise Value", "expression": "SUM(price)"}},
 		},
 	})
@@ -139,7 +140,7 @@ func TestWorkspaceFileGatewayBuildsSemanticYAMLViewWithoutRepositoryMountPaths(t
 			t.Fatalf("grant failed: %s", result.Stdout)
 		}
 	}
-	handler := httpHandler(home)
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}

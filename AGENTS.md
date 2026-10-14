@@ -17,7 +17,7 @@
 
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"   # 若系统 go 过旧
-make check-docs                 # 文档图 OKF + 设计文档五段合同
+make check-docs                 # 文档图 OKF、主题所有权与链接
 make quality                    # 闸层：gofmt/tidy/vet/staticcheck + 圈复杂度/文件体积/克隆门禁
 make docs-serve                 # 本机 UTF-8 HTML 阅读 product.html 与设计 Markdown
 make test                       # lakeFS 进程内夹具的普通/索引场景；复用或自动启动 OpenSearch
@@ -40,7 +40,7 @@ go run ./cmd/kc -- help
 - 不要把知识协议写进 `catalog/`；不要把 live 资源伪装成 `snapshot.Store`。
 - 不要安装未经批准的依赖；不要提交，除非用户明确要求。
 - 改协议旅程用例前读 `.data/scenes/README.md`。不要只写 `command succeeds`；不要把 `cli/testdata/scenes` 当成协议场景树。改压测用例前读 `.data/scale/scenes/README.md`，结构或指标改动后跑该目录 `perf_tree.py --check`。
-- 其它路径禁区、发权、hook/gate、dsh-plugin 运行时约束见拥有该主题的文档和包 README。
+- 其它路径禁区、发权、hook/gate 与运行时约束见拥有该主题的文档和包 README。
 
 ## 交付
 
@@ -50,7 +50,7 @@ go run ./cmd/kc -- help
 2. **只打开本任务碰到的 owner 文档**，以及上一步扫到的直接相关篇。不要把 20 多份设计全文当默认上下文。
 3. 涉及形状、命令、错误码：再读对应包 README、公开代码和 Conformance。它们是已选定合同，不能代替设计。
 4. 有 `TASK.md` 时只认领一条 `[ ]`；契约（含 `make check-docs`）全绿且无 skip 才可 `[x]`。
-5. 改行为前写出 Goal / Non-Goals（引用 owner）/ 不变量 ID / 选定与否决方案 / 接口指向设计合同或公开类型。不得用当前实现收窄设计。
+5. 改行为前说明目标与实际触碰的 owner 合同。排除项、约束、不变量 ID、方案比较与接口说明按需写，不要求固定段落；引用既有不变量时只选适用 ID，不把实施提醒升级为设计约束。不得用当前实现收窄设计。
 6. 仅在用户明确要求验证时，先跑会失败的证据，再改代码，再跑到绿。文档变更后重读变更过的 owner 与 `docs/graph/`。主题所有权或文档间关系只改 `docs/graph/`，不改设计正文的文件头。
 
 术语以 `docs/reviewed/terminology.md` 为准。默认 ref 用 `snapshot.DefaultRef`。业务 `kc` 必须经 Server 与显式 principal。

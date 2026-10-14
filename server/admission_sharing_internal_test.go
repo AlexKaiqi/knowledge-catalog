@@ -10,6 +10,7 @@ import (
 	apphome "kc/home"
 	inv "kc/invocation"
 	"kc/kernel"
+	snapshotclient "kc/snapshot/client"
 )
 
 func TestAdmissionAndSharingHaveTypedSelfServiceRoutes(t *testing.T) {
@@ -59,7 +60,7 @@ func TestAdmissionReportsOnlyCallerGrantsAndCurrentAdministrators(t *testing.T) 
 	if w.Code != http.StatusOK {
 		t.Fatalf("admission show: %d %s", w.Code, w.Body.String())
 	}
-	var result kcclient.AdmissionResult
+	var result snapshotclient.AdmissionResult
 	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +94,7 @@ func TestAdmissionListsBootstrapWildcardAsAdministrator(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("admission show: %d %s", w.Code, w.Body.String())
 	}
-	var result kcclient.AdmissionResult
+	var result snapshotclient.AdmissionResult
 	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}

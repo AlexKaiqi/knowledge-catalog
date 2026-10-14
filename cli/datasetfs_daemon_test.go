@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -59,8 +61,31 @@ func TestKnowledgeSetFSRequiresServer(t *testing.T) {
 }
 
 func TestResolvedKnowledgeSetPinStripsClientCatalog(t *testing.T) {
-	raw := json.RawMessage(`{"setId":"agent","revision":1,"pinId":"pin-1","repositories":{"kr://acme/source":"c1"}}`)
-	stripped, err := resolvedKnowledgeSetPin(raw)
+	t.Setenv("KC_CONFIG_DIR", t.TempDir())
+	t.Setenv("KC_AUTH_TOKEN", "")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/snapshot/v1/files/mounts:list" {
+			t.Errorf("unexpected file gateway request: %s %s", r.Method, r.URL.Path)
+		}
+		var request map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatal(err)
+		}
+		if request["dataset"] != "agent" || request["pin"] != nil {
+			t.Errorf("mount must resolve the named Dataset through the gateway: %#v", request)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"pin":{"setId":"agent","revision":1,"pinId":"pin-1","repositories":{"kr://acme/source":"c1"}},"mounts":[{"path":"docs","repository":"kr://acme/source","commit":"c1"}]}`)
+	}))
+	defer server.Close()
+	_, manifest, closeClient, err := prepareKnowledgeSetFS(datasetFSConfig{
+		server: server.URL, dataset: "agent", root: t.TempDir(), principal: "agent:test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeClient()
+	stripped, err := json.Marshal(manifest.Pin)
 	if err != nil {
 		t.Fatal(err)
 	}

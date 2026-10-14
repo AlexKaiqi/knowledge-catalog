@@ -34,6 +34,26 @@ func connectionDo(s *connectedSource, fn func(snapshot.Store) error) error {
 }
 func (s *connectedSource) ID() kernel.RepositoryID { return s.id }
 
+func (s *connectedSource) ReadRepositoryMetadata() (map[string]string, error) {
+	return connectionCall(s, func(source snapshot.Store) (map[string]string, error) {
+		metadata, ok := source.(nativeRepositoryMetadataReader)
+		if !ok {
+			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "connected authority does not provide repository metadata reads")
+		}
+		return metadata.ReadRepositoryMetadata()
+	})
+}
+
+func (s *connectedSource) WriteRepositoryMetadata(properties map[string]string) error {
+	return connectionDo(s, func(source snapshot.Store) error {
+		metadata, ok := source.(interface{ WriteRepositoryMetadata(map[string]string) error })
+		if !ok {
+			return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "connected authority does not provide repository metadata updates")
+		}
+		return metadata.WriteRepositoryMetadata(properties)
+	})
+}
+
 // Origin forwards the optional authority-instance identity: the connected
 // authority's binding DSN is the stable, non-secret coordinate that keeps
 // per-repository state (retrieval projections) scoped to one authority

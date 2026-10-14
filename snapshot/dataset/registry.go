@@ -62,6 +62,9 @@ func (g *registry) load() (State, error) {
 	if len(files) > 0 {
 		return g.stateFromYAML(files)
 	}
+	if err := g.requireVirginAuthority(); err != nil {
+		return State{}, err
+	}
 	return EmptyState, nil
 }
 

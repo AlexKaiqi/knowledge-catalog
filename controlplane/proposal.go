@@ -2,8 +2,8 @@ package controlplane
 
 import (
 	"kc/kernel"
-	"kc/knowledge"
-	"kc/knowledge/writer"
+	objectmodel "kc/object"
+	"kc/object/writer"
 	"kc/snapshot"
 )
 
@@ -23,9 +23,9 @@ type ProposeInput struct {
 	TargetRef    string
 	CandidateRef string
 	BaseCommit   kernel.CommitID
-	Operations   []knowledge.Operation
+	Operations   []objectmodel.Operation
 	Rationale    string
-	Provenance   *knowledge.ProvenanceEnvelope
+	Provenance   *objectmodel.ProvenanceEnvelope
 }
 
 func (cp *ControlPlane) Propose(input ProposeInput) (Proposal, error) {

@@ -61,7 +61,7 @@ func TestManagedProductMyRepositoriesAvoidsInventoryDiscovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out map[string]any
-	if err := client.SnapshotService().MyRepositories(context.Background(), kcclient.RequestOptions{}, &out); err != nil {
+	if err := client.RepositoryManagementService().MyRepositories(context.Background(), kcclient.RequestOptions{}, &out); err != nil {
 		t.Fatal(err)
 	}
 	raw, _ := json.Marshal(out)

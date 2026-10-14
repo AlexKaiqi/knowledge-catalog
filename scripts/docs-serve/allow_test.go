@@ -10,6 +10,9 @@ func TestAllowedRel(t *testing.T) {
 		"docs/reviewed/terminology.md",
 		"docs/reviewed/README.md",
 		"docs/graph/README.md",
+		"docs/assets/architecture.svg",
+		"docs/assets/nested/architecture.png",
+		"docs/assets/architecture.SVG",
 	}
 	for _, p := range ok {
 		if !allowedRel(p) {
@@ -24,6 +27,14 @@ func TestAllowedRel(t *testing.T) {
 		"docs/graph/documents/x.okf",
 		"/etc/passwd",
 		"",
+		"architecture.svg",
+		"docs/reviewed/architecture.svg",
+		"docs/architecture.png",
+		"docs/assets-other/architecture.svg",
+		"docs/assets/architecture.gif",
+		"docs/assets/architecture.webp",
+		"docs/assets/architecture.svg.js",
+		"docs/assets/../architecture.svg",
 	}
 	for _, p := range deny {
 		if allowedRel(p) {

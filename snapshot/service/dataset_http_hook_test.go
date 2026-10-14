@@ -60,6 +60,8 @@ func TestDatasetHTTPPreHookRevocationPrecedesPreparationAndRetirement(t *testing
 			if _, err := fixture.catalog.DefineKnowledgeSet("files", 1, []dataset.KnowledgeSetSource{{Repository: fixture.source.id, Selector: "refs/heads/main"}}); err != nil {
 				t.Fatal(err)
 			}
+			before := dataset.NormalizeState(fixture.catalog.DumpState())
+			fixture.source.inspections = 0
 			prepared, hookCalls := 0, 0
 			fixture.resources.BeforePublish = func(_ context.Context, _ identity.HTTPIdentity, _ dataset.Service, definition dataset.KnowledgeSet) (dataset.KnowledgeSet, map[string]any, error) {
 				prepared++
@@ -84,13 +86,10 @@ func TestDatasetHTTPPreHookRevocationPrecedesPreparationAndRetirement(t *testing
 				target, body = target+"/files/retire", map[string]any{}
 			}
 			datasetHTTPCall(t, handler, "POST", target, body, 403)
-			current, err := fixture.catalog.Set("files")
-			if err != nil || current.Revision != 1 || current.Retired || prepared != 0 || hookCalls != 1 {
-				t.Fatalf("pre-hook revocation allowed mutation: current=%#v err=%v prepared=%d hooks=%d", current, err, prepared, hookCalls)
+			if prepared != 0 || hookCalls != 1 || fixture.source.inspections != 0 {
+				t.Fatalf("pre-hook revocation reached source preparation: prepared=%d hooks=%d inspections=%d", prepared, hookCalls, fixture.source.inspections)
 			}
-			if _, err := fixture.catalog.DatasetVersion("files", 2); err == nil {
-				t.Fatal("revoked candidate became accepted history")
-			}
+			assertDatasetHTTPState(t, fixture, before)
 		})
 	}
 }

@@ -3,5 +3,5 @@
 Feature: probe system immutable
 
   Scenario: writer cannot mutate system
-    When I run `kc writer put --as bot --command-id mutate-system --repo kr://kc/system --object schema/evil --value '{"entity":"Evil"}'`
+    When I run `kc writer put urn:kc:object:kr%3A%2F%2Fkc%2Fsystem:schema%2Fevil --as bot --command-id mutate-system --value '{"entity":"Evil"}'`
     Then error FORBIDDEN

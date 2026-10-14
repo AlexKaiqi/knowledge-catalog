@@ -3,7 +3,9 @@ package invocation
 import (
 	"encoding/json"
 	"fmt"
+	discoverydatasets "kc/discovery/datasets"
 	journal "kc/internal/journal"
+	objectservice "kc/object/service"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,15 +13,15 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
+
 	kchome "kc/home"
 	"kc/invoke"
 	"kc/kernel"
-	knowledge "kc/knowledge"
-	knowledgeapp "kc/knowledgeapp"
+	objectmodel "kc/object"
+
 	"kc/snapshot"
 	"kc/snapshot/dataset"
-	"sort"
+
 	"strconv"
 )
 
@@ -58,7 +60,7 @@ func VerbArchiveRepo(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if repositoryID == string(knowledge.SystemRepositoryID) {
+	if repositoryID == string(objectmodel.SystemRepositoryID) {
 		return nil, kernel.Fail(kernel.ErrForbidden, "System Repository %s cannot be archived", repositoryID)
 	}
 	repo, err := RequireRepo(cx.WS, repositoryID)
@@ -133,13 +135,13 @@ func VerbDefineKnowledgeSet(cx *Invocation) (any, error) {
 			return nil, err
 		}
 	}
-	def, err := (knowledgeapp.DatasetPublisher{
+	def, err := (discoverydatasets.DatasetPublisher{
 		Registry: cat,
-		Authorize: func(context.Context, knowledgeapp.DatasetPublication) error {
+		Authorize: func(context.Context, discoverydatasets.DatasetPublication) error {
 			return Authorize(cx.Home, "dataset.manage", cx.Flags, nil)
 		},
-		Prepare: cx.WS.PrepareDataset,
-	}).Execute(cx.Context, knowledgeapp.DatasetPublication{Dataset: setID, Revision: revision, Sources: sources, Metadata: metadata})
+		Prepare: cx.WS.DatasetPreparation.Execute,
+	}).Execute(cx.Context, discoverydatasets.DatasetPublication{Dataset: setID, Revision: revision, Sources: sources, Metadata: metadata})
 	if err != nil {
 		return nil, err
 	}
@@ -290,7 +292,7 @@ func WorkspaceSources(cx *Invocation) ([]dataset.KnowledgeSetSource, dataset.Kno
 	fromRepo := cx.Flag("from-repo")
 	items := cx.FlagValues("source")
 	payload := cx.Flag("payload")
-	fileEntries, err := FileSourcesFrom(cx.FlagValues("file-source"))
+	fileEntries, err := dataset.ParseFileMappings(cx.FlagValues("file-source"))
 	if err != nil {
 		return nil, dataset.KnowledgeSetRecipe{}, false, err
 	}
@@ -341,7 +343,7 @@ func WorkspaceSources(cx *Invocation) ([]dataset.KnowledgeSetSource, dataset.Kno
 	}
 	var sources []dataset.KnowledgeSetSource
 	if len(items) > 0 {
-		sources, err = WorkspaceSourcesFrom(items)
+		sources, err = dataset.ParseSourceMappings(items)
 		if err != nil {
 			return nil, dataset.KnowledgeSetRecipe{}, false, err
 		}
@@ -352,54 +354,6 @@ func WorkspaceSources(cx *Invocation) ([]dataset.KnowledgeSetSource, dataset.Kno
 	}
 	return sources, dataset.KnowledgeSetRecipe{}, false, nil
 }
-
-// WorkspaceSourcesFrom parses --source <repository>[=selector][@path[@subPath]].
-// Callers who only know a knowledge source id omit the selector; the published
-// default is filled in here so they never have to name a Snapshot ref.
-//
-// The @path suffix is what makes a source a mount (dataset.KnowledgeSetSource.Path
-// is *string so "declared as root" and "not declared" are different states):
-// omit @ entirely for a pure federated-read source (Path stays nil); write
-// @ with nothing after it for the root mount (Path: ""); write @refs/x for a
-// nested mount; add a second @ for SubPath (@kb@docs/knowledge mounts only
-// docs/knowledge from the member, at workspace path kb).
-func WorkspaceSourcesFrom(items []string) ([]dataset.KnowledgeSetSource, error) {
-	var sources []dataset.KnowledgeSetSource
-	for _, item := range items {
-		item = strings.TrimSpace(item)
-		if item == "" {
-			return nil, fmt.Errorf("--source requires a knowledge source id")
-		}
-		repoSelector, rest, hasPath := strings.Cut(item, "@")
-		repo, selector, ok := strings.Cut(repoSelector, "=")
-		if !ok {
-			repo = repoSelector
-			selector = snapshot.DefaultRef
-		} else if strings.TrimSpace(selector) == "" {
-			selector = snapshot.DefaultRef
-		}
-		repo = strings.TrimSpace(repo)
-		if repo == "" {
-			return nil, fmt.Errorf("--source must be <repository>[=selector][@path[@subPath]], got %s", item)
-		}
-		src := dataset.KnowledgeSetSource{Repository: kernel.RepositoryID(repo), Selector: selector}
-		if hasPath {
-			path, subPath, _ := strings.Cut(rest, "@")
-			src.Path = dataset.MountPath(path)
-			src.SubPath = subPath
-		}
-		sources = append(sources, src)
-	}
-	if len(sources) == 0 {
-		return nil, fmt.Errorf("at least one --source <repository>[=selector][@path] is required")
-	}
-	return sources, nil
-}
-
-// FileSourcesFrom parses --file-source <repository>[=<selector>]@<file>@<target>
-// into per-file dataset entries (U10): the file lives at <file> inside the
-// member repository and is delivered at <target> in the composed tree. Every
-// entry of one repository shares its selector with the repository's mounts.
 
 func WriteRecipeToRepo(cx *Invocation, root dataset.KnowledgeSetSource, raw []byte, setID string, revision int) (*RecipePublish, error) {
 	if err := AuthorizeRoutedWrite(cx, root.Repository); err != nil {
@@ -536,46 +490,12 @@ func VerbDatasetCloneRequiresServer(cx *Invocation) (any, error) {
 		"kc dataset clone consumes a KC Server deployment; pass --server or set KC_SERVER_URL")
 }
 
-// FileSourcesFrom parses --file-source <repository>[=<selector>]@<file>@<target>
-// into per-file dataset entries (U10): the file lives at <file> inside the
-// member repository and is delivered at <target> in the composed tree. Every
-// entry of one repository shares its selector with the repository's mounts.
-func FileSourcesFrom(items []string) ([]dataset.KnowledgeSetSource, error) {
-	if len(items) == 0 {
-		return nil, nil
-	}
-	out := make([]dataset.KnowledgeSetSource, 0, len(items))
-	for _, item := range items {
-		item = strings.TrimSpace(item)
-		if item == "" {
-			return nil, fmt.Errorf("--file-source requires <repository>[=<selector>]@<file>@<target>")
-		}
-		repoSelector, rest, ok := strings.Cut(item, "@")
-		file, target, hasTarget := strings.Cut(rest, "@")
-		if !ok || !hasTarget || strings.TrimSpace(file) == "" || strings.TrimSpace(target) == "" {
-			return nil, fmt.Errorf("--file-source must be <repository>[=<selector>]@<file>@<target>, got %s", item)
-		}
-		repo, selector, _ := strings.Cut(repoSelector, "=")
-		if strings.TrimSpace(selector) == "" {
-			selector = snapshot.DefaultRef
-		}
-		repo = strings.TrimSpace(repo)
-		if repo == "" {
-			return nil, fmt.Errorf("--file-source must be <repository>[=<selector>]@<file>@<target>, got %s", item)
-		}
-		out = append(out, dataset.KnowledgeSetSource{
-			Repository: kernel.RepositoryID(repo), Selector: selector, File: file, Target: target,
-		})
-	}
-	return out, nil
-}
-
 func VerbDetach(cx *Invocation) (any, error) {
 	repositoryID, err := cx.Require("repo")
 	if err != nil {
 		return nil, err
 	}
-	if repositoryID == string(knowledge.SystemRepositoryID) {
+	if repositoryID == string(objectmodel.SystemRepositoryID) {
 		return nil, kernel.Fail(kernel.ErrForbidden, "System Repository %s cannot be detached", repositoryID)
 	}
 	cat, err := PickDatasets(cx.WS, cx.Flags)
@@ -621,66 +541,9 @@ func VerbBrowseSchemas(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	after, err := DecodeSchemaPageCursor(cx.Flag("continuation"), repositoryID, commitID)
-	if err != nil {
-		return nil, err
-	}
 	repo, err := cx.WS.Reader.Require(repositoryID, kernel.ErrCapabilityUnsatisfied)
 	if err != nil {
 		return nil, err
 	}
-	store, ok := repo.(knowledge.SchemaStore)
-	if !ok {
-		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-			"repository %s does not provide bounded schema discovery", repositoryID)
-	}
-	ids, err := store.SchemaObjectIDs(commitID)
-	if err != nil {
-		return nil, err
-	}
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-	start := 0
-	if after != "" {
-		start = sort.Search(len(ids), func(i int) bool { return ids[i] > after })
-	}
-	end := start + limit
-	if end > len(ids) {
-		end = len(ids)
-	}
-	listed, err := SchemaEntityDirectory(repo, commitID, ids[start:end])
-	if err != nil {
-		return nil, err
-	}
-	exhausted := end == len(ids)
-	continuation := ""
-	if !exhausted && end > start {
-		continuation = EncodeSchemaPageCursor(repositoryID, commitID, ids[end-1])
-	}
-	return SchemaPageResponse{
-		Repository: repositoryID, Commit: commitID, Schemas: listed,
-		Continuation: continuation,
-	}, nil
-}
-
-func DecodeSchemaPageCursor(raw string, repository kernel.RepositoryID, commit kernel.CommitID) (knowledge.ObjectID, error) {
-	if raw == "" {
-		return "", nil
-	}
-	decoded, err := base64.RawURLEncoding.DecodeString(raw)
-	if err != nil {
-		return "", kernel.Fail(kernel.ErrUsageInvalid, "schema continuation is invalid")
-	}
-	var cursor SchemaPageCursor
-	if err := json.Unmarshal(decoded, &cursor); err != nil || cursor.Version != 1 ||
-		cursor.Repository != repository || cursor.Commit != commit || cursor.Check != SchemaCursorCheck(cursor) {
-		return "", kernel.Fail(kernel.ErrUsageInvalid, "schema continuation does not match the fixed Repository basis")
-	}
-	return cursor.After, nil
-}
-
-func EncodeSchemaPageCursor(repository kernel.RepositoryID, commit kernel.CommitID, after knowledge.ObjectID) string {
-	cursor := SchemaPageCursor{Version: 1, Repository: repository, Commit: commit, After: after}
-	cursor.Check = SchemaCursorCheck(cursor)
-	raw, _ := json.Marshal(cursor)
-	return base64.RawURLEncoding.EncodeToString(raw)
+	return (objectservice.SchemaBrowseExecutor{Repository: repo}).Execute(cx.Context, objectservice.SchemaBrowseRequest{Commit: commitID, Limit: limit, Continuation: cx.Flag("continuation")})
 }

@@ -2,9 +2,10 @@
 
 服务接入面：method+pattern 路由闭集、typed handler 注册、授权强制与遥测的宿主。
 CAP-ORG-01 B4 先立契约（`routes.go` 与 `httpsurface.Patterns()` 双向对账）；B6 把 cli 的
-serve/service_routes/handlers/授权/遥测/就绪探测搬入（B6/B7）。CLI 与 HTTP 继续运行同一批
-typed application executor（API-01）——动词操作体在 `invocation` 缝（见该包 README），
-本包负责 transport 形状：路由、wire DTO、授权强制、遥测注入。
+serve/service_routes/handlers/授权/遥测/就绪探测搬入（B6/B7）。生产 CLI 经模块 SDK 请求
+本服务；KC 应用的 typed handler 由 `invocation` 缝调用所属任务服务（API-01），文件任务
+挂载独立 `snapshot/service`。根 CLI 仅在
+`_test.go` 中保留内部操作登记及嵌入装配。本包负责路由、wire DTO、授权强制与遥测注入。
 
 公开入口：`HTTPHandler`/`HTTPHandlerWithTelemetry`（handler 装配）、
 `HTTPHandlerFromConfig`/`HTTPServerOptionsFromFlags`（配置驱动）。cli 的 serve verb 以
@@ -16,8 +17,10 @@ typed application executor（API-01）——动词操作体在 `invocation` 缝�
 已迁入，`serve_facade.go`/`serve_telemetry`）、gitea/配对身份（B6 已迁入）、
 就绪探测（B7 已迁入：`server/internal/readiness` 持探测/缓存/指纹与证据写探针；search 后端经 `Providers.SearchBackend` 端口注入——探测函数由装配根 `home` 的 `NewSearchBackendProbe` 绑定具体 adapter，本包与 readiness 包都不 import 具体 provider，A-01 守卫 `TestProviderAdaptersImportedOnlyAtAssembly` 钉住）。
 
-不拥有：业务规则与执行器（`knowledgeapp`）、装配与 provider 选择（`home`）、argv 词汇与
-产品输出（`cli` / `invoke`）、wire 协议语义（`client`）、声明本身（Knowledge ②）。
+不拥有：业务规则与执行器（`object/service`、`discovery/service`、`discovery/datasets`、
+`interfaces/service`、`liveaccess/service`、`snapshot/service` 等所属能力）、装配与 provider
+选择（`home`）、模块任务的参数/帮助/产品结果（各模块 `cli`）、全局 argv 与会话（根
+`cli`/`client`）、声明本身（Object ②）。请求语义沿所属模块公开合同执行。
 
 ## 最小用法
 
@@ -27,14 +30,43 @@ for _, r := range server.Routes() {
 }
 ```
 
+## 插件说明与运行装配
+
+`GET /knowledge/v1/plugins/{name}` 经当前认证主体及 `inventory.read` 返回实际登记的
+静态用途、用法和任务入口。它不接受目标或 query 参数，不打开 Home 或构造来源、
+Index、Controller；只有授权文件而没有运行布局时也可读取。说明不代表支持或就绪。
+根 CLI 的离线帮助与此服务读取分别由所属 CLI/SDK 接入。
+
+既有 access-spec describe 继续沿 `knowledge.access.describe` 和获准的固定来源范围，
+在原 `AccessPlan` 根字段之外附插件简述和帮助入口，不修改 Schema 返回。
+正常服务运行在激活 workers 前由根 Home 执行一次 `VerifyIndexPlugins`；自有连接的
+冷管理恢复不探测插件配置。运行视图不随请求或凭据轮换热加载；变更在下一次根装配生效。
+
+Handler 构造保持冷态，不核验自有连接的插件配置或启动维护；配置入口先恢复根 Home。
+返回的 `ManagedHTTPHandler.Start()` 显式激活该根：核验一次当前 Repo 配置，绑定后台
+服务身份，再启动索引与 Object 维护。`kc serve` 在 `ListenAndServe` 前调用 `Start`；
+嵌入式宿主未显式启动时，第一条需要运行资源的 typed 任务激活同一个根，后续任务复用它。
+静态插件说明不触发激活。重复 `Start` 不重读配置或重建实例；关闭后不能再启动。
+
+LiveAccess 经同一根 Repo 配置激活。`HTTPServerOptions.LiveAccessPlugins` 提供编译入口，
+`StateLookup` 只可作为所选标准入口的嵌入 adapter，不能替代采用配置。
+`LiveAccessCredentialOrigins` 或部署的 `liveaccess.credentialOrigins` 固定适用证明目标；
+请求传本次已认证主体、证明及关联。逐值采用、目标限制和可靠原结果留证归 LiveAccess。
+独立访问审计支持 `AuditQueryRequest.requestId` 筛选原请求；普通读取不附完整结果证据。
+
+`ManagedHTTPHandler.BeginShutdown()` 先拒绝新工作，取消并等待后台维护，保留在途请求
+所需资源。`kc serve` 收到退出信号后先调用它，再由 `http.Server.Shutdown` 排空 HTTP，
+最后通过 `Close` 释放根 Home 的索引、缓存、来源资源及遥测。嵌入式 HTTP 宿主沿同一顺序
+管理退出；直接 `Close` 也复用 `BeginShutdown`，等待在途业务任务后才释放资源。
+排空期间保留请求自己的上下文和后续步骤所需资源；资源只释放一次。
+
 ## 依赖方向
 
-可以依赖：`knowledgeapp`、`home`（B6 起：transport 打开 Home 装配执行载体）、`invocation`、
-`delivery`、`gate`、`hook`、`identity`、`observability`、`controlplane`、`invoke`（§3.3）。
-禁止 import：`kc/cli`（B6 已落 denylist，`TestForbiddenDependencies`）。`kc/client` 暂允许，
-仅作为 B6 前既有 wire-shape 家（sharing/connection 负载：本地面填充 typed client 解码的同一
-批 JSON 形状）；该归属必须在 B7 重新裁决（httpsurface 升级为共享 DTO 家或 server 自持形状），
-在此之前不得新增形状进 `client`。
+可以依赖：所属能力的公开合同与任务服务、`home`（transport 打开 Home 装配执行载体）、
+`invocation`、`delivery`、`gate`、`hook`、`identity`、`observability`、`controlplane`、`invoke`。
+禁止 import：`kc/cli`，由 `TestForbiddenDependencies` 保持。`kc/client` 仅用于已有身份与
+管理面共享 wire 形状；其它任务采用所属模块 SDK 合同。实际依赖闭集与既有例外由
+`internal/arch` 维护，不通过 B6/B7 的历史路径恢复第二份执行器。
 
 ## 验证
 

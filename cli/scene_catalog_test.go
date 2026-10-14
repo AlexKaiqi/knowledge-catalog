@@ -259,7 +259,7 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 			"probe-revoke-catalog-read-denied.feature":    {"kc grant remove", "Then error FORBIDDEN"},
 		},
 		"repository-attached": {
-			"probe-publish-permissions-keeps-read-denied.feature": {"kc writer put", "--aspect permissions", "Then error FORBIDDEN"},
+			"probe-publish-permissions-keeps-read-denied.feature": {"kc writer put", "urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:Table%3Aorders#/permissions/user:bob", "Then error FORBIDDEN"},
 			"probe-detach-keeps-head-readable.feature":            {"kc detach", "kc writer head", "| commit     | nonempty |"},
 			"probe-archive-rejects-dataset-definition.feature":    {"kc catalog archive", "kc dataset define", "USAGE_INVALID"},
 			"probe-writer-grant-isolates-principals.feature":      {"--action writer.commit", "Then error FORBIDDEN", "kc writer put"},
@@ -379,11 +379,7 @@ func TestSceneRepositoryVerificationCasesStayOnAttachedState(t *testing.T) {
 	}
 	for source, names := range wantEvidence {
 		for _, name := range names {
-			found := false
-			for _, process := range state.Processes {
-				found = found || process.Surface == "go-test" && process.Source == source && contains(process.Evidence, name)
-			}
-			if !found {
+			if !hasGoEvidence(state, source, name) {
 				t.Errorf("repository-attached lost %s Go evidence %s", source, name)
 			}
 		}
@@ -428,7 +424,7 @@ func TestSceneRepositoryVerificationCasesStayOnAttachedState(t *testing.T) {
 		"kc show --as inventory-reader": {
 			"catalogId": "absent", "repositories[].id": "kr://scene/knowledge",
 		},
-		"kc read --as inventory-reader --repo kr://scene/knowledge --object missing": {"error": "FORBIDDEN"},
+		"kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:missing --as inventory-reader": {"error": "FORBIDDEN"},
 	}
 	for command, fields := range wantObservations {
 		for field, want := range fields {
@@ -441,15 +437,14 @@ func TestSceneRepositoryVerificationCasesStayOnAttachedState(t *testing.T) {
 
 func TestSceneSystemSchemaMaterialsMatchEmbed(t *testing.T) {
 	files := map[string]string{
-		"schema-definition.v1.aspect.yaml":   "_schemas/schema-definition.v1.aspect.yaml",
-		"resource-descriptor.v1.aspect.yaml": "_schemas/resource-descriptor.v1.aspect.yaml",
-		"relation.v1.aspect.yaml":            "_schemas/relation.v1.aspect.yaml",
-		"readme.v1.aspect.yaml":              "_schemas/readme.v1.aspect.yaml",
+		"schema-definition.v1.aspect.yaml":   "object/trusted/schema-definition.v1.aspect.yaml",
+		"resource-descriptor.v1.aspect.yaml": "liveaccess/contract/trusted/resource-descriptor.v1.aspect.yaml",
+		"relation.v1.aspect.yaml":            "systemrepo/content/_schemas/relation.v1.aspect.yaml",
+		"readme.v1.aspect.yaml":              "object/trusted/readme.v1.aspect.yaml",
 	}
 	sceneDir := filepath.Join(scenesRoot(), "service-initialized", "_materials", "system")
-	embedDir := filepath.Join(repoRoot(), "knowledge", "system")
 	for name, source := range files {
-		want, err := os.ReadFile(filepath.Join(embedDir, source))
+		want, err := os.ReadFile(filepath.Join(repoRoot(), source))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -458,7 +453,7 @@ func TestSceneSystemSchemaMaterialsMatchEmbed(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !bytes.Equal(got, want) {
-			t.Errorf("%s drifted from knowledge/system/%s", name, source)
+			t.Errorf("%s drifted from %s", name, source)
 		}
 	}
 }
@@ -758,10 +753,10 @@ func TestSceneFeaturesCoverHelpShortestPaths(t *testing.T) {
 		"kc writer commit",
 		"kc writer put",
 		"kc writer head",
-		"kc read --repo",
+		"kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:note%2Fhello",
 		"kc search --as agent:copilot --dataset",
-		"kc read --as agent:copilot --dataset",
-		"kc read --dataset",
+		"kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:metric%2Fgmv#/definition --as agent:copilot --dataset",
+		"kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:metric%2Fgmv --dataset",
 		"kc login --server",
 		"kc admission show",
 		"kc show",
@@ -808,7 +803,7 @@ func TestSceneConsumeJourneyIsOneFeature(t *testing.T) {
 		"kc show",
 		"kc schema list --repo",
 		"kc search --as agent:copilot --dataset",
-		"kc read --as agent:copilot --dataset",
+		"kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:metric%2Fgmv#/definition --as agent:copilot --dataset",
 	}
 	found := ""
 	err := filepath.WalkDir(scenesRoot(), func(path string, d os.DirEntry, walkErr error) error {
@@ -972,9 +967,8 @@ func TestSceneCatalogFeaturesCoverProductPoints(t *testing.T) {
 			t.Errorf("missing state %s", id)
 		}
 	}
-	observation := processOn(ids["repository-attached"], "binding.observation")
 	for _, name := range []string{"TestProjectionControllerNoticePullsStateWithoutChangingSnapshot", "TestStateRefreshFindsDynamicValueWithoutChangingSnapshot", "TestObservedNullProvesMissingAndFailedRefreshKeepsPublishedRevision"} {
-		if !contains(observation.Evidence, name) {
+		if !hasGoEvidence(ids["repository-attached"], "binding.observation", name) {
 			t.Errorf("dynamic observation lost named evidence %s", name)
 		}
 	}
@@ -1297,6 +1291,15 @@ func processOn(state sceneCatalogState, source string) sceneCatalogProcess {
 	return sceneCatalogProcess{}
 }
 
+func hasGoEvidence(state sceneCatalogState, source, name string) bool {
+	for _, process := range state.Processes {
+		if process.Surface == "go-test" && process.Source == source && contains(process.Evidence, name) {
+			return true
+		}
+	}
+	return false
+}
+
 func hasProcessFile(state sceneCatalogState, file string) bool {
 	for _, proc := range state.Processes {
 		if proc.File == file || filepath.Base(proc.File) == filepath.Base(file) {
@@ -1502,7 +1505,7 @@ func TestSceneWalkLeafIsTwoNamedRepositories(t *testing.T) {
 		t.Fatal(err)
 	}
 	datasetText := string(datasetBody)
-	for _, needle := range []string{"kc dataset define --dataset qinghe-sales", "--source table-meta=", "--source sales-semantic=", "@tables@tables", "@semantic-models@semantic-models", "@metrics@metrics", "kc read --dataset qinghe-sales --object table/shop.orders", "kc read --dataset qinghe-sales --object metric/shop.gmv", "0.objectId", "data-job/shop.refresh_sales_mart"} {
+	for _, needle := range []string{"kc dataset define --dataset qinghe-sales", "--source table-meta=", "--source sales-semantic=", "@tables@tables", "@semantic-models@semantic-models", "@metrics@metrics", "kc read urn:kc:object:table-meta:table%2Fshop.orders --dataset qinghe-sales", "kc read urn:kc:object:sales-semantic:metric%2Fshop.gmv --dataset qinghe-sales", "| objectId | table/shop.orders |", "| objectId | metric/shop.gmv |", "kc read urn:kc:object:table-meta:data-job%2Fshop.refresh_sales_mart --dataset qinghe-sales"} {
 		if !strings.Contains(datasetText, needle) {
 			t.Errorf("sales-dataset-defined missing %s", needle)
 		}
@@ -1575,7 +1578,7 @@ func sceneStateDirs(t *testing.T, ids map[string]sceneCatalogState) map[string]s
 
 func isSceneSpecialDir(name string) bool {
 	switch name {
-	case "_build", "_materials", "_probes", "_results":
+	case "_build", "_materials", "_probes", "_specs", "_results":
 		return true
 	default:
 		return false

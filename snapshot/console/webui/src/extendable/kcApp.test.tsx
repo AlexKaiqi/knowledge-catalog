@@ -190,7 +190,7 @@ test.each(['publish', 'retire'])('late %s responses cannot reopen a page the use
 
 test('a legal Dataset named new does not collide with the creation page', async () => {
     const server = await loggedIn('/ui/datasets/new');
-    vi.stubGlobal('fetch', vi.fn(async (path: string, options?: RequestInit) => path === '/snapshot/v1/datasets/new'
+    vi.stubGlobal('fetch', vi.fn(async (path: string, options?: RequestInit) => new URL(path, window.location.origin).pathname === '/snapshot/v1/datasets/new'
         ? new Response(JSON.stringify({ id: 'new', revision: 1, servingRevision: 1, versions: [1], items: [], sources: [], repositories: [], itemCount: 0, retired: true }))
         : server.fetcher(path, options)));
     expect(await screen.findByRole('heading', { name: 'new v1 已退役' })).toBeTruthy();

@@ -119,6 +119,9 @@ func accessMatches(event AccessEvent, query AccessQuery) (bool, error) {
 	if query.TraceID != "" && event.Trace.TraceID != query.TraceID {
 		return false, nil
 	}
+	if query.RequestID != "" && event.RequestID != query.RequestID {
+		return false, nil
+	}
 	inRange, err := occurredInRange(event.OccurredAt, query.Since, query.Until)
 	if err != nil {
 		return false, err

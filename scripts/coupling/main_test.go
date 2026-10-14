@@ -103,7 +103,7 @@ func TestStrictRejectsMissingDifferentOrWrongDepthPolicy(t *testing.T) {
 }
 
 func TestStrictRetainsUnknownUnitPropagationAndInstabilityGates(t *testing.T) {
-	base := baseline{Depth: 1, UnitPolicy: unitPolicySignature(1), PropagationCost: 0.25,
+	base := baseline{Depth: defaultUnitDepth, UnitPolicy: unitPolicySignature(defaultUnitDepth), PropagationCost: 0.25,
 		Units: []unitStat{{Unit: "snapshot", Instability: 0.125}}}
 	for _, trial := range []struct {
 		stats       []unitStat

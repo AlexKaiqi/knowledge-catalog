@@ -53,7 +53,7 @@ func TestManagedRepositoryProviderOnLakeFS(t *testing.T) {
 	if created["status"] != "APPLIED" || repo == "" || created["head"] == "" {
 		t.Fatalf("invalid managed creation: %#v", created)
 	}
-	putArgs := []string{"writer", "put", "--repo", repo, "--object", "note/live", "--command-id", "live-publish", "--if-absent", "--value", `{"text":"hosted on lakeFS"}`}
+	putArgs := []string{"writer", "put", testObjectReference(t, repo, "note/live", ""), "--command-id", "live-publish", "--if-absent", "--value", `{"text":"hosted on lakeFS"}`}
 	receipt := asMap(t, body(t, call(putArgs...)))
 	commit := publishedCommit(t, receipt)
 	stop()
@@ -69,7 +69,7 @@ func TestManagedRepositoryProviderOnLakeFS(t *testing.T) {
 	if writeReplay["disposition"] != "REPLAYED" || publishedCommit(t, writeReplay) != commit {
 		t.Fatalf("Writer history was not restored: %#v", writeReplay)
 	}
-	row := asMap(t, body(t, call("read", "--repo", repo, "--object", "note/live", "--commit", commit)))
+	row := asMap(t, body(t, call("read", testObjectReference(t, repo, "note/live", ""), "--commit", commit)))
 	if row["commit"] != commit || asMap(t, row["value"])["text"] != "hosted on lakeFS" {
 		t.Fatalf("hosted knowledge was lost: %#v", row)
 	}

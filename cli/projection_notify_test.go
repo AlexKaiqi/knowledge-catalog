@@ -71,6 +71,7 @@ func TestProjectionNotifyPullsBoundStateWithoutChangingHEAD(t *testing.T) {
 	body(t, kc(home, "local", "store", "set", "--index", "opensearch"))
 	body(t, kc(home, "local", "store", "set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repositoryID)
+	adoptLiveAccessFixture(t, home, repositoryID)
 	status := "running"
 	runtime := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/v1/access" {
@@ -89,11 +90,8 @@ func TestProjectionNotifyPullsBoundStateWithoutChangingHEAD(t *testing.T) {
 		})
 	}))
 	t.Cleanup(runtime.Close)
-	body(t, kc(home, "writer", "put", "--command-id", "notify-schema", "--repo", repositoryID,
-		"--object", "schema/job.runtime",
-		"--value", `{"entity":"Job","aspect":"runtime","origin":"`+runtime.URL+`","fields":{"status":{"type":"string","access":["text","filter"]}}}`))
-	body(t, kc(home, "writer", "put", "--command-id", "notify-entity", "--repo", repositoryID,
-		"--object", "Job:orders", "--aspect", "properties", "--value", `{"name":"orders"}`))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "schema/job.runtime", ""), "--command-id", "notify-schema", "--value", `{"entity":"Job","aspect":"runtime","origin":"`+runtime.URL+`","fields":{"status":{"type":"string","access":["text","filter"]}}}`))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "Job:orders", "/properties"), "--command-id", "notify-entity", "--value", `{"name":"orders"}`))
 	head := asMap(t, body(t, kc(home, "writer", "head", "--repo", repositoryID)))
 	before := head["commit"]
 
@@ -111,5 +109,24 @@ func TestProjectionNotifyPullsBoundStateWithoutChangingHEAD(t *testing.T) {
 	after := asMap(t, body(t, kc(home, "writer", "head", "--repo", repositoryID)))
 	if after["commit"] != before {
 		t.Fatalf("notify moved Repository HEAD: %#v", after)
+	}
+
+	// Exercise actual HTTP assembly with no background runtime installed. The
+	// explicit notice request may observe its source without configuring a worker.
+	body(t, kc(home, "local", "grant", "bootstrap", "--principal", "operator"))
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
+	if closer, ok := handler.(interface{ Close() error }); ok {
+		t.Cleanup(func() { _ = closer.Close() })
+	}
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+	status = "archived"
+	remote := asMap(t, body(t, kcRemote(t, server.URL, "operator", "operations", "projection", "notice",
+		"--repo", repositoryID, "--object", "Job:orders", "--aspect", "runtime")))
+	if remote["basisCommit"] != before || remote["revision"] == "" || remote["revision"] == again["revision"] {
+		t.Fatalf("HTTP notice without a worker runtime lost its local source or fixed basis: %#v", remote)
+	}
+	if actual := asMap(t, body(t, kcRemote(t, server.URL, "operator", "writer", "head", "--repo", repositoryID))); actual["commit"] != before {
+		t.Fatalf("HTTP notice mutated Snapshot HEAD: %#v", actual)
 	}
 }

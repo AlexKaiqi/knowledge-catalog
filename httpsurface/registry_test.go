@@ -7,8 +7,8 @@ import (
 
 func TestRegistryIsTheReviewedPublicHTTPSurface(t *testing.T) {
 	got := Patterns()
-	if len(got) != 92 {
-		t.Fatalf("HTTP registry count changed from the reviewed 92 to %d", len(got))
+	if len(got) != 95 {
+		t.Fatalf("HTTP registry count changed from the reviewed 95 to %d", len(got))
 	}
 	seen := map[string]bool{}
 	for _, pattern := range got {
@@ -27,6 +27,8 @@ func TestRegistryIsTheReviewedPublicHTTPSurface(t *testing.T) {
 	// keeping the exact patterns guards against accidental replacement as well
 	// as an unreviewed change in the total surface.
 	for _, pattern := range []string{
+		"GET /knowledge/v1/plugins/{name}",
+		"POST /knowledge/v1/objects:put", "POST /knowledge/v1/objects:remove",
 		"GET /repositories/{repository}", "GET /assets/repository.js",
 		"GET /console", "GET /assets/console.js",
 		"GET /ui/",

@@ -64,7 +64,7 @@ func TestRelationsWithoutIndexNeverFallsBackToAuthorityScan(t *testing.T) {
 	seedRelation(t, home, repository)
 
 	// The lakeFS authority stays Canonical and exact object reads still work.
-	body(t, kc(home, "read", "--repo", repository, "--object", "relation:owned"))
+	body(t, kc(home, "read", testObjectReference(t, repository, "relation:owned", "")))
 	// Candidate discovery has no authority fallback when the local profile has index:none.
 	expectCode(t, kc(home, "relations", "--repo", repository, "--object", "Table:orders"), "CAPABILITY_UNSATISFIED")
 	events, err := observability.NewFileStore(home).Retrieval(observability.RetrievalQuery{

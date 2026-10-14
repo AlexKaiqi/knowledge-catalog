@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 	"kc/snapshot"
 )
 
@@ -13,15 +13,15 @@ const defaultTargetRef = snapshot.DefaultRef
 
 // PreviewResult is a ChangeSet plus counts. Empty previews must not be committed.
 type PreviewResult struct {
-	ChangeSet knowledge.CommitChangeSet `json:"changeSet"`
-	Summary   Summary                   `json:"summary"`
-	Empty     bool                      `json:"empty"`
+	ChangeSet objectmodel.CommitChangeSet `json:"changeSet"`
+	Summary   Summary                     `json:"summary"`
+	Empty     bool                        `json:"empty"`
 }
 
 // Envelope builds SOURCE provenance. sourceRefs are required by Preview.
-func Envelope(connectorID string, sourceRefs []string, producedAt string) *knowledge.ProvenanceEnvelope {
-	return &knowledge.ProvenanceEnvelope{
-		OriginKind:  knowledge.OriginSource,
+func Envelope(connectorID string, sourceRefs []string, producedAt string) *objectmodel.ProvenanceEnvelope {
+	return &objectmodel.ProvenanceEnvelope{
+		OriginKind:  objectmodel.OriginSource,
 		ActorRef:    connectorID,
 		ActivityRef: connectorID,
 		SourceRefs:  append([]string(nil), sourceRefs...),
@@ -35,7 +35,7 @@ func CommandID(connectorID, runKey string) string {
 }
 
 // RunKey is a stable digest of operations, suitable as CommandID runKey.
-func RunKey(ops []knowledge.Operation) string {
+func RunKey(ops []objectmodel.Operation) string {
 	return string(kernel.CanonicalDigest(ops))
 }
 
@@ -53,7 +53,7 @@ func (s Scope) Validate() error {
 }
 
 // Contains reports whether the connector may write this Address.
-func (s Scope) Contains(a knowledge.Address) bool {
+func (s Scope) Contains(a objectmodel.Address) bool {
 	if s.ObjectPrefix != "" && !strings.HasPrefix(string(a.ObjectID), s.ObjectPrefix) {
 		return false
 	}
@@ -91,17 +91,17 @@ func Preview(plan Plan) (PreviewResult, error) {
 		return PreviewResult{}, err
 	}
 	observed, ignored := observedMap(plan)
-	var operations []knowledge.Operation
+	var operations []objectmodel.Operation
 	summary := Summary{Ignored: ignored}
 	for key, unit := range desired {
 		digest := kernel.CanonicalDigest(unit.Value)
 		existing, ok := observed[key]
 		if !ok {
-			operations = append(operations, putOp(unit, &knowledge.Precondition{Type: knowledge.IfAbsent}))
+			operations = append(operations, putOp(unit, &objectmodel.Precondition{Type: objectmodel.IfAbsent}))
 			summary.Added++
 			continue
 		}
-		declarationDigest := knowledge.DeclarationDigest(unit.SchemaRef, unit.ValueSource)
+		declarationDigest := objectmodel.DeclarationDigest(unit.SchemaRef, unit.ValueSource)
 		declarationUnchanged := existing.DeclarationDigest == declarationDigest
 		if existing.DeclarationDigest == "" {
 			// Backward compatibility is safe only for legacy value-only units. A
@@ -113,7 +113,7 @@ func Preview(plan Plan) (PreviewResult, error) {
 			summary.Unchanged++
 			continue
 		}
-		operations = append(operations, putOp(unit, &knowledge.Precondition{Type: knowledge.IfDigestEquals, Digest: existing.Digest}))
+		operations = append(operations, putOp(unit, &objectmodel.Precondition{Type: objectmodel.IfDigestEquals, Digest: existing.Digest}))
 		summary.Updated++
 	}
 	if plan.Mode == ModeReconcile {
@@ -121,8 +121,8 @@ func Preview(plan Plan) (PreviewResult, error) {
 			if _, ok := desired[key]; ok {
 				continue
 			}
-			operations = append(operations, knowledge.Operation{
-				Op:      knowledge.OpRemove,
+			operations = append(operations, objectmodel.Operation{
+				Op:      objectmodel.OpRemove,
 				Address: addr,
 				Reason:  "absent-from-source",
 			})
@@ -130,7 +130,7 @@ func Preview(plan Plan) (PreviewResult, error) {
 		}
 	}
 	sort.Slice(operations, func(i, j int) bool {
-		return knowledge.AddressKey(operations[i].Address) < knowledge.AddressKey(operations[j].Address)
+		return objectmodel.AddressKey(operations[i].Address) < objectmodel.AddressKey(operations[j].Address)
 	})
 	targetRef := plan.TargetRef
 	if targetRef == "" {
@@ -148,7 +148,7 @@ func Preview(plan Plan) (PreviewResult, error) {
 	return PreviewResult{
 		Summary: summary,
 		Empty:   len(operations) == 0,
-		ChangeSet: knowledge.CommitChangeSet{
+		ChangeSet: objectmodel.CommitChangeSet{
 			TargetRepository:     plan.TargetRepository,
 			TargetRef:            targetRef,
 			BaseCommit:           plan.BaseCommit,
@@ -163,16 +163,16 @@ func Preview(plan Plan) (PreviewResult, error) {
 func desiredMap(plan Plan) (map[string]Unit, error) {
 	out := map[string]Unit{}
 	for _, unit := range plan.Desired {
-		if err := knowledge.AssertWritable(unit.Address); err != nil {
+		if err := objectmodel.AssertWritable(unit.Address); err != nil {
 			return nil, err
 		}
-		if err := knowledge.ValidateValueSource(unit.ValueSource); err != nil {
+		if err := objectmodel.ValidateValueSource(unit.ValueSource); err != nil {
 			return nil, err
 		}
 		if !plan.Scope.Contains(unit.Address) {
-			return nil, kernel.Fail(kernel.ErrScopeDenied, "address %s is outside connector scope", knowledge.AddressKey(unit.Address))
+			return nil, kernel.Fail(kernel.ErrScopeDenied, "address %s is outside connector scope", objectmodel.AddressKey(unit.Address))
 		}
-		key := knowledge.AddressKey(unit.Address)
+		key := objectmodel.AddressKey(unit.Address)
 		if _, exists := out[key]; exists {
 			return nil, kernel.Fail(kernel.ErrUsageInvalid, "duplicate desired address %s", key)
 		}
@@ -189,15 +189,15 @@ func observedMap(plan Plan) (map[string]Observed, int) {
 			ignored++
 			continue
 		}
-		out[knowledge.AddressKey(item.Address)] = item
+		out[objectmodel.AddressKey(item.Address)] = item
 	}
 	return out, ignored
 }
 
-func observedAddrs(plan Plan, digests map[string]Observed) map[string]knowledge.Address {
-	out := map[string]knowledge.Address{}
+func observedAddrs(plan Plan, digests map[string]Observed) map[string]objectmodel.Address {
+	out := map[string]objectmodel.Address{}
 	for _, item := range plan.Observed {
-		key := knowledge.AddressKey(item.Address)
+		key := objectmodel.AddressKey(item.Address)
 		if _, ok := digests[key]; !ok {
 			continue
 		}
@@ -206,9 +206,9 @@ func observedAddrs(plan Plan, digests map[string]Observed) map[string]knowledge.
 	return out
 }
 
-func putOp(unit Unit, pre *knowledge.Precondition) knowledge.Operation {
-	return knowledge.Operation{
-		Op:           knowledge.OpPut,
+func putOp(unit Unit, pre *objectmodel.Precondition) objectmodel.Operation {
+	return objectmodel.Operation{
+		Op:           objectmodel.OpPut,
 		Address:      unit.Address,
 		Value:        unit.Value,
 		PathHint:     unit.PathHint,

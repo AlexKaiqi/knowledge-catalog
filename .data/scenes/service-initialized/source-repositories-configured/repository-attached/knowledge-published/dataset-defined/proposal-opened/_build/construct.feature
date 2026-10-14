@@ -7,9 +7,9 @@ Feature: proposal-opened
     Then the output has:
       | proposalId      | PR-scene |
       | candidateCommit | nonempty |
-    When I run `kc read --repo kr://scene/knowledge --object note/hello`
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:note%2Fhello`
     Then the output has:
       | value.text | hi |
-    When I run `kc read --repo kr://scene/knowledge --object note/hello --ref refs/heads/candidates/PR-scene`
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:note%2Fhello --ref refs/heads/candidates/PR-scene`
     Then the output has:
       | value.text | proposed |

@@ -7,6 +7,7 @@ import (
 	kchome "kc/home"
 	"kc/internal/telemetry"
 	"kc/internal/testkit"
+	inv "kc/invocation"
 	"os"
 	"path/filepath"
 	"testing"
@@ -42,7 +43,7 @@ func TestRunWithTelemetryCreatesCLIRootSpan(t *testing.T) {
 	if len(spans) != 1 || spans[0].Name != "kc.deployment-init" {
 		t.Fatalf("CLI root span %#v", spans)
 	}
-	events, err := readTrail(home, "kc", "deployment.init", 10)
+	events, err := inv.ReadTrail(home, "kc", "deployment.init", 10)
 	if err != nil || len(events) != 1 {
 		t.Fatalf("CLI audit %#v: %v", events, err)
 	}

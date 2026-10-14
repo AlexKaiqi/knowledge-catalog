@@ -71,8 +71,7 @@ func TestHTTPExpressionSearchAllAnySortContinuationAndValidation(t *testing.T) {
 	body(t, kc(home, "store-set", "--index", "opensearch"))
 	body(t, kc(home, "store-set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repository)
-	body(t, kc(home, "put", "--command-id", "expression-schema", "--repo", repository,
-		"--object", "schema/runbook.search", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]},"team":{"type":"string","access":["filter"]},"severity":{"type":"number","access":["filter","sort"]}}}`))
+	body(t, kc(home, "put", testObjectReference(t, repository, "schema/runbook.search", ""), "--command-id", "expression-schema", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]},"team":{"type":"string","access":["filter"]},"severity":{"type":"number","access":["filter","sort"]}}}`))
 	for _, item := range []struct {
 		id, value string
 	}{
@@ -81,8 +80,7 @@ func TestHTTPExpressionSearchAllAnySortContinuationAndValidation(t *testing.T) {
 		{"runbook/database", `{"body":"database restore procedure","team":"payments","severity":2}`},
 		{"runbook/other", `{"body":"payment miscellany","team":"other","severity":0}`},
 	} {
-		body(t, kc(home, "put", "--command-id", "expression-"+strings.TrimPrefix(item.id, "runbook/"), "--repo", repository,
-			"--object", item.id, "--schema-ref", "schema/runbook.search", "--value", item.value))
+		body(t, kc(home, "put", testObjectReference(t, repository, item.id, ""), "--command-id", "expression-"+strings.TrimPrefix(item.id, "runbook/"), "--schema-ref", "schema/runbook.search", "--value", item.value))
 	}
 	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "1", "--source", repository+"=refs/heads/main@"))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--dataset", workspace))

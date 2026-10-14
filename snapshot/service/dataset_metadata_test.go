@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"kc/identity"
+	"kc/snapshot/access"
 	"kc/snapshot/dataset"
 )
 
@@ -54,6 +55,36 @@ func TestDatasetHTTPMetadataPublicationAndHistoricalRead(t *testing.T) {
 		t.Fatalf("omitted metadata was inherited or release was not prepared: %#v %d", cleared, preparations)
 	}
 	assertDatasetMetadata(t, datasetHTTPCall(t, h, http.MethodGet, base+"/files?revision=2", nil, 200), map[string]string{"description": "new release"})
+}
+
+func TestDatasetHTTPMetadataDoesNotGrantManagementOrFileAccess(t *testing.T) {
+	f, source := newFileHTTPFixture(t)
+	h := f.handler()
+	request := map[string]any{
+		"dataset": "files", "revision": 1,
+		"sources":  []dataset.KnowledgeSetSource{{Repository: source.id, Selector: "refs/heads/main", File: "reference/a.json", Target: "public.json"}},
+		"metadata": map[string]string{"owner": "alice", "actions": "*", "path": "private/hidden.txt"},
+	}
+	datasetHTTPCall(t, h, http.MethodPost, "/snapshot/v1/datasets", request, http.StatusOK)
+	pin := datasetHTTPCall(t, h, http.MethodPost, "/snapshot/v1/datasets/files/resolve", map[string]any{}, http.StatusOK)
+	source.reads = 0 // Begin observing consumption after publication validation.
+	// Keep resolve authority so a missing file.read cannot be hidden by an
+	// earlier permission failure. Neither accepted owner nor submitted actions
+	// replace the current management and byte-delivery checks.
+	f.rules.rules = []access.Rule{{ID: "resolve-only", Principal: "alice", Dataset: "files", Actions: []string{"dataset.resolve"}}}
+	before := dataset.NormalizeState(f.catalog.DumpState())
+	source.inspections = 0
+	request["revision"] = 2
+	datasetHTTPCall(t, h, http.MethodPost, "/snapshot/v1/datasets", request, http.StatusForbidden)
+	assertDatasetHTTPState(t, f, before)
+	if source.inspections != 0 {
+		t.Fatal("submitted resource attributes bypassed management authorization")
+	}
+	datasetHTTPCall(t, h, http.MethodPost, "/snapshot/v1/files/file:read", map[string]any{"dataset": "files", "pin": pin, "path": "public.json"}, http.StatusForbidden)
+	if source.reads != 0 {
+		t.Fatal("accepted resource owner bypassed byte authorization")
+	}
+	assertDatasetHTTPState(t, f, before)
 }
 
 func assertDatasetMetadata(t *testing.T, view map[string]any, want map[string]string) {

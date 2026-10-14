@@ -3,12 +3,12 @@
 Feature: knowledge-published
 
   Scenario: construct
-    When I run `kc writer put --command-id publish-note-hello --repo kr://scene/knowledge --object note/hello --file $materials/note.hello.json`
+    When I run `kc writer put urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:note%2Fhello --command-id publish-note-hello --file $materials/note.hello.json`
     Then the output has:
       | disposition         | APPLIED |
       | result.repositoryId | kr://scene/knowledge |
       | result.newCommit    | nonempty |
-    When I run `kc read --repo kr://scene/knowledge --object note/hello`
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:note%2Fhello`
     Then the output has:
       | objectId | note/hello |
       | repository          | kr://scene/knowledge |

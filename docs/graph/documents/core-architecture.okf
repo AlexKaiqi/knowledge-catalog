@@ -21,6 +21,7 @@ path_hint: docs/graph/documents/core-architecture.okf
     "write-and-read-semantics",
     "layer-ownership-and-import-direction",
     "snapshot-authority-and-derived-media",
-    "provider-capability-contract-and-substrate-replacement"
+    "provider-capability-contract-and-substrate-replacement",
+    "module-client-ownership-and-single-direction-dependencies"
   ]
 }

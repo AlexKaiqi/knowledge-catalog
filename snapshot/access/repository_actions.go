@@ -19,6 +19,9 @@ const (
 	RepositoryImport         = "repository.import"
 	RepositoryCreate         = "repository.create"
 	RepositoryDelete         = "repository.delete"
+	// RepositoryDatasetPublish permits selecting source content for a Dataset
+	// publication. It is independent of ordinary file reads and native writes.
+	RepositoryDatasetPublish = "repository.dataset.publish"
 )
 
 // IsRepositoryAction is the closed set used by native API assembly. The
@@ -39,7 +42,7 @@ func IsRepositoryAction(action string) bool {
 // Creator/Sharing policies may explicitly choose these bounded Repo actions.
 // Allocation, physical deletion and external import require separate grants.
 func IsRepositoryCreatorAction(action string) bool {
-	return IsRepositoryAction(action) && action != RepositoryCreate && action != RepositoryDelete && action != RepositoryImport
+	return action == RepositoryDatasetPublish || IsRepositoryAction(action) && action != RepositoryCreate && action != RepositoryDelete && action != RepositoryImport
 }
 
 func IsRepositoryReadAction(action string) bool {

@@ -1,7 +1,7 @@
 package observability
 
 import (
-	"kc/knowledge"
+	objectmodel "kc/object"
 	"sort"
 	"strings"
 )
@@ -63,9 +63,9 @@ func (s *FileStore) Hitmap(query AccessQuery) ([]HitmapEntry, error) {
 	return out, nil
 }
 
-func addressKey(address *knowledge.Address) string {
+func addressKey(address *objectmodel.Address) string {
 	if address == nil {
 		return ""
 	}
-	return knowledge.AddressKey(*address)
+	return objectmodel.AddressKey(*address)
 }

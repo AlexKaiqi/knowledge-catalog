@@ -2,6 +2,7 @@ package cli
 
 import (
 	apphome "kc/home"
+	serv "kc/server"
 	"net/http/httptest"
 	"testing"
 
@@ -47,7 +48,7 @@ func TestPrepareRemoteKnowledgeSetFSUsesGatewayAndKeepsFixedPin(t *testing.T) {
 			t.Fatalf("grant failed: %s", result.Stdout)
 		}
 	}
-	server := httptest.NewServer(httpHandler(home))
+	server := httptest.NewServer(serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{}))
 	defer server.Close()
 	plan, manifest, closeClient, err := prepareKnowledgeSetFS(datasetFSConfig{
 		server: server.URL, dataset: "agent", root: project, principal: "agent:test",
@@ -88,8 +89,8 @@ func TestPrepareKnowledgeSetFSMakesOneTargetPerRecipePath(t *testing.T) {
 		"--source", one+"=refs/heads/main@docs/runbooks@runbooks",
 		"--source", two+"=refs/heads/main@knowledge/policy")
 
-	plan, manifest, closeHome, err := prepareEmbeddedKnowledgeSetFS(datasetFSConfig{
-		home: home, dataset: "agent", root: project,
+	plan, manifest, closeHome, err := prepareEmbeddedKnowledgeSetFS(home, datasetFSConfig{
+		dataset: "agent", root: project,
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -1,0 +1,38 @@
+// Package cli owns the LiveAccess plugin's static user explanation.
+package cli
+
+import "kc/discovery/adoption"
+
+type PluginAffordance = adoption.PluginAffordance
+
+// Affordance reads no configuration and performs no business or source I/O.
+func Affordance() PluginAffordance {
+	return PluginAffordance{
+		Name: "liveaccess", Summary: "按固定声明取得外部实际值，传递本次适用认证，并保留可独立复核的访问证据。",
+		Tasks: []string{"read", "access", "binding show", "invoke", "operations audit access", "operations audit trace"},
+		Usage: `LiveAccess
+
+说明入口：
+  kc plugin liveaccess help
+取值协议：
+  LookupState(ctx, StateLookupRequest) → (StateObservation, error)。
+  请求含 Binding、SchemaRef、Origin、Identity、Trace、RequestID；成功返回 Value、Basis，失败返回原因。
+  Basis 保留来源代际、一致性、观察时间及可选的源版本、水位，不能用声明版本冒充外部观察。
+适用条件：
+  来源 Repo 配置本插件；Dataset 复用来源配置及本次固定范围。
+  访问按固定对象、Schema、Binding 或实现声明核验；没有匹配能力明确失败，不回退全局实现。
+结果影响：
+  对象读取无感取得实际值；合法 null 保持 null 及成功依据。
+  外部值失败只在原位置给出说明，其他可读值保留；不以旧值、空值或句柄掩盖失败。
+  Member 的观察值及原依据可由索引采用，查询回读仍复核原观察。
+认证承诺：
+  自动传递本次适用认证，仅交给可信适用目标；地址变化、重定向不扩大凭证范围。
+  凭证不进入对象、日志或审计。透明取值只读，源修改必须显式调用并授权。
+独立审计承诺：
+  记录访问主体、时间、实际位置及 requestId；保存当次采用值或失败、固定声明和原观察依据。
+  证据独立授权查询，源变化后仍能复核；留证可靠后交付，丢失与到期分别说明。
+相关入口：
+  kc read；kc access；kc binding show；kc invoke；kc operations audit access；kc operations audit trace。
+  参数见 kc help <任务>。本说明只读，不访问来源、不展示凭证，也不证明当前配置或就绪。`,
+	}
+}

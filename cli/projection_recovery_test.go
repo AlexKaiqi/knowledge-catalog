@@ -19,9 +19,8 @@ func TestLocalCLISearchDoesNotCatchUpProjection(t *testing.T) {
 	// export KC_TEST_OPENSEARCH_URL, so pin index:none explicitly.
 	body(t, kc(h, "store-set", "--index", "none"))
 	seedRepo(t, h, core)
-	body(t, kc(h, "put", "--command-id", "schema-body", "--repo", core, "--object", "schema/policy.body",
-		"--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`))
-	body(t, kc(h, "put", "--command-id", "i1", "--repo", core, "--object", "policy/A", "--value", `{"body":"needs a runbook"}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "schema/policy.body", ""), "--command-id", "schema-body", "--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--command-id", "i1", "--value", `{"body":"needs a runbook"}`))
 	expectCode(t, kc(h, "search", "--repo", core, "--query", "runbook"), "CAPABILITY_UNSATISFIED")
 }
 
@@ -74,8 +73,8 @@ func TestServeProjectionWorkerCatchesCommitWithoutSync(t *testing.T) {
 	body(t, governor("dataset", "define", "--dataset", setID, "--revision", "1",
 		"--source", repositoryID))
 
-	frozen := body(t, asConsumer("read", "--dataset", setID, "--object", "runbook/payment-oncall")).([]any)
-	if len(frozen) != 1 || asMap(t, frozen[0])["commit"] != commit {
+	frozen := asMap(t, body(t, asConsumer("read", testObjectReference(t, repositoryID, "runbook/payment-oncall", ""), "--dataset", setID)))
+	if frozen["reference"] != testObjectReference(t, repositoryID, "runbook/payment-oncall", "") || asMap(t, frozen)["commit"] != commit {
 		t.Fatalf("published dataset %#v", frozen)
 	}
 	search := waitRemoteSearchHits(t, func() kcRunResult {

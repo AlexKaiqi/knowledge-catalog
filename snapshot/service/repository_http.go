@@ -18,22 +18,30 @@ func (h *handler) repositoryList(w http.ResponseWriter, r *http.Request) {
 			return nil, err
 		}
 		state := dataset.NormalizeState(cat.DumpState())
-		rows := make([]map[string]any, 0, len(state.Repositories))
-		for _, id := range state.Repositories {
-			row := map[string]any{"id": id}
-			if resources.DescribeRepository != nil {
-				details, err := resources.DescribeRepository(ctx, caller, kernel.RepositoryID(id))
-				if err != nil {
-					return nil, err
-				}
-				for key, value := range details {
-					if key != "id" {
-						row[key] = value
-					}
-				}
-			}
-			rows = append(rows, row)
+		rows, err := repositoryInventory(ctx, caller, resources, state.Repositories)
+		if err != nil {
+			return nil, err
 		}
 		return map[string]any{"repositories": rows}, nil
 	})
+}
+
+func repositoryInventory(ctx context.Context, caller identity.HTTPIdentity, resources Resources, ids []string) ([]map[string]any, error) {
+	rows := make([]map[string]any, 0, len(ids))
+	for _, id := range ids {
+		row := map[string]any{"id": id}
+		if resources.DescribeRepository != nil {
+			details, err := resources.DescribeRepository(ctx, caller, kernel.RepositoryID(id))
+			if err != nil {
+				return nil, err
+			}
+			for key, value := range details {
+				if key != "id" {
+					row[key] = value
+				}
+			}
+		}
+		rows = append(rows, row)
+	}
+	return rows, nil
 }

@@ -7,7 +7,7 @@ import (
 
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 )
 
 // TestCatalogRepoReadFlow extends the write loop through every Reader CLI verb.
@@ -18,81 +18,37 @@ func TestCatalogRepoReadFlow(t *testing.T) {
 	body(t, kc(h, "init"))
 	seedRepo(t, h, core)
 
-	c1 := asMap(t, asMap(t, body(t, kc(h, "put",
-		"--command-id", "a1",
-		"--repo", core,
-		"--object", "policy/A",
-		"--value", `{"v":1}`,
-		"--origin-kind", "SOURCE",
-		"--source-ref", "handbook",
-		"--actor-ref", "alice",
-	)))["result"])["newCommit"].(string)
-	c2 := asMap(t, asMap(t, body(t, kc(h, "put",
-		"--command-id", "a2",
-		"--repo", core,
-		"--object", "policy/A",
-		"--value", `{"v":2}`,
-		"--origin-kind", "SOURCE",
-		"--source-ref", "handbook",
-	)))["result"])["newCommit"].(string)
+	c1 := asMap(t, asMap(t, body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--command-id", "a1", "--value", `{"v":1}`, "--origin-kind", "SOURCE", "--source-ref", "handbook", "--actor-ref", "alice")))["result"])["newCommit"].(string)
+	c2 := asMap(t, asMap(t, body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--command-id", "a2", "--value", `{"v":2}`, "--origin-kind", "SOURCE", "--source-ref", "handbook")))["result"])["newCommit"].(string)
 	if c1 == c2 {
 		t.Fatal("second put did not move commit")
 	}
-	body(t, kc(h, "put",
-		"--command-id", "io",
-		"--repo", core,
-		"--object", "ETLTask:job-1",
-		"--aspect", "io",
-		"--value", `{"inputs":["a"]}`,
-	))
-	body(t, kc(h, "put",
-		"--command-id", "own",
-		"--repo", core,
-		"--object", "ETLTask:job-1",
-		"--aspect", "ownership",
-		"--value", `{"owner":"alice"}`,
-	))
-	body(t, kc(h, "put",
-		"--command-id", "b1",
-		"--repo", core,
-		"--object", "policy/B",
-		"--value", `{"tmp":true}`,
-	))
-	body(t, kc(h, "remove", "--command-id", "drop-b", "--repo", core, "--object", "policy/B"))
+	body(t, kc(h, "put", testObjectReference(t, core, "ETLTask:job-1", "/io"), "--command-id", "io", "--value", `{"inputs":["a"]}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "ETLTask:job-1", "/ownership"), "--command-id", "own", "--value", `{"owner":"alice"}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "policy/B", ""), "--command-id", "b1", "--value", `{"tmp":true}`))
+	body(t, kc(h, "remove", testObjectReference(t, core, "policy/B", ""), "--command-id", "drop-b"))
 
-	old := asMap(t, body(t, kc(h, "read", "--repo", core, "--object", "policy/A", "--commit", c1)))
+	old := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--commit", c1)))
 	if old["commit"] != c1 || asMap(t, old["value"])["v"] != float64(1) {
 		t.Fatal("pinned commit followed latest", old)
 	}
-	live := asMap(t, body(t, kc(h, "read", "--repo", core, "--object", "policy/A", "--ref", "refs/heads/main")))
+	live := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--ref", "refs/heads/main")))
 	if asMap(t, live["value"])["v"] != float64(2) {
 		t.Fatal(live)
 	}
-	aspect := asMap(t, body(t, kc(h, "read", "--repo", core, "--object", "ETLTask:job-1", "--aspect", "io", "--ref", "refs/heads/main")))
+	aspect := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "ETLTask:job-1", "/io"), "--ref", "refs/heads/main")))
 	if asMap(t, aspect["value"])["inputs"].([]any)[0] != "a" {
 		t.Fatal(aspect)
 	}
 	if aspect["aspectName"] != "io" {
 		t.Fatal(aspect)
 	}
-	trimmed := asMap(t, body(t, kc(h, "read",
-		"--repo", core, "--object", "ETLTask:job-1",
-		"--exclude", "ownership", "--ref", "refs/heads/main",
-	)))
-	val := asMap(t, trimmed["value"])
-	if val["io"] == nil {
-		t.Fatal(trimmed["value"])
+	selected := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "ETLTask:job-1", "/io"), "--ref", "refs/heads/main")))
+	if selected["aspectName"] != "io" || len(asMap(t, selected["value"])) != 1 || asMap(t, selected["value"])["inputs"].([]any)[0] != "a" {
+		t.Fatalf("locator must select only io, without the ownership Aspect: %#v", selected)
 	}
-	if _, ok := val["ownership"]; ok {
-		t.Fatal("exclude ownership", trimmed["value"])
-	}
-	onlyIO := asMap(t, body(t, kc(h, "read",
-		"--repo", core, "--object", "ETLTask:job-1",
-		"--include", "io", "--ref", "refs/heads/main",
-	)))
-	onlyVal := asMap(t, onlyIO["value"])
-	if onlyVal["io"] == nil || onlyVal["ownership"] != nil {
-		t.Fatal(onlyIO["value"])
+	for _, flag := range []string{"--include", "--exclude"} {
+		expectCode(t, kc(h, "read", testObjectReference(t, core, "ETLTask:job-1", ""), flag, "ownership"), "USAGE_INVALID")
 	}
 
 	prov := asMap(t, body(t, kc(h, "provenance", "--repo", core, "--object", "policy/A", "--commit", c1)))
@@ -178,7 +134,7 @@ func TestCatalogRepoReadFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer ws.Close()
-	delta, err := ws.Reader.Diff(kernel.RepositoryID(core), knowledge.ObjectID("policy/A"), kernel.CommitID(c1), kernel.CommitID(c2))
+	delta, err := ws.Reader.Diff(kernel.RepositoryID(core), objectmodel.ObjectID("policy/A"), kernel.CommitID(c1), kernel.CommitID(c2))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,25 +151,20 @@ func TestCatalogRepoReadErrors(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 
-	expectMsg(t, kc(h, "read", "--repo", core, "--object", "a", "--ref", "refs/heads/main"), "no component fixture")
+	expectMsg(t, kc(h, "read", testObjectReference(t, core, "a", ""), "--ref", "refs/heads/main"), "no component fixture")
 
 	body(t, kc(h, "init"))
 	seedRepo(t, h, core)
-	c1 := asMap(t, asMap(t, body(t, kc(h, "put",
-		"--command-id", "seed",
-		"--repo", core,
-		"--object", "policy/A",
-		"--value", `{"v":1}`,
-	)))["result"])["newCommit"].(string)
+	c1 := asMap(t, asMap(t, body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--command-id", "seed", "--value", `{"v":1}`)))["result"])["newCommit"].(string)
 
-	expectMsg(t, kc(h, "read", "--object", "policy/A", "--ref", "refs/heads/main"), "missing --repo")
-	expectMsg(t, kc(h, "read", "--repo", core, "--ref", "refs/heads/main"), "missing --object")
-	expectMsg(t, kc(h, "read", "--repo", "kr://no/such", "--object", "policy/A", "--ref", "refs/heads/main"), "unknown repository")
-	expectMsg(t, kc(h, "read", "--repo", core, "--object", "policy/A", "--ref", "refs/heads/missing"), "does not exist")
-	expectCode(t, kc(h, "read", "--repo", core, "--object", "policy/A", "--commit", "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"), "VERSION_UNRESOLVED")
+	expectMsg(t, kc(h, "read", "--ref", "refs/heads/main"), "object URN")
+	expectMsg(t, kc(h, "read", "--repo", core, "--ref", "refs/heads/main"), "rejects --repo")
+	expectMsg(t, kc(h, "read", testObjectReference(t, "kr://no/such", "policy/A", ""), "--ref", "refs/heads/main"), "unknown repository")
+	expectMsg(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--ref", "refs/heads/missing"), "does not exist")
+	expectCode(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--commit", "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"), "VERSION_UNRESOLVED")
 	expectCode(t, kc(h, "log", "--repo", core, "--object", "policy/A", "--commit", "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"), "VERSION_UNRESOLVED")
-	expectCode(t, kc(h, "read", "--repo", core, "--object", "missing", "--commit", c1), "KNOWLEDGE_REF_UNRESOLVED")
-	expectCode(t, kc(h, "read", "--as", "other", "--repo", core, "--object", "policy/A", "--ref", "refs/heads/main"), "FORBIDDEN")
+	expectCode(t, kc(h, "read", testObjectReference(t, core, "missing", ""), "--commit", c1), "KNOWLEDGE_REF_UNRESOLVED")
+	expectCode(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--as", "other", "--ref", "refs/heads/main"), "FORBIDDEN")
 }
 
 func TestAspectBindingResolveThroughCLIAndWorkspace(t *testing.T) {
@@ -221,11 +172,9 @@ func TestAspectBindingResolveThroughCLIAndWorkspace(t *testing.T) {
 	core := "kr://acme/public/core"
 	body(t, kc(h, "init"))
 	seedRepo(t, h, core)
-	body(t, kc(h, "put", "--command-id", "binding-schema", "--repo", core,
-		"--object", "schema/service.health",
-		"--value", `{"entity":"Service","aspect":"health","origin":"http://127.0.0.1:9","fields":{"status":{"type":"string"}}}`))
-	put := asMap(t, body(t, kc(h, "put", "--command-id", "binding-entity", "--repo", core,
-		"--object", "Service:orders", "--aspect", "properties", "--value", `{"name":"orders"}`)))
+	adoptLiveAccessFixture(t, h, core)
+	body(t, kc(h, "put", testObjectReference(t, core, "schema/service.health", ""), "--command-id", "binding-schema", "--value", `{"entity":"Service","aspect":"health","origin":"http://127.0.0.1:9","fields":{"status":{"type":"string"}}}`))
+	put := asMap(t, body(t, kc(h, "put", testObjectReference(t, core, "Service:orders", "/properties"), "--command-id", "binding-entity", "--value", `{"name":"orders"}`)))
 	commit := asMap(t, put["result"])["newCommit"].(string)
 	resolved := asMap(t, body(t, kc(h, "resolve-binding", "--repo", core,
 		"--object", "Service:orders", "--aspect", "health", "--commit", commit)))
@@ -247,10 +196,9 @@ func TestWorkspaceSearchFailsClosedWhenAnyMemberCannotSatisfyQuery(t *testing.T)
 	body(t, kc(h, "init"))
 	seedRepo(t, h, searchable)
 	seedRepo(t, h, opaque)
-	body(t, kc(h, "put", "--command-id", "schema", "--repo", searchable, "--object", "schema/policy.body",
-		"--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`))
-	body(t, kc(h, "put", "--command-id", "hit", "--repo", searchable, "--object", "policy/A", "--value", `{"body":"runbook"}`))
-	body(t, kc(h, "put", "--command-id", "opaque", "--repo", opaque, "--object", "note/A", "--value", `{"body":"runbook"}`))
+	body(t, kc(h, "put", testObjectReference(t, searchable, "schema/policy.body", ""), "--command-id", "schema", "--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`))
+	body(t, kc(h, "put", testObjectReference(t, searchable, "policy/A", ""), "--command-id", "hit", "--value", `{"body":"runbook"}`))
+	body(t, kc(h, "put", testObjectReference(t, opaque, "note/A", ""), "--command-id", "opaque", "--value", `{"body":"runbook"}`))
 	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1",
 		"--source", searchable+"=refs/heads/main", "--source", opaque+"=refs/heads/main"))
 	syncIndexes(t, h, searchable)
@@ -264,8 +212,7 @@ func TestWorkspaceSearchUnsatisfiedExplainsHowToRecover(t *testing.T) {
 	repo := "kr://acme/public/opaque"
 	body(t, kc(h, "init"))
 	seedRepo(t, h, repo)
-	body(t, kc(h, "put", "--command-id", "opaque", "--repo", repo,
-		"--object", "note/A", "--value", `{"body":"runbook"}`))
+	body(t, kc(h, "put", testObjectReference(t, repo, "note/A", ""), "--command-id", "opaque", "--value", `{"body":"runbook"}`))
 	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1",
 		"--source", repo+"=refs/heads/main"))
 
@@ -282,11 +229,9 @@ func TestWorkspaceSearchPublicContinuation(t *testing.T) {
 	values := [][]string{{"z", "a"}, {"y", "b"}}
 	for i, repo := range []string{one, two} {
 		seedRepo(t, h, repo)
-		body(t, kc(h, "put", "--command-id", fmt.Sprintf("schema-%d", i), "--repo", repo, "--object", "schema/item.structure",
-			"--value", `{"entity":"Item","pattern":"record","fields":{"name":{"type":"string","access":["filter","sort"]}}}`))
+		body(t, kc(h, "put", testObjectReference(t, repo, "schema/item.structure", ""), "--command-id", fmt.Sprintf("schema-%d", i), "--value", `{"entity":"Item","pattern":"record","fields":{"name":{"type":"string","access":["filter","sort"]}}}`))
 		for j, value := range values[i] {
-			body(t, kc(h, "put", "--command-id", fmt.Sprintf("item-%d-%d", i, j), "--repo", repo, "--object", fmt.Sprintf("Item:%d:%d", i, j),
-				"--value", fmt.Sprintf(`{"name":"%s"}`, value)))
+			body(t, kc(h, "put", testObjectReference(t, repo, fmt.Sprintf("Item:%d:%d", i, j), ""), "--command-id", fmt.Sprintf("item-%d-%d", i, j), "--value", fmt.Sprintf(`{"name":"%s"}`, value)))
 		}
 	}
 	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1",

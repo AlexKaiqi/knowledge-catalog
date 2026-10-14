@@ -30,18 +30,18 @@ func TestRemoteGrantListPreservesInventoryFiltersAndLegacyExplicitQuestion(t *te
 		t.Fatal(err)
 	}
 	flags := map[string]FlagValue{"repo": "repo-A", "principal": "reader", "ref": "main", "object": "data/*", "aspect": "body"}
-	listed, err := runRemoteGrantList(context.Background(), client, flags, kcclient.RequestOptions{})
+	listed, err := executeSnapshotCommand(context.Background(), client, "grant list", flags, kcclient.RequestOptions{})
 	if err != nil || len(listed.(inv.GrantList).Rules) != 1 || query != "aspect=body&object=data%2F%2A&principal=reader&ref=main&repository=repo-A" {
 		t.Fatalf("remote inventory dropped filters: %#v %s %v", listed, query, err)
 	}
 	flags["action"] = "knowledge.read"
 	flags["object"] = "data/file"
-	value, err := runRemoteGrantList(context.Background(), client, flags, kcclient.RequestOptions{})
+	value, err := executeSnapshotCommand(context.Background(), client, "grant list", flags, kcclient.RequestOptions{})
 	if err != nil || value.(map[string]any)["ruleId"] != "limited" || query != "action=knowledge.read&principal=reader" {
 		t.Fatalf("remote question became a list or excluded applicable global rules: %#v %s %v", value, query, err)
 	}
 	flags["repo"] = "repo-other"
-	if _, err := runRemoteGrantList(context.Background(), client, flags, kcclient.RequestOptions{}); kernel.CodeOf(err) != kernel.ErrForbidden {
+	if _, err := executeSnapshotCommand(context.Background(), client, "grant list", flags, kcclient.RequestOptions{}); kernel.CodeOf(err) != kernel.ErrForbidden {
 		t.Fatalf("legacy explicit-rule question widened target scope: %v", err)
 	}
 }

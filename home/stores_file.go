@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"kc/index/opensearch"
+	"kc/declarativeindex/opensearch"
 	"kc/internal/jsonfile"
 
 	"gopkg.in/yaml.v3"

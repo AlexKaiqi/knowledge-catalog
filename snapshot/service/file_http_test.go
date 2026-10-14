@@ -85,11 +85,11 @@ func newFileHTTPFixture(t *testing.T) (*datasetHTTPFixture, *fileHTTPSource) {
 		"c1": {"reference/a.json": []byte(`{"object_id":"Business:old","value":1}`), "reference/b.txt": []byte("old bytes"), "private/hidden.txt": []byte("must stay outside")},
 		"c2": {"reference/renamed.json": []byte(`{"object_id":"Business:old","value":2}`)},
 	}}
-	registry := snapshot.NewRegistry()
+	registry := fixture.resources.Sources.(snapshot.Registry)
+	registry.Delete(source.ID())
 	if err := registry.Add(source); err != nil {
 		t.Fatal(err)
 	}
-	fixture.resources.Sources = registry
 	return fixture, source
 }
 func TestSnapshotFileHTTPUsesLiteralCoordinateAndFixedPublishedCommit(t *testing.T) {
@@ -146,15 +146,26 @@ func TestSnapshotFileHTTPRechecksRevocationAndRejectsForgedFileList(t *testing.T
 	handler := fixture.handler()
 	datasetHTTPCall(t, handler, http.MethodPost, "/snapshot/v1/datasets", map[string]any{"dataset": "files", "revision": 1, "sources": []any{map[string]any{"repository": source.id, "selector": snapshot.DefaultRef, "file": "reference/a.json", "target": "public.json"}}}, http.StatusOK)
 	pin := datasetHTTPCall(t, handler, http.MethodPost, "/snapshot/v1/datasets/files/resolve", map[string]any{}, http.StatusOK)
+	read := datasetHTTPCall(t, handler, http.MethodPost, "/snapshot/v1/files/file:read", map[string]any{"dataset": "files", "pin": pin, "path": "public.json"}, http.StatusOK)
+	if rootFileRead(t, read) != `{"object_id":"Business:old","value":1}` {
+		t.Fatalf("valid accepted file did not remain readable: %#v", read)
+	}
 	forged := map[string]any{}
 	for k, v := range pin {
 		forged[k] = v
 	}
 	forged["items"] = []any{map[string]any{"target": "public.json", "repository": source.id, "commit": "c1", "kind": "file", "file": "private/hidden.txt"}}
 	before := source.reads
-	datasetHTTPCall(t, handler, http.MethodPost, "/snapshot/v1/files/file:read", map[string]any{"dataset": "files", "pin": forged, "path": "public.json"}, http.StatusBadRequest)
+	failed := datasetHTTPCall(t, handler, http.MethodPost, "/snapshot/v1/files/file:read", map[string]any{"dataset": "files", "pin": forged, "path": "public.json"}, http.StatusBadRequest)
+	if failed["error"].(map[string]any)["code"] != string(kernel.ErrKnowledgeSetInvalid) || source.reads != before {
+		t.Fatalf("forged file list reached delivery or failed for the wrong reason: %#v reads=%d", failed, source.reads)
+	}
 	fixture.rules.rules = []access.Rule{{ID: "resolve", Principal: "alice", Dataset: "files", Actions: []string{"dataset.resolve"}}}
-	datasetHTTPCall(t, handler, http.MethodPost, "/snapshot/v1/files/file:read", map[string]any{"dataset": "files", "pin": pin, "path": "public.json"}, http.StatusForbidden)
+	datasetHTTPCall(t, handler, http.MethodPost, "/snapshot/v1/datasets/files/resolve", map[string]any{}, http.StatusOK)
+	failed = datasetHTTPCall(t, handler, http.MethodPost, "/snapshot/v1/files/file:read", map[string]any{"dataset": "files", "pin": pin, "path": "public.json"}, http.StatusForbidden)
+	if failed["error"].(map[string]any)["code"] != string(kernel.ErrForbidden) {
+		t.Fatalf("file-only revocation failed for the wrong reason: %#v", failed)
+	}
 	if source.reads != before {
 		t.Fatal("untrusted pin or revoked permission reached source bytes")
 	}

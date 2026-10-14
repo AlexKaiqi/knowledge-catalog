@@ -65,3 +65,20 @@ current rules for every new request.
 `repository.metadata.write`。元数据写权不隐含文件、commit、Settings 或授权管理权；
 这些动作也不隐含元数据写权。元数据键和值不进入规则求值，不因 `owner`、`source`
 等自定义键产生授权或来源身份。
+
+## Dataset 来源发布许可
+
+`repository.dataset.publish` 允许将选定源版本发布到 Dataset，独立于目标的 `dataset.manage`。
+仓 `file.read`、Dataset 管理与 `dataset.*` 不隐含这项源许可。`MatchSourcePublication` 要求
+请求同时给出来源 Repo、目标 Dataset 与选定 Ref；规则可限定来源 Repo，也可将 Repo 与
+Dataset 限定为交集，服务全局显式规则继续成立。Dataset-only、Object 或 Aspect 限定规则
+不能成为私有来源的发布许可。Ref 在调用者显式固定 Commit 时表示该 Commit，否则表示
+选定 selector（空值使用 `snapshot.DefaultRef`）；不能用 `main` 标签借用另一个 Commit 的权。
+
+管理包含此动作的 grant（也包括覆盖它的 `repository.*` 等 wildcard）需要来源 Repo 或
+服务全局的 `admin.grants.manage`。仅有 Dataset 的 grant 管理权不能授予、替换或撤销这项
+来源许可。Repo×Dataset 的明确管理交集仅作用于该交集；不从 Dataset 管理推导来源管理。
+
+该动作可由部署的 `CreatorActions` 显式选择，普通读取与 `ShareActions` 闭集不包含它。
+创建重放与重启沿用既有耐久授权/撤销事实，不补授这项许可。已发布 Dataset 的消费继续按
+Dataset 当前授权与固定文件范围执行，撤销源发布许可阻止后续发布，不追加逐读来源许可。

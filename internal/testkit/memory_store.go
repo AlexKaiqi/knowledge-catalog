@@ -6,9 +6,9 @@ import (
 	"strings"
 	"sync"
 
-	"kc/internal/repofile"
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
+	repofile "kc/object/format"
 	"kc/snapshot"
 )
 
@@ -141,7 +141,7 @@ func (s *memoryStore) ListFiles(commit kernel.CommitID) ([]string, error) {
 	return out, nil
 }
 
-func (s *memoryStore) ObjectUnitPaths(objectID knowledge.ObjectID, commit kernel.CommitID) ([]string, error) {
+func (s *memoryStore) ObjectUnitPaths(objectID objectmodel.ObjectID, commit kernel.CommitID) ([]string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	state, ok := s.commits[commit]
@@ -162,9 +162,14 @@ func (s *memoryStore) ObjectUnitPaths(objectID knowledge.ObjectID, commit kernel
 	return paths, nil
 }
 
-func (s *memoryStore) ApplyTreeCommit(change snapshot.TreeChangeSet) (kernel.CommitID, error) {
+func (s *memoryStore) ApplyTreeCommit(change snapshot.TreeChangeSet) (_ kernel.CommitID, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	defer func() {
+		if err != nil {
+			err = snapshot.WriteNotApplied(err)
+		}
+	}()
 	if s.archived {
 		return "", kernel.Fail(kernel.ErrRepositoryArchived, "repository %s is archived", s.id)
 	}
@@ -333,5 +338,5 @@ var (
 	_ snapshot.DirectoryReader = (*memoryStore)(nil)
 	_ snapshot.HistoryStore    = (*memoryStore)(nil)
 	_ snapshot.ChangeStore     = (*memoryStore)(nil)
-	_ knowledge.UnitLocator    = (*memoryStore)(nil)
+	_ objectmodel.UnitLocator  = (*memoryStore)(nil)
 )

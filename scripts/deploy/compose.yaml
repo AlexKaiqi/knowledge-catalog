@@ -151,7 +151,7 @@ services:
     environment:
       KC_LAKEFS_URL: http://lakefs:8000
       KC_OPENSEARCH_URL: http://opensearch:9200
-      KC_CATALOG: ${KC_CATALOG:-kr://acme/catalog}
+      KC_REGISTRY_ID: ${KC_REGISTRY_ID:-kr://acme/catalog}
       KC_AS: ${KC_AS:-admin}
       KC_LAKEFS_ACCESS_KEY: ${KC_LAKEFS_ACCESS_KEY:-AKIAKOSLOCALEXAMPLE}
       KC_LAKEFS_SECRET_KEY: ${KC_LAKEFS_SECRET_KEY:-wJalrXUtnFEMILocalLakeFSSecret12}
@@ -208,7 +208,7 @@ services:
         condition: service_healthy
     environment:
       KC_SERVER_URL: http://kc-server:7380
-      KC_CATALOG: ${KC_CATALOG:-kr://acme/catalog}
+      KC_REGISTRY_ID: ${KC_REGISTRY_ID:-kr://acme/catalog}
       KC_AS: ${KC_AS:-admin}
       KC_TTYD_CREDENTIAL: ${KC_TTYD_CREDENTIAL:-}
     ports:

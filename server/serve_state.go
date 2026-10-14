@@ -3,7 +3,7 @@ package server
 import (
 	"net/http"
 
-	knowledgeserving "kc/knowledge/serving"
+	knowledgeserving "kc/liveaccess"
 )
 
 // HTTPStateLookup 与 NewHTTPStateLookup 是公开面保持：origin 绑定查找的

@@ -565,11 +565,11 @@ current_state_bytes
 通用、不含数仓业务的测试放现有 package `_test.go`：
 
 - `snapshot/commandlog/` keyed-store conformance、crash recovery；
-- `knowledge/writer/` native/tree differential write；
-- `knowledge/reader/` page/continuation/native capability；
-- `knowledge/dolt/` SQL schema、point read、diff/history、failure；
-- `index/` streaming rebuild、desired-target recovery；
-- `index/opensearch/` generation/bulk/search；
+- `object/writer/` native/tree differential write；
+- `object/reader/` page/continuation/native capability；
+- `object/dolt/` SQL schema、point read、diff/history、failure；
+- `discovery/projection/` streaming rebuild、desired-target recovery；
+- `declarativeindex/opensearch/` generation/bulk/search；
 - `internal/arch/` 新依赖图守卫；
 - `cli/` page HTTP shape 与禁止全量 fallback。
 

@@ -2,11 +2,10 @@ package client
 
 import (
 	"context"
-	"encoding/json"
+	accessclient "kc/liveaccess/client"
 
-	"kc/knowledge"
-	"kc/retrieval"
-	"kc/snapshot/dataset"
+	discoveryclient "kc/discovery/client"
+	objectclient "kc/object/client"
 )
 
 type KnowledgeService struct{ client *Client }
@@ -15,157 +14,57 @@ func (c *Client) KnowledgeService() KnowledgeService { return KnowledgeService{c
 
 // KnowledgeDatasetIdentity is the shared dataset-channel identity envelope:
 // a named workspace, or an inline published pin/definition.
-type KnowledgeDatasetIdentity struct {
-	Dataset    string                `json:"dataset,omitempty"`
-	Pin        json.RawMessage       `json:"pin,omitempty"`
-	Definition *dataset.KnowledgeSet `json:"definition,omitempty"`
-}
+type KnowledgeDatasetIdentity = objectclient.KnowledgeDatasetIdentity
 
 // KnowledgeRepoPin is the shared repository-channel basis envelope: one
 // fixed commit (or ref resolved at the server) of one repository.
-type KnowledgeRepoPin struct {
-	Repository string `json:"repository,omitempty"`
-	Commit     string `json:"commit,omitempty"`
-	Ref        string `json:"ref,omitempty"`
-}
+type KnowledgeRepoPin = objectclient.KnowledgeRepoPin
 
 // KnowledgeScope is the full scope envelope of knowledge API requests: the
-// dataset identity or the repository basis. Kept flat so request literals
-// stay readable; embedded in every request struct, the JSON wire contract is
-// unchanged.
-type KnowledgeScope struct {
-	Dataset    string                `json:"dataset,omitempty"`
-	Pin        json.RawMessage       `json:"pin,omitempty"`
-	Definition *dataset.KnowledgeSet `json:"definition,omitempty"`
-	Repository string                `json:"repository,omitempty"`
-	Commit     string                `json:"commit,omitempty"`
-	Ref        string                `json:"ref,omitempty"`
-}
+// dataset identity or the repository basis used by scope-oriented operations.
+// Basic object reads instead carry their source identity in the complete
+// object Reference and keep only Dataset and version qualifiers alongside it.
+type KnowledgeScope = objectclient.KnowledgeScope
 
-type KnowledgeReadRequest struct {
-	KnowledgeScope
-	Object  string   `json:"object"`
-	Aspect  string   `json:"aspect,omitempty"`
-	Member  string   `json:"member,omitempty"`
-	Include []string `json:"include,omitempty"`
-	Exclude []string `json:"exclude,omitempty"`
-}
+type KnowledgeReadRequest = objectclient.ReadRequest
 
-type KnowledgeSearchRequest struct {
-	KnowledgeScope
-	InventoryDiscovery bool                    `json:"inventoryDiscovery,omitempty"`
-	Query              string                  `json:"query,omitempty"`
-	Match              []string                `json:"match,omitempty"`
-	MatchMode          string                  `json:"matchMode,omitempty"`
-	Equal              []string                `json:"equal,omitempty"`
-	NotEqual           []string                `json:"notEqual,omitempty"`
-	In                 []string                `json:"in,omitempty"`
-	Exists             []string                `json:"exists,omitempty"`
-	Missing            []string                `json:"missing,omitempty"`
-	Prefix             []string                `json:"prefix,omitempty"`
-	Contains           []string                `json:"contains,omitempty"`
-	GreaterThan        []string                `json:"greaterThan,omitempty"`
-	GreaterEqual       []string                `json:"greaterEqual,omitempty"`
-	LessThan           []string                `json:"lessThan,omitempty"`
-	LessEqual          []string                `json:"lessEqual,omitempty"`
-	Sort               []string                `json:"sort,omitempty"`
-	Limit              int                     `json:"limit,omitempty"`
-	Continuation       string                  `json:"continuation,omitempty"`
-	Expression         *retrieval.SearchExpr   `json:"expression,omitempty"`
-	Order              *retrieval.SearchClause `json:"order,omitempty"`
-	Recall             string                  `json:"recall,omitempty"`
-}
+type KnowledgeSearchRequest = discoveryclient.SearchRequest
 
-type KnowledgeRelationsRequest struct {
-	KnowledgeScope
-	Endpoint     string `json:"endpoint"`
-	RelationType string `json:"relationType,omitempty"`
-	Role         string `json:"role,omitempty"`
-	Direction    string `json:"direction,omitempty"`
-	Limit        int    `json:"limit,omitempty"`
-	Continuation string `json:"continuation,omitempty"`
-}
+type KnowledgeRelationsRequest = discoveryclient.RelationsRequest
 
 // KnowledgeTraverseRequest runs one bounded neighborhood closure on a fixed
 // basis. MaxHops is required; the server fixes the scope before execution and
 // never widens it to out-of-scope frontiers.
-type KnowledgeTraverseRequest struct {
-	KnowledgeScope
-	Endpoint     string `json:"endpoint"`
-	RelationType string `json:"relationType,omitempty"`
-	Role         string `json:"role,omitempty"`
-	Direction    string `json:"direction,omitempty"`
-	MinHops      int    `json:"minHops,omitempty"`
-	MaxHops      int    `json:"maxHops"`
-	Limit        int    `json:"limit,omitempty"`
-	Continuation string `json:"continuation,omitempty"`
-}
+type KnowledgeTraverseRequest = discoveryclient.TraverseRequest
 
-type KnowledgeRerankRequest struct {
-	KnowledgeDatasetIdentity
-	Candidates []knowledge.KnowledgeRef       `json:"candidates"`
-	Spec       retrieval.SemanticOperatorSpec `json:"spec"`
-}
+type KnowledgeRerankRequest = discoveryclient.RerankRequest
 
-type KnowledgeSearchRerankRequest struct {
-	KnowledgeSearchRequest
-	Spec retrieval.SemanticOperatorSpec `json:"spec"`
-}
+type KnowledgeSearchRerankRequest = discoveryclient.SearchRerankRequest
 
-type KnowledgeObjectRequest struct {
-	KnowledgeScope
-	Object       string `json:"object"`
-	Limit        int    `json:"limit,omitempty"`
-	Continuation string `json:"continuation,omitempty"`
-}
+type KnowledgeObjectRequest = objectclient.ObjectRequest
 
-type KnowledgeResolveRequest struct {
-	KnowledgeScope
-	Object string `json:"object"`
-	Aspect string `json:"aspect,omitempty"`
-	Member string `json:"member,omitempty"`
-}
+type KnowledgeResolveRequest = objectclient.ResolveRequest
 
-type KnowledgeSchemaRequest struct {
-	KnowledgeScope
-	Object string `json:"object,omitempty"`
-}
+type KnowledgeSchemaRequest = objectclient.SchemaRequest
 
-type KnowledgeBindingRequest struct {
-	KnowledgeScope
-	Object string `json:"object"`
-	Aspect string `json:"aspect"`
-	Member string `json:"member,omitempty"`
-}
+type KnowledgeBindingRequest = accessclient.BindingRequest
 
 // KnowledgeResourceAccessRequest selects an object Interface implementation,
 // invokes a compatible ResourceDescriptor operation, or hydrates a pinned
 // Binding. Input remains raw JSON across the client hop; handlers are installed
 // at the Server, not shipped by the consumer.
-type KnowledgeResourceAccessRequest struct {
-	KnowledgeScope
-	Object         string          `json:"object"`
-	Aspect         string          `json:"aspect,omitempty"`
-	Member         string          `json:"member,omitempty"`
-	Operation      string          `json:"operation,omitempty"`
-	Input          json.RawMessage `json:"input,omitempty"`
-	Implementation string          `json:"implementation,omitempty"`
-}
+type KnowledgeResourceAccessRequest = accessclient.AccessRequest
 
 // KnowledgeSchemaPageRequest discovers Domain Schemas at one fixed
 // Repository basis before a consumer has selected a Workspace.
-type KnowledgeSchemaPageRequest struct {
-	KnowledgeRepoPin
-	Limit        int    `json:"limit,omitempty"`
-	Continuation string `json:"continuation,omitempty"`
-}
+type KnowledgeSchemaPageRequest = objectclient.SchemaPageRequest
 
 func (s KnowledgeService) Read(ctx context.Context, request KnowledgeReadRequest, options RequestOptions, output any) error {
-	return s.client.doJSON(ctx, "POST", "/knowledge/v1/objects:read", request, options, output)
+	return s.client.objects.Read(ctx, request, objectclient.RequestOptions{RequestID: options.RequestID}, output)
 }
 
 func (s KnowledgeService) Search(ctx context.Context, request KnowledgeSearchRequest, options RequestOptions, output any) error {
-	return s.client.doJSON(ctx, "POST", "/knowledge/v1/search", request, options, output)
+	return s.client.discovery.Search(ctx, request, discoveryclient.RequestOptions{RequestID: options.RequestID}, output)
 }
 
 func (s KnowledgeService) Rerank(ctx context.Context, request KnowledgeRerankRequest, options RequestOptions, output any) error {
@@ -180,40 +79,40 @@ func (s KnowledgeService) SearchRerank(ctx context.Context, request KnowledgeSea
 }
 
 func (s KnowledgeService) Relations(ctx context.Context, request KnowledgeRelationsRequest, options RequestOptions, output any) error {
-	return s.client.doJSON(ctx, "POST", "/knowledge/v1/relations:query", request, options, output)
+	return s.client.discovery.Relations(ctx, request, discoveryclient.RequestOptions{RequestID: options.RequestID}, output)
 }
 
 // Traverse runs one bounded neighborhood closure. The server owns the hop
 // ceiling, the edge budget, and the fixed scope; out-of-scope frontiers come
 // back as explicit boundaries instead of nodes.
 func (s KnowledgeService) Traverse(ctx context.Context, request KnowledgeTraverseRequest, options RequestOptions, output any) error {
-	return s.client.doJSON(ctx, "POST", "/knowledge/v1/traverse:query", request, options, output)
+	return s.client.discovery.Traverse(ctx, request, discoveryclient.RequestOptions{RequestID: options.RequestID}, output)
 }
 
 func (s KnowledgeService) Provenance(ctx context.Context, request KnowledgeObjectRequest, options RequestOptions, output any) error {
-	return s.client.doJSON(ctx, "POST", "/knowledge/v1/provenance:describe", request, options, output)
+	return s.client.objects.Provenance(ctx, request, objectclient.RequestOptions{RequestID: options.RequestID}, output)
 }
 
 func (s KnowledgeService) Log(ctx context.Context, request KnowledgeObjectRequest, options RequestOptions, output any) error {
-	return s.client.doJSON(ctx, "POST", "/knowledge/v1/log:query", request, options, output)
+	return s.client.objects.Log(ctx, request, objectclient.RequestOptions{RequestID: options.RequestID}, output)
 }
 
 func (s KnowledgeService) Resolve(ctx context.Context, request KnowledgeResolveRequest, options RequestOptions, output any) error {
-	return s.client.doJSON(ctx, "POST", "/knowledge/v1/objects:resolve", request, options, output)
+	return s.client.objects.Resolve(ctx, request, objectclient.RequestOptions{RequestID: options.RequestID}, output)
 }
 
 func (s KnowledgeService) Schema(ctx context.Context, request KnowledgeSchemaRequest, options RequestOptions, output any) error {
-	return s.client.doJSON(ctx, "POST", "/knowledge/v1/schemas:describe", request, options, output)
+	return s.client.objects.Schema(ctx, request, objectclient.RequestOptions{RequestID: options.RequestID}, output)
 }
 
 func (s KnowledgeService) BrowseSchemas(ctx context.Context, request KnowledgeSchemaPageRequest, options RequestOptions, output any) error {
-	return s.client.doJSON(ctx, "POST", "/knowledge/v1/schemas:list", request, options, output)
+	return s.client.objects.BrowseSchemas(ctx, request, objectclient.RequestOptions{RequestID: options.RequestID}, output)
 }
 
 func (s KnowledgeService) ResolveBinding(ctx context.Context, request KnowledgeBindingRequest, options RequestOptions, output any) error {
-	return s.client.doJSON(ctx, "POST", "/knowledge/v1/bindings:resolve", request, options, output)
+	return s.client.liveAccess.ResolveBinding(ctx, request, accessclient.RequestOptions{RequestID: options.RequestID}, output)
 }
 
 func (s KnowledgeService) AccessResource(ctx context.Context, request KnowledgeResourceAccessRequest, options RequestOptions, output any) error {
-	return s.client.doJSON(ctx, "POST", "/knowledge/v1/resources:access", request, options, output)
+	return s.client.liveAccess.AccessResource(ctx, request, accessclient.RequestOptions{RequestID: options.RequestID}, output)
 }

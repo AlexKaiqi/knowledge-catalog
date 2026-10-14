@@ -27,11 +27,9 @@ func TestLiveHTTPDynamicStateSearchJourney(t *testing.T) {
 	body(t, kc(home, "store-set", "--index", "opensearch"))
 	body(t, kc(home, "store-set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repositoryID)
-	body(t, kc(home, "put", "--command-id", "state-schema", "--repo", repositoryID,
-		"--object", "schema/service.health",
-		"--value", `{"entity":"Service","aspect":"health","origin":"`+runtimeURL+`","fields":{"status":{"type":"string","access":["text","filter"]}}}`))
-	body(t, kc(home, "put", "--command-id", "state-entity", "--repo", repositoryID,
-		"--object", "Service:orders", "--aspect", "properties", "--value", `{"name":"orders"}`))
+	adoptLiveAccessFixture(t, home, repositoryID)
+	body(t, kc(home, "put", testObjectReference(t, repositoryID, "schema/service.health", ""), "--command-id", "state-schema", "--value", `{"entity":"Service","aspect":"health","origin":"`+runtimeURL+`","fields":{"status":{"type":"string","access":["text","filter"]}}}`))
+	body(t, kc(home, "put", testObjectReference(t, repositoryID, "Service:orders", "/properties"), "--command-id", "state-entity", "--value", `{"name":"orders"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", repositoryID+"=refs/heads/main@"))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--dataset", "agent"))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read,search", "--repo", repositoryID))

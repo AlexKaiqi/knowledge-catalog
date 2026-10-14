@@ -106,7 +106,7 @@ system repo 随平台版本出版且运行时只读。内置 LiveAccess 合同�
 
 ## 接口契约 / 状态机
 
-知识形状见 [Interface 定义](../../knowledge/object_interface.go)；解析见
-[Reader](../../knowledge/reader/README.md)，注册与执行见
-[Serving](../../knowledge/serving/README.md) 及其一致性测试。
+知识形状见 [Interface 定义](../../interfaces/definition.go)；解析见
+[Reader](../../object/reader/README.md)，注册与执行见
+[Serving](../../liveaccess/README.md) 及其一致性测试。
 LiveAccess 的观察保证沿用外部资源访问合同。本文不复制协议字段、错误码或状态转换。

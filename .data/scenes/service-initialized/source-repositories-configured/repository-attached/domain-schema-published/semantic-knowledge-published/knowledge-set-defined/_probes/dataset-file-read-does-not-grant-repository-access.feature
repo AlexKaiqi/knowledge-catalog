@@ -12,11 +12,11 @@ Feature: Dataset file.read 可读清单但不授予仓级读搜权限
       | rules[].principal | consumer |
       | rules[].dataset | scene-set |
       | rules[].actions.0 | file.read |
-    When I run `kc read --as consumer --dataset scene-set --object metric/gmv`
-    Then the output includes:
-      | [].objectId | metric/gmv |
-      | [].commit | nonempty |
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:metric%2Fgmv --as consumer --dataset scene-set`
+    Then the output has:
+      | objectId | metric/gmv |
+      | commit | nonempty |
     When I run `kc search --as consumer --repo kr://scene/knowledge --query merchandise`
     Then error FORBIDDEN
-    When I run `kc read --as consumer --repo kr://scene/knowledge --object metric/gmv`
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:metric%2Fgmv --as consumer`
     Then error FORBIDDEN

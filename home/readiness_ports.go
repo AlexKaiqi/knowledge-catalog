@@ -1,6 +1,6 @@
 package home
 
-import "kc/index/opensearch"
+import "kc/declarativeindex/opensearch"
 
 // The readiness ports bind concrete provider checks at assembly (CAP-ORG-01
 // B7, A-01): only the assembly root imports concrete adapters, so readiness

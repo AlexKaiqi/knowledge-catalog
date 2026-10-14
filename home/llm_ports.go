@@ -4,8 +4,8 @@ import (
 	"os"
 	"time"
 
-	"kc/retrieval"
-	"kc/retrieval/llmhttp"
+	retrieval "kc/discovery"
+	"kc/discovery/llmhttp"
 )
 
 // The LLM ports bind concrete provider clients at assembly (CAP-ORG-01 A-01,

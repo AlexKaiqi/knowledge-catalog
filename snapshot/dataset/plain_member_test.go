@@ -5,8 +5,8 @@ import (
 
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/knowledge/reader"
-	"kc/knowledge/writer"
+	"kc/object/reader"
+	"kc/object/writer"
 	"kc/snapshot"
 	catalog "kc/snapshot/dataset"
 )

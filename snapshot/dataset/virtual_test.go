@@ -62,7 +62,12 @@ func TestReadVirtualFileRejectsUnownedPath(t *testing.T) {
 func TestCheckResolvedRepositoryDoesNotProbeOtherMembers(t *testing.T) {
 	registry := snapshot.NewRegistry()
 	targetChecks, otherChecks := 0, 0
-	target := &countingStore{Store: testkit.MakeRepository(t, "kr://acme/target"), checks: &targetChecks}
+	targetSource := testkit.MakeTreeStore(t, "kr://acme/target")
+	targetReader, ok := snapshot.TreeReaderOf(targetSource)
+	if !ok {
+		t.Fatal("root fallback fixture requires real raw path reads")
+	}
+	target := &countingFileStore{countingStore: &countingStore{Store: targetSource, checks: &targetChecks}, TreeReader: targetReader}
 	other := &countingStore{Store: testkit.MakeRepository(t, "kr://acme/other"), checks: &otherChecks}
 	if err := registry.Add(target); err != nil {
 		t.Fatal(err)
@@ -93,6 +98,11 @@ func TestCheckResolvedRepositoryDoesNotProbeOtherMembers(t *testing.T) {
 type countingStore struct {
 	snapshot.Store
 	checks *int
+}
+
+type countingFileStore struct {
+	*countingStore
+	snapshot.TreeReader
 }
 
 func (s *countingStore) HasCommit(commit kernel.CommitID) bool {

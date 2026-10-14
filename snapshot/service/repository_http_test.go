@@ -57,6 +57,7 @@ func TestSnapshotRepositoryHTTPInventoryDoesNotGrantOtherScopes(t *testing.T) {
 	if _, err := fixture.catalog.DefineKnowledgeSet("files", 1, []dataset.KnowledgeSetSource{{Repository: source.id, Selector: snapshot.DefaultRef, File: "reference/a.json", Target: "public.json"}}); err != nil {
 		t.Fatal(err)
 	}
+	source.reads = 0 // Publication validates bytes; inventory must not read them.
 	handler := fixture.handler()
 	datasetHTTPCall(t, handler, http.MethodGet, "/snapshot/v1/repositories", nil, http.StatusOK)
 	pin := datasetHTTPCall(t, handler, http.MethodPost, "/snapshot/v1/datasets/files/resolve", map[string]any{}, http.StatusOK)

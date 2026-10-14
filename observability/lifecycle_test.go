@@ -10,7 +10,7 @@ import (
 
 	"kc/internal/jsonfile"
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 	"kc/observability"
 )
 
@@ -48,8 +48,8 @@ func TestFileStoreDatePartitionHotDeleteAndQuota(t *testing.T) {
 		t.Helper()
 		id, err := store.RecordAccessReceipt(observability.AccessEvent{
 			OccurredAt: at, Identity: identity, Action: "read", Decision: "ALLOW", Result: "RESOLVED",
-			Knowledge: []observability.KnowledgeAccess{{KnowledgeRef: knowledge.PinnedKnowledgeRef{
-				KnowledgeRef: knowledge.KnowledgeRef{Repository: "kr://acme/semantics", Object: "Metric:gmv"},
+			Knowledge: []observability.KnowledgeAccess{{KnowledgeRef: objectmodel.PinnedKnowledgeRef{
+				KnowledgeRef: objectmodel.KnowledgeRef{Repository: "kr://acme/semantics", Object: "Metric:gmv"},
 				Commit:       "c1",
 			}}},
 		})

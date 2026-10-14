@@ -7,11 +7,13 @@
 package snapshot
 
 import (
+	"bytes"
 	"encoding/json"
 	"sync"
 	"time"
 
 	"kc/kernel"
+	"kc/snapshot/internal/storecontract"
 )
 
 type retentionStore interface {
@@ -29,7 +31,7 @@ func (l *commandLedger) ResolvePending(commandID, digest string, receipt any) (C
 		return CommandEntry{}, kernel.Fail(kernel.ErrTemporaryUnavailable,
 			"read pending command %s: %v", commandID, lookupErr)
 	}
-	if !ok || prior.Status != StatusPending || len(prior.Receipt) != 0 {
+	if !ok || prior.Status != StatusPending || hasCommandReceipt(prior.Receipt) {
 		return CommandEntry{}, kernel.Fail(kernel.ErrPreconditionFailed,
 			"command %s has no unresolved pending reservation", commandID)
 	}
@@ -40,6 +42,9 @@ func (l *commandLedger) ResolvePending(commandID, digest string, receipt any) (C
 	raw, err := json.Marshal(receipt)
 	if err != nil {
 		return CommandEntry{}, err
+	}
+	if !hasCommandReceipt(raw) {
+		return CommandEntry{}, kernel.Fail(kernel.ErrUsageInvalid, "resolve pending command %s requires a receipt", commandID)
 	}
 	prior.Status = StatusApplied
 	prior.Receipt = raw
@@ -67,7 +72,7 @@ func (l *commandLedger) AbandonPending(commandID, digest string) (CommandEntry, 
 		return CommandEntry{}, kernel.Fail(kernel.ErrTemporaryUnavailable,
 			"read pending command %s: %v", commandID, lookupErr)
 	}
-	if !ok || prior.Status != StatusPending || len(prior.Receipt) != 0 {
+	if !ok || prior.Status != StatusPending || hasCommandReceipt(prior.Receipt) {
 		return CommandEntry{}, kernel.Fail(kernel.ErrPreconditionFailed,
 			"command %s has no unresolved pending reservation", commandID)
 	}
@@ -231,7 +236,7 @@ func (l *commandLedger) Execute(commandID, digest string, request CommandRequest
 			return CommandEntry{}, false, kernel.Fail(kernel.ErrIdempotencyConflict,
 				"command %s reused with different payload", commandID)
 		}
-		if len(prior.Receipt) == 0 {
+		if prior.Status != StatusApplied || !hasCommandReceipt(prior.Receipt) {
 			return CommandEntry{}, false, kernel.Fail(kernel.ErrPreconditionFailed,
 				"command %s has an unresolved prior outcome; inspect the target ref before retrying", commandID)
 		}
@@ -253,8 +258,14 @@ func (l *commandLedger) Execute(commandID, digest string, request CommandRequest
 	l.mu.Unlock()
 	receipt, err := apply()
 	if err != nil {
+		if !storecontract.IsWriteNotApplied(err) {
+			return CommandEntry{}, false, err
+		}
 		if l.store != nil {
-			_ = l.store.Delete(commandID)
+			if releaseErr := l.store.Delete(commandID); releaseErr != nil {
+				return CommandEntry{}, false, kernel.Fail(kernel.ErrTemporaryUnavailable,
+					"release unapplied command %s in idempotency ledger: %v", commandID, releaseErr)
+			}
 		}
 		l.mu.Lock()
 		delete(l.entries, commandID)
@@ -264,6 +275,9 @@ func (l *commandLedger) Execute(commandID, digest string, request CommandRequest
 	raw, err := json.Marshal(receipt)
 	if err != nil {
 		return CommandEntry{}, false, err
+	}
+	if !hasCommandReceipt(raw) {
+		return CommandEntry{}, false, kernel.Fail(kernel.ErrPreconditionFailed, "command %s apply omitted its receipt", commandID)
 	}
 	entry = CommandEntry{CommandID: commandID, Digest: digest, Status: StatusApplied, CreatedAt: now,
 		UpdatedAt: time.Now().UTC().Format(time.RFC3339Nano), Receipt: raw, Request: request}
@@ -309,4 +323,9 @@ func (l *commandLedger) entriesLocked() []CommandEntry {
 		out = append(out, entry)
 	}
 	return out
+}
+
+func hasCommandReceipt(raw json.RawMessage) bool {
+	trimmed := bytes.TrimSpace(raw)
+	return len(trimmed) != 0 && !bytes.Equal(trimmed, []byte("null"))
 }

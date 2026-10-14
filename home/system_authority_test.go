@@ -8,7 +8,7 @@ import (
 
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 	"kc/snapshot"
 )
 
@@ -20,7 +20,7 @@ func TestDeploymentRequiresActualSystemBinding(t *testing.T) {
 	cfg := deploymentFixture(t)
 	cfg.Repositories = nil
 	for _, err := range []error{cfg.Validate(), InitializeDeployment(cfg, systemSeedPolicies)} {
-		if kernel.CodeOf(err) != kernel.ErrUsageInvalid || !strings.Contains(err.Error(), string(knowledge.SystemRepositoryID)) {
+		if kernel.CodeOf(err) != kernel.ErrUsageInvalid || !strings.Contains(err.Error(), string(objectmodel.SystemRepositoryID)) {
 			t.Fatalf("absent system binding was accepted: %v", err)
 		}
 	}
@@ -31,7 +31,7 @@ func TestDeploymentRequiresActualSystemBinding(t *testing.T) {
 
 func TestDeploymentPublishesAndRestoresActualSystem(t *testing.T) {
 	cfg := deploymentFixture(t)
-	binding, _ := cfg.Binding(knowledge.SystemRepositoryID)
+	binding, _ := cfg.Binding(objectmodel.SystemRepositoryID)
 	physical, err := openExistingAuthority(binding.homeRepo())
 	if err != nil {
 		t.Fatal(err)
@@ -49,13 +49,13 @@ func TestDeploymentPublishesAndRestoresActualSystem(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	source, _ := ws.Store.Get(knowledge.SystemRepositoryID)
+	source, _ := ws.Store.Get(objectmodel.SystemRepositoryID)
 	head, _ := source.Head(snapshot.DefaultRef)
 	if head != published || !source.HasCommit(published) {
 		t.Fatal("runtime substituted a different system authority")
 	}
 	assertRuntimeSystemReadOnly(t, ws, source, head)
-	repo, err := ws.Reader.Require(knowledge.SystemRepositoryID, kernel.ErrCapabilityUnsatisfied)
+	repo, err := ws.Reader.Require(objectmodel.SystemRepositoryID, kernel.ErrCapabilityUnsatisfied)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestDeploymentPublishesAndRestoresActualSystem(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer restarted.Close()
-	source, _ = restarted.Store.Get(knowledge.SystemRepositoryID)
+	source, _ = restarted.Store.Get(objectmodel.SystemRepositoryID)
 	if head, _ := source.Head(snapshot.DefaultRef); head != published {
 		t.Fatal("init or startup rewrote the system publication")
 	}
@@ -161,21 +161,21 @@ func TestComponentOpenRequiresPublishedSystem(t *testing.T) {
 
 func TestSystemInitializationAndRestoreUseSeparateAuthorityPorts(t *testing.T) {
 	cfg := deploymentFixture(t)
-	cfg.Repositories[0] = RepositoryBinding{ID: string(knowledge.SystemRepositoryID), Driver: "lakefs", DSN: "https://lakefs.example/system"}
-	physical := testkit.MakeTreeStore(t, string(knowledge.SystemRepositoryID))
+	cfg.Repositories[0] = RepositoryBinding{ID: string(objectmodel.SystemRepositoryID), Driver: "lakefs", DSN: "https://lakefs.example/system"}
+	physical := testkit.MakeTreeStore(t, string(objectmodel.SystemRepositoryID))
 	original := authorityDrivers["lakefs"]
 	initializes, restores := 0, 0
 	driver := original
 	driver.validate = func(HomeRepo) error { return nil }
 	driver.open = func(abs string, item HomeRepo) (snapshot.Store, error) {
-		if item.ID != string(knowledge.SystemRepositoryID) {
+		if item.ID != string(objectmodel.SystemRepositoryID) {
 			return original.open(abs, item)
 		}
 		initializes++
 		return physical, nil
 	}
 	driver.openExisting = func(abs string, item HomeRepo) (snapshot.Store, error) {
-		if item.ID != string(knowledge.SystemRepositoryID) {
+		if item.ID != string(objectmodel.SystemRepositoryID) {
 			return original.openExisting(abs, item)
 		}
 		restores++

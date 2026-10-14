@@ -16,8 +16,8 @@ Feature: dataset-defined
       | datasets[].id | scene-notes |
       | datasets[].revision | 1 |
       | repositories[].id | kr://scene/knowledge |
-    When I run `kc read --dataset scene-notes --object note/hello`
-    Then the output includes:
-      | [].objectId | note/hello |
-      | [].repository | kr://scene/knowledge |
-      | [].commit | nonempty |
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:note%2Fhello --dataset scene-notes`
+    Then the output has:
+      | objectId | note/hello |
+      | repository | kr://scene/knowledge |
+      | commit | nonempty |

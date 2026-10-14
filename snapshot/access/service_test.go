@@ -19,23 +19,32 @@ type memoryRules struct {
 	failure error
 }
 
+func cloneRules(rules []access.Rule) []access.Rule {
+	cloned := slices.Clone(rules)
+	for i := range cloned {
+		cloned[i].Actions = slices.Clone(rules[i].Actions)
+		cloned[i].Cmds = slices.Clone(rules[i].Cmds)
+	}
+	return cloned
+}
+
 func (m *memoryRules) ReadRules(context.Context) ([]access.Rule, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return slices.Clone(m.rules), m.failure
+	return cloneRules(m.rules), m.failure
 }
 
 func (m *memoryRules) UpdateRules(_ context.Context, update func([]access.Rule) ([]access.Rule, error)) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	rules, err := update(slices.Clone(m.rules))
+	rules, err := update(cloneRules(m.rules))
 	if err != nil {
 		return err
 	}
 	if m.failure != nil {
 		return m.failure
 	}
-	m.rules = rules
+	m.rules = cloneRules(rules)
 	return nil
 }
 
@@ -63,7 +72,7 @@ func TestServiceSeparatesInventoryManageAndCrossResourceScopes(t *testing.T) {
 		}
 	}
 	requested := access.Rule{Principal: "consumer", Actions: []string{"file.read", "dataset.resolve"}, Repo: "A", Dataset: "published"}
-	before := slices.Clone(store.rules)
+	before := cloneRules(store.rules)
 	for _, principal := range []string{"reader", "limited", "native-admin"} {
 		if _, err := service.Add(ctx, principal, requested); kernel.CodeOf(err) != kernel.ErrForbidden {
 			t.Fatalf("unauthorized add by %s: %v", principal, err)
@@ -105,7 +114,7 @@ func TestServiceDerivesRevokeAuthorityFromUniqueDurableTarget(t *testing.T) {
 	store.rules = append(store.rules,
 		access.Rule{ID: "legacy", Principal: "one", Repo: "A"},
 		access.Rule{ID: "legacy", Principal: "two", Repo: "B"})
-	before := slices.Clone(store.rules)
+	before := cloneRules(store.rules)
 	for _, id := range []string{"missing", "legacy"} {
 		if err := service.Revoke(ctx, "manager", id); kernel.CodeOf(err) != kernel.ErrForbidden {
 			t.Fatalf("scoped manager learned an unscoped target: %s %v", id, err)
@@ -132,13 +141,13 @@ func TestServiceAcknowledgesOnlyDurableSuccessAndRequiresIdentity(t *testing.T) 
 	service, store := scopedService()
 	ctx := context.Background()
 	requested := access.Rule{Principal: "consumer", Actions: []string{"file.read"}, Repo: "A"}
-	before := slices.Clone(store.rules)
+	before := cloneRules(store.rules)
 	store.failure = errors.New("storage offline")
-	if receipt, err := service.Add(ctx, "manager", requested); err == nil || receipt.ID != "" {
+	if receipt, err := service.Add(ctx, "manager", requested); !errors.Is(err, store.failure) || !reflect.DeepEqual(receipt, access.Rule{}) {
 		t.Fatalf("failed persistence returned a grant receipt: %#v %v", receipt, err)
 	}
-	if err := service.Revoke(ctx, "global", "repository-manager"); err == nil {
-		t.Fatal("failed persistence acknowledged revoke")
+	if err := service.Revoke(ctx, "global", "repository-manager"); !errors.Is(err, store.failure) {
+		t.Fatalf("failed persistence changed or acknowledged revoke: %v", err)
 	}
 	if !reflect.DeepEqual(before, store.rules) {
 		t.Fatal("failed persistence changed rules")
@@ -149,5 +158,77 @@ func TestServiceAcknowledgesOnlyDurableSuccessAndRequiresIdentity(t *testing.T) 
 	}
 	if _, err := access.NewService(nil).List(ctx, "reader", access.Query{}); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
 		t.Fatalf("missing policy became empty authority: %v", err)
+	}
+}
+
+func TestDatasetGrantAdministrationUsesTheExactDurableScope(t *testing.T) {
+	for _, test := range []struct {
+		operation string
+		dataset   string
+	}{
+		{"add", "one"}, {"add", "two"}, {"revoke", "one"}, {"revoke", "two"},
+	} {
+		t.Run(test.operation+"-"+test.dataset, func(t *testing.T) {
+			store := &memoryRules{rules: []access.Rule{
+				{ID: "manager", Principal: "editor", Actions: []string{"admin.grants.manage"}, Dataset: "one"},
+				{ID: "target-one", Principal: "reader", Actions: []string{"file.read"}, Dataset: "one"},
+				{ID: "target-two", Principal: "other", Actions: []string{"file.read"}, Dataset: "two"},
+			}}
+			service := access.NewService(store)
+			before, want := cloneRules(store.rules), cloneRules(store.rules)
+			var err error
+			if test.operation == "add" {
+				requested := access.Rule{Principal: "recipient", Actions: []string{"dataset.resolve"}, Dataset: test.dataset}
+				var receipt access.Rule
+				receipt, err = service.Add(context.Background(), "editor", requested)
+				if test.dataset == "one" {
+					if receipt.ID == "" {
+						t.Fatal("successful grant has no durable identity")
+					}
+					requested.ID = receipt.ID
+					if !reflect.DeepEqual(receipt, requested) {
+						t.Fatalf("grant widened or changed requested scope: %#v", receipt)
+					}
+					want = append(want, requested)
+				} else if !reflect.DeepEqual(receipt, access.Rule{}) {
+					t.Fatalf("denied grant has a receipt: %#v", receipt)
+				}
+			} else {
+				err = service.Revoke(context.Background(), "editor", "target-"+test.dataset)
+				if test.dataset == "one" {
+					want = append(want[:1], want[2:]...)
+				}
+			}
+			if test.dataset == "one" && err != nil || test.dataset == "two" && kernel.CodeOf(err) != kernel.ErrForbidden {
+				t.Fatalf("Dataset management crossed scope: %v", err)
+			}
+			if !reflect.DeepEqual(store.rules, want) {
+				t.Fatalf("scope management changed unrelated rules: before=%#v want=%#v got=%#v", before, want, store.rules)
+			}
+		})
+	}
+}
+
+func TestConstrainedManagementRulesDoNotDelegateAuthority(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		alter func(*access.Rule)
+	}{
+		{"ref", func(rule *access.Rule) { rule.Ref = "main" }},
+		{"object", func(rule *access.Rule) { rule.Object = "data/*" }},
+		{"aspect", func(rule *access.Rule) { rule.Aspect = "canonical" }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			service, store := scopedService()
+			test.alter(&store.rules[1])
+			before := cloneRules(store.rules)
+			requested := access.Rule{Principal: "consumer", Actions: []string{"file.read"}, Repo: "A", Ref: "main", Object: "data/table", Aspect: "canonical"}
+			if receipt, err := service.Add(context.Background(), "manager", requested); kernel.CodeOf(err) != kernel.ErrForbidden || !reflect.DeepEqual(receipt, access.Rule{}) {
+				t.Fatalf("constrained manager delegated authority: %#v %v", receipt, err)
+			}
+			if !reflect.DeepEqual(store.rules, before) {
+				t.Fatal("denied delegation changed durable policy")
+			}
+		})
 	}
 }

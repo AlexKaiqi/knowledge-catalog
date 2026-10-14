@@ -13,7 +13,7 @@ import (
 // TestLiveTaihuAuthentication talks to real Taihu introspection. It is
 // authentication only: whoami and pairing headers, not allow.json.
 //
-//	KC_LIVE_TAIHU=1 KC_SERVICE_CLIENT_SECRET=… KC_AUTH_TOKEN=… go test -count=1 -run TestLiveTaihuAuthentication ./cli
+//	KC_LIVE_TAIHU=1 KC_SERVICE_CLIENT_SECRET=… KC_AUTH_TOKEN=… go test -count=1 -run '^TestLiveTaihuAuthentication$' ./server
 func TestLiveTaihuAuthentication(t *testing.T) {
 	if strings.TrimSpace(os.Getenv("KC_LIVE_TAIHU")) != "1" {
 		t.Skip("set KC_LIVE_TAIHU=1, KC_SERVICE_CLIENT_SECRET, and KC_AUTH_TOKEN to verify real Taihu introspection")

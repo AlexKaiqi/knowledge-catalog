@@ -14,6 +14,7 @@ path_hint: docs/graph/documents/terminology.okf
     "all"
   ],
   "ownerTopics": [
-    "public-vocabulary"
+    "public-vocabulary",
+    "resource-access-collector-observer-boundary"
   ]
 }

@@ -8,6 +8,7 @@ import (
 
 	"kc/client"
 	"kc/kernel"
+	snapshotclient "kc/snapshot/client"
 )
 
 func TestGrantClientUsesExistingInventoryCoordinates(t *testing.T) {
@@ -28,13 +29,13 @@ func TestGrantClientUsesExistingInventoryCoordinates(t *testing.T) {
 	if _, err := kc.Login(context.Background(), client.LoginRequest{Identity: client.Identity{Principal: "operator"}}); err != nil {
 		t.Fatal(err)
 	}
-	query := client.GrantRequest{Principal: "agent:reader", Repository: "kr://acme/one", Object: "data/*", Actions: []string{"knowledge.read"}}
+	query := snapshotclient.GrantRequest{Principal: "agent:reader", Repository: "kr://acme/one", Object: "data/*", Actions: []string{"knowledge.read"}}
 	var output map[string]any
-	if err := kc.AdminService().GrantsMatching(context.Background(), query, client.RequestOptions{}, &output); err != nil || output["rules"] == nil {
+	if err := kc.AdminService().GrantsMatching(context.Background(), query, snapshotclient.RequestOptions{}, &output); err != nil || output["rules"] == nil {
 		t.Fatalf("inventory: %#v %v", output, err)
 	}
 	query.Actions = append(query.Actions, "writer.commit")
-	if err := kc.AdminService().GrantsMatching(context.Background(), query, client.RequestOptions{}, &output); kernel.CodeOf(err) != kernel.ErrUsageInvalid || requests != 1 {
+	if err := kc.AdminService().GrantsMatching(context.Background(), query, snapshotclient.RequestOptions{}, &output); kernel.CodeOf(err) != kernel.ErrUsageInvalid || requests != 1 {
 		t.Fatalf("ambiguous action filter was sent: requests=%d err=%v", requests, err)
 	}
 }

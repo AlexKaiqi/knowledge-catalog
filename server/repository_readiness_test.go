@@ -9,12 +9,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"kc/index"
+	indeximplementation "kc/declarativeindex/projection"
+	retrieval "kc/discovery"
+	index "kc/discovery/projection"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/knowledge"
-	"kc/knowledge/reader"
-	"kc/retrieval"
+	objectmodel "kc/object"
+	"kc/object/reader"
 	"kc/snapshot"
 )
 
@@ -40,7 +41,7 @@ func (e *readinessEngine) Rebuild(_ []index.CompiledDoc, meta index.Meta) error 
 	e.meta = meta
 	return nil
 }
-func (e *readinessEngine) Apply(_ []index.CompiledDoc, _ []knowledge.ObjectID, meta index.Meta) error {
+func (e *readinessEngine) Apply(_ []index.CompiledDoc, _ []objectmodel.ObjectID, meta index.Meta) error {
 	e.activeCalls++
 	e.meta = meta
 	return nil
@@ -62,7 +63,7 @@ func repositoryReadinessFixture(t *testing.T) (*inv.Invocation, kchome.ManagedRe
 		t.Fatal(err)
 	}
 	eng := &readinessEngine{physical: "physical-v1", revision: "provider-v1"}
-	idx := index.NewIndexEngine(t.TempDir(), func(string, kernel.RepositoryID) (index.Engine, error) { return eng, nil })
+	idx := indeximplementation.NewIndexEngine(t.TempDir(), func(string, kernel.RepositoryID) (index.Engine, error) { return eng, nil })
 	t.Cleanup(func() { _ = idx.Close() })
 	head, err := repo.Head(snapshot.DefaultRef)
 	if err != nil {

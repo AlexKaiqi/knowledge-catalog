@@ -8,7 +8,7 @@ import (
 
 	"kc/internal/telemetry"
 	"kc/kernel"
-	knowledgeserving "kc/knowledge/serving"
+	knowledgeserving "kc/liveaccess"
 )
 
 type observedStateLookup struct {

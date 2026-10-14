@@ -8,6 +8,19 @@
 继续使用投影控制、Collector、Observer 与 Retriever，不因目录产品惯用 ingestion 就把对账面
 写成采集写面或让它接收变更写入。
 
+本篇拥有声明式索引插件的固定依据投影准备、推进后的维护需求、对账、增量、发布与
+恢复；逻辑声明归[声明式索引](declarative-index.md)，一次查询归[检索](retrieval.md)。
+系统注册、目标选择和贡献调用归[插件接入](plugin-extension.md)，不把接入机制作为
+另一套维护算法。
+
+多实例接入时，控制器主投影只维护本实例承担的 Repository HEAD；Dataset 恢复 lane
+直接按系统分区的接受来源版本调度，不先要求 DefaultRef HEAD 可读，同仓多个固定
+basis 独立尝试并核验。State 需求按本实例的 HEAD 实际依据与 Dataset 固定声明依据
+分别恢复；来源提示不把旧声明改为当前 HEAD。执行持久 pending 时也核对有效需求，旧工作账
+不重新赋予维护资格。不同实例的物理资源 namespace 和工作账必须区分；仅分开本地目录
+不能证明同一物理引擎上的资源隔离。唯一固定实例接纳既有资源，其身份不随部署默认选择
+改变；具体物理适配保持真实知识身份。
+
 ## Non-Goals
 
 - 不拥有知识发布、采集写面或查询执行；Writer 接受提交后只交出推进提示，不等待引擎。
@@ -27,9 +40,12 @@
 | 动态 State 投影 | 固定声明、来源观察与有效服务需求 | 声明版本没变不证明外部值没变 |
 | 其它 Snapshot 消费者 | 自身策略与实际派生状态 | 正文预热完成不授予搜索就绪 |
 
-应用服务从 Dataset 登记服务 恢复服务需求，经窄端口交给控制器；索引组件不导入 Dataset 登记服务，也不在
-查询到来时才登记必须维护的目标。同一来源版本可以被多个 Dataset 共享，授权和文件范围
-仍在消费时执行；动态观察还须满足相容的来源授权与共享边界。
+应用服务从 Dataset 登记服务恢复服务需求，经窄端口交给控制器；索引组件不导入 Dataset
+登记服务，也不在查询到来时才登记必须维护的目标。插件接入后，推进提示按各实例已登记
+的服务需求路由，不能只投递给该 Repository 当前查询所选实例而漏掉依赖它的 Dataset。
+Repository HEAD 与已接受 Dataset 的固定来源分别恢复，后者不随来源 HEAD 换依据。
+同一来源版本可以被多个 Dataset 共享，需求路由不改变共享投影合同；授权和文件范围
+仍在消费时执行，动态观察还须满足相容的来源授权与共享边界。
 
 动态 State 投影采用完整 object 文档：一篇文档同时携带 Snapshot 字段与已成功观察的
 State 字段，静态条件与动态条件因此能在同一文档上求 AND，首版无需跨两个提供方的候选集
@@ -167,8 +183,8 @@ Snapshot 和动态 State 都按各自有效目标维护。旧服务版不会因 
 
 ## 接口契约 / 状态机
 
-[Controller](../../index/controller.go)、[索引维护](../../index/sync.go)、
-[State 维护](../../index/state.go)、[变化通知](../../index/notice.go)、
-[提供方端口](../../index/engine.go)、[缓存消费者](../../retrieval/cache/README.md) 与
-[索引包用法及 Conformance](../../index/README.md) 承接可执行合同。
+[Controller](../../declarativeindex/control/controller.go)、[索引维护](../../declarativeindex/projection/sync.go)、
+[State 维护](../../declarativeindex/projection/state.go)、[变化通知](../../discovery/projection/notice.go)、
+[提供方端口](../../discovery/projection/engine.go)、[缓存消费者](../../object/cache/README.md) 与
+[索引包用法及 Conformance](../../declarativeindex/projection/README.md) 承接可执行合同。
 调度记录、状态枚举、批量参数和重试格式不在本文另写一份。

@@ -1,7 +1,7 @@
 Feature: 仓 HEAD 前进后重新发布 Dataset 并回读新版
 
   Scenario: 仓 HEAD 前进后重新发布 Dataset 并回读新版
-    When I run `kc writer put --command-id republish-head --repo kr://scene/knowledge --object note/republish --value '{"text":"republish"}'`
+    When I run `kc writer put urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:note%2Frepublish --command-id republish-head --value '{"text":"republish"}'`
     Then the output has:
       | disposition         | APPLIED |
       | result.repositoryId | kr://scene/knowledge |
@@ -16,11 +16,11 @@ Feature: 仓 HEAD 前进后重新发布 Dataset 并回读新版
       | sources.1.repository | kr://scene/graph |
       | sources.1.subPath | relations/rel |
       | sources.1.commit | nonempty |
-    When I run `kc read --dataset scene-set --object metric/gmv`
-    Then the output includes:
-      | [].objectId | metric/gmv |
-      | [].repository | kr://scene/knowledge |
-      | [].commit | nonempty |
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:metric%2Fgmv --dataset scene-set`
+    Then the output has:
+      | objectId | metric/gmv |
+      | repository | kr://scene/knowledge |
+      | commit | nonempty |
     When I run `kc show`
     Then the output includes:
       | datasets[].id | scene-set |

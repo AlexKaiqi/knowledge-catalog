@@ -5,10 +5,14 @@ import (
 	"encoding/json"
 	inv "kc/invocation"
 	serv "kc/server"
+	snapshotclient "kc/snapshot/client"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
+	"sync/atomic"
 	"testing"
 
 	"kc/client"
@@ -52,10 +56,10 @@ func TestDatasetDirectoryDeliveryReorganizesMultipleRepositories(t *testing.T) {
 			t.Fatalf("wrong delivery path or source: %#v", mount)
 		}
 		seen[mount.Path] = true
-		var directory client.WorkspaceFileDirectoryResponse
-		if err := f.reader.WorkspaceFilesService().Directory(context.Background(), client.WorkspaceFileDirectoryRequest{
+		var directory snapshotclient.WorkspaceFileDirectoryResponse
+		if err := f.reader.WorkspaceFilesService().Directory(context.Background(), snapshotclient.WorkspaceFileDirectoryRequest{
 			WorkspaceFileCoordinate: f.coordinate(t, &opened.Pin), MountPath: mount.Path,
-		}, client.RequestOptions{}, &directory); err != nil {
+		}, snapshotclient.RequestOptions{}, &directory); err != nil {
 			t.Fatal(err)
 		}
 		if len(directory.Entries) != 1 || directory.Entries[0].Name != "README.md" || directory.Entries[0].Kind != "file" ||
@@ -76,10 +80,10 @@ func TestDatasetDirectoryDeliveryReorganizesMultipleRepositories(t *testing.T) {
 		{"reference/policies", "../secret.txt", kernel.ErrUsageInvalid},
 		{"data/metrics", "../secret.txt", kernel.ErrUsageInvalid},
 	} {
-		var out client.WorkspaceFileReadResponse
-		err := f.reader.WorkspaceFilesService().Read(context.Background(), client.WorkspaceFileReadRequest{
+		var out snapshotclient.WorkspaceFileReadResponse
+		err := f.reader.WorkspaceFilesService().Read(context.Background(), snapshotclient.WorkspaceFileReadRequest{
 			WorkspaceFileCoordinate: f.coordinate(t, &opened.Pin), MountPath: tc.mount, File: tc.file,
-		}, client.RequestOptions{}, &out)
+		}, snapshotclient.RequestOptions{}, &out)
 		if err == nil || kernel.CodeOf(err) != tc.code || len(out.Content) != 0 {
 			t.Fatalf("out-of-scope read %s/%s: response=%#v err=%v", tc.mount, tc.file, out, err)
 		}
@@ -115,10 +119,10 @@ func TestDatasetDirectoryDeliveryRepublishKeepsOldLayoutAndBytes(t *testing.T) {
 		pin   dataset.ResolvedKnowledgeSet
 		mount string
 	}{{old.Pin, "handbook/rules"}, {current.Pin, "reference/policies"}} {
-		var out client.WorkspaceFileReadResponse
-		err := f.reader.WorkspaceFilesService().Read(context.Background(), client.WorkspaceFileReadRequest{
+		var out snapshotclient.WorkspaceFileReadResponse
+		err := f.reader.WorkspaceFilesService().Read(context.Background(), snapshotclient.WorkspaceFileReadRequest{
 			WorkspaceFileCoordinate: f.coordinate(t, &tc.pin), MountPath: tc.mount, File: "README.md",
-		}, client.RequestOptions{}, &out)
+		}, snapshotclient.RequestOptions{}, &out)
 		if kernel.CodeOf(err) != kernel.ErrForbidden {
 			t.Fatalf("release %d accepted another release's path %s: %v", tc.pin.Revision, tc.mount, err)
 		}
@@ -134,19 +138,19 @@ func TestDatasetDirectoryDeliveryRejectsTraversalInsideRelativePaths(t *testing.
 	for _, mount := range []string{"reference/policies", "reference/guides", "data/metrics"} {
 		t.Run(mount, func(t *testing.T) {
 			t.Run("read", func(t *testing.T) {
-				var out client.WorkspaceFileReadResponse
-				err := f.reader.WorkspaceFilesService().Read(context.Background(), client.WorkspaceFileReadRequest{
+				var out snapshotclient.WorkspaceFileReadResponse
+				err := f.reader.WorkspaceFilesService().Read(context.Background(), snapshotclient.WorkspaceFileReadRequest{
 					WorkspaceFileCoordinate: f.coordinate(t, &opened.Pin), MountPath: mount, File: "scratch/../../secret.txt",
-				}, client.RequestOptions{}, &out)
+				}, snapshotclient.RequestOptions{}, &out)
 				if kernel.CodeOf(err) != kernel.ErrUsageInvalid || len(out.Content) != 0 {
 					t.Fatalf("normalized path escaped selected subtree: response=%#v err=%v", out, err)
 				}
 			})
 			t.Run("list", func(t *testing.T) {
-				var out client.WorkspaceFileDirectoryResponse
-				err := f.reader.WorkspaceFilesService().Directory(context.Background(), client.WorkspaceFileDirectoryRequest{
+				var out snapshotclient.WorkspaceFileDirectoryResponse
+				err := f.reader.WorkspaceFilesService().Directory(context.Background(), snapshotclient.WorkspaceFileDirectoryRequest{
 					WorkspaceFileCoordinate: f.coordinate(t, &opened.Pin), MountPath: mount, Directory: "scratch/../..",
-				}, client.RequestOptions{}, &out)
+				}, snapshotclient.RequestOptions{}, &out)
 				if kernel.CodeOf(err) != kernel.ErrUsageInvalid || len(out.Entries) != 0 {
 					t.Fatalf("normalized directory escaped selected subtree: response=%#v err=%v", out, err)
 				}
@@ -187,18 +191,28 @@ func TestDatasetDirectoryDeliveryRejectsConflictsWithoutReplacingRelease(t *test
 }
 
 type directoryDelivery struct {
-	cfg       apphome.DeploymentConfig
-	serverURL string
-	operator  *client.Client
-	reader    *client.Client
+	cfg         apphome.DeploymentConfig
+	serverURL   string
+	operator    *client.Client
+	reader      *client.Client
+	sourceReads atomic.Int64
 }
 
 func newDirectoryDelivery(t *testing.T) *directoryDelivery {
 	t.Helper()
-	lakefs := testkit.NewLakeFSFake(t)
+	f := &directoryDelivery{}
+	sourceRepos := map[string]bool{}
+	lakefs := testkit.NewLakeFSFakeWithInterceptor(t, func(_ http.ResponseWriter, r *http.Request) bool {
+		parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+		if r.Method == http.MethodGet && len(parts) == 7 && parts[2] == "repositories" &&
+			parts[4] == "refs" && parts[6] == "objects" && sourceRepos[parts[3]] {
+			f.sourceReads.Add(1)
+		}
+		return false
+	})
 	t.Setenv("KC_LAKEFS_CREDENTIAL", lakefs.Credential())
 	root := t.TempDir()
-	f := &directoryDelivery{cfg: apphome.DeploymentConfig{
+	f.cfg = apphome.DeploymentConfig{
 		Version: 1, StateDir: filepath.Join(root, "state"), CacheDir: filepath.Join(root, "cache"),
 		Auth: "local", BootstrapPrincipal: "agent:publisher", Stores: apphome.StoresFile{Index: "none"},
 		Registry: apphome.RegistryBinding{ID: deliveryCatalog, Driver: "lakefs", DSN: lakefs.DSN(lakefs.NewRepo())},
@@ -206,7 +220,16 @@ func newDirectoryDelivery(t *testing.T) *directoryDelivery {
 			{ID: deliveryDocs, Driver: "lakefs", DSN: lakefs.DSN(lakefs.NewRepo())},
 			{ID: deliveryData, Driver: "lakefs", DSN: lakefs.DSN(lakefs.NewRepo())},
 		},
-	}}
+	}
+	for _, binding := range f.cfg.Repositories {
+		if binding.ID == deliveryDocs || binding.ID == deliveryData {
+			endpoint, err := snapshot.ParseLakeFSDSN(binding.DSN)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sourceRepos[endpoint.Repository] = true
+		}
+	}
 	if err := apphome.InitializeDeployment(f.cfg, func(dir, principal string) error {
 		return inv.WriteAllow(dir, inv.AllowFile{Rules: []inv.AllowRule{
 			{ID: "publisher", Principal: principal, Actions: []string{"*"}},
@@ -254,7 +277,7 @@ func newDirectoryDelivery(t *testing.T) *directoryDelivery {
 	f.operator, f.reader = newClient("agent:publisher"), newClient("agent:consumer")
 	for _, repository := range []string{deliveryDocs, deliveryData} {
 		if err := f.operator.SnapshotService().AttachRepository(context.Background(),
-			client.RepositoryAttachRequest{Repository: repository}, client.RequestOptions{}, nil); err != nil {
+			snapshotclient.RepositoryAttachRequest{Repository: repository}, snapshotclient.RequestOptions{}, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -297,12 +320,12 @@ func (f *directoryDelivery) write(t *testing.T, repository, commandID string, ch
 
 func (f *directoryDelivery) publish(revision int, sources []dataset.KnowledgeSetSource) error {
 	return f.operator.SnapshotService().DefineKnowledgeSet(context.Background(),
-		client.KnowledgeSetRequest{Dataset: "delivery", Revision: revision, Sources: sources}, client.RequestOptions{}, nil)
+		snapshotclient.KnowledgeSetRequest{Dataset: "delivery", Revision: revision, Sources: sources}, snapshotclient.RequestOptions{}, nil)
 }
 
-func (f *directoryDelivery) coordinate(t *testing.T, pin *dataset.ResolvedKnowledgeSet) client.WorkspaceFileCoordinate {
+func (f *directoryDelivery) coordinate(t *testing.T, pin *dataset.ResolvedKnowledgeSet) snapshotclient.WorkspaceFileCoordinate {
 	t.Helper()
-	coordinate := client.WorkspaceFileCoordinate{Dataset: "delivery", View: "repository"}
+	coordinate := snapshotclient.WorkspaceFileCoordinate{Dataset: "delivery", View: "repository"}
 	if pin != nil {
 		raw, err := json.Marshal(pin)
 		if err != nil {
@@ -313,12 +336,12 @@ func (f *directoryDelivery) coordinate(t *testing.T, pin *dataset.ResolvedKnowle
 	return coordinate
 }
 
-func (f *directoryDelivery) mounts(t *testing.T, pin *dataset.ResolvedKnowledgeSet) client.WorkspaceFileMountsResponse {
+func (f *directoryDelivery) mounts(t *testing.T, pin *dataset.ResolvedKnowledgeSet) snapshotclient.WorkspaceFileMountsResponse {
 	t.Helper()
-	var out client.WorkspaceFileMountsResponse
-	if err := f.reader.WorkspaceFilesService().Mounts(context.Background(), client.WorkspaceFileMountsRequest{
+	var out snapshotclient.WorkspaceFileMountsResponse
+	if err := f.reader.WorkspaceFilesService().Mounts(context.Background(), snapshotclient.WorkspaceFileMountsRequest{
 		WorkspaceFileCoordinate: f.coordinate(t, pin),
-	}, client.RequestOptions{}, &out); err != nil {
+	}, snapshotclient.RequestOptions{}, &out); err != nil {
 		t.Fatal(err)
 	}
 	return out
@@ -326,10 +349,10 @@ func (f *directoryDelivery) mounts(t *testing.T, pin *dataset.ResolvedKnowledgeS
 
 func (f *directoryDelivery) assertRead(t *testing.T, pin dataset.ResolvedKnowledgeSet, mount, content string) {
 	t.Helper()
-	var out client.WorkspaceFileReadResponse
-	if err := f.reader.WorkspaceFilesService().Read(context.Background(), client.WorkspaceFileReadRequest{
+	var out snapshotclient.WorkspaceFileReadResponse
+	if err := f.reader.WorkspaceFilesService().Read(context.Background(), snapshotclient.WorkspaceFileReadRequest{
 		WorkspaceFileCoordinate: f.coordinate(t, &pin), MountPath: mount, File: "README.md",
-	}, client.RequestOptions{}, &out); err != nil {
+	}, snapshotclient.RequestOptions{}, &out); err != nil {
 		t.Fatal(err)
 	}
 	if string(out.Content) != content || out.Mount.Path != mount || out.File != "README.md" || out.Offset != 0 ||

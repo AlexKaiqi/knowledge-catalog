@@ -114,10 +114,10 @@ func TestCommandSpecificUsageBoundaries(t *testing.T) {
 		{"preview create requires a proposal", []string{"governance", "preview", "create"}},
 		{"validation record requires an outcome", []string{"governance", "validation", "record"}},
 		{"binding resolve requires an aspect", []string{"binding", "show", "--repo", repositoryID, "--object", "Service:x"}},
-		{"read rejects pin", []string{"read", "--pin", `{}`, "--object", "policy/x"}},
+		{"read rejects pin", []string{"read", testObjectReference(t, repositoryID, "policy/x", ""), "--pin", `{}`}},
 		{"resolve requires an object", []string{"resolve", "--repo", repositoryID}},
 		{"resolve rejects a member without an aspect", []string{"resolve", "--repo", repositoryID, "--object", "policy/x", "--member", "user:bob"}},
-		{"read rejects a member without an aspect", []string{"read", "--repo", repositoryID, "--object", "policy/x", "--member", "user:bob"}},
+		{"read rejects retired split coordinates", []string{"read", "--repo", repositoryID, "--object", "policy/x", "--member", "user:bob"}},
 		{"log rejects an oversized page", []string{"log", "--repo", repositoryID, "--object", "policy/x", "--limit", "201"}},
 		{"log rejects a garbage continuation", []string{"log", "--repo", repositoryID, "--object", "policy/x", "--continuation", "not-a-cursor"}},
 		{"log rejects aspect coordinates", []string{"log", "--repo", repositoryID, "--object", "policy/x", "--aspect", "io"}},
@@ -146,7 +146,7 @@ func TestCommandSpecificUsageBoundaries(t *testing.T) {
 		{"diff requires a directory", []string{"diff", "--repo", repositoryID}},
 		{"invoke requires an operation", []string{"invoke", "--repo", repositoryID, "--object", "resource/x"}},
 		{"access rejects descriptor operations", []string{"access", "--repo", repositoryID, "--object", "resource/x", "--operation", "query", "--input", "{}"}},
-		{"read rejects mixed workspace and repo", []string{"read", "--dataset", "agent", "--repo", repositoryID, "--object", "policy/x"}},
+		{"read rejects mixed workspace and repo", []string{"read", testObjectReference(t, repositoryID, "policy/x", ""), "--dataset", "agent", "--repo", repositoryID}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -283,7 +283,7 @@ func TestMutatingCommandsRejectInvalidStateTargetsAndAuthorization(t *testing.T)
 		{"writer commit requires a directory", []string{"writer", "commit", "--command-id", "missing-changeset"}, "USAGE_INVALID"},
 		{"writer head rejects an unknown repository", []string{"writer", "head", "--repo", "kr://missing/repository"}, "USAGE_INVALID"},
 		{"diff rejects an unknown repository", []string{"diff", "--repo", "kr://missing/repository", "--dir", t.TempDir()}, "USAGE_INVALID"},
-		{"writer remove rejects an unknown repository", []string{"writer", "remove", "--command-id", "remove-missing", "--repo", "kr://missing/repository", "--object", "Policy:x"}, "USAGE_INVALID"},
+		{"writer remove rejects an unknown repository", []string{"writer", "remove", testObjectReference(t, "kr://missing/repository", "Policy:x", ""), "--command-id", "remove-missing"}, "USAGE_INVALID"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			expectCode(t, kc(home, tc.args...), tc.code)

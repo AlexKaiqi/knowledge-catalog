@@ -106,6 +106,9 @@ func (c *service) PrepareKnowledgeSet(setID string, revision int, sources []Know
 	if err != nil {
 		return KnowledgeSet{}, err
 	}
+	if err := c.validatePublicationFiles(items); err != nil {
+		return KnowledgeSet{}, err
+	}
 	def := KnowledgeSet{SetID: setID, Revision: revision, Sources: frozen, Items: items}
 	return def, nil
 }
@@ -156,6 +159,9 @@ func (c *service) PublishKnowledgeSet(def KnowledgeSet) (KnowledgeSet, error) {
 	}
 	items, err := datasetItemsFromSources(frozen, nil)
 	if err != nil {
+		return KnowledgeSet{}, err
+	}
+	if err := c.validatePublicationFiles(items); err != nil {
 		return KnowledgeSet{}, err
 	}
 	def = KnowledgeSet{SetID: def.SetID, Revision: def.Revision, Sources: frozen, Items: items, Metadata: maps.Clone(def.Metadata)}

@@ -4,8 +4,8 @@ import (
 	inv "kc/invocation"
 	"testing"
 
+	retrieval "kc/discovery"
 	"kc/kernel"
-	"kc/retrieval"
 )
 
 func TestSearchRequestFromFlags(t *testing.T) {

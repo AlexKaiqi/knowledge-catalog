@@ -2,13 +2,14 @@ package invocation
 
 import (
 	"fmt"
+	objectservice "kc/object/service"
 
 	"kc/invoke"
 	"kc/kernel"
-	knowledge "kc/knowledge"
-	reader "kc/knowledge/reader"
-	"kc/knowledge/writer"
-	knowledgeapp "kc/knowledgeapp"
+	objectmodel "kc/object"
+	reader "kc/object/reader"
+	"kc/object/writer"
+
 	"kc/snapshot"
 	"os"
 	"sort"
@@ -51,6 +52,15 @@ func VerbDiff(cx *Invocation) (any, error) {
 }
 
 func VerbPut(cx *Invocation) (any, error) {
+	if cx.Flag("reference") == "" {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "put requires an object URN")
+	}
+	if _, err := cx.Require("command-id"); err != nil {
+		return nil, err
+	}
+	if err := NormalizeReferenceFlags(cx.Flags); err != nil {
+		return nil, err
+	}
 	value, ok, err := LoadJSONFlag(cx.Flags, "--value")
 	if err != nil {
 		return nil, err
@@ -58,50 +68,20 @@ func VerbPut(cx *Invocation) (any, error) {
 	if !ok {
 		return nil, fmt.Errorf("put requires --file or --value")
 	}
-	op, err := WriteOperation(cx.Flags, knowledge.OpPut, value)
-	if err != nil {
-		return nil, err
-	}
-	return CommitOne(cx, []knowledge.Operation{op})
+	return maintainReference(cx, objectmodel.OpPut, value)
 }
 
 func VerbRemove(cx *Invocation) (any, error) {
-	op, err := WriteOperation(cx.Flags, knowledge.OpRemove, nil)
-	if err != nil {
+	if cx.Flag("reference") == "" {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "remove requires an object URN")
+	}
+	if _, err := cx.Require("command-id"); err != nil {
 		return nil, err
 	}
-	return CommitOne(cx, []knowledge.Operation{op})
-}
-
-// CommitOne is the single-operation COMMIT path behind put and remove. The
-// bulk data-plane option belongs to the directory/changeset commit surface;
-// single-operation commits reject it instead of silently ignoring the flag.
-func CommitOne(cx *Invocation, operations []knowledge.Operation) (any, error) {
-	if invoke.FlagBool(cx.Flags, "bulk") {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "--bulk applies to writer commit, not single-operation writes")
-	}
-	SetTelemetryChangeCounts(cx.Observation, operations)
-	rawRepositoryID, err := cx.Require("repo")
-	if err != nil {
+	if err := NormalizeReferenceFlags(cx.Flags); err != nil {
 		return nil, err
 	}
-	if err := RequireSnapshotRepository(cx, rawRepositoryID); err != nil {
-		return nil, err
-	}
-	repositoryID := kernel.RepositoryID(rawRepositoryID)
-	commandID, err := cx.Require("command-id")
-	if err != nil {
-		return nil, err
-	}
-	return cx.WS.Writer.CommitIntent(commandID, writer.CommitIntent{
-		TargetRepository:     repositoryID,
-		TargetRef:            cx.TargetRef("ref"),
-		BaseCommit:           kernel.CommitID(cx.Flag("base")),
-		ExpectedTargetCommit: kernel.CommitID(cx.Flag("expected")),
-		Operations:           operations,
-		Message:              cx.Flag("message"),
-		Provenance:           OriginFrom(cx.Flags),
-	})
+	return maintainReference(cx, objectmodel.OpRemove, nil)
 }
 
 func VerbCommit(cx *Invocation) (any, error) {
@@ -149,8 +129,8 @@ func VerbCommit(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return (knowledgeapp.CommitExecutor{Writer: cx.WS.Writer}).Execute(cx.Context,
-		knowledgeapp.CommitRequest{
+	return (objectservice.CommitExecutor{Writer: cx.WS.Writer}).Execute(cx.Context,
+		objectservice.CommitRequest{
 			CommandID: commandID,
 			Intent: writer.CommitIntent{
 				TargetRepository:     raw.TargetRepository,
@@ -190,8 +170,8 @@ func CommitDesiredDir(cx *Invocation) (any, error) {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "desired state already matches the current version")
 	}
 	SetTelemetryChangeCounts(cx.Observation, changeSet.Operations)
-	return (knowledgeapp.CommitExecutor{Writer: cx.WS.Writer}).Execute(cx.Context,
-		knowledgeapp.CommitRequest{
+	return (objectservice.CommitExecutor{Writer: cx.WS.Writer}).Execute(cx.Context,
+		objectservice.CommitRequest{
 			CommandID: commandID,
 			Intent: writer.CommitIntent{
 				TargetRepository:     changeSet.TargetRepository,
@@ -251,7 +231,7 @@ func PrepareDesiredIngest(cx *Invocation, repositoryID, dir string) (writer.Inge
 	return preview, base, current, nil
 }
 
-func DesiredDiffResult(repository string, commit kernel.CommitID, ops []knowledge.Operation, current map[string]string) map[string]any {
+func DesiredDiffResult(repository string, commit kernel.CommitID, ops []objectmodel.Operation, current map[string]string) map[string]any {
 	return map[string]any{
 		"repository": repository,
 		"commit":     commit,
@@ -269,19 +249,19 @@ func ReplayedDesiredReceipt(cx *Invocation, commandID string) (any, bool) {
 	return receipt, true
 }
 
-func DecodeChangeSet(body []byte, label string) (knowledge.CommitChangeSet, error) {
-	var raw knowledge.CommitChangeSet
+func DecodeChangeSet(body []byte, label string) (objectmodel.CommitChangeSet, error) {
+	var raw objectmodel.CommitChangeSet
 	if err := kernel.UnmarshalJSON(body, &raw); err != nil {
-		return knowledge.CommitChangeSet{}, fmt.Errorf("%s is not valid JSON", label)
+		return objectmodel.CommitChangeSet{}, fmt.Errorf("%s is not valid JSON", label)
 	}
 	if raw.TargetRepository != "" && raw.Operations != nil {
 		return raw, nil
 	}
 	var wrapped struct {
-		ChangeSet knowledge.CommitChangeSet `json:"changeSet"`
+		ChangeSet objectmodel.CommitChangeSet `json:"changeSet"`
 	}
 	if err := kernel.UnmarshalJSON(body, &wrapped); err != nil || wrapped.ChangeSet.TargetRepository == "" || wrapped.ChangeSet.Operations == nil {
-		return knowledge.CommitChangeSet{}, fmt.Errorf("changeset must include targetRepository and operations")
+		return objectmodel.CommitChangeSet{}, fmt.Errorf("changeset must include targetRepository and operations")
 	}
 	return wrapped.ChangeSet, nil
 }
@@ -314,7 +294,7 @@ func IngestDesired(flags map[string]invoke.FlagValue, dir, repoID, targetRef str
 	return preview, nil
 }
 
-func CurrentDigests(r *reader.Reader, repositoryID kernel.RepositoryID, commit kernel.CommitID, ops []knowledge.Operation) (map[string]string, error) {
+func CurrentDigests(r *reader.Reader, repositoryID kernel.RepositoryID, commit kernel.CommitID, ops []objectmodel.Operation) (map[string]string, error) {
 	out := map[string]string{}
 	if r == nil || commit == "" {
 		return out, nil
@@ -327,15 +307,15 @@ func CurrentDigests(r *reader.Reader, repositoryID kernel.RepositoryID, commit k
 			}
 			return nil, err
 		}
-		if resolution.Status == knowledge.StatusUnresolved || resolution.Digest == "" {
+		if resolution.Status == objectmodel.StatusUnresolved || resolution.Digest == "" {
 			continue
 		}
-		out[knowledge.AddressKey(op.Address)] = string(resolution.Digest)
+		out[objectmodel.AddressKey(op.Address)] = string(resolution.Digest)
 	}
 	return out, nil
 }
 
-func ClassifyDesiredChanges(ops []knowledge.Operation, current map[string]string) []map[string]any {
+func ClassifyDesiredChanges(ops []objectmodel.Operation, current map[string]string) []map[string]any {
 	changes := make([]map[string]any, 0)
 	for _, op := range ops {
 		row := map[string]any{"objectId": string(op.Address.ObjectID)}
@@ -345,13 +325,13 @@ func ClassifyDesiredChanges(ops []knowledge.Operation, current map[string]string
 		if op.Address.MemberKey != "" {
 			row["memberKey"] = op.Address.MemberKey
 		}
-		if op.Op == knowledge.OpRemove {
+		if op.Op == objectmodel.OpRemove {
 			row["change"] = "remove"
 			changes = append(changes, row)
 			continue
 		}
 		digest := string(kernel.CanonicalDigest(op.Value))
-		existing, ok := current[knowledge.AddressKey(op.Address)]
+		existing, ok := current[objectmodel.AddressKey(op.Address)]
 		switch {
 		case !ok:
 			row["change"] = "add"

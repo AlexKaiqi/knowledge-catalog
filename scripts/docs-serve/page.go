@@ -72,6 +72,7 @@ func wrapPage(title, rel, body string) string {
     }
     h1 { font-size: 1.85rem; }
     p { color: var(--muted); }
+    main img { max-width: 100%%; height: auto; }
     code {
       font-family: var(--mono);
       font-size: 0.86em;
@@ -163,7 +164,7 @@ func absUnderRoot(root, urlPath string) (string, string, error) {
 	if err != nil {
 		rootResolved = root
 	}
-	if !underRoot(rootResolved, resolved) && !underRoot(root, abs) {
+	if !underRoot(rootResolved, resolved) || !underRoot(root, abs) {
 		return "", "", os.ErrPermission
 	}
 	return abs, relSlash, nil

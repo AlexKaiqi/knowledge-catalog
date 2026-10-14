@@ -4,6 +4,16 @@
 
 应然设计见 [CLI 交互](../docs/reviewed/cli.md)。公开 argv 以 [`surface.go`](surface.go) 为准，现行操作语义以 [`SURFACE.md`](SURFACE.md) 为准。本文保留重构目标、否决项和迁移对照，不是文档图 owner。
 
+2026-10-14 客户端收尾：公开 CLI 静态组合 Snapshot、Object、Discovery、Declarative Index、
+LiveAccess 五个模块的命令、输入、帮助和产品结果；KC 保留全局 parser、认证会话、部署、
+宿主管理与跨模块装配。旧私有类型/函数转发、空文件和兼容业务 registry 已清理。
+command/verbs 内部登记、嵌入 Invocation 的遥测与证据链，以及 kcfs 的本机夹具 projection、
+prepare 和读取适配仅在 `_test.go` 编译；产品 `Run` 只通过 typed Client 进入 Server。
+模块细节矩阵归各模块测试，宿主保留 argv、认证上下文、跨模块旅程与实际 Server 集成证据。
+会话 round-trip、过期和文件权限改测现行保存/读取入口；原直连 OAuth 交换仅作为明确命名的
+Legacy 测试材料保留，当前 Server broker 的秘密检查、拒绝与成功结果另外经 typed SDK 验证。
+下文批次、旧路径与否决项保留当时范围，不作为现行源码所有权说明。
+
 下文的计数、落地顺序与风险属于当时迁移记录，不作为当前命令分母或未完成清单；当前范围
 由注册表、help 与 Conformance 对账。历史问题的完成结果见 §13.1。
 
@@ -554,7 +564,7 @@ kc grant add --repo <id> --principal <user> \
     detach = Catalog 成员移除（新 catalog API + HTTP + client；≠ repo archive）
 
 (4) 操作数收紧
-    rejectPublicSurfaceFlags：knowledge/写 拒绝 --catalog|--source|--pin；Writer/`schema list` 拒绝 --dataset
+    rejectPublicSurfaceFlags：object/写 拒绝 --catalog|--source|--pin；Writer/`schema list` 拒绝 --dataset
     schema list 仅 --repo；删 search --catalog / catalog_discovery 产品路径
     kcfs 必填 --dataset --root；治理 preview 用 --dataset；hook/gate 默认当前 Catalog
 

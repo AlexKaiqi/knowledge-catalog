@@ -13,6 +13,7 @@ import (
 	inv "kc/invocation"
 	"kc/invoke"
 	"kc/kernel"
+	objectmodel "kc/object"
 	"kc/snapshot"
 	"kc/snapshot/access"
 	"kc/snapshot/dataset"
@@ -35,7 +36,8 @@ func (f *httpFacade) snapshotStoreService() snapshotservice.Handler {
 }
 
 func (f *httpFacade) snapshotNativeCredential() func(context.Context) (string, error) {
-	if !f.options.Authenticated() || f.options.AuthModeLabel() == "lakefs" {
+	explicitLocal := f.options.localAssertion() && strings.EqualFold(strings.TrimSpace(f.options.AuthMode), "local")
+	if (!f.options.Authenticated() && !explicitLocal) || f.options.AuthModeLabel() == "lakefs" {
 		return nil
 	}
 	return func(context.Context) (string, error) {
@@ -65,6 +67,10 @@ func snapshotOperationAction(operation string) (string, error) {
 	switch operation {
 	case "inventory-show", "repository-list", "dataset-list", "dataset-show":
 		return "inventory.read", nil
+	case "registry-audit":
+		return "registry.audit.read", nil
+	case "repository-attach", "detach":
+		return "repositories.manage", nil
 	case "dataset-define", "dataset-retire":
 		return "dataset.manage", nil
 	case "pin", "pin-check", "pin-source", "file-mounts", "file-list", "file-read":
@@ -130,7 +136,14 @@ func (f *httpFacade) snapshotResources(opened *Home, caller identity.HTTPIdentit
 		if request.Caller.Principal != caller.Principal || request.Caller.OnBehalfOf != caller.OnBehalfOf {
 			return kernel.Fail(kernel.ErrUnauthenticated, "Snapshot Store authorization caller changed within one lease")
 		}
+		if operation == "detach" && request.Query.Repo == string(objectmodel.SystemRepositoryID) {
+			return kernel.Fail(kernel.ErrForbidden, "System Repository %s cannot be detached", request.Query.Repo)
+		}
 		return f.authorizeSnapshotRequest(ctx, opened, operation, immutable, request)
+	}
+	resources.DiscoveryWorkspaceID = inv.ConfiguredDiscoveryWorkspace(opened)
+	resources.BeforeAttach = func(_ context.Context, _ identity.HTTPIdentity, id kernel.RepositoryID) error {
+		return opened.ValidateRepositoryAttachment(id)
 	}
 	resources.DescribeRepository = func(_ context.Context, caller identity.HTTPIdentity, id kernel.RepositoryID) (map[string]any, error) {
 		view := inv.DescribeRepository(opened, id)
@@ -162,10 +175,12 @@ func (f *httpFacade) snapshotResources(opened *Home, caller identity.HTTPIdentit
 		return definition, receipt, nil
 	}
 	resources.PreparePublication = func(ctx context.Context, _ identity.HTTPIdentity, definition dataset.KnowledgeSet) error {
-		return opened.PrepareDataset(ctx, definition)
+		return opened.DatasetPreparation.Execute(ctx, definition)
 	}
 	resources.EnsureDataset = func(_ context.Context, _ identity.HTTPIdentity, cat dataset.Service, id string) error {
-		_, err := inv.EnsureWorkspace(opened, opened.Dir, cat, id)
+		// Consumption confirms an accepted definition. First adoption is an
+		// explicit publication with target management and source permission.
+		_, err := cat.Set(id)
 		return err
 	}
 	resources.RecordRead = func(ctx context.Context, caller identity.HTTPIdentity, evidence snapshotservice.FileReadEvidence) error {
@@ -203,6 +218,16 @@ func (f *httpFacade) authorizeSnapshotRequest(ctx context.Context, opened *Home,
 	}
 	var err error
 	switch {
+	case request.Query.Action == access.RepositoryDatasetPublish:
+		rules, readErr := inv.ReadAllow(opened.Dir)
+		err = readErr
+		if err == nil {
+			query := request.Query
+			query.Principal = request.Caller.Principal
+			if _, allowed := access.MatchSourcePublication(rules.Rules, query); !allowed {
+				err = kernel.Fail(kernel.ErrForbidden, "%s is not allowed to %s", query.Principal, query.Action)
+			}
+		}
 	case request.Query.Action == "file.read" && request.Definition != nil && request.Pin != nil:
 		err = inv.RequireCompleteWorkspaceRead(opened.Dir, flags, inv.KnowledgeSetPin(*request.Pin), request.Query.Object)
 	case request.Query.Action == "file.read" && request.Query.Repo != "":
@@ -320,7 +345,7 @@ func (f *httpFacade) aroundSnapshotOperation(ctx context.Context, caller identit
 		return nil, err
 	}
 	metadata := snapshotservice.ContextMetadata(ctx)
-	flags := snapshotRequestFlags(ctx, caller, access.Query{Action: action, Dataset: metadata.Dataset})
+	flags := snapshotRequestFlags(ctx, caller, access.Query{Action: action, Dataset: metadata.Dataset, Repo: metadata.Repository})
 	flags["home"] = lease.opened.Dir
 	observation := invoke.NewObservationTelemetry(ctx, f.runtime, operation, func() string { return inv.TelemetryProvider(flags) })
 	return inv.WithHooks(lease.opened, lease.opened.Dir, action, flags, observation, run)

@@ -1,11 +1,73 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestMainAcceptsDesignDocumentsWithoutFixedSections(t *testing.T) {
+	root := t.TempDir()
+	writeMarkdownFixture(t, root, "go.mod", "module documentation-fixture\n")
+	for _, class := range []string{"entrypoint", "foundation", "decision", "runtime", "evolution"} {
+		path := "docs/reviewed/" + class + ".md"
+		if class == "entrypoint" {
+			path = "README.md"
+		}
+		writeMarkdownFixture(t, root, path, "# 重构目标\n\n沿已有契约接入插件，读取时返回实际数据。\n")
+		body, err := json.Marshal(catalogEntry{
+			ID: class, Path: path, Title: "重构目标", Class: class,
+			Lifecycle: "active", OwnerTopics: []string{class + "-topic"},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		unit := fmt.Sprintf("---\nobject_id: documentation/%s\naspect_name: catalog-entry\nkind: Aspect\n---\n%s\n", class, body)
+		writeMarkdownFixture(t, root, "docs/graph/documents/"+class+".okf", unit)
+	}
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Errorf("restore working directory: %v", err)
+		}
+	})
+	// Exercise the command, including graph and link checks. Reintroducing a
+	// mandatory section here must fail even when lower-level checks still pass.
+	main()
+}
+
+func TestValidateCatalogKeepsOwnershipAndCycleChecks(t *testing.T) {
+	root := t.TempDir()
+	writeMarkdownFixture(t, root, "README.md", "入口\n")
+	writeMarkdownFixture(t, root, "docs/topic.md", "目标：透明读取。\n")
+	docs := map[string]catalogEntry{
+		"root":  {Path: "README.md", OwnerTopics: []string{"entry"}},
+		"topic": {Path: "docs/topic.md", OwnerTopics: []string{"entry"}},
+	}
+	if err := validateCatalog(root, docs, nil); err == nil || !strings.Contains(err.Error(), `ownerTopic "entry" duplicated`) {
+		t.Fatalf("duplicate topic ownership was not rejected: %v", err)
+	}
+	docs["topic"] = catalogEntry{Path: "docs/topic.md", OwnerTopics: []string{"topic"}}
+	if err := validateCatalog(root, docs, nil); err != nil {
+		t.Fatalf("distinct ownership failed: %v", err)
+	}
+	cycle := []edge{
+		{Type: "depends_on", From: "root", To: "topic"},
+		{Type: "depends_on", From: "topic", To: "root"},
+	}
+	if err := validateCatalog(root, docs, cycle); err == nil || !strings.Contains(err.Error(), "depends_on graph has a cycle") {
+		t.Fatalf("dependency cycle was not rejected: %v", err)
+	}
+}
 
 func TestValidateMarkdownLinksMaintainedDocuments(t *testing.T) {
 	for _, tc := range []struct {

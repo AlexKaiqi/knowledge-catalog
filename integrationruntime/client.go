@@ -4,7 +4,7 @@ import (
 	"context"
 	"kc/client"
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 )
 
 // ClientWriter implements the runtime publication port exclusively with the
@@ -26,7 +26,7 @@ func (w ClientWriter) Head(ctx context.Context, repository kernel.RepositoryID, 
 	return result.Commit, nil
 }
 
-func (w ClientWriter) Commit(ctx context.Context, command string, change knowledge.CommitChangeSet) (kernel.CommitID, error) {
+func (w ClientWriter) Commit(ctx context.Context, command string, change objectmodel.CommitChangeSet) (kernel.CommitID, error) {
 	var result struct {
 		CommandID string `json:"commandId"`
 		Result    struct {

@@ -29,8 +29,8 @@ var routeRegistration = regexp.MustCompile(`mux\.Handle(?:Func)?\("(GET|POST|PUT
 // not share the CLI command table: HTTP is an independent typed protocol.
 func TestEveryPublicHTTPRouteIsRegisteredWithOnlyItsDeclaredMethod(t *testing.T) {
 	routes := registeredHTTPRoutes(t)
-	if len(routes) != 92 {
-		t.Fatalf("public HTTP route count changed from the reviewed 92 to %d; review the new protocol surface", len(routes))
+	if len(routes) != 95 {
+		t.Fatalf("public HTTP route count changed from the reviewed 95 to %d; review the new protocol surface", len(routes))
 	}
 
 	handler := serv.HTTPHandlerWithOptions(testkit.TempDir(t), serv.HTTPServerOptions{})
@@ -107,8 +107,7 @@ func TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses(t *testing.T) {
 	repositoryDSN := lakeFSRepoDSN(t)
 	body(t, kc(home, "local", "repository", "attach", "--repo", repositoryID, "--dsn", repositoryDSN))
 	body(t, kc(home, "attach", "--repo", repositoryID, "--dsn", repositoryDSN))
-	body(t, kc(home, "writer", "put", "--command-id", "http-only-seed", "--repo", repositoryID,
-		"--object", "Policy:http-only", "--value", `{"body":"http-only"}`))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "Policy:http-only", ""), "--command-id", "http-only-seed", "--value", `{"body":"http-only"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1",
 		"--source", repositoryID+"=refs/heads/main@knowledge"))
 	body(t, kc(home, "grant", "add", "--principal", principal,
@@ -275,6 +274,7 @@ func concreteHTTPPath(pattern string) string {
 		return strings.NewReplacer("{repository}", "native-repo", "{pull}", "one").Replace(pattern)
 	}
 	replacer := strings.NewReplacer(
+		"{name}", "declarative-index",
 		"{repository}", "kr:%2F%2Facme%2Frepository",
 		"{dataset}", "agent",
 		"{command}", "command-1",

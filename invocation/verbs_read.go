@@ -3,17 +3,19 @@ package invocation
 import (
 	"context"
 	"fmt"
+	discoveryservice "kc/discovery/service"
+	objectservice "kc/object/service"
 	"os"
 	"strings"
 
 	"encoding/json"
 	"kc/invoke"
 	"kc/kernel"
-	knowledge "kc/knowledge"
-	reader "kc/knowledge/reader"
-	knowledgeserving "kc/knowledge/serving"
-	knowledgeapp "kc/knowledgeapp"
-	"kc/retrieval"
+	"kc/liveaccess"
+	objectmodel "kc/object"
+	reader "kc/object/reader"
+
+	retrieval "kc/discovery"
 	"kc/snapshot/dataset"
 	"strconv"
 )
@@ -26,20 +28,39 @@ type (
 // VerbResolveBinding returns the stable declaration required by an upper
 // Materialization runtime. It never invokes the runtime or returns live data.
 func VerbResolveBinding(cx *Invocation) (any, error) {
-	address, err := AddressFrom(cx.Flags)
+	address, err := bindingAddress(cx)
 	if err != nil {
 		return nil, err
 	}
-	if address.AspectName == "" {
-		return nil, fmt.Errorf("resolve-binding requires --aspect")
-	}
 	return OnTarget(cx,
 		func(serving *reader.Serving, _ dataset.Service) (any, error) {
-			return serving.ResolveBinding(address)
+			return liveaccess.ResolveBinding(serving, address)
 		},
 		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
-			return cx.WS.Reader.ResolveBinding(repositoryID, commitID, address)
+			repo, err := cx.WS.Reader.Require(repositoryID, kernel.ErrKnowledgeRefUnresolved)
+			if err != nil {
+				return nil, err
+			}
+			return liveaccess.ResolveRepoBinding(repo, commitID, address)
 		})
+}
+
+func bindingAddress(cx *Invocation) (objectmodel.Address, error) {
+	address, err := AddressFrom(cx.Flags)
+	if err != nil {
+		return objectmodel.Address{}, err
+	}
+	if address.AspectName == "" {
+		return objectmodel.Address{}, fmt.Errorf("resolve-binding requires --aspect")
+	}
+	return address, nil
+}
+
+func repositoryServingAt(cx *Invocation, repository kernel.RepositoryID, commit kernel.CommitID, setID string) *reader.Serving {
+	repositories := map[kernel.RepositoryID]kernel.CommitID{repository: commit}
+	return reader.Open(func(id kernel.RepositoryID) (objectmodel.Repository, error) {
+		return cx.WS.Reader.Require(id, kernel.ErrKnowledgeRefUnresolved)
+	}, reader.KnowledgeSetPin{SetID: setID, Repositories: repositories, Items: reader.WholeRepositoryItems(repositories)})
 }
 
 // OnTarget dispatches a read to the Workspace pin or to one pinned Repository commit.
@@ -109,7 +130,7 @@ func VerbResolveObject(cx *Invocation) (any, error) {
 			if err != nil {
 				return nil, err
 			}
-			return serving.Resolve(knowledge.ObjectID(objectID))
+			return serving.Resolve(objectmodel.ObjectID(objectID))
 		},
 		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
 			if UsesAddress(cx.Flags) {
@@ -188,53 +209,53 @@ func ShapePinOutput(flags map[string]invoke.FlagValue, result any) (any, error) 
 }
 
 func VerbRead(cx *Invocation) (any, error) {
+	reference, err := referenceFromFlags(cx.Flags)
+	if err != nil {
+		return nil, err
+	}
+	if reference == nil {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "read requires an object URN")
+	}
+	if err := NormalizeReferenceFlags(cx.Flags); err != nil {
+		return nil, err
+	}
 	if ServingWorkspace(cx.Flags) {
-		object, err := cx.Require("object")
+		values, err := (objectservice.DatasetReadExecutor{
+			Authorize: func(context.Context) error { return Authorize(cx.Home, "knowledge.read", cx.Flags, nil, cx.WS) },
+			ReferenceRead: func(_ context.Context, ref objectmodel.Reference) ([]objectmodel.ObservedValue, error) {
+				return readDatasetReference(cx, ref)
+			},
+			Deliver: func(_ context.Context, values []objectmodel.ObservedValue) ([]objectmodel.ObservedValue, error) {
+				return FilterKnowledgeServingReads(cx.Home, cx.Flags, nil, values), nil
+			},
+		}).Execute(cx.Context, objectservice.DatasetReadRequest{Reference: *reference})
 		if err != nil {
 			return nil, err
 		}
-		request := knowledgeapp.DatasetReadRequest{Object: knowledge.ObjectID(object), Selector: AspectSelectorFrom(cx.Flags)}
-		if UsesAddress(cx.Flags) {
-			address, err := AddressFrom(cx.Flags)
-			if err != nil {
-				return nil, err
-			}
-			request.Address = &address
+		if len(values) != 1 {
+			return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "Reference did not select one published source object")
 		}
-		return (knowledgeapp.DatasetReadExecutor{
-			Authorize: func(context.Context) error { return Authorize(cx.Home, "knowledge.read", cx.Flags, nil, cx.WS) },
-			Resolve: func(context.Context) (*knowledgeserving.Service, error) {
-				serving, _, err := OpenCompleteServing(cx, object)
-				if err != nil {
-					return nil, err
-				}
-				return LogicalWorkspaceServing(cx, serving)
-			},
-			Deliver: func(_ context.Context, values []knowledgeserving.ReadResult) ([]knowledgeserving.ReadResult, error) {
-				return FilterKnowledgeServingReads(cx.Home, cx.Flags, nil, values), nil
-			},
-		}).Execute(cx.Context, request)
+		return values[0], nil
 	}
-	return OnTarget(cx, nil,
-		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
-			objectID, err := cx.Require("object")
-			if err != nil {
-				return nil, err
-			}
-			request := knowledgeapp.ReadRequest{
-				Repository: repositoryID, Commit: commitID,
-				Object: knowledge.ObjectID(objectID),
-			}
-			if UsesAddress(cx.Flags) {
-				address, err := AddressFrom(cx.Flags)
-				if err != nil {
-					return nil, err
-				}
-				request.Address = &address
-			}
-			request.Selector = AspectSelectorFrom(cx.Flags)
-			return (knowledgeapp.ReadExecutor{Reader: cx.WS.Reader}).Execute(cx.Context, request)
-		})
+	_, commitID, err := PinCommit(cx.WS, cx.Flags)
+	if err != nil {
+		return nil, err
+	}
+	observed, err := readRepositoryObserved(cx, objectservice.ReadRequest{
+		Reference: *reference, Commit: commitID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(observed.Observations) == 0 && len(observed.Failures) == 0 {
+		return objectmodel.KnowledgeValue{
+			Reference: observed.Reference, Locator: observed.Locator, Digest: observed.Digest,
+			KnowledgeRef: observed.KnowledgeRef, Repository: observed.Repository, Commit: observed.Commit,
+			Address: observed.Address, Value: observed.Value, Provenance: observed.Provenance,
+			Units: observed.Units, Declarations: observed.Declarations,
+		}, nil
+	}
+	return observed, nil
 }
 
 // VerbProvenance returns the origin envelopes stamped on each unit. It does not
@@ -249,11 +270,11 @@ func VerbProvenance(cx *Invocation) (any, error) {
 			if err != nil {
 				return nil, err
 			}
-			traces, err := serving.GetProvenance(knowledge.ObjectID(objectID))
+			traces, err := serving.GetProvenance(objectmodel.ObjectID(objectID))
 			if err != nil {
 				return nil, err
 			}
-			out := []knowledge.ProvenanceTrace{}
+			out := []objectmodel.ProvenanceTrace{}
 			for _, trace := range traces {
 				if AllowedRepoRead(cx.Home, cx.Flags, string(trace.Repository), string(trace.ObjectID)) {
 					out = append(out, trace)
@@ -281,8 +302,8 @@ func VerbRelations(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	direction := knowledge.RelationDirection(strings.ToUpper(cx.Flag("direction")))
-	if direction != "" && direction != knowledge.RelationDirected && direction != knowledge.RelationUndirected {
+	direction := objectmodel.RelationDirection(strings.ToUpper(cx.Flag("direction")))
+	if direction != "" && direction != objectmodel.RelationDirected && direction != objectmodel.RelationUndirected {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "--direction must be DIRECTED or UNDIRECTED")
 	}
 	if ServingWorkspace(cx.Flags) {
@@ -297,7 +318,7 @@ func VerbRelations(cx *Invocation) (any, error) {
 		if !AllowedRepoRead(cx.Home, cx.Flags, string(endpoint.Repository), string(endpoint.Object)) {
 			return nil, kernel.Fail(kernel.ErrForbidden, "relation endpoint repository is not authorized")
 		}
-		return (knowledgeapp.DatasetRelationsExecutor{Serving: serving, Repositories: cx.WS.Reader, Projection: cx.WS.Index}).Execute(cx.Context, RelationPageRequest(endpoint, cx, limit, direction))
+		return (discoveryservice.DatasetRelationsExecutor{Serving: serving, Repositories: cx.WS.Reader, Projection: cx.WS.Index}).Execute(cx.Context, RelationPageRequest(endpoint, cx, limit, direction))
 	}
 	if strings.HasPrefix(object, "kc://") {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "repository relations requires a bare --object ObjectID")
@@ -310,11 +331,11 @@ func VerbRelations(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	endpoint := knowledge.KnowledgeRef{Repository: repositoryID, Object: knowledge.ObjectID(object)}
+	endpoint := objectmodel.KnowledgeRef{Repository: repositoryID, Object: objectmodel.ObjectID(object)}
 	return cx.WS.Index.RelationsAtContext(cx.Context, repo, commitID, RelationPageRequest(endpoint, cx, limit, direction))
 }
 
-func RelationPageRequest(endpoint knowledge.KnowledgeRef, cx *Invocation, limit int, direction knowledge.RelationDirection) retrieval.RelationPageRequest {
+func RelationPageRequest(endpoint objectmodel.KnowledgeRef, cx *Invocation, limit int, direction objectmodel.RelationDirection) retrieval.RelationPageRequest {
 	return retrieval.RelationPageRequest{
 		Query: retrieval.RelationQuery{
 			Endpoint: endpoint, RelationType: cx.Flag("relation-type"), Role: cx.Flag("role"), Direction: direction,
@@ -348,8 +369,8 @@ func VerbTraverse(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	direction := knowledge.RelationDirection(strings.ToUpper(cx.Flag("direction")))
-	if direction != "" && direction != knowledge.RelationDirected && direction != knowledge.RelationUndirected {
+	direction := objectmodel.RelationDirection(strings.ToUpper(cx.Flag("direction")))
+	if direction != "" && direction != objectmodel.RelationDirected && direction != objectmodel.RelationUndirected {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "--direction must be DIRECTED or UNDIRECTED")
 	}
 	step := retrieval.TraverseStep{RelationType: cx.Flag("relation-type"), Role: cx.Flag("role"), Direction: direction}
@@ -370,7 +391,7 @@ func VerbTraverse(cx *Invocation) (any, error) {
 			return nil, kernel.Fail(kernel.ErrForbidden, "traverse start repository is not authorized")
 		}
 		request.Query.Start = endpoint
-		return (knowledgeapp.DatasetTraverseExecutor{Serving: serving, Repositories: cx.WS.Reader, Projection: cx.WS.Index}).Execute(cx.Context, request)
+		return (discoveryservice.DatasetTraverseExecutor{Serving: serving, Repositories: cx.WS.Reader, Projection: cx.WS.Index}).Execute(cx.Context, request)
 	}
 	if strings.HasPrefix(object, "kc://") {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "repository traverse requires a bare --object ObjectID")
@@ -379,26 +400,26 @@ func VerbTraverse(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	request.Query.Start = knowledge.KnowledgeRef{Repository: repositoryID, Object: knowledge.ObjectID(object)}
-	return (knowledgeapp.RepoTraverseExecutor{Repositories: cx.WS.Reader, Projection: cx.WS.Index}).Execute(cx.Context, request, repositoryID, commitID)
+	request.Query.Start = objectmodel.KnowledgeRef{Repository: repositoryID, Object: objectmodel.ObjectID(object)}
+	return (discoveryservice.RepoTraverseExecutor{Repositories: cx.WS.Reader, Projection: cx.WS.Index}).Execute(cx.Context, request, repositoryID, commitID)
 }
 
-func WorkspaceRelationEndpoint(raw string, pin reader.KnowledgeSetPin) (knowledge.KnowledgeRef, error) {
+func WorkspaceRelationEndpoint(raw string, pin reader.KnowledgeSetPin) (objectmodel.KnowledgeRef, error) {
 	if !strings.HasPrefix(raw, "kc://") {
-		return knowledge.KnowledgeRef{}, kernel.Fail(kernel.ErrUsageInvalid,
+		return objectmodel.KnowledgeRef{}, kernel.Fail(kernel.ErrUsageInvalid,
 			"workspace relations requires an unpinned kc:// repository/object reference")
 	}
-	var match knowledge.KnowledgeRef
+	var match objectmodel.KnowledgeRef
 	matchedPrefix := 0
 	for repository := range pin.Repositories {
-		prefix := knowledge.FormatKnowledgeRef(repository, "")
+		prefix := objectmodel.FormatKnowledgeRef(repository, "")
 		if len(prefix) > matchedPrefix && strings.HasPrefix(raw, prefix) && len(raw) > len(prefix) {
-			match = knowledge.KnowledgeRef{Repository: repository, Object: knowledge.ObjectID(raw[len(prefix):])}
+			match = objectmodel.KnowledgeRef{Repository: repository, Object: objectmodel.ObjectID(raw[len(prefix):])}
 			matchedPrefix = len(prefix)
 		}
 	}
 	if match.Repository == "" {
-		return knowledge.KnowledgeRef{}, kernel.Fail(kernel.ErrUsageInvalid,
+		return objectmodel.KnowledgeRef{}, kernel.Fail(kernel.ErrUsageInvalid,
 			"relation endpoint repository is not a member of the resolved Workspace")
 	}
 	return match, nil
@@ -407,7 +428,7 @@ func WorkspaceRelationEndpoint(raw string, pin reader.KnowledgeSetPin) (knowledg
 // VerbDescribeSchema reports the AccessHints a schema declares, which is what
 // decides the logical retrieval surface compiled into AccessSpec.
 func VerbDescribeSchema(cx *Invocation) (any, error) {
-	objectID := knowledge.ObjectID(cx.Flag("object"))
+	objectID := objectmodel.ObjectID(cx.Flag("object"))
 	return OnTarget(cx,
 		func(serving *reader.Serving, _ dataset.Service) (any, error) {
 			reports, err := serving.DescribeSchema(objectID)
@@ -445,31 +466,33 @@ func VerbLog(cx *Invocation) (any, error) {
 			if err != nil {
 				return nil, err
 			}
-			id := knowledge.ObjectID(objectID)
-			return CollectObjectLogPage(cx.Home, cx.Flags, id, serving.Pin().Repositories, limit, cx.Flag("continuation"),
-				func(repositoryID kernel.RepositoryID, commitID kernel.CommitID, query knowledge.ObjectLogQuery) ([]knowledge.ObjectRevision, error) {
-					allowed, err := serving.Contains(repositoryID, id)
-					if err != nil || !allowed {
-						return nil, err
-					}
-					repo, err := serving.Member(repositoryID)
-					if err != nil {
-						return nil, err
-					}
-					return repo.Log(id, commitID, query)
-				})
+			id := objectmodel.ObjectID(objectID)
+			return (objectservice.ObjectLogExecutor{Allow: func(repo kernel.RepositoryID, id objectmodel.ObjectID) bool {
+				return AllowedRepoRead(cx.Home, cx.Flags, string(repo), string(id))
+			}, ReadLog: func(repositoryID kernel.RepositoryID, commitID kernel.CommitID, query objectmodel.ObjectLogQuery) ([]objectmodel.ObjectRevision, error) {
+				allowed, err := serving.Contains(repositoryID, id)
+				if err != nil || !allowed {
+					return nil, err
+				}
+				repo, err := serving.Member(repositoryID)
+				if err != nil {
+					return nil, err
+				}
+				return repo.Log(id, commitID, query)
+			}}).Execute(cx.Context, objectservice.ObjectLogRequest{Object: id, Pin: serving.Pin().Repositories, Limit: limit, Continuation: cx.Flag("continuation")})
 		},
 		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
 			objectID, err := cx.Require("object")
 			if err != nil {
 				return nil, err
 			}
-			id := knowledge.ObjectID(objectID)
+			id := objectmodel.ObjectID(objectID)
 			pin := map[kernel.RepositoryID]kernel.CommitID{repositoryID: commitID}
-			return CollectObjectLogPage(cx.Home, cx.Flags, id, pin, limit, cx.Flag("continuation"),
-				func(member kernel.RepositoryID, commit kernel.CommitID, query knowledge.ObjectLogQuery) ([]knowledge.ObjectRevision, error) {
-					return cx.WS.Reader.Log(member, id, commit, query)
-				})
+			return (objectservice.ObjectLogExecutor{Allow: func(repo kernel.RepositoryID, id objectmodel.ObjectID) bool {
+				return AllowedRepoRead(cx.Home, cx.Flags, string(repo), string(id))
+			}, ReadLog: func(member kernel.RepositoryID, commit kernel.CommitID, query objectmodel.ObjectLogQuery) ([]objectmodel.ObjectRevision, error) {
+				return cx.WS.Reader.Log(member, id, commit, query)
+			}}).Execute(cx.Context, objectservice.ObjectLogRequest{Object: id, Pin: pin, Limit: limit, Continuation: cx.Flag("continuation")})
 		})
 }
 
@@ -498,14 +521,14 @@ func LoadJSONFlag(flags map[string]invoke.FlagValue, label string) (any, bool, e
 	return nil, false, nil
 }
 
-func SetTelemetryChangeCounts(observation *invoke.ObservationTelemetry, operations []knowledge.Operation) {
+func SetTelemetryChangeCounts(observation *invoke.ObservationTelemetry, operations []objectmodel.Operation) {
 	observation = invoke.NoObservationTelemetry(observation)
 	puts, removes := 0, 0
 	for _, operation := range operations {
 		switch operation.Op {
-		case knowledge.OpPut:
+		case objectmodel.OpPut:
 			puts++
-		case knowledge.OpRemove:
+		case objectmodel.OpRemove:
 			removes++
 		}
 	}
@@ -535,82 +558,23 @@ func OpenCompleteServing(cx *Invocation, object string) (*reader.Serving, datase
 	return serving, cat, nil
 }
 
-func AspectSelectorFrom(flags map[string]invoke.FlagValue) *knowledge.AspectSelector {
+func AspectSelectorFrom(flags map[string]invoke.FlagValue) *objectmodel.AspectSelector {
 	include := invoke.FlagStrings(flags, "include")
 	exclude := invoke.FlagStrings(flags, "exclude")
 	if len(include) == 0 && len(exclude) == 0 {
 		return nil
 	}
-	return &knowledge.AspectSelector{Include: include, Exclude: exclude}
+	return &objectmodel.AspectSelector{Include: include, Exclude: exclude}
 }
 
-func FilterKnowledgeServingReads(home string, flags map[string]invoke.FlagValue, _ dataset.Service, values []knowledgeserving.ReadResult) []knowledgeserving.ReadResult {
-	out := []knowledgeserving.ReadResult{}
+func FilterKnowledgeServingReads(home string, flags map[string]invoke.FlagValue, _ dataset.Service, values []objectmodel.ObservedValue) []objectmodel.ObservedValue {
+	out := []objectmodel.ObservedValue{}
 	for _, item := range values {
 		if AllowedRepoRead(home, flags, string(item.Repository), string(item.ObjectID)) {
 			out = append(out, item)
 		}
 	}
 	return out
-}
-
-func CollectObjectLogPage(
-	home string,
-	flags map[string]invoke.FlagValue,
-	objectID knowledge.ObjectID,
-	pin map[kernel.RepositoryID]kernel.CommitID,
-	limit int,
-	continuation string,
-	readLog func(kernel.RepositoryID, kernel.CommitID, knowledge.ObjectLogQuery) ([]knowledge.ObjectRevision, error),
-) (objectLogPage, error) {
-	basis := objectLogBasis(pin)
-	after, err := decodeObjectLogCursor(continuation, objectID, basis)
-	if err != nil {
-		return objectLogPage{}, err
-	}
-	logs := []reader.ObjectLog{}
-	nextAfter := map[string]string{}
-	for _, repositoryID := range pinnedRepositoryIDs(pin) {
-		if !AllowedRepoRead(home, flags, string(repositoryID), string(objectID)) {
-			continue
-		}
-		repoKey := string(repositoryID)
-		if after != nil {
-			if _, open := after[repoKey]; !open {
-				continue
-			}
-		}
-		query := knowledge.ObjectLogQuery{Limit: limit + 1}
-		if after != nil {
-			query.After = kernel.CommitID(after[repoKey])
-		}
-		revisions, logErr := readLog(repositoryID, pin[repositoryID], query)
-		if logErr != nil {
-			if kernel.CodeOf(logErr) == kernel.ErrKnowledgeRefUnresolved {
-				continue
-			}
-			return objectLogPage{}, logErr
-		}
-		if len(revisions) == 0 {
-			continue
-		}
-		more := len(revisions) > limit
-		if more {
-			revisions = revisions[:limit]
-			nextAfter[repoKey] = string(revisions[len(revisions)-1].Commit)
-		}
-		logs = append(logs, reader.ObjectLog{
-			Repository: repositoryID,
-			ObjectID:   objectID,
-			Commit:     pin[repositoryID],
-			Revisions:  revisions,
-		})
-	}
-	page := objectLogPage{Logs: logs}
-	if len(nextAfter) > 0 {
-		page.Continuation = encodeObjectLogCursor(objectID, basis, nextAfter)
-	}
-	return page, nil
 }
 
 func ParseJSON(text, label string) (any, error) {

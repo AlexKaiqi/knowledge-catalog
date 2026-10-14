@@ -12,7 +12,7 @@ import (
 
 	kcclient "kc/client"
 	"kc/kernel"
-	"kc/knowledge/writer"
+	"kc/object/writer"
 )
 
 // TestRemoteCommitRecoversReceiptAfterPOSTTimeout pins the receipt-recovery

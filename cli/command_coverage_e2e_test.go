@@ -19,16 +19,11 @@ func TestCatalogViewsChecksAndKnowledgeResolve(t *testing.T) {
 
 	body(t, kc(home, "local", "init"))
 	seedRepo(t, home, repositoryID)
-	body(t, kc(home, "writer", "put", "--command-id", "coverage-schema", "--repo", repositoryID,
-		"--object", "schema/policy.body",
-		"--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
-	body(t, kc(home, "writer", "put", "--command-id", "coverage-object", "--repo", repositoryID,
-		"--object", "policy/coverage", "--schema-ref", "schema/policy.body", "--value", `{"body":"coverage"}`))
-	body(t, kc(home, "writer", "put", "--command-id", "coverage-service", "--repo", repositoryID,
-		"--object", "Service:coverage", "--aspect", "properties", "--value", `{"name":"coverage"}`))
-	body(t, kc(home, "writer", "put", "--command-id", "coverage-resource", "--repo", repositoryID,
-		"--object", "resource/coverage", "--value",
-		`{"kind":"ResourceDescriptor","runtime":"sql","protocol":"resource-access/v1","access":{"query":{"call":"sql.query"}}}`))
+	adoptLiveAccessFixture(t, home, repositoryID)
+	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "schema/policy.body", ""), "--command-id", "coverage-schema", "--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "policy/coverage", ""), "--command-id", "coverage-object", "--schema-ref", "schema/policy.body", "--value", `{"body":"coverage"}`))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "Service:coverage", "/properties"), "--command-id", "coverage-service", "--value", `{"name":"coverage"}`))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "resource/coverage", ""), "--command-id", "coverage-resource", "--value", `{"kind":"ResourceDescriptor","runtime":"sql","protocol":"resource-access/v1","access":{"query":{"call":"sql.query"}}}`))
 	head := asMap(t, body(t, kc(home, "writer", "head", "--repo", repositoryID)))
 	if head["repository"] != repositoryID || head["commit"] == "" {
 		t.Fatalf("writer head must expose a fixed Connector/preview base: %#v", head)
@@ -132,12 +127,8 @@ func TestCatalogViewsChecksAndKnowledgeResolve(t *testing.T) {
 		})
 	}))
 	t.Cleanup(runtime.Close)
-	body(t, kc(home, "writer", "put", "--command-id", "coverage-health-schema", "--repo", repositoryID,
-		"--object", "schema/service.health",
-		"--value", `{"entity":"Service","aspect":"health","origin":"`+runtime.URL+`","fields":{"status":{"type":"string","access":["filter"]}}}`))
-	body(t, kc(home, "writer", "put", "--command-id", "coverage-resource-origin", "--repo", repositoryID,
-		"--object", "resource/coverage", "--value",
-		`{"kind":"ResourceDescriptor","runtime":"sql","protocol":"resource-access/v1","origin":"`+runtime.URL+`","access":{"query":{"call":"sql.query"}}}`))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "schema/service.health", ""), "--command-id", "coverage-health-schema", "--value", `{"entity":"Service","aspect":"health","origin":"`+runtime.URL+`","fields":{"status":{"type":"string","access":["filter"]}}}`))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "resource/coverage", ""), "--command-id", "coverage-resource-origin", "--value", `{"kind":"ResourceDescriptor","runtime":"sql","protocol":"resource-access/v1","origin":"`+runtime.URL+`","access":{"query":{"call":"sql.query"}}}`))
 	resource := asMap(t, body(t, kc(home, "access", "--repo", repositoryID,
 		"--object", "Service:coverage", "--aspect", "health")))
 	if asMap(t, resource["value"])["status"] != "healthy" {

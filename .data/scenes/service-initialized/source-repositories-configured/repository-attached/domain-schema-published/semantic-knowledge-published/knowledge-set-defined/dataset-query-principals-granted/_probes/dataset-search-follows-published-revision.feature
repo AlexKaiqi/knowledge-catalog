@@ -3,12 +3,12 @@ Feature: Dataset 重新发布后搜索与回读使用服务版本
   Scenario: Dataset 重新发布后搜索与回读使用服务版本
     When I run `kc search --dataset scene-set --query merchandise`
     Then 1 hit metric/gmv
-    When I run `kc read --repo kr://scene/knowledge --commit $last.hits.0.commit --object metric/gmv --aspect definition`
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:metric%2Fgmv#/definition --commit $last.hits.0.commit`
     Then the output has:
       | objectId | metric/gmv |
       | repository | kr://scene/knowledge |
       | value.name          | Gross merchandise value |
-    When I run `kc writer put --command-id after-search --repo kr://scene/knowledge --object note/after-search --value '{"text":"after-search"}'`
+    When I run `kc writer put urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:note%2Fafter-search --command-id after-search --value '{"text":"after-search"}'`
     Then the output has:
       | disposition         | APPLIED |
       | result.repositoryId | kr://scene/knowledge |
@@ -17,10 +17,10 @@ Feature: Dataset 重新发布后搜索与回读使用服务版本
     Then the output has:
       | repository  | kr://scene/knowledge |
       | basisCommit | nonempty |
-    When I run `kc read --dataset scene-set --object metric/gmv --aspect definition`
-    Then the output includes:
-      | [].objectId | metric/gmv |
-      | [].value.name          | Gross merchandise value |
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:metric%2Fgmv#/definition --dataset scene-set`
+    Then the output has:
+      | objectId | metric/gmv |
+      | value.name          | Gross merchandise value |
     When I run `kc relations --dataset scene-set --object kc://scene/knowledge/metric/gmv`
     Then the output includes:
       | hits[].objectId | rel/defines/gmv |
@@ -36,7 +36,7 @@ Feature: Dataset 重新发布后搜索与回读使用服务版本
       | basisCommit | nonempty |
     When I run `kc search --dataset scene-set --query merchandise`
     Then 1 hit metric/gmv
-    When I run `kc read --dataset scene-set --object metric/gmv --aspect definition`
-    Then the output includes:
-      | [].objectId | metric/gmv |
-      | [].value.name          | Gross merchandise value |
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:metric%2Fgmv#/definition --dataset scene-set`
+    Then the output has:
+      | objectId | metric/gmv |
+      | value.name          | Gross merchandise value |

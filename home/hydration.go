@@ -1,11 +1,7 @@
 package home
 
 import (
-	"context"
-
-	"kc/kernel"
-	"kc/knowledge"
-	readcache "kc/retrieval/cache"
+	readcache "kc/object/cache"
 )
 
 // HydrationCacheConfig controls process-local Snapshot body acceleration.
@@ -38,14 +34,5 @@ func (ws *Home) configureHydration() error {
 	}
 	ws.ReadCache, ws.Hydrator = cache, cache
 	ws.Reader.SetHydrator(cache)
-	ws.Index.SetHydrator(cache)
 	return nil
-}
-
-type cacheWarmer struct{ cache *readcache.Cache }
-
-func (cacheWarmer) ID() string { return "snapshot-body-cache/v1" }
-
-func (w cacheWarmer) Reconcile(ctx context.Context, repo knowledge.Repository, commit kernel.CommitID) error {
-	return w.cache.Warm(ctx, repo, commit)
 }

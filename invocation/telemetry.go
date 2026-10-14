@@ -7,13 +7,12 @@ import (
 
 	"go.opentelemetry.io/otel/trace"
 
+	retrieval "kc/discovery"
 	kchome "kc/home"
 	"kc/internal/telemetry"
 	"kc/invoke"
 	"kc/kernel"
-	"kc/knowledge"
-	knowledgeserving "kc/knowledge/serving"
-	"kc/retrieval"
+	objectmodel "kc/object"
 )
 
 type TelemetryStart struct {
@@ -216,7 +215,7 @@ func TelemetryProvider(flags map[string]invoke.FlagValue) string {
 func knowledgeReadFanout(visible any) (objects, units int) {
 	objects, units = -1, -1
 	switch typed := visible.(type) {
-	case []knowledgeserving.ReadResult:
+	case []objectmodel.ObservedValue:
 		seen := map[string]struct{}{}
 		units = 0
 		for _, item := range typed {
@@ -228,21 +227,21 @@ func knowledgeReadFanout(visible any) (objects, units int) {
 			}
 		}
 		objects = len(seen)
-	case knowledgeserving.ReadResult:
+	case objectmodel.ObservedValue:
 		objects = 1
 		if n := len(typed.Units); n > 0 {
 			units = n
 		} else {
 			units = 1
 		}
-	case knowledge.KnowledgeValue:
+	case objectmodel.KnowledgeValue:
 		objects = 1
 		if n := len(typed.Units); n > 0 {
 			units = n
 		} else {
 			units = 1
 		}
-	case []knowledge.KnowledgeValue:
+	case []objectmodel.KnowledgeValue:
 		seen := map[string]struct{}{}
 		units = 0
 		for _, item := range typed {

@@ -41,6 +41,7 @@ test.each([undefined, 'native-files'])('Compare respects explicit native mapping
     const fetcher = vi.fn(async (input: string, options?: RequestInit) => {
         const path = new URL(input, window.location.origin);
         if (path.pathname === '/snapshot/v1/repositories') return json({repositories: [{id: 'kr://example/source', consoleRepository: native}]});
+        if (path.pathname === '/snapshot/v1/datasets/shared/resolve') return json({setId: 'shared', revision: 2, repositories: {'kr://example/source': 'fixed-2'}});
         if (path.pathname === '/snapshot/v1/datasets/shared') {
             const revision = Number(path.searchParams.get('revision')) || 2;
             return json({id: 'shared', revision, servingRevision: 2, versions: [1, 2], itemCount: 1, repositories: ['kr://example/source'],

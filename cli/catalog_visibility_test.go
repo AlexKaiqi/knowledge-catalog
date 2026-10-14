@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	apphome "kc/home"
-	"kc/knowledge"
+	objectmodel "kc/object"
 )
 
 func TestAuthenticatedPrincipalDiscoversPublicCatalogWithoutGrant(t *testing.T) {
@@ -32,7 +32,7 @@ func TestAuthenticatedPrincipalDiscoversPublicCatalogWithoutGrant(t *testing.T) 
 	if _, present := show["catalogId"]; present || len(show["repositories"].([]any)) == 0 {
 		t.Fatalf("service inventory shape changed: %#v", show)
 	}
-	expectCode(t, kcRemote(t, server.URL, "agent:viewer", "read", "--repo", source.ID, "--object", "note/one"), "FORBIDDEN")
+	expectCode(t, kcRemote(t, server.URL, "agent:viewer", "read", testObjectReference(t, source.ID, "note/one", "")), "FORBIDDEN")
 }
 
 func TestRegistryHistoryRequiresExplicitAuditReadGrant(t *testing.T) {
@@ -75,8 +75,8 @@ func TestUndeclaredSystemRepositoryStillRequiresGrant(t *testing.T) {
 			_ = closer.Close()
 		}
 	}()
-	expectCode(t, kcRemote(t, server.URL, "agent:viewer", "schema", "list", "--repo", string(knowledge.SystemRepositoryID)), "FORBIDDEN")
-	expectCode(t, kcRemote(t, server.URL, "agent:viewer", "read", "--repo", string(knowledge.SystemRepositoryID), "--object", string(knowledge.MetaSchemaV1)), "FORBIDDEN")
+	expectCode(t, kcRemote(t, server.URL, "agent:viewer", "schema", "list", "--repo", string(objectmodel.SystemRepositoryID)), "FORBIDDEN")
+	expectCode(t, kcRemote(t, server.URL, "agent:viewer", "read", testObjectReference(t, string(objectmodel.SystemRepositoryID), string(objectmodel.MetaSchemaV1), "")), "FORBIDDEN")
 }
 
 func TestAuthenticatedPrincipalReadsDeclaredRepositoryWithoutGrant(t *testing.T) {
@@ -106,9 +106,9 @@ func TestAuthenticatedPrincipalReadsDeclaredRepositoryWithoutGrant(t *testing.T)
 	if listed["repository"] != source.ID {
 		t.Fatalf("declared authenticated read must admit schema browse: %#v", listed)
 	}
-	expectCode(t, kcRemote(t, server.URL, "agent:viewer", "read", "--repo", source.ID, "--object", "note/one"), "KNOWLEDGE_REF_UNRESOLVED")
-	expectCode(t, kcRemote(t, server.URL, "agent:viewer", "schema", "list", "--repo", string(knowledge.SystemRepositoryID)), "FORBIDDEN")
-	expectCode(t, kcRemote(t, server.URL, "agent:viewer", "writer", "put", "--command-id", "mutate-declared", "--repo", source.ID, "--object", "note/one", "--value", `{"v":1}`), "FORBIDDEN")
+	expectCode(t, kcRemote(t, server.URL, "agent:viewer", "read", testObjectReference(t, source.ID, "note/one", "")), "KNOWLEDGE_REF_UNRESOLVED")
+	expectCode(t, kcRemote(t, server.URL, "agent:viewer", "schema", "list", "--repo", string(objectmodel.SystemRepositoryID)), "FORBIDDEN")
+	expectCode(t, kcRemote(t, server.URL, "agent:viewer", "writer", "put", testObjectReference(t, source.ID, "note/one", ""), "--command-id", "mutate-declared", "--value", `{"v":1}`), "FORBIDDEN")
 }
 
 func TestDeclaredSystemRepositoryUsesAuthenticatedDefault(t *testing.T) {
@@ -125,9 +125,9 @@ func TestDeclaredSystemRepositoryUsesAuthenticatedDefault(t *testing.T) {
 			_ = closer.Close()
 		}
 	}()
-	report := asMap(t, body(t, kcRemote(t, server.URL, "agent:viewer", "schema", "list", "--repo", string(knowledge.SystemRepositoryID))))
-	if report["repository"] != string(knowledge.SystemRepositoryID) {
+	report := asMap(t, body(t, kcRemote(t, server.URL, "agent:viewer", "schema", "list", "--repo", string(objectmodel.SystemRepositoryID))))
+	if report["repository"] != string(objectmodel.SystemRepositoryID) {
 		t.Fatalf("declared System Repository must be readable like any other authenticated-default repo: %#v", report)
 	}
-	expectCode(t, kcRemote(t, server.URL, "agent:viewer", "writer", "put", "--command-id", "mutate-system", "--repo", string(knowledge.SystemRepositoryID), "--object", "schema/evil", "--value", `{"entity":"Evil"}`), "FORBIDDEN")
+	expectCode(t, kcRemote(t, server.URL, "agent:viewer", "writer", "put", testObjectReference(t, string(objectmodel.SystemRepositoryID), "schema/evil", ""), "--command-id", "mutate-system", "--value", `{"entity":"Evil"}`), "FORBIDDEN")
 }

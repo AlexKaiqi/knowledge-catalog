@@ -77,7 +77,7 @@ func main() {
 	writeBase := flag.Bool("write-baseline", false, "write the computed snapshot to the baseline file and exit")
 	strict := flag.Bool("strict", false, "fail when propagation cost exceeds the baseline, a unit drifts by >=0.05 Instability, or a unit is missing from the baseline")
 	baselineFlag := flag.String("baseline", "", "baseline JSON path (default: scripts/coupling/baseline.json under the repo root)")
-	depth := flag.Int("depth", 1, "unit granularity: path segments, with registered named subunits at depth 1 (structural report only)")
+	depth := flag.Int("depth", defaultUnitDepth, "unit granularity: path segments, with registered named subunits at depth 1 (structural report only)")
 	cochange := flag.Bool("cochange", false, "print normalized file/unit co-change rates from git history and exit")
 	cochangeMin := flag.Int("cochange-min", 4, "minimum shared commits for a co-change pair to be reported")
 	filesOf := flag.String("files", "", "print per-file LOC/churn and prefix clusters for one unit and exit")
@@ -99,8 +99,8 @@ func main() {
 		}
 		return
 	}
-	if *strict && *depth != 1 {
-		fatal(fmt.Errorf("-strict requires -depth=1: baselines are recorded at unit granularity"))
+	if *strict && *depth != defaultUnitDepth {
+		fatal(fmt.Errorf("-strict requires -depth=2: baselines use root/first-level capability granularity"))
 	}
 	basePath := *baselineFlag
 	if basePath == "" {
@@ -369,7 +369,7 @@ func readBaseline(path string) (*baseline, error) {
 // strictCheck implements the ratchet: metrics may improve but must not get
 // worse, and the unit set may only grow via an explicit baseline tightening.
 func strictCheck(base *baseline, stats []unitStat, propagation float64) []string {
-	if err := comparableBaseline(base, 1); err != nil {
+	if err := comparableBaseline(base, defaultUnitDepth); err != nil {
 		return []string{err.Error()}
 	}
 	var problems []string
@@ -462,7 +462,7 @@ func runCochange(root string, minSupport int) error {
 	for _, files := range commits {
 		units := map[string]bool{}
 		for _, f := range files {
-			units[relativeUnit(f, 1)] = true
+			units[relativeUnit(f, defaultUnitDepth)] = true
 		}
 		// Unit churn counts commits, not file touches: co-change rates compare
 		// commit support on both sides.

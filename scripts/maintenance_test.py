@@ -14,31 +14,84 @@ SCRIPTS = pathlib.Path(__file__).resolve().parent
 
 
 class MaintenanceEntryTest(unittest.TestCase):
+    def isolated_testsuite(self, root, group, mode="declared", evidence=False):
+        scripts, bins = root / "scripts", root / "bin"
+        scripts.mkdir()
+        bins.mkdir()
+        shutil.copyfile(SCRIPTS / "testsuite.sh", scripts / "testsuite.sh")
+        log = root / "commands.jsonl"
+        go = bins / "go"
+        go.write_text(f"#!{sys.executable}\n"
+                      f"log_path = {str(log)!r}\n" + '''import json, os, sys
+args = sys.argv[1:]
+mode = os.environ["KC_MAINTENANCE_TEST_MODE"]
+with open(log_path, "a") as log:
+    log.write(json.dumps({"args": args, "live": os.getenv("KC_LIVE_TAIHU"),
+                         "report": os.getenv("KC_COMMAND_COVERAGE_REPORT")}) + "\\n")
+if "-list" in args:
+    if mode == "list-failed":
+        print("listing failed", file=sys.stderr)
+        sys.exit(71)
+    declared = mode != "empty" and args[-1] == "./server"
+    print("TestLiveTaihuAuthentication" if declared else "TestLiveTaihuAuthenticationExtra")
+    print("ok kc/server")
+elif mode == "test-failed":
+    print("test failed", file=sys.stderr)
+    sys.exit(73)
+elif args[-1] != "./server":
+    print("ok kc/cli [no tests to run]")
+else:
+    print(json.dumps({"Action": "pass", "Package": "kc/server",
+                      "Test": "TestLiveTaihuAuthentication"}))
+''')
+        go.chmod(0o755)
+        for name in ("npm", "node", "docker"):
+            stub = bins / name
+            stub.write_text("#!/bin/sh\nexit 75\n")
+            stub.chmod(0o755)
+        env = dict(os.environ, GO=str(go), KC_VALIDATION_RUN_ID="isolated-fixture",
+                   KC_VALIDATION_RUN_DIR=str(root / "evidence") if evidence else "",
+                   KC_TEST_OPENSEARCH_URL="", KC_LIVE_TAIHU="0",
+                   KC_MAINTENANCE_TEST_MODE=mode)
+        env.pop("KC_COMMAND_COVERAGE_REPORT", None)
+        env["PATH"] = str(bins) + os.pathsep + env.get("PATH", "")
+        result = subprocess.run(["/bin/bash", str(scripts / "testsuite.sh"), group],
+                                env=env, capture_output=True, text=True, timeout=10)
+        return result, log
+
     def test_retired_gitea_entry_rejects_without_side_effects(self):
         with tempfile.TemporaryDirectory() as temp:
             root = pathlib.Path(temp)
-            scripts, bins = root / "scripts", root / "bin"
-            scripts.mkdir()
-            bins.mkdir()
-            shutil.copyfile(SCRIPTS / "testsuite.sh", scripts / "testsuite.sh")
-            log = root / "commands.jsonl"
-            go = bins / "go"
-            go.write_text(f"#!{sys.executable}\n"
-                          "import json, os, sys\n"
-                          f"with open({str(log)!r}, 'a') as log:\n"
-                          "    log.write(json.dumps({'args': sys.argv[1:], 'live': os.getenv('KC_REQUIRE_LIVE_ADAPTERS')}) + '\\n')\n")
-            go.chmod(0o755)
-            for name in ("npm", "node", "docker"):
-                stub = bins / name
-                stub.write_text("#!/bin/sh\nexit 75\n")
-                stub.chmod(0o755)
-            env = dict(os.environ, GO=str(go), KC_VALIDATION_RUN_ID="isolated-fixture",
-                       KC_VALIDATION_RUN_DIR="", KC_TEST_OPENSEARCH_URL="http://opensearch.invalid")
-            env["PATH"] = str(bins) + os.pathsep + env.get("PATH", "")
-            result = subprocess.run(["/bin/bash", str(scripts / "testsuite.sh"), "gitea"],
-                                    env=env, capture_output=True, text=True, timeout=10)
+            result, log = self.isolated_testsuite(root, "gitea")
             self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
             self.assertFalse(log.exists(), "retired driver must not run a provider or install dependencies")
+
+    def test_taihu_suite_dispatch_requires_declared_owner_and_preserves_failures(self):
+        name, package = "TestLiveTaihuAuthentication", "./server"
+        selection = f"^{name}$"
+        for mode, evidence, status in (("declared", False, 0), ("declared", True, 0),
+                                       ("empty", True, 1), ("list-failed", True, 71),
+                                       ("test-failed", True, 73)):
+            with self.subTest(mode=mode, evidence=evidence), tempfile.TemporaryDirectory() as temp:
+                root = pathlib.Path(temp)
+                result, log = self.isolated_testsuite(root, "taihu-live", mode, evidence)
+                self.assertEqual(result.returncode, status, result.stdout + result.stderr)
+                calls = [json.loads(line) for line in log.read_text().splitlines()]
+                self.assertEqual(calls[0]["args"], ["test", "-list", selection, package])
+                self.assertTrue(all(call["live"] == "1" for call in calls),
+                                "Taihu suite must explicitly activate its existing live gate")
+                if mode in ("empty", "list-failed"):
+                    self.assertEqual(len(calls), 1, "failed declaration lookup must prevent test execution")
+                    self.assertIn("not declared" if mode == "empty" else "listing failed", result.stderr)
+                    continue
+                self.assertEqual(len(calls), 2)
+                expected = ["test"] + (["-json"] if evidence else [])
+                expected += ["-count=1", "-timeout=2m", "-run", selection, package]
+                self.assertEqual(calls[1]["args"], expected)
+                report = str(root / "evidence" / "command-coverage-1.json") if evidence else None
+                self.assertEqual(calls[1]["report"], report)
+                if mode == "test-failed":
+                    self.assertIn("test failed", result.stderr)
 
     def test_native_daemon_acceptance_preserves_failures_and_cleanup(self):
         source = (SCRIPTS / "e2e-kcfs-linux.sh").read_text()
@@ -204,11 +257,13 @@ exec(sys.stdin.read(), {"__name__": "__main__"})
     def test_surface_guard_rejects_retired_implementations_and_cli_examples(self):
         with tempfile.TemporaryDirectory() as temp:
             root = pathlib.Path(temp)
-            for directory in ("scripts", "cli", "client", "knowledge/serving",
+            for directory in ("scripts", "cli", "client", "liveaccess", "object",
+                              "snapshot/cli", "snapshot/client",
                               "snapshot/dataset", "snapshot/access", "snapshot/service", "snapshot/console", "docs", "server", "cmd", ".github"):
                 (root / directory).mkdir(parents=True, exist_ok=True)
             for name in ("README.md", "cli/README.md", "snapshot/README.md", "snapshot/dataset/README.md", "snapshot/access/README.md", "snapshot/service/README.md", "snapshot/console/README.md",
-                         "knowledge/serving/README.md", "Makefile", ".dockerignore"):
+                         "snapshot/cli/README.md", "snapshot/client/README.md",
+                         "liveaccess/README.md", "Makefile", ".dockerignore"):
                 (root / name).write_text("")
             (root / "snapshot/service/contract.go").write_text("package service\n")
             (root / "snapshot/service/file_http.go").write_text('mux.HandleFunc("POST /snapshot/v1/files/file:read", handler)\n')

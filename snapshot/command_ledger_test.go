@@ -15,10 +15,11 @@ import (
 )
 
 type memoryStore struct {
-	entries []snapshot.CommandEntry
-	saves   int
-	failAt  int
-	failGet bool
+	entries    []snapshot.CommandEntry
+	saves      int
+	failAt     int
+	failGet    bool
+	failDelete bool
 }
 
 func (s *memoryStore) Ready() error { return nil }
@@ -71,6 +72,9 @@ func (s *memoryStore) Put(entry snapshot.CommandEntry) error {
 }
 
 func (s *memoryStore) Delete(commandID string) error {
+	if s.failDelete {
+		return errors.New("ledger delete unavailable")
+	}
 	for i := range s.entries {
 		if s.entries[i].CommandID == commandID {
 			s.entries = append(s.entries[:i], s.entries[i+1:]...)
@@ -317,7 +321,7 @@ func TestApplyFailureReleasesDurableCommandClaim(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, _, err := ledger.Execute("cmd", "digest", snapshot.CommandRequest{Kind: "TEST"}, func() (any, error) {
-		return nil, errors.New("validation failed")
+		return nil, snapshot.WriteNotApplied(errors.New("validation failed before publication"))
 	}); err == nil {
 		t.Fatal("apply failure must be returned")
 	}
@@ -331,6 +335,125 @@ func TestApplyFailureReleasesDurableCommandClaim(t *testing.T) {
 		return map[string]any{"ok": true}, nil
 	}); err != nil || applied != 1 {
 		t.Fatalf("released command did not retry: applied=%d err=%v", applied, err)
+	}
+}
+
+func TestUnknownApplyFailureKeepsDurableCommandClaim(t *testing.T) {
+	store := &memoryStore{}
+	ledger, err := snapshot.NewCommandLedger(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outcome := kernel.Fail(kernel.ErrTemporaryUnavailable, "lost publication response")
+	_, _, err = ledger.Execute("cmd", "digest", snapshot.CommandRequest{Kind: "TEST"}, func() (any, error) {
+		return nil, outcome
+	})
+	if !errors.Is(err, outcome) {
+		t.Fatalf("unknown error was replaced: %v", err)
+	}
+	restarted, err := snapshot.NewCommandLedger(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, ok := restarted.Lookup("cmd")
+	if !ok || entry.Status != snapshot.StatusPending || entry.Digest != "digest" {
+		t.Fatalf("unknown failure lost claim: %+v, found = %v", entry, ok)
+	}
+	for _, tc := range []struct {
+		digest string
+		code   kernel.ErrorCode
+	}{{"digest", kernel.ErrPreconditionFailed}, {"different", kernel.ErrIdempotencyConflict}} {
+		_, _, err = restarted.Execute("cmd", tc.digest, snapshot.CommandRequest{Kind: "TEST"}, func() (any, error) {
+			t.Fatal("unknown result must not execute again")
+			return nil, nil
+		})
+		if kernel.CodeOf(err) != tc.code {
+			t.Fatalf("retry digest %s: %v", tc.digest, err)
+		}
+	}
+}
+
+func TestUnappliedCommandDeleteFailureKeepsPendingClaim(t *testing.T) {
+	store := &memoryStore{failDelete: true}
+	ledger, err := snapshot.NewCommandLedger(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = ledger.Execute("cmd", "digest", snapshot.CommandRequest{Kind: "TEST"}, func() (any, error) {
+		return nil, snapshot.WriteNotApplied(kernel.Fail(kernel.ErrNonFastForward, "ref moved before publication"))
+	})
+	if kernel.CodeOf(err) != kernel.ErrTemporaryUnavailable {
+		t.Fatalf("failed durable release = %v", err)
+	}
+	if entry, ok := ledger.Lookup("cmd"); !ok || entry.Status != snapshot.StatusPending {
+		t.Fatalf("failed durable release discarded in-memory claim: %+v, found = %v", entry, ok)
+	}
+	_, _, err = ledger.Execute("cmd", "different", snapshot.CommandRequest{Kind: "TEST"}, func() (any, error) {
+		t.Fatal("failed claim release must not execute a new payload")
+		return nil, nil
+	})
+	if kernel.CodeOf(err) != kernel.ErrIdempotencyConflict {
+		t.Fatalf("failed release lost digest protection: %v", err)
+	}
+}
+
+func TestWriteNotAppliedPreservesProtocolFailure(t *testing.T) {
+	original := kernel.Fail(kernel.ErrNonFastForward, "ref moved")
+	wrapped := snapshot.WriteNotApplied(original)
+	if !errors.Is(wrapped, original) || kernel.CodeOf(wrapped) != kernel.ErrNonFastForward || wrapped.Error() != original.Error() {
+		t.Fatalf("unapplied proof changed error: %v", wrapped)
+	}
+	if snapshot.WriteNotApplied(wrapped) != wrapped || snapshot.WriteNotApplied(nil) != nil {
+		t.Fatal("unapplied proof did not preserve existing wrapper or nil")
+	}
+}
+
+func TestBoltPendingNullReceiptRequiresExplicitResolution(t *testing.T) {
+	for _, resolve := range []bool{false, true} {
+		name := "abandon"
+		if resolve {
+			name = "resolve"
+		}
+		t.Run(name, func(t *testing.T) {
+			store := snapshot.NewBoltCommandStore(filepath.Join(t.TempDir(), "commands.db"))
+			if err := store.Ready(); err != nil {
+				t.Fatal(err)
+			}
+			if err := store.Put(snapshot.CommandEntry{CommandID: "pending", Digest: "digest", Status: snapshot.StatusPending}); err != nil {
+				t.Fatal(err)
+			}
+			ledger, err := snapshot.NewCommandLedger(store)
+			if err != nil {
+				t.Fatal(err)
+			}
+			apply := func() (any, error) {
+				t.Fatal("durable pending command must never reapply")
+				return nil, nil
+			}
+			_, _, err = ledger.Execute("pending", "digest", snapshot.CommandRequest{Kind: "TEST"}, apply)
+			if kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
+				t.Fatalf("null pending receipt replayed before explicit decision: %v", err)
+			}
+			if resolve {
+				if _, err := ledger.ResolvePending("pending", "digest", map[string]any{"commit": "accepted"}); err != nil {
+					t.Fatal(err)
+				}
+			} else if _, err := ledger.AbandonPending("pending", "digest"); err != nil {
+				t.Fatal(err)
+			}
+			reopened, err := snapshot.NewCommandLedger(store)
+			if err != nil {
+				t.Fatal(err)
+			}
+			entry, replayed, err := reopened.Execute("pending", "digest", snapshot.CommandRequest{Kind: "TEST"}, apply)
+			if resolve {
+				if err != nil || !replayed || entry.Status != snapshot.StatusApplied || string(entry.Receipt) != `{"commit":"accepted"}` {
+					t.Fatalf("resolved command did not replay accepted receipt: %+v, replayed = %v, error = %v", entry, replayed, err)
+				}
+			} else if replayed || kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
+				t.Fatalf("abandoned command replayed: %+v, replayed = %v, error = %v", entry, replayed, err)
+			}
+		})
 	}
 }
 

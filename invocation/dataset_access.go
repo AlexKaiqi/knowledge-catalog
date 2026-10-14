@@ -19,10 +19,10 @@ import (
 	kchome "kc/home"
 	"kc/invoke"
 	"kc/kernel"
-	knowledge "kc/knowledge"
-	knowledgemaintenance "kc/knowledge/maintenance"
-	reader "kc/knowledge/reader"
-	"kc/knowledge/semanticview"
+	objectmodel "kc/object"
+	knowledgemaintenance "kc/object/maintenance"
+	reader "kc/object/reader"
+	"kc/object/semanticview"
 	"kc/snapshot"
 	"kc/snapshot/dataset"
 	fileservice "kc/snapshot/service"
@@ -295,6 +295,10 @@ func KnowledgeSetPin(resolved dataset.ResolvedKnowledgeSet) reader.KnowledgeSetP
 }
 
 func AllowedDatasetFileRead(home string, flags map[string]invoke.FlagValue) bool {
+	return allowedDatasetFileRead(home, flags, "")
+}
+
+func allowedDatasetFileRead(home string, flags map[string]invoke.FlagValue, repository string) bool {
 	as := invoke.FlagString(flags, "as")
 	if as == "" {
 		return true
@@ -306,6 +310,7 @@ func AllowedDatasetFileRead(home string, flags map[string]invoke.FlagValue) bool
 	q := AllowQuery{
 		Principal: as,
 		Action:    "file.read",
+		Repo:      repository,
 		Dataset:   invoke.DatasetOf(flags),
 	}
 	_, ok := MatchAllow(file.Rules, q)
@@ -345,7 +350,7 @@ func SemanticMounts(def dataset.KnowledgeSet, pin dataset.ResolvedKnowledgeSet) 
 	return mounts
 }
 
-func SemanticProjectionFor(store snapshot.Store, repo knowledge.Repository, pin dataset.ResolvedKnowledgeSet) (*SemanticProjection, error) {
+func SemanticProjectionFor(store snapshot.Store, repo objectmodel.Repository, pin dataset.ResolvedKnowledgeSet) (*SemanticProjection, error) {
 	commit := pin.Repositories[repo.ID()]
 	key := semanticProjectionKey{repository: repo.ID(), commit: commit, scope: kernel.CanonicalDigest(pin.Items)}
 	semanticProjections.Lock()
@@ -367,10 +372,10 @@ func SemanticProjectionFor(store snapshot.Store, repo knowledge.Repository, pin 
 	return projection, nil
 }
 
-func BuildSemanticProjection(store snapshot.Store, repo knowledge.Repository, pin dataset.ResolvedKnowledgeSet) (*SemanticProjection, error) {
+func BuildSemanticProjection(store snapshot.Store, repo objectmodel.Repository, pin dataset.ResolvedKnowledgeSet) (*SemanticProjection, error) {
 	commit := pin.Repositories[repo.ID()]
-	scope := reader.Open(func(kernel.RepositoryID) (knowledge.Repository, error) { return repo, nil }, KnowledgeSetPin(pin))
-	values := []knowledge.KnowledgeValue{}
+	scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return repo, nil }, KnowledgeSetPin(pin))
+	values := []objectmodel.KnowledgeValue{}
 	var prefixes, files []string
 	for _, item := range pin.Items {
 		if item.Repository != repo.ID() || item.Commit != commit {
@@ -383,7 +388,7 @@ func BuildSemanticProjection(store snapshot.Store, repo knowledge.Repository, pi
 			files = append(files, item.File)
 		}
 	}
-	if err := knowledgemaintenance.WalkScope(store, repo, commit, prefixes, files, func(id knowledge.ObjectID) error {
+	if err := knowledgemaintenance.WalkScope(store, repo, commit, prefixes, files, func(id objectmodel.ObjectID) error {
 		allowed, err := scope.Contains(repo.ID(), id)
 		if err != nil || !allowed {
 			return err
@@ -398,12 +403,12 @@ func BuildSemanticProjection(store snapshot.Store, repo knowledge.Repository, pi
 		return nil, err
 	}
 	sort.Slice(values, func(i, j int) bool { return values[i].Address.ObjectID < values[j].Address.ObjectID })
-	schemas := map[knowledge.ObjectID]knowledge.SchemaDefinition{}
+	schemas := map[objectmodel.ObjectID]objectmodel.SchemaDefinition{}
 	for _, value := range values {
-		if !knowledge.IsSchemaObject(value.Address.ObjectID) {
+		if !objectmodel.IsSchemaObject(value.Address.ObjectID) {
 			continue
 		}
-		definition, parseErr := knowledge.ParseSchemaDefinition(value.Address.ObjectID, value.Value)
+		definition, parseErr := objectmodel.ParseSchemaDefinition(value.Address.ObjectID, value.Value)
 		if parseErr != nil {
 			return nil, parseErr
 		}
@@ -431,9 +436,9 @@ func BuildSemanticProjection(store snapshot.Store, repo knowledge.Repository, pi
 	return projection, nil
 }
 
-func SemanticEntity(value knowledge.KnowledgeValue, schemas map[knowledge.ObjectID]knowledge.SchemaDefinition) string {
+func SemanticEntity(value objectmodel.KnowledgeValue, schemas map[objectmodel.ObjectID]objectmodel.SchemaDefinition) string {
 	for _, declaration := range value.Declarations {
-		parsed, ok := knowledge.ParseSchemaRef(declaration.SchemaRef)
+		parsed, ok := objectmodel.ParseSchemaRef(declaration.SchemaRef)
 		if !ok {
 			continue
 		}
@@ -448,7 +453,7 @@ func DatasetFSMayReadRepository(home string, flags map[string]invoke.FlagValue, 
 	if OwnerBypass(flags) {
 		return true, nil
 	}
-	if AllowedDatasetFileRead(home, flags) {
+	if allowedDatasetFileRead(home, flags, repository) {
 		return true, nil
 	}
 	return PrincipalAllowed(home, invoke.FlagString(flags, "as"), "file.read", repository, opened...), nil

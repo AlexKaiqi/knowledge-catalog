@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 )
 
 func TestRepositoryAccessRejectsWriteActions(t *testing.T) {
@@ -20,7 +20,7 @@ func TestEnsureRepositoryAccessDoesNotRestoreRemovedEntry(t *testing.T) {
 		t.Fatal(err)
 	}
 	file, err := ReadRepositoryAccess(dir)
-	if err != nil || !file.Allows(string(knowledge.SystemRepositoryID), "knowledge.read") {
+	if err != nil || !file.Allows(string(objectmodel.SystemRepositoryID), "knowledge.read") {
 		t.Fatalf("first ensure should seed the protocol publication: %#v %v", file, err)
 	}
 	if err := WriteRepositoryAccess(dir, RepositoryAccessFile{}); err != nil {
@@ -30,7 +30,7 @@ func TestEnsureRepositoryAccessDoesNotRestoreRemovedEntry(t *testing.T) {
 		t.Fatal(err)
 	}
 	file, err = ReadRepositoryAccess(dir)
-	if err != nil || file.Allows(string(knowledge.SystemRepositoryID), "knowledge.read") {
+	if err != nil || file.Allows(string(objectmodel.SystemRepositoryID), "knowledge.read") {
 		t.Fatalf("second ensure must not restore a removed default: %#v %v", file, err)
 	}
 }

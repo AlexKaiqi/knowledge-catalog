@@ -14,14 +14,14 @@ Feature: 授予写权后指定主体可写，其他主体写入仍被拒绝
       | rules[].repo      | kr://scene/knowledge |
       | rules[].actions.0 | writer.commit |
 
-    When I run `kc writer put --as other --command-id x --repo kr://scene/knowledge --object note/x --value '{"v":1}'`
+    When I run `kc writer put urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:note%2Fx --as other --command-id x --value '{"v":1}'`
     Then error FORBIDDEN
-    When I run `kc writer put --as writer-bot --command-id y --repo kr://scene/knowledge --object note/y --value '{"v":1}'`
+    When I run `kc writer put urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:note%2Fy --as writer-bot --command-id y --value '{"v":1}'`
     Then the output has:
       | disposition           | APPLIED |
       | result.repositoryId   | kr://scene/knowledge |
       | result.newCommit      | nonempty |
-    When I run `kc read --repo kr://scene/knowledge --object note/y`
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:note%2Fy`
     Then the output has:
       | objectId | note/y |
       | value.v             | 1 |

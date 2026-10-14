@@ -34,6 +34,11 @@ func TestKnowledgeSetOverlayProducesPortableRecipeOffline(t *testing.T) {
 	if definition["setId"] != "incident" || len(definition["sources"].([]any)) != 2 {
 		t.Fatalf("merged definition: %#v", definition)
 	}
+	embeddedArgs := []string{"dataset", "overlay", "--home", filepath.Join(root, "must-not-exist"), "--file", base, "--overlay", overlay}
+	embedded := asMap(t, body(t, kcRunResultFrom(cli.RunEmbeddedForTest(embeddedArgs, nil), publicCommandPath(embeddedArgs))))
+	if !reflect.DeepEqual(embedded, definition) {
+		t.Fatalf("embedded host context changed offline composition: %#v", embedded)
+	}
 	receipt := asMap(t, body(t, call("dataset", "overlay", "--file", base, "--overlay", overlay, "--out", out)))
 	if receipt["out"] != out || receipt["setId"] != "incident" {
 		t.Fatal(receipt)
@@ -53,6 +58,9 @@ func TestKnowledgeSetOverlayProducesPortableRecipeOffline(t *testing.T) {
 		t.Fatalf("preprocessing opened Home: %v", err)
 	}
 	t.Run("missing overlay", func(t *testing.T) { expectCode(t, call("dataset", "overlay", "--file", base), "USAGE_INVALID") })
+	t.Run("product rejects Home", func(t *testing.T) {
+		expectCode(t, call("dataset", "overlay", "--home", root, "--file", base, "--overlay", overlay), "USAGE_INVALID")
+	})
 	t.Run("invalid removal", func(t *testing.T) {
 		if err := os.WriteFile(overlay, []byte("remove: [kr://acme/absent]\n"), 0600); err != nil {
 			t.Fatal(err)

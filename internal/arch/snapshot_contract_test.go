@@ -19,6 +19,8 @@ var snapshotPublicDTOs = map[string]map[string]bool{
 	"kc/snapshot/dataset": names("Commit History LogQuery State DatasetItem KnowledgeSet KnowledgeSetCheck KnowledgeSetFileMount KnowledgeSetIssue KnowledgeSetMount KnowledgeSetOverlay KnowledgeSetRecipe KnowledgeSetSource ManagementOptions MountRoute ResolvedKnowledgeSet Snapshot VirtualFile VirtualMount"),
 	"kc/snapshot/access":  names("GrantList Query Rule"),
 	"kc/snapshot/service": names("Authorization Config FileCoordinate FileDirectoryRequest FileDirectoryResponse FileMountsRequest FileMountsResponse FileReadEvidence FileReadRequest FileReadResponse IdentityOptions RequestMetadata Resources ViewOptions"),
+	"kc/snapshot/client":  names("Config RequestOptions KnowledgeSetRequest KnowledgeSetResolveRequest DatasetShowOptions RepositoryAttachRequest WorkspaceFileCoordinate WorkspaceFileMountsRequest WorkspaceFileDirectoryRequest WorkspaceFileReadRequest WorkspaceFileMountsResponse WorkspaceFileDirectoryResponse WorkspaceFileReadResponse GrantRequest GrantExpected GrantUpdateRequest AdmissionResult AdmissionGrant AdmissionRequest"),
+	"kc/snapshot/cli":     names("Command Context"),
 }
 
 var snapshotDTOMethods = names("kc/snapshot/dataset.State.IsEmpty kc/snapshot/dataset.KnowledgeSetSource.IsFileEntry kc/snapshot/dataset.KnowledgeSetRecipe.Sources kc/snapshot/access.Rule.UnmarshalJSON kc/snapshot/service.Resources.OpenFiles")
@@ -45,6 +47,8 @@ var snapshotFactoryResults = map[string]string{
 	"kc/snapshot/service.NewFileView":             "FileView",
 	"kc/snapshot/service.NewLakeFSAuthenticator":  "identity.HTTPAuthenticator",
 	"kc/snapshot/console.Handler":                 "http.Handler",
+	"kc/snapshot/client.New":                      "Client",
+	"kc/snapshot/cli.New":                         "Executor",
 }
 
 func names(list string) map[string]bool {
@@ -59,6 +63,7 @@ var snapshotPublicPackages = map[string]bool{
 	"kc/snapshot": true, "kc/snapshot/dataset": true,
 	"kc/snapshot/access": true, "kc/snapshot/service": true,
 	"kc/snapshot/console": true,
+	"kc/snapshot/client":  true, "kc/snapshot/cli": true,
 }
 
 // Include tests and nested modules: neither may reopen a private production API.
@@ -190,7 +195,7 @@ func TestSnapshotRetiredImplementationsStayAbsent(t *testing.T) {
 			t.Errorf("retired implementation or alternate contract path remains: %s", path)
 		}
 	}
-	for _, pkg := range []string{"dataset", "access", "service", "console"} {
+	for _, pkg := range []string{"dataset", "access", "service", "console", "client", "cli"} {
 		matches, err := filepath.Glob(filepath.Join(root, "snapshot", pkg, "contract.go"))
 		if err != nil {
 			t.Fatal(err)
@@ -332,6 +337,8 @@ func snapshotSignatureDependencyAllowed(pkg, dependency, symbol string) bool {
 			"kc/snapshot/access":  {},
 			"kc/snapshot/service": names("kc/identity kc/kernel kc/snapshot kc/snapshot/access kc/snapshot/dataset"),
 			"kc/snapshot/console": {},
+			"kc/snapshot/client":  names("kc/kernel kc/snapshot kc/snapshot/dataset"),
+			"kc/snapshot/cli":     names("kc/kernel kc/snapshot kc/snapshot/dataset kc/snapshot/client"),
 		}
 		return allowed[pkg][dependency]
 	}
@@ -457,23 +464,28 @@ func TestSnapshotPublicSurfaceGuardDetectsIndirectLeaks(t *testing.T) {
 		{"dto-pointer-authority-method", "type FileRef struct{}; func (f *FileRef) Save() {}", "adds behavior"},
 		{"concrete-interface-alias", "type Registry string; func NewRegistry() Registry { return \"\" }", "must be a declared interface"},
 		{"external-concrete-alias", `import "net/http"; type Client = http.Client`, "concrete public type shape"},
-		{"upper-layer-signature", `import "kc/knowledge"; type FileRef struct{ Value knowledge.Object }`, "unselected signature dependency"},
+		{"upper-layer-signature", `import objectmodel "kc/object"; type FileRef struct{ Value knowledge.Object }`, "unselected signature dependency"},
 		{"selected-data-and-ports", `import contracts "kc/snapshot/internal/storecontract"; type FileRef struct{Path string}; type TreeChange = contracts.TreeChange; type WriteObserver func(string) error; type TreeReader interface {ReadFile(string) ([]byte,error)}; const Driver = contracts.DefaultRef`, ""},
 		{"capability-interface-discovery", `type TreeReader interface { ReadFile(string) ([]byte,error) }; func TreeReaderOf(store any) (TreeReader,bool) { reader,ok := store.(TreeReader); return reader,ok }`, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			file, err := parser.ParseFile(token.NewFileSet(), "surface.go", "package snapshot; "+tc.source, 0)
-			if err != nil {
-				t.Fatal(err)
-			}
-			violations := strings.Join(snapshotSurfaceViolations("kc/snapshot", []*ast.File{file}), "\n")
-			if tc.signal == "" && violations != "" {
-				t.Fatalf("legitimate contract rejected: %s", violations)
-			}
-			if tc.signal != "" && !strings.Contains(violations, tc.signal) {
-				t.Fatalf("missing %q signal: %s", tc.signal, violations)
-			}
+			assertSnapshotSurface(t, "kc/snapshot", tc.source, tc.signal)
 		})
+	}
+}
+
+func assertSnapshotSurface(t *testing.T, pkg, source, signal string) {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), "surface.go", "package snapshot; "+source, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	violations := strings.Join(snapshotSurfaceViolations(pkg, []*ast.File{file}), "\n")
+	if signal == "" && violations != "" {
+		t.Fatalf("legitimate contract rejected: %s", violations)
+	}
+	if signal != "" && !strings.Contains(violations, signal) {
+		t.Fatalf("missing %q signal: %s", signal, violations)
 	}
 }
 
@@ -533,4 +545,19 @@ func TestSnapshotSharedContractDTOsRemainPure(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestSnapshotClientEntryGuardsPreserveImplementationHiding(t *testing.T) {
+	for _, tc := range []struct{ pkg, source, signal string }{
+		{"kc/snapshot/client", `type Config struct{BaseURL string; Transport Transport}; type Transport interface{Do() error}; type Client interface{}; func New(Config) (Client,error){return nil,nil}`, ""},
+		{"kc/snapshot/client", `type Config struct{session string}`, "private state"},
+		{"kc/snapshot/client", `type Client struct{}; func New() *Client{return nil}`, "selected interface Client"},
+		{"kc/snapshot/cli", `import "kc/snapshot/client"; type Context struct{Principal string}; type Command struct{Flags []string}; type Executor interface{Run(client.RequestOptions) error}; func New() Executor{return nil}`, ""},
+		{"kc/snapshot/cli", `import "kc/client"; type Context struct{Session *client.Client}`, "unselected signature dependency"},
+		{"kc/snapshot/cli", `type Command struct{}; func (Command) Execute() {}`, "adds behavior"},
+	} {
+		t.Run(tc.pkg+"/"+tc.signal, func(t *testing.T) {
+			assertSnapshotSurface(t, tc.pkg, tc.source, tc.signal)
+		})
+	}
 }

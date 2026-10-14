@@ -194,11 +194,11 @@ SEARCH 代数不做无约束字符串查询语言，也不做通用 RQL 或 SQL�
 
 ## 接口契约 / 状态机
 
-查询、结果与续页见 [retrieval](../../retrieval/README.md)、
-[查询代数](../../retrieval/searchop.go)；候选与维护端口见
-[index](../../index/README.md) 及 [Conformance](../../index/conformance_test.go)。
-同版本缓存见 [retrieval/cache](../../retrieval/cache/README.md)，
-引擎装配见 [OpenSearch adapter](../../index/opensearch/README.md)。
+查询、结果与续页见 [retrieval](../../discovery/README.md)、
+[查询代数](../../discovery/searchop.go)；候选与维护端口见
+[index](../../declarativeindex/projection/README.md) 及 [Conformance](../../declarativeindex/projection/conformance_test.go)。
+同版本缓存见 [object/cache](../../object/cache/README.md)，
+引擎装配见 [OpenSearch adapter](../../declarativeindex/opensearch/README.md)。
 
 具体表达式、能力枚举、发布状态和错误码不在本文复制。动态时效默认政策、通用多提供方
 成本规划，以及源端下推与托管投影之间的取舍（成本、权威角色、保留模型与自动选路策略）

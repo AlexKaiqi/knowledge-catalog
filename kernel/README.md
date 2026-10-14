@@ -2,7 +2,7 @@
 
 无依赖底座，只拥有三类所有层都可安全使用的概念：统一错误信封、canonical digest、Snapshot 的 `RepositoryID / CommitID` 坐标。
 
-`kernel` 不是共享类型桶。`ObjectID / Address / KnowledgeRef / schema_ref / provenance` 属于 `knowledge/`；原始 `FileRef` 属于 `snapshot/`。`internal/arch` 会阻止这些声明回流。
+`kernel` 不是共享类型桶。`ObjectID / Address / KnowledgeRef / schema_ref / provenance` 属于 `object/`；原始 `FileRef` 属于 `snapshot/`。`internal/arch` 会阻止这些声明回流。
 
 | 文件 | 负责 |
 |---|---|

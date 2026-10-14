@@ -7,7 +7,7 @@ path_hint: docs/graph/documents/resource-access.okf
 {
   "id": "resource-access",
   "path": "docs/reviewed/resource-access.md",
-  "title": "外部资源访问：观察、采集与恢复",
+  "title": "LiveAccess 插件重构",
   "class": "decision",
   "lifecycle": "active",
   "audience": [
@@ -18,7 +18,8 @@ path_hint: docs/graph/documents/resource-access.okf
     "binding-and-observation-semantics",
     "state-stream-boundary",
     "value-path-and-observation-record",
-    "resource-access-collector-observer-boundary",
-    "unrecoverable-observation-evidence"
+    "unrecoverable-observation-evidence",
+    "liveaccess-plugin-execution-and-observation",
+    "liveaccess-plugin-registration-and-access-execution"
   ]
 }

@@ -1,0 +1,233 @@
+package projection
+
+import (
+	ports "kc/discovery/projection"
+	"reflect"
+	"strings"
+	"testing"
+
+	retrieval "kc/discovery"
+	"kc/kernel"
+	objectmodel "kc/object"
+	"kc/object/reader"
+)
+
+func TestCompiledDocumentDoesNotCarryWorkspaceScope(t *testing.T) {
+	typeOfDoc := reflect.TypeOf(ports.CompiledDoc{})
+	for i := 0; i < typeOfDoc.NumField(); i++ {
+		field := typeOfDoc.Field(i)
+		name := strings.ToLower(field.Name + " " + strings.Split(field.Tag.Get("json"), ",")[0])
+		for _, forbidden := range []string{"workspace", "pinid", "pin_id"} {
+			if strings.Contains(name, forbidden) {
+				t.Fatalf("CompiledDoc must remain reusable across Workspaces; found request scope field %s", field.Name)
+			}
+		}
+	}
+}
+
+func TestProjectionCompilerRequiresObservationForBindingEligibility(t *testing.T) {
+	field := retrieval.AccessField{
+		FieldRef: retrieval.FieldRef{Schema: "schema/live", Aspect: "status", Path: "owner"},
+		Type:     "string", Access: []reader.AccessHint{reader.HintFilter},
+	}
+	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:orders", AspectName: "status"}
+	declarationDigest := objectmodel.DeclarationDigest("schema/live", &objectmodel.ValueSource{
+		Kind:    objectmodel.ValueSourceBinding,
+		Binding: &objectmodel.BindingDeclaration{Mode: objectmodel.BindingState, Runtime: "fixture", Protocol: "resource-access/v1", Operations: map[string]objectmodel.BindingOperation{"lookup": {Call: "status"}}},
+	})
+	value := objectmodel.KnowledgeValue{
+		Commit: "c1", Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "Table:orders"},
+		Value: map[string]any{"status": nil},
+		Declarations: []objectmodel.UnitDeclaration{{
+			Address: address, SchemaRef: "schema/live", DeclarationDigest: declarationDigest,
+			ValueSource: &objectmodel.ValueSource{Kind: objectmodel.ValueSourceBinding, Binding: &objectmodel.BindingDeclaration{Mode: objectmodel.BindingState}},
+		}},
+	}
+	doc, err := compileProjectionDocument(nil, value, retrieval.AccessSpec{Fields: []retrieval.AccessField{field}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.EligibleFields) != 0 {
+		t.Fatalf("unobserved Binding must not prove MISSING: %#v", doc.EligibleFields)
+	}
+
+	doc, err = compileProjectionDocumentObserved(nil, value, []objectmodel.UnitObservation{{
+		Address: address, DeclarationCommit: "c1", DeclarationDigest: declarationDigest,
+		Basis: objectmodel.ObservationBasis{BindingGeneration: "g1", Consistency: objectmodel.ObservationRepeatable, SourceRevision: "r1", ObservedAt: "2026-08-27T00:00:00Z"},
+	}}, retrieval.AccessSpec{Fields: []retrieval.AccessField{field}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Cells) != 0 || len(doc.EligibleFields) != 1 || doc.EligibleFields[0] != field.FieldRef.Key() {
+		t.Fatalf("observed null must prove MISSING without a cell: %#v", doc)
+	}
+
+	_, err = compileProjectionDocumentObserved(nil, value, []objectmodel.UnitObservation{{
+		Address: address, DeclarationCommit: "c1", DeclarationDigest: kernel.Digest("wrong"),
+	}}, retrieval.AccessSpec{Fields: []retrieval.AccessField{field}})
+	if kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
+		t.Fatalf("mismatched observation must be rejected, got %v", err)
+	}
+}
+
+func TestProjectionCompilerTreatsMembersAsMaintenanceUnits(t *testing.T) {
+	spec := retrieval.AccessSpec{Fields: []retrieval.AccessField{{
+		FieldRef: retrieval.FieldRef{Schema: "schema/tag", Aspect: "tags", Path: "label"},
+		Type:     "string", Access: []reader.AccessHint{reader.HintFilter, reader.HintText},
+	}}}
+	value := objectmodel.KnowledgeValue{
+		Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "Table:orders"},
+		Value: map[string]any{"tags": map[string]any{
+			"owner": map[string]any{"label": "finance"},
+			"tier":  map[string]any{"label": "gold"},
+		}},
+		Declarations: []objectmodel.UnitDeclaration{
+			{Address: objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: "Table:orders", AspectName: "tags", MemberKey: "owner"}, SchemaRef: "schema/tag"},
+			{Address: objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: "Table:orders", AspectName: "tags", MemberKey: "tier"}, SchemaRef: "schema/tag"},
+		},
+	}
+	doc, err := compileProjectionDocument(nil, value, spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Cells) != 2 || doc.Cells[0].Value != "finance" || doc.Cells[1].Value != "gold" {
+		t.Fatalf("member values must be flattened under one object document: %#v", doc.Cells)
+	}
+	if len(doc.EligibleFields) != 1 || doc.EligibleFields[0] != spec.Fields[0].FieldRef.Key() {
+		t.Fatalf("eligible fields: %#v", doc.EligibleFields)
+	}
+}
+
+func TestProjectionCompilerPreservesMissingApplicability(t *testing.T) {
+	field := retrieval.AccessField{
+		FieldRef: retrieval.FieldRef{Schema: "schema/table", Aspect: "structure", Path: "owner"},
+		Type:     "string", Access: []reader.AccessHint{reader.HintFilter},
+	}
+	value := objectmodel.KnowledgeValue{
+		Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "Table:orders"},
+		Value:   map[string]any{"structure": map[string]any{"name": "orders"}},
+		Declarations: []objectmodel.UnitDeclaration{{
+			Address:   objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:orders", AspectName: "structure"},
+			SchemaRef: "schema/table",
+		}},
+	}
+	doc, err := compileProjectionDocument(nil, value, retrieval.AccessSpec{Fields: []retrieval.AccessField{field}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Cells) != 0 || len(doc.EligibleFields) != 1 || doc.EligibleFields[0] != field.FieldRef.Key() {
+		t.Fatalf("missing value must keep applicability without inventing a cell: %#v", doc)
+	}
+}
+
+func TestProjectionCompilerEmitsRelationCore(t *testing.T) {
+	value := objectmodel.KnowledgeValue{
+		Address: objectmodel.Address{Kind: objectmodel.KindRelation, ObjectID: "relation:owned"},
+		Value: map[string]any{
+			"relationId": "relation:owned", "relationType": "owned-by", "direction": "DIRECTED",
+			"endpoints": []any{
+				map[string]any{"role": "subject", "objectRef": map[string]any{"repository": "kr://acme/core", "object": "Table:orders"}},
+				map[string]any{"role": "owner", "objectRef": map[string]any{"repository": "kr://acme/core", "object": "Team:finance"}},
+			},
+		},
+	}
+	doc, err := compileProjectionDocument(nil, value, retrieval.AccessSpec{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doc.Kind != objectmodel.KindRelation || doc.Relation == nil || doc.Relation.Type != "owned-by" || len(doc.Relation.Endpoints) != 2 {
+		t.Fatalf("relation core missing: %#v", doc)
+	}
+}
+
+func TestProjectionCompilerRejectsInvalidTypedValue(t *testing.T) {
+	value := objectmodel.KnowledgeValue{
+		Address:      objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "Policy:P-1"},
+		Value:        map[string]any{"score": "not-a-number"},
+		Declarations: []objectmodel.UnitDeclaration{{Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "Policy:P-1"}, SchemaRef: "schema/policy"}},
+	}
+	_, err := compileProjectionDocument(nil, value, retrieval.AccessSpec{Fields: []retrieval.AccessField{{
+		FieldRef: retrieval.FieldRef{Schema: "schema/policy", Path: "score"}, Type: "number", Access: []reader.AccessHint{reader.HintFilter},
+	}}})
+	if err == nil {
+		t.Fatal("invalid typed value must fail projection instead of silently reducing coverage")
+	}
+}
+
+func TestProjectionCompilerIndexesObjectReferenceAsKeyword(t *testing.T) {
+	field := retrieval.AccessField{
+		FieldRef: retrieval.FieldRef{Schema: "schema/table", Aspect: "properties", Path: "platformRef"},
+		Type:     "object_ref", Access: []reader.AccessHint{reader.HintFilter},
+	}
+	value := objectmodel.KnowledgeValue{
+		Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "Table:orders"},
+		Value:   map[string]any{"properties": map[string]any{"platformRef": "Platform:warehouse"}},
+		Declarations: []objectmodel.UnitDeclaration{{
+			Address:   objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:orders", AspectName: "properties"},
+			SchemaRef: "schema/table",
+		}},
+	}
+	doc, err := compileProjectionDocument(nil, value, retrieval.AccessSpec{Fields: []retrieval.AccessField{field}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Cells) != 1 || doc.Cells[0].StringValue == nil || *doc.Cells[0].StringValue != "Platform:warehouse" {
+		t.Fatalf("object reference cell: %#v", doc.Cells)
+	}
+}
+
+func TestProjectionCompilerIndexesReadmeBodyAsText(t *testing.T) {
+	field := retrieval.AccessField{
+		FieldRef: retrieval.FieldRef{Schema: objectmodel.CoreReadmeSchemaV1, Aspect: objectmodel.ReadmeAspect, Path: "body"},
+		Type:     "string", Access: []reader.AccessHint{reader.HintText},
+	}
+	body := "# Payments warehouse\n\nPublished metrics."
+	value := objectmodel.KnowledgeValue{
+		Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "payments"},
+		Value:   map[string]any{objectmodel.ReadmeAspect: map[string]any{"body": body}},
+		Declarations: []objectmodel.UnitDeclaration{{
+			Address:   objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "payments", AspectName: objectmodel.ReadmeAspect},
+			SchemaRef: string(objectmodel.CoreReadmeSchemaV1),
+		}},
+	}
+	doc, err := compileProjectionDocument(nil, value, retrieval.AccessSpec{Fields: []retrieval.AccessField{field}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doc.Text != body {
+		t.Fatalf("README SEARCH must index the knowledge body, not a file path: %#v", doc)
+	}
+	if len(doc.Cells) != 1 || doc.Cells[0].TextValue != body || doc.Cells[0].StringValue != nil {
+		t.Fatalf("body is text access, not a keyword term: %#v", doc.Cells)
+	}
+}
+
+func TestProjectionCompilerSkipsStreamBindingUnits(t *testing.T) {
+	field := retrieval.AccessField{
+		FieldRef: retrieval.FieldRef{Schema: "schema/live", Aspect: "events", Path: "last"},
+		Type:     "string", Access: []reader.AccessHint{reader.HintFilter},
+	}
+	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Job:orders", AspectName: "events"}
+	declarationDigest := objectmodel.DeclarationDigest("schema/live", &objectmodel.ValueSource{
+		Kind:    objectmodel.ValueSourceBinding,
+		Binding: &objectmodel.BindingDeclaration{Mode: objectmodel.BindingStream, Runtime: "fixture", Protocol: "resource-access/v1", Operations: map[string]objectmodel.BindingOperation{"read": {Call: "events"}}},
+	})
+	value := objectmodel.KnowledgeValue{
+		Commit: "c1", Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "Job:orders"},
+		Value: map[string]any{"events": map[string]any{"last": "should-not-index"}},
+		Declarations: []objectmodel.UnitDeclaration{{
+			Address: address, SchemaRef: "schema/live", DeclarationDigest: declarationDigest,
+			ValueSource: &objectmodel.ValueSource{Kind: objectmodel.ValueSourceBinding, Binding: &objectmodel.BindingDeclaration{Mode: objectmodel.BindingStream}},
+		}},
+	}
+	doc, err := compileProjectionDocumentObserved(nil, value, []objectmodel.UnitObservation{{
+		Address: address, DeclarationCommit: "c1", DeclarationDigest: declarationDigest,
+		Basis: objectmodel.ObservationBasis{BindingGeneration: "g1", Consistency: objectmodel.ObservationRepeatable, SourceRevision: "r1", ObservedAt: "2026-08-27T00:00:00Z"},
+	}}, retrieval.AccessSpec{Fields: []retrieval.AccessField{field}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Cells) != 0 || len(doc.EligibleFields) != 0 {
+		t.Fatalf("Stream Binding must not become a snapshot knowledge document: %#v", doc)
+	}
+}

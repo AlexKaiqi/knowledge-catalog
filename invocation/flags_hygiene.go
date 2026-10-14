@@ -19,13 +19,13 @@ var knownFlags = func() map[string]struct{} {
 		base base-rev bulk candidate registry-dir changeset checkouts-dir clear
 		client-id cmd command-id commit config contains content continuation credential-file database dir driver dsn eq
 		recall
-		evidence-id evidence-ref exclude exists expected file filter-on-behalf-of filter-principal
+		evidence-id evidence-ref exclude exists expected expected-file file filter-on-behalf-of filter-principal filter-request-id
 		direction from from-repo gt gte help home host id if-absent if-digest in include index
 		input input-dataset-version implementation kind layer limit link listen lt lte match match-mode max-hops
-		member message min-hops mine missing mode name namespace neq object oauth2-base on on-behalf-of origin-kind out overlay
-		operation outcome parent-span-id path path-hint payload phase pin port prefix preview
+		member message metadata min-hops mine missing mode name namespace neq object oauth2-base on on-behalf-of origin-kind out overlay
+		operation outcome offset length parent-span-id path path-hint payload phase pin port prefix preview
 		principal produced-at profile projections-dir proposal proposal-id query read
-		ref relation-type remove repo repos-dir repository request-id require revision rerank-model rerank-timeout
+		ref reference relation-type remove repo repos-dir repository request-id require revision rerank-model rerank-timeout
 		role root run schema-ref server service-client-id service-client-secret service-principal since sort source source-ref source-revision span-id store suite target to token topic
 		trace-id until url user validation value value-source wait dataset-file dataset
 		file-source

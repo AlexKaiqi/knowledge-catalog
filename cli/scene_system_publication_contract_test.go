@@ -1,19 +1,20 @@
 package cli_test
 
 import (
+	"kc/systemrepo"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 
-	"kc/knowledge"
+	objectmodel "kc/object"
 )
 
 // Publication changes must update every scene's system inventory expectation,
 // while retaining exact counts for both system and ordinary repositories.
 func TestSceneSystemInventoryMatchesPublishedSchemas(t *testing.T) {
-	want := strconv.Itoa(len(knowledge.SystemSchemaOperations()))
+	want := strconv.Itoa(len(systemrepo.SystemSchemaOperations()))
 	checked := map[string]int{}
 	err := filepath.WalkDir(scenesRoot(), func(path string, entry os.DirEntry, err error) error {
 		if err != nil || entry.IsDir() || !strings.HasSuffix(path, ".feature") {
@@ -47,7 +48,7 @@ func assertSceneSystemInventory(t *testing.T, path string, scenario sceneScenari
 	rows := map[string]string{}
 	check := func() {
 		for field, value := range rows {
-			if !strings.HasSuffix(field, ".id") || value != string(knowledge.SystemRepositoryID) {
+			if !strings.HasSuffix(field, ".id") || value != string(objectmodel.SystemRepositoryID) {
 				continue
 			}
 			count := strings.TrimSuffix(field, ".id") + ".schemaCount"

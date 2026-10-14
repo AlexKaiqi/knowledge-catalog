@@ -26,13 +26,8 @@ func TestPrePutDeniedLeavesNoCommit(t *testing.T) {
 	seedRepo(t, h, "kr://acme/public/core")
 	writeHookScript(t, h, "deny.sh", "#!/bin/sh\nexit 1\n")
 	body(t, kc(h, "hook-add", "--on", "put", "--phase", "pre", "--repo", "kr://acme/public/core", "--run", "deny.sh"))
-	expectCode(t, kc(h, "put",
-		"--command-id", "x",
-		"--repo", "kr://acme/public/core",
-		"--object", "policy/A",
-		"--value", `{"v":1}`,
-	), "HOOK_DENIED")
-	expectCode(t, kc(h, "read", "--repo", "kr://acme/public/core", "--object", "policy/A", "--ref", "refs/heads/main"), "KNOWLEDGE_REF_UNRESOLVED")
+	expectCode(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/A", ""), "--command-id", "x", "--value", `{"v":1}`), "HOOK_DENIED")
+	expectCode(t, kc(h, "read", testObjectReference(t, "kr://acme/public/core", "policy/A", ""), "--ref", "refs/heads/main"), "KNOWLEDGE_REF_UNRESOLVED")
 }
 
 func TestReplayedSkipsHook(t *testing.T) {
@@ -41,21 +36,11 @@ func TestReplayedSkipsHook(t *testing.T) {
 	seedRepo(t, h, "kr://acme/public/core")
 	writeHookScript(t, h, "count.sh", "#!/bin/sh\necho x >> count.txt\n")
 	body(t, kc(h, "hook-add", "--on", "put", "--phase", "pre", "--repo", "kr://acme/public/core", "--run", "count.sh"))
-	put := asMap(t, body(t, kc(h, "put",
-		"--command-id", "sync-1",
-		"--repo", "kr://acme/public/core",
-		"--object", "policy/A",
-		"--value", `{"v":1}`,
-	)))
+	put := asMap(t, body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/A", ""), "--command-id", "sync-1", "--value", `{"v":1}`)))
 	if put["disposition"] != "APPLIED" {
 		t.Fatal(put)
 	}
-	replay := asMap(t, body(t, kc(h, "put",
-		"--command-id", "sync-1",
-		"--repo", "kr://acme/public/core",
-		"--object", "policy/A",
-		"--value", `{"v":1}`,
-	)))
+	replay := asMap(t, body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/A", ""), "--command-id", "sync-1", "--value", `{"v":1}`)))
 	if replay["disposition"] != "REPLAYED" {
 		t.Fatal(replay)
 	}
@@ -73,7 +58,7 @@ func TestMergeGateMissingSuiteAndPreviewMove(t *testing.T) {
 	core := "kr://acme/public/core"
 	kc(h, "init")
 	seedRepo(t, h, core)
-	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-103", "--value", `{"v":1}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-103", ""), "--command-id", "seed", "--value", `{"v":1}`))
 	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
 	body(t, kc(h, "gate-add", "--on", "merge", "--repo", core, "--require", "suite:metrics-contract"))
 
@@ -109,7 +94,7 @@ func TestMergeAuthorizationDerivesRepositoryAndRefFromProposal(t *testing.T) {
 	core := "kr://acme/public/core"
 	kc(h, "init")
 	seedRepo(t, h, core)
-	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-1", "--value", `{"v":1}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-1", ""), "--command-id", "seed", "--value", `{"v":1}`))
 	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
 	body(t, kc(h,
 		"propose", "--proposal-id", "PR-auth", "--repo", core,
@@ -135,7 +120,7 @@ func TestValidationAuthorizationDerivesWorkspaceFromPreview(t *testing.T) {
 
 	kc(h, "init")
 	seedRepo(t, h, core)
-	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-1", "--value", `{"v":1}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-1", ""), "--command-id", "seed", "--value", `{"v":1}`))
 	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
 	body(t, kc(h,
 		"propose", "--proposal-id", "PR-validation-auth", "--repo", core,
@@ -163,7 +148,7 @@ func TestPostDefineKnowledgeSetPointersOnlyAndFailureDoesNotRollback(t *testing.
 	core := "kr://acme/public/core"
 	kc(h, "init")
 	seedRepo(t, h, core)
-	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-1", "--value", `{"secret":true}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-1", ""), "--command-id", "seed", "--value", `{"secret":true}`))
 
 	var got []byte
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -241,7 +226,7 @@ func TestPreMergeDoesNotSatisfyGate(t *testing.T) {
 	core := "kr://acme/public/core"
 	kc(h, "init")
 	seedRepo(t, h, core)
-	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-1", "--value", `{"v":1}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-1", ""), "--command-id", "seed", "--value", `{"v":1}`))
 	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
 	writeHookScript(t, h, "ok.sh", "#!/bin/sh\nexit 0\n")
 	body(t, kc(h, "hook-add", "--on", "merge", "--phase", "pre", "--repo", core, "--run", "ok.sh"))
@@ -266,8 +251,8 @@ func TestReadPathAndPutIgnoreGates(t *testing.T) {
 	writeHookScript(t, h, "count.sh", "#!/bin/sh\necho x >> count.txt\n")
 	body(t, kc(h, "hook-add", "--on", "put", "--phase", "pre", "--repo", core, "--run", "count.sh"))
 	body(t, kc(h, "gate-add", "--on", "merge", "--repo", core, "--require", "suite:lint"))
-	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-1", "--value", `{"v":1}`))
-	body(t, kc(h, "read", "--repo", core, "--object", "policy/P-1", "--ref", "refs/heads/main"))
+	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-1", ""), "--command-id", "seed", "--value", `{"v":1}`))
+	body(t, kc(h, "read", testObjectReference(t, core, "policy/P-1", ""), "--ref", "refs/heads/main"))
 	raw, err := os.ReadFile(filepath.Join(h, "count.txt"))
 	if err != nil {
 		t.Fatal(err)
@@ -282,7 +267,7 @@ func TestMergeStillNeedsValidationWithoutGates(t *testing.T) {
 	core := "kr://acme/public/core"
 	kc(h, "init")
 	seedRepo(t, h, core)
-	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-1", "--value", `{"v":1}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-1", ""), "--command-id", "seed", "--value", `{"v":1}`))
 	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
 	body(t, kc(h,
 		"propose", "--proposal-id", "PR-1", "--repo", core,
@@ -298,7 +283,7 @@ func TestFailedSuiteAndOtherRepoGate(t *testing.T) {
 	core := "kr://acme/public/core"
 	kc(h, "init")
 	seedRepo(t, h, core)
-	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-1", "--value", `{"v":1}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-1", ""), "--command-id", "seed", "--value", `{"v":1}`))
 	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
 	body(t, kc(h, "gate-add", "--on", "merge", "--repo", "kr://acme/semantic", "--require", "suite:metrics-contract"))
 	proposal := asMap(t, body(t, kc(h,
@@ -335,7 +320,7 @@ func TestValidatePreviewRecordsStructure(t *testing.T) {
 	core := "kr://acme/public/core"
 	kc(h, "init")
 	seedRepo(t, h, core)
-	body(t, kc(h, "put", "--command-id", "seed", "--repo", core, "--object", "policy/P-1", "--value", `{"v":1}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-1", ""), "--command-id", "seed", "--value", `{"v":1}`))
 	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
 	body(t, kc(h,
 		"propose", "--proposal-id", "PR-val", "--repo", core,
@@ -361,12 +346,7 @@ func TestPostPutPointersOnly(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	body(t, kc(h, "hook-add", "--on", "put", "--phase", "post", "--repo", core, "--url", srv.URL))
-	put := asMap(t, body(t, kc(h, "put",
-		"--command-id", "seed",
-		"--repo", core,
-		"--object", "policy/P-1",
-		"--value", `{"secret":true}`,
-	)))
+	put := asMap(t, body(t, kc(h, "put", testObjectReference(t, core, "policy/P-1", ""), "--command-id", "seed", "--value", `{"secret":true}`)))
 	var event map[string]any
 	if err := json.Unmarshal(got, &event); err != nil {
 		t.Fatal(err, string(got))

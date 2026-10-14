@@ -8,9 +8,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	discoveryservice "kc/discovery/service"
 	kchome "kc/home"
 	"kc/identity"
-	knowledge "kc/knowledge"
+	liveservice "kc/liveaccess/service"
+	objectmodel "kc/object"
 	"kc/snapshot"
 	"os"
 	"path/filepath"
@@ -22,10 +24,9 @@ import (
 	"kc/delivery"
 	"kc/invoke"
 	"kc/kernel"
-	reader "kc/knowledge/reader"
-	knowledgeserving "kc/knowledge/serving"
-	knowledgeapp "kc/knowledgeapp"
-	"kc/retrieval"
+	reader "kc/object/reader"
+
+	retrieval "kc/discovery"
 	"kc/snapshot/dataset"
 	"net/http"
 )
@@ -185,7 +186,7 @@ func DropByID[T any](items []T, id string, idOf func(T) string) ([]T, bool) {
 
 // originFrom builds the provenance envelope, or nil when no origin flag was
 // given. DERIVATION without a pinned input is rejected downstream by kernel.
-func OriginFrom(flags map[string]invoke.FlagValue) *knowledge.ProvenanceEnvelope {
+func OriginFrom(flags map[string]invoke.FlagValue) *objectmodel.ProvenanceEnvelope {
 	originKind := invoke.FlagString(flags, "origin-kind")
 	sourceRefs := invoke.FlagStrings(flags, "source-ref")
 	evidenceRefs := invoke.FlagStrings(flags, "evidence-ref")
@@ -199,11 +200,11 @@ func OriginFrom(flags map[string]invoke.FlagValue) *knowledge.ProvenanceEnvelope
 	if originKind == "" && len(sourceRefs) == 0 && len(evidenceRefs) == 0 && actor == "" && activity == "" && inputWorkspaceVersion == "" && spec == "" && model == "" && hash == "" && produced == "" {
 		return nil
 	}
-	kind := knowledge.OriginKind(originKind)
+	kind := objectmodel.OriginKind(originKind)
 	if kind == "" {
-		kind = knowledge.OriginSource
+		kind = objectmodel.OriginSource
 	}
-	env := &knowledge.ProvenanceEnvelope{
+	env := &objectmodel.ProvenanceEnvelope{
 		OriginKind:               kind,
 		ActorRef:                 actor,
 		ActivityRef:              activity,
@@ -213,7 +214,7 @@ func OriginFrom(flags map[string]invoke.FlagValue) *knowledge.ProvenanceEnvelope
 		ProducedAt:               produced,
 	}
 	if spec != "" || model != "" || hash != "" {
-		env.Algorithm = &knowledge.AlgorithmRef{
+		env.Algorithm = &objectmodel.AlgorithmRef{
 			DerivationSpecRef: spec,
 			ModelRef:          model,
 			CodeHash:          hash,
@@ -249,10 +250,10 @@ func SearchWorkspace(cx *Invocation) (any, error) {
 	// internal _embedder stamp (like _search-request). The plain CLI leaves
 	// it unset and dataset semantic recall fails closed there.
 	embedder, _ := cx.Flags["_embedder"].(retrieval.Embedder)
-	return (knowledgeapp.DatasetSearchExecutor{
+	return (discoveryservice.DatasetSearchExecutor{
 		Embedder:  embedder,
 		Authorize: func(context.Context) error { return Authorize(cx.Home, "knowledge.search", cx.Flags, nil, cx.WS) },
-		Resolve: func(context.Context) (*reader.Serving, *knowledgeserving.Service, error) {
+		Resolve: func(context.Context) (*reader.Serving, discoveryservice.LogicalHydrator, error) {
 			serving, _, err := OpenServingAt(cx, cx.WS, cx.Flags)
 			if err != nil {
 				return nil, nil, err
@@ -291,30 +292,30 @@ func PinCommit(ws *kchome.Home, flags map[string]invoke.FlagValue) (kernel.Repos
 	return kernel.RepositoryID(repositoryID), commitID, nil
 }
 
-func WriteOperation(flags map[string]invoke.FlagValue, op knowledge.OpKind, value any) (knowledge.Operation, error) {
+func WriteOperation(flags map[string]invoke.FlagValue, op objectmodel.OpKind, value any) (objectmodel.Operation, error) {
 	address, err := AddressFrom(flags)
 	if err != nil {
-		return knowledge.Operation{}, err
+		return objectmodel.Operation{}, err
 	}
 	pre, err := preconditionFrom(flags)
 	if err != nil {
-		return knowledge.Operation{}, err
+		return objectmodel.Operation{}, err
 	}
-	var source *knowledge.ValueSource
+	var source *objectmodel.ValueSource
 	if raw := invoke.FlagString(flags, "value-source"); raw != "" {
-		if op != knowledge.OpPut {
-			return knowledge.Operation{}, fmt.Errorf("--value-source is only valid with PUT")
+		if op != objectmodel.OpPut {
+			return objectmodel.Operation{}, fmt.Errorf("--value-source is only valid with PUT")
 		}
-		var parsed knowledge.ValueSource
+		var parsed objectmodel.ValueSource
 		if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
-			return knowledge.Operation{}, fmt.Errorf("--value-source is not valid JSON")
+			return objectmodel.Operation{}, fmt.Errorf("--value-source is not valid JSON")
 		}
-		if err := knowledge.ValidateValueSource(&parsed); err != nil {
-			return knowledge.Operation{}, err
+		if err := objectmodel.ValidateValueSource(&parsed); err != nil {
+			return objectmodel.Operation{}, err
 		}
 		source = &parsed
 	}
-	return knowledge.Operation{
+	return objectmodel.Operation{
 		Op:           op,
 		Address:      address,
 		Value:        value,
@@ -365,49 +366,53 @@ func OpenServingAt(cx *Invocation, ws *kchome.Home, flags map[string]invoke.Flag
 	return serving, cat, nil
 }
 
-func LogicalWorkspaceServing(cx *Invocation, declarations *reader.Serving) (*knowledgeserving.Service, error) {
+func LogicalWorkspaceServing(cx *Invocation, declarations *reader.Serving) (*liveservice.Service, error) {
 	request, err := stateRequestContextFrom(cx)
 	if err != nil {
 		return nil, err
 	}
-	return knowledgeserving.OpenRequest(declarations, cx.State, request), nil
+	lookup, err := ResourceLookup(cx)
+	if err != nil {
+		return nil, err
+	}
+	return liveservice.OpenRequest(declarations, lookup, request), nil
 }
 
 func KnowledgeDelivery(home string, flags map[string]invoke.FlagValue) delivery.Chain {
-	return delivery.Chain{delivery.RepositoryRead{Allowed: func(_ string, ref knowledge.KnowledgeRef) bool {
+	return delivery.Chain{delivery.RepositoryRead{Allowed: func(_ string, ref objectmodel.KnowledgeRef) bool {
 		return AllowedRepoRead(home, flags, string(ref.Repository), string(ref.Object))
 	}}}
 }
 
-func preconditionFrom(flags map[string]invoke.FlagValue) (*knowledge.Precondition, error) {
+func preconditionFrom(flags map[string]invoke.FlagValue) (*objectmodel.Precondition, error) {
 	ifAbsent := invoke.FlagBool(flags, "if-absent")
 	digest := invoke.FlagString(flags, "if-digest")
 	if ifAbsent && digest != "" {
 		return nil, fmt.Errorf("use only one of --if-absent or --if-digest")
 	}
 	if ifAbsent {
-		return &knowledge.Precondition{Type: knowledge.IfAbsent}, nil
+		return &objectmodel.Precondition{Type: objectmodel.IfAbsent}, nil
 	}
 	if digest != "" {
-		return &knowledge.Precondition{Type: knowledge.IfDigestEquals, Digest: kernel.Digest(digest)}, nil
+		return &objectmodel.Precondition{Type: objectmodel.IfDigestEquals, Digest: kernel.Digest(digest)}, nil
 	}
 	return nil, nil
 }
 
-func stateRequestContextFrom(cx *Invocation) (knowledgeserving.RequestContext, error) {
+func stateRequestContextFrom(cx *Invocation) (objectmodel.RequestContext, error) {
 	identity, err := IdentityContextFrom(cx.Flags)
 	if err != nil {
-		return knowledgeserving.RequestContext{}, err
+		return objectmodel.RequestContext{}, err
 	}
 	trace, err := TraceContextFrom(cx.Flags)
 	if err != nil {
-		return knowledgeserving.RequestContext{}, err
+		return objectmodel.RequestContext{}, err
 	}
 	requestID, err := RequestIDFrom(cx.Flags)
 	if err != nil {
-		return knowledgeserving.RequestContext{}, err
+		return objectmodel.RequestContext{}, err
 	}
-	return knowledgeserving.RequestContext{
+	return objectmodel.RequestContext{
 		Identity: identity, Trace: trace, RequestID: requestID,
 	}, nil
 }

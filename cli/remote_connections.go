@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	inv "kc/invocation"
 	"kc/kernel"
 )
 
@@ -21,7 +22,7 @@ func repositoryIDFromConnectionURL(raw string) (string, error) {
 }
 
 func connectionCredentialFile(flags map[string]FlagValue) (string, error) {
-	name, err := requireRemoteFlag(flags, "credential-file")
+	name, err := inv.RequireRemoteFlag(flags, "credential-file")
 	if err != nil {
 		return "", err
 	}

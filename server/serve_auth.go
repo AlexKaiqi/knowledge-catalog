@@ -1,15 +1,17 @@
 package server
 
 import (
+	"kc/interfaces"
 	inv "kc/invocation"
 	"kc/invoke"
 
 	"net/http"
 	"strings"
 
+	retrieval "kc/discovery"
 	"kc/kernel"
-	knowledgeserving "kc/knowledge/serving"
-	"kc/retrieval"
+	knowledgeserving "kc/liveaccess"
+	liveservice "kc/liveaccess/service"
 )
 
 // HTTPServerOptions enables production-style authentication while keeping
@@ -31,9 +33,15 @@ type HTTPServerOptions struct {
 	// declared on that Binding's Domain Schema. Nil fails bound READs instead
 	// of returning a misleading null value.
 	StateLookup knowledgeserving.StateLookup
+	// LiveAccessPlugins supplies compiled entries; Repo metadata remains the
+	// adoption authority. The standard entry may use StateLookup as its adapter.
+	LiveAccessPlugins map[string]liveservice.PluginEntry
+	// LiveAccessCredentialOrigins is the deployment's trusted proof audience
+	// set. Object Schema origin and redirects cannot extend this set.
+	LiveAccessCredentialOrigins []string
 	// ObjectInterfaces installs independent object capability handlers. Nil
 	// enables only the verified, published LiveAccess reference implementation.
-	ObjectInterfaces *knowledgeserving.InterfaceRegistry
+	ObjectInterfaces *interfaces.InterfaceRegistry
 	// Embedder is an optional request-time query-vector provider for semantic
 	// recall. Nil keeps semantic recall fail-closed (CAPABILITY_UNSATISFIED).
 	Embedder retrieval.Embedder

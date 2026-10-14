@@ -4,6 +4,10 @@
 「解决什么问题、为什么这样划边界、关键取舍是什么」；验证、研究、规模与过程资料同目录存放，
 按原有角色作为唯一权威。文档主题所有权、关系与用例关联以 `docs/graph/` 为准。
 
+完整产品设计与使用书见 [product.html](product.html)，以单文件呈现对象环境愿景、对象注册、
+分层职责图与 Agent 使用闭环。设计语义仍由[架构总览](reviewed/core-architecture.md)等 owner
+维护；图的可编辑源及展示副本放在 `assets/architecture/`。
+
 这里不是一组平级文章。文档按“入口 → 基础决策 → 专题决策 → 运行设计 →
 验证/演进”组成有向图。
 
@@ -43,22 +47,22 @@
 | 人类名片 | 根 `README.md` |
 | Agent 闸门 | `AGENTS.md` |
 | 执行接力棒 | 根 `TASK.md`（不是文档图节点） |
-| specs（Goal / Non-Goals / 边界） | `class: foundation` 的设计 Markdown |
+| specs（目标与必要边界） | `class: foundation` 的设计 Markdown |
 | decisions（选定 / 否决） | `class: decision` / `evolution` 的设计 Markdown |
 | Oracle | `docs/reviewed/architecture-invariants.md`、`internal/arch`、conformance、`.data/scenes` |
 | 实现可写区 | 仓库根 Go 包，不是 `src/` |
 
-`class` 为 foundation / decision / runtime / evolution 的 Markdown 必须出现下列二级标题（名称不可改，`make check-docs` 强制）：`## Goal`、`## Non-Goals`、`## 硬性约束 / Invariants`、`## 选定方案 / 被否决方案`、`## 接口契约 / 状态机`。entrypoint / validation / guide 不套这五段。
+设计文档说明目标和已约定的要求，标题与结构按内容选择。重构目标篇可以只写目标、必要约束与验收依据；Non-Goals、方案比较、接口或状态机有实质内容才写，没有就省略。`make check-docs` 不检查固定段落。
 
-五段写应然。「尚未实现」「首版没做」「当前包叫这个」不是 Non-Goal，也不是否决。接口段指向**设计要求的缝**（公开类型名、包 README、Conformance）；参考实现路径可以注明，但不能把今天的文件名或缺口写成协议。五段之后展开调研证据和推导；避免仅换标题重复结论，保留有助于理解取舍的反例与可验证要求。
+约束要有目标或合同依据。实现提醒与待决定问题放在任务或实施说明；不变量是已确定、在适用范围内持续成立且可被反例证伪的性质，引用及证据归[架构不变量](reviewed/architecture-invariants.md)。涉及接口时指向公开类型、包 README 或 Conformance，不用当前实现收窄设计。
 
 ### 设计正文怎样写
 
-从一个具体问题或失败反例开始，说明需要保持的事实和受约束的使用者。调研要区分“来源说明的
-机制”与“我们据此作出的推论”；给出可定位来源、适用条件和核对时间，不能用产品名堆砌替代
-比较。决策写清选择理由、代价、否决理由和仍开放的问题；不要把暂未实现的能力写成永久边界。
+围绕实际问题或目标组织内容，按需解释要求、依据和取舍。引用调研时区分“来源说明的
+机制”与“我们据此作出的推论”，给出可定位来源、适用条件和核对时间，不能用产品名堆砌替代
+比较。涉及方案选择时说明理由与有意义的取舍；未决定的保持开放，不为凑段落编造否决方案。
 
-五段合同提供入口，不代替正文推导。概念图、数学关系、反例和解释语义所需的最小示意可以保留；
+概念图、数学关系、反例和解释语义所需的最小示意可以保留；
 可编译接口、完整消息、配置、脚本、DDL 或测试数据应放到关联源码、包文档、配置或夹具，正文
 链接过去。迁移时必须保留设计要求，不能仅删除代码块。
 
@@ -90,7 +94,7 @@
 - 组件篇之间按 [`reviewed/README.md`](reviewed/README.md) 的责任表分篇：声明式索引、索引控制、
   检索分别承接声明变化、后台恢复与请求正确性；权限与 CLI 各有产品决定，不压进“服务负责”
   一句话。
-- [外部资源访问](reviewed/resource-access.md) 拥有 Binding/Observation 语义与观察保留；
+- [LiveAccess 插件重构](reviewed/resource-access.md) 拥有透明取值、单值失败与身份传递目标，沿用 Binding/Observation 及观察保留合同；
   [检索](reviewed/retrieval.md) 拥有 SEARCH 代数与 RetrievalPlan；
   [索引控制](reviewed/index-control.md) 只拥有如何据此维护派生投影。
 - 权威与派生介质的角色、替换边界归 [架构总览](reviewed/core-architecture.md)；具体
@@ -129,7 +133,7 @@
 | 知识身份、Schema 与发布 | [`knowledge.md`](reviewed/knowledge.md) |
 | 对象能力合同与处理器分派 | [`object-interface.md`](reviewed/object-interface.md) |
 | Dataset 组合、固定版本与文件交付 | [`dataset.md`](reviewed/dataset.md) |
-| 访问声明与逻辑索引合同 | [`declarative-index.md`](reviewed/declarative-index.md) |
+| 声明式索引插件、查询合同与验收 | [`declarative-index.md`](reviewed/declarative-index.md) |
 | 投影对账、增量与恢复 | [`index-control.md`](reviewed/index-control.md) |
 | SEARCH 代数与查询计划 | [`retrieval.md`](reviewed/retrieval.md) |
 | Binding、观察与保留 | [`resource-access.md`](reviewed/resource-access.md) |
@@ -195,9 +199,9 @@ Terminology
 2. 改变公开名称，先改 Terminology；改变跨层边界，先改架构总览和架构守卫。
 3. 专题文档只能拥有其 OKF 中声明的主题。独立主题才拆成新文；长篇的实现清单先迁到源码附近，短篇但责任独立的设计不机械合并。涉及别的主题时链接权威文档，不复制结论。
 4. 设计文档不记录 P0/P1、已完成/未完成流水账；状态只进 MVP Acceptance/Test Catalog。
-5. 包 README 维护已选定协议的用法；设计文档维护理由、不变量和取舍。实现必须跟设计，设计不跟今天的代码收缩。
-6. 「尚未实现 / 首版 / 待建」只属于缺口页。只有设计明确**永远不做**的才进 Non-Goals 或否决。
-7. 运行 `make check-docs`。漏登记、重复主题、悬空 Relation、环、坏链、不合协议信封的 Relation、设计类文档缺少五段合同标题，都会失败。
+5. 包 README 维护已选定协议的用法；设计文档维护目标、要求与必要的理由和取舍。实现必须跟设计，设计不跟今天的代码收缩。
+6. Non-Goals 只记录已确定的范围排除；暂无实现不自动成为排除项，未决定的方案不写成否决。
+7. 运行 `make check-docs`。漏登记、重复主题、悬空 Relation、环、坏链、不合协议信封的 Relation 都会失败；标题与段落数量不作为门禁。
 
 生成的 HTML、PNG 和 JSON 架构视图是派生展示，不进入文档权威图；它们必须能依据
 Markdown 与 `docs/graph/` 重建，不能承载独有决策；手工编写的产品手册须同步核对来源，不能宣称已有自动生成器。当前的人读产品说明是

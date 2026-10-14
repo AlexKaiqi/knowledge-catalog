@@ -1,0 +1,9 @@
+---
+object_id: interface/asset.inspect/v1
+---
+{
+  "name": "AssetInspection",
+  "meaning": "说明对象可由独立处理器检查；这组材料没有安装该处理器。",
+  "standardImplementationSchemas": ["schema/inspection.implementation/v1"],
+  "operations": {"inspect": {"effect": "read"}}
+}

@@ -39,7 +39,7 @@ func TestManagedRepositoryCreatePreservesTypedRequestAndCorrelation(t *testing.T
 		t.Fatal(err)
 	}
 	var result map[string]any
-	err = kc.SnapshotService().CreateRepository(context.Background(), client.RepositoryCreateRequest{Repository: "repo-A", CommandID: "create-A"}, client.RequestOptions{RequestID: "request-A"}, &result)
+	err = kc.RepositoryManagementService().CreateRepository(context.Background(), client.RepositoryCreateRequest{Repository: "repo-A", CommandID: "create-A"}, client.RequestOptions{RequestID: "request-A"}, &result)
 	if err != nil || result["status"] != "REPLAYED" || result["repositoryId"] != "repo-A" {
 		t.Fatalf("create result=%#v err=%v", result, err)
 	}
@@ -59,7 +59,7 @@ func TestManagedRepositoryCreateRequiresExplicitCoordinatesBeforeTransport(t *te
 		{client.RepositoryCreateRequest{CommandID: "create-A"}},
 		{client.RepositoryCreateRequest{Repository: "repo-A"}},
 	} {
-		if err := kc.SnapshotService().CreateRepository(context.Background(), input.request, client.RequestOptions{}, nil); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
+		if err := kc.RepositoryManagementService().CreateRepository(context.Background(), input.request, client.RequestOptions{}, nil); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
 			t.Errorf("missing input reached transport: %v", err)
 		}
 	}

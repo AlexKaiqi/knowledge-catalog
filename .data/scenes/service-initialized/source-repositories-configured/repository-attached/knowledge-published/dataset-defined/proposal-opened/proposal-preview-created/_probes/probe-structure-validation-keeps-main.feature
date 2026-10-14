@@ -7,6 +7,6 @@ Feature: 执行 Preview 结构检查得到通过报告且主分支保持原值
     Then the output has:
       | reportId | nonempty |
       | outcome  | PASSED |
-    When I run `kc read --repo kr://scene/knowledge --object note/hello`
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:note%2Fhello`
     Then the output has:
       | value.text | hi |

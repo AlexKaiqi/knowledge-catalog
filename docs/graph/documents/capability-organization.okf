@@ -17,6 +17,7 @@ path_hint: docs/graph/documents/capability-organization.okf
     "maintainer"
   ],
   "ownerTopics": [
-    "capability-boundary-organization"
+    "capability-boundary-organization",
+    "snapshot-module-client-directory-and-boundaries"
   ]
 }

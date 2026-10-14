@@ -1,0 +1,1 @@
+This small module is a test fixture. Its source, vectors and license live at independent paths.

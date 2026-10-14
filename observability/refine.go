@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 )
 
 type RefineSearchView struct {
@@ -26,35 +26,35 @@ type RefineSpec struct {
 }
 
 type RefineFieldRef struct {
-	Schema knowledge.ObjectID `json:"schema"`
-	Aspect string             `json:"aspect,omitempty"`
-	Path   string             `json:"path"`
+	Schema objectmodel.ObjectID `json:"schema"`
+	Aspect string               `json:"aspect,omitempty"`
+	Path   string               `json:"path"`
 }
 
 type RefineLaneEvidence = RetrievalLaneEvidence
 
 type RefineCandidate struct {
-	KnowledgeRef      knowledge.PinnedKnowledgeRef `json:"knowledgeRef"`
-	Value             any                          `json:"value"`
-	ValueDigest       kernel.Digest                `json:"valueDigest"`
-	OriginalRank      int                          `json:"originalRank"`
-	RetrievalEvidence []RefineLaneEvidence         `json:"retrievalEvidence,omitempty"`
-	Observations      []knowledge.UnitObservation  `json:"observations,omitempty"`
+	KnowledgeRef      objectmodel.PinnedKnowledgeRef `json:"knowledgeRef"`
+	Value             any                            `json:"value"`
+	ValueDigest       kernel.Digest                  `json:"valueDigest"`
+	OriginalRank      int                            `json:"originalRank"`
+	RetrievalEvidence []RefineLaneEvidence           `json:"retrievalEvidence,omitempty"`
+	Observations      []objectmodel.UnitObservation  `json:"observations,omitempty"`
 }
 
 type RefineRankGroup struct {
-	Rank int                      `json:"rank"`
-	Refs []knowledge.KnowledgeRef `json:"refs"`
+	Rank int                        `json:"rank"`
+	Refs []objectmodel.KnowledgeRef `json:"refs"`
 }
 
 type RefineModelOutput struct {
-	Provider       string                   `json:"provider"`
-	Model          string                   `json:"model"`
-	ModelRevision  string                   `json:"modelRevision,omitempty"`
-	PromptRevision string                   `json:"promptRevision,omitempty"`
-	DurationMillis int64                    `json:"durationMillis"`
-	Groups         []RefineRankGroup        `json:"groups"`
-	Unjudged       []knowledge.KnowledgeRef `json:"unjudged"`
+	Provider       string                     `json:"provider"`
+	Model          string                     `json:"model"`
+	ModelRevision  string                     `json:"modelRevision,omitempty"`
+	PromptRevision string                     `json:"promptRevision,omitempty"`
+	DurationMillis int64                      `json:"durationMillis"`
+	Groups         []RefineRankGroup          `json:"groups"`
+	Unjudged       []objectmodel.KnowledgeRef `json:"unjudged"`
 }
 
 // RefineEvent is non-Canonical semantic inference evidence. Candidate Value is
@@ -104,7 +104,7 @@ func (e RefineEvent) Validate() error {
 	if e.CandidateDigest == "" || e.ProjectedBytes <= 0 || len(e.Candidates) == 0 {
 		return fmt.Errorf("refine evidence requires projected candidate input")
 	}
-	seen := map[knowledge.KnowledgeRef]struct{}{}
+	seen := map[objectmodel.KnowledgeRef]struct{}{}
 	for i, candidate := range e.Candidates {
 		ref := candidate.KnowledgeRef
 		if ref.Repository == "" || ref.Commit == "" || ref.Object == "" || candidate.OriginalRank != i+1 {

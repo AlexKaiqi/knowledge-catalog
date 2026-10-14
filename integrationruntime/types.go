@@ -9,7 +9,7 @@ import (
 
 	"kc/connector"
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 )
 
 type ArtifactSpec struct {
@@ -64,7 +64,7 @@ type Collection struct {
 
 type Writer interface {
 	Head(context.Context, kernel.RepositoryID, string) (kernel.CommitID, error)
-	Commit(context.Context, string, knowledge.CommitChangeSet) (kernel.CommitID, error)
+	Commit(context.Context, string, objectmodel.CommitChangeSet) (kernel.CommitID, error)
 }
 
 // WriterFactory authenticates against the manifest's saved Server and returns
@@ -72,9 +72,9 @@ type Writer interface {
 type WriterFactory func(context.Context, string) (Writer, string, error)
 
 type Pending struct {
-	CommandID string                    `json:"commandId"`
-	ChangeSet knowledge.CommitChangeSet `json:"changeSet"`
-	Cursor    string                    `json:"cursor,omitempty"`
+	CommandID string                      `json:"commandId"`
+	ChangeSet objectmodel.CommitChangeSet `json:"changeSet"`
+	Cursor    string                      `json:"cursor,omitempty"`
 }
 
 type state struct {

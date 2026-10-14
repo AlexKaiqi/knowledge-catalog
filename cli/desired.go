@@ -9,19 +9,20 @@ import (
 	"sync/atomic"
 
 	kcclient "kc/client"
+	"kc/invoke"
 	"kc/kernel"
-	"kc/knowledge"
-	"kc/knowledge/writer"
+	objectmodel "kc/object"
+	"kc/object/writer"
 )
 
-func parseResolution(raw any) (knowledge.Resolution, error) {
+func parseResolution(raw any) (objectmodel.Resolution, error) {
 	encoded, err := json.Marshal(raw)
 	if err != nil {
-		return knowledge.Resolution{}, err
+		return objectmodel.Resolution{}, err
 	}
-	var resolution knowledge.Resolution
+	var resolution objectmodel.Resolution
 	if err := json.Unmarshal(encoded, &resolution); err != nil {
-		return knowledge.Resolution{}, err
+		return objectmodel.Resolution{}, err
 	}
 	return resolution, nil
 }
@@ -36,7 +37,7 @@ const diffPreflightConcurrency = 16
 // result and error semantics match the former serial loop: unresolved
 // addresses and empty digests contribute nothing, and any other error fails
 // the whole preflight.
-func remoteCurrentDigests(ctx context.Context, client *kcclient.Client, repository string, commit kernel.CommitID, ops []knowledge.Operation, options kcclient.RequestOptions) (map[string]string, error) {
+func remoteCurrentDigests(ctx context.Context, client *kcclient.Client, repository string, commit kernel.CommitID, ops []objectmodel.Operation, options kcclient.RequestOptions) (map[string]string, error) {
 	out := make(map[string]string, len(ops))
 	if commit == "" || len(ops) == 0 {
 		return out, nil
@@ -94,11 +95,11 @@ func remoteCurrentDigests(ctx context.Context, client *kcclient.Client, reposito
 					mu.Unlock()
 					return
 				}
-				if resolution.Status == knowledge.StatusUnresolved || resolution.Digest == "" {
+				if resolution.Status == objectmodel.StatusUnresolved || resolution.Digest == "" {
 					continue
 				}
 				mu.Lock()
-				out[knowledge.AddressKey(op.Address)] = string(resolution.Digest)
+				out[objectmodel.AddressKey(op.Address)] = string(resolution.Digest)
 				mu.Unlock()
 			}
 		}()
@@ -115,7 +116,7 @@ func remoteCurrentDigests(ctx context.Context, client *kcclient.Client, reposito
 // desired directory, and collect current digests through the typed client.
 func prepareRemoteDesiredIngest(ctx context.Context, client *kcclient.Client, flags map[string]FlagValue, repository, dir string, options kcclient.RequestOptions) (writer.IngestPreview, kernel.CommitID, map[string]string, error) {
 	ref := snapshotRef(flags)
-	base := kernel.CommitID(flagString(flags, "base"))
+	base := kernel.CommitID(invoke.FlagString(flags, "base"))
 	if base == "" {
 		var err error
 		base, err = remoteHeadCommit(ctx, client, repository, ref, options)

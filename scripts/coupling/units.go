@@ -15,6 +15,10 @@ func hasInstabilityDrift(current, previous float64) bool {
 // Snapshot Store's HTTP adapter is an application capability inside the
 // product's source directory. Its identity edge must not be attributed to the
 // file/Dataset/access core. All other units keep the existing top-level policy.
+// The refactor exposes roots and named first-level capabilities; use that
+// granularity uniformly for runtime, tools and testkit, retaining every edge.
+const defaultUnitDepth = 2
+
 const snapshotServiceUnit = "snapshot/service"
 
 func unitPolicySignature(depth int) string {

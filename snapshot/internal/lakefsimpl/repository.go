@@ -274,7 +274,13 @@ func (r *Repository) publicationLock(name string) string {
 // operations. Atomic branch creation is the mutex; while holding it, KC checks
 // expected, hard-resets the clean publication branch, verifies, then releases.
 // Deployment policy must deny direct writers on publication branches.
-func (r *Repository) publishBranch(name string, candidate, expected kernel.CommitID) error {
+func (r *Repository) publishBranch(name string, candidate, expected kernel.CommitID) (err error) {
+	resetStarted := false
+	defer func() {
+		if err != nil && !resetStarted {
+			err = storecontract.WriteNotApplied(err)
+		}
+	}()
 	lock := r.publicationLock(name)
 	if err := r.createBranch(lock, candidate, true); err != nil {
 		if statusOf(err) != http.StatusConflict {
@@ -287,25 +293,19 @@ func (r *Repository) publishBranch(name string, candidate, expected kernel.Commi
 		if !found {
 			return kernel.Fail(kernel.ErrVersionUnresolved, "ref refs/heads/%s does not exist", name)
 		}
-		lockHead, lockFound, lockErr := r.getBranch(lock)
+		lockHead, _, lockErr := r.getBranch(lock)
 		if lockErr != nil {
 			return lockErr
 		}
 		if current == candidate {
-			if lockFound && lockHead == candidate {
-				r.deleteBranch(lock) // completed publisher crashed before cleanup.
-			}
 			return nil
 		}
 		if current != expected {
-			if lockFound && current == lockHead {
-				r.deleteBranch(lock)
-			}
 			return kernel.Fail(kernel.ErrNonFastForward,
 				"ref refs/heads/%s moved: expected commit %s, actual %s", name, expected, current)
 		}
 		return kernel.Fail(kernel.ErrTemporaryUnavailable,
-			"lakefs publication lock for refs/heads/%s is held", name)
+			"lakefs publication lock for refs/heads/%s is held (target %s, candidate %s); stop all publishers before RecoverLakeFSPublication", name, current, lockHead)
 	}
 	defer r.deleteBranch(lock)
 
@@ -325,6 +325,7 @@ func (r *Repository) publishBranch(name string, candidate, expected kernel.Commi
 	}
 	query := url.Values{"ref": {string(candidate)}, "force": {"false"}}
 	endpoint := r.client.repositoryPath("branches/"+url.PathEscape(name)+"/hard_reset") + "?" + query.Encode()
+	resetStarted = true
 	if _, _, err := r.client.doJSON(http.MethodPut, endpoint, nil, nil); err != nil {
 		return err
 	}

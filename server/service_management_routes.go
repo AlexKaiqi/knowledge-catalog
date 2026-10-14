@@ -6,12 +6,11 @@ import (
 
 	"encoding/json"
 	"net/http"
-	"strconv"
 	"strings"
 
 	kcclient "kc/client"
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 	"kc/observability"
 )
 
@@ -19,14 +18,11 @@ import (
 // request DTOs below are resource-specific: no endpoint accepts a CLI verb or
 // an arbitrary flag map.
 func (f *httpFacade) registerManagementRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /knowledge/v1/plugins/{name}", f.pluginHelp)
 	f.registerRepositoryRoutes(mux)
 	f.snapshotStoreService().Register(mux)
-	mux.HandleFunc("GET /snapshot/v1/inventory", f.inventoryShow)
-	mux.HandleFunc("GET /snapshot/v1/audit", f.registryAudit)
-	mux.HandleFunc("POST /snapshot/v1/repositories", f.registryRepositoryAttach)
 	mux.HandleFunc("POST /snapshot/v1/repositories:create", f.registryRepositoryCreate)
 	mux.HandleFunc("POST /snapshot/v1/repositories/{repository}/archive", f.registryRepositoryArchive)
-	mux.HandleFunc("DELETE /snapshot/v1/repositories/{repository}", f.registryRepositoryDetach)
 
 	mux.HandleFunc("POST /writer/v1/repositories/{repository}/commits", f.writerCommit)
 	mux.HandleFunc("GET /writer/v1/repositories/{repository}/head", f.writerHead)
@@ -57,43 +53,9 @@ func (f *httpFacade) registerManagementRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /operations/v1/feedback", f.feedbackRecord)
 }
 
-type registryRepositoryRequest struct {
-	Repository string `json:"repository"`
-}
-
 type registryRepositoryCreateRequest struct {
 	Repository string `json:"repository"`
 	CommandID  string `json:"commandId"`
-}
-
-func registryFlags(r *http.Request) map[string]FlagValue {
-	return map[string]FlagValue{}
-}
-
-func (f *httpFacade) inventoryShow(w http.ResponseWriter, r *http.Request) {
-	f.executeTyped(w, r, "inventory-show", "inventory.read", inv.Command{Stage: invoke.StageGoverned, Run: inv.ReadInventoryState}, registryFlags(r))
-}
-
-func (f *httpFacade) registryAudit(w http.ResponseWriter, r *http.Request) {
-	flags := registryFlags(r)
-	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
-		if _, err := strconv.Atoi(raw); err != nil {
-			invoke.WriteJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "limit must be an integer")))
-			return
-		}
-		flags["limit"] = raw
-	}
-	f.executeTyped(w, r, "registry-audit", "registry.audit.read", inv.Command{Stage: invoke.StageHome, Run: inv.VerbAudit}, flags)
-}
-
-func (f *httpFacade) registryRepositoryAttach(w http.ResponseWriter, r *http.Request) {
-	var request registryRepositoryRequest
-	if !decodeServiceRequest(w, r, &request) {
-		return
-	}
-	flags := registryFlags(r)
-	flags["repo"] = request.Repository
-	f.executeTyped(w, r, "repository-attach", "repositories.manage", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbRegister}, flags)
 }
 
 func (f *httpFacade) registryRepositoryCreate(w http.ResponseWriter, r *http.Request) {
@@ -101,7 +63,7 @@ func (f *httpFacade) registryRepositoryCreate(w http.ResponseWriter, r *http.Req
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	flags := registryFlags(r)
+	flags := map[string]FlagValue{}
 	flags["repo"], flags["command-id"] = request.Repository, request.CommandID
 	if err := inv.ValidateManagedRepositoryCoordinates(flags); err != nil {
 		invoke.WriteJSON(w, http.StatusBadRequest, kernel.FaultJSON(err))
@@ -114,31 +76,25 @@ func (f *httpFacade) registryRepositoryArchive(w http.ResponseWriter, r *http.Re
 	if !decodeEmptyServiceRequest(w, r) {
 		return
 	}
-	flags := registryFlags(r)
+	flags := map[string]FlagValue{}
 	flags["repo"] = r.PathValue("repository")
 	f.executeTyped(w, r, "repository-archive", "repositories.manage", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbArchiveRepo}, flags)
 }
 
-func (f *httpFacade) registryRepositoryDetach(w http.ResponseWriter, r *http.Request) {
-	flags := registryFlags(r)
-	flags["repo"] = r.PathValue("repository")
-	f.executeTyped(w, r, "detach", "repositories.manage", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbDetach}, flags)
-}
-
 type writerCommitRequest struct {
-	CommandID string              `json:"commandId"`
-	ChangeSet knowledge.ChangeSet `json:"changeSet"`
+	CommandID string                `json:"commandId"`
+	ChangeSet objectmodel.ChangeSet `json:"changeSet"`
 }
 
 type proposalRequest struct {
-	Repository   string                        `json:"repository,omitempty"`
-	ProposalID   string                        `json:"proposalId"`
-	CandidateRef string                        `json:"candidateRef"`
-	TargetRef    string                        `json:"targetRef,omitempty"`
-	BaseCommit   string                        `json:"baseCommit,omitempty"`
-	Operations   []knowledge.Operation         `json:"operations"`
-	Message      string                        `json:"message,omitempty"`
-	Provenance   *knowledge.ProvenanceEnvelope `json:"provenance,omitempty"`
+	Repository   string                          `json:"repository,omitempty"`
+	ProposalID   string                          `json:"proposalId"`
+	CandidateRef string                          `json:"candidateRef"`
+	TargetRef    string                          `json:"targetRef,omitempty"`
+	BaseCommit   string                          `json:"baseCommit,omitempty"`
+	Operations   []objectmodel.Operation         `json:"operations"`
+	Message      string                          `json:"message,omitempty"`
+	Provenance   *objectmodel.ProvenanceEnvelope `json:"provenance,omitempty"`
 }
 
 func (f *httpFacade) writerCommit(w http.ResponseWriter, r *http.Request) {
@@ -245,6 +201,7 @@ type policyBindingRequest struct {
 	Require    []string `json:"require,omitempty"`
 }
 type auditQueryRequest struct {
+	RequestID    string `json:"requestId,omitempty"`
 	Principal    string `json:"principal,omitempty"`
 	OnBehalfOf   string `json:"onBehalfOf,omitempty"`
 	Action       string `json:"action,omitempty"`
@@ -338,7 +295,8 @@ func auditFlags(q auditQueryRequest) map[string]FlagValue {
 	// by the query separate so transport tracing cannot silently change audit
 	// results after addHTTPTraceFlags runs.
 	flags := compactFlags(map[string]FlagValue{
-		"filter-principal": q.Principal, "filter-on-behalf-of": q.OnBehalfOf, "action": q.Action,
+		"filter-request-id": q.RequestID,
+		"filter-principal":  q.Principal, "filter-on-behalf-of": q.OnBehalfOf, "action": q.Action,
 		"repo": q.Repository, "object": q.Object, "since": q.Since, "until": q.Until,
 		"continuation": q.Continuation, "evidence-id": q.EvidenceID,
 	})
@@ -403,7 +361,7 @@ func (f *httpFacade) feedbackRecord(w http.ResponseWriter, r *http.Request) {
 		RetrievalEvidenceID string                          `json:"retrievalEvidenceId,omitempty"`
 		RefineEvidenceID    string                          `json:"refineEvidenceId,omitempty"`
 		Answer              string                          `json:"answer,omitempty"`
-		SelectedRefs        []knowledge.KnowledgeRef        `json:"selectedRefs,omitempty"`
+		SelectedRefs        []objectmodel.KnowledgeRef      `json:"selectedRefs,omitempty"`
 		IdealGroups         []observability.RefineRankGroup `json:"idealGroups,omitempty"`
 	}
 	if decodeServiceRequest(w, r, &q) {
@@ -415,7 +373,7 @@ func (f *httpFacade) feedbackRecord(w http.ResponseWriter, r *http.Request) {
 		// A feedback submission is a new traced request. Keep its transport
 		// trace separate from the earlier Agent trace being labelled.
 		flags["_feedback-target-trace-id"] = q.TraceID
-		flags["_feedback-selected"] = append([]knowledge.KnowledgeRef(nil), q.SelectedRefs...)
+		flags["_feedback-selected"] = append([]objectmodel.KnowledgeRef(nil), q.SelectedRefs...)
 		flags["_feedback-ideal"] = append([]observability.RefineRankGroup(nil), q.IdealGroups...)
 		f.executeTyped(w, r, "operations-feedback-record", "feedback.write", inv.Command{Stage: invoke.StageHome, Run: inv.VerbRecordFeedback}, flags)
 	}

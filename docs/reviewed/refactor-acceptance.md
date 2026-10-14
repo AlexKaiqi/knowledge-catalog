@@ -31,13 +31,13 @@
 
 ### RA-01 · Dolt 会话复用（已随 Dolt adapter 退役）
 
-- **状态：** 已退役，不是待办。`snapshot/dolt` 与 `knowledge/dolt` 已从仓中删除；本条保留
+- **状态：** 已退役，不是待办。`snapshot/dolt` 与 `object/dolt` 已从仓中删除；本条保留
   为历史验收记录，不再有对应实现与验证入口，也不得为满足本条重新引入 Dolt。
 - **原 owner：** [架构总览](core-architecture.md)；条目 `DOLT-01`（随 adapter 退役）。
 - **原成功观察：** 同一 Repository 生命周期内 20 次只读查询不再启动 20 个 Dolt 进程；
   变更命令先释放会话并继续保持单写者；`Close` 可重复并回收进程。
 - **原验证入口：** 进程复用、多行语句与诊断对齐、诊断不污染下一次结果三组会话用例，
-  以及 `snapshot/dolt`、`knowledge/dolt` 定向包与 session race——全部随包删除。
+  以及 `snapshot/dolt`、`object/dolt` 定向包与 session race——全部随包删除。
 
 ### RA-02 · Provider 合同与等价性
 

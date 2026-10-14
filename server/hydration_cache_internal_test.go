@@ -8,20 +8,20 @@ import (
 	"strings"
 	"testing"
 
+	retrieval "kc/discovery"
 	apphome "kc/home"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/knowledge"
-	"kc/knowledge/reader"
-	"kc/retrieval"
-	readcache "kc/retrieval/cache"
+	objectmodel "kc/object"
+	readcache "kc/object/cache"
+	"kc/object/reader"
 	"kc/snapshot"
 )
 
 func TestHTTPCachedReadRechecksRevocationAndKeepsOldBasis(t *testing.T) {
 	repo := testkit.MakeRepository(t, "kr://acme/public/cache-permission")
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
-	commit, err := repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
+	commit, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
 		TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: root, ExpectedTargetCommit: root,
 		Operations: testkit.PutEntity("policy/a", map[string]any{"body": "first version"}, ""),
 	})
@@ -55,7 +55,11 @@ func TestHTTPCachedReadRechecksRevocationAndKeepsOldBasis(t *testing.T) {
 		}
 	}
 	read := func(basis kernel.CommitID) *httptest.ResponseRecorder {
-		body, err := json.Marshal(map[string]any{"repository": repo.ID(), "commit": basis, "object": "policy/a"})
+		reference, err := objectmodel.FormatReference(objectmodel.Reference{Repository: repo.ID(), Object: "policy/a"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := json.Marshal(map[string]any{"reference": reference, "commit": basis})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -81,7 +85,7 @@ func TestHTTPCachedReadRechecksRevocationAndKeepsOldBasis(t *testing.T) {
 		t.Fatalf("revocation bypassed: %d %s", denied.Code, denied.Body.String())
 	}
 	grant(true)
-	next, err := repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
+	next, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
 		TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: commit, ExpectedTargetCommit: commit,
 		Operations: testkit.PutEntity("policy/a", map[string]any{"body": "second version"}, ""),
 	})
@@ -97,7 +101,7 @@ func TestHTTPCachedReadRechecksRevocationAndKeepsOldBasis(t *testing.T) {
 	// SEARCH may discover this identity without body read permission. Its
 	// delivery stage must strip only this response, never the shared cache.
 	grant(false)
-	value, err := rd.Read(knowledge.KnowledgeRef{Repository: repo.ID(), Object: "policy/a"}, commit, nil)
+	value, err := rd.Read(objectmodel.KnowledgeRef{Repository: repo.ID(), Object: "policy/a"}, commit, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

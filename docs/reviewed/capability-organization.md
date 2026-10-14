@@ -1,43 +1,69 @@
 # 能力边界组织设计
 
 本设计以能力边界为组织单元重排仓库目录：一个顶层目录 = 一个能力 = 一个概念；对外最小信息（README +
-interface）先行，内部实现按三档隐藏。承接 [核心架构](core-architecture.md)（四协议边界与层所有权）、
+interface）先行，内部实现按三档隐藏。承接 [核心架构](core-architecture.md)（协议边界与层所有权）、
 [工程质量闭环](quality-loop.md)（闸/审分层与 coupling 棘轮）、[基础重构验收合同](refactor-acceptance.md)（红绿执行纪律）。
 本设计只动组织，不动行为；所有不变量 ID 沿用 [架构不变量](architecture-invariants.md) 现有编号，不新造编号。
+模块客户端责任还由[CLI 交互](cli.md)与[服务边界](service.md)约束；目录收口不改变任务或认证合同。
 
 ## Goal
 
 以能力边界作为仓库的组织单元：**一个顶层目录 = 一个能力 = 一个概念**。每个能力以
-对外最小信息（README + interface）先行，内部实现语言级隐藏。四个协议边界
+对外最小信息（README + interface）先行，内部实现语言级隐藏。三个协议边界
 （Snapshot、Knowledge、Retrieval）在各自 owner 下收敛，只做「内部实现完全不暴露」的收尾；
 组织优化的主战场是应用层的约 20 个单元。
+模块拥有自己的公开客户端入口，文件任务实现与其协议归属一致；KC 只保留全局上下文与跨模块装配。
+
+这一组织服务于 Agent 的对象环境：Snapshot 支撑多团队协作、版本化与生产发布，Object
+组织对象知识及元数据，插件在 scope 约束内承接业务扩展。各模块提供所属能力及使用说明，
+让对象与系统两处 Affordance 支撑发现、申请获准、实际使用与记录；目录调整不另造授权或执行权威。
 
 ## Non-Goals
 
-- 底层存储与知识解释仍沿各自合同（`snapshot/store.go`、`snapshot/dataset/README.md`、`knowledge/README.md`、
-  `retrieval/README.md` 是已选定合同）；公开消费面不新增对象列举、不新增 PATCH / 跨仓事务。
-- 不新增协议层或编号体系；应用能力负责装配与政策执行，不是第五个协议边界。
+- 底层存储与知识解释仍沿各自合同（`snapshot/store.go`、`snapshot/dataset/README.md`、`object/README.md`、
+  `discovery/README.md` 是已选定合同）；公开消费面不新增对象列举、不新增 PATCH / 跨仓事务。
+- 不新增协议层或编号体系；应用能力负责装配与政策执行，不是新的协议边界。
 - 不删除、削弱 conformance / arch 守卫断言；`internal/arch` 层表变更属协议决策，必须同变更改
   `core-architecture.md`。
 - 不做 big-bang 重命名；一次迁移一个能力，每步可逆、全绿。
 - 不移动非 Go 能力区域（`webui/`、`output/`、`docs/graph/`、`.data/`）。
 - 不处理 Dataset 消费语义、VFS 能力扩展等产品行为演进（各自 owner 所有）。
+- 本次 Snapshot 客户端收口不新增业务权威、全局身份账、命令框架或独立二进制。
 
 ## Snapshot Store 目录修订
 
 2026-10-12 用户明确要求把 Dataset、对应权限核心、HTTP 和完整控制台收口为可独立使用的 Snapshot Store 模块。此次修订替代本设计此前对这部分目录的“顶层扁平”与“非 Go 区域不移动”限制；它不改变其它能力的组织约定或历史批次记录。
 
-`Snapshot Store` 是产品能力的目录所有者，模块内分别保留底层存储、文件组合、访问控制、服务接口和展示组件。实现集中在 `snapshot/dataset`、`snapshot/access`、`snapshot/service`、`snapshot/console`；旧 Catalog 路径删除；KC 的服务和调用缝仅做装配与外部业务适配。不得以类型转发掩盖双实现，不得将 Knowledge、索引或 Home 生命周期反向引入新核心。登记空间已按单服务收敛，仓登记、发布历史和授权权威保持；架构守卫应验证这条新的所有权边界。 外部 import 闭集为 snapshot 根包与 dataset/access/service/console 四个具名一级包；实现深层不作为另一路径开放。各模块契约、实现与测试同归其主，优先同包未导出类型，确需私有子包时采用本模块 internal；contract.go 是代码组织约定而非 Go 可见性机制。lakeFS 是唯一生产存储实现，Gitea/filegit 存储及具体类型转发退役，独立 Gitea 身份认证仍可装配。
+`Snapshot Store` 是产品能力的目录所有者，模块内分别保留底层存储、文件组合、访问控制、服务接口和展示组件。实现集中在 `snapshot/dataset`、`snapshot/access`、`snapshot/service`、`snapshot/console`；旧 Catalog 路径删除；KC 的服务和调用缝仅做装配与外部业务适配。不得以类型转发掩盖双实现，不得将 Knowledge、索引或 Home 生命周期反向引入新核心。登记空间已按单服务收敛，仓登记、发布历史和授权权威保持；架构守卫应验证这条新的所有权边界。 外部 import 闭集为 snapshot 根包与 dataset/access/service/console/client/cli 六个具名一级包；实现深层不作为另一路径开放。各模块契约、实现与测试同归其主，优先同包未导出类型，确需私有子包时采用本模块 internal；contract.go 是代码组织约定而非 Go 可见性机制。lakeFS 是唯一生产存储实现，Gitea/filegit 存储及具体类型转发退役，独立 Gitea 身份认证仍可装配。
 
 身份消费者闭集增加 `snapshot/service`：其共享已核验的运输身份合同与有界验证响应，不拥有另一份身份账。旧 Invocation 与 Server 路径只保留兼容转发。文件组合核心仍不得触达身份提供方或知识实现。
 
-结构耦合的逻辑单元沿用顶层目录，唯独将 `snapshot/service` 及其子包登记为具名嵌套单元：它是消费身份合同的应用适配，不能把这条依赖归到 Snapshot 核心。所有生产 import 仍计入度量；包级层表与依赖闭包守卫继续验证真实方向。组织调整须用同一单元政策重算调整前后，证明确实收紧后才显式登记新单元；不能通过抬高基线或省略边让门禁通过。
+2026-10-13 的客户端修订将 Snapshot typed SDK 与任务 CLI 分别归 `snapshot/client`、
+`snapshot/cli`。两包属于客户端适配，不改变底层 Store 与 Dataset 核心的层归属；模块核心、
+服务与控制台均不反向依赖它们。SDK 注入已认证运输，CLI 消费 SDK 与明确的本次主体上下文；
+KC 负责会话、部署、宿主管理及跨模块任务。通用 HTTP 编解码可以共享纯基础设施，但不持有
+会话或 typed 领域规则。公开数据形状与工厂继续逐项入守卫闭集，不能借客户端迁移开放
+concrete 权威、私有状态、实现别名或另一份业务执行器。
+
+客户端收口也包括叶操作数、参数范围、产品输出和可供性帮助，而不是仅归属执行函数。
+模块的公开静态声明供宿主绑定 argv 与组合导航；独立模块和 KC 显示同一完整帮助。
+宿主的全局身份、跨模块旅程及集成测试保留，重复模块叶规则和无符号空壳应删除。
+概念页与分组引导同样由模块静态贡献；宿主只装配帮助导航，不把说明登记为业务命令，
+也不因概念发现需要扩张协议或再造描述实体。
+
+结构耦合的逻辑单元沿根与具名一级子能力划分；`snapshot/service`、`snapshot/client`、`snapshot/cli`
+分别作为独立单元，各自更深层实现归同一单元：它们分别是 HTTP、SDK 与任务交互适配，不能把应用依赖
+归到 Snapshot 核心。所有生产 import 仍计入度量；包级层表与依赖闭包守卫继续验证真实方向。
+组织调整须用同一单元政策重算调整前后，证明确实收紧后才显式登记新单元；不能通过抬高
+基线或省略边让门禁通过。
 
 ## Object 模块目录修订
 
 2026-10-12 的对象重构目标进一步修订本设计的目录约定：基本身份、表示、结构合同及固定
-读写归 `object/`；通用对象能力归 `interfaces/`，发现与投影归 `discovery/`，当前态访问归
-`liveaccess/`。这四个模块同级，不把后面三项收入 Object，也不另设 `objectcore`、
+读写归 `object/`，通用查询合同与消费服务归 `discovery/`，具体声明式索引插件归
+`declarativeindex/`，当前态访问归 `liveaccess/`。能力扩展主体
+是 Plugin，Affordance 描述对象与系统能力怎样使用；此前 `interfaces/` 仅作为现有操作合同兼容代码的
+定位，不继续建立并列的 Interface 架构层。这些实现不全部收入 Object，也不另设 `objectcore`、
 `objectio` 或笼统的 `objectapp`。Snapshot Store 的上述重构边界继续独立成立。
 
 模块可以提供具名的公开一级子能力；跨模块依赖只进入根包或这些一级入口。依赖方向仍须
@@ -49,15 +75,17 @@ interface）先行，内部实现按三档隐藏。承接 [核心架构](core-ar
 明确流程所有者。固定正文缓存可作为 `object/cache` 独立装配，基础 Reader 只持 hydrate
 窄口，不能因此持有缓存实现状态。宿主只选择、注入及管理组件生命周期，不承接逐请求规则。
 
-2026-10-13 补入 `plugins/` 作为产品扩展机制；它管理包、Repo/Dataset 实例、注册和生命周期，
-不属于新的协议边界。能力模块各自公开类型化注册口，产品装配组合这些入口；声明式索引
-和 LiveAccess 在各自模块的具名插件入口构造真实贡献。根合同与任务服务不反向导入插件
-实现，插件宿主不导入具体 provider。Object 固定读写、任务授权/依据/交付仍由系统保证。
-这些目标替代此前“只做目录组织”的范围限制，不把下文旧树当作否决插件机制的理由。
+2026-10-13 的插件目标以真实索引接入提取机制，不先创建 `plugins/` 或为每项能力预留
+注册目录。首批沿实际任务服务定义索引贡献的消费口，由具体插件入口构造、在 home 登记真实
+实例，让查询、固定依据准备和已接受推进实际使用它。本次执行等待 Object 与插件层
+分别验收后完成具体索引插件；根合同
+和索引不反向导入产品宿主，Object 固定读写与任务授权/依据/交付仍由系统保证。第二种
+真实能力需要同一机制时再提取共同宿主，不把最终模块目录变成每个切面的前置。
 
 CLI/help 继续承载能力说明，现有业务合同随真实调用方一起保留。安装与卸载管理的公开
-形状在实施前独立选定，不以每个插件生成命令树，也不复用用户出站 Hook 的注册与重试
-承诺。扩展阶段、安装范围和退出保证归对象重构指南，交互取舍归 CLI owner。
+形状在真实管理任务出现后独立选定，不以每个插件生成命令树，也不复用用户出站 Hook
+的注册与重试承诺。最小接入、目标范围和退出保证归[插件接入设计](plugin-extension.md)，
+Object 自身能力与跨模块拆分归[对象重构指南](object-refactor-guideline.md)，交互取舍归 CLI owner。
 
 本节确定目标，不宣称目录已经迁移。下文旧包名、批次和耦合实测保留其原范围；旧目录树与
 `knowledgeapp` 唯一归属的描述不作为阻止此次目标迁移的约束。每批仍需更新真实依赖守卫、
@@ -141,9 +169,11 @@ kc/
 │   ├── access/                        # contract.go、明确权限、实现与测试
 │   ├── service/                       # contract.go、独立 HTTP 与原始字节交付
 │   ├── console/                       # contract.go、完整 lakeFS 控制台与资产
+│   ├── client/                        # contract.go、typed SDK 与注入的已认证运输
+│   ├── cli/                           # contract.go、任务命令合同与 SDK 调用
 │   └── internal/lakefsimpl/            # 私有 lakeFS；支持合同与图章按需私有化
 │
-├── knowledge/              能力②:身份与读写解释
+├── object/              能力②:身份与读写解释
 │   ├── README.md                       # ① 拥有身份/Schema/来源/治理;不拥有组合与检索
 │   ├── writer/  reader/                # ② 写面(CAS/幂等)与读面(同版本 hydrate 窄口)——本身就是契约
 │   ├── serving.go                      # ② 消费组合窄口(注入状态端口,CA-01)
@@ -151,13 +181,13 @@ kc/
 │   └── internal/
 │       └── unitcodecimpl/  semanticviewimpl/  maintenanceimpl/  # ③ 编码/视图/维护扫描(B11;同名顶层薄壳可达)
 │
-├── retrieval/              能力③合同:检索合同(薄,纯契约)
+├── discovery/              能力③合同:检索合同(薄,纯契约)
 │   ├── README.md                       # ① 拥有查询计划/候选页/回读纪律;不拥有投影实现
 │   ├── search.go  relations.go  view.go   # ② SearchRequest/SearchView/关系合同/页界(IX-01)
 │   ├── conformance_test.go             # ④ R-01/R-02/K-25 反例组
 │   └── (无 internal;禁 import index —— denylist 钉死)
 │
-├── index/                  能力③投影:派生投影(读面+写面,可丢派生状态)
+├── discovery/projection/                  能力③投影:派生投影(读面+写面,可丢派生状态)
 │   ├── README.md                       # ① 拥有 READY/对账/代际/物理拓扑;不拥有声明本身/Canonical
 │   ├── retriever.go                    # ② 读面:exact-basis 候选源 + READY(R-01/R-02)
 │   ├── maintainer.go                   # ② 写面:basis/coverage/lag、代际重建、增量、消费者对账(PC-01/IX-03/04)
@@ -169,7 +199,7 @@ kc/
 │
 │   ━━━ 应用环:本轮组织重构的主对象 ━━━
 │
-├── knowledgeapp/           应用能力:应用用例(API-01 唯一业务规则所在层)
+├── discovery/service/           应用能力:应用用例(API-01 唯一业务规则所在层)
 │   ├── README.md                       # ① 全部 executor 如实入册:纵切 8 + 治理 5 + 投影 3
 │   ├── read.go  search.go  write.go    # ② 纵切 executor 与请求/响应类型(契约面)
 │   ├── operations.go  governance.go    # ② 治理 executor(PROPOSAL→Merge 经应用核心)
@@ -297,8 +327,8 @@ gate/
 
 ### 2.4 修正记录（相对上一轮讨论）
 
-- `index/` 保持顶层能力目录，**不**收进 `retrieval/internal/`：应用核心直接装配 Retriever
-  （`kc/index` 现被 `knowledgeapp`/`cli`/`home`/`index/opensearch` import），埋入 internal
+- `discovery/projection/` 保持顶层能力目录，**不**收进 `discovery/internal/`：应用核心直接装配 Retriever
+  （`kc/index` 现被 `knowledgeapp`/`cli`/`home`/`discovery/opensearch` import），埋入 internal
   等于把应用面契约藏起来。
 - `gate/` 保持独立能力，**不**内部化：事实是 `cli`/`controlplane`/`home` 三方消费，
   上一轮「只有 merge 消费」的说法有误。（✅ B13 裁决 B 落定，2026-09-29：维持独立能力，
@@ -307,7 +337,7 @@ gate/
 - R1 修正（2026-09-28，施工首日）：S3' 把工作区载体 `Invocation`（含 `WS *home.Home`，143 处动词体消费）
   一并搬进了 invoke，触发既有守卫 `TestApplicationPackageBoundaries`（只有 transport 可 import home），
   main 带红。修复：`invocation`/`command`/`handler` 移回 cli（`cli/invocation.go`），invoke 回归纯
-  词汇表（掉 home/knowledge/knowledge/serving/snapshot 四个 import，instability 0.88→0.80，
+  词汇表（掉 home/object/liveaccess/snapshot 四个 import，instability 0.88→0.80，
   propagation 38.22%→37.86%，基线显式收紧）；`TestCLIAndHTTPUseSameTypedApplicationExecutor` 的
   `run:`→`Run:` 守卫字面量追平（等价字面量，断言不弱化）。
 - R3 修正（2026-09-28，B5 循环分析）：service 闭包需要带 `WS *home.Home` 的执行载体，而 cli 与
@@ -328,17 +358,17 @@ gate/
   Binding 钉住的 Schema origin），origin 在场的本地流程并不失败；B6 的硬失败
   实为行为收缩（两个本地旅程测试自 B6 起红，被验证脚本掩盖）。已恢复：回退
   查找是合同本体（缝不自行发明目标 ≠ 拒绝 origin 绑定调用），lookup 实现迁
-  `knowledge/serving`（通用合同件，server 经别名保持公开面），`invocation` 的
+  `liveaccess`（通用合同件，server 经别名保持公开面），`invocation` 的
   wire 形状类型下移为 serving 实义 + invocation 别名。
   棘轮 34.62%→38.62%（26 单元；缝成为更大枢纽 + server 获得传入边，B6 设计代价，基线
   显式重写并登记 TASK.md）。
 - B7 落地（2026-09-29，Phase 2 就绪装配）：`serve_readiness` 迁 `server/internal/readiness`
   （Result/Cache/Probe/Deployment/EvidenceWriteProbe + 指纹缓存）；就绪探测改装配缝注入——
   `Providers.SearchBackend` 端口由 `home.NewSearchBackendProbe` 绑定具体索引 adapter
-  （`index/opensearch.Check`），readiness 包与 server 均不 import 具体 provider；A-01
+  （`discovery/opensearch.Check`），readiness 包与 server 均不 import 具体 provider；A-01
   守卫落地为 `TestProviderAdaptersImportedOnlyAtAssembly`（复核批 R1 起注册例外清零：rerank/embedder provider 装配同样入 `home/llm_ports.go` 端口）（provider 集 {snapshot/lakefs,
-  snapshot/gitea, index/opensearch, retrieval/llmhttp, retrieval/cache}；snapshot/commandlog、
-  snapshot/treewriter 属能力树不属 provider；注册例外 server ↛→ retrieval/llmhttp 的
+  snapshot/gitea, discovery/opensearch, discovery/llmhttp, object/cache}；snapshot/commandlog、
+  snapshot/treewriter 属能力树不属 provider；注册例外 server ↛→ discovery/llmhttp 的
   reranker/embedder 装配，B9 吸收）。wire-shape 裁决（B6 债项收口）：`client` 为管理面
   公开 wire 契约家（负载类型 + typed 方法 + transport/身份/会话），typed service 路由形状
   继续由 server 自持；`server → client` 为守卫 why-text 记录的既决例外，双方不得单方迁移
@@ -371,33 +401,33 @@ gate/
   internal impl 路径，仅对应 shim 可 import（外加 snapshot 树根豁免）；层表增
   `snapshot/internal/{lakefsimpl,giteaimpl}`。裁决 A=observability 上提 app 横切能力、
   B=gate 保持独立能力（B11/B13 执行）。耦合 38.00% 零漂移。
-- B11 落地（2026-09-29，Phase 3 收拢）：`knowledge/unitcodec` → `knowledge/internal/unitcodecimpl`
-  （消费者 `internal/repofile` 在 knowledge 树外，按 Go internal 可见性走薄壳
-  `knowledge/unitcodec`）；`knowledge/semanticview`、`knowledge/maintenance`、
+- B11 落地（2026-09-29，Phase 3 收拢）：`object` → `object`
+  （消费者 `object/format` 在 knowledge 树外，按 Go internal 可见性走薄壳
+  `object`）；`object/semanticview`、`object/maintenance`、
   `catalog/worktree` 同样收拢为薄壳 + `internal/{semanticviewimpl,maintenanceimpl,worktreeimpl}`
-  （跨树消费者 index/invocation/testkit 保留原 import 路径=薄壳面；行为整体迁 impl，
+  （跨树消费者 discovery/projection/invocation/testkit 保留原 import 路径=薄壳面；行为整体迁 impl，
   package 内部测试随迁，外部合同测试留薄壳处）。Go internal 规则补上语言级强制：
   knowledge 树外代码从此只能经薄壳面消费这些能力。层表增四个 impl；deny 规则为
   `catalog/internal/worktreeimpl` 复制层①语义；TestProtocolLayersDoNotDependOnClient
   覆盖全部 impl（强化）；TestCatalogStaysOffTheKnowledgeProtocol worktree 依赖闭包
-  += `catalog/internal/worktreeimpl`。knowledge/catalog README 更新薄壳注记。
-- B12 落地（2026-09-29，Phase 3 收拢·裁决 C 同批）：`retrieval/opensearch` 归属 ③投影——
-  迁 `index/opensearch/`（② provider 注册薄壳：Config/Env 常量/Check/Open 再导出），
-  实现体进 `index/internal/opensearchimpl`（package 内部测试随迁，外部合同测试留薄壳处）；
+  += `catalog/internal/worktreeimpl`。object/catalog README 更新薄壳注记。
+- B12 落地（2026-09-29，Phase 3 收拢·裁决 C 同批）：`discovery/opensearch` 归属 ③投影——
+  迁 `discovery/opensearch/`（② provider 注册薄壳：Config/Env 常量/Check/Open 再导出），
+  实现体进 `discovery/internal/opensearchimpl`（package 内部测试随迁，外部合同测试留薄壳处）；
   home/server/index 消费方 import 路径更新，文档链接（retrieval.md、scale-*、
   knowledge-exploration-research.md、README）同步改指新路径与 impl 实现文件。A-01 守卫
-  扩展定稿：adapter 集 `index/internal/opensearchimpl`，层表增 `index/opensearch` 与 impl；
+  扩展定稿：adapter 集 `discovery/internal/opensearchimpl`，层表增 `discovery/opensearch` 与 impl；
   新增 peer-adapter 规则（opensearchimpl 装配 llmhttp embedder 属 adapter 内组合，非装配
   根职责，显式豁免并记录 why）。耦合基线随 adapter 归属重写：38.00% → 35.54%（收紧
-  2.46pp，index 不稳定度 0.44→0.50、retrieval 0.36→0.22；TASK.md 注明）。`index/internal/`
+  2.46pp，index 不稳定度 0.44→0.50、retrieval 0.36→0.22；TASK.md 注明）。`discovery/projection/internal/`
   进一步拆分（planner/consumer/lanes）评估：index 单包内聚尚可、消费者只见面不触内部，
   无实益不做（§2.3 时机条款）。tag `capability-phase-3`。
 - B13 落地（2026-09-29，Phase 4 裁决落地）：裁决 A=observability 上提 app 横切能力——
   证据形状 `IdentityContext`/`TraceContext`（含 Validate）上提 `kernel`（协议基座窄口），
   `observability` 持类型别名（公开形状零变化，cli/client/server/home 消费方零改动），
-  `knowledge/serving` 改经 `kernel` 消费、不再 import observability；层表
+  `liveaccess` 改经 `kernel` 消费、不再 import observability；层表
   observability: knowledge → app；`TestCapabilityConsumerSets` observability 消费方集合
-  去 knowledge/serving；§3.2 ⚠ 消除（✅ 记录）。裁决 B=gate 保持独立能力（§2.4 落定注记，
+  去 liveaccess；§3.2 ⚠ 消除（✅ 记录）。裁决 B=gate 保持独立能力（§2.4 落定注记，
   消费方集合由守卫钉住）。耦合再收紧 35.54% → 33.23%（serving↛observability）。
   同变更更新层表拥有文档 §2.3/§3.2（core-architecture.md 不含 observability 表项，
   层表主题在本文档）。期间一次 make test 失败经复跑证实为本地 OpenSearch 栈掉线
@@ -428,7 +458,7 @@ gate/
 声明式索引的三分映射（`core-architecture.md`「协议边界之内还要分清组件责任」）：
 **声明**属于 Knowledge ②（S-01：Schema 只声明逻辑访问语义）；**对声明的编译与执行**属于
 `index`（计划器、物理 digest、代际）；**请求正确性**属于 `retrieval` 合同 + `index` 读面。
-`index/README` 的「不拥有」一节写明：不拥有声明本身、不拥有 Canonical、不决定正文是否发布。
+`discovery/projection/README` 的「不拥有」一节写明：不拥有声明本身、不拥有 Canonical、不决定正文是否发布。
 
 ### 3.2 应用环
 
@@ -440,6 +470,8 @@ gate/
 | `cli` | argv 闭集（`cli/surface.go`）+ client 会话 | product 输出编码 | 人；cmd/kc | QUALITY-05、check-surface 60 锚点 |
 | `invoke` | FlagValue/ParseArgs/JSONOut + ObservationTelemetry | — | server, cli（拆分前 cli 单消费） | — |
 | `client` | Identity / Authentication / Session | 会话持久化 | cli, cmd/kc-integration, integrationruntime | 协议层永不依赖 client（守卫已有） |
+| `snapshot/client` | 所属 typed HTTP 合同与认证运输注入口 | HTTP 请求编码与服务私有实现 | KC client、模块 CLI、独立调用方 | L-01、API-01、KS-01、AUTH-02；核心不依赖 SDK |
+| `snapshot/cli` | 任务命令与帮助注册合同、注入主体上下文 | 参数适配、输出与 SDK 调用 | KC CLI、独立调用方 | L-01、API-01；核心不依赖 CLI |
 | `controlplane` | PROPOSAL→Preview→validate→Merge 操作语义 | journal、状态文件 | server, cli, invoke, knowledgeapp | K-07, K-08, K-09 |
 | `gate` | 规则/证据绑定同一 previewId、fail-closed | gates.json 读写 | server, controlplane, home | K-08 |
 | `connector` | `connector.Preview`（patch/reconcile）→ ChangeSet | 无源访问、无 Writer | integrationruntime | W-01 |
@@ -450,7 +482,7 @@ gate/
 | `identity` | VerifiedUser / Bind，fail-closed | identities.json、IdP 细节 | server, home | — |
 | `observability` | Recorder / AccessLog 协议口 | FileStore JSONL、日志分区 | server, client, home, invocation, cli | O-01 |
 
-✅ 裁决项 A 已落地（B13，2026-09-29）：`observability` 上提为 app 横切能力。`knowledge/serving`
+✅ 裁决项 A 已落地（B13，2026-09-29）：`observability` 上提为 app 横切能力。`liveaccess`
 原直连 `observability.IdentityContext/TraceContext`（纯证据形状）改为经协议基座窄口消费——形状
 上提 `kernel`（`kernel.IdentityContext/TraceContext`），`observability` 持别名（公开形状不变），
 serving 不再 import observability；层表 observability: knowledge → app。
@@ -463,6 +495,9 @@ serving 不再 import observability；层表 observability: knowledge → app。
 - `cli → { client, invoke, home }`（cli 前端不直接碰应用用例，一律经 typed client）
 - 协议环（含 `index`）永不 import `server` / `cli` / `client`（守卫已有，随 `server/` 建包把 denylist 同步加上）。
 - 每个能力的 README「依赖方向」一节与 denylist 同句（§1.3）。
+- `snapshot/cli → snapshot/client →` 所属公开文件合同；SDK 不依赖 CLI，根包、Dataset、
+  access、service、console 均不反向依赖两种客户端。共享 HTTP 基础设施不依赖任何 typed
+  领域或 KC 会话。两种模块入口不得触达 KC cli/client/home/server/invocation 业务实现。
 
 ### 3.4 应用环四件套现状审计（2026-09-28 实测）
 
@@ -503,10 +538,10 @@ serving 不再 import observability；层表 observability: knowledge → app。
 
 | 批 | 阶段 | 内容（详见下方 Phase 说明） | 验证门（通用门之外） | 提交点 |
 |---|---|---|---|---|
-| B0 | 基线 | 工作区清理（✓ 前轮遗留 4 文件 = `2ce24b6`）；设计升格 `docs/reviewed/` + `docs/graph/` 登记 + TASK.md 立项；建分支与 `pre-capability-refactor` tag；裁决 A/B/C | `make check-docs`（五段合同）+ status clean | 2 个 commit |
+| B0 | 基线 | 工作区清理（✓ 前轮遗留 4 文件 = `2ce24b6`）；设计升格 `docs/reviewed/` + `docs/graph/` 登记 + TASK.md 立项；建分支与 `pre-capability-refactor` tag；裁决 A/B/C | `make check-docs`（文档图与链接）+ status clean | 2 个 commit |
 | B1 | 一·材料 | `invoke`/`datasetfs` 补 README；`knowledgeapp` README 与导出面对齐（16+ executor 入册） | 人工评审 README | 1 commit |
 | B2 | 一·材料 | §3.4 的 7 条 denylist 落 `internal/arch`（proposed 集已按现 import 核过，加上即绿） | `go test ./internal/arch/ -run TestForbiddenDependencies` | 1 commit |
-| B3 | 一·闸 | arch 新守卫：顶层生产目录 README 存在性；`knowledgeapp` 导出面闭集锚点 | `go test ./internal/arch/` + `go test ./knowledgeapp/` | 1 commit |
+| B3 | 一·闸 | arch 新守卫：顶层生产目录 README 存在性；`knowledgeapp` 导出面闭集锚点 | `go test ./internal/arch/` + `go test ./discovery/service/` | 1 commit |
 | B4 | 二·契约 | 新建 `server/`：`routes.go` 闭集 + `routes_anchor_test.go` + 层表注册 | `make check-surface` + `go test ./server/` | 1 commit |
 | B5 | 二·搬家 | `service_routes`/handlers 迁 `server/internal/handlers`；cli 调用点改指 | `make test` + `TestCLIAndHTTPUseSameTypedApplicationExecutor` + `make test-contracts` | 1 commit |
 | B6 | 二·搬家 | 授权强制、遥测迁 `server/internal/{auth,telemetry}`；denylist 补 `server↛{cli,client}`、`knowledgeapp↛server`、`cli↛knowledgeapp`（前端一律经 typed client）；`delivery`/`gate`/`hook`/`identity`/`observability` README 消费方改写 | `make test` + `make quality` | 1 commit |
@@ -515,7 +550,7 @@ serving 不再 import observability；层表 observability: knowledge → app。
 | B9 | 三·协议回执 | `snapshot/receipt.go` 新增；`cli` 两文件改用（**新增，不替换**，不收窄公开形状） | `make test` + A-01 组 | 1 commit |
 | B10 | 三·收拢 | snapshot internal 化（裁决 C：薄壳 + `internal/{lakefsimpl,giteaimpl}`；不做则仅 denylist 更新） | RepositoryContract 组（`TestLakeFSMatchesTreeProviderByOperationStep` 等） | 1 commit |
 | B11 | 三·收拢 | knowledge internal 化 + `catalog/worktree` internal 化（更新 `TestCatalogStaysOffTheKnowledgeProtocol` 依赖集） | `make test` + `make test-contracts` | 1 commit |
-| B12 | 三·收拢 | opensearch 归属 ③投影（裁决 C 同批）；A-01 守卫扩展定稿（生产包 import 具体 adapter 仅限 `home` 与能力薄壳）；`index/internal/` 拆分仅按 §2.3 时机评估，无实益不做 | `make test` + coupling 终值对比 | 1 commit + tag `capability-phase-3` |
+| B12 | 三·收拢 | opensearch 归属 ③投影（裁决 C 同批）；A-01 守卫扩展定稿（生产包 import 具体 adapter 仅限 `home` 与能力薄壳）；`discovery/projection/internal/` 拆分仅按 §2.3 时机评估，无实益不做 | `make test` + coupling 终值对比 | 1 commit + tag `capability-phase-3` |
 | B13 | 四·裁决 | 裁决项 A（observability 层归属）/ B（gate 独立性）落地 | 同变更改 `core-architecture.md` + `make test-boundary` | 1 commit |
 | B14 | 四·验收 | §5 全门 + coupling 终值 vs 38.22% + 交付说明（实现范围 vs 已验证范围）；设计文档回写实际落点 | §5 全部门 | 1 commit |
 
@@ -530,7 +565,7 @@ serving 不再 import observability；层表 observability: knowledge → app。
   `gate ↛ {snapshot, catalog, knowledge, retrieval, index, hook, controlplane, cli, httpsurface, client, home}`；
   `identity ↛` 同 gate 严集；`datasetfs ↛` 全协议环+全部 transport/装配（当前零 kc 依赖）；
   `observability ↛ {retrieval, index, controlplane, hook, gate, cli, httpsurface, client, home}`
-  ——不得 deny knowledge，`knowledge/serving` 反向依赖它）。
+  ——不得 deny knowledge，`liveaccess` 反向依赖它）。
 - `knowledgeapp` 导出面闭集锚点（仿 `cli/surface.go` 60 锚点做法，把全部 16+ executor 与请求/响应类型入集，
   新增导出符号须显式改集）；README「当前纵切」与导出面对齐（如实登记治理与投影执行器，不收窄不隐藏）。
 - 验证：`go test ./internal/arch/ -run TestForbiddenDependencies` 仍绿（条目均按现 import 可加）+ §5 新守卫（README 存在性）。
@@ -555,9 +590,9 @@ serving 不再 import observability；层表 observability: knowledge → app。
 **Phase 3 · internal 收拢（一次一个能力，可逆）＝ B10–B12**
 - `snapshot/lakefs`、`snapshot/gitea` → 公开注册 shim + `snapshot/internal/{lakefsimpl,giteaimpl}`；
   shim 保持原导出 API，`home` 不改 import。
-- `index/opensearch` → `index/opensearch` shim + `index/internal/opensearchimpl`（provider 归属
+- `discovery/opensearch` → `discovery/opensearch` shim + `discovery/internal/opensearchimpl`（provider 归属
   ③投影能力）。
-- `knowledge/unitcodec|semanticview|maintenance` → `knowledge/internal/…`；
+- `object|semanticview|maintenance` → `object/internal/…`；
   `catalog/worktree` → `catalog/internal/worktree`（同步更新 `TestCatalogStaysOffTheKnowledgeProtocol` 依赖集）。
 - 验证：每批 `make test` + `make test-contracts` + `make quality`；coupling baseline 重录。
 
@@ -581,9 +616,11 @@ serving 不再 import observability；层表 observability: knowledge → app。
 **选定**
 - 顶层扁平 + 层表分组；否决 `capabilities/` 物理嵌套（依赖非树形、coupling unit 错位、import path 噪声、无强制力）。
 - 能力四件套为准入条件；否决「README 可后补」——写不出「不拥有什么」即降级或合并。
-- `index` 为顶层能力、双导出面（retriever/maintainer）；否决收进 `retrieval/internal/`（应用核心直接装配 Retriever）。
+- `index` 为顶层能力、双导出面（retriever/maintainer）；否决收进 `discovery/internal/`（应用核心直接装配 Retriever）。
 - adapter 采用「公开薄 shim + internal 实现」；否决纯 denylist 约束（少一档语言级强制）。
 - cli 拆分先立 routes 闭集再搬实现；否决实现先行（QUALITY-05 已证无零倒置切面，契约先行才有缝）。
+- Snapshot 文件 SDK/CLI 同归模块，KC 只装配全局上下文；否决中央业务实现加模块转发壳，
+  也否决通过通用运输包反向携带会话或领域业务。
 
 **被否决**
 - 把应用能力升格为第五协议边界（core-architecture Non-Goals）。
@@ -605,16 +642,20 @@ serving 不再 import observability；层表 observability: knowledge → app。
 - README 不复制设计：README 持形状与最小用法，`docs/reviewed/` 持设计；某能力需要设计 owner
   文档时走 `docs/graph/` 登记，不在 README 里长出第二份设计正文。
 - 层表 / denylist 变更 = 协议决策：同变更改 `core-architecture.md`，并在交付说明列明影响的不变量 ID。
+- `snapshot/client` 与 `snapshot/cli` 是明确登记的公开入口，不放宽既有根包、DTO、工厂与
+  私有实现守卫；新增反向依赖与独立使用回归随迁移执行。
 
 ## 接口契约 / 状态机
 
 状态机不复制进本文：接入「未提交或形成提案」与消费「先固定坐标再鉴权」的请求语义由各边界
 Conformance 持有。
 
-- 协议口：`snapshot/store.go`、`catalog/README.md`、`knowledge/README.md`、`retrieval/README.md`、
-  `index/README.md`（读面/写面两文件名在本设计落地时定稿）。
+- 协议口：`snapshot/store.go`、`catalog/README.md`、`object/README.md`、`discovery/README.md`、
+  `discovery/projection/README.md`（读面/写面两文件名在本设计落地时定稿）。
 - 应用口：`knowledgeapp` executor 集（`docs/reviewed/service.md` §1.2）、`cli/surface.go`、
   `httpsurface.Patterns()`、`home/README.md` 装配合同。
+- 模块客户端口：`snapshot/client/contract.go`、`snapshot/cli/contract.go`；其形状由公开
+  Go 合同和模块回归持有，不在本设计复制命令字段。
 - 闸：`internal/arch/layers_test.go`、`provider_boundary_test.go`、`semantic_test.go`；
   `scripts/coupling`（baseline 与 -strict）。
 - 迁移承接：`TASK.md` QUALITY-05（cli 内部分层，形状确认 2026-09-24 已完成）。

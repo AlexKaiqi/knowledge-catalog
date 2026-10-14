@@ -3,13 +3,17 @@ package cli_test
 import (
 	"context"
 	"encoding/json"
+	snapshotclient "kc/snapshot/client"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"testing"
 
-	"kc/client"
+	apphome "kc/home"
 	"kc/kernel"
 	"kc/snapshot"
+	"kc/snapshot/access"
 	"kc/snapshot/dataset"
 )
 
@@ -74,17 +78,24 @@ func TestDatasetFileDeliveryServesRenamedAndMixedEntries(t *testing.T) {
 		f.assertRead(t, opened.Pin, "reference/policies", "policy v1\n")
 	})
 	t.Run("scope does not widen through delivered paths", func(t *testing.T) {
-		for _, path := range []string{
-			"handbook/secret.txt",
-			"reference/policies/../../../handbook/secret.txt",
-			"semantic/secret.txt",
+		if f.sourceReads.Load() == 0 {
+			t.Fatal("accepted publication and reads must reach the source object endpoint")
+		}
+		for _, tc := range []struct {
+			path string
+			code kernel.ErrorCode
+		}{
+			{"handbook/secret.txt", kernel.ErrForbidden},
+			{"reference/policies/../../../handbook/secret.txt", kernel.ErrUsageInvalid},
+			{"semantic/secret.txt", kernel.ErrForbidden},
 		} {
-			var out client.WorkspaceFileReadResponse
-			err := f.reader.WorkspaceFilesService().Read(context.Background(), client.WorkspaceFileReadRequest{
-				WorkspaceFileCoordinate: f.coordinate(t, &opened.Pin), Path: path,
-			}, client.RequestOptions{}, &out)
-			if err == nil || kernel.CodeOf(err) != kernel.ErrForbidden || len(out.Content) != 0 {
-				t.Fatalf("delivered path %q escaped the published list: err=%v", path, err)
+			before := f.sourceReads.Load()
+			var out snapshotclient.WorkspaceFileReadResponse
+			err := f.reader.WorkspaceFilesService().Read(context.Background(), snapshotclient.WorkspaceFileReadRequest{
+				WorkspaceFileCoordinate: f.coordinate(t, &opened.Pin), Path: tc.path,
+			}, snapshotclient.RequestOptions{}, &out)
+			if err == nil || kernel.CodeOf(err) != tc.code || len(out.Content) != 0 || f.sourceReads.Load() != before {
+				t.Fatalf("delivered path %q: err=%v content=%q source reads=%d", tc.path, err, out.Content, f.sourceReads.Load()-before)
 			}
 		}
 	})
@@ -95,10 +106,10 @@ func TestDatasetFileDeliveryServesRenamedAndMixedEntries(t *testing.T) {
 		}
 		f.assertDeliveredRead(t, old, "reference/policies/metric.md", "metric v1\n")
 		current := f.mounts(t, nil)
-		var out client.WorkspaceFileReadResponse
-		err := f.reader.WorkspaceFilesService().Read(context.Background(), client.WorkspaceFileReadRequest{
+		var out snapshotclient.WorkspaceFileReadResponse
+		err := f.reader.WorkspaceFilesService().Read(context.Background(), snapshotclient.WorkspaceFileReadRequest{
 			WorkspaceFileCoordinate: f.coordinate(t, &current.Pin), Path: "reference/policies/metric.md",
-		}, client.RequestOptions{}, &out)
+		}, snapshotclient.RequestOptions{}, &out)
 		// The delivered namespace is the union of per-file entries and mount
 		// content. The serving version dropped the entry, and the mapped
 		// source file does not exist, so the miss answers exactly like a
@@ -111,37 +122,52 @@ func TestDatasetFileDeliveryServesRenamedAndMixedEntries(t *testing.T) {
 
 func TestDatasetFileDeliveryRejectsContentConflicts(t *testing.T) {
 	f := newDirectoryDelivery(t)
+	accepted := f.mounts(t, nil)
+	beforeHead, beforeState, beforeHistory := f.registryState(t)
 	sources := append(directoryDeliverySources("reference/policies", "reference/guides", "data/metrics"),
 		dataset.KnowledgeSetSource{
 			Repository: deliveryData, Selector: snapshot.DefaultRef,
 			File: "semantic/metrics/README.md", Target: "reference/policies/README.md",
 		})
-	if err := f.publish(2, sources); err != nil {
+	if err := f.publish(2, sources); kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
+		t.Fatalf("conflicting delivered content must be rejected before publication: %v", err)
+	}
+	afterHead, afterState, afterHistory := f.registryState(t)
+	if afterHead != beforeHead || !reflect.DeepEqual(afterState, beforeState) || !reflect.DeepEqual(afterHistory, beforeHistory) {
+		t.Fatalf("rejected content changed authority: HEAD %s -> %s, state %#v -> %#v, history %#v -> %#v",
+			beforeHead, afterHead, beforeState, afterState, beforeHistory, afterHistory)
+	}
+	if current := f.mounts(t, nil); !reflect.DeepEqual(current, accepted) {
+		t.Fatalf("rejected content replaced the accepted release: %#v", current)
+	}
+	f.assertRead(t, accepted.Pin, "reference/policies", "policy v1\n")
+	assertListing(t, f, accepted.Pin, "reference/policies", "README.md")
+}
+
+func (f *directoryDelivery) registryState(t *testing.T) (string, dataset.State, dataset.History) {
+	t.Helper()
+	opened, err := apphome.OpenDeployment(f.cfg)
+	if err != nil {
 		t.Fatal(err)
 	}
-	opened := f.mounts(t, nil)
-	var out client.WorkspaceFileReadResponse
-	err := f.reader.WorkspaceFilesService().Read(context.Background(), client.WorkspaceFileReadRequest{
-		WorkspaceFileCoordinate: f.coordinate(t, &opened.Pin), Path: "reference/policies/README.md",
-	}, client.RequestOptions{}, &out)
-	if err == nil || kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid || len(out.Content) != 0 {
-		t.Fatalf("conflicting delivered content must be refused, not resolved by order: %#v err=%v", out, err)
+	defer opened.Close()
+	head, err := opened.Registry.Head()
+	if err != nil {
+		t.Fatal(err)
 	}
-	var listing client.WorkspaceFileDirectoryResponse
-	err = f.reader.WorkspaceFilesService().Directory(context.Background(), client.WorkspaceFileDirectoryRequest{
-		WorkspaceFileCoordinate: f.coordinate(t, &opened.Pin), Path: "reference/policies",
-	}, client.RequestOptions{}, &listing)
-	if err == nil || kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid || len(listing.Entries) != 0 {
-		t.Fatalf("conflicting delivered names must not be enumerated: %#v err=%v", listing, err)
+	history, err := opened.Datasets.Log(dataset.LogQuery{Limit: 200})
+	if err != nil {
+		t.Fatal(err)
 	}
+	return head, dataset.NormalizeState(opened.Datasets.DumpState()), history
 }
 
 func assertListing(t *testing.T, f *directoryDelivery, pin dataset.ResolvedKnowledgeSet, dir string, want ...string) {
 	t.Helper()
-	var out client.WorkspaceFileDirectoryResponse
-	if err := f.reader.WorkspaceFilesService().Directory(context.Background(), client.WorkspaceFileDirectoryRequest{
+	var out snapshotclient.WorkspaceFileDirectoryResponse
+	if err := f.reader.WorkspaceFilesService().Directory(context.Background(), snapshotclient.WorkspaceFileDirectoryRequest{
 		WorkspaceFileCoordinate: f.coordinate(t, &pin), Path: dir,
-	}, client.RequestOptions{}, &out); err != nil {
+	}, snapshotclient.RequestOptions{}, &out); err != nil {
 		t.Fatalf("listing %q: %v", dir, err)
 	}
 	got := make([]string, 0, len(out.Entries))
@@ -170,10 +196,10 @@ func assertListing(t *testing.T, f *directoryDelivery, pin dataset.ResolvedKnowl
 
 func (f *directoryDelivery) assertDeliveredRead(t *testing.T, pin dataset.ResolvedKnowledgeSet, path, content string) {
 	t.Helper()
-	var out client.WorkspaceFileReadResponse
-	if err := f.reader.WorkspaceFilesService().Read(context.Background(), client.WorkspaceFileReadRequest{
+	var out snapshotclient.WorkspaceFileReadResponse
+	if err := f.reader.WorkspaceFilesService().Read(context.Background(), snapshotclient.WorkspaceFileReadRequest{
 		WorkspaceFileCoordinate: f.coordinate(t, &pin), Path: path,
-	}, client.RequestOptions{}, &out); err != nil {
+	}, snapshotclient.RequestOptions{}, &out); err != nil {
 		t.Fatal(err)
 	}
 	if string(out.Content) != content || out.Path != path || !out.EOF || out.TotalBytes != int64(len(content)) {
@@ -197,17 +223,17 @@ func TestDatasetDeliveryRejectsReadsAfterGrantRevocation(t *testing.T) {
 	f.assertRead(t, opened.Pin, "reference/policies", "policy v1\n")
 	// Delivered addressing serves mount members too (per-file entries only
 	// carry Item metadata; mount members name their frozen Mount instead).
-	var pre client.WorkspaceFileReadResponse
-	if err := f.reader.WorkspaceFilesService().Read(context.Background(), client.WorkspaceFileReadRequest{
+	var pre snapshotclient.WorkspaceFileReadResponse
+	if err := f.reader.WorkspaceFilesService().Read(context.Background(), snapshotclient.WorkspaceFileReadRequest{
 		WorkspaceFileCoordinate: f.coordinate(t, &opened.Pin), Path: "reference/policies/README.md",
-	}, client.RequestOptions{}, &pre); err != nil || string(pre.Content) != "policy v1\n" ||
+	}, snapshotclient.RequestOptions{}, &pre); err != nil || string(pre.Content) != "policy v1\n" ||
 		pre.Item != nil || pre.Mount.Commit != opened.Pin.Repositories[pre.Mount.Repository] {
 		t.Fatalf("delivered mount-member read before revocation: %#v err=%v", pre, err)
 	}
 
 	// Revoke the consumer's rule through the admin surface, as an operator.
 	var raw any
-	if err := f.operator.AdminService().Grants(context.Background(), client.RequestOptions{}, &raw); err != nil {
+	if err := f.operator.AdminService().Grants(context.Background(), snapshotclient.RequestOptions{}, &raw); err != nil {
 		t.Fatal(err)
 	}
 	blob, err := json.Marshal(raw)
@@ -229,7 +255,7 @@ func TestDatasetDeliveryRejectsReadsAfterGrantRevocation(t *testing.T) {
 		if rule.Principal != "agent:consumer" {
 			continue
 		}
-		if err := f.operator.AdminService().RemoveGrant(context.Background(), rule.ID, client.RequestOptions{}, nil); err != nil {
+		if err := f.operator.AdminService().RemoveGrant(context.Background(), rule.ID, snapshotclient.RequestOptions{}, nil); err != nil {
 			t.Fatal(err)
 		}
 		revoked++
@@ -246,28 +272,28 @@ func TestDatasetDeliveryRejectsReadsAfterGrantRevocation(t *testing.T) {
 		call func() error
 	}{
 		{"mounts", func() error {
-			var out client.WorkspaceFileMountsResponse
-			return f.reader.WorkspaceFilesService().Mounts(context.Background(), client.WorkspaceFileMountsRequest{
+			var out snapshotclient.WorkspaceFileMountsResponse
+			return f.reader.WorkspaceFilesService().Mounts(context.Background(), snapshotclient.WorkspaceFileMountsRequest{
 				WorkspaceFileCoordinate: f.coordinate(t, &opened.Pin),
-			}, client.RequestOptions{}, &out)
+			}, snapshotclient.RequestOptions{}, &out)
 		}},
 		{"directory", func() error {
-			var out client.WorkspaceFileDirectoryResponse
-			return f.reader.WorkspaceFilesService().Directory(context.Background(), client.WorkspaceFileDirectoryRequest{
+			var out snapshotclient.WorkspaceFileDirectoryResponse
+			return f.reader.WorkspaceFilesService().Directory(context.Background(), snapshotclient.WorkspaceFileDirectoryRequest{
 				WorkspaceFileCoordinate: f.coordinate(t, &opened.Pin), MountPath: "reference/policies",
-			}, client.RequestOptions{}, &out)
+			}, snapshotclient.RequestOptions{}, &out)
 		}},
 		{"mount read", func() error {
-			var out client.WorkspaceFileReadResponse
-			return f.reader.WorkspaceFilesService().Read(context.Background(), client.WorkspaceFileReadRequest{
+			var out snapshotclient.WorkspaceFileReadResponse
+			return f.reader.WorkspaceFilesService().Read(context.Background(), snapshotclient.WorkspaceFileReadRequest{
 				WorkspaceFileCoordinate: f.coordinate(t, &opened.Pin), MountPath: "reference/policies", File: "README.md",
-			}, client.RequestOptions{}, &out)
+			}, snapshotclient.RequestOptions{}, &out)
 		}},
 		{"delivered read", func() error {
-			var out client.WorkspaceFileReadResponse
-			return f.reader.WorkspaceFilesService().Read(context.Background(), client.WorkspaceFileReadRequest{
+			var out snapshotclient.WorkspaceFileReadResponse
+			return f.reader.WorkspaceFilesService().Read(context.Background(), snapshotclient.WorkspaceFileReadRequest{
 				WorkspaceFileCoordinate: f.coordinate(t, &opened.Pin), Path: "reference/policies/README.md",
-			}, client.RequestOptions{}, &out)
+			}, snapshotclient.RequestOptions{}, &out)
 		}},
 	} {
 		if err := tc.call(); err == nil || kernel.CodeOf(err) != kernel.ErrForbidden {
@@ -276,11 +302,160 @@ func TestDatasetDeliveryRejectsReadsAfterGrantRevocation(t *testing.T) {
 	}
 
 	// Positive control: another principal's grant is untouched.
-	var out client.WorkspaceFileMountsResponse
-	if err := f.operator.WorkspaceFilesService().Mounts(context.Background(), client.WorkspaceFileMountsRequest{
+	var out snapshotclient.WorkspaceFileMountsResponse
+	if err := f.operator.WorkspaceFilesService().Mounts(context.Background(), snapshotclient.WorkspaceFileMountsRequest{
 		WorkspaceFileCoordinate: f.coordinate(t, &opened.Pin),
-	}, client.RequestOptions{}, &out); err != nil || len(out.Mounts) != 3 {
+	}, snapshotclient.RequestOptions{}, &out); err != nil || len(out.Mounts) != 3 {
 		t.Fatalf("operator keeps its own access after consumer revocation: %#v err=%v", out.Mounts, err)
+	}
+}
+
+// Removing the whole consume rule proves the resolve gate, while this journey
+// reaches the file gate through the real durable grant update surface.
+func TestDatasetDeliveryRechecksFileReadAfterGrantUpdate(t *testing.T) {
+	f := newDirectoryDelivery(t)
+	opened := f.mounts(t, nil)
+	f.assertRead(t, opened.Pin, "reference/policies", "policy v1\n")
+	var first snapshotclient.WorkspaceFileDirectoryResponse
+	request := snapshotclient.WorkspaceFileDirectoryRequest{
+		WorkspaceFileCoordinate: f.coordinate(t, &opened.Pin), Path: "", Limit: 1,
+	}
+	if err := f.reader.WorkspaceFilesService().Directory(context.Background(), request, snapshotclient.RequestOptions{}, &first); err != nil || first.Continuation == "" {
+		t.Fatalf("authorized bounded page has no continuation: %#v %v", first, err)
+	}
+	updateDeliveryConsumerGrant(t, f, []string{"dataset.resolve"})
+
+	var resolved dataset.ResolvedKnowledgeSet
+	if err := f.reader.SnapshotService().ResolveKnowledgeSet(context.Background(), "delivery", snapshotclient.KnowledgeSetResolveRequest{}, snapshotclient.RequestOptions{}, &resolved); err != nil || !reflect.DeepEqual(resolved, opened.Pin) {
+		t.Fatalf("file-only revocation changed resolve or its fixed publication: %#v %v", resolved, err)
+	}
+	var mounts snapshotclient.WorkspaceFileMountsResponse
+	if err := f.reader.WorkspaceFilesService().Mounts(context.Background(), snapshotclient.WorkspaceFileMountsRequest{WorkspaceFileCoordinate: f.coordinate(t, &opened.Pin)}, snapshotclient.RequestOptions{}, &mounts); err != nil || len(mounts.Mounts) != 0 || !reflect.DeepEqual(mounts.Pin, opened.Pin) {
+		t.Fatalf("current file revocation retained deliverable mounts or changed publication: %#v %v", mounts, err)
+	}
+	var directory snapshotclient.WorkspaceFileDirectoryResponse
+	if err := f.reader.WorkspaceFilesService().Directory(context.Background(), request, snapshotclient.RequestOptions{}, &directory); err != nil || len(directory.Entries) != 0 || !directory.Exhausted || directory.Continuation != "" {
+		t.Fatalf("current file revocation leaked directory entries: %#v %v", directory, err)
+	}
+	request.Continuation = first.Continuation
+	if err := f.reader.WorkspaceFilesService().Directory(context.Background(), request, snapshotclient.RequestOptions{}, &directory); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
+		t.Fatalf("old cursor ignored the changed deliverable scope: %#v %v", directory, err)
+	}
+	for _, address := range []snapshotclient.WorkspaceFileReadRequest{
+		{WorkspaceFileCoordinate: f.coordinate(t, &opened.Pin), MountPath: "reference/policies", File: "README.md"},
+		{WorkspaceFileCoordinate: f.coordinate(t, &opened.Pin), Path: "reference/policies/README.md"},
+	} {
+		var read snapshotclient.WorkspaceFileReadResponse
+		if err := f.reader.WorkspaceFilesService().Read(context.Background(), address, snapshotclient.RequestOptions{}, &read); kernel.CodeOf(err) != kernel.ErrForbidden || len(read.Content) != 0 {
+			t.Fatalf("old pin bypassed the current file gate: %#v %v", read, err)
+		}
+	}
+	var control snapshotclient.WorkspaceFileReadResponse
+	if err := f.operator.WorkspaceFilesService().Read(context.Background(), snapshotclient.WorkspaceFileReadRequest{
+		WorkspaceFileCoordinate: f.coordinate(t, &opened.Pin), Path: "reference/policies/README.md",
+	}, snapshotclient.RequestOptions{}, &control); err != nil || string(control.Content) != "policy v1\n" || control.Mount.Commit != opened.Pin.Repositories[deliveryDocs] {
+		t.Fatalf("another principal lost its independent fixed read: %#v %v", control, err)
+	}
+}
+
+func updateDeliveryConsumerGrant(t *testing.T, f *directoryDelivery, actions []string) {
+	t.Helper()
+	var inventory access.GrantList
+	if err := f.operator.AdminService().Grants(context.Background(), snapshotclient.RequestOptions{}, &inventory); err != nil {
+		t.Fatal(err)
+	}
+	found := 0
+	for _, rule := range inventory.Rules {
+		if rule.Principal != "agent:consumer" || rule.Dataset != "delivery" {
+			continue
+		}
+		found++
+		observed := snapshotclient.GrantExpected{ID: rule.ID, SharedBy: rule.SharedBy, ShareID: rule.ShareID,
+			GrantRequest: snapshotclient.GrantRequest{Principal: rule.Principal, Actions: slices.Clone(rule.Actions),
+				Repository: rule.Repo, Dataset: rule.Dataset, Ref: rule.Ref, Object: rule.Object, Aspect: rule.Aspect}}
+		replacement := observed.GrantRequest
+		replacement.Actions = slices.Clone(actions)
+		var updated access.Rule
+		if err := f.operator.AdminService().UpdateGrant(context.Background(), rule.ID, snapshotclient.GrantUpdateRequest{
+			GrantRequest: replacement, Expected: observed,
+		}, snapshotclient.RequestOptions{}, &updated); err != nil {
+			t.Fatal(err)
+		}
+		wanted := rule
+		wanted.Actions = slices.Clone(actions)
+		if !reflect.DeepEqual(updated, wanted) {
+			t.Fatalf("grant update did not preserve identity and the full replacement: %#v want %#v", updated, wanted)
+		}
+	}
+	if found != 1 {
+		t.Fatalf("expected one consumer publication rule, found %d", found)
+	}
+}
+
+func TestDatasetDeliveryFiltersUnauthorizedSourcesBeforeClone(t *testing.T) {
+	f := newDirectoryDelivery(t)
+	sources := append(directoryDeliverySources("reference/policies", "reference/guides", "data/metrics"),
+		dataset.KnowledgeSetSource{Repository: deliveryDocs, Selector: snapshot.DefaultRef, File: "docs/guides/README.md", Target: "data/exports/guide.txt"},
+		dataset.KnowledgeSetSource{Repository: deliveryData, Selector: snapshot.DefaultRef, File: "semantic/metrics/README.md", Target: "unreadable/metric.txt"},
+	)
+	if err := f.publish(2, sources); err != nil {
+		t.Fatal(err)
+	}
+	opened := f.mounts(t, nil)
+	f.assertDeliveredRead(t, opened.Pin, "unreadable/metric.txt", "metric v1\n")
+	updateDeliveryConsumerGrant(t, f, []string{"dataset.resolve"})
+	if err := f.operator.AdminService().AddGrant(context.Background(), snapshotclient.GrantRequest{
+		Principal: "agent:consumer", Actions: []string{"file.read"}, Repository: deliveryDocs, Dataset: "delivery",
+	}, snapshotclient.RequestOptions{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	filtered := f.mounts(t, &opened.Pin)
+	if !reflect.DeepEqual(filtered.Pin, opened.Pin) || len(filtered.Mounts) != 2 {
+		t.Fatalf("authorization changed accepted pin or retained unreadable source: %#v", filtered)
+	}
+	for _, mount := range filtered.Mounts {
+		if mount.Repository != deliveryDocs || mount.Commit != opened.Pin.Repositories[deliveryDocs] {
+			t.Fatalf("unreadable source survived current file filtering: %#v", mount)
+		}
+	}
+	assertListing(t, f, opened.Pin, "", "data", "reference")
+	assertListing(t, f, opened.Pin, "data", "exports")
+	assertListing(t, f, opened.Pin, "data/exports", "guide.txt")
+	f.assertDeliveredRead(t, opened.Pin, "data/exports/guide.txt", "guide v1\n")
+	for _, path := range []string{"unreadable/metric.txt", "data/metrics/README.md"} {
+		var read snapshotclient.WorkspaceFileReadResponse
+		if err := f.reader.WorkspaceFilesService().Read(context.Background(), snapshotclient.WorkspaceFileReadRequest{
+			WorkspaceFileCoordinate: f.coordinate(t, &opened.Pin), Path: path,
+		}, snapshotclient.RequestOptions{}, &read); kernel.CodeOf(err) != kernel.ErrForbidden || len(read.Content) != 0 {
+			t.Fatalf("unreadable source returned bytes at %s: %#v %v", path, read, err)
+		}
+	}
+	target := filepath.Join(t.TempDir(), "authorized-clone")
+	receipt, err := f.clone(t, target)
+	if err != nil || receipt["files"] != float64(3) {
+		t.Fatalf("partial-scope clone did not materialize exactly the authorized tree: %#v %v", receipt, err)
+	}
+	wanted := map[string]string{"reference/policies/README.md": "policy v1\n", "reference/guides/README.md": "guide v1\n", "data/exports/guide.txt": "guide v1\n"}
+	actual := map[string]string{}
+	if err := filepath.WalkDir(target, func(path string, entry os.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		relative, err := filepath.Rel(target, path)
+		actual[filepath.ToSlash(relative)] = string(content)
+		return err
+	}); err != nil || !reflect.DeepEqual(actual, wanted) {
+		t.Fatalf("clone wrote an unauthorized file or wrong content: %#v want %#v error %v", actual, wanted, err)
+	}
+	var control snapshotclient.WorkspaceFileReadResponse
+	if err := f.operator.WorkspaceFilesService().Read(context.Background(), snapshotclient.WorkspaceFileReadRequest{
+		WorkspaceFileCoordinate: f.coordinate(t, &opened.Pin), Path: "unreadable/metric.txt",
+	}, snapshotclient.RequestOptions{}, &control); err != nil || string(control.Content) != "metric v1\n" || control.Mount.Commit != opened.Pin.Repositories[deliveryData] {
+		t.Fatalf("another principal lost its independently authorized source: %#v %v", control, err)
 	}
 }
 

@@ -39,7 +39,7 @@ func (w *rawWriter) SetStamp(as, requestID, ruleID string) {
 
 func (w *rawWriter) Lookup(commandID string) (TreeChangeSet, Receipt, bool) {
 	entry, ok := w.commands.Lookup(commandID)
-	if !ok || entry.Request.Kind != RawWriteSurface || len(entry.Request.TreeChangeSet) == 0 {
+	if !ok || entry.Status != StatusApplied || entry.Request.Kind != RawWriteSurface || len(entry.Request.TreeChangeSet) == 0 || !hasCommandReceipt(entry.Receipt) {
 		return TreeChangeSet{}, Receipt{}, false
 	}
 	var cs TreeChangeSet
@@ -54,7 +54,9 @@ func (w *rawWriter) Commit(commandID string, cs TreeChangeSet) (receipt Receipt,
 	refs := map[string]any{"commandId": commandID, "repositoryId": string(cs.TargetRepository), "targetRef": cs.TargetRef}
 	defer func() {
 		if w.observer != nil {
-			err = w.observer(RawWriteSurface, refs, err)
+			if recordErr := w.observer(RawWriteSurface, refs, err); err == nil {
+				err = recordErr
+			}
 		}
 	}()
 	if cs.TargetRepository == "" {
@@ -94,12 +96,12 @@ func (w *rawWriter) Commit(commandID string, cs TreeChangeSet) (receipt Receipt,
 	}, func() (any, error) {
 		tree, ok := TreeStoreOf(target)
 		if !ok {
-			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-				"repository %s does not support raw path writes", cs.TargetRepository)
+			return nil, WriteNotApplied(kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+				"repository %s does not support raw path writes", cs.TargetRepository))
 		}
 		oldCommit, err := target.Head(cs.TargetRef)
 		if err != nil {
-			return nil, err
+			return nil, WriteNotApplied(err)
 		}
 		newCommit, err := tree.ApplyTreeCommit(cs)
 		if err != nil {

@@ -182,7 +182,7 @@ func TestNativeCopyChecksSourceBeforeForwarding(t *testing.T) {
 }
 
 func TestNativeMutationMethodsUseSpecificProductActions(t *testing.T) {
-	for _, row := range []struct{ method, path, action string }{{"PUT", "/api/v1/repositories/alpha/settings/gc_rules", access.RepositorySettingsManage}, {"DELETE", "/api/v1/repositories/alpha/tags/old", access.RepositoryRefsManage}, {"PATCH", "/api/v1/repositories/alpha/pulls/one", access.RepositoryPullsManage}} {
+	for _, row := range []struct{ method, path, action string }{{"PUT", "/api/v1/repositories/alpha/settings/branch_protection", access.RepositorySettingsManage}, {"DELETE", "/api/v1/repositories/alpha/tags/old", access.RepositoryRefsManage}, {"PATCH", "/api/v1/repositories/alpha/pulls/one", access.RepositoryPullsManage}} {
 		rules := &nativeTestRules{rules: []access.Rule{{Principal: "alice", Repo: "kr://test/a", Actions: []string{access.RepositoryFileRead}}}}
 		handler, upstream := nativeTestHandler(t, rules)
 		callNativeTest(t, handler, "alice", row.method, row.path, "{}", 403)

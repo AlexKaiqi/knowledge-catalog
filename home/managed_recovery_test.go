@@ -2,7 +2,7 @@ package home
 
 import (
 	"kc/internal/testkit"
-	"kc/knowledge"
+	objectmodel "kc/object"
 	"testing"
 
 	"kc/snapshot"
@@ -27,7 +27,7 @@ func TestManagedRestoreKeepsDriverCapabilities(t *testing.T) {
 	if restored != native || opened != 1 {
 		t.Fatal("lakeFS restoration replaced its driver handle")
 	}
-	if _, ok := restored.(knowledge.NativeRepository); !ok {
+	if _, ok := restored.(objectmodel.NativeRepository); !ok {
 		t.Fatal("native knowledge capability was erased")
 	}
 	if _, ok := restored.(snapshot.TreeStore); ok {

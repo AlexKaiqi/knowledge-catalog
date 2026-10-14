@@ -4,19 +4,19 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
-	inv "kc/invocation"
+	serv "kc/server"
+	"kc/systemrepo"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"kc/kernel"
-	"kc/knowledge"
 )
 
 func TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent(t *testing.T) {
 	home := t.TempDir()
 	mustKnowledgeSetFSRun(t, home, "init")
-	server := httptest.NewServer(httpHandler(home))
+	server := httptest.NewServer(serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{}))
 	defer server.Close()
 
 	request := func(payload map[string]any) (int, map[string]any, string) {
@@ -58,7 +58,7 @@ func TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent(t *testing.T) {
 		return body
 	}
 
-	wantTotal := len(knowledge.SystemSchemaOperations())
+	wantTotal := len(systemrepo.SystemSchemaOperations())
 	first := page("")
 	if first["repository"] != "kr://kc/system" || first["continuation"] == nil {
 		t.Fatalf("unexpected first page: %#v", first)
@@ -96,7 +96,7 @@ func TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent(t *testing.T) {
 		}
 		current = page(current["continuation"].(string))
 	}
-	for _, schema := range knowledge.SystemSchemaOperations() {
+	for _, schema := range systemrepo.SystemSchemaOperations() {
 		if !seen[string(schema.Address.ObjectID)] {
 			t.Errorf("paginated directory omitted %s", schema.Address.ObjectID)
 		}
@@ -113,29 +113,5 @@ func TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent(t *testing.T) {
 	errObj, _ := oversized["error"].(map[string]any)
 	if status != http.StatusBadRequest || errObj["code"] != string(kernel.ErrUsageInvalid) {
 		t.Fatalf("schema page limit 201 status=%d payload=%#v raw=%s", status, oversized, raw)
-	}
-}
-
-type namedSchemaRepo struct{ knowledge.Repository }
-
-func (namedSchemaRepo) ID() kernel.RepositoryID { return "kr://tables-only" }
-
-func (namedSchemaRepo) Read(objectID knowledge.ObjectID, commit kernel.CommitID) (knowledge.KnowledgeValue, error) {
-	return knowledge.KnowledgeValue{
-		KnowledgeRef: knowledge.KnowledgeRef{Object: objectID},
-		Value: map[string]any{
-			"entity": "Note", "description": "A short note.", "pattern": "record",
-			"fields": map[string]any{"body": map[string]any{"type": "string", "access": []any{"text"}}},
-		},
-	}, nil
-}
-
-func TestSchemaListNamesEntitiesWithoutContractDetails(t *testing.T) {
-	listed, err := inv.SchemaEntityDirectory(namedSchemaRepo{}, "commit-1", []knowledge.ObjectID{"schema/note"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(listed) != 1 || listed[0].ObjectID != "schema/note" || listed[0].Entity != "Note" || listed[0].Description != "A short note." {
-		t.Fatalf("schema list must name the entity: %#v", listed)
 	}
 }

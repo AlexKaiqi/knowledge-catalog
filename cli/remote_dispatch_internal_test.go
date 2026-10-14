@@ -16,24 +16,26 @@ import (
 )
 
 type remoteDispatchRouteCase struct {
-	path   string
-	method string
-	target string
+	path     string
+	method   string
+	target   string
+	flags    map[string]FlagValue
+	operands []string
 }
 
 var remoteDispatchRoutes = []remoteDispatchRouteCase{
-	{path: "read", method: http.MethodPost, target: "/knowledge/v1/objects:read"},
-	{path: "resolve", method: http.MethodPost, target: "/knowledge/v1/objects:resolve"},
-	{path: "search", method: http.MethodPost, target: "/knowledge/v1/search"},
-	{path: "relations", method: http.MethodPost, target: "/knowledge/v1/relations:query"},
-	{path: "traverse", method: http.MethodPost, target: "/knowledge/v1/traverse:query"},
-	{path: "provenance", method: http.MethodPost, target: "/knowledge/v1/provenance:describe"},
-	{path: "log", method: http.MethodPost, target: "/knowledge/v1/log:query"},
-	{path: "schema describe", method: http.MethodPost, target: "/knowledge/v1/schemas:describe"},
-	{path: "schema list", method: http.MethodPost, target: "/knowledge/v1/schemas:list"},
-	{path: "binding show", method: http.MethodPost, target: "/knowledge/v1/bindings:resolve"},
-	{path: "access", method: http.MethodPost, target: "/knowledge/v1/resources:access"},
-	{path: "invoke", method: http.MethodPost, target: "/knowledge/v1/resources:access"},
+	{path: "read", method: http.MethodPost, target: "/knowledge/v1/objects:read", flags: map[string]FlagValue{"commit": "commit-A"}, operands: []string{"urn:kc:object:repo-A:policy%2FA#/body/en"}},
+	{path: "resolve", method: http.MethodPost, target: "/knowledge/v1/objects:resolve", flags: map[string]FlagValue{"repo": "repo-A", "object": "policy/A", "aspect": "body", "member": "en", "commit": "commit-A"}},
+	{path: "search", method: http.MethodPost, target: "/knowledge/v1/search", flags: map[string]FlagValue{"dataset": "agent", "query": "runbook", "limit": "2"}},
+	{path: "relations", method: http.MethodPost, target: "/knowledge/v1/relations:query", flags: map[string]FlagValue{"dataset": "agent", "object": "kc://repo-A/policy/A", "limit": "2"}},
+	{path: "traverse", method: http.MethodPost, target: "/knowledge/v1/traverse:query", flags: map[string]FlagValue{"dataset": "agent", "object": "kc://repo-A/policy/A", "max-hops": "2", "limit": "2"}},
+	{path: "provenance", method: http.MethodPost, target: "/knowledge/v1/provenance:describe", flags: map[string]FlagValue{"repo": "repo-A", "object": "policy/A", "commit": "commit-A"}},
+	{path: "log", method: http.MethodPost, target: "/knowledge/v1/log:query", flags: map[string]FlagValue{"repo": "repo-A", "object": "policy/A", "commit": "commit-A", "limit": "2"}},
+	{path: "schema describe", method: http.MethodPost, target: "/knowledge/v1/schemas:describe", flags: map[string]FlagValue{"repo": "repo-A", "object": "policy/A", "commit": "commit-A"}},
+	{path: "schema list", method: http.MethodPost, target: "/knowledge/v1/schemas:list", flags: map[string]FlagValue{"repo": "repo-A", "commit": "commit-A", "limit": "2"}},
+	{path: "binding show", method: http.MethodPost, target: "/knowledge/v1/bindings:resolve", flags: map[string]FlagValue{"repo": "repo-A", "commit": "commit-A", "object": "policy/A", "aspect": "body", "member": "en"}},
+	{path: "access", method: http.MethodPost, target: "/knowledge/v1/resources:access", flags: map[string]FlagValue{"repo": "repo-A", "commit": "commit-A", "object": "policy/A", "aspect": "body", "member": "en"}},
+	{path: "invoke", method: http.MethodPost, target: "/knowledge/v1/resources:access", flags: map[string]FlagValue{"repo": "repo-A", "commit": "commit-A", "object": "policy/A", "operation": "query", "input": `{"sql":"select 1"}`}},
 	{path: "show", method: http.MethodGet, target: "/snapshot/v1/inventory"},
 	{path: "registry audit", method: http.MethodGet, target: "/snapshot/v1/audit?limit=2"},
 	{path: "attach", method: http.MethodPost, target: "/snapshot/v1/repositories"},
@@ -43,7 +45,7 @@ var remoteDispatchRoutes = []remoteDispatchRouteCase{
 	{path: "dataset retire", method: http.MethodPost, target: "/snapshot/v1/datasets/agent/retire"},
 	{path: "pin", method: http.MethodPost, target: "/snapshot/v1/datasets/agent/resolve"},
 	{path: "pin check", method: http.MethodPost, target: "/snapshot/v1/datasets/agent/check"},
-	{path: "writer put", method: http.MethodPost, target: "/writer/v1/repositories/repo-A/commits"},
+	{path: "writer put", method: http.MethodPost, target: "/knowledge/v1/objects:put", flags: map[string]FlagValue{"kind": "Member", "command-id": "command-A", "value": `{"body":"runbook"}`, "ref": "refs/heads/main", "message": "useful"}, operands: []string{"urn:kc:object:repo-A:policy%2FA#/body/en"}},
 	{path: "writer head", method: http.MethodGet, target: "/writer/v1/repositories/repo-A/head?ref=refs%2Fheads%2Fmain"},
 	{path: "writer receipt", method: http.MethodGet, target: "/writer/v1/receipts/command-A"},
 	{path: "governance proposal create", method: http.MethodPost, target: "/governance/v1/proposals"},
@@ -54,10 +56,10 @@ var remoteDispatchRoutes = []remoteDispatchRouteCase{
 	{path: "grant add", method: http.MethodPost, target: "/admin/v1/grants"},
 	{path: "grant list", method: http.MethodGet, target: "/admin/v1/grants?action=knowledge.read&principal=user%3Aalice"},
 	{path: "grant remove", method: http.MethodDelete, target: "/admin/v1/grants/rule-A"},
-	{path: "operations projection sync", method: http.MethodPost, target: "/operations/v1/projections:sync"},
-	{path: "operations projection notice", method: http.MethodPost, target: "/operations/v1/projections:notice"},
-	{path: "operations projection describe", method: http.MethodPost, target: "/operations/v1/projections:describe"},
-	{path: "operations access-spec describe", method: http.MethodPost, target: "/operations/v1/access-specs:describe"},
+	{path: "operations projection sync", method: http.MethodPost, target: "/operations/v1/projections:sync", flags: map[string]FlagValue{"repo": "repo-A", "commit": "commit-A", "ref": "refs/heads/main"}},
+	{path: "operations projection notice", method: http.MethodPost, target: "/operations/v1/projections:notice", flags: map[string]FlagValue{"repo": "repo-A", "object": "policy/A", "aspect": "body", "ref": "refs/heads/main"}},
+	{path: "operations projection describe", method: http.MethodPost, target: "/operations/v1/projections:describe", flags: map[string]FlagValue{"repo": "repo-A", "commit": "commit-A"}},
+	{path: "operations access-spec describe", method: http.MethodPost, target: "/operations/v1/access-specs:describe", flags: map[string]FlagValue{"dataset": "agent"}},
 	{path: "operations hook add", method: http.MethodPost, target: "/operations/v1/hooks"},
 	{path: "operations hook list", method: http.MethodGet, target: "/operations/v1/hooks"},
 	{path: "operations hook remove", method: http.MethodDelete, target: "/operations/v1/hooks/rule-A"},
@@ -104,6 +106,9 @@ func TestRemoteTypedDispatchRoutesSupportedOperations(t *testing.T) {
 				t.Fatal(err)
 			}
 			flags := remoteDispatchTestFlags()
+			if test.flags != nil {
+				flags = test.flags
+			}
 			if test.path == "create" {
 				flags = map[string]FlagValue{"name": "repo-A"}
 			}
@@ -125,12 +130,27 @@ func TestRemoteTypedDispatchRoutesSupportedOperations(t *testing.T) {
 				delete(flags, "aspect")
 				delete(flags, "member")
 			}
-			output, err := runRemoteRequest(context.Background(), client, test.path, flags, kcclient.RequestOptions{})
+			if len(test.operands) > 0 {
+				bound := false
+				for _, entry := range objectCLIEntries {
+					if entry.Path == test.path {
+						if err := bindObjectOperands(entry, flags, test.operands); err != nil {
+							t.Fatal(err)
+						}
+						bound = true
+						break
+					}
+				}
+				if !bound {
+					t.Fatalf("Object command %s has no operand binding", test.path)
+				}
+			}
+			output, err := runFixtureRemoteRequest(context.Background(), client, test.path, flags, kcclient.RequestOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
 			if test.path == "pin" {
-				_, ok := output.(taskKnowledgeSetPin)
+				_, ok := output.(inv.TaskKnowledgeSetPin)
 				if !ok {
 					t.Fatalf("response = %#v", output)
 				}

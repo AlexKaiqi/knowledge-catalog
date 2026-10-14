@@ -7,7 +7,7 @@ import (
 
 	"kc/internal/jsonfile"
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 )
 
 const (
@@ -53,7 +53,7 @@ func AuthenticatedRepositoryActions() []string {
 // infers it from the reserved ID.
 func SystemRepositoryAccess() RepositoryAccess {
 	return RepositoryAccess{
-		ID:                   string(knowledge.SystemRepositoryID),
+		ID:                   string(objectmodel.SystemRepositoryID),
 		AuthenticatedActions: AuthenticatedRepositoryActions(),
 	}
 }

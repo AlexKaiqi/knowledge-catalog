@@ -1,11 +1,11 @@
 package delivery
 
-import "kc/knowledge"
+import objectmodel "kc/object"
 
-// RepositoryRead is the selected first delivery stage: without knowledge.read
+// RepositoryRead is the selected first delivery stage: without objectmodel.read
 // the caller keeps the knowledge ID and loses Canonical body.
 type RepositoryRead struct {
-	Allowed func(principal string, ref knowledge.KnowledgeRef) bool
+	Allowed func(principal string, ref objectmodel.KnowledgeRef) bool
 }
 
 func (s RepositoryRead) Apply(ctx Context, env Envelope) (Envelope, error) {

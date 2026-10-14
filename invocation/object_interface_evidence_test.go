@@ -2,20 +2,20 @@ package invocation
 
 import (
 	"context"
+	"kc/interfaces"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"kc/invoke"
 	"kc/kernel"
-	"kc/knowledge"
-	"kc/knowledge/serving"
+	objectmodel "kc/object"
 	"kc/observability"
 )
 
-func interfaceEvidenceFixture() (serving.InterfaceCallResult, serving.InterfaceRequest, map[string]invoke.FlagValue) {
-	request := serving.InterfaceRequest{Repository: "kr://demo/knowledge", Object: "table/orders", Implementation: "live", Operation: "read"}
-	result := serving.InterfaceCallResult{Value: map[string]any{"rows": 12}, Observation: knowledge.ObservationBasis{BindingGeneration: "orders-v7", Consistency: knowledge.ObservationBounded, SourceRevision: "source-42", ObservedAt: "2026-10-10T03:00:00Z"}, Basis: serving.InterfaceExecutionBasis{DeclarationCommit: "k40", DeclarationDigest: "implementation-digest", Contract: knowledge.PinnedKnowledgeRef{KnowledgeRef: knowledge.KnowledgeRef{Repository: "kr://demo/contracts", Object: "interface/live-access/v1"}, Commit: "contracts-6"}, ContractDigest: "contract-digest", ImplementationSchema: knowledge.PinnedKnowledgeRef{KnowledgeRef: knowledge.KnowledgeRef{Repository: request.Repository, Object: "schema/implements.live-access/v1"}, Commit: "k40"}, ImplementationSchemaDigest: "schema-digest", HandlerRevision: "live-access-http/v1"}}
+func interfaceEvidenceFixture() (interfaces.InterfaceCallResult, interfaces.InterfaceRequest, map[string]invoke.FlagValue) {
+	request := interfaces.InterfaceRequest{Repository: "kr://demo/knowledge", Object: "table/orders", Implementation: "live", Operation: "read"}
+	result := interfaces.InterfaceCallResult{Value: map[string]any{"rows": 12}, Observation: objectmodel.ObservationBasis{BindingGeneration: "orders-v7", Consistency: objectmodel.ObservationBounded, SourceRevision: "source-42", ObservedAt: "2026-10-10T03:00:00Z"}, Basis: interfaces.InterfaceExecutionBasis{DeclarationCommit: "k40", DeclarationDigest: "implementation-digest", Contract: objectmodel.PinnedKnowledgeRef{KnowledgeRef: objectmodel.KnowledgeRef{Repository: "kr://demo/contracts", Object: "interface/live-access/v1"}, Commit: "contracts-6"}, ContractDigest: "contract-digest", ImplementationSchema: objectmodel.PinnedKnowledgeRef{KnowledgeRef: objectmodel.KnowledgeRef{Repository: request.Repository, Object: "schema/implements.live-access/v1"}, Commit: "k40"}, ImplementationSchemaDigest: "schema-digest", HandlerRevision: "live-access-http/v1"}}
 	flags := map[string]invoke.FlagValue{"as": "agent", "_action": "resource.access", "repo": string(request.Repository), "object": string(request.Object), "implementation": request.Implementation, ResolvedCommitFlag: "k40"}
 	return result, request, flags
 }
@@ -89,7 +89,7 @@ func TestFailedInterfaceInvokeEvidenceNamesRequestedMember(t *testing.T) {
 		t.Fatalf("failed invoke evidence: %#v %v", page, err)
 	}
 	address := page.Entries[0].Knowledge[0].Address
-	if page.Entries[0].Result != "ERROR" || address == nil || address.Kind != knowledge.KindMember || address.AspectName != knowledge.ObjectInterfacesAspect || address.MemberKey != request.Implementation {
+	if page.Entries[0].Result != "ERROR" || address == nil || address.Kind != objectmodel.KindMember || address.AspectName != interfaces.ObjectInterfacesAspect || address.MemberKey != request.Implementation {
 		t.Fatalf("failed interface call was recorded as a different unit: %#v", page.Entries[0])
 	}
 }

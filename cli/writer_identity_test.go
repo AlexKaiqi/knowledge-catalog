@@ -8,7 +8,7 @@ import (
 	"kc/internal/testkit"
 )
 
-// knowledge.md U2/U5/U6 写入面旅程：切面级修改保持兄弟切面与对象身份、
+// objectmodel.md U2/U5/U6 写入面旅程：切面级修改保持兄弟切面与对象身份、
 // 提交响应丢失后经回执恢复且同一命令身份不能携带另一份内容、跨仓关系
 // 发布不写端点仓也不扩大读权。
 
@@ -17,16 +17,13 @@ func TestAspectModificationKeepsSiblingAndIdentity(t *testing.T) {
 	h := testkit.TempDir(t)
 	kc(h, "init")
 	seedRepo(t, h, "kr://acme/public/core")
-	body(t, kc(h, "put", "--command-id", "def-v1", "--repo", "kr://acme/public/core",
-		"--object", "Policy:P-103", "--aspect", "definition", "--value", `{"text":"v1"}`))
-	body(t, kc(h, "put", "--command-id", "run-v1", "--repo", "kr://acme/public/core",
-		"--object", "Policy:P-103", "--aspect", "runtime", "--value", `{"status":"on"}`))
+	body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "Policy:P-103", "/definition"), "--command-id", "def-v1", "--value", `{"text":"v1"}`))
+	body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "Policy:P-103", "/runtime"), "--command-id", "run-v1", "--value", `{"status":"on"}`))
 
-	body(t, kc(h, "put", "--command-id", "def-v2", "--repo", "kr://acme/public/core",
-		"--object", "Policy:P-103", "--aspect", "definition", "--value", `{"text":"v2"}`))
+	body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "Policy:P-103", "/definition"), "--command-id", "def-v2", "--value", `{"text":"v2"}`))
 
-	definition := asMap(t, body(t, kc(h, "read", "--repo", "kr://acme/public/core", "--object", "Policy:P-103", "--aspect", "definition")))
-	runtime := asMap(t, body(t, kc(h, "read", "--repo", "kr://acme/public/core", "--object", "Policy:P-103", "--aspect", "runtime")))
+	definition := asMap(t, body(t, kc(h, "read", testObjectReference(t, "kr://acme/public/core", "Policy:P-103", "/definition"))))
+	runtime := asMap(t, body(t, kc(h, "read", testObjectReference(t, "kr://acme/public/core", "Policy:P-103", "/runtime"))))
 	if got := definition["value"]; !reflect.DeepEqual(got, map[string]any{"text": "v2"}) {
 		t.Fatalf("modified aspect must serve v2: %#v", got)
 	}
@@ -48,23 +45,20 @@ func TestLostResponseRecoversFromReceiptAndRefusesContentSwap(t *testing.T) {
 	h := testkit.TempDir(t)
 	kc(h, "init")
 	seedRepo(t, h, "kr://acme/public/core")
-	accepted := asMap(t, body(t, kc(h, "put", "--command-id", "sync-1", "--repo", "kr://acme/public/core",
-		"--object", "policy/A", "--value", `{"v":1}`)))
+	accepted := asMap(t, body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/A", ""), "--command-id", "sync-1", "--value", `{"v":1}`)))
 	if accepted["disposition"] != "APPLIED" {
 		t.Fatalf("first publish must apply: %#v", accepted)
 	}
 	head := body(t, kc(h, "writer", "head", "--repo", "kr://acme/public/core"))
 
 	// 同一命令身份、另一份内容：拒绝，HEAD 不动。
-	expectCode(t, kc(h, "put", "--command-id", "sync-1", "--repo", "kr://acme/public/core",
-		"--object", "policy/A", "--value", `{"v":2}`), "IDEMPOTENCY_CONFLICT")
+	expectCode(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/A", ""), "--command-id", "sync-1", "--value", `{"v":2}`), "IDEMPOTENCY_CONFLICT")
 	if got := body(t, kc(h, "writer", "head", "--repo", "kr://acme/public/core")); !reflect.DeepEqual(got, head) {
 		t.Fatalf("content swap must not move HEAD: %v vs %v", got, head)
 	}
 
 	// 响应丢失：回执暴露已接受事实，无需重写。
-	replay := asMap(t, body(t, kc(h, "put", "--command-id", "sync-1", "--repo", "kr://acme/public/core",
-		"--object", "policy/A", "--value", `{"v":1}`)))
+	replay := asMap(t, body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/A", ""), "--command-id", "sync-1", "--value", `{"v":1}`)))
 	if replay["disposition"] != "REPLAYED" {
 		t.Fatalf("identical retry must replay: %#v", replay)
 	}
@@ -117,7 +111,7 @@ func TestCrossRepositoryRelationPublishKeepsEndpointRepoUntouched(t *testing.T) 
 	if got := body(t, kc(h, "grant", "list")); !reflect.DeepEqual(got, grants) {
 		t.Fatalf("relation publish must not widen grants: %#v", got)
 	}
-	relation := asMap(t, body(t, kc(h, "read", "--repo", "kr://acme/public/core", "--object", "relation:owned")))
+	relation := asMap(t, body(t, kc(h, "read", testObjectReference(t, "kr://acme/public/core", "relation:owned", ""))))
 	rawValue, err := json.Marshal(relation["value"])
 	if err != nil {
 		t.Fatal(err)

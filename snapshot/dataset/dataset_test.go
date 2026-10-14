@@ -5,7 +5,7 @@ import (
 
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 	"kc/snapshot"
 	catalog "kc/snapshot/dataset"
 )
@@ -103,7 +103,7 @@ func TestResolveKnowledgeSetExposesVersionRef(t *testing.T) {
 func TestPublishedPrefixDatasetDoesNotReadSiblingPaths(t *testing.T) {
 	s := setupFed(t)
 	head := testkit.MustHead(t, s.publicRepo, "refs/heads/main")
-	if _, err := s.publicRepo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
+	if _, err := s.publicRepo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
 		TargetRepository: "kr://acme/public/core", TargetRef: "refs/heads/main",
 		BaseCommit: head, ExpectedTargetCommit: head,
 		Operations: testkit.PutEntity("note/outside", map[string]any{"body": "secret"}, ""),

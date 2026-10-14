@@ -6,7 +6,9 @@ import (
 	"kc/snapshot"
 )
 
-// Observer receives the actual operation outcome for external evidence.
+// Observer receives the actual operation outcome for external evidence. Its
+// error is returned only when the operation succeeded; it cannot replace an
+// operation failure or undo an already accepted authority change.
 type Observer func(operation string, refs map[string]any, err error) error
 
 // Service is the file Dataset authority. Implementations remain private.
@@ -19,7 +21,7 @@ type Service interface {
 	DumpState() State
 	HasRepository(repositoryID kernel.RepositoryID) bool
 	LoadState(state State)
-	Log(query LogQuery) History
+	Log(query LogQuery) (History, error)
 	NotifySnapshot(ev Snapshot)
 	PrepareKnowledgeSet(setID string, revision int, sources []KnowledgeSetSource) (KnowledgeSet, error)
 	PublishKnowledgeSet(def KnowledgeSet) (KnowledgeSet, error)
@@ -59,7 +61,10 @@ type Registry interface {
 
 func observe(observer Observer, operation string, refs map[string]any, err error) error {
 	if observer != nil {
-		return observer(operation, refs, err)
+		recordErr := observer(operation, refs, err)
+		if err == nil {
+			return recordErr
+		}
 	}
 	return err
 }

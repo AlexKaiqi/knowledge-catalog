@@ -2,15 +2,15 @@ package home
 
 import (
 	"kc/kernel"
-	"kc/knowledge"
-	"kc/knowledge/writer"
+	objectmodel "kc/object"
 	"kc/snapshot"
+	"kc/systemrepo"
 )
 
 // initializeSystemAuthority publishes only during an explicit deployment
 // operation. An initialized deployment must restore its existing publication.
 func initializeSystemAuthority(store snapshot.Registry, c DeploymentConfig, initialized bool) error {
-	binding, err := c.Binding(knowledge.SystemRepositoryID)
+	binding, err := c.Binding(objectmodel.SystemRepositoryID)
 	if err != nil {
 		return err
 	}
@@ -33,7 +33,7 @@ func initializeSystemAuthority(store snapshot.Registry, c DeploymentConfig, init
 		if err := verifySystemAuthority(source); err != nil {
 			return err
 		}
-	} else if _, err := writer.PublishSystem(source); err != nil {
+	} else if _, err := systemrepo.PublishSystem(source); err != nil {
 		return err
 	}
 	// Registry registration only needs the identity and existing version.
@@ -52,6 +52,17 @@ type systemAuthority struct {
 	snapshot.DirectoryReader
 	snapshot.HistoryStore
 	snapshot.ChangeStore
+}
+
+type nativeRepositoryMetadataReader interface {
+	ReadRepositoryMetadata() (map[string]string, error)
+}
+
+// Metadata remains optional and read-only on the runtime System authority.
+// Embedding just the read port does not expose the source's native setter.
+type systemMetadataAuthority struct {
+	*systemAuthority
+	nativeRepositoryMetadataReader
 }
 
 func readOnlySystemAuthority(source snapshot.Store) (snapshot.Store, error) {
@@ -75,7 +86,11 @@ func readOnlySystemAuthority(source snapshot.Store) (snapshot.Store, error) {
 		closeManagedSource(source)
 		return nil, err
 	}
-	return &systemAuthority{source, tree, directory, history, changes}, nil
+	authority := &systemAuthority{source, tree, directory, history, changes}
+	if metadata, ok := source.(nativeRepositoryMetadataReader); ok {
+		return &systemMetadataAuthority{authority, metadata}, nil
+	}
+	return authority, nil
 }
 
 func (*systemAuthority) CreateRef(string, kernel.CommitID) error {

@@ -11,8 +11,8 @@ import (
 
 // VirtualFile is one raw byte read across a composed Workspace tree: the
 // virtual path the caller asked for, which member/commit it routed to, and
-// the bytes there. RouteMount decides ownership; this is that same routing
-// applied to a read instead of a write-back plan — the primitive a virtual
+// the bytes there. RouteDatasetFile compiles the fixed published file list;
+// write-back mount routing remains separate. This is the primitive a virtual
 // filesystem (no real checkout on disk, docs/reviewed/dataset.md's TreeStore)
 // needs for a single file.
 type VirtualFile struct {
@@ -22,7 +22,7 @@ type VirtualFile struct {
 	Content    []byte              `json:"content"`
 }
 
-// ReadVirtualFile routes path to its owning mount and reads the raw bytes
+// ReadVirtualFile routes path to its frozen file or prefix and reads raw bytes
 // there at this ResolveKnowledgeSet's pin. A member without TreeStore fails with
 // CAPABILITY_UNSATISFIED naming it, the same seam-reporting pattern as
 // Store.Knowledge.
@@ -46,13 +46,22 @@ func (c *service) ReadVirtualFileOf(def KnowledgeSet, path string) (VirtualFile,
 // VFS equivalent of reader.Open over a ResolvedKnowledgeSet: repeated remote
 // filesystem calls can share one snapshot instead of re-following selectors.
 func (c *service) ReadVirtualFileAt(def KnowledgeSet, resolved ResolvedKnowledgeSet, path string) (VirtualFile, error) {
-	route, err := RouteMount(def, path)
+	route, err := RouteDatasetFile(resolved.Items, path)
 	if err != nil {
+		if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+			return VirtualFile{}, kernel.Fail(kernel.ErrUsageInvalid, "no source in workspace %s owns path %s", def.SetID, path)
+		}
 		return VirtualFile{}, err
+	}
+	if route.Kind == DatasetItemPrefix && !hasDeclaredPrefix(def.Sources, route) {
+		return VirtualFile{}, kernel.Fail(kernel.ErrUsageInvalid, "workspace %s does not declare this directory mapping", def.SetID)
 	}
 	commit, ok := resolved.Repositories[route.Repository]
 	if !ok {
 		return VirtualFile{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "resolved pin has no commit for repository %s", route.Repository)
+	}
+	if route.Commit != commit {
+		return VirtualFile{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "selected file disagrees with resolved repository commit")
 	}
 	snapshot, err := c.store.Require(route.Repository, kernel.ErrUsageInvalid)
 	if err != nil {
@@ -63,14 +72,23 @@ func (c *service) ReadVirtualFileAt(def KnowledgeSet, resolved ResolvedKnowledge
 		return VirtualFile{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
 			"repository %s does not support raw path reads", route.Repository)
 	}
-	if !DatasetPathAllowed(resolved.Items, route.Repository, route.Path) {
+	if !DatasetPathAllowed(resolved.Items, route.Repository, route.File) {
 		return VirtualFile{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "path %s is not in dataset %s", path, def.SetID)
 	}
-	content, err := raw.ReadFile(route.Path, commit)
+	content, err := raw.ReadFile(route.File, commit)
 	if err != nil {
 		return VirtualFile{}, err
 	}
 	return VirtualFile{Path: path, Repository: route.Repository, Commit: commit, Content: content}, nil
+}
+
+func hasDeclaredPrefix(sources []KnowledgeSetSource, item DatasetItem) bool {
+	for _, source := range sources {
+		if source.Path != nil && source.Repository == item.Repository && normalizeMountPath(*source.Path) == normalizeMountPath(item.Target) && normalizeMemberSubPath(source.SubPath) == item.Prefix {
+			return true
+		}
+	}
+	return false
 }
 
 // VirtualMount is one declared path boundary in a composed Workspace, paired

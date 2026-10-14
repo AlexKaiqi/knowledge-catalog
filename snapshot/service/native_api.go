@@ -166,6 +166,9 @@ func (h *handler) serveNativeRepository(w http.ResponseWriter, r *http.Request, 
 	if route.action == access.RepositoryDelete {
 		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "registered repository must be detached from deployment bindings and Dataset sources before physical deletion; no detach lifecycle is configured")
 	}
+	if route.path == "/repositories/{repository}/settings/gc_rules" && r.Method != http.MethodGet && r.Method != http.MethodHead {
+		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "registered authority must retain committed history; no retention policy validator is configured")
+	}
 	// Download links remain under current product authorization. Native storage
 	// presigned URLs would let later reads bypass this request boundary.
 	query := r.URL.Query()

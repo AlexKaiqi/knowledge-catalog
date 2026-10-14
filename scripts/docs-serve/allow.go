@@ -19,6 +19,8 @@ func allowedRel(rel string) bool {
 	switch strings.ToLower(filepath.Ext(rel)) {
 	case ".md", ".html":
 		return true
+	case ".svg", ".png":
+		return strings.HasPrefix(rel, "docs/assets/")
 	default:
 		return false
 	}

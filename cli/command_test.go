@@ -1,13 +1,11 @@
 package cli
 
 import (
-	inv "kc/invocation"
+	"kc/invoke"
 	"slices"
 	"sort"
 	"strings"
 	"testing"
-
-	"kc/kernel"
 )
 
 func TestCLICommandsIsTheCompleteStableSurface(t *testing.T) {
@@ -36,12 +34,15 @@ func TestProductCLIRefactorDefinesTheExactPublicSurface(t *testing.T) {
 		"dataset define",
 		"dataset overlay",
 		"dataset retire",
+		"dataset show",
 		"deployment identity migrate",
 		"deployment init",
 		"deployment status",
 		"deployment system publish",
 		"detach",
 		"diff",
+		"files list",
+		"files read",
 		"governance preview create",
 		"governance preview validate",
 		"governance proposal create",
@@ -50,6 +51,7 @@ func TestProductCLIRefactorDefinesTheExactPublicSurface(t *testing.T) {
 		"grant add",
 		"grant list",
 		"grant remove",
+		"grant update",
 		"invoke",
 		"log",
 		"login",
@@ -68,6 +70,7 @@ func TestProductCLIRefactorDefinesTheExactPublicSurface(t *testing.T) {
 		"operations projection describe",
 		"operations projection notice",
 		"operations projection sync",
+		"plugin",
 		"provenance",
 		"read",
 		"registry audit",
@@ -162,6 +165,12 @@ func TestEveryPublicCLICommandHasAnInternalOperationAndSemanticAction(t *testing
 func TestInternalHandlersMatchPublicCLIPaths(t *testing.T) {
 	for path, surface := range cliSurface {
 		want := strings.ReplaceAll(path, " ", "-")
+		if path == "plugin" {
+			if surface.Handler != "knowledge-plugin-help" {
+				t.Errorf("plugin help must use its sole explanation handler, got %q", surface.Handler)
+			}
+			continue
+		}
 		if strings.HasPrefix(surface.Handler, "knowledge-") {
 			want = "knowledge-" + want
 		}
@@ -179,7 +188,7 @@ func TestRetiredInternalOperationsAreUnknown(t *testing.T) {
 		"merge", "validate", "record-validation", "search", "relations", "read", "init",
 		"admission-request", "admin-grant-add", "admin-grant-list", "admin-grant-remove",
 		"catalog-show", "catalog-repo-list", "catalog-repo-attach", "catalog-repo-create",
-		"catalog-repo-archive", "dataset-list", "dataset-show", "kset-list", "kset-show",
+		"catalog-repo-archive", "dataset-list", "kset-list", "kset-show",
 		"kset-define", "kset-retire", "kset-overlay",
 		"catalog-repo-connect", "catalog-repo-connection-show", "catalog-repo-connection-check", "catalog-repo-connection-rotate",
 	} {
@@ -234,7 +243,7 @@ func TestRemovedCommandsAreRejected(t *testing.T) {
 		}
 	}
 	for _, argv := range [][]string{
-		{"read", "--kset", "agent", "--object", "policy/A"},
+		{"read", "urn:kc:object:kr%3A%2F%2Facme%2Fsource:policy%2FA", "--kset", "agent"},
 		{"dataset", "define", "--kset", "docs", "--revision", "1", "--source", "kr://acme/core"},
 	} {
 		result := Run(argv)
@@ -242,7 +251,7 @@ func TestRemovedCommandsAreRejected(t *testing.T) {
 			t.Fatalf("%v must reject --kset: %s", argv, result.Stdout)
 		}
 	}
-	pinFlag := Run([]string{"read", "--pin", `{"setId":"agent"}`, "--object", "policy/A"})
+	pinFlag := Run([]string{"read", "urn:kc:object:kr%3A%2F%2Facme%2Fsource:policy%2FA", "--pin", `{"setId":"agent"}`})
 	if pinFlag.Status == 0 || !strings.Contains(pinFlag.Stdout, "rejects --pin") {
 		t.Fatalf("read --pin must be rejected: %s", pinFlag.Stdout)
 	}
@@ -352,52 +361,17 @@ func TestGroupedCatalogViewsUseSnapshotServices(t *testing.T) {
 func TestEveryInternalOperationReferencedByCLIHasTheDeclaredStage(t *testing.T) {
 	for path, surface := range cliSurface {
 		cmd := commands[surface.Handler]
+		if path == "plugin" {
+			if cmd.Stage != invoke.StageHome {
+				t.Errorf("%s must read explanation without mounting source Home", path)
+			}
+			continue
+		}
 		if knowledgeCLIPath(path) || strings.HasPrefix(path, "writer ") || strings.HasPrefix(path, "governance ") {
-			if cmd.Stage != stageGoverned {
+			if cmd.Stage != invoke.StageGoverned {
 				t.Errorf("%s should be governed", path)
 			}
 		}
-	}
-}
-
-func TestLimitFlagRejectsGarbage(t *testing.T) {
-	for _, raw := range []string{"abc", "-1", "1.5"} {
-		if _, err := inv.LimitFrom(map[string]FlagValue{"limit": raw}, 50); err == nil {
-			t.Errorf("--limit %s should be rejected", raw)
-		}
-	}
-	got, err := inv.LimitFrom(map[string]FlagValue{}, 50)
-	if err != nil || got != 50 {
-		t.Fatalf("absent --limit: %d %v", got, err)
-	}
-}
-
-func TestPageLimitTreatsZeroAsDefaultAndRejectsOversized(t *testing.T) {
-	got, err := inv.PageLimit(map[string]FlagValue{"limit": "0"}, 50, 200)
-	if err != nil || got != 50 {
-		t.Fatalf("limit 0: %d %v", got, err)
-	}
-	got, err = inv.PageLimit(map[string]FlagValue{}, 50, 200)
-	if err != nil || got != 50 {
-		t.Fatalf("omitted limit: %d %v", got, err)
-	}
-	if _, err := inv.PageLimit(map[string]FlagValue{"limit": "201"}, 50, 200); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
-		t.Fatalf("oversized page: %v", err)
-	}
-}
-
-func TestAddressCoordinatesRejectMemberWithoutAspect(t *testing.T) {
-	if usesAddress(map[string]FlagValue{"object": "policy/x"}) {
-		t.Fatal("object-only is not an Address")
-	}
-	if !usesAddress(map[string]FlagValue{"object": "policy/x", "aspect": "io"}) {
-		t.Fatal("aspect is an Address")
-	}
-	if !usesAddress(map[string]FlagValue{"object": "policy/x", "member": "user:bob"}) {
-		t.Fatal("member without aspect is still an Address attempt")
-	}
-	if _, err := inv.AddressFrom(map[string]FlagValue{"object": "policy/x", "member": "user:bob"}); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
-		t.Fatalf("member without aspect: %v", err)
 	}
 }
 
@@ -413,4 +387,20 @@ func TestKnowledgeHistoryCommandsRejectAddressCoordinatesOnThePublicSurface(t *t
 			t.Fatalf("%v should reject Address coordinates before contacting the server: %s", argv, result.Stdout)
 		}
 	}
+}
+
+func leafNeedsValueHelp(usage string) bool {
+	first, _, _ := strings.Cut(usage, "\n")
+	for _, mark := range []string{
+		"<json>", "<text>", "<action", "[=<", "--mode", "--config",
+		"--changeset", "--value", "--input", "--query", "--source",
+		"--phase", "--require", "--candidate", "--outcome", "--dir ",
+		"--operation", "--credential-file", "--file", "--aspect",
+		"--direction", "--suite",
+	} {
+		if strings.Contains(first, mark) {
+			return true
+		}
+	}
+	return false
 }

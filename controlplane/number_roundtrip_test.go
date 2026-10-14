@@ -7,8 +7,8 @@ import (
 
 	"kc/controlplane"
 	"kc/internal/testkit"
-	"kc/knowledge"
-	"kc/knowledge/reader"
+	objectmodel "kc/object"
+	"kc/object/reader"
 	"kc/snapshot"
 )
 
@@ -43,7 +43,7 @@ func TestPersistedProposalPreviewRetainsExactCandidateNumbers(t *testing.T) {
 	if fromProposal != fromPreview || fromProposal != proposal.CandidateCommit {
 		t.Fatal("restored maintenance state changed candidate basis")
 	}
-	value, err := reader.NewReader(s.Store).Read(knowledge.KnowledgeRef{Repository: s.RepositoryID, Object: "sample/A"}, fromPreview, nil)
+	value, err := reader.NewReader(s.Store).Read(objectmodel.KnowledgeRef{Repository: s.RepositoryID, Object: "sample/A"}, fromPreview, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

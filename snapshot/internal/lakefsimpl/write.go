@@ -98,7 +98,13 @@ func (r *Repository) ApplyTreeCommitBulk(cs storecontract.TreeChangeSet) (kernel
 	return r.applyTreeCommit(cs, r.client.uploadObject)
 }
 
-func (r *Repository) applyTreeCommit(cs storecontract.TreeChangeSet, write objectWriter) (kernel.CommitID, error) {
+func (r *Repository) applyTreeCommit(cs storecontract.TreeChangeSet, write objectWriter) (_ kernel.CommitID, err error) {
+	publicationStarted := false
+	defer func() {
+		if err != nil && !publicationStarted {
+			err = storecontract.WriteNotApplied(err)
+		}
+	}()
 	if err := r.denyIfArchived(); err != nil {
 		return "", err
 	}
@@ -142,6 +148,7 @@ func (r *Repository) applyTreeCommit(cs storecontract.TreeChangeSet, write objec
 	if err != nil {
 		return "", err
 	}
+	publicationStarted = true
 	if err := r.publishBranch(targetBranch, candidate, cs.ExpectedTargetCommit); err != nil {
 		return "", err
 	}

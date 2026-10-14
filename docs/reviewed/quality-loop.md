@@ -22,7 +22,7 @@ agent 协作下腐化为什么更快、各层权威归谁。它是工程过程�
 
 | 层 | 回答的问题 | 本仓权威位置 |
 |---|---|---|
-| 防（设计先行） | 这次改动要保持什么、明确不做什么 | [AGENTS.md](../../AGENTS.md)「交付」与各 owner 设计文档（Goal / Non-Goals / 不变量 / 选定与否决） |
+| 防（设计先行） | 这次改动要达到什么、触碰哪些已选合同 | [AGENTS.md](../../AGENTS.md)「交付」与各 owner 设计文档；内容按需，不要求固定段落 |
 | 拦（提交前自动检查） | 明确违规有没有 | [AGENTS.md](../../AGENTS.md) 工作方式与红线；检查体系由 [验证体系](test-catalog.md) 拥有 |
 | 闸（增量门禁） | 这次有没有比上次更烂 | 方法论归本文；`scripts/coupling -strict` 已随 `make quality` 硬卡传播成本与 Instability drift（QUALITY-04），基线收紧须显式 `-write-baseline` 并记 TASK.md |
 | 审（语义复核） | 合规的 diff 是不是坏 diff | 信号采集与逐条判定流程由 [`.dsh/skills/code-signals-review.md`](../../.dsh/skills/code-signals-review.md) 拥有 |
@@ -79,7 +79,7 @@ agent 协作下腐化为什么更快、各层权威归谁。它是工程过程�
 重复代码块显著增多；AI 采用提升吞吐但与交付稳定性负相关。本仓据此作出的推论与对策：
 
 1. **agent 没有跨会话记忆** → 不知道已有实现 → 重复造轮子。对策：写下来的合同与文档
-   就是 agent 的外部记忆——这是「防」层（先写 Goal / Non-Goals / 不变量并引用 owner）
+   就是 agent 的外部记忆——这是「防」层（说明目标与适用 owner 合同）
    对 agent 比对人更重要的原因。
 2. **局部目标**（让当前任务通过）→ 绕抽象、加特例、断言迎合实现。对策：契约 /
    conformance / 架构守卫不可削弱、不用 skip 换绿（AGENTS.md 红线）；断言先红后绿。
@@ -130,8 +130,9 @@ Robert C. Martin《Agile Software Development》(2002) 的包度量与 SDP；Mac
   snapshot / kernel）低且被依赖也是正确形态。依赖方向必须从高不稳定指向低不稳定。
 - 不设普适阈值：以 `scripts/coupling/baseline.json` 为基线，只紧不松；盯离群单元、
   传播成本与 Instability 的突变（工具报告 drift ≥ 0.05 的单元）。
-- 结构单元默认按顶层目录归并，`snapshot/service` 及其子包是显式登记的嵌套应用单元，
-  避免把 HTTP 适配的身份消费边误记到文件核心。物理目录所有权不替代逻辑依赖方向；
+- 结构单元默认按模块根及一级子能力分别度量（固定 depth=2），工具、测试夹具与运行基础设施
+  同样分开；depth=1 保留为诊断，不能用混合目录形成的假循环解释实际 Go 包依赖。
+  所有源码版本使用同一口径比较，物理目录所有权不替代逻辑依赖方向；
   全部生产 import、可达性计算及门禁阈值保持。行为耦合的源码归组使用同一具名单元规则。
 - 基线保存单元政策签名；缺失、不同签名或不同 depth 都不可比较。单元组织调整必须用
   同一工具、政策与平台重算改前和改后，保留 import 图与已存在单元的漂移证据，在传播

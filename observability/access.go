@@ -5,14 +5,17 @@ import (
 	"strings"
 
 	"kc/kernel"
-	"kc/knowledge"
+	liveevidence "kc/liveaccess/evidence"
+	objectmodel "kc/object"
 	"kc/snapshot"
 )
 
 type KnowledgeAccess struct {
-	KnowledgeRef knowledge.PinnedKnowledgeRef `json:"knowledgeRef"`
-	Address      *knowledge.Address           `json:"address,omitempty"`
-	Observations []knowledge.UnitObservation  `json:"observations,omitempty"`
+	Reference    string                         `json:"reference,omitempty"`
+	Locator      string                         `json:"locator,omitempty"`
+	KnowledgeRef objectmodel.PinnedKnowledgeRef `json:"knowledgeRef"`
+	Address      *objectmodel.Address           `json:"address,omitempty"`
+	Observations []objectmodel.UnitObservation  `json:"observations,omitempty"`
 }
 
 type FileAccess struct {
@@ -26,23 +29,24 @@ type SnapshotAccess struct {
 }
 
 type AccessEvent struct {
-	EvidenceID string            `json:"evidenceId,omitempty"`
-	OccurredAt string            `json:"occurredAt"`
-	Identity   IdentityContext   `json:"identity"`
-	Trace      TraceContext      `json:"trace,omitempty"`
-	Action     string            `json:"action"`
-	RequestID  string            `json:"requestId,omitempty"`
-	Dataset    string            `json:"dataset,omitempty"`
-	PinID      string            `json:"pinId,omitempty"`
-	Decision   string            `json:"decision"`
-	RuleID     string            `json:"ruleId,omitempty"`
-	Result     string            `json:"result"`
-	Knowledge  []KnowledgeAccess `json:"knowledge,omitempty"`
-	Files      []FileAccess      `json:"files,omitempty"`
-	Snapshots  []SnapshotAccess  `json:"snapshots,omitempty"`
-	Stream     string            `json:"stream,omitempty"`
-	Cursor     string            `json:"cursor,omitempty"`
-	Error      map[string]any    `json:"error,omitempty"`
+	EvidenceID string                  `json:"evidenceId,omitempty"`
+	OccurredAt string                  `json:"occurredAt"`
+	Identity   IdentityContext         `json:"identity"`
+	Trace      TraceContext            `json:"trace,omitempty"`
+	Action     string                  `json:"action"`
+	RequestID  string                  `json:"requestId,omitempty"`
+	Dataset    string                  `json:"dataset,omitempty"`
+	PinID      string                  `json:"pinId,omitempty"`
+	Decision   string                  `json:"decision"`
+	RuleID     string                  `json:"ruleId,omitempty"`
+	Result     string                  `json:"result"`
+	Knowledge  []KnowledgeAccess       `json:"knowledge,omitempty"`
+	Files      []FileAccess            `json:"files,omitempty"`
+	Snapshots  []SnapshotAccess        `json:"snapshots,omitempty"`
+	Stream     string                  `json:"stream,omitempty"`
+	Cursor     string                  `json:"cursor,omitempty"`
+	Error      map[string]any          `json:"error,omitempty"`
+	LiveAccess *liveevidence.Reference `json:"liveaccess,omitempty"`
 }
 
 func (e AccessEvent) Validate() error {
@@ -73,7 +77,7 @@ func (e AccessEvent) Validate() error {
 			if observation.Address.ObjectID != ref.Object || observation.DeclarationCommit != ref.Commit {
 				return fmt.Errorf("knowledge observation must match the accessed object and declaration commit")
 			}
-			if err := knowledge.ValidateObservationBasis(observation.Basis); err != nil {
+			if err := objectmodel.ValidateObservationBasis(observation.Basis); err != nil {
 				return err
 			}
 		}
@@ -99,8 +103,9 @@ type AccessQuery struct {
 	OnBehalfOf   string
 	Action       string
 	TraceID      string
+	RequestID    string
 	Repository   kernel.RepositoryID
-	Object       knowledge.ObjectID
+	Object       objectmodel.ObjectID
 	Limit        int
 	Continuation string
 }

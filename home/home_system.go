@@ -1,11 +1,11 @@
 package home
 
 import (
+	"kc/systemrepo"
 	"strings"
 
 	"kc/kernel"
-	"kc/knowledge"
-	"kc/knowledge/writer"
+	objectmodel "kc/object"
 	"kc/snapshot"
 )
 
@@ -19,12 +19,12 @@ func EnsureSystemRepository(home string) (kernel.CommitID, error) {
 	}
 	defer ws.Close()
 
-	repo, exists := ws.Store.Get(knowledge.SystemRepositoryID)
+	repo, exists := ws.Store.Get(objectmodel.SystemRepositoryID)
 	if !exists {
 		return "", kernel.Fail(kernel.ErrTemporaryUnavailable, "published System Repository is not mounted")
 	}
 	cat := ws.Datasets
-	if err := cat.RegisterRepository(knowledge.SystemRepositoryID); err != nil {
+	if err := cat.RegisterRepository(objectmodel.SystemRepositoryID); err != nil {
 		return "", err
 	}
 	if err := EnsureRepositoryAccess(home, SystemRepositoryAccess()); err != nil {
@@ -35,7 +35,7 @@ func EnsureSystemRepository(home string) (kernel.CommitID, error) {
 	if err != nil {
 		return "", err
 	}
-	knowledgeRepo, err := ws.Reader.Require(knowledge.SystemRepositoryID, kernel.ErrCapabilityUnsatisfied)
+	knowledgeRepo, err := ws.Reader.Require(objectmodel.SystemRepositoryID, kernel.ErrCapabilityUnsatisfied)
 	if err != nil {
 		return "", err
 	}
@@ -47,10 +47,10 @@ func EnsureSystemRepository(home string) (kernel.CommitID, error) {
 
 func SystemRepositoryStatus(commit kernel.CommitID) map[string]any {
 	return map[string]any{
-		"repositoryId":     knowledge.SystemRepositoryID,
+		"repositoryId":     objectmodel.SystemRepositoryID,
 		"commit":           commit,
-		"metaSchema":       knowledge.MetaSchemaV1,
-		"metaSchemaDigest": knowledge.SystemMetaSchemaDigest(),
+		"metaSchema":       objectmodel.MetaSchemaV1,
+		"metaSchemaDigest": objectmodel.SystemMetaSchemaDigest(),
 	}
 }
 
@@ -73,7 +73,7 @@ func PublishSystemRepository(home, driver, dsn, dir string) (map[string]any, err
 		return nil, err
 	}
 	spec := repoAddRequest{
-		ID:     string(knowledge.SystemRepositoryID),
+		ID:     string(objectmodel.SystemRepositoryID),
 		Driver: driver,
 		DSN:    strings.TrimSpace(dsn),
 		Dir:    strings.TrimSpace(dir),
@@ -81,11 +81,11 @@ func PublishSystemRepository(home, driver, dsn, dir string) (map[string]any, err
 	if existing, ok := systemAuthoritySpec(file); ok {
 		if existing.Driver != "" && normalizeRepoDriver(existing.Driver) != driver {
 			return nil, kernel.Fail(kernel.ErrPreconditionFailed,
-				"%s is already published on driver %s", knowledge.SystemRepositoryID, existing.Driver)
+				"%s is already published on driver %s", objectmodel.SystemRepositoryID, existing.Driver)
 		}
 		if existing.DSN != "" && spec.DSN != "" && existing.DSN != spec.DSN {
 			return nil, kernel.Fail(kernel.ErrPreconditionFailed,
-				"%s is already published at %s", knowledge.SystemRepositoryID, existing.DSN)
+				"%s is already published at %s", objectmodel.SystemRepositoryID, existing.DSN)
 		}
 		if spec.DSN == "" {
 			spec.DSN = existing.DSN
@@ -100,7 +100,7 @@ func PublishSystemRepository(home, driver, dsn, dir string) (map[string]any, err
 	if err != nil {
 		return nil, err
 	}
-	item.ID = string(knowledge.SystemRepositoryID)
+	item.ID = string(objectmodel.SystemRepositoryID)
 	abs, err := ResolveStoreDir(home, item.Dir, item.Dir)
 	if err != nil {
 		return nil, err
@@ -110,7 +110,7 @@ func PublishSystemRepository(home, driver, dsn, dir string) (map[string]any, err
 		return nil, err
 	}
 	defer closeManagedSource(repo)
-	published, err := writer.PublishSystem(repo)
+	published, err := systemrepo.PublishSystem(repo)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +128,7 @@ func PublishSystemRepository(home, driver, dsn, dir string) (map[string]any, err
 
 func systemAuthoritySpec(file HomeFile) (HomeRepo, bool) {
 	for _, repo := range file.Repos {
-		if repo.ID == string(knowledge.SystemRepositoryID) {
+		if repo.ID == string(objectmodel.SystemRepositoryID) {
 			return repo, true
 		}
 	}

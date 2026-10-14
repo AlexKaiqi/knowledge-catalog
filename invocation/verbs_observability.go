@@ -8,7 +8,8 @@ import (
 	"kc/identity"
 	"kc/invoke"
 	"kc/kernel"
-	knowledge "kc/knowledge"
+	liveservice "kc/liveaccess/service"
+	objectmodel "kc/object"
 	"kc/observability"
 )
 
@@ -25,8 +26,9 @@ func ObservabilityQuery(cx *Invocation) (observability.AccessQuery, error) {
 		OnBehalfOf:   cx.Flag("filter-on-behalf-of"),
 		Action:       cx.Flag("action"),
 		TraceID:      ObservabilityFilterTraceID(cx),
+		RequestID:    cx.Flag("filter-request-id"),
 		Repository:   kernel.RepositoryID(cx.Flag("repo")),
-		Object:       knowledge.ObjectID(cx.Flag("object")),
+		Object:       objectmodel.ObjectID(cx.Flag("object")),
 		Limit:        limit,
 		Continuation: cx.Flag("continuation"),
 	}, nil
@@ -57,7 +59,11 @@ func VerbAccessLog(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := map[string]any{"source": "access", "entries": page.Entries}
+	store, err := liveservice.OpenResultStore(cx.Home)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]any{"source": "access", "entries": liveservice.AuditEntries(cx.Context, store, page.Entries)}
 	if page.Continuation != "" {
 		out["continuation"] = page.Continuation
 	}
@@ -235,7 +241,7 @@ func VerbRecordFeedback(cx *Invocation) (any, error) {
 	refineEvidenceID := strings.TrimSpace(invoke.FlagString(cx.Flags, "_refine-evidence-id"))
 	retrievalEvidenceID := strings.TrimSpace(invoke.FlagString(cx.Flags, "_retrieval-evidence-id"))
 	answer := strings.TrimSpace(invoke.FlagString(cx.Flags, "_feedback-answer"))
-	selected, _ := cx.Flags["_feedback-selected"].([]knowledge.KnowledgeRef)
+	selected, _ := cx.Flags["_feedback-selected"].([]objectmodel.KnowledgeRef)
 	ideal, _ := cx.Flags["_feedback-ideal"].([]observability.RefineRankGroup)
 	if refineEvidenceID != "" {
 		refines, err := store.Refine(observability.RefineQuery{EvidenceID: refineEvidenceID, Limit: 1})
@@ -279,7 +285,7 @@ func VerbRecordFeedback(cx *Invocation) (any, error) {
 		Identity: identity, Trace: trace, SubmissionTrace: recordedSubmissionTrace, Dataset: setID, Outcome: outcome, Message: message,
 		RetrievalEvidenceID: retrievalEvidenceID,
 		RefineEvidenceID:    refineEvidenceID, LabelSource: labelSource, Answer: answer,
-		SelectedRefs: append([]knowledge.KnowledgeRef(nil), selected...), IdealGroups: append([]observability.RefineRankGroup(nil), ideal...),
+		SelectedRefs: append([]objectmodel.KnowledgeRef(nil), selected...), IdealGroups: append([]observability.RefineRankGroup(nil), ideal...),
 	}
 	if err := RecordFeedbackWithTelemetry(cx.Observation, store, event); err != nil {
 		return nil, err
@@ -287,12 +293,12 @@ func VerbRecordFeedback(cx *Invocation) (any, error) {
 	return map[string]any{"traceId": traceID, "retrievalEvidenceId": retrievalEvidenceID, "refineEvidenceId": refineEvidenceID, "outcome": outcome, "recorded": true}, nil
 }
 
-func ValidateFeedbackRefs(refine observability.RefineEvent, selected []knowledge.KnowledgeRef, ideal []observability.RefineRankGroup) error {
-	allowed := map[knowledge.KnowledgeRef]struct{}{}
+func ValidateFeedbackRefs(refine observability.RefineEvent, selected []objectmodel.KnowledgeRef, ideal []observability.RefineRankGroup) error {
+	allowed := map[objectmodel.KnowledgeRef]struct{}{}
 	for _, candidate := range refine.Candidates {
 		allowed[candidate.KnowledgeRef.KnowledgeRef] = struct{}{}
 	}
-	check := func(ref knowledge.KnowledgeRef) error {
+	check := func(ref objectmodel.KnowledgeRef) error {
 		if _, ok := allowed[ref]; !ok {
 			return kernel.Fail(kernel.ErrUsageInvalid, "feedback ref is not a candidate in refine evidence")
 		}
@@ -313,12 +319,12 @@ func ValidateFeedbackRefs(refine observability.RefineEvent, selected []knowledge
 	return nil
 }
 
-func ValidateRetrievalFeedbackRefs(retrievalEvent observability.RetrievalEvent, selected []knowledge.KnowledgeRef, ideal []observability.RefineRankGroup) error {
-	allowed := map[knowledge.KnowledgeRef]struct{}{}
+func ValidateRetrievalFeedbackRefs(retrievalEvent observability.RetrievalEvent, selected []objectmodel.KnowledgeRef, ideal []observability.RefineRankGroup) error {
+	allowed := map[objectmodel.KnowledgeRef]struct{}{}
 	for _, candidate := range retrievalEvent.Candidates {
 		allowed[candidate.KnowledgeRef.KnowledgeRef] = struct{}{}
 	}
-	check := func(ref knowledge.KnowledgeRef) error {
+	check := func(ref objectmodel.KnowledgeRef) error {
 		if _, ok := allowed[ref]; !ok {
 			return kernel.Fail(kernel.ErrUsageInvalid, "feedback ref is not a candidate in retrieval evidence")
 		}

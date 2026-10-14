@@ -11,7 +11,7 @@ import (
 
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 	"kc/snapshot"
 )
 
@@ -35,7 +35,7 @@ func TestManagedRepositoryRejectsReservedAndStaticIdentitiesWithoutEffects(t *te
 		t.Fatal(err)
 	}
 	grants := 0
-	for _, id := range []string{string(knowledge.SystemRepositoryID), cfg.Registry.ID, staticID} {
+	for _, id := range []string{string(objectmodel.SystemRepositoryID), cfg.Registry.ID, staticID} {
 		t.Run(id, func(t *testing.T) {
 			_, err := ws.CreateManagedRepository(ManagedRepositoryRequest{RepositoryID: id, CommandID: "reserved-" + id, Principal: "alice"}, func(ManagedRepositoryGrant) error { grants++; return nil })
 			if err == nil {

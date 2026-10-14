@@ -1,6 +1,6 @@
 # Knowledge Catalog 术语表
 
-日期：2026-10-12
+日期：2026-10-14
 
 状态：规范。公开文档、CLI 帮助、JSON 合同和 Go 导出注释使用这里的名称。
 
@@ -50,7 +50,7 @@
 Knowledge Reader Service 是 Knowledge Server 内部的②装配组件：它把 Dataset 交付的
 Snapshot 成员包装为知识读能力，并提供 exact-basis ReadMany；不是第三个对外 Server，也不持有 Knowledge object cache 的具体实现。
 Reader 可以持有应用注入的同版本 hydrate 端口（公开类型 `knowledge.Hydrator`），而完整正文缓存
-由上层 `retrieval/cache` 实现。hydrate 指按完整读取身份取得固定 authority basis 的知识与版本；
+由上层 `object/cache` 实现。hydrate 指按完整读取身份取得固定 authority basis 的知识与版本；
 缓存命中是该读取的内部优化，不是另一个公开动作、知识版本或授权决定。
 
 ## 2. Repository 与知识集
@@ -62,19 +62,18 @@ Reader 可以持有应用注入的同版本 hydrate 端口（公开类型 `knowl
 | System Repository | 部署明确绑定的保留 Knowledge Repository（参考 ID `kr://kc/system`）；项目自描述目录经部署发布到实际仓，启动核对，运行时只读。分开解释产品自身的模型、操作入口和运行机制，另发布能力说明、使用指南、导航关系及基础 Schema，不是业务知识集的隐式成员；读权走仓的已认证默认或 grant。 |
 | Object（业务对象） | 领域中被独立指认、引用和供给的关注单元，例如图片资产、模块或外部表；其边界和身份延续由领域模型规定。它不是 Snapshot 的路径、文件或字节。 |
 | 对象知识表示 | 关于业务对象的版本化定义、组成、事实、说明、来源及使用合同；以既有 Repository 和知识标识定位，不增加第二套通用领域身份。 |
-| 知识记录 / 声明 | 知识表示的维护内容，以及可独立寻址的 Schema、Interface、Relation 等合同或关系记录；沿用现有 ObjectID / Address 技术寻址，存在标识不代表自动发布了一个业务供给。 |
-| 可供性（Affordance） | 关联明确实现与任务合同的能力说明规范，说明用途、条件、效果、风险、成本及示例。对象能力关联固定 Interface、实现及操作；CLI 任务能力沿用 typed 任务合同与 help 载体，可关联已装配 Plugin，不强制登记为对象 Interface。知识出版须经 Writer 固定；说明、help 或元数据不授予权限、不证明可用，也不另建分派或描述字段协议。 |
-| Plugin（目标插件） | 有明确身份、版本和可执行实现的软件实体，提供受明确任务合同约束的能力；合同与说明沿用知识发布，代码由运行宿主装配。标准插件与业务插件不改变基础身份、写边界或权限合同。 |
-| PluginBinding（目标插件采用绑定） | 将指定 Plugin 的采用版本与配置关联到 Repository 或 Dataset 的能力启用范围；采用不发权，范围不等于代码沙箱，也不替代 State 的值来源 Binding。 |
-| PluginHost（目标插件宿主） | 核对注册、装配代码、注入服务并管理插件生命周期与恢复的运行宿主；逐请求身份、授权、固定范围及证据继续由既有任务服务保证，不另建身份栈。 |
-| Snapshot Store | 固定内容、不可变版本与条件推进的存储权威；lakeFS 实现此底座，不拥有业务 Object、Schema 或 Interface 的解释。 |
+| 知识记录 / 声明 | 知识表示的维护内容，以及可独立寻址的 Schema、能力说明、Relation 等合同或关系记录；沿用现有 ObjectID / Address 技术寻址，存在标识不代表自动发布了一个业务供给。 |
+| 可供性（Affordance） | 说明注册对象与系统自身能力如何使用的规范，关联明确的任务合同及适用实现，说明用途、条件、效果、风险、成本及示例。CLI/help 承载渐进说明，现有插件说明入口为 `kc plugin <名称> help`；知识出版须经 Writer 固定。说明、help 或元数据不授予权限、不证明支持或就绪，也不另建分派或描述 Schema。 |
+| Plugin（目标插件） | 提供明确任务合同下真实实现的软件实体；系统在配置作用域内通过注册、服务与 hook 选择并调用其贡献。当前具体方向为声明式索引与 LiveAccess，不将内部物理驱动等同为整项能力插件，也不预设包发布或动态加载协议。 |
+| PluginBinding（目标插件采用绑定） | Repository 的插件配置与登记关联，限定插件参与该仓的写后维护和读取使用；任务服务按该配置及本次请求选择贡献，Dataset 使用固定来源的配置与声明，不自动继承采用或权限。对象保存具体能力声明，不另安装插件；配置不发权，也不替代 State 的值来源 Binding。公开形状由插件注册与作用域合同拥有。 |
+| PluginHost（后续共同宿主） | 从真实插件接入提取的注册、装配与生命周期机制；首批沿已有产品装配，不先创建完整框架。逐请求身份、授权、固定范围及证据继续由任务服务保证。 |
+| Snapshot Store | 固定内容、不可变版本与条件推进的存储权威；lakeFS 实现此底座，不拥有业务 Object、Schema 或插件能力的解释。 |
 | README | 知识仓自描述 Markdown 知识对象（Address + `schema_ref`，字段 `body` 可 SEARCH）。仓根 `README.md` 是人写与 git 直推解释用的有界 `path_hint`，不是身份，也不是第二条检索代数。`show` 的 `repositories` 不派生 title/summary。不是无 frontmatter 的 git 文件、不是对象 LIST、不是登记字段。 |
 | Meta Schema | 约束 Domain Schema 文档自身的协议合同；由二进制内置信任根校验，并在 System Repository 中发布同一内容。不是实例字段基类，Domain Schema 不从它继承可访问字段。 |
 | Domain Schema | 接入方定义、随目标 Knowledge Repository 版本化的 `schema/*` 合同记录；通过 `schema_ref` 约束实例 Address/value。 |
-| 对象 Interface | 根据对象处理逻辑共性定义实现要求、操作和结果保证的完整能力；知识合同与独立处理器共同提供系统可分派的能力。与 Writer/CLI 操作入口说明、Go interface 和 Hook 分别解释。 |
-| LiveAccess | 当前状态及已声明操作的对象 Interface；承接 ResourceDescriptor 与 State 的兼容访问，不隐式提供事件窗口或订阅。 |
-| Interface 实现声明 | 对象按能力要求提供的版本化普通知识单元，通常为 Aspect/Member；处理器由运行环境装配，声明可读不授予运行权限。 |
-| 声明式索引 | Schema 字段上的逻辑查询能力声明，是唯一书写形式；结构与查询合同分别校验，声明、物理能力、就绪与授权分别判断，固定版本保留当时解释。 |
+| Interface（现有代码合同名） | 现有公开类型、同名知识合同及普通 Aspect/Member 实现声明使用的名称；保留其固定解析、支持匹配、输入结果校验及执行依据，声明不授予权限。本次不更名代码或改变持久声明；目标能力实体统一称 Plugin。 |
+| LiveAccess | 当前状态及已声明源操作的目标插件，沿用现有同名知识合同、公开类型与 ResourceDescriptor / State 兼容访问；不隐式提供事件窗口或订阅。 |
+| 声明式索引 | 以 Schema 字段的 `access` 与类型为查询合同，提供检索和自动索引维护的插件，名称为 `declarative-index`；字段查询声明只写于 Schema。声明、实现支持、就绪与授权分别判断，固定版本保留当时解释；不等同于通用发现能力。 |
 | Address | 一次写入或精确读取的知识单元身份（`object_id` 加可选 aspect / member）。种类是 Entity、Aspect、Relation、Member。这些种类不是四种 Domain Schema；关系记录的值形状另由 Domain Schema（如 `schema/core/relation/v1`）约束。 |
 | Plain Repository | 未按知识发布合同维护内容的普通 Repository；只解释组合阶梯（可 pin 无 Schema 的树），仍可被 Dataset 组合。VFS 不是它的理由，知识仓固定 commit 同样可挂。 |
 | Knowledge Set（知识集 / Dataset） | 命名、版本化的跨仓文件清单：成员是 `{repository, commit, path\|prefix}`，发布时冻 commit。短名 `dataset`。Go 协议类型是 `dataset.KnowledgeSet`。 |
@@ -89,7 +88,7 @@ Reader 可以持有应用注入的同版本 hydrate 端口（公开类型 `knowl
 | TaskContext | 客户端宿主私有的任务上下文：身份、KnowledgeSet、ResolvedKnowledgeSet 与 mount 生命周期。它不是服务端 Session，也不写入用户工作目录。 |
 | Semantic File View | 在固定 Repository commit 上由 Canonical Address 组装的只读 YAML/Markdown 消费投影；保留 `_kc` 坐标，可丢弃重建，不是 Canonical 或写入口。 |
 
-`knowledge/reader.KnowledgeSetPin` 是 Knowledge Plane 内部从
+`object/reader.KnowledgeSetPin` 是 Knowledge Plane 内部从
 `dataset.ResolvedKnowledgeSet` 投影出的读取 basis，不是另一个可持久化协议对象，也不
 替代 `ResolvedKnowledgeSet` 这个公开名称。
 
@@ -165,6 +164,6 @@ Source → Resource Access ← kc access / StateLookup （origin 访问地址）
 |---|---|---|
 | Collector | 对账外部当前态，把要进仓的差量发给 Writer（COMMIT/PROPOSAL）。 | 不发 change notice；不提供 origin 访问地址 |
 | Observer | 盯源变化，只发 change notice（定位 Binding/Address/source revision hint，不带正文）。公开入口是 `kc operations projection notice` / `POST /operations/v1/projections:notice`。 | 不对账进仓；不提供 origin 访问地址 |
-| Resource Access | 提供 LiveAccess 实现或历史 Schema Canonical `origin` 上的资源访问运行入口；按固定声明与对象身份取值或调用操作。 | 不写仓；不发 notice |
+| Resource Access | 提供 LiveAccess 插件的来源运行入口或历史 Schema Canonical `origin` 上的兼容访问；按固定声明与对象身份取值或调用操作。 | 不写仓；不发 notice |
 | Connector | Collector 对账用的 Address helper（`connector.Preview`）。 | 不连源、不持 Writer、不是 Observer、不是 Resource Access |
 | invalidate-and-pull | Observer 通知后，平台按固定 Binding 向 Resource Access 拉取。投影控制文档也称 notify-and-pull，同一机制。 | 通知成功不等于投影完整，更不等于知识已更新 |

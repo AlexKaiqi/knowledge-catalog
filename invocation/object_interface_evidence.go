@@ -1,32 +1,33 @@
 package invocation
 
 import (
-	"kc/knowledge"
-	"kc/knowledge/serving"
+	"kc/interfaces"
+	objectmodel "kc/object"
+
 	"kc/observability"
 )
 
 // ObserveObjectInterfaceCall projects the known execution envelope into the
 // existing access evidence. Business values and arbitrary handler basis remain
 // opaque; only a typed state observation becomes a Member UnitObservation.
-func ObserveObjectInterfaceCall(result serving.InterfaceCallResult, request serving.InterfaceRequest) ObservedAccessResult {
-	address := knowledge.Address{Kind: knowledge.KindMember, ObjectID: request.Object, AspectName: knowledge.ObjectInterfacesAspect, MemberKey: request.Implementation}
-	implementation := observability.KnowledgeAccess{KnowledgeRef: knowledge.PinnedKnowledgeRef{KnowledgeRef: knowledge.KnowledgeRef{Repository: request.Repository, Object: request.Object}, Commit: result.Basis.DeclarationCommit}, Address: &address}
-	var observation *knowledge.ObservationBasis
+func ObserveObjectInterfaceCall(result interfaces.InterfaceCallResult, request interfaces.InterfaceRequest) ObservedAccessResult {
+	address := objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: request.Object, AspectName: interfaces.ObjectInterfacesAspect, MemberKey: request.Implementation}
+	implementation := observability.KnowledgeAccess{KnowledgeRef: objectmodel.PinnedKnowledgeRef{KnowledgeRef: objectmodel.KnowledgeRef{Repository: request.Repository, Object: request.Object}, Commit: result.Basis.DeclarationCommit}, Address: &address}
+	var observation *objectmodel.ObservationBasis
 	switch basis := result.Observation.(type) {
-	case knowledge.ObservationBasis:
+	case objectmodel.ObservationBasis:
 		observation = &basis
-	case *knowledge.ObservationBasis:
+	case *objectmodel.ObservationBasis:
 		observation = basis
 	}
 	if observation != nil {
-		implementation.Observations = []knowledge.UnitObservation{{Address: address, DeclarationCommit: result.Basis.DeclarationCommit, DeclarationDigest: result.Basis.DeclarationDigest, Basis: *observation}}
+		implementation.Observations = []objectmodel.UnitObservation{{Address: address, DeclarationCommit: result.Basis.DeclarationCommit, DeclarationDigest: result.Basis.DeclarationDigest, Basis: *observation}}
 	}
 	return ObservedAccessResult{Output: result, Knowledge: []observability.KnowledgeAccess{implementation, {KnowledgeRef: result.Basis.Contract}, {KnowledgeRef: result.Basis.ImplementationSchema}}}
 }
 
 func objectInterfaceAuditRefs(result any) map[string]any {
-	value, ok := accessOutput(result).(serving.InterfaceCallResult)
+	value, ok := accessOutput(result).(interfaces.InterfaceCallResult)
 	if !ok {
 		return nil
 	}

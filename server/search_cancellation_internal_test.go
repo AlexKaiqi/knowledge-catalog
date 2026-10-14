@@ -4,14 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	indeximplementation "kc/declarativeindex/projection"
+	retrieval "kc/discovery"
+	index "kc/discovery/projection"
 	apphome "kc/home"
-	"kc/index"
 	"kc/internal/testkit"
 	inv "kc/invocation"
 	"kc/kernel"
-	"kc/knowledge"
-	"kc/knowledge/reader"
-	"kc/retrieval"
+	objectmodel "kc/object"
+	"kc/object/reader"
 	"kc/snapshot"
 	"net/http"
 	"net/http/httptest"
@@ -43,7 +44,7 @@ func (e *httpSearchCancellationEngine) Rebuild(_ []index.CompiledDoc, meta index
 	e.meta = meta
 	return nil
 }
-func (e *httpSearchCancellationEngine) Apply(_ []index.CompiledDoc, _ []knowledge.ObjectID, meta index.Meta) error {
+func (e *httpSearchCancellationEngine) Apply(_ []index.CompiledDoc, _ []objectmodel.ObjectID, meta index.Meta) error {
 	e.meta = meta
 	return nil
 }
@@ -53,12 +54,12 @@ func (e *httpSearchCancellationEngine) Close() error        { return nil }
 func TestHTTPSearchCancellationReachesProvider(t *testing.T) {
 	repo := testkit.MakeRepository(t, "kr://acme/public/cancel")
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
-	commit, err := repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: root, ExpectedTargetCommit: root, Operations: []knowledge.Operation{{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "schema/item"}, Value: map[string]any{"entity": "Item", "fields": map[string]any{"body": map[string]any{"type": "string", "access": []any{"text"}}}}}}})
+	commit, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: root, ExpectedTargetCommit: root, Operations: []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/item"}, Value: map[string]any{"entity": "Item", "fields": map[string]any{"body": map[string]any{"type": "string", "access": []any{"text"}}}}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	engine := &httpSearchCancellationEngine{entered: make(chan struct{})}
-	idx := index.NewIndexEngine("", func(string, kernel.RepositoryID) (index.Engine, error) { return engine, nil })
+	idx := indeximplementation.NewIndexEngine("", func(string, kernel.RepositoryID) (index.Engine, error) { return engine, nil })
 	defer idx.Close()
 	if _, err := idx.Rebuild(repo, commit); err != nil {
 		t.Fatal(err)

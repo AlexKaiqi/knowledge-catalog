@@ -9,7 +9,7 @@ import (
 	apphome "kc/home"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 	serv "kc/server"
 	"kc/snapshot"
 )
@@ -34,13 +34,13 @@ func TestSystemKnowledgeCanBeReadThroughAuthenticatedServer(t *testing.T) {
 		{"kc/mechanism/dynamic-access", "definition", "观察（Observation）"},
 		{"kc/guide/first-publication", "guide", "成功证据"},
 	} {
-		read := asMap(t, body(t, kcRemote(t, server.URL, "agent:reader", "read", "--repo", string(knowledge.SystemRepositoryID), "--object", tc.object, "--aspect", tc.aspect)))
+		read := asMap(t, body(t, kcRemote(t, server.URL, "agent:reader", "read", testObjectReference(t, string(objectmodel.SystemRepositoryID), tc.object, testObjectLocator(tc.aspect)))))
 		value := asMap(t, read["value"])
 		if read["commit"] == "" || !strings.Contains(value["body"].(string), tc.needle) {
 			t.Fatalf("system knowledge not delivered with a fixed basis: %#v", read)
 		}
 	}
-	read := asMap(t, body(t, kcRemote(t, server.URL, "agent:reader", "read", "--repo", string(knowledge.SystemRepositoryID), "--object", "kc/capability/read-knowledge")))
+	read := asMap(t, body(t, kcRemote(t, server.URL, "agent:reader", "read", testObjectReference(t, string(objectmodel.SystemRepositoryID), "kc/capability/read-knowledge", ""))))
 	value := asMap(t, read["value"])
 	for _, aspect := range []string{"definition", "usage", "entrypoints"} {
 		if value[aspect] == nil {
@@ -53,7 +53,7 @@ func TestDeploymentRejectsDriftedSystemDescription(t *testing.T) {
 	cfg, config := declaredDeployment(t, false)
 	fake := testkit.NewLakeFSFake(t)
 	physicalID := fake.NewRepo()
-	cfg.Repositories = []apphome.RepositoryBinding{{ID: string(knowledge.SystemRepositoryID), Driver: "lakefs", DSN: fake.DSN(physicalID)}}
+	cfg.Repositories = []apphome.RepositoryBinding{{ID: string(objectmodel.SystemRepositoryID), Driver: "lakefs", DSN: fake.DSN(physicalID)}}
 	writeDeployment(t, config, cfg)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", config))
 	body(t, deploymentCommand(t, "deployment", "system", "publish", "--config", config))
@@ -62,7 +62,7 @@ func TestDeploymentRejectsDriftedSystemDescription(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer opened.Close()
-	store, _ := opened.Store.Get(knowledge.SystemRepositoryID)
+	store, _ := opened.Store.Get(objectmodel.SystemRepositoryID)
 	tree, ok := snapshot.TreeReaderOf(store)
 	if !ok {
 		t.Fatal("declared system binding lacks a file authority")

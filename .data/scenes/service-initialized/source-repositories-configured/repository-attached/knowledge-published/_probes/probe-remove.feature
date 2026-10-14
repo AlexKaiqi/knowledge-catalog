@@ -3,17 +3,17 @@
 Feature: probe remove
 
   Scenario: remove unpublishes one object
-    When I run `kc writer put --command-id publish-note-tmp --repo kr://scene/knowledge --object note/tmp --value '{"text":"tmp"}'`
+    When I run `kc writer put urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:note%2Ftmp --command-id publish-note-tmp --value '{"text":"tmp"}'`
     Then the output has:
       | disposition         | APPLIED |
       | result.repositoryId | kr://scene/knowledge |
-    When I run `kc writer remove --command-id drop-note-tmp --repo kr://scene/knowledge --object note/tmp`
+    When I run `kc writer remove urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:note%2Ftmp --command-id drop-note-tmp`
     Then the output has:
       | disposition         | APPLIED |
       | result.repositoryId | kr://scene/knowledge |
       | result.newCommit    | nonempty |
-    When I run `kc read --repo kr://scene/knowledge --object note/tmp`
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:note%2Ftmp`
     Then error KNOWLEDGE_REF_UNRESOLVED
-    When I run `kc read --repo kr://scene/knowledge --object note/hello`
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:note%2Fhello`
     Then the output has:
       | value.text | hi |

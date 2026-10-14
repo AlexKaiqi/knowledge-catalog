@@ -65,3 +65,34 @@ func TestExplicitMatchDoesNotInferNamespacesOrNativeRoles(t *testing.T) {
 		}
 	}
 }
+
+func TestExplicitMatchRequiresEveryCoordinateAndCombinedScope(t *testing.T) {
+	rule := access.Rule{ID: "scoped", Principal: "alice", Actions: []string{"file.read"}, Repo: "source", Dataset: "published", Ref: "main", Object: "concept/*", Aspect: "canonical"}
+	query := access.Query{Principal: "alice", Action: "file.read", Repo: "source", Dataset: "published", Ref: "main", Object: "concept/table", Aspect: "canonical"}
+	for _, test := range []struct {
+		name   string
+		alter  func(*access.Rule, *access.Query)
+		allows bool
+	}{
+		{name: "all-coordinates", allows: true},
+		{name: "principal", alter: func(_ *access.Rule, q *access.Query) { q.Principal = "bob" }},
+		{name: "action", alter: func(_ *access.Rule, q *access.Query) { q.Action = "dataset.resolve" }},
+		{name: "repository-with-matching-dataset", alter: func(_ *access.Rule, q *access.Query) { q.Repo = "other" }},
+		{name: "dataset-with-matching-repository", alter: func(_ *access.Rule, q *access.Query) { q.Dataset = "other" }},
+		{name: "ref", alter: func(_ *access.Rule, q *access.Query) { q.Ref = "other" }},
+		{name: "object", alter: func(_ *access.Rule, q *access.Query) { q.Object = "files/table" }},
+		{name: "aspect", alter: func(_ *access.Rule, q *access.Query) { q.Aspect = "other" }},
+		{name: "invalid-object-pattern", alter: func(r *access.Rule, _ *access.Query) { r.Object = "[" }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			r, q := rule, query
+			if test.alter != nil {
+				test.alter(&r, &q)
+			}
+			matched, allowed := access.Match([]access.Rule{r}, q)
+			if allowed != test.allows || allowed && matched.ID != rule.ID {
+				t.Fatalf("coordinate evaluation: rule=%#v query=%#v matched=%#v allowed=%v", r, q, matched, allowed)
+			}
+		})
+	}
+}

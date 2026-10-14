@@ -14,15 +14,15 @@ type ConnectionRotationRequest struct {
 	Credential string `json:"credential"`
 }
 
-func (s SnapshotService) ConnectRepository(ctx context.Context, q ConnectionRequest, o RequestOptions, out any) error {
+func (s RepositoryManagementService) ConnectRepository(ctx context.Context, q ConnectionRequest, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "POST", "/snapshot/v1/connections:connect", q, o, out)
 }
-func (s SnapshotService) RepositoryConnection(ctx context.Context, repository string, o RequestOptions, out any) error {
+func (s RepositoryManagementService) RepositoryConnection(ctx context.Context, repository string, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "GET", "/snapshot/v1/connections/"+resourceSegment(repository)+"/connection", nil, o, out)
 }
-func (s SnapshotService) CheckRepositoryConnection(ctx context.Context, repository string, o RequestOptions, out any) error {
+func (s RepositoryManagementService) CheckRepositoryConnection(ctx context.Context, repository string, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "POST", "/snapshot/v1/connections/"+resourceSegment(repository)+"/connection:check", struct{}{}, o, out)
 }
-func (s SnapshotService) RotateRepositoryConnection(ctx context.Context, repository string, q ConnectionRotationRequest, o RequestOptions, out any) error {
+func (s RepositoryManagementService) RotateRepositoryConnection(ctx context.Context, repository string, q ConnectionRotationRequest, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "POST", "/snapshot/v1/connections/"+resourceSegment(repository)+"/connection:rotate", q, o, out)
 }

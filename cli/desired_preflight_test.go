@@ -13,7 +13,7 @@ import (
 	"time"
 
 	kcclient "kc/client"
-	"kc/knowledge"
+	objectmodel "kc/object"
 )
 
 // TestRemoteCurrentDigestsRunsConcurrently pins the diff-preflight contract:
@@ -53,11 +53,11 @@ func TestRemoteCurrentDigestsRunsConcurrently(t *testing.T) {
 	if _, err := kc.Login(context.Background(), kcclient.LoginRequest{Identity: kcclient.Identity{Principal: "kaiqidong"}}); err != nil {
 		t.Fatal(err)
 	}
-	ops := make([]knowledge.Operation, 0, 12)
+	ops := make([]objectmodel.Operation, 0, 12)
 	for i := range 12 {
-		ops = append(ops, knowledge.Operation{
-			Op:      knowledge.OpPut,
-			Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: knowledge.ObjectID(fmt.Sprintf("obj/%02d", i))},
+		ops = append(ops, objectmodel.Operation{
+			Op:      objectmodel.OpPut,
+			Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: objectmodel.ObjectID(fmt.Sprintf("obj/%02d", i))},
 		})
 	}
 	got, err := remoteCurrentDigests(context.Background(), kc, "kr://kaiqidong/preflight", "c0", ops, kcclient.RequestOptions{})
@@ -67,8 +67,8 @@ func TestRemoteCurrentDigestsRunsConcurrently(t *testing.T) {
 	if len(got) != len(ops) {
 		t.Fatalf("preflight resolved %d of %d digests", len(got), len(ops))
 	}
-	if got[knowledge.AddressKey(ops[7].Address)] != "digest-obj/07" {
-		t.Fatalf("digest mapping mismatch: %q", got[knowledge.AddressKey(ops[7].Address)])
+	if got[objectmodel.AddressKey(ops[7].Address)] != "digest-obj/07" {
+		t.Fatalf("digest mapping mismatch: %q", got[objectmodel.AddressKey(ops[7].Address)])
 	}
 	if observed := atomic.LoadInt32(&maxInFlight); observed < 2 {
 		t.Fatalf("diff preflight stayed serial: max in-flight resolves = %d", observed)
@@ -95,9 +95,9 @@ func TestRemoteCurrentDigestsSkipsUnresolved(t *testing.T) {
 	if _, err := kc.Login(context.Background(), kcclient.LoginRequest{Identity: kcclient.Identity{Principal: "kaiqidong"}}); err != nil {
 		t.Fatal(err)
 	}
-	ops := []knowledge.Operation{
-		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "obj/missing"}},
-		{Op: knowledge.OpPut, Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "obj/empty"}},
+	ops := []objectmodel.Operation{
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "obj/missing"}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "obj/empty"}},
 	}
 	got, err := remoteCurrentDigests(context.Background(), kc, "kr://kaiqidong/preflight", "c0", ops, kcclient.RequestOptions{})
 	if err != nil {

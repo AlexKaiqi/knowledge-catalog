@@ -51,10 +51,18 @@ type Resources struct {
 	// DescribeRepository adds optional application-owned inventory metadata for
 	// an already selected registered source. It cannot change that source ID.
 	DescribeRepository func(context.Context, identity.HTTPIdentity, kernel.RepositoryID) (map[string]any, error)
+	// DiscoveryWorkspaceID is optional host navigation metadata, not a second
+	// registration space or authorization decision.
+	DiscoveryWorkspaceID string
+	// BeforeAttach verifies optional host-owned durable connection bindings.
+	// It must not register a source; membership is accepted by Datasets alone.
+	BeforeAttach       func(context.Context, identity.HTTPIdentity, kernel.RepositoryID) error
 	BeforePublish      func(context.Context, identity.HTTPIdentity, dataset.Service, dataset.KnowledgeSet) (dataset.KnowledgeSet, map[string]any, error)
 	PreparePublication func(context.Context, identity.HTTPIdentity, dataset.KnowledgeSet) error
-	// EnsureDataset is optional legacy recipe adoption. It must use the same
-	// Dataset authority; an independent file service needs no application recipe.
+	// EnsureDataset is optional host coordination before named consumption.
+	// KC only confirms an accepted definition. A host that adopts a recipe must
+	// enforce target management and source publication permission before that
+	// one-time acceptance; ordinary consumption does not require source grants.
 	EnsureDataset func(context.Context, identity.HTTPIdentity, dataset.Service, string) error
 	RecordRead    func(context.Context, identity.HTTPIdentity, FileReadEvidence) error
 	RequestURL    string

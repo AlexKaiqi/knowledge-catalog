@@ -17,7 +17,10 @@ func TestCatalogLogStampsAuthor(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	hist := s.catalog.Log(catalog.LogQuery{Limit: 20, Dataset: "duty"})
+	hist, err := s.catalog.Log(catalog.LogQuery{Limit: 20, Dataset: "duty"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(hist.Commits) == 0 {
 		t.Fatal(hist)
 	}
@@ -62,7 +65,10 @@ func TestCatalogHistoryWithoutCommitMetadataKeepsAcceptedCoordinates(t *testing.
 		t.Fatal(err)
 	}
 	head, _ := reg.Head()
-	hist := cat.Log(catalog.LogQuery{Limit: 1})
+	hist, err := cat.Log(catalog.LogQuery{Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(hist.Commits) != 1 || hist.Commits[0].Commit != head {
 		t.Fatalf("accepted coordinate lost without optional metadata: %#v", hist)
 	}
@@ -79,7 +85,34 @@ func TestCatalogHistoryDoesNotFabricateUnavailableCommitMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	cat := catalogFromRegistry(t, reg)
-	if got := cat.Log(catalog.LogQuery{}); len(got.Commits) != 0 {
-		t.Fatalf("unavailable metadata was reported as recovered: %#v", got)
+	if got, err := cat.Log(catalog.LogQuery{}); kernel.CodeOf(err) != kernel.ErrVersionUnresolved || len(got.Commits) != 0 {
+		t.Fatalf("unavailable metadata was reported as recovered: %#v, error = %v", got, err)
+	}
+}
+
+type registryHistoryUnavailable struct {
+	*catalogMem
+	unavailable bool
+}
+
+func (store *registryHistoryUnavailable) CommitHistory(commit kernel.CommitID, limit int) ([]kernel.CommitID, error) {
+	if store.unavailable {
+		return nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "history backend unavailable")
+	}
+	return store.catalogMem.CommitHistory(commit, limit)
+}
+
+func TestCatalogHistoryFailureMustRemainObservable(t *testing.T) {
+	authority := newCatalogMem("kr://audit/failure")
+	backend := &registryHistoryUnavailable{catalogMem: authority}
+	reg, err := catalog.CreateSnapshotRegistry(backend, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cat := catalogFromRegistry(t, reg)
+	backend.unavailable = true
+	history, err := cat.Log(catalog.LogQuery{})
+	if kernel.CodeOf(err) != kernel.ErrTemporaryUnavailable || len(history.Commits) != 0 {
+		t.Fatalf("history provider failure became a successful or invented history: %#v, error = %v", history, err)
 	}
 }

@@ -15,6 +15,13 @@ evidence:
       - "TestRemoteProviderReadBackAndConsumerDiscovery"
       - "TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing"
     title: "经正式 Server 发布回读与发现且退役路由保持缺失"
+  - id: "targetless-plugin-help"
+    source: "http.facade"
+    views:
+      - "access-control"
+    tests:
+      - "TestProductPluginHelpUsesActualServerWithoutRuntimeConstruction"
+    title: "显式主体经 CLI、模块 SDK 与真实 Server 读取插件说明且不构建来源或索引"
   - source: "identity.bind"
     views:
       - "access-control"
@@ -31,6 +38,9 @@ evidence:
       - "TestAgentDelegatedAccessTraceFeedbackAndHitmap"
       - "TestHTTPAccessLogQueryFiltersAndPages"
     title: "访问证据保留身份与固定来源且 HTTP 审计查询按条件分页"
+    verifies:
+      - claim: "resource-access#U17"
+        detail: "授权 HTTP 审计查询可按主体、仓和时间过滤分页访问关联记录；不证明按请求还原原值/逐值失败或跨重启保留。"
 probes:
   - file: "probe-local-pairing.feature"
     source: "identity.bind"

@@ -11,7 +11,7 @@ import (
 type GrantList = access.GrantList
 
 func grantScope(flags map[string]invoke.FlagValue) AllowRule {
-	return AllowRule{Repo: invoke.FlagString(flags, "repo"), Dataset: invoke.DatasetOf(flags), Ref: invoke.FlagString(flags, "ref"), Object: invoke.FlagString(flags, "object"), Aspect: invoke.FlagString(flags, "aspect")}
+	return AllowRule{Actions: SplitCmds(invoke.FlagString(flags, "action")), Repo: invoke.FlagString(flags, "repo"), Dataset: invoke.DatasetOf(flags), Ref: invoke.FlagString(flags, "ref"), Object: invoke.FlagString(flags, "object"), Aspect: invoke.FlagString(flags, "aspect")}
 }
 
 // AuthorizeGrantAdministration uses explicit resource coordinates. Grant
@@ -55,7 +55,11 @@ func VerbGrantList(cx *Invocation) (any, error) {
 // EvaluateAllow retains the existing CLI's explicit-rule question. It does
 // not include deployment defaults and does not create an authorization route.
 func EvaluateAllow(rules []AllowRule, query AllowQuery) (any, error) {
-	rule, ok := MatchAllow(rules, query)
+	match := MatchAllow
+	if query.Action == access.RepositoryDatasetPublish {
+		match = access.MatchSourcePublication
+	}
+	rule, ok := match(rules, query)
 	if !ok {
 		return nil, kernel.Fail(kernel.ErrForbidden, "%s is not allowed to %s", query.Principal, query.Action)
 	}

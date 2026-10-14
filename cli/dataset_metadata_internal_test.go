@@ -1,72 +1,69 @@
 package cli
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
-	"reflect"
+	"strings"
 	"testing"
 
-	"kc/client"
-	"kc/kernel"
+	snapshotclient "kc/snapshot/client"
 )
 
-func TestRemoteDatasetMetadataUsesFlagOrPortableRecipe(t *testing.T) {
-	recipe := filepath.Join(t.TempDir(), "recipe.yaml")
-	if err := os.WriteFile(recipe, []byte("name: notes\nmetadata:\n  description: recipe\n  custom/team: tea\nmounts:\n- repository: repo-A\n  selector: refs/heads/main\n  path: reference\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	for _, test := range []struct {
-		name  string
-		flags map[string]FlagValue
-		want  map[string]string
-	}{
-		{"recipe", map[string]FlagValue{"file": recipe}, map[string]string{"description": "recipe", "custom/team": "tea"}},
-		{"override", map[string]FlagValue{"file": recipe, "metadata": `{"description":"override","empty":""}`}, map[string]string{"description": "override", "empty": ""}},
-		{"clear", map[string]FlagValue{"file": recipe, "metadata": `{}`}, nil},
-		{"sources", map[string]FlagValue{"source": "repo-A@reference", "metadata": `{"arbitrary":"value"}`}, map[string]string{"arbitrary": "value"}},
+func TestSnapshotArgvPublishesMetadataAndKeepsHostActionPrivate(t *testing.T) {
+	t.Setenv("KC_CONFIG_DIR", t.TempDir())
+	t.Setenv("KC_AUTH_TOKEN", "")
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.Header.Get("X-Kc-As") != "alice" || r.Header.Get("X-Kc-Request-Id") != "publish-A" {
+			t.Errorf("module lost the host identity or request context: %#v", r.Header)
+		}
+		switch r.Method + " " + r.URL.Path {
+		case "POST /snapshot/v1/datasets":
+			var request snapshotclient.KnowledgeSetRequest
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Error(err)
+			}
+			if request.Dataset != "notes" || request.Revision != 1 || request.Metadata["description"] != "tea" || len(request.Sources) != 1 {
+				t.Errorf("argv definition lost metadata or mappings: %#v", request)
+			}
+		case "GET /snapshot/v1/datasets/notes":
+			if r.URL.Query().Get("revision") != "1" {
+				t.Errorf("argv selection lost its fixed revision: %s", r.URL)
+			}
+		default:
+			t.Errorf("unexpected Snapshot operation: %s %s", r.Method, r.URL)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "notes", "revision": 1})
+	}))
+	defer server.Close()
+	for _, args := range [][]string{
+		{"dataset", "define", "notes", "--revision", "1", "--source", "repo-A@reference", "--metadata", `{"description":"tea"}`},
+		{"dataset", "show", "notes", "--revision", "1"},
 	} {
-		t.Run(test.name, func(t *testing.T) {
-			calls := 0
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				calls++
-				var request client.KnowledgeSetRequest
-				if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-					t.Fatal(err)
-				}
-				if r.URL.Path != "/snapshot/v1/datasets" || request.Dataset != "notes" || request.Revision != 1 || !reflect.DeepEqual(request.Metadata, test.want) {
-					t.Errorf("metadata lost on remote define: %s %#v", r.URL.Path, request)
-				}
-				_ = json.NewEncoder(w).Encode(map[string]any{"setId": "notes", "revision": 1})
-			}))
-			defer server.Close()
-			remote, err := client.New(client.Config{BaseURL: server.URL})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if _, err := remote.Login(context.Background(), client.LoginRequest{Identity: client.Identity{Principal: "alice"}}); err != nil {
-				t.Fatal(err)
-			}
-			test.flags["dataset"], test.flags["revision"] = "notes", "1"
-			if _, err := runRemoteWorkspaceDefine(context.Background(), remote.SnapshotService(), test.flags, client.RequestOptions{}); err != nil || calls != 1 {
-				t.Fatalf("publication: %v, calls=%d", err, calls)
-			}
-		})
+		result := Run(append(args, "--server", server.URL, "--as", "alice", "--request-id", "publish-A"))
+		if result.Status != 0 {
+			t.Fatalf("public argv did not reach the composed module: %#v", result)
+		}
+	}
+	if calls != 2 {
+		t.Fatalf("argv did not perform both typed operations: %d", calls)
 	}
 }
 
-func TestDatasetMetadataFlagRejectsInvalidValuesBeforeRemoteRequest(t *testing.T) {
-	for _, value := range []string{`null`, `{"x":null}`, `{"x":1}`, `{"x":[]}`, `{"x":"a","x":"b"}`, `{}`, ""} {
-		definition, err := remoteDatasetInput(map[string]FlagValue{"source": "repo-A@reference", "metadata": value})
-		if value == `{}` {
-			if err != nil || len(definition.Metadata) != 0 {
-				t.Fatalf("empty object must clear metadata: %#v %v", definition, err)
-			}
-		} else if kernel.CodeOf(err) != kernel.ErrUsageInvalid {
-			t.Fatalf("invalid metadata %s accepted: %v", value, err)
+func TestDatasetMetadataFlagCannotExpandOtherCommandInputs(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { calls++ }))
+	defer server.Close()
+	for _, command := range [][]string{{"writer", "remove"}, {"search"}, {"dataset", "retire", "notes"}, {"grant", "add"}} {
+		argv := append(command, "--server", server.URL, "--as", "alice", "--metadata", `{}`)
+		result := Run(argv)
+		if result.Status == 0 || !strings.Contains(result.Stdout, "unknown flag --metadata") {
+			t.Fatalf("metadata broadened another command's existing vocabulary: %v %#v", command, result)
 		}
+	}
+	if calls != 0 {
+		t.Fatalf("invalid metadata scope issued %d requests", calls)
 	}
 }

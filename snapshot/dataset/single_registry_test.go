@@ -36,7 +36,10 @@ func TestLegacyRegistryRecoveryPreservesHistoryAndBindsActualAuthority(t *testin
 	if err != nil || version.Sources[0].Commit != "T1" {
 		t.Fatalf("recovery lost accepted source coordinates: %#v %v", version, err)
 	}
-	history := service.Log(dataset.LogQuery{Dataset: "orders"})
+	history, err := service.Log(dataset.LogQuery{Dataset: "orders"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(history.Commits) != 1 || history.Commits[0].Commit != string(before) {
 		t.Fatalf("legacy audit history lost: %#v", history)
 	}
@@ -63,7 +66,10 @@ func TestLegacyRegistryRecoveryPreservesHistoryAndBindsActualAuthority(t *testin
 	if err != nil || !reflect.DeepEqual(got, version) {
 		t.Fatalf("metadata migration changed accepted release: %#v %v", got, err)
 	}
-	history = service.Log(dataset.LogQuery{Dataset: "orders"})
+	history, err = service.Log(dataset.LogQuery{Dataset: "orders"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(history.Commits) != 1 || history.Commits[0].Commit != string(before) {
 		t.Fatalf("metadata migration invented a Dataset change: %#v", history)
 	}

@@ -23,6 +23,12 @@ func AuthorizeManagement(rules []Rule, principal, action string, target Rule) er
 		if rule.Principal != principal || rule.Ref != "" || rule.Object != "" || rule.Aspect != "" {
 			continue
 		}
+		// A Dataset manager cannot grant itself source publication authority.
+		// Wildcards that include the source action require the same Repo/global
+		// management scope as the explicit action.
+		if action == "admin.grants.manage" && actionAllowed(target.Actions, RepositoryDatasetPublish) && rule.Repo == "" && rule.Dataset != "" {
+			continue
+		}
 		if !scopeMatches(rule, Query{Repo: target.Repo, Dataset: target.Dataset}) {
 			continue
 		}

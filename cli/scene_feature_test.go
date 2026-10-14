@@ -20,10 +20,11 @@ import (
 	"unicode"
 
 	"gopkg.in/yaml.v3"
-
+	"kc/cli"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/knowledge"
+	livefixture "kc/liveaccess/fixture"
+	objectmodel "kc/object"
 )
 
 type sceneFeature struct {
@@ -45,22 +46,23 @@ type sceneScenario struct {
 }
 
 type sceneStep struct {
-	line       int
-	kind       string
-	text       string
-	table      [][]string
-	command    string
-	method     string
-	path       string
-	principal  string
-	onBehalfOf string
-	object     string
-	errorCode  string
-	whoami     string
-	material   string
-	fixtureDir string
-	schema     *sceneSchemaSpec
-	instance   *sceneInstanceSpec
+	line           int
+	kind           string
+	text           string
+	table          [][]string
+	command        string
+	method         string
+	path           string
+	principal      string
+	onBehalfOf     string
+	object         string
+	errorCode      string
+	whoami         string
+	material       string
+	fixtureDir     string
+	accessInstance string
+	schema         *sceneSchemaSpec
+	instance       *sceneInstanceSpec
 }
 
 type sceneSchemaSpec struct {
@@ -342,13 +344,15 @@ func TestSceneExistingRepositoryFixtureUsesLakeFS(t *testing.T) {
 	if len(stamps) != 3 {
 		t.Fatalf("frozen existing-repository stamps=%d want system, knowledge and graph: %#v", len(stamps), stamps)
 	}
-	wantRepositories := map[string]bool{string(knowledge.SystemRepositoryID): true, "kr://scene/knowledge": true, "kr://scene/graph": true}
+	wantRepositories := map[string]bool{string(objectmodel.SystemRepositoryID): true, "kr://scene/knowledge": true, "kr://scene/graph": true}
 	for _, stamp := range stamps {
 		if !wantRepositories[stamp.id] || stamp.driver != "lakefs" || !cache.lakefs.OwnsDSN(stamp.dsn) {
 			t.Fatalf("unexpected existing repository stamp: %#v", stamp)
 		}
 		delete(wantRepositories, stamp.id)
 	}
+	assertSceneRepositoryAccessSelection(t, cache, frozen.dir, "kr://scene/knowledge", "main")
+	assertSceneRepositoryAccessSelection(t, cache, frozen.dir, "kr://scene/graph", "")
 	homeA, _ := cache.cloneParent(t, attached)
 	homeB, _ := cache.cloneParent(t, attached)
 	stampsA := sceneRemoteStamps(t, homeA)
@@ -356,6 +360,8 @@ func TestSceneExistingRepositoryFixtureUsesLakeFS(t *testing.T) {
 	if len(stampsA) != 3 || len(stampsB) != 3 {
 		t.Fatalf("cloned stamps A=%#v B=%#v", stampsA, stampsB)
 	}
+	assertSceneRepositoryAccessSelection(t, cache, homeA, "kr://scene/knowledge", "main")
+	assertSceneRepositoryAccessSelection(t, cache, homeB, "kr://scene/knowledge", "main")
 	// Catalog authority pointers must fork too; copying a consumer home must
 	// never allow its registry writes to advance another clone or the parent.
 	openedA, err := kchome.Open(homeA)
@@ -1073,14 +1079,21 @@ func (w *sceneWorld) run(step sceneStep) {
 		}
 		bound := false
 		for _, repo := range file.Repos {
-			bound = bound || repo.ID == string(knowledge.SystemRepositoryID)
+			bound = bound || repo.ID == string(objectmodel.SystemRepositoryID)
 		}
+		var newSystemDSN string
 		if !bound {
-			if _, err := kchome.PublishSystemRepository(w.home, "lakefs", fake.DSN(fake.NewRepo()), ""); err != nil {
+			newSystemDSN = fake.DSN(fake.NewRepo())
+			if _, err := kchome.PublishSystemRepository(w.home, "lakefs", newSystemDSN, ""); err != nil {
 				w.t.Fatal(err)
 			}
 		}
 		w.bindProjection()
+		if newSystemDSN != "" {
+			if err := cli.ConfigureFixtureIndexSource(w.home, objectmodel.SystemRepositoryID, newSystemDSN); err != nil {
+				w.t.Fatal(err)
+			}
+		}
 		if _, err := kchome.EnsureSystemRepository(w.home); err != nil {
 			w.t.Fatal(err)
 		}
@@ -1098,8 +1111,25 @@ func (w *sceneWorld) run(step sceneStep) {
 		defer ws.Close()
 		if _, exists := ws.Store.Get(kernel.RepositoryID(step.object)); !exists {
 			name := w.cache.lakefs.NewRepo()
-			if _, err := kchome.AddRepository(ws, step.object, "lakefs", w.cache.lakefs.DSN(name), "", ""); err != nil {
+			dsn := w.cache.lakefs.DSN(name)
+			if err := cli.ConfigureFixtureIndexSource(w.home, kernel.RepositoryID(step.object), dsn); err != nil {
 				w.t.Fatal(err)
+			}
+			if step.accessInstance != "" {
+				if err := livefixture.AdoptRepository(kernel.RepositoryID(step.object), dsn, step.accessInstance); err != nil {
+					w.t.Fatal(err)
+				}
+			}
+			if _, err := kchome.AddRepository(ws, step.object, "lakefs", dsn, "", ""); err != nil {
+				w.t.Fatal(err)
+			}
+		} else if step.accessInstance != "" {
+			for _, binding := range ws.File.Repos {
+				if binding.ID == step.object {
+					if err := livefixture.AdoptRepository(kernel.RepositoryID(step.object), binding.DSN, step.accessInstance); err != nil {
+						w.t.Fatal(err)
+					}
+				}
 			}
 		}
 	case "bootstrap-fixture":
@@ -1643,11 +1673,7 @@ func (w *sceneWorld) publishSchema(spec *sceneSchemaSpec) {
 	if err != nil {
 		w.t.Fatal(err)
 	}
-	body(w.t, kc(w.home, "writer", "put",
-		"--command-id", w.nextCommandID("schema"),
-		"--repo", spec.repo,
-		"--object", spec.object,
-		"--value", string(value)))
+	body(w.t, kc(w.home, "writer", "put", testObjectReference(w.t, spec.repo, spec.object, ""), "--command-id", w.nextCommandID("schema"), "--value", string(value)))
 }
 
 func (w *sceneWorld) publishInstance(spec *sceneInstanceSpec) {
@@ -1657,11 +1683,12 @@ func (w *sceneWorld) publishInstance(spec *sceneInstanceSpec) {
 		w.t.Fatal(err)
 	}
 	w.canonical = spec.fields
+	locator := ""
+	if spec.aspect != "" {
+		locator = testObjectLocator(spec.aspect)
+	}
 	body(w.t, kc(w.home, "writer", "put",
-		"--command-id", w.nextCommandID("instance"),
-		"--repo", spec.repo,
-		"--object", spec.object,
-		"--aspect", spec.aspect,
+		testObjectReference(w.t, spec.repo, spec.object, locator), "--command-id", w.nextCommandID("instance"),
 		"--schema-ref", spec.schemaRef,
 		"--value", string(value)))
 }
@@ -1718,14 +1745,17 @@ func (w *sceneWorld) publishMaterial(step sceneStep) {
 		if err != nil {
 			w.t.Fatal(err)
 		}
-		args := []string{"writer", "put", "--command-id", w.nextCommandID("put"),
-			"--repo", yamlString(doc, "repo"), "--object", yamlString(doc, "object"),
-			"--value", string(value)}
-		if aspect := yamlString(doc, "aspect"); aspect != "" {
-			args = append(args, "--aspect", aspect)
+		locator := ""
+		aspect, member := yamlString(doc, "aspect"), yamlString(doc, "member")
+		if aspect != "" {
+			locator = testObjectLocator(aspect)
+			if member != "" {
+				locator = testObjectLocator(aspect, member)
+			}
 		}
-		if member := yamlString(doc, "member"); member != "" {
-			args = append(args, "--member", member)
+		args := []string{"writer", "put", testObjectReference(w.t, yamlString(doc, "repo"), yamlString(doc, "object"), locator), "--command-id", w.nextCommandID("put"), "--value", string(value)}
+		if member != "" {
+			args = append(args, "--kind", "Member")
 		}
 		body(w.t, kc(w.home, args...))
 	default:
@@ -1925,7 +1955,15 @@ func classifySceneStep(line int, keyword, rest string, table [][]string) (sceneS
 		step.kind = "deployment-fixture"
 	case strings.HasPrefix(rest, "existing repository "):
 		step.kind = "repository-fixture"
-		step.object = strings.TrimSpace(strings.TrimPrefix(rest, "existing repository "))
+		input := strings.TrimSpace(strings.TrimPrefix(rest, "existing repository "))
+		object, instance, selected := strings.Cut(input, " with LiveAccess instance ")
+		if len(strings.Fields(object)) != 1 || selected && len(strings.Fields(instance)) != 1 {
+			return step, fmt.Errorf("existing repository requires one id and an optional explicit LiveAccess instance")
+		}
+		step.object = strings.TrimSpace(object)
+		if selected {
+			step.accessInstance = strings.TrimSpace(instance)
+		}
 
 	case strings.HasPrefix(rest, "bootstrap principal "):
 		step.kind = "bootstrap-fixture"

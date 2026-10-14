@@ -2,7 +2,7 @@ package home
 
 import (
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 	"kc/snapshot"
 	"kc/snapshot/access"
 	"path/filepath"
@@ -69,7 +69,7 @@ func (ws *Home) CreateManagedRepository(req ManagedRepositoryRequest, grant func
 		return result, kernel.Fail(kernel.ErrPreconditionFailed, "managed provisioning requires a writable deployment")
 	}
 	id, err := NormalizeRepositoryID(req.RepositoryID)
-	if err != nil || id != req.RepositoryID || strings.TrimSpace(req.CommandID) == "" || strings.TrimSpace(req.Principal) == "" || req.RepositoryID == string(knowledge.SystemRepositoryID) {
+	if err != nil || id != req.RepositoryID || strings.TrimSpace(req.CommandID) == "" || strings.TrimSpace(req.Principal) == "" || req.RepositoryID == string(objectmodel.SystemRepositoryID) {
 		return result, kernel.Fail(kernel.ErrUsageInvalid, "managed create requires a valid repository, commandId, and principal")
 	}
 	{

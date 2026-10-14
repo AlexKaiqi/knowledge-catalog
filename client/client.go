@@ -1,11 +1,7 @@
 package client
 
 import (
-	"bytes"
-	"compress/gzip"
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,10 +13,16 @@ import (
 
 	"go.opentelemetry.io/otel/propagation"
 
+	declarativeindexclient "kc/declarativeindex/client"
+	discoveryclient "kc/discovery/client"
+	"kc/internal/httpjson"
 	"kc/kernel"
+	accessclient "kc/liveaccess/client"
+	objectclient "kc/object/client"
+	snapshotclient "kc/snapshot/client"
 )
 
-const maxResponseBytes = 8 << 20
+const maxResponseBytes = httpjson.MaxResponseBytes
 
 // Config assembles a KC Client without selecting a concrete authentication
 // mechanism. BaseURL is the KC server origin (optionally with a path prefix).
@@ -34,11 +36,16 @@ type Config struct {
 // Client carries the current identity, authentication, request correlation,
 // and W3C trace context across remote calls.
 type Client struct {
-	baseURL       string
-	httpClient    *http.Client
-	authenticator Authenticator
-	sessions      SessionStore
-	propagator    propagation.TextMapPropagator
+	baseURL          string
+	httpClient       *http.Client
+	authenticator    Authenticator
+	sessions         SessionStore
+	propagator       propagation.TextMapPropagator
+	snapshots        snapshotclient.Client
+	objects          objectclient.Client
+	discovery        discoveryclient.Client
+	declarativeIndex declarativeindexclient.Client
+	liveAccess       accessclient.Client
 }
 
 func New(config Config) (*Client, error) {
@@ -62,14 +69,42 @@ func New(config Config) (*Client, error) {
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 30 * time.Second}
 	}
-	return &Client{
+	c := &Client{
 		baseURL:       baseURL,
 		httpClient:    httpClient,
 		authenticator: authenticator,
 		sessions:      sessions,
 		propagator:    propagation.TraceContext{},
-	}, nil
+	}
+	snapshots, err := snapshotclient.New(snapshotclient.Config{BaseURL: baseURL, Transport: c})
+	if err != nil {
+		return nil, err
+	}
+	c.snapshots = snapshots
+	objects, err := objectclient.New(objectclient.Config{BaseURL: baseURL, Transport: c})
+	if err != nil {
+		return nil, err
+	}
+	c.objects = objects
+	discovery, err := discoveryclient.New(discoveryclient.Config{BaseURL: baseURL, Transport: c})
+	if err != nil {
+		return nil, err
+	}
+	c.discovery = discovery
+	declarativeIndex, err := declarativeindexclient.New(declarativeindexclient.Config{BaseURL: baseURL, Transport: c})
+	if err != nil {
+		return nil, err
+	}
+	c.declarativeIndex = declarativeIndex
+	access, err := accessclient.New(accessclient.Config{BaseURL: baseURL, Transport: c})
+	if err != nil {
+		return nil, err
+	}
+	c.liveAccess = access
+	return c, nil
 }
+
+func (c *Client) LiveAccessService() accessclient.Client { return c.liveAccess }
 
 // Login establishes client-local identity and authentication state. The
 // default pass-through authenticator performs no remote verification.
@@ -205,93 +240,7 @@ func (s IdentityService) WhoAmI(ctx context.Context, options RequestOptions) (Id
 	return identity, err
 }
 
-// gzipRequestBodyThreshold is the marshaled-body size above which doJSON
-// compresses the payload as Content-Encoding: gzip. Scale ChangeSets measured
-// ~228 MB raw; the compressed wire form is an order of magnitude smaller.
-// Small calls stay plain so compression never adds latency where it cannot
-// pay for itself.
-const gzipRequestBodyThreshold = 512 << 10
-
-// doJSON is transport plumbing for typed namespace clients. Endpoint paths
-// are compile-time constants owned by those clients; callers cannot provide a
-// CLI verb, flag bag, or arbitrary KC route.
+// doJSON uses the shared transport implementation for application-owned routes.
 func (c *Client) doJSON(ctx context.Context, method, path string, input any, options RequestOptions, output any) error {
-	var body []byte
-	var err error
-	if input != nil {
-		body, err = json.Marshal(input)
-	}
-	if err != nil {
-		return err
-	}
-	contentEncoding := ""
-	// Native lakeFS requests keep their original encoding: its API is not the
-	// KC facade that owns transparent gzip decompression.
-	if len(body) >= gzipRequestBodyThreshold && !strings.HasPrefix(path, "/api/v1/") {
-		var compressed bytes.Buffer
-		gz := gzip.NewWriter(&compressed)
-		if _, err := gz.Write(body); err != nil {
-			return kernel.Fail(kernel.ErrTemporaryUnavailable, "compress request body: %v", err)
-		}
-		if err := gz.Close(); err != nil {
-			return kernel.Fail(kernel.ErrTemporaryUnavailable, "compress request body: %v", err)
-		}
-		body = compressed.Bytes()
-		contentEncoding = "gzip"
-	}
-	request, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	if input != nil {
-		request.Header.Set("Content-Type", "application/json")
-		if contentEncoding != "" {
-			request.Header.Set("Content-Encoding", contentEncoding)
-		}
-	}
-	request.Header.Set("Accept", "application/json")
-	requestID := strings.TrimSpace(options.RequestID)
-	if requestID == "" {
-		requestID = newRequestID()
-	}
-	request.Header.Set("X-Kc-Request-Id", requestID)
-	response, err := c.Do(ctx, c.baseURL, request)
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-	raw, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
-	if err != nil {
-		return err
-	}
-	if len(raw) > maxResponseBytes {
-		return kernel.Fail(kernel.ErrTemporaryUnavailable, "kc server response exceeds %d bytes", maxResponseBytes)
-	}
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		var envelope struct {
-			Error *kernel.IngressError `json:"error"`
-		}
-		if json.Unmarshal(raw, &envelope) == nil && envelope.Error != nil {
-			return envelope.Error
-		}
-		if strings.HasPrefix(path, "/api/v1/") {
-			return nativeJSONError(response.StatusCode, raw)
-		}
-		return kernel.Fail(kernel.ErrTemporaryUnavailable, "kc server returned HTTP %d", response.StatusCode)
-	}
-	if output == nil || len(bytes.TrimSpace(raw)) == 0 {
-		return nil
-	}
-	if err := kernel.UnmarshalJSON(raw, output); err != nil {
-		return kernel.Fail(kernel.ErrTemporaryUnavailable, "decode kc server response: %v", err)
-	}
-	return nil
-}
-
-func newRequestID() string {
-	raw := make([]byte, 16)
-	if _, err := rand.Read(raw); err != nil {
-		return fmt.Sprintf("kc-client-%d", time.Now().UnixNano())
-	}
-	return "kc-client-" + hex.EncodeToString(raw)
+	return httpjson.Do(ctx, c, c.baseURL, method, path, input, options.RequestID, output)
 }

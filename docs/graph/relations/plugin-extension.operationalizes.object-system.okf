@@ -1,0 +1,27 @@
+---
+object_id: documentation/relation/plugin-extension--operationalizes--object-system
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: docs/graph/relations/plugin-extension.operationalizes.object-system.okf
+---
+{
+  "relationId": "documentation/relation/plugin-extension--operationalizes--object-system",
+  "relationType": "operationalizes",
+  "direction": "DIRECTED",
+  "endpoints": [
+    {
+      "role": "from",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/plugin-extension"
+      }
+    },
+    {
+      "role": "to",
+      "objectRef": {
+        "repository": "kr://kc/documentation",
+        "object": "documentation/object-system"
+      }
+    }
+  ]
+}

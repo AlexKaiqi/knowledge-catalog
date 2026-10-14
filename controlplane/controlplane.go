@@ -4,7 +4,7 @@ import (
 	"kc/gate"
 	"kc/internal/journal"
 	"kc/kernel"
-	"kc/knowledge/writer"
+	"kc/object/writer"
 	"kc/snapshot"
 	"kc/snapshot/dataset"
 )

@@ -258,11 +258,11 @@ Agent 读取系统仓导读，按目标找到模型、入口或机制说明，�
 
 ## 接口契约 / 状态机
 
-身份与形状见 [知识协议](../../knowledge/README.md)、
-[Address](../../knowledge/address.go)、[Relation](../../knowledge/relation.go)、
-[对象 Interface](../../knowledge/object_interface.go) 与 [Schema 声明](../../knowledge/schema.go)；
-解释与写入见 [Reader](../../knowledge/reader/README.md)、
-[Writer](../../knowledge/writer/README.md) 和 [Conformance](../../knowledge/writer/conformance_test.go)。
+身份与形状见 [知识协议](../../object/README.md)、
+[Address](../../object/address.go)、[Relation](../../object/relation.go)、
+[对象 Interface](../../interfaces/definition.go) 与 [Schema 声明](../../object/schema.go)；
+解释与写入见 [Reader](../../object/reader/README.md)、
+[Writer](../../object/writer/README.md) 和 [Conformance](../../object/writer/conformance_test.go)。
 治理入口见 [ControlPlane](../../controlplane/README.md)、[Gate](../../gate/README.md)、
 [Hook](../../hook/README.md)。字段、错误码和状态转换只在这些合同中维护。
 

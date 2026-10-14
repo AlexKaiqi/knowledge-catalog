@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"kc/invoke"
 	"strings"
 	"testing"
 )
@@ -18,7 +19,7 @@ func TestSearchInheritsConfiguredDatasetWithinSingleService(t *testing.T) {
 	t.Setenv("KC_DATASET", "configured")
 	flags := map[string]FlagValue{}
 	bindRemoteEnvironment("search", flags)
-	if flagString(flags, "dataset") != "configured" {
+	if invoke.FlagString(flags, "dataset") != "configured" {
 		t.Fatalf("service inventory replaced the configured Dataset: %#v", flags)
 	}
 }

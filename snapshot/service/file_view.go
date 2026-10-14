@@ -5,7 +5,6 @@ import (
 	"kc/snapshot"
 	"kc/snapshot/dataset"
 	"path"
-	"sort"
 	"strings"
 )
 
@@ -25,18 +24,28 @@ type ViewOptions struct {
 }
 
 type fileView struct {
-	pin        dataset.ResolvedKnowledgeSet
-	mounts     []dataset.VirtualMount
-	tree       dataset.DatasetDeliveredTree
-	sources    Sources
-	delivered  bool
-	directory  func(dataset.VirtualMount, string, int, string) (snapshot.DirectoryPage, error)
-	sourceRead func(dataset.VirtualMount, string) ([]byte, error)
-	record     func(FileReadEvidence) error
+	pin         dataset.ResolvedKnowledgeSet
+	mounts      []dataset.VirtualMount
+	tree        dataset.DatasetDeliveredTree
+	items       []dataset.DatasetItem
+	sources     Sources
+	delivered   bool
+	directory   func(dataset.VirtualMount, string, int, string) (snapshot.DirectoryPage, error)
+	sourceRead  func(dataset.VirtualMount, string) ([]byte, error)
+	record      func(FileReadEvidence) error
+	pagingScope kernel.Digest
 }
 
 func NewFileView(options ViewOptions) FileView {
-	return &fileView{pin: options.Pin, mounts: append([]dataset.VirtualMount{}, options.Mounts...), tree: dataset.NewDatasetDeliveredTree(dataset.DatasetFileItems(options.Items)), sources: options.Sources, delivered: options.Delivered, directory: options.Directory, sourceRead: options.Read, record: options.Record}
+	items := dataset.DatasetFileItems(options.Items)
+	scope := append([]dataset.DatasetItem{}, options.Pin.Items...)
+	if len(scope) == 0 { // Trusted programmatic views may predate pin item lists.
+		for _, mount := range options.Mounts {
+			scope = append(scope, dataset.DatasetItem{Kind: dataset.DatasetItemPrefix, Target: dataset.NormalizeMountPath(mount.Path), Prefix: dataset.NormalizeMountPath(mount.SubPath), Repository: mount.Repository, Commit: mount.Commit})
+		}
+		scope = append(scope, items...)
+	}
+	return &fileView{pin: options.Pin, mounts: append([]dataset.VirtualMount{}, options.Mounts...), tree: dataset.NewDatasetDeliveredTree(items), items: scope, sources: options.Sources, delivered: options.Delivered, directory: options.Directory, sourceRead: options.Read, record: options.Record, pagingScope: filePagingScope(options.Mounts, items, scope)}
 }
 func (v *fileView) FixedPin() dataset.ResolvedKnowledgeSet { return v.pin }
 func (v *fileView) VisibleMounts() []dataset.VirtualMount {
@@ -61,24 +70,6 @@ func (v *fileView) mount(value string) (dataset.VirtualMount, error) {
 		}
 	}
 	return dataset.VirtualMount{}, kernel.Fail(kernel.ErrForbidden, "mount %s is not present or not authorized", clean)
-}
-
-// mountOwning returns the visible mount whose subtree contains delivered path
-// p: the mount at p, the mount p lives below, or the root mount (Path "")
-// that acts as the fallback owner. Longest declared path wins; mounts never
-// nest each other, so at most the root and one subtree mount can match.
-func (v *fileView) mountOwning(p string) (dataset.VirtualMount, bool) {
-	best := dataset.VirtualMount{}
-	found := false
-	for _, mount := range v.mounts {
-		if mount.Path != p && mount.Path != "" && !strings.HasPrefix(p, mount.Path+"/") {
-			continue
-		}
-		if !found || len(mount.Path) > len(best.Path) {
-			best, found = mount, true
-		}
-	}
-	return best, found
 }
 
 // readMountDirectory pages one mount's repository directory at the pinned
@@ -110,15 +101,33 @@ func (v *fileView) readMountDirectory(mount dataset.VirtualMount, directory stri
 }
 
 func (v *fileView) List(request FileDirectoryRequest) (FileDirectoryResponse, error) {
-	// Delivered addressing is "MountPath empty": the delivered tree is
-	// addressed by Path alone and Path "" is the root. Mount-relative
-	// addressing always names a mount, so the two never collide.
-	if request.MountPath == "" {
+	// Path selects delivered addressing. Directory with an empty MountPath
+	// selects the declared root mount; no coordinates select delivered root.
+	if request.Path != "" && (request.MountPath != "" || request.Directory != "") {
+		return FileDirectoryResponse{}, kernel.Fail(kernel.ErrUsageInvalid, "directory addressing must use delivered path or mount-relative coordinates")
+	}
+	if request.MountPath == "" && request.Directory == "" {
 		return v.listDelivered(request)
 	}
 	mount, err := v.mount(request.MountPath)
 	if err != nil {
 		return FileDirectoryResponse{}, err
+	}
+	if v.delivered {
+		if _, err := RepositoryPath(mount.SubPath, request.Directory); err != nil {
+			return FileDirectoryResponse{}, err
+		}
+		directory := path.Join(mount.Path, request.Directory)
+		if directory == "." {
+			directory = ""
+		}
+		if v.composedDirectory(directory, mount) {
+			request.Path, request.MountPath, request.Directory = directory, "", ""
+			return v.listDelivered(request)
+		}
+		if _, err := v.literalMountFor(directory); err != nil {
+			return FileDirectoryResponse{}, err
+		}
 	}
 
 	page, err := v.readMountDirectory(mount, request.Directory, request)
@@ -129,11 +138,9 @@ func (v *fileView) List(request FileDirectoryRequest) (FileDirectoryResponse, er
 }
 
 // listDelivered enumerates one delivered directory of the composed tree. A
-// directory inside a mount subtree pages that member's source directory and
-// merges per-file entries into its first page; a directory that exists only
-// through per-file entries, or that parents mount paths, lists those directly
-// without paging. A name shared between a per-file entry and delivered source
-// content is a conflict, never an order-based override
+// directory pages derived children first, then its owning source's pages.
+// A name shared between a per-file entry and delivered source content is a
+// conflict, never an order-based override
 // (docs/reviewed/dataset.md, "冲突不得按挂载顺序覆盖").
 func (v *fileView) listDelivered(request FileDirectoryRequest) (FileDirectoryResponse, error) {
 	if !v.delivered {
@@ -143,86 +150,10 @@ func (v *fileView) listDelivered(request FileDirectoryRequest) (FileDirectoryRes
 		return FileDirectoryResponse{}, kernel.Fail(kernel.ErrUsageInvalid, "delivered listing takes path alone; mountPath and directory address one mount")
 	}
 	dir := dataset.NormalizeMountPath(request.Path)
-	owning, owns := v.mountOwning(dir)
-	if owns {
-		return v.listDeliveredMount(dir, owning, request)
+	if request.Path != "" && !ValidRelativePath(request.Path) {
+		return FileDirectoryResponse{}, kernel.Fail(kernel.ErrUsageInvalid, "invalid delivered directory path")
 	}
-	return v.listDeliveredDerived(dir)
-}
-
-func (v *fileView) listDeliveredMount(dir string, mount dataset.VirtualMount, request FileDirectoryRequest) (FileDirectoryResponse, error) {
-	relative := ""
-	if dir != mount.Path {
-		relative = strings.TrimPrefix(dir, mount.Path+"/")
-	}
-	page, err := v.readMountDirectory(mount, relative, request)
-	if err != nil {
-		return FileDirectoryResponse{}, err
-	}
-	entries := page.Entries
-	if request.Continuation == "" {
-		claimed := map[string]struct{}{}
-		for _, entry := range entries {
-			claimed[entry.Name] = struct{}{}
-		}
-		for _, item := range v.tree.FilesIn(dir) {
-			name := path.Base(item.Target)
-			if _, clash := claimed[name]; clash {
-				return FileDirectoryResponse{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid,
-					"delivered path %s has conflicting sources", item.Target)
-			}
-			claimed[name] = struct{}{}
-			entries = append(entries, snapshot.DirectoryEntry{Name: name, Kind: "file"})
-		}
-	}
-	return FileDirectoryResponse{
-		Pin: v.pin, Mount: mount, Entries: entries, Continuation: page.Continuation, Exhausted: page.Exhausted,
-	}, nil
-}
-
-// listDeliveredDerived lists a delivered directory that no mount subtree
-// pages: mount paths and per-file entries below it become direct entries.
-// Mount carries the delivered coordinate only; no single member owns it.
-func (v *fileView) listDeliveredDerived(dir string) (FileDirectoryResponse, error) {
-	claimed := map[string]string{}
-	claim := func(name, kind string) error {
-		if prior, clash := claimed[name]; clash && prior != kind {
-			return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "delivered path %s/%s has conflicting sources", mountLabelFor(dir), name)
-		}
-		claimed[name] = kind
-		return nil
-	}
-	below := func(target string) (string, bool) {
-		if dir == "" {
-			return target, true
-		}
-		return strings.CutPrefix(target, dir+"/")
-	}
-	for _, mount := range v.mounts {
-		if rel, ok := below(mount.Path); ok && rel != "" {
-			if err := claim(strings.Split(rel, "/")[0], "directory"); err != nil {
-				return FileDirectoryResponse{}, err
-			}
-		}
-	}
-	for _, item := range v.tree.FilesIn(dir) {
-		if err := claim(path.Base(item.Target), "file"); err != nil {
-			return FileDirectoryResponse{}, err
-		}
-	}
-	for _, name := range v.tree.DirsIn(dir) {
-		if err := claim(name, "directory"); err != nil {
-			return FileDirectoryResponse{}, err
-		}
-	}
-	entries := make([]snapshot.DirectoryEntry, 0, len(claimed))
-	for name, kind := range claimed {
-		entries = append(entries, snapshot.DirectoryEntry{Name: name, Kind: kind})
-	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
-	return FileDirectoryResponse{
-		Pin: v.pin, Mount: dataset.VirtualMount{Path: dir}, Entries: entries, Exhausted: true,
-	}, nil
+	return v.listDeliveredPage(dir, request)
 }
 
 func mountLabelFor(dir string) string {
@@ -242,6 +173,13 @@ func (v *fileView) Read(request FileReadRequest) (FileReadResponse, error) {
 	mount, err := v.mount(request.MountPath)
 	if err != nil {
 		return FileReadResponse{}, err
+	}
+	if v.delivered {
+		if _, err := RepositoryPath(mount.SubPath, request.File); err != nil {
+			return FileReadResponse{}, err
+		}
+		request.Path, request.MountPath, request.File = path.Join(mount.Path, request.File), "", ""
+		return v.readDelivered(request)
 	}
 	if request.Offset < 0 || request.Length < 0 || request.Length > 4<<20 {
 		return FileReadResponse{}, kernel.Fail(kernel.ErrUsageInvalid, "file range must use a non-negative offset and length no greater than 4 MiB")
@@ -274,12 +212,8 @@ func (v *fileView) Read(request FileReadRequest) (FileReadResponse, error) {
 	}, nil
 }
 
-// readDelivered serves one delivered file of the composed tree. A per-file
-// entry is probed against its owning mount first: when the member's own
-// content also delivers the same delivered path the layout has two sources
-// for one file and the read is refused; a missing member file lets the
-// per-file entry serve. Paths without a per-file entry route into their
-// owning mount like the mount-relative shape does.
+// readDelivered compiles ownership from the complete fixed scope, then checks
+// current visibility and old-list conflicts before reading selected bytes.
 func (v *fileView) readDelivered(request FileReadRequest) (FileReadResponse, error) {
 	if !v.delivered {
 		return FileReadResponse{}, kernel.Fail(kernel.ErrUsageInvalid, "delivered paths address the repository view; the semantic view has no per-file entries")
@@ -294,35 +228,34 @@ func (v *fileView) readDelivered(request FileReadRequest) (FileReadResponse, err
 	if delivered == "" {
 		return FileReadResponse{}, kernel.Fail(kernel.ErrUsageInvalid, "delivered file path is required")
 	}
-	item, isFileEntry := v.tree.Find(delivered)
-	if !isFileEntry {
-		return v.readDeliveredMount(delivered, request)
+	item, err := v.literalRoute(request.Path)
+	if err != nil {
+		return FileReadResponse{}, err
 	}
-	if owning, owns := v.mountOwning(delivered); owns {
-		relative := ""
-		if delivered != owning.Path {
-			relative = strings.TrimPrefix(delivered, owning.Path+"/")
-		}
-		probePath, pathErr := RepositoryPath(owning.SubPath, relative)
-		if pathErr == nil {
-			// Readability probe only: a readable member file at the same
-			// delivered path means conflicting sources. The probe content
-			// itself is discarded.
-			if _, probeErr := v.readMemberFile(owning.Repository, probePath, owning.Commit); probeErr == nil {
-				return FileReadResponse{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid,
-					"delivered path %s has conflicting sources", delivered)
-			} else if kernel.CodeOf(probeErr) != kernel.ErrKnowledgeRefUnresolved {
-				return FileReadResponse{}, probeErr
+	if item.Kind == dataset.DatasetItemPrefix {
+		if declared, visible := v.declaredDirectoryVisibility(delivered); declared {
+			if !visible {
+				return FileReadResponse{}, kernel.Fail(kernel.ErrForbidden, "delivered path is a hidden declared directory")
 			}
+			return FileReadResponse{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "delivered path is a directory")
 		}
 	}
-	content, readErr := v.readMemberFile(item.Repository, item.File, item.Commit)
-	mount := dataset.VirtualMount{
-		Path:       deliveredParent(delivered),
-		Repository: item.Repository,
-		Commit:     item.Commit,
+	mount := dataset.VirtualMount{Path: deliveredParent(delivered), Repository: item.Repository, Commit: item.Commit}
+	file := item.File
+	var deliveredItem *dataset.DatasetItem
+	var content []byte
+	var readErr error
+	if item.Kind == dataset.DatasetItemFile {
+		deliveredItem = &item
+		content, readErr = v.readMemberFile(item.Repository, item.File, item.Commit)
+	} else {
+		mount, _ = v.visiblePrefix(item)
+		file = delivered
+		if mount.Path != "" {
+			file = strings.TrimPrefix(strings.TrimPrefix(delivered, mount.Path), "/")
+		}
+		content, readErr = v.readSource(mount, file)
 	}
-	deliveredItem := item
 	if err := v.recordDeliveredRead(delivered, item.Repository, item.Commit, content, readErr); err != nil && readErr == nil {
 		return FileReadResponse{}, err
 	}
@@ -333,8 +266,7 @@ func (v *fileView) readDelivered(request FileReadRequest) (FileReadResponse, err
 	if start > int64(len(content)) {
 		start = int64(len(content))
 	}
-	// A missing length means "to the end of the file", same default the
-	// mount-relative read applies; Length 0 must not read an empty range.
+	// Length 0 uses the same 512 KiB default as mount-relative reads.
 	length := request.Length
 	if length == 0 {
 		length = 512 << 10
@@ -344,41 +276,14 @@ func (v *fileView) readDelivered(request FileReadRequest) (FileReadResponse, err
 		end = int64(len(content))
 	}
 	return FileReadResponse{
-		Pin: v.pin, Mount: mount, File: item.File, Path: delivered, Item: &deliveredItem,
+		Pin: v.pin, Mount: mount, File: file, Path: delivered, Item: deliveredItem,
 		Offset: start, TotalBytes: int64(len(content)), EOF: end == int64(len(content)),
 		Content: content[start:end],
 	}, nil
 }
 
-// readDeliveredMount serves a delivered path that belongs to a mount subtree
-// by mapping it back to the member path, then reusing the mount-relative
-// read. Response Path keeps the delivered coordinate the caller asked for.
-func (v *fileView) readDeliveredMount(delivered string, request FileReadRequest) (FileReadResponse, error) {
-	owning, owns := v.mountOwning(delivered)
-	if !owns {
-		return FileReadResponse{}, kernel.Fail(kernel.ErrForbidden, "delivered path %s is not present or not authorized", delivered)
-	}
-	relative := ""
-	if delivered != owning.Path {
-		relative = strings.TrimPrefix(delivered, owning.Path+"/")
-	}
-	mounted := FileReadRequest{
-		FileCoordinate: request.FileCoordinate,
-		MountPath:      owning.Path,
-		File:           relative,
-		Offset:         request.Offset,
-		Length:         request.Length,
-	}
-	out, err := v.Read(mounted)
-	if err != nil {
-		return out, err
-	}
-	out.Path = delivered
-	return out, nil
-}
-
 func (v *fileView) readMemberFile(repository kernel.RepositoryID, memberPath string, commit kernel.CommitID) ([]byte, error) {
-	store, ok := v.sources.Get(repository)
+	store, ok := v.source(repository)
 	if !ok {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "repository %s is not attached", repository)
 	}

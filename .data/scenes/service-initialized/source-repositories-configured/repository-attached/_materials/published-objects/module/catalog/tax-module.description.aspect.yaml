@@ -1,0 +1,16 @@
+---
+object_id: module/tax-calculation
+aspect_name: definition
+schema_ref: schema/published-object.definition/v1
+---
+{
+  "title": "modulecatalogtoken Tax calculation module",
+  "kind": "module",
+  "summary": "一个模块由分散的源码、测试数据和另一仓的许可证组成。",
+  "resources": [
+    {"repository": "__RESOURCE_REPO__", "commit": "__RESOURCE_COMMIT__", "path": "src/tax/calculate.js"},
+    {"repository": "__RESOURCE_REPO__", "commit": "__RESOURCE_COMMIT__", "path": "test-vectors/tax.json"},
+    {"repository": "__OTHER_REPO__", "commit": "__OTHER_COMMIT__", "path": "legal/LICENSE.txt"}
+  ],
+  "internalNote": "hiddenassetnotes"
+}

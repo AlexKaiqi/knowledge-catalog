@@ -183,51 +183,6 @@ func validateRouteInventory(routes []routeEntry, patterns []string) error {
 	return nil
 }
 
-func cliDeclarations(fset *token.FileSet, file *ast.File, path string) ([]commandEntry, error) {
-	for _, decl := range file.Decls {
-		gen, ok := decl.(*ast.GenDecl)
-		if !ok {
-			continue
-		}
-		for _, spec := range gen.Specs {
-			value, ok := spec.(*ast.ValueSpec)
-			if !ok || len(value.Names) != 1 || value.Names[0].Name != "cliSurface" {
-				continue
-			}
-			if len(value.Values) != 1 {
-				return nil, fmt.Errorf("cliSurface must have one literal value")
-			}
-			mapping, ok := value.Values[0].(*ast.CompositeLit)
-			if !ok {
-				return nil, fmt.Errorf("cliSurface is no longer a literal map; update inventory reader")
-			}
-			entries := []commandEntry{}
-			for _, expr := range mapping.Elts {
-				pair, ok := expr.(*ast.KeyValueExpr)
-				if !ok {
-					return nil, fmt.Errorf("unsupported cliSurface entry")
-				}
-				command, ok := literal(pair.Key)
-				if !ok {
-					return nil, fmt.Errorf("nonliteral CLI command")
-				}
-				fields, ok := pair.Value.(*ast.CompositeLit)
-				if !ok || len(fields.Elts) != 2 {
-					return nil, fmt.Errorf("unsupported CLI action for %s", command)
-				}
-				action, ok := literal(fields.Elts[1])
-				if !ok {
-					return nil, fmt.Errorf("nonliteral CLI action for %s", command)
-				}
-				entries = append(entries, commandEntry{command, action, path, fset.Position(pair.Pos()).Line})
-			}
-			sort.Slice(entries, func(i, j int) bool { return entries[i].Command < entries[j].Command })
-			return entries, nil
-		}
-	}
-	return nil, fmt.Errorf("cliSurface not found")
-}
-
 func main() {
 	check := flag.Bool("check", false, "fail on unresolved exact document Test references; print compact counts")
 	flag.Parse()
@@ -247,6 +202,8 @@ func generate(check bool) error {
 	fset := token.NewFileSet()
 	tests := []testEntry{}
 	commands := []commandEntry{}
+	moduleCommands := map[string][]commandEntry{}
+	composedModules := map[string]bool{}
 	routes := []routeEntry{}
 	for _, path := range files {
 		if !strings.HasSuffix(path, ".go") {
@@ -268,6 +225,18 @@ func generate(check bool) error {
 			if err != nil {
 				return err
 			}
+			expression, _ := namedValue(file, "cliSurface")
+			_, composedModules, err = commandComposition(file, expression)
+			if err != nil {
+				return err
+			}
+		}
+		if path == "snapshot/cli/commands.go" || path == "object/cli/commands.go" || path == "discovery/cli/commands.go" || path == "declarativeindex/cli/commands.go" || path == "liveaccess/cli/commands.go" {
+			module := strings.TrimSuffix(path, "/commands.go")
+			moduleCommands[module], err = snapshotCommandDeclarations(fset, file, path)
+			if err != nil {
+				return err
+			}
 		}
 		if !productionHTTPSource(path) {
 			continue
@@ -277,6 +246,20 @@ func generate(check bool) error {
 			return err
 		}
 		routes = append(routes, found...)
+	}
+	for module, entries := range moduleCommands {
+		if !composedModules[module] {
+			return fmt.Errorf("%s commands are not composed into the public CLI", module)
+		}
+		commands = append(commands, entries...)
+	}
+	for module := range composedModules {
+		if len(moduleCommands[module]) == 0 {
+			return fmt.Errorf("%s command composition has no module declarations", module)
+		}
+	}
+	if err := validateCommandInventory(commands); err != nil {
+		return err
 	}
 	if len(commands) == 0 || len(routes) == 0 {
 		return fmt.Errorf("public surface inventory is empty")

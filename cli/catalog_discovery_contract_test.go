@@ -50,10 +50,10 @@ func TestInventoryDiscoveryActualServerPinsSelectedSourcesAndMasksBodies(t *test
 
 	for i, repo := range repos {
 		body(t, admin("attach", "--repo", repo))
-		body(t, admin("writer", "put", "--repo", repo, "--command-id", "schema-"+repo, "--object", "schema/note", "--value", `{"entity":"Note","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+		body(t, admin("writer", "put", testObjectReference(t, repo, "schema/note", ""), "--command-id", "schema-"+repo, "--value", `{"entity":"Note","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
 		content := []string{"discovery phrase confidentialalpha", "discovery phrase confidentialbeta", "discovery phrase excludedbody"}[i]
 		raw, _ := json.Marshal(map[string]string{"body": content})
-		body(t, admin("writer", "put", "--repo", repo, "--command-id", "note-"+repo, "--object", "note/one", "--schema-ref", "schema/note", "--value", string(raw)))
+		body(t, admin("writer", "put", testObjectReference(t, repo, "note/one", ""), "--command-id", "note-"+repo, "--schema-ref", "schema/note", "--value", string(raw)))
 		body(t, admin("operations", "projection", "sync", "--repo", repo))
 	}
 	body(t, admin("dataset", "define", "--dataset", "published", "--revision", "1", "--source", repos[0], "--source", repos[1]))

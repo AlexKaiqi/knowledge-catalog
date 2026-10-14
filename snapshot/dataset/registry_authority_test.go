@@ -81,8 +81,8 @@ func TestSnapshotRegistryRequiresExplicitCreationAndRecoversNewHandle(t *testing
 	if _, err := catalog.OpenSnapshotRegistry(registryIdentityAlias{authority}, ref); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
 		t.Fatalf("wrong identity accepted: %v", err)
 	}
-	if history := catalogFromRegistry(t, reopened).Log(catalog.LogQuery{}); len(history.Commits) != 4 {
-		t.Fatalf("history was not recovered: %#v", history)
+	if history, err := catalogFromRegistry(t, reopened).Log(catalog.LogQuery{}); err != nil || len(history.Commits) != 4 {
+		t.Fatalf("history was not recovered: %#v, error = %v", history, err)
 	}
 }
 

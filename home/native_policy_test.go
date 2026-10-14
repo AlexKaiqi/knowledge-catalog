@@ -7,7 +7,7 @@ import (
 )
 
 func TestNativeCreatorAndSharingActionsStayExplicitAndBounded(t *testing.T) {
-	for _, action := range []string{access.RepositoryMetadataRead, access.RepositoryFileRead, access.RepositoryHistoryRead, access.RepositoryFilesWrite, access.RepositoryCommit, access.RepositoryRefsManage, access.RepositoryMerge} {
+	for _, action := range []string{access.RepositoryMetadataRead, access.RepositoryFileRead, access.RepositoryHistoryRead, access.RepositoryFilesWrite, access.RepositoryCommit, access.RepositoryRefsManage, access.RepositoryMerge, access.RepositoryDatasetPublish} {
 		if err := validateCreatorActions([]string{action}); err != nil {
 			t.Fatalf("explicit native creator action rejected: %s %v", action, err)
 		}
@@ -22,5 +22,8 @@ func TestNativeCreatorAndSharingActionsStayExplicitAndBounded(t *testing.T) {
 	}
 	if err := validateShareActions([]string{access.RepositoryFilesWrite}); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
 		t.Fatal("consume sharing expanded to writes")
+	}
+	if err := validateShareActions([]string{access.RepositoryDatasetPublish}); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
+		t.Fatal("ordinary sharing expanded to source publication")
 	}
 }

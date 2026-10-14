@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	kcclient "kc/client"
 	inv "kc/invocation"
 	serv "kc/server"
 	"net/http"
@@ -142,7 +143,7 @@ func TestTaihuLoginRequiresVerifiedPersistedIdentity(t *testing.T) {
 				}
 				t.Setenv("KC_CONFIG_DIR", blocked)
 			}
-			result, err := exchangeTaihuCode(&invocation{Context: context.Background()}, taihuPendingAuth{OAuth2Base: server.URL, Server: server.URL, ClientID: "fixture", CodeVerifier: "verifier"}, "code", "http://localhost/callback")
+			result, err := exchangeTaihuCode(&inv.Invocation{Context: context.Background()}, taihuPendingAuth{OAuth2Base: server.URL, Server: server.URL, ClientID: "fixture", CodeVerifier: "verifier"}, "code", "http://localhost/callback")
 			if err == nil {
 				t.Fatalf("LOGIN-VERIFIED-DURABLE: %s failure returned success: %#v", failure, result)
 			}
@@ -223,7 +224,7 @@ func TestBrowserCodeCompletesThroughBrokerWithoutClientSecret(t *testing.T) {
 	t.Cleanup(upstream.Close)
 	server := httptest.NewServer(serv.HTTPHandlerWithOptions(t.TempDir(), serv.HTTPServerOptions{Authenticator: testTaihuAuthenticator{principal: "kaiqidong"}, ServiceIdentity: &serv.ServiceIdentity{ClientID: "kc-app", ClientSecret: "server-secret", OAuth2Base: upstream.URL}}))
 	t.Cleanup(server.Close)
-	result, err := exchangeTaihuCode(&invocation{Context: context.Background()}, taihuPendingAuth{Server: server.URL, CodeVerifier: strings.Repeat("a", 43)}, "one-time-code", "http://localhost/callback")
+	result, err := exchangeTaihuCode(&inv.Invocation{Context: context.Background()}, taihuPendingAuth{Server: server.URL, CodeVerifier: strings.Repeat("a", 43)}, "one-time-code", "http://localhost/callback")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,38 +238,37 @@ func TestBrowserCodeCompletesThroughBrokerWithoutClientSecret(t *testing.T) {
 }
 
 func TestTaihuSessionPersistRoundTrip(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "session-taihu.json")
+	isolateLoginConfig(t)
+	const server = "http://localhost:7380"
+	path := inv.ServerSessionPath(server, "session-taihu.json")
 
 	// Not present -> not ok.
-	if _, ok := loadTaihuSession(path); ok {
-		t.Fatal("load of missing session must report ok=false")
+	if _, ok, err := currentServerTokenSession(context.Background(), server); ok || err != nil {
+		t.Fatalf("load of missing session must report ok=false without error: %v", err)
 	}
 
 	sess := taihuSession{
-		Server:       "http://localhost:7380",
-		AccessToken:  "test-access-token",
-		RefreshToken: "test-refresh-token",
-		ExpiresAt:    time.Now().Add(time.Hour),
+		Server: server, AccessToken: "test-access-token",
+		RefreshToken: "test-refresh-token", ExpiresAt: time.Now().Add(time.Hour),
 	}
-	if err := persistTaihuSession(path, sess); err != nil {
+	if err := persistTokenLogin(sess); err != nil {
 		t.Fatal(err)
 	}
-	got, ok := loadTaihuSession(path)
-	if !ok {
-		t.Fatal("load of persisted session must be ok")
+	got, ok, err := currentServerTokenSession(context.Background(), server)
+	if !ok || err != nil {
+		t.Fatalf("load of persisted session must be ok: %v", err)
 	}
 	if got.Server != sess.Server || got.AccessToken != sess.AccessToken || got.RefreshToken != sess.RefreshToken {
 		t.Fatalf("round-trip mismatch: %#v", got)
 	}
 
-	// Expired session -> not ok.
+	// An expired credential without a refresh token is not usable.
 	expired := taihuSession{Server: sess.Server, AccessToken: "x", ExpiresAt: time.Now().Add(-time.Minute)}
-	if err := persistTaihuSession(path, expired); err != nil {
+	if err := persistTokenLogin(expired); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := loadTaihuSession(path); ok {
-		t.Fatal("expired session must be treated as absent")
+	if _, ok, err := currentServerTokenSession(context.Background(), server); ok || kernel.CodeOf(err) != kernel.ErrUnauthenticated {
+		t.Fatalf("expired session must reject authentication: ok=%v err=%v", ok, err)
 	}
 
 	// File permissions are restrictive (0600).
@@ -300,7 +300,7 @@ func TestLocalSessionPersistRoundTrip(t *testing.T) {
 	if _, ok := loadLocalSession("http://other:9"); ok {
 		t.Fatal("local session must not apply to a different server")
 	}
-	info, err := os.Stat(localSessionPath())
+	info, err := os.Stat(inv.ServerSessionPath("http://kc-server:7380", "session-local.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -309,13 +309,13 @@ func TestLocalSessionPersistRoundTrip(t *testing.T) {
 	}
 }
 
-func TestTaihuTokenExchangeRequiresClientSecretAndSurfacesError(t *testing.T) {
+func TestLegacyTaihuTokenExchangeRequiresClientSecretAndSurfacesError(t *testing.T) {
 	pending := taihuPendingAuth{
 		ClientID:     "knowledge-catalog",
 		CodeVerifier: "verifier",
 		OAuth2Base:   "http://example.invalid",
 	}
-	if _, err := exchangeTaihuAccessToken(pending, "code", "http://127.0.0.1:7382", "", nil); err == nil || kernel.CodeOf(err) != kernel.ErrUsageInvalid {
+	if _, err := legacyExchangeTaihuAccessToken(pending, "code", "http://127.0.0.1:7382", "", nil); err == nil || kernel.CodeOf(err) != kernel.ErrUsageInvalid {
 		t.Fatalf("missing secret: %v", err)
 	}
 
@@ -339,15 +339,65 @@ func TestTaihuTokenExchangeRequiresClientSecretAndSurfacesError(t *testing.T) {
 	t.Cleanup(ts.Close)
 	pending.OAuth2Base = ts.URL
 
-	if _, err := exchangeTaihuAccessToken(pending, "code", "http://127.0.0.1:7382", "wrong", ts.Client()); err == nil || !strings.Contains(err.Error(), "invalid_client") {
+	if _, err := legacyExchangeTaihuAccessToken(pending, "code", "http://127.0.0.1:7382", "wrong", ts.Client()); err == nil || !strings.Contains(err.Error(), "invalid_client") {
 		t.Fatalf("wrong secret must surface Taihu error, got %v", err)
 	}
-	got, err := exchangeTaihuAccessToken(pending, "code", "http://127.0.0.1:7382", "app-secret", ts.Client())
+	got, err := legacyExchangeTaihuAccessToken(pending, "code", "http://127.0.0.1:7382", "app-secret", ts.Client())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !sawSecret || got.AccessToken != "live-token" {
 		t.Fatalf("token %#v sawSecret=%v", got, sawSecret)
+	}
+}
+
+func TestCurrentTokenBrokerUsesDeploymentSecretAndRejectsInvalidProof(t *testing.T) {
+	upstreamCalls := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamCalls++
+		if r.URL.Path != "/oauth2/token" {
+			t.Errorf("unexpected token endpoint: %s", r.URL.Path)
+		}
+		user, secret, ok := r.BasicAuth()
+		if !ok || user != "knowledge-catalog" || secret != "app-secret" {
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = io.WriteString(w, `{"error":"invalid_client","error_description":"Taihu app authentication failed"}`)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "live-token", "expires_in": 60})
+	}))
+	t.Cleanup(upstream.Close)
+	for _, test := range []struct {
+		name   string
+		secret string
+		code   kernel.ErrorCode
+		calls  int
+	}{
+		{"missing", "", kernel.ErrTemporaryUnavailable, 0},
+		{"wrong", "wrong", kernel.ErrUnauthenticated, 1},
+		{"accepted", "app-secret", "", 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			before := upstreamCalls
+			handler := serv.HTTPHandlerWithOptions(t.TempDir(), serv.HTTPServerOptions{Authenticator: testTaihuAuthenticator{principal: "kaiqidong"}, ServiceIdentity: &serv.ServiceIdentity{ClientID: "knowledge-catalog", ClientSecret: test.secret, OAuth2Base: upstream.URL}})
+			server := httptest.NewServer(handler)
+			t.Cleanup(server.Close)
+			remote, err := kcclient.New(kcclient.Config{BaseURL: server.URL, HTTPClient: server.Client()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := remote.IdentityService().ExchangeToken(context.Background(), kcclient.TokenRequest{GrantType: "authorization_code", Code: "code", CodeVerifier: strings.Repeat("a", 43), RedirectURI: "http://127.0.0.1:7382"})
+			if test.code == "" {
+				if err != nil || result.AccessToken != "live-token" {
+					t.Fatalf("accepted deployment secret did not return token: %v", err)
+				}
+			} else if kernel.CodeOf(err) != test.code {
+				t.Fatalf("broker did not reject %s deployment secret: %v", test.name, err)
+			}
+			if upstreamCalls-before != test.calls {
+				t.Fatalf("broker contacted upstream %d times, want %d", upstreamCalls-before, test.calls)
+			}
+		})
 	}
 }
 

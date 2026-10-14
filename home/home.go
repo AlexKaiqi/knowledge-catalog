@@ -1,18 +1,22 @@
 package home
 
 import (
+	"errors"
 	"fmt"
+	discoverydatasets "kc/discovery/datasets"
+	discoveryplugin "kc/discovery/plugin"
 	"path/filepath"
 	"sync"
 
 	"kc/controlplane"
-	"kc/index"
 	"kc/internal/journal"
 	"kc/kernel"
-	"kc/knowledge"
-	"kc/knowledge/reader"
-	"kc/knowledge/writer"
-	readcache "kc/retrieval/cache"
+	liveservice "kc/liveaccess/service"
+	objectmodel "kc/object"
+	readcache "kc/object/cache"
+	"kc/object/maintenance"
+	"kc/object/reader"
+	"kc/object/writer"
 	"kc/snapshot"
 	"kc/snapshot/dataset"
 )
@@ -26,30 +30,36 @@ import (
 // is home_mount.go. Per-verb behaviour stays in cli/verbs_*.go.
 
 type Home struct {
-	inventory    *homeInventory
-	readOnly     bool
-	closeOnce    sync.Once
-	closeErr     error
-	controlMu    sync.Mutex
-	Deployment   *DeploymentConfig
-	Dir          string
-	Store        snapshot.Registry
-	Commands     snapshot.CommandLedger
-	Writer       *writer.Writer
-	TreeWriter   snapshot.RawWriter
-	Reader       *reader.Reader
-	Datasets     dataset.Service
-	Registry     dataset.Registry
-	ControlPlane *controlplane.ControlPlane
-	ControlStore *controlplane.FileControlState
-	File         HomeFile
-	Control      controlplane.ControlState
-	Journal      journal.Journal
-	Index        *index.Index
-	Projection   *index.Controller
-	Hydrator     knowledge.Hydrator
-	ReadCache    *readcache.Cache
-	Stores       StoresFile
+	inventory          *homeInventory
+	readOnly           bool
+	closeOnce          sync.Once
+	closeErr           error
+	controlMu          sync.Mutex
+	indexDirectory     string
+	pluginsVerified    bool
+	liveAccessEntries  map[string]liveservice.PluginEntry
+	Deployment         *DeploymentConfig
+	Dir                string
+	Store              snapshot.Registry
+	Commands           snapshot.CommandLedger
+	Writer             *writer.Writer
+	TreeWriter         snapshot.RawWriter
+	Reader             *reader.Reader
+	Datasets           dataset.Service
+	Registry           dataset.Registry
+	ControlPlane       *controlplane.ControlPlane
+	ControlStore       *controlplane.FileControlState
+	File               HomeFile
+	Control            controlplane.ControlState
+	Journal            journal.Journal
+	Index              discoveryplugin.IndexQueries
+	Plugins            *discoveryplugin.IndexPlugins
+	LiveAccess         *liveservice.Plugins
+	ObjectMaintenance  *maintenance.Coordinator
+	DatasetPreparation discoverydatasets.Preparation
+	Hydrator           objectmodel.Hydrator
+	ReadCache          *readcache.Cache
+	Stores             StoresFile
 }
 
 func Open(home string) (*Home, error) {
@@ -73,12 +83,23 @@ func Open(home string) (*Home, error) {
 	}
 	datasets, registry, err := OpenDatasets(home, file, store)
 	if err != nil {
-		return nil, err
+		return nil, errors.Join(err, store.Close())
 	}
 	return assemble(home, file, stores, store, datasets, registry, false)
 }
 
-func assemble(home string, file HomeFile, stores StoresFile, store snapshot.Registry, datasets dataset.Service, registry dataset.Registry, recovering bool) (*Home, error) {
+// assemble takes ownership of the authority handles even when construction fails.
+func assemble(home string, file HomeFile, stores StoresFile, store snapshot.Registry, datasets dataset.Service, registry dataset.Registry, recovering bool) (result *Home, err error) {
+	ws := &Home{
+		inventory: &homeInventory{bindings: map[string]HomeRepo{}},
+		Dir:       home, Store: store, Datasets: datasets, Registry: registry,
+		File: file, Stores: stores,
+	}
+	defer func() {
+		if result == nil {
+			err = errors.Join(err, ws.Close())
+		}
+	}()
 	var ledgerStore snapshot.CommandStore = snapshot.NewBoltCommandStore(filepath.Join(home, "writer.db"))
 	if recovering {
 		existing, err := snapshot.OpenBoltCommandStore(filepath.Join(home, "writer.db"))
@@ -116,39 +137,21 @@ func assemble(home string, file HomeFile, stores StoresFile, store snapshot.Regi
 	if err != nil {
 		return nil, err
 	}
-	ws := &Home{
-		inventory:    &homeInventory{bindings: map[string]HomeRepo{}},
-		Dir:          home,
-		Store:        store,
-		Commands:     commands,
-		Writer:       w,
-		TreeWriter:   tw,
-		Reader:       rd,
-		Datasets:     datasets,
-		Registry:     registry,
-		ControlPlane: plane,
-		ControlStore: controlStore,
-		File:         file,
-		Control:      control,
-		Journal:      sys,
-		Index:        index.NewIndexEngine(idxDir, indexOpener(file, stores)),
-		Stores:       stores,
-	}
+	ws.Commands, ws.Writer, ws.TreeWriter, ws.Reader = commands, w, tw, rd
+	ws.ControlPlane, ws.ControlStore, ws.Control, ws.Journal = plane, controlStore, control, sys
 	for _, binding := range file.Repos {
 		ws.inventory.bindings[binding.ID] = binding
 	}
 	if err := ws.configureHydration(); err != nil {
 		return nil, err
 	}
-	if stores.Index != "none" || ws.ReadCache != nil {
-		projection := ws.Index
-		if stores.Index == "none" {
-			projection = nil
-		}
-		controller, err := index.NewController(
-			projection,
-			index.NewTargetStore(filepath.Join(idxDir, "controller.db")),
-			func(id kernel.RepositoryID) (knowledge.Repository, error) {
+	if err := ws.configureIndexPlugins(idxDir); err != nil {
+		return nil, err
+	}
+	if ws.ReadCache != nil {
+		controller, err := maintenance.NewCoordinator(
+			filepath.Join(idxDir, "object-maintenance.db"),
+			func(id kernel.RepositoryID) (objectmodel.Repository, error) {
 				return rd.Require(id, kernel.ErrCapabilityUnsatisfied)
 			},
 		)
@@ -158,18 +161,16 @@ func assemble(home string, file HomeFile, stores StoresFile, store snapshot.Regi
 		controller.SetInventory(func() ([]kernel.RepositoryID, error) {
 			return store.IDs(), nil
 		})
-		ws.Projection = controller
-		if projection != nil {
-			if err := controller.RegisterConsumer(datasetProjectionConsumer{datasets: datasets, controller: controller}); err != nil {
-				return nil, err
-			}
-		}
+		ws.ObjectMaintenance = controller
 		if ws.ReadCache != nil {
-			if err := controller.RegisterConsumer(cacheWarmer{cache: ws.ReadCache}); err != nil {
+			if err := controller.RegisterConsumer(ws.ReadCache); err != nil {
 				return nil, err
 			}
 		}
 	}
+	ws.DatasetPreparation = discoverydatasets.Preparation{Enabled: ws.Plugins.Configured(), Provider: ws.Plugins, Lookup: func(id kernel.RepositoryID) (objectmodel.Repository, error) {
+		return ws.Reader.Require(id, kernel.ErrCapabilityUnsatisfied)
+	}}
 	ws.wireSidecars()
 	return ws, nil
 }
@@ -192,7 +193,7 @@ func openMembers(home string, file HomeFile, stores StoresFile) (snapshot.Regist
 		}
 		var opened snapshot.Store
 		var err error
-		if repo.ID == string(knowledge.SystemRepositoryID) {
+		if repo.ID == string(objectmodel.SystemRepositoryID) {
 			opened, err = openExistingAuthority(repo)
 		} else {
 			opened, err = openAttachedRepository(home, repo, stores)
@@ -200,7 +201,7 @@ func openMembers(home string, file HomeFile, stores StoresFile) (snapshot.Regist
 		if err != nil {
 			return nil, err
 		}
-		if repo.ID == string(knowledge.SystemRepositoryID) {
+		if repo.ID == string(objectmodel.SystemRepositoryID) {
 			opened, err = readOnlySystemAuthority(opened)
 			if err != nil {
 				return nil, err
@@ -211,7 +212,7 @@ func openMembers(home string, file HomeFile, stores StoresFile) (snapshot.Regist
 			return nil, err
 		}
 	}
-	system, ok := store.Get(knowledge.SystemRepositoryID)
+	system, ok := store.Get(objectmodel.SystemRepositoryID)
 	if !ok {
 		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "component fixture requires a published System Repository")
 	}
@@ -240,40 +241,52 @@ func OpenDatasets(home string, file HomeFile, store snapshot.Registry) (dataset.
 		_ = registry.Close()
 		return nil, nil, err
 	}
-	if err := datasets.RegisterRepository(knowledge.SystemRepositoryID); err != nil {
+	if err := datasets.RegisterRepository(objectmodel.SystemRepositoryID); err != nil {
 		_ = registry.Close()
 		return nil, nil, err
 	}
 	return datasets, registry, nil
 }
 
+// StopMaintenance joins workers while preserving resources for accepted tasks.
+func (ws *Home) StopMaintenance() {
+	if ws == nil || ws.readOnly {
+		return
+	}
+	ws.Plugins.StopBackground()
+	if ws.ObjectMaintenance != nil {
+		ws.ObjectMaintenance.Close()
+	}
+}
+
 // Close releases projection engines and member store adapters opened for this process.
 func (ws *Home) Close() error {
-	if ws == nil {
+	if ws == nil || ws.readOnly {
 		return nil
 	}
 	ws.closeOnce.Do(func() {
 		var first error
-		if ws.Projection != nil {
-			ws.Projection.Close()
+		ws.StopMaintenance()
+		if ws.Plugins != nil {
+			if err := ws.Plugins.Close(); err != nil {
+				first = err
+			}
+		}
+		if ws.LiveAccess != nil {
+			first = errors.Join(first, ws.LiveAccess.Close())
 		}
 		if ws.ReadCache != nil {
-			if err := ws.ReadCache.Close(); err != nil {
-				first = err
-			}
-		}
-		if ws.Index != nil {
-			if err := ws.Index.Close(); err != nil {
-				first = err
-			}
-		}
-		if ws.Store != nil {
-			if err := ws.Store.Close(); err != nil && first == nil {
+			if err := ws.ReadCache.Close(); err != nil && first == nil {
 				first = err
 			}
 		}
 		if ws.Registry != nil {
 			if err := ws.Registry.Close(); err != nil && first == nil {
+				first = err
+			}
+		}
+		if ws.Store != nil {
+			if err := ws.Store.Close(); err != nil && first == nil {
 				first = err
 			}
 		}

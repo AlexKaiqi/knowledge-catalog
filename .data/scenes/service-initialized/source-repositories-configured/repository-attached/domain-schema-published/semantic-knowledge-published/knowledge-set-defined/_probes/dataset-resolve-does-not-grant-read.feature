@@ -12,7 +12,7 @@ Feature: Dataset resolve 授权不放行文件与仓正文读取
       | rules[].principal | resolver |
       | rules[].dataset | scene-set |
       | rules[].actions.0 | dataset.resolve |
-    When I run `kc read --as resolver --dataset scene-set --object metric/gmv`
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:metric%2Fgmv --as resolver --dataset scene-set`
     Then error FORBIDDEN
-    When I run `kc read --as resolver --repo kr://scene/knowledge --object metric/gmv`
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:metric%2Fgmv --as resolver`
     Then error FORBIDDEN

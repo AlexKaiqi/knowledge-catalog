@@ -11,7 +11,7 @@ import (
 	kchome "kc/home"
 	"kc/invoke"
 	"kc/kernel"
-	knowledge "kc/knowledge"
+	objectmodel "kc/object"
 	"kc/snapshot"
 )
 
@@ -89,7 +89,7 @@ func DescribeRepository(ws *kchome.Home, id kernel.RepositoryID) map[string]any 
 	if err != nil {
 		return out
 	}
-	if store, ok := repo.(knowledge.SchemaStore); ok {
+	if store, ok := repo.(objectmodel.SchemaStore); ok {
 		if schemas, schemaErr := store.SchemaObjectIDs(commit); schemaErr == nil {
 			out["schemaCount"] = len(schemas)
 		}
@@ -98,7 +98,7 @@ func DescribeRepository(ws *kchome.Home, id kernel.RepositoryID) map[string]any 
 }
 
 // FilterInventoryState is the Registry inventory view. Registration is visible to
-// a principal who already passed inventory.read; knowledge.read still gates
+// a principal who already passed inventory.read; objectmodel.read still gates
 // Canonical body, not whether the repository id appears here.
 func FilterInventoryState(_ string, _ map[string]invoke.FlagValue, state dataset.State) dataset.State {
 	return dataset.NormalizeState(state)
@@ -138,7 +138,10 @@ func VerbAudit(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	hist := cat.Log(dataset.LogQuery{Limit: limit, Dataset: invoke.DatasetOf(cx.Flags)})
+	hist, err := cat.Log(dataset.LogQuery{Limit: limit, Dataset: invoke.DatasetOf(cx.Flags)})
+	if err != nil {
+		return nil, err
+	}
 	return map[string]any{
 		"source":      "registry",
 		"authorityId": hist.RepositoryID,

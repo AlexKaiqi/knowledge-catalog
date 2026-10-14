@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"kc/internal/repofile"
-	"kc/knowledge"
+	objectmodel "kc/object"
+	repofile "kc/object/format"
 )
 
 var updateSystemEntrypoints = flag.Bool("update-system-entrypoints", false, "publish CLI registry-derived system entrypoints")
@@ -53,12 +53,12 @@ func TestSystemCLIEntrypoints(t *testing.T) {
 	}
 	for group, commands := range groups {
 		rel := "capabilities/" + group + "/entrypoints.yaml"
-		address := knowledge.Address{Kind: knowledge.KindAspect, ObjectID: knowledge.ObjectID("kc/capability/" + group), AspectName: "entrypoints"}
+		address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: objectmodel.ObjectID("kc/capability/" + group), AspectName: "entrypoints"}
 		raw, err := repofile.Serialize(address, rel, "schema/system/capability-entrypoints/v1", nil, map[string]any{"commands": commands})
 		if err != nil {
 			t.Fatal(err)
 		}
-		file := filepath.Join("..", "knowledge", "system", filepath.FromSlash(rel))
+		file := filepath.Join("..", "systemrepo", "content", filepath.FromSlash(rel))
 		if *updateSystemEntrypoints {
 			if err := os.WriteFile(file, []byte(raw), 0644); err != nil {
 				t.Fatal(err)

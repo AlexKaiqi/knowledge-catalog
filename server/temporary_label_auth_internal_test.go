@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	inv "kc/invocation"
 	"kc/invoke"
+	objectmodel "kc/object"
 	"testing"
 
 	"kc/kernel"
@@ -29,7 +30,11 @@ func TestE2EReadPayloadHoistsDefinitionBeforeAuthorize(t *testing.T) {
 		"repositories": map[string]any{repositoryID: "fixed"},
 		"definition":   definition,
 	}
-	body, err := json.Marshal(map[string]any{"pin": pinWithDefinition, "object": "Policy:label"})
+	reference, err := objectmodel.FormatReference(objectmodel.Reference{Repository: kernel.RepositoryID(repositoryID), Object: "Policy:label"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(map[string]any{"pin": pinWithDefinition, "reference": reference})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,8 +67,12 @@ func TestHTTPKnowledgeReadFlagsExtractTemporaryDefinition(t *testing.T) {
 			"sources": []map[string]any{{"repository": repositoryID, "selector": snapshot.DefaultRef}},
 		},
 	}
+	reference, err := objectmodel.FormatReference(objectmodel.Reference{Repository: kernel.RepositoryID(repositoryID), Object: "Policy:label"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	body, err := json.Marshal(knowledgeReadRequest{
-		knowledgeScope: knowledgeScope{Pin: mustRaw(t, pinWithDefinition)}, Object: "Policy:label",
+		knowledgeDatasetIdentity: knowledgeDatasetIdentity{Pin: mustRaw(t, pinWithDefinition)}, Reference: reference,
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"kc/client"
-	"kc/knowledge"
+	objectmodel "kc/object"
 )
 
 func TestKnowledgeClientReadPreservesLargeIntegerValues(t *testing.T) {
@@ -27,8 +27,8 @@ func TestKnowledgeClientReadPreservesLargeIntegerValues(t *testing.T) {
 	if _, err := c.Login(context.Background(), client.LoginRequest{Identity: client.Identity{Principal: "reader"}}); err != nil {
 		t.Fatal(err)
 	}
-	var value knowledge.KnowledgeValue
-	if err := c.KnowledgeService().Read(context.Background(), client.KnowledgeReadRequest{KnowledgeScope: client.KnowledgeScope{Repository: "kr://acme/public/core", Commit: "fixed"}, Object: "sample/A"}, client.RequestOptions{}, &value); err != nil {
+	var value objectmodel.KnowledgeValue
+	if err := c.KnowledgeService().Read(context.Background(), client.KnowledgeReadRequest{Reference: "urn:kc:object:kr%3A%2F%2Facme%2Fpublic%2Fcore:sample%2FA", Commit: "fixed"}, client.RequestOptions{}, &value); err != nil {
 		t.Fatal(err)
 	}
 	encoded, err := json.Marshal(value.Value)

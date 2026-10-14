@@ -25,6 +25,7 @@ type RequestMetadata struct {
 	SpanID       string
 	ParentSpanID string
 	Dataset      string
+	Repository   string
 }
 
 type requestMetadataKey struct{}
@@ -41,6 +42,7 @@ func requestContext(r *http.Request) context.Context {
 		SpanID:       strings.TrimSpace(r.Header.Get("X-Kc-Span-Id")),
 		ParentSpanID: strings.TrimSpace(r.Header.Get("X-Kc-Parent-Span-Id")),
 		Dataset:      r.PathValue("dataset"),
+		Repository:   r.PathValue("repository"),
 	}
 	return context.WithValue(r.Context(), requestMetadataKey{}, metadata)
 }
@@ -83,10 +85,17 @@ func (h *handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /admin/v1/grants/{grant}", h.adminGrantUpdate)
 	mux.HandleFunc("DELETE /admin/v1/grants/{grant}", h.adminGrantRemove)
 	h.registerDatasetRoutes(mux)
+	h.registerInventoryRoutes(mux)
 	h.registerFileRoutes(mux)
 }
 
 func (h *handler) withResources(w http.ResponseWriter, r *http.Request, operation string, run func(context.Context, identity.HTTPIdentity, Resources) (any, error)) {
+	for key := range r.URL.Query() {
+		if strings.EqualFold(key, "catalog") {
+			writeError(w, kernel.Fail(kernel.ErrUsageInvalid, "Catalog selection is not supported; this service has one registry"))
+			return
+		}
+	}
 	caller, ok := h.authenticate(w, r)
 	if !ok {
 		return

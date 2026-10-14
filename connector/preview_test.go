@@ -6,16 +6,16 @@ import (
 	"kc/connector"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/knowledge"
-	"kc/knowledge/writer"
+	objectmodel "kc/object"
+	"kc/object/writer"
 )
 
-func structure(objectID string) knowledge.Address {
-	return knowledge.Address{Kind: knowledge.KindAspect, ObjectID: knowledge.ObjectID(objectID), AspectName: "structure"}
+func structure(objectID string) objectmodel.Address {
+	return objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: objectmodel.ObjectID(objectID), AspectName: "structure"}
 }
 
-func classification(objectID string) knowledge.Address {
-	return knowledge.Address{Kind: knowledge.KindAspect, ObjectID: knowledge.ObjectID(objectID), AspectName: "classification"}
+func classification(objectID string) objectmodel.Address {
+	return objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: objectmodel.ObjectID(objectID), AspectName: "classification"}
 }
 
 func basePlan(mode connector.Mode, desired []connector.Unit, observed []connector.Observed) connector.Plan {
@@ -51,7 +51,7 @@ func TestPatchAddUpdateNoRemove(t *testing.T) {
 	if len(preview.ChangeSet.Operations) != 2 {
 		t.Fatalf("%#v", preview.ChangeSet.Operations)
 	}
-	if preview.ChangeSet.Provenance == nil || preview.ChangeSet.Provenance.OriginKind != knowledge.OriginSource {
+	if preview.ChangeSet.Provenance == nil || preview.ChangeSet.Provenance.OriginKind != objectmodel.OriginSource {
 		t.Fatal(preview.ChangeSet.Provenance)
 	}
 }
@@ -71,7 +71,7 @@ func TestReconcileRemovesAbsentFromSource(t *testing.T) {
 	if preview.Summary.Added != 0 || preview.Summary.Updated != 0 || preview.Summary.Removed != 1 || preview.Summary.Unchanged != 1 {
 		t.Fatalf("%#v", preview.Summary)
 	}
-	if preview.ChangeSet.Operations[0].Op != knowledge.OpRemove || preview.ChangeSet.Operations[0].Address.ObjectID != "Table:c.db.gone" {
+	if preview.ChangeSet.Operations[0].Op != objectmodel.OpRemove || preview.ChangeSet.Operations[0].Address.ObjectID != "Table:c.db.gone" {
 		t.Fatalf("%#v", preview.ChangeSet.Operations)
 	}
 }
@@ -121,17 +121,17 @@ func TestUnchangedIsEmpty(t *testing.T) {
 }
 
 func TestBindingDeclarationParticipatesInDiff(t *testing.T) {
-	address := knowledge.Address{Kind: knowledge.KindAspect, ObjectID: "Table:orders", AspectName: "profile"}
-	source := &knowledge.ValueSource{Kind: knowledge.ValueSourceBinding, Binding: &knowledge.BindingDeclaration{
-		Mode: knowledge.BindingState, DescriptorRef: "resource/mysql-v2",
+	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:orders", AspectName: "profile"}
+	source := &objectmodel.ValueSource{Kind: objectmodel.ValueSourceBinding, Binding: &objectmodel.BindingDeclaration{
+		Mode: objectmodel.BindingState, DescriptorRef: "resource/mysql-v2",
 	}}
 	plan := basePlan(connector.ModePatch, []connector.Unit{{
 		Address: address, Value: nil, SchemaRef: "schema/table.profile", ValueSource: source,
 	}}, []connector.Observed{{
 		Address: address, Digest: kernel.CanonicalDigest(nil),
-		DeclarationDigest: knowledge.DeclarationDigest("schema/table.profile", &knowledge.ValueSource{
-			Kind:    knowledge.ValueSourceBinding,
-			Binding: &knowledge.BindingDeclaration{Mode: knowledge.BindingState, DescriptorRef: "resource/mysql-v1"},
+		DeclarationDigest: objectmodel.DeclarationDigest("schema/table.profile", &objectmodel.ValueSource{
+			Kind:    objectmodel.ValueSourceBinding,
+			Binding: &objectmodel.BindingDeclaration{Mode: objectmodel.BindingState, DescriptorRef: "resource/mysql-v1"},
 		}),
 	}})
 	plan.Scope.Aspects = []string{"profile"}
@@ -142,7 +142,7 @@ func TestBindingDeclarationParticipatesInDiff(t *testing.T) {
 	if preview.Summary.Updated != 1 || preview.ChangeSet.Operations[0].ValueSource.Binding.DescriptorRef != "resource/mysql-v2" {
 		t.Fatalf("binding declaration change was not preserved: %#v", preview)
 	}
-	plan.Observed[0].DeclarationDigest = knowledge.DeclarationDigest("schema/table.profile", source)
+	plan.Observed[0].DeclarationDigest = objectmodel.DeclarationDigest("schema/table.profile", source)
 	unchanged, err := connector.Preview(plan)
 	if err != nil || !unchanged.Empty || unchanged.Summary.Unchanged != 1 {
 		t.Fatalf("unchanged binding declaration: %#v %v", unchanged, err)
@@ -180,8 +180,8 @@ func TestObjectPrefix(t *testing.T) {
 }
 
 func TestMemberInAspectScope(t *testing.T) {
-	member := knowledge.Address{
-		Kind:       knowledge.KindMember,
+	member := objectmodel.Address{
+		Kind:       objectmodel.KindMember,
 		ObjectID:   "ETLTask:job-1",
 		AspectName: "io",
 		MemberKey:  "in-1",
@@ -203,7 +203,7 @@ func TestCommandID(t *testing.T) {
 	if got := connector.CommandID("hive-structure", "abc"); got != "connector:hive-structure:abc" {
 		t.Fatal(got)
 	}
-	ops := []knowledge.Operation{{Op: knowledge.OpPut, Address: structure("Table:c.db.a")}}
+	ops := []objectmodel.Operation{{Op: objectmodel.OpPut, Address: structure("Table:c.db.a")}}
 	first, second := connector.RunKey(ops), connector.RunKey(ops)
 	if first == "" || first != second {
 		t.Fatal("run key must be stable")
@@ -214,13 +214,13 @@ func TestPreviewThenCommit(t *testing.T) {
 	s := testkit.NewSetup(t, "kr://acme/public/physical")
 	firstValue := map[string]any{"qualified_name": "db.t"}
 	addr := structure("Table:c.db.t")
-	first, err := s.Writer.Commit("boot", knowledge.CommitChangeSet{
+	first, err := s.Writer.Commit("boot", objectmodel.CommitChangeSet{
 		TargetRepository:     s.RepositoryID,
 		TargetRef:            "refs/heads/main",
 		BaseCommit:           s.RootCommitID,
 		ExpectedTargetCommit: s.RootCommitID,
-		Operations: []knowledge.Operation{{
-			Op:       knowledge.OpPut,
+		Operations: []objectmodel.Operation{{
+			Op:       objectmodel.OpPut,
 			Address:  addr,
 			Value:    firstValue,
 			PathHint: "table/t.json",
@@ -266,7 +266,7 @@ func TestPreviewThenCommit(t *testing.T) {
 }
 
 func TestAllowEntity(t *testing.T) {
-	addr := knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "note/1"}
+	addr := objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "note/1"}
 	preview, err := connector.Preview(connector.Plan{
 		ConnectorID:      "files",
 		Mode:             connector.ModePatch,

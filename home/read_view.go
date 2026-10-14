@@ -2,7 +2,7 @@ package home
 
 import (
 	"kc/internal/journal"
-	"kc/knowledge/reader"
+	"kc/object/reader"
 )
 
 // ReadView borrows the process's authority handles, command ledger, Writer,
@@ -13,26 +13,29 @@ func (ws *Home) ReadView(j journal.Journal) *Home {
 	// controlMu) are never copied; new Home fields must be carried here
 	// deliberately instead of riding along a struct copy.
 	view := &Home{
-		inventory:    ws.inventory,
-		readOnly:     true,
-		Deployment:   ws.Deployment,
-		Dir:          ws.Dir,
-		Store:        ws.Store,
-		Commands:     ws.Commands,
-		Writer:       ws.Writer,
-		TreeWriter:   ws.TreeWriter,
-		Datasets:     ws.Datasets,
-		Registry:     ws.Registry,
-		ControlPlane: ws.ControlPlane,
-		ControlStore: ws.ControlStore,
-		File:         ws.BindingFile(),
-		Control:      ws.Control,
-		Journal:      j,
-		Index:        ws.Index,
-		Projection:   ws.Projection,
-		Hydrator:     ws.Hydrator,
-		ReadCache:    ws.ReadCache,
-		Stores:       ws.Stores,
+		inventory:          ws.inventory,
+		readOnly:           true,
+		Deployment:         ws.Deployment,
+		Dir:                ws.Dir,
+		Store:              ws.Store,
+		Commands:           ws.Commands,
+		Writer:             ws.Writer,
+		TreeWriter:         ws.TreeWriter,
+		Datasets:           ws.Datasets,
+		Registry:           ws.Registry,
+		ControlPlane:       ws.ControlPlane,
+		ControlStore:       ws.ControlStore,
+		File:               ws.BindingFile(),
+		Control:            ws.Control,
+		Journal:            j,
+		Index:              ws.Index,
+		Plugins:            ws.Plugins,
+		LiveAccess:         ws.LiveAccess,
+		ObjectMaintenance:  ws.ObjectMaintenance,
+		DatasetPreparation: ws.DatasetPreparation,
+		Hydrator:           ws.Hydrator,
+		ReadCache:          ws.ReadCache,
+		Stores:             ws.Stores,
 	}
 	view.Reader = reader.NewReader(ws.Store)
 	view.Reader.SetJournal(j)

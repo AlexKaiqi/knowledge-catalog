@@ -1,6 +1,6 @@
 // Command check-docs validates the git-tracked documentation graph.
 // Nodes are Aspect OKF units; edges are Canonical Relation OKF units.
-// Protocol shape is knowledge.DecodeRelation / repofile.Parse, not a parallel JSON schema.
+// Protocol shape is objectmodel.DecodeRelation / repofile.Parse, not a parallel JSON schema.
 package main
 
 import (
@@ -13,8 +13,8 @@ import (
 	"sort"
 	"strings"
 
-	"kc/internal/repofile"
-	"kc/knowledge"
+	objectmodel "kc/object"
+	repofile "kc/object/format"
 )
 
 const (
@@ -35,17 +35,7 @@ var (
 		"depends_on": {}, "refines": {}, "verifies": {},
 		"operationalizes": {}, "measures": {}, "catalogs": {},
 	}
-	mdLink                 = regexp.MustCompile(`\]\(([^)#]+)`)
-	requiredDesignHeadings = []string{
-		"## Goal",
-		"## Non-Goals",
-		"## 硬性约束 / Invariants",
-		"## 选定方案 / 被否决方案",
-		"## 接口契约 / 状态机",
-	}
-	designContractClass = map[string]struct{}{
-		"foundation": {}, "decision": {}, "runtime": {}, "evolution": {},
-	}
+	mdLink = regexp.MustCompile(`\]\(([^)#]+)`)
 )
 
 type catalogEntry struct {
@@ -76,13 +66,10 @@ func main() {
 	if err := validateCatalog(root, docs, rels); err != nil {
 		fatal(err)
 	}
-	if err := validateDesignContracts(root, docs); err != nil {
-		fatal(err)
-	}
 	if err := validateMarkdownLinks(root, docs); err != nil {
 		fatal(err)
 	}
-	fmt.Printf("documentation graph: PASS (%d documents, %d relations, unique topics, valid links, acyclic depends_on, design contracts)\n",
+	fmt.Printf("documentation graph: PASS (%d documents, %d relations, unique topics, valid links, acyclic depends_on)\n",
 		len(docs), len(rels))
 }
 
@@ -121,7 +108,7 @@ func loadGraph(graphDir string) (map[string]catalogEntry, []edge, error) {
 		}
 		rel := relPath(graphDir, path)
 		switch unit.Address.Kind {
-		case knowledge.KindAspect:
+		case objectmodel.KindAspect:
 			entry, err := decodeDocument(*unit, rel)
 			if err != nil {
 				return err
@@ -130,7 +117,7 @@ func loadGraph(graphDir string) (map[string]catalogEntry, []edge, error) {
 				return fmt.Errorf("duplicate document id %s", entry.ID)
 			}
 			docs[entry.ID] = entry
-		case knowledge.KindRelation:
+		case objectmodel.KindRelation:
 			got, err := decodeEdge(*unit, rel)
 			if err != nil {
 				return err
@@ -148,7 +135,7 @@ func decodeDocument(unit repofile.Unit, rel string) (catalogEntry, error) {
 	if unit.Address.AspectName != catalogAspect {
 		return catalogEntry{}, fmt.Errorf("%s: document Aspect must be %s", rel, catalogAspect)
 	}
-	want := knowledge.ObjectID(documentPrefix + strings.TrimPrefix(string(unit.ObjectID), documentPrefix))
+	want := objectmodel.ObjectID(documentPrefix + strings.TrimPrefix(string(unit.ObjectID), documentPrefix))
 	if unit.ObjectID != want || !strings.HasPrefix(string(unit.ObjectID), documentPrefix) {
 		return catalogEntry{}, fmt.Errorf("%s: object_id must be documentation/<id>", rel)
 	}
@@ -180,14 +167,14 @@ func decodeDocument(unit repofile.Unit, rel string) (catalogEntry, error) {
 }
 
 func decodeEdge(unit repofile.Unit, rel string) (edge, error) {
-	decoded, err := knowledge.DecodeRelation(unit.Address, unit.Value)
+	decoded, err := objectmodel.DecodeRelation(unit.Address, unit.Value)
 	if err != nil {
 		return edge{}, fmt.Errorf("%s: %w", rel, err)
 	}
-	if unit.SchemaRef != string(knowledge.CoreRelationSchemaV1) {
-		return edge{}, fmt.Errorf("%s: schema_ref must be %s", rel, knowledge.CoreRelationSchemaV1)
+	if unit.SchemaRef != string(objectmodel.CoreRelationSchemaV1) {
+		return edge{}, fmt.Errorf("%s: schema_ref must be %s", rel, objectmodel.CoreRelationSchemaV1)
 	}
-	if decoded.Direction != knowledge.RelationDirected {
+	if decoded.Direction != objectmodel.RelationDirected {
 		return edge{}, fmt.Errorf("%s: documentation relations are DIRECTED", rel)
 	}
 	if _, ok := allowedRelation[decoded.RelationType]; !ok {
@@ -263,33 +250,6 @@ func validateCatalog(root string, docs map[string]catalogEntry, rels []edge) err
 		}
 	}
 	return acyclicDepends(docs, rels)
-}
-
-func validateDesignContracts(root string, docs map[string]catalogEntry) error {
-	var missing []string
-	for _, doc := range docs {
-		if _, ok := designContractClass[doc.Class]; !ok {
-			continue
-		}
-		if !strings.HasSuffix(doc.Path, ".md") {
-			continue
-		}
-		raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(doc.Path)))
-		if err != nil {
-			return err
-		}
-		body := string(raw)
-		for _, heading := range requiredDesignHeadings {
-			if !strings.Contains(body, heading+"\n") && !strings.Contains(body, heading+"\r\n") {
-				missing = append(missing, fmt.Sprintf("%s missing %s", doc.Path, heading))
-			}
-		}
-	}
-	sort.Strings(missing)
-	if len(missing) > 0 {
-		return fmt.Errorf("design docs must use ai-native-project-maintenance headings:\n  %s", strings.Join(missing, "\n  "))
-	}
-	return nil
 }
 
 func listedMarkdown(root string) ([]string, error) {

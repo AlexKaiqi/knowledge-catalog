@@ -1,37 +1,41 @@
 # Knowledge Catalog — 通用知识底座（Go 参考实现）
 
-让不同团队维护的知识能独立发布、按任务组合，并供人、应用和 Agent 带依据使用、持续修正。
-这是 登记空间 协议的 Go 参考实现：集成 lakeFS 等版本化存储，提供 Dataset 文件范围组合与
-独立消费授权、自定义知识模型、声明式索引和统一访问。大文件、大量文件的存储与版本能力
-由底层方案承载，系统整体容量与恢复能力另需验证。
+为人、应用和 Agent 提供可发现、可获准、可使用并留痕的对象环境。对象可以是材料、数据、
+代码、工具或服务；团队独立维护供给，使用者按任务选择并在真实授权下使用、持续修正。
+这是 Catalog 协议的 Go 参考实现：Snapshot 仓承担协作、版本与生产发布，Object 层组织
+对象内容及元数据，插件在明确作用域内扩展业务能力。当前具体插件方向为声明式索引与
+LiveAccess；Affordance 同时说明对象和系统自身怎样使用。大文件、大量文件的存储与版本
+能力由底层方案承载，系统整体容量与恢复能力另需验证。
 
 接入方维护自己的内容、模型和来源；消费者采用需要的范围，并保留所用版本与引用依据。
 普通文件可先组合交付，需要结构化知识、查询或动态资源时再增加相应能力。
-产品价值与目标形态由[架构总览](docs/reviewed/core-architecture.md)拥有。
+产品价值、Agent 使用闭环及结构化架构图由[架构总览](docs/reviewed/core-architecture.md)拥有。
+申请访问衔接资源拥有者或既有业务流程；通用自主申请与 Wield 等后续扩展仍属设计方向。
 
 ## 当前 MVP
 
 当前版本是**预配置与既有授权下可用的单实例 Server/Client 参考实现**：即使部署在一台机器上，Connector、`kc`、`kcfs` 也只通过 typed API 进入 KC Server；Store 和 Retrieval provider 可以本机部署，但不能绕过知识、授权、证据和索引语义。核心入口已实现，不代表全程自助、所有 adapter 或宿主已完成验收。共享服务试点有条件可用，多实例生产服务尚未验收；边界见 [`docs/reviewed/mvp-acceptance.md`](docs/reviewed/mvp-acceptance.md)，验证结论须对应具体运行范围与源码版本。
 
-面向接入方与消费方的产品使用手册：[`docs/product.html`](docs/product.html)（派生 HTML，不进文档图）。单个文件即可离线打开、直接分享，也支持打印为 PDF。
+完整产品设计与使用书：[`docs/product.html`](docs/product.html)（由 owner 文档派生，不进文档图）。
+正文覆盖对象注册与环境管理、Agent 使用闭环和结构化架构图；单个文件即可离线打开、直接分享，也支持打印为 PDF。
 在仓库中一起阅读手册和设计 Markdown（UTF-8 HTML）：`make docs-serve`，然后打开提示的地址（默认 `http://127.0.0.1:8766/docs/product.html`）。
 
 先按角色进入，不必先读完整设计：
 
 | 角色 | 最短闭环 | 入口 |
 |---|---|---|
-| 知识接入方 | Client `create` → `attach --repo` → `writer commit --dir`（或 `writer put`）→ `read/provenance --repo` | `kc help write` |
+| 知识接入方 | Client `create` → `attach --repo` → `writer commit --dir`（或 `writer put <对象URN>`）→ `read <对象URN>`；来源核对走 `provenance` | `kc help write` |
 | 治理方 | `attach --repo <配置源>` → `dataset define --source <repository>` → `grant add`；serve 追 live 投影，必要时 `operations projection sync --repo` | `kc help compose` |
-| 知识消费方 | `连接服务 → show`；已知对象直接 `read`，未知对象再 `schema list → search`；选择 `--repo` 或 `--dataset` | `kc help consume` |
+| 知识消费方 | `连接服务 → show`；已知对象直接 `read <对象URN>`，可加 `--dataset`；未知对象先按仓或 Dataset `search`，再读取命中引用 | `kc help consume` |
 
 Dataset 负责文件范围、组合与版本交付，不是写入源仓的前置条件；普通文件无需知识 Schema，结构校验和声明式检索在知识层提供。
 
-每个部署显式绑定实际 `kr://kc/system` 仓；部署初始化将 `knowledge/system` 的模型、入口、机制、使用说明和基础 Schema 经 Writer 发布，启动核对，运行时只读实际仓。接入方在自己的
+每个部署显式绑定实际 `kr://kc/system` 仓；部署初始化将 `systemrepo/content` 的模型、入口、机制、使用说明和基础 Schema 经 Writer 发布，启动核对，运行时只读实际仓。接入方在自己的
 Knowledge Repository 中版本化 Domain Schema；Writer 会校验 Schema 文档、兼容性和引用实例。
 `kc deployment system publish --config deployment.yaml` 保留显式发布/核对入口（空仓写入、已占用只校验），不自动覆盖不同版本，也不在启动时挂载内置仓。
 `POST /knowledge/v1/schemas:list`（CLI `kc schema list`）可在选择知识集前分页列出一个固定 Repository 已发布的实体。面向
 人、IDE 与通用 Agent 文件工具的默认投影是 Semantic YAML view（例如
-`knowledge/semantic/metrics/*.yaml`），Canonical 单元信封只属于维护/存储形状。产品设计和
+`object/semantic/metrics/*.yaml`），Canonical 单元信封只属于维护/存储形状。产品设计和
 用例见 [`docs/reviewed/knowledge.md`](docs/reviewed/knowledge.md)。
 
 **Knowledge Catalog 语义只有一套**：身份、版本、来源、写边界、知识集组合、维护闭环、联邦读取。不同的是 store adapter。协议分层 ⓪–③（[`docs/reviewed/core-architecture.md`](docs/reviewed/core-architecture.md)；不要和介质梯子混名）：
@@ -53,7 +57,7 @@ M 访问物化      StateLookup 端口 + 外部 State / Stream runtime（上层�
 - **身份**（RESOLVE，②）：`ObjectIdentity ≠ path`，身份在文件内容（frontmatter），Address = `object_id` + aspect + member。
 - **来源**（GET_PROVENANCE，②）：精确 commit 坐标 + 各单元信封；不是 git log。
 - **写**：`COMMIT`/`PROPOSAL` → Snapshot；State/Stream 是 Aspect Binding 的观察面，不是 Writer Surface。
-- **目标 store**：当前通过 `snapshot` 根包接入 lakeFS，具体后端在 `snapshot/internal/lakefsimpl`；Dataset、权限、HTTP 与完整控制台分别归具名一级模块。Gitea/filegit/Dolt 存储 adapter 已退役删除；独立身份认证不受影响。`index/opensearch` 提供可重建 Snapshot/State 派生。未配置检索时仍提供 Snapshot 精确 READ/VFS，但 SEARCH/RELATIONS 明确缺能力；Bound State READ 与动态字段 SEARCH 通过独立 runtime 服务。见 [`docs/reviewed/core-architecture.md`](docs/reviewed/core-architecture.md)。
+- **目标 store**：当前通过 `snapshot` 根包接入 lakeFS，具体后端在 `snapshot/internal/lakefsimpl`；Dataset、权限、HTTP 与完整控制台分别归具名一级模块。Gitea/filegit/Dolt 存储 adapter 已退役删除；独立身份认证不受影响。`declarativeindex/opensearch` 提供可重建 Snapshot/State 派生。未配置检索时仍提供 Snapshot 精确 READ/VFS，但 SEARCH/RELATIONS 明确缺能力；Bound State READ 与动态字段 SEARCH 通过独立 runtime 服务。见 [`docs/reviewed/core-architecture.md`](docs/reviewed/core-architecture.md)。
 
 ### 概念与动词
 
@@ -80,27 +84,40 @@ snapshot/           # ⓪ Store / TreeStore / ref / CAS / Advanced
 ├── access/         # 服务、Repository 与 Dataset 授权
 ├── service/        # 原始文件与 Dataset HTTP 服务
 ├── console/        # 完整控制台与 Dataset 页面
+├── client/ cli/    # 所属 typed SDK 与可组合任务交互
 └── internal/       # lakeFS 与底层私有实现
-knowledge/          # ② Address / Aspect / Schema / Binding / ChangeSet / Repository
-├── writer/         # Knowledge COMMIT / PROPOSAL
-├── reader/         # 声明/快照精确读、拼装、固定 pin
-├── semanticview/   # 固定 KnowledgeValue → 带 _kc 坐标的消费 YAML
-└── serving/        # 消费逻辑 READ；State Binding hydrate + 双 basis
-knowledgeapp/       # Dataset 发布准备与消费编排；连接授权、知识读写和检索
-index/              # ③ 工作投影控制器
-retrieval/          # ③ AccessSpec / Search / Refine + 物理 provider
-└── opensearch/
+object/             # 业务对象基本合同、固定读写与唯一组装
+├── reader/ writer/ service/         # 固定解释与任务流程
+├── client/ cli/                    # 所属 typed SDK 与任务交互
+├── format/ semanticview/            # 文件编码及消费表示
+└── cache/ maintenance/              # Hydrator 与独立派生维护
+interfaces/         # 普通能力合同、实现解析、登记和调用
+└── service/        # 固定范围、授权、隔离调用与结果核验
+liveaccess/         # 当前态访问的独立实现及来源端口
+├── service/ contract/
+├── client/ cli/    # 当前态访问、调用与插件说明入口
+└── discovery/      # 向动态投影供给已核验观察
+discovery/          # Schema 字段 access、逻辑查询及补判
+├── service/ datasets/               # 发现任务及可搜索 Dataset 流程
+├── client/ cli/                    # 所属 typed SDK 与任务交互
+├── projection/                     # 派生编译、固定依据与就绪
+└── llmhttp/                        # 可选模型处理提供方
+declarativeindex/   # 声明式索引插件、具体投影与维护
+├── projection/ control/            # 固定/动态投影与后台恢复
+├── opensearch/                     # 私有物理驱动的公开装配入口
+└── client/ cli/ plugin/             # typed 运维任务与真实插件登记
+systemrepo/         # 完整平台出版物的显式发布与核对
 controlplane/       # PROPOSAL → Preview → validate → Merge
 gate/               # merge 证据清单
 hook/               # CLI 出站 pre/post
 connector/          # Collector 的 STATE Address 对账 helper
 observability/      # access→retrieval→refine→feedback 证据链、trace、派生 hitmap/training
 datasetfs/         # Linux go-fuse 宿主投影；只消费固定的应用层文件计划
-cli/  cmd/kc/       # KC Client + Server 装配；公开业务命令不直开 Home
+cli/  cmd/kc/       # 全局上下文、五模块 CLI 装配、部署与服务进程入口
+server/ invocation/ # typed HTTP 接入、共享执行载体与所属服务适配
       cmd/kcfs/     # 本机多目录 mount 进程；不暴露为 HTTP 动词
 internal/
-├── gitdir/         # git 目录 plumbing + commit 签名；⓪ 适配器与 ① 登记表共用
-├── repofile/       # ② 磁盘单元格式（frontmatter + JSON body）；不是 store
+├── gitdir/         # 不带领域语义的 Git 目录 plumbing
 ├── journal/        # 本机过程账
 ├── jsonfile/       # 原子 JSON 落盘
 ├── testkit/        # T12 / Writer 契约与测试装置
@@ -114,6 +131,10 @@ docs/
     ├── core-architecture.md … service.md  # 按组件的设计章
     └── terminology.md、test-catalog.md 等 # 验证、研究、规模与过程资料
 ```
+
+生产 `kc` 的业务请求经各模块 SDK 进入 Server；handler/stage 的内部登记、Invocation 遥测
+和 kcfs 的本机夹具装配仅在根 CLI 的 `_test.go` 中编译。模块参数、输出及故障矩阵随所属
+CLI/服务测试保存，根保留全局 argv、认证上下文、跨模块旅程与实际 Server 集成验证。
 
 ## Dataset 登记与组合
 
@@ -198,26 +219,27 @@ kc login
 REPOSITORY="$(kc create --name public-core | jq -r '.repositoryId')"
 kc attach --repo "$REPOSITORY"
 
-# 接入方：只提交知识源 id 和草稿，读回同一 --repo。
-kc writer put --command-id schema-1 --repo "$REPOSITORY" \
-  --object schema/runbook.body \
+# 接入方：构造对象引用，提交完整内容，再用同一引用读回。
+REFERENCE_REPO="$(printf '%s' "$REPOSITORY" | jq -sRr @uri)"
+SCHEMA_REFERENCE="urn:kc:object:${REFERENCE_REPO}:schema%2Frunbook.body"
+RUNBOOK_REFERENCE="urn:kc:object:${REFERENCE_REPO}:runbook%2Fpayment-oncall"
+kc writer put "$SCHEMA_REFERENCE" --command-id schema-1 \
   --value '{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}'
-kc writer put --command-id sync-1 --repo "$REPOSITORY" \
-  --object runbook/payment-oncall --schema-ref schema/runbook.body \
+kc writer put "$RUNBOOK_REFERENCE" --command-id sync-1 --schema-ref schema/runbook.body \
   --value '{"body":"切换支付流量前先检查冻结窗口"}' \
   --origin-kind SOURCE --source-ref file:///source/runbooks/payment-oncall.md
-kc read --repo "$REPOSITORY" --object runbook/payment-oncall
+kc read "$RUNBOOK_REFERENCE"
 
 # 治理方：命名知识集、发权。serve 追 live 投影；sync 用于历史 EnsureAt / 强制重建 / 排障。
 kc dataset define agent --revision 1 --source "$REPOSITORY"
 kc operations projection sync --repo "$REPOSITORY"
 kc registry audit
 
-# 消费方：对准已发布 Dataset。回执带 commit；精确历史重放抄 --repo --commit。
+# 消费方：同一对象引用限定到已发布 Dataset；精确历史读取保留返回的 commit。
 kc show
 kc show
 kc search --dataset agent --query 冻结窗口
-kc read --dataset agent --object runbook/payment-oncall
+kc read "$RUNBOOK_REFERENCE" --dataset agent
 kc provenance --dataset agent --object runbook/payment-oncall
 kc log --dataset agent --object runbook/payment-oncall
 # 共享服务可验证 Gitea 登录；调用方带 Authorization，主体变为稳定的 gitea:<user-id>
@@ -253,9 +275,9 @@ kc serve --config deployment.yaml # auth: gitea / authURL / bootstrapPrincipal �
 | T3 Atomicity | 任一操作失败无部分提交 |
 | T4 Command Idempotency | 精确重试返回原 Receipt；异内容冲突 |
 | T5 | 已退役：底座没有 APPEND/Stream surface；state/stream 通过 Aspect Binding 声明 |
-| T6 Authority Store | lakeFS/Gitea 的版本身份、CAS、pinned read 与 provider-neutral conformance；夹具与真实服务证据分开 |
+| T6 Authority Store | lakeFS 的版本身份、CAS、pinned read 与 provider-neutral conformance；夹具与真实服务证据分开 |
 | T7 Ingestion/Grounding | ingest 扫描、reconcile 对账、groundingCitation |
-| T8 Retrieval Projection | `index/` 可重建投影定位 + Canonical 回读；非权威、basis/lag；`AspectSelector` 只裁显式 READ |
+| T8 Retrieval Projection | `discovery/projection/` 通用执行合同与 `declarativeindex/projection/` 可重建投影定位 + Canonical 回读；非权威、basis/lag；`AspectSelector` 只裁显式 READ |
 | T9 Maintenance Loop | 完整多 Repository Preview、validateStructure、Validation basis；Merge 更新源仓，重新发布 Dataset 后新请求可见 |
 | T10 Refine | SEM_FILTER 三值；SEM_RERANK 单次 listwise Provider、Ref-preserving RankGroup、fixed-basis/lane evidence、输入字节预算；Responses-compatible Luna 可选实测 |
 | T11 登记空间 | Dataset Registry、不可变发布记录、故障传播、来源不覆盖、固定已发布版本 |
@@ -263,14 +285,14 @@ kc serve --config deployment.yaml # auth: gitea / authURL / bootstrapPrincipal �
 | Hook / Gate | pre 非 0 无 commit；REPLAYED 不打 hook；post 只含指针；缺 suite 不能 merge；Preview 变了旧 PASSED 作废 |
 | Collector helper | `patch` 不误删；`reconcile` 只在 Observed∩Scope 上 REMOVE；超 Scope 拒绝；预览可 COMMIT |
 | End-to-end journey | `cli/mvp_acceptance_test.go` 固定接入方/消费方最短闭环；`cli/user_journey_test.go` 再覆盖 HTTP 读写、proposal、权限和生命周期 |
-| Layering | `internal/arch`：[`docs/reviewed/core-architecture.md`](docs/reviewed/core-architecture.md) 的 import 与类型归属跑成断言。`snapshot/dataset → snapshot`；②不得依赖③；Snapshot adapter 不得依赖 Knowledge/repofile/Retrieval；ObjectID/Address/Provenance 只能由 `knowledge` 声明 |
-| CLI surface | `cli/command_test.go`：Help 与命令表双向对齐；退役动词仍报替代品；stage 归属（governed 需要工作区、home 级动词不需要）；`--limit` 全动词一致拒绝非法值 |
+| Layering | `internal/arch`：[`docs/reviewed/core-architecture.md`](docs/reviewed/core-architecture.md) 的 import 与类型归属跑成断言。`snapshot/dataset → snapshot`；②不得依赖③；Snapshot adapter 不得依赖 Object/format/Discovery；ObjectID/Address/Provenance 由 `object` 声明 |
+| CLI surface | 各模块 CLI 合同与根 `cli/command_test.go`：Help、输入与命令表对齐；退役动词仍报替代品；嵌入测试的 stage 归属保持；公开参数边界与 Server 集成分别验证 |
 
 ## 文档
 
 - [`docs/product.html`](docs/product.html)：给人读的派生产品说明（不进文档图）。本机 `make docs-serve` 把设计 Markdown 渲染成 UTF-8 HTML，产品页「继续阅读」可点进去。
 - [`docs/README.md`](docs/README.md)：人类文档地图、文件类型分工和维护规则。
-- [`docs/graph/`](docs/graph/)：文档节点与关系的 OKF 知识单元（主题所有权、`depends_on` / `refines` / `verifies` 等）。关系信封由 `knowledge.DecodeRelation` 校验。
+- [`docs/graph/`](docs/graph/)：文档节点与关系的 OKF 知识单元（主题所有权、`depends_on` / `refines` / `verifies` 等）。关系信封由 `object.DecodeRelation` 校验。
 - [`docs/reviewed/terminology.md`](docs/reviewed/terminology.md) → [`docs/reviewed/core-architecture.md`](docs/reviewed/core-architecture.md)：系统设计主干。
 - [`docs/reviewed/walkthrough.md`](docs/reviewed/walkthrough.md)：当前 CLI 操作旅程；[`docs/reviewed/mvp-acceptance.md`](docs/reviewed/mvp-acceptance.md) 与 [`docs/reviewed/test-catalog.md`](docs/reviewed/test-catalog.md)：状态和证据。
 
@@ -278,4 +300,4 @@ kc serve --config deployment.yaml # auth: gitea / authURL / bootstrapPrincipal �
 
 ## Store 扩展
 
-权威 Adapter 实现 Snapshot capability，并与上层 Reader/Writer 组合验证同一 conformance（lakeFS、Gitea）；具体通过范围以各 adapter 的运行证据为准。具体 adapter 只在 `home/authority_drivers.go` 装配。检索引擎实现 `Retriever` / `ProjectionMaintainer`，Relation 候选同样只能来自 exact-basis Retriever，再按候选 ID 回读 Canonical。见 [`docs/reviewed/core-architecture.md`](docs/reviewed/core-architecture.md)。
+权威 Adapter 实现 Snapshot capability，并与上层 Reader/Writer 组合验证同一 conformance；当前生产实现为 lakeFS，夹具与真实部署的通过范围分别以运行证据为准。具体 adapter 只在 `home/authority_drivers.go` 装配。检索引擎实现 `Retriever` / `ProjectionMaintainer`，Relation 候选同样只能来自 exact-basis Retriever，再按候选 ID 回读 Canonical。见 [`docs/reviewed/core-architecture.md`](docs/reviewed/core-architecture.md)。

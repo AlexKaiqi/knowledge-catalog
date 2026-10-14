@@ -9,8 +9,8 @@ import (
 	"kc/gate"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/knowledge"
-	"kc/knowledge/writer"
+	objectmodel "kc/object"
+	"kc/object/writer"
 	"kc/snapshot/dataset"
 )
 
@@ -48,7 +48,7 @@ func setupLoop(t *testing.T) loop {
 
 func commitToMain(t *testing.T, w *writer.Writer, repositoryID kernel.RepositoryID, base kernel.CommitID, objectID string, value any) kernel.CommitID {
 	t.Helper()
-	receipt, err := w.Commit("main:"+objectID+":"+string(base), knowledge.CommitChangeSet{
+	receipt, err := w.Commit("main:"+objectID+":"+string(base), objectmodel.CommitChangeSet{
 		TargetRepository: repositoryID, TargetRef: "refs/heads/main",
 		BaseCommit: base, ExpectedTargetCommit: base,
 		Operations: testkit.PutEntity(objectID, value, ""),

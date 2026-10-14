@@ -3,6 +3,7 @@ package cli_test
 import (
 	"context"
 	"encoding/json"
+	snapshotclient "kc/snapshot/client"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -59,8 +60,8 @@ func TestDatasetPublishingRecoveryKeepsAcceptedVersion(t *testing.T) {
 		}
 		return c
 	}
-	coordinate := func(pin *dataset.ResolvedKnowledgeSet) kcclient.WorkspaceFileCoordinate {
-		c := kcclient.WorkspaceFileCoordinate{Dataset: "incident", View: "repository"}
+	coordinate := func(pin *dataset.ResolvedKnowledgeSet) snapshotclient.WorkspaceFileCoordinate {
+		c := snapshotclient.WorkspaceFileCoordinate{Dataset: "incident", View: "repository"}
 		if pin != nil {
 			raw, err := json.Marshal(pin)
 			if err != nil {
@@ -77,10 +78,10 @@ func TestDatasetPublishingRecoveryKeepsAcceptedVersion(t *testing.T) {
 	baseline := map[string]string{}
 	assertDelivered := func(c *kcclient.Client, pin *dataset.ResolvedKnowledgeSet, file, marker string) {
 		t.Helper()
-		var out kcclient.WorkspaceFileReadResponse
-		if err := c.WorkspaceFilesService().Read(context.Background(), kcclient.WorkspaceFileReadRequest{
+		var out snapshotclient.WorkspaceFileReadResponse
+		if err := c.WorkspaceFilesService().Read(context.Background(), snapshotclient.WorkspaceFileReadRequest{
 			WorkspaceFileCoordinate: coordinate(pin), Path: file,
-		}, kcclient.RequestOptions{}, &out); err != nil {
+		}, snapshotclient.RequestOptions{}, &out); err != nil {
 			t.Fatalf("delivered read %s: %v", file, err)
 		}
 		got := string(out.Content)
@@ -106,10 +107,10 @@ func TestDatasetPublishingRecoveryKeepsAcceptedVersion(t *testing.T) {
 	reader := readerClient()
 	accepted := &dataset.ResolvedKnowledgeSet{}
 	{
-		var mounts kcclient.WorkspaceFileMountsResponse
-		if err := reader.WorkspaceFilesService().Mounts(context.Background(), kcclient.WorkspaceFileMountsRequest{
+		var mounts snapshotclient.WorkspaceFileMountsResponse
+		if err := reader.WorkspaceFilesService().Mounts(context.Background(), snapshotclient.WorkspaceFileMountsRequest{
 			WorkspaceFileCoordinate: coordinate(nil),
-		}, kcclient.RequestOptions{}, &mounts); err != nil {
+		}, snapshotclient.RequestOptions{}, &mounts); err != nil {
 			t.Fatal(err)
 		}
 		if len(mounts.Mounts) != 1 || mounts.Pin.Revision != 1 {
@@ -122,10 +123,10 @@ func TestDatasetPublishingRecoveryKeepsAcceptedVersion(t *testing.T) {
 	// 准备阶段失败：来源未在 Catalog 登记 → 冻结失败拒绝，已接受版本继续服务。
 	expectCode(t, call("dataset", "define", "incident", "--revision", "2", "--source", "kr://recover/unconfigured@notes@note"), "KNOWLEDGE_SET_INVALID")
 	{
-		var mounts kcclient.WorkspaceFileMountsResponse
-		if err := reader.WorkspaceFilesService().Mounts(context.Background(), kcclient.WorkspaceFileMountsRequest{
+		var mounts snapshotclient.WorkspaceFileMountsResponse
+		if err := reader.WorkspaceFilesService().Mounts(context.Background(), snapshotclient.WorkspaceFileMountsRequest{
 			WorkspaceFileCoordinate: coordinate(nil),
-		}, kcclient.RequestOptions{}, &mounts); err != nil {
+		}, snapshotclient.RequestOptions{}, &mounts); err != nil {
 			t.Fatal(err)
 		}
 		if mounts.Pin.Revision != 1 || mounts.Pin.PinID != accepted.PinID {
@@ -175,10 +176,10 @@ func TestDatasetPublishingRecoveryKeepsAcceptedVersion(t *testing.T) {
 	assertDelivered(recovered, accepted, "notes/recover.md", "durable")
 	expectCode(t, call("dataset", "define", "incident", "--revision", "1", "--source", "kr://recover/source@notes@note"), "NON_FAST_FORWARD")
 	{
-		var mounts kcclient.WorkspaceFileMountsResponse
-		if err := recovered.WorkspaceFilesService().Mounts(context.Background(), kcclient.WorkspaceFileMountsRequest{
+		var mounts snapshotclient.WorkspaceFileMountsResponse
+		if err := recovered.WorkspaceFilesService().Mounts(context.Background(), snapshotclient.WorkspaceFileMountsRequest{
 			WorkspaceFileCoordinate: coordinate(nil),
-		}, kcclient.RequestOptions{}, &mounts); err != nil {
+		}, snapshotclient.RequestOptions{}, &mounts); err != nil {
 			t.Fatal(err)
 		}
 		if mounts.Pin.Revision != 1 || mounts.Pin.PinID != accepted.PinID {
@@ -190,10 +191,10 @@ func TestDatasetPublishingRecoveryKeepsAcceptedVersion(t *testing.T) {
 	writeSourceTree(t, materials, "note/second.md", "second\n")
 	body(t, call("writer", "commit", "--command-id", "recovery-write-2", "--repo", "kr://recover/source", "--dir", materials))
 	body(t, call("dataset", "define", "incident", "--revision", "2", "--source", "kr://recover/source@notes@note", "--base-rev", string(accepted.Repositories["kr://recover/source"])))
-	var after kcclient.WorkspaceFileMountsResponse
-	if err := recovered.WorkspaceFilesService().Mounts(context.Background(), kcclient.WorkspaceFileMountsRequest{
+	var after snapshotclient.WorkspaceFileMountsResponse
+	if err := recovered.WorkspaceFilesService().Mounts(context.Background(), snapshotclient.WorkspaceFileMountsRequest{
 		WorkspaceFileCoordinate: coordinate(nil),
-	}, kcclient.RequestOptions{}, &after); err != nil {
+	}, snapshotclient.RequestOptions{}, &after); err != nil {
 		t.Fatal(err)
 	}
 	if after.Pin.Revision != 2 {

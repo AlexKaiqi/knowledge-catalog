@@ -11,7 +11,7 @@ import (
 
 	"kc/connector"
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 )
 
 func TestTickHonorsSchedulePauseAndArtifactIntegrity(t *testing.T) {
@@ -93,13 +93,13 @@ type testWriter struct {
 	fail     bool
 	reject   error
 	commands []string
-	changes  []knowledge.CommitChangeSet
+	changes  []objectmodel.CommitChangeSet
 }
 
 func (*testWriter) Head(context.Context, kernel.RepositoryID, string) (kernel.CommitID, error) {
 	return "base", nil
 }
-func (w *testWriter) Commit(_ context.Context, command string, change knowledge.CommitChangeSet) (kernel.CommitID, error) {
+func (w *testWriter) Commit(_ context.Context, command string, change objectmodel.CommitChangeSet) (kernel.CommitID, error) {
 	w.calls++
 	w.commands = append(w.commands, command)
 	w.changes = append(w.changes, change)

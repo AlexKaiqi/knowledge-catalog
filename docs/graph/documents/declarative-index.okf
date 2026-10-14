@@ -7,7 +7,7 @@ path_hint: docs/graph/documents/declarative-index.okf
 {
   "id": "declarative-index",
   "path": "docs/reviewed/declarative-index.md",
-  "title": "声明式索引：逻辑访问声明与物理实现分离",
+  "title": "声明式索引：插件重构",
   "class": "decision",
   "lifecycle": "active",
   "audience": [
@@ -15,6 +15,9 @@ path_hint: docs/graph/documents/declarative-index.okf
     "contributor"
   ],
   "ownerTopics": [
-    "aspect-addressing-and-access-spec"
+    "aspect-addressing-and-access-spec",
+    "declarative-index-plugin-logical-contract",
+    "declarative-index-plugin-requirements-and-guarantees",
+    "declarative-index-module-control-cli-boundaries"
   ]
 }

@@ -12,9 +12,9 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"kc/client"
+	retrieval "kc/discovery"
 	"kc/kernel"
-	"kc/knowledge"
-	"kc/retrieval"
+	objectmodel "kc/object"
 )
 
 func TestPassThroughLoginCarriesIdentityAuthenticationAndTrace(t *testing.T) {
@@ -197,7 +197,7 @@ func TestKnowledgeRerankRequestSerializesTypedCandidatesAndSpec(t *testing.T) {
 	topK := 10
 	raw, err := json.Marshal(client.KnowledgeRerankRequest{
 		KnowledgeDatasetIdentity: client.KnowledgeDatasetIdentity{Dataset: "agent"},
-		Candidates:               []knowledge.KnowledgeRef{{Repository: "kr://acme/public/core", Object: "runbook/p1"}},
+		Candidates:               []objectmodel.KnowledgeRef{{Repository: "kr://acme/public/core", Object: "runbook/p1"}},
 		Spec: retrieval.SemanticOperatorSpec{
 			SpecRef: "urn:semantic-spec:runbook", Revision: 1, Operator: retrieval.OpSemanticRerank,
 			Criterion: "relevance", OutputContract: retrieval.OutputContract{TopK: &topK},

@@ -13,16 +13,12 @@ func TestCLIEvaluationDailyJourneyProductStdout(t *testing.T) {
 	repo := "kr://acme/public/core"
 	body(t, kc(home, "init"))
 	seedRepo(t, home, repo)
-	body(t, kc(home, "put", "--command-id", "schema-1", "--repo", repo,
-		"--object", "schema/runbook.body",
-		"--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
-	body(t, kc(home, "put", "--command-id", "source-1", "--repo", repo,
-		"--object", "runbook/payment", "--schema-ref", "schema/runbook.body",
-		"--value", `{"body":"切换支付流量前先检查冻结窗口"}`))
+	body(t, kc(home, "put", testObjectReference(t, repo, "schema/runbook.body", ""), "--command-id", "schema-1", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+	body(t, kc(home, "put", testObjectReference(t, repo, "runbook/payment", ""), "--command-id", "source-1", "--schema-ref", "schema/runbook.body", "--value", `{"body":"切换支付流量前先检查冻结窗口"}`))
 	body(t, kc(home, "grant", "add", "--principal", "bot", "--action", "inventory.read"))
 	body(t, kc(home, "grant", "add", "--principal", "bot", "--action", "knowledge.read", "--repo", repo))
 
-	read := asMap(t, body(t, kc(home, "read", "--repo", repo, "--object", "runbook/payment")))
+	read := asMap(t, body(t, kc(home, "read", testObjectReference(t, repo, "runbook/payment", ""))))
 	if read["objectId"] != "runbook/payment" || read["repository"] != repo {
 		t.Fatalf("read identity: %#v", read)
 	}
@@ -32,8 +28,8 @@ func TestCLIEvaluationDailyJourneyProductStdout(t *testing.T) {
 	if _, ok := read["knowledgeRef"]; ok {
 		t.Fatalf("read kept protocol envelope: %#v", read)
 	}
-	if _, ok := read["address"]; ok {
-		t.Fatalf("read kept address envelope: %#v", read)
+	if read["reference"] != testObjectReference(t, repo, "runbook/payment", "") || asMap(t, read["address"])["objectId"] != "runbook/payment" || read["digest"] == "" || len(read["declarations"].([]any)) != 1 {
+		t.Fatalf("read lost its public reference or maintenance basis: %#v", read)
 	}
 
 	describe := asMap(t, body(t, kc(home, "schema", "describe", "--repo", repo, "--object", "schema/runbook.body")))

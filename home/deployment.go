@@ -9,7 +9,8 @@ import (
 	"strings"
 
 	"kc/kernel"
-	"kc/knowledge"
+	"kc/liveaccess"
+	objectmodel "kc/object"
 	"kc/observability"
 
 	"gopkg.in/yaml.v3"
@@ -33,6 +34,7 @@ type DeploymentConfig struct {
 	BootstrapPrincipal  string                             `json:"bootstrapPrincipal,omitempty" yaml:"bootstrapPrincipal,omitempty"`
 	Stores              StoresFile                         `json:"stores,omitempty" yaml:"stores,omitempty"`
 	Evidence            *EvidenceConfig                    `json:"evidence,omitempty" yaml:"evidence,omitempty"`
+	LiveAccess          liveaccess.RuntimeConfig           `json:"liveaccess,omitempty" yaml:"liveaccess,omitempty"`
 	Auth                string                             `json:"auth" yaml:"auth"`
 	AuthURL             string                             `json:"authURL,omitempty" yaml:"authURL,omitempty"`
 	AuthLogoutURL       string                             `json:"authLogoutURL,omitempty" yaml:"authLogoutURL,omitempty"`
@@ -141,8 +143,11 @@ func (c DeploymentConfig) Validate() error {
 	if err := c.validateEvidence(); err != nil {
 		return err
 	}
-	if _, err := c.Binding(knowledge.SystemRepositoryID); err != nil {
-		return invalid("deployment requires an explicit Snapshot binding for %s", knowledge.SystemRepositoryID)
+	if err := c.LiveAccess.Validate(); err != nil {
+		return err
+	}
+	if _, err := c.Binding(objectmodel.SystemRepositoryID); err != nil {
+		return invalid("deployment requires an explicit Snapshot binding for %s", objectmodel.SystemRepositoryID)
 	}
 	return nil
 }
@@ -156,7 +161,7 @@ func (c DeploymentConfig) validateSnapshotBindings() error {
 			return invalid("discoveryWorkspaceId must be an exact Workspace identity")
 		}
 		id, err := NormalizeRepositoryID(b.ID)
-		if err != nil || id != b.ID || ids[id] || id == string(knowledge.SystemRepositoryID) {
+		if err != nil || id != b.ID || ids[id] || id == string(objectmodel.SystemRepositoryID) {
 			return invalid("registry binding has invalid or duplicate identity %q", b.ID)
 		}
 		ids[id] = true

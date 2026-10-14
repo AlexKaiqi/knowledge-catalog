@@ -3,24 +3,27 @@ package cli
 import (
 	"context"
 	inv "kc/invocation"
+	snapshotcli "kc/snapshot/cli"
+	snapshotclient "kc/snapshot/client"
 	"maps"
 	"strings"
 
 	kchome "kc/home"
 	"kc/internal/telemetry"
+	"kc/invoke"
 	"kc/kernel"
 )
 
 func runClientOperationWithTelemetry(ctx context.Context, runtime *telemetry.Runtime, path, command string, flags map[string]FlagValue) RunResult {
-	started := telemetryStart{}
+	started := inv.TelemetryStart{}
 	if runtime != nil {
-		ctx, started.Span, started.At = runtime.StartOperation(ctx, telemetryFace(command), command)
+		ctx, started.Span, started.At = runtime.StartOperation(ctx, inv.TelemetryFace(command), command)
 	}
 	result, err := runClientOperation(path, flags)
 	// Deployment evidence belongs to its explicit durable state. Pure client
 	// preprocessing has no server state and creates no implicit local directory.
 	if strings.HasPrefix(path, "deployment ") {
-		if config, configErr := kchome.ReadDeployment(flagString(flags, "config")); configErr == nil && kchome.ValidateDeploymentState(config) == nil {
+		if config, configErr := kchome.ReadDeployment(invoke.FlagString(flags, "config")); configErr == nil && kchome.ValidateDeploymentState(config) == nil {
 			stamp := maps.Clone(flags)
 			stamp["as"] = config.BootstrapPrincipal
 			stamp["request-id"] = telemetry.NewID("req")
@@ -28,21 +31,21 @@ func runClientOperationWithTelemetry(ctx context.Context, runtime *telemetry.Run
 				stamp["trace-id"] = started.Span.SpanContext().TraceID().String()
 				stamp["span-id"] = started.Span.SpanContext().SpanID().String()
 			}
-			if _, auditErr := recordAudit(config.StateDir, command, stamp, result, err); auditErr != nil && err == nil {
+			if _, auditErr := inv.RecordAudit(config.StateDir, command, stamp, result, err); auditErr != nil && err == nil {
 				err = auditErr
 			}
 		}
 	}
 	if runtime != nil {
-		outcome, errorType := telemetryResultFor(command, result, err)
-		runtime.EndOperation(ctx, started.Span, started.At, telemetryFace(command), command, outcome, errorType)
+		outcome, errorType := inv.TelemetryResultFor(command, result, err)
+		runtime.EndOperation(ctx, started.Span, started.At, inv.TelemetryFace(command), command, outcome, errorType)
 	}
-	return shapeInvocationResult(result, err)
+	return inv.ShapeInvocationResult(result, err)
 }
 
 // Client operations run before task binding and never implicitly open a Home.
 func runClientOperation(path string, flags map[string]FlagValue) (any, error) {
-	if err := rejectUnknownFlags(flags); err != nil {
+	if err := inv.RejectUnknownFlags(flags); err != nil {
 		return nil, err
 	}
 	if strings.HasPrefix(path, "deployment ") {
@@ -50,10 +53,10 @@ func runClientOperation(path string, flags map[string]FlagValue) (any, error) {
 		if path == "deployment identity migrate" {
 			allowed += " file"
 		}
-		if err := rejectFlagsOutside(flags, inv.FlagNames(allowed), "kc "+path); err != nil {
+		if err := inv.RejectFlagsOutside(flags, inv.FlagNames(allowed), "kc "+path); err != nil {
 			return nil, err
 		}
-		config, err := kchome.ReadDeployment(flagString(flags, "config"))
+		config, err := kchome.ReadDeployment(invoke.FlagString(flags, "config"))
 		if err != nil {
 			return nil, err
 		}
@@ -62,7 +65,7 @@ func runClientOperation(path string, flags map[string]FlagValue) (any, error) {
 			if err := kchome.ValidateDeploymentState(config); err != nil {
 				return nil, err
 			}
-			file, err := requireFlag(flags, "file")
+			file, err := invoke.RequireFlag(flags, "file")
 			if err != nil {
 				return nil, err
 			}
@@ -73,7 +76,7 @@ func runClientOperation(path string, flags map[string]FlagValue) (any, error) {
 			return migrateLegacyIdentity(config.StateDir, request)
 		case "deployment init":
 			err := kchome.InitializeDeployment(config, func(dir, principal string) error {
-				return writeAllow(dir, inv.AllowFile{Rules: []inv.AllowRule{{ID: "bootstrap-deployment-admin", Principal: principal, Actions: []string{"*"}}}})
+				return inv.WriteAllow(dir, inv.AllowFile{Rules: []inv.AllowRule{{ID: "bootstrap-deployment-admin", Principal: principal, Actions: []string{"*"}}}})
 			})
 			if err != nil {
 				return nil, err
@@ -95,11 +98,7 @@ func runClientOperation(path string, flags map[string]FlagValue) (any, error) {
 		}
 	}
 	if path == "dataset overlay" {
-		return clientKnowledgeSetOverlay(flags)
+		return snapshotcli.New(nil, snapshotcli.Context{}).Execute(context.Background(), "dataset overlay", snapshotFlags(flags), snapshotclient.RequestOptions{})
 	}
 	return nil, kernel.Fail(kernel.ErrUsageInvalid, "unknown client operation")
-}
-
-func verbClientOperation(cx *invocation) (any, error) {
-	return runClientOperation(strings.ReplaceAll(cx.Command, "-", " "), cx.Flags)
 }

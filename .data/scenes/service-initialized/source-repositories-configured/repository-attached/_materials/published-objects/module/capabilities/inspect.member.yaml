@@ -1,0 +1,7 @@
+---
+object_id: module/tax-calculation
+aspect_name: interfaces
+member_key: inspect
+schema_ref: schema/inspection.implementation/v1
+---
+{"interfaceRef": "interface/asset.inspect/v1", "purpose": "Inspect module contents when a handler is installed."}

@@ -58,7 +58,10 @@ func TestRegistryWritesFlatYAML(t *testing.T) {
 	if !strings.Contains(text, "setId: duty") {
 		t.Fatal(text)
 	}
-	hist := s.catalog.Log(catalog.LogQuery{Limit: 20, Dataset: "duty"})
+	hist, err := s.catalog.Log(catalog.LogQuery{Limit: 20, Dataset: "duty"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(hist.Commits) == 0 {
 		t.Fatal(hist)
 	}

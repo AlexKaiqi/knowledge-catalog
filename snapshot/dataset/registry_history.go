@@ -13,7 +13,7 @@ func (g *registry) snapshotHistory(limit int, path string) ([]Commit, error) {
 	}
 	history, ok := snapshot.HistoryStoreOf(g.authority)
 	if !ok {
-		return []Commit{}, nil
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "registry authority does not support commit history")
 	}
 	if limit <= 0 {
 		limit = 20

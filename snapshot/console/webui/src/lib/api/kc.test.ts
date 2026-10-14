@@ -24,6 +24,18 @@ test('historical detail requests carry bounded pagination without altering the r
     expect(fetcher.mock.calls[1][0]).toBe('/snapshot/v1/datasets/shared?revision=1&limit=50&continuation=basis%2B%2F%3D');
 });
 
+test.each([undefined, 1])('named Dataset consumption resolves revision %s without management fields', async revision => {
+    const pin = {setId: 'shared/name', revision: revision ?? 3, repositories: {source: 'fixed'}, pinId: 'accepted'};
+    const fetcher = vi.fn(async (path: string) => new Response(JSON.stringify(path === '/identity/v1/whoami' ? {principal: 'alice'} : pin), {status: 200}));
+    vi.stubGlobal('fetch', fetcher);
+    await session.restore({mode: 'lakefs', localAssertion: false, accepts: ['Cookie']});
+    const controller = new AbortController();
+    expect(await kc.resolve('shared/name', revision, controller.signal)).toEqual(pin);
+    expect(fetcher.mock.calls[1]).toEqual(['/snapshot/v1/datasets/shared%2Fname/resolve', expect.objectContaining({
+        method: 'POST', body: JSON.stringify(revision === undefined ? {} : {revision}), signal: controller.signal,
+    })]);
+});
+
 test('build output belongs to the Snapshot Store console module', () => {
     expect(config({ command: 'build', mode: 'production' }).build.outDir).toBe('../webapp');
 });

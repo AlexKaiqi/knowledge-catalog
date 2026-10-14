@@ -26,8 +26,8 @@ Feature: knowledge-set-defined
       | datasets[].revision | 1 |
       | repositories[].id | kr://scene/knowledge |
       | repositories[].id | kr://scene/graph |
-    When I run `kc read --dataset scene-set --object metric/gmv`
-    Then the output includes:
-      | [].objectId | metric/gmv |
-      | [].repository | kr://scene/knowledge |
-      | [].commit | nonempty |
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:metric%2Fgmv --dataset scene-set`
+    Then the output has:
+      | objectId | metric/gmv |
+      | repository | kr://scene/knowledge |
+      | commit | nonempty |

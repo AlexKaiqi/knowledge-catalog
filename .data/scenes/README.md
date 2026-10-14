@@ -20,6 +20,7 @@
 | `_build/` | 从父状态进入共享前态的可执行 construct；不为独立 Go 测试建立目录或参考 construct |
 | `_materials/` | 这一步用的夹具。`kc writer commit --dir $materials/…` 或 `put --file $materials/…`。`$home` 是本趟 home。System Schema 例外 |
 | `_probes/` | 从本状态出发的独立验证，临时后态不被其他用例或子状态继承 |
+| `_specs/*.yaml` | 提前入库的验收规格，记录前态、动作、预期和独立失败风险；不充当可执行 probe 或运行证据 |
 | `_results/` | 本节点上次验证的 `latest.json`。gitignore，不是分叉或 Oracle；不得跨节点拼成同次全部通过 |
 
 公开命令闭集由测试钉在 construct / probe（或 `_meta.yaml` 点名的 go-test）上，不另写一份覆盖清单：
@@ -58,11 +59,18 @@ python3 .data/scenes/tree.py --check-states
 
 ### 1.2 与产品文档对应的视图
 
-从产品任务了解用例时，先看 `--family product`。`_views.yaml` 的 `product_documents` 只指定已在 `docs/graph/` 登记的 owner 文档 ID 和用例章节；工具按文档顺序提取稳定条目 ID 与标题，生成 `product/<文档 ID>/<条目 ID>` 视图。当前来源包括 `knowledge`、`dataset`、`service`、`cli` 与 `resource-access` 各篇的「方向性用例」；条目来自各 owner 正文，ID 在文档内稳定，不另抄任务清单。派生 `docs/product.html` 不作为关联的权威来源。
+从产品任务了解用例时，先看 `--family product`。`_views.yaml` 的 `product_documents` 只指定已在 `docs/graph/` 登记的 owner 文档 ID 和用例章节；工具按文档顺序提取稳定条目 ID 与标题，生成 `product/<文档 ID>/<条目 ID>` 视图。用例条目可以是三级标题，或 `1. **U1 标题：**说明` 的有序列表，代码块里的例子不算条目。当前来源包括 `knowledge`、`dataset`、`service`、`cli` 与 `resource-access` 各篇的「方向性用例」；条目来自各 owner 正文，ID 在文档内稳定，不另抄任务清单。派生 `docs/product.html` 不作为关联的权威来源。
 
-设计书写方向性任务与不可接受的结果，场景树承接具体前态、操作和断言。尚未实现的能力先记
-明确缺口，不创建没有真实构建过程的状态或不能执行的 feature。动态 State 的独立 Go 证据继续
+设计书写方向性任务与不可接受的结果，场景树承接具体前态、操作和断言。尚未实现的能力现在就把
+验收规格放入最近相关宿主的 `_specs/*.yaml`，同时保留明确缺口；不创建没有真实构建过程的状态或不能执行的 feature。动态 State 的独立 Go 证据继续
 挂在 `repository-attached`，不因为增加设计用例就虚构一个动态服务已就绪的共享状态。
+
+规格文件为列表，每项包含全库唯一 `id`、`title`、`risk`，以及非空列表 `claims`、`given`、
+`when`、`then`。`claims` 指向既有 owner 的稳定用例 ID；其余字段给出具体条件、动作、可证伪
+预期及删除后会漏检的风险。每条规格只负责一种风险，变体各自从前态独立开始，不传递临时后态。
+`--family product` 和相应产品视图直接展示规格，`--check-product` 检查格式、唯一 ID 与引用。
+规格不填不存在的测试名、不报 pass 或 skip，也不计入可执行用例、命令覆盖或证据并集；
+实施时沿原规格接入实际 probe/具名 Go evidence，保留同一目标及其尚未被执行证明的缺口。
 
 关联方向是**产品条目 → 具体验证与断言 → 所需状态与构建前置**。在 probe 或具名 Go evidence 上就近声明：
 
@@ -84,7 +92,7 @@ python3 .data/scenes/tree.py --view product/resource-access/U3
 python3 .data/scenes/tree.py --check-product
 ```
 
-产品视图检查引用有效、断言说明非空，且每个文档条目都有验证入口或明确缺口。无入口的新条目、失效引用和伪造构建证据会报错。`product_documents` 的 `gaps` 只记录尚未由关联证据证明的具体范围，允许与局部证据并存，不保存节点或用例清单。
+产品视图检查引用有效、断言说明非空、入库规格完整，且每个文档条目都有验证入口或明确缺口。规格关联不能代替执行证据或清除 gap。无入口的新条目、失效引用和伪造构建证据会报错。`product_documents` 的 `gaps` 只记录尚未由关联证据证明的具体范围，允许与局部证据并存，不保存节点或用例清单。
 
 输出中的 `linked` 只表示已有关联，`gap` 表示已声明缺口；两者都不等于完整覆盖或测试通过。`execution_status: not_evaluated` 明确说明该工具没有执行用例。产品验收仍按 `docs/reviewed/test-catalog.md` 读取同次运行证据；工程并集与产品声明完整性分别检查。
 
@@ -104,7 +112,7 @@ python3 .data/scenes/tree.py --check-product
 2. 每个目录都必须有 `fixture` 和 `_build/construct.feature`，`surface` 为 `feature` 或 `both`。construct 只做进入共享前态所需的步骤，再观测后态。独立 Go 证据写在相关状态的 `evidence` 中。
 3. 夹具放在**构建或 probe 写入它的宿主节点**的 `_materials/`，不进 登记空间 登记表，不在场景根放 `materials:` 清单。
 4. Domain Schema 草稿放在 `domain-schema-published/_materials/` 下按目标仓分目录：`drafts/` 属知识仓，`graph-drafts/` 属关系仓。construct 分别经 `kc writer commit --repo --dir` 发布并回读；引用 Schema 的实例必须在自己的目标仓找到该 Schema。实例与 note 用 `kc writer put --file $materials/…`，再 READ/browse 回读。不要用 `Given material` 代替这些公开命令。Gherkin 不出现 ChangeSet 文件。提交前对照用 `kc diff --repo --dir`，不是 construct 必经步骤。
-5. System Schema：跟踪源是 `knowledge/system/_schemas/`（`go:embed` 信任根）。`service-initialized/_materials/system/` 是旅程可见副本，**禁止** Writer PUT 到 `kr://kc/system`。改协议 Schema 先改跟踪源，再让副本与 `TestSceneSystemSchemaMaterialsMatchEmbed` 对齐。
+5. System Schema：跟踪源在 `systemrepo/content/_schemas/`、`object/trusted/` 与 `liveaccess/contract/trusted/`（各能力的 `go:embed` 可信数据）。`service-initialized/_materials/system/` 是旅程可见副本，**禁止** Writer PUT 到 `kr://kc/system`。改协议 Schema 先改跟踪源，再让副本与 `TestSceneSystemSchemaMaterialsMatchEmbed` 对齐。
 6. 不要引用已删除的数仓黑盒套件。清河茶铺表/作业/语义/SQL 只写在走查叶 `_materials/`。接入方 Resource Access / Collector / Observer 的 Docker 与代码放在写入 origin 的节点 `_materials/accessor/`。
 7. 不要在仓库根加 `tests/scenarios/` 或把协议场景拷进 `cli/testdata/scenes`。
 8. 一条 feature 一个 Scenario。construct 与每个 probe 文件各一种失败风险。每条 probe 必须可以从本节点冻结前态单独执行；不得用文件排序传递写入、授权、登录会话或 HTTP 服务状态。有意连续的操作写在同一个用例里。
@@ -177,7 +185,7 @@ Then the output has:
 |---|---|
 | `Given material <id>` | 已退出树脊。写入必须是 `kc writer`；执行器仍解析该步骤，但 `TestSceneWriteSpineUsesPublicWriter` 禁止 construct 再用它 |
 | `Given deployment fixture` | 构建细合同的空 登记空间 与 System 信任根前态；不是用户命令，不创建业务 Snapshot |
-| `Given existing repository <id>` | 墙外测试夹具提供既有 Snapshot binding，尚未入 登记空间；接入仍由公开 attach 完成 |
+| `Given existing repository <id> [with LiveAccess instance <name>]` | 墙外测试夹具提供既有 Snapshot binding，尚未入 登记空间；可显式输入该源的 LiveAccess 实例选择，写入原生 Repo metadata 并保留索引选择。普通及真实 lakeFS 重放使用同一前态；已有部署须事先配置。接入仍由公开 attach 完成 |
 | `Given configured catalog <id>` / `Given bootstrap principal <id>` | 多 登记空间 / 首次部署授权的夹具前态；真实初始化和恢复另走正式配置入口 |
 | `Given local HTTP server` | 测试认证器上的 typed Server；后续带 `--server $server` 的命令走正式 Run |
 | `When I run \`kc ...\`` | 公开 argv 的应用合同；带 `--server` 时是正式 Client。`$materials` → 本节点 `_materials/`，`$home` → 本趟 home，`$server` → Given local HTTP，`$last.field` / `$previewId` → 上次成功 CLI JSON |
@@ -202,7 +210,7 @@ Then the output has:
 |---|---|
 | `TestSceneCatalogTreeFollowsLayersAndRoles` | 目录父与节点对不上；feature 节点无 construct；场景进 `cli/testdata` |
 | `TestSceneFeaturesPinObservedState` | 裸 `command succeeds`；`When I run` / HTTP 后无观测；material 不回读 |
-| `TestSceneSystemSchemaMaterialsMatchEmbed` | 旅程夹具与 `knowledge/system/_schemas` 漂移 |
+| `TestSceneSystemSchemaMaterialsMatchEmbed` | 旅程夹具与 `systemrepo/content/_schemas` 漂移 |
 | `TestSceneCatalogDoesNotRegisterMaterials` | 场景根出现 `catalog.yaml`；construct 用 `Given material` 代替 Writer |
 | `TestSceneCatalogCoversPublicProductSurfaces` | 公开命令没有 capability 挂载状态 |
 | `TestSceneFeaturesCoverPublicCLI` | 公开命令既无场景 `When I run`，也无该 capability 对应状态引用的具名正式 Go 测试调用 |

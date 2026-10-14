@@ -2,19 +2,20 @@ package invocation
 
 import (
 	"context"
-	"fmt"
+	discoveryservice "kc/discovery/service"
 	"kc/kernel"
-	knowledge "kc/knowledge"
-	reader "kc/knowledge/reader"
-	knowledgeserving "kc/knowledge/serving"
-	"kc/knowledgeapp"
+	knowledgeserving "kc/liveaccess"
+	liveservice "kc/liveaccess/service"
+	objectmodel "kc/object"
+	reader "kc/object/reader"
+
+	retrieval "kc/discovery"
 	"kc/observability"
-	"kc/retrieval"
-	"strings"
+	"kc/snapshot/dataset"
 )
 
 type RerankApplicationRequest struct {
-	Candidates []knowledge.KnowledgeRef
+	Candidates []objectmodel.KnowledgeRef
 	Spec       retrieval.SemanticOperatorSpec
 }
 
@@ -44,7 +45,7 @@ func SearchAndRerankWorkspace(cx *Invocation, spec retrieval.SemanticOperatorSpe
 		view := search.SearchView
 		return SearchRerankResult{
 			Retrieval: search,
-			Rerank:    retrieval.SemanticRerankResult{SearchView: &view, Groups: []retrieval.RankGroup{}, Unjudged: []knowledge.KnowledgeRef{}, Complete: true},
+			Rerank:    retrieval.SemanticRerankResult{SearchView: &view, Groups: []retrieval.RankGroup{}, Unjudged: []objectmodel.KnowledgeRef{}, Complete: true},
 		}, nil
 	}
 	candidates := make([]retrieval.Candidate, 0, len(search.Hits))
@@ -53,8 +54,8 @@ func SearchAndRerankWorkspace(cx *Invocation, spec retrieval.SemanticOperatorSpe
 			continue
 		}
 		candidates = append(candidates, retrieval.Candidate{
-			Ref:   knowledge.KnowledgeRef{Repository: hit.Knowledge.Repository, Object: hit.Knowledge.Address.ObjectID},
-			Value: hit.Knowledge.Value, Observations: append([]knowledge.UnitObservation(nil), hit.Version.Observations...),
+			Ref:   objectmodel.KnowledgeRef{Repository: hit.Knowledge.Repository, Object: hit.Knowledge.Address.ObjectID},
+			Value: hit.Knowledge.Value, Observations: append([]objectmodel.UnitObservation(nil), hit.Version.Observations...),
 			OriginalRank: i + 1, RetrievalEvidence: append([]retrieval.LaneEvidence(nil), hit.Evidence...),
 		})
 	}
@@ -62,7 +63,7 @@ func SearchAndRerankWorkspace(cx *Invocation, spec retrieval.SemanticOperatorSpe
 		view := search.SearchView
 		return SearchRerankResult{
 			Retrieval: search,
-			Rerank:    retrieval.SemanticRerankResult{SearchView: &view, Groups: []retrieval.RankGroup{}, Unjudged: []knowledge.KnowledgeRef{}, Complete: true},
+			Rerank:    retrieval.SemanticRerankResult{SearchView: &view, Groups: []retrieval.RankGroup{}, Unjudged: []objectmodel.KnowledgeRef{}, Complete: true},
 		}, nil
 	}
 	reranked, execution, err := retrieval.ExecuteRerankRecorded(cx.Context, reranker, retrieval.RerankRequest{
@@ -106,7 +107,7 @@ func RerankWorkspace(cx *Invocation, request RerankApplicationRequest, reranker 
 	view := retrieval.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{}}
 	candidates := make([]retrieval.Candidate, 0, len(request.Candidates))
 	accesses := make([]observability.KnowledgeAccess, 0, len(request.Candidates))
-	seen := map[knowledge.KnowledgeRef]struct{}{}
+	seen := map[objectmodel.KnowledgeRef]struct{}{}
 	for _, ref := range request.Candidates {
 		if ref.Repository == "" || ref.Object == "" {
 			return nil, kernel.Fail(kernel.ErrUsageInvalid, "rerank candidate requires repository and object")
@@ -130,18 +131,18 @@ func RerankWorkspace(cx *Invocation, request RerankApplicationRequest, reranker 
 		if err != nil {
 			return nil, err
 		}
-		hydrated, err := knowledgeserving.HydrateRepositoryValue(cx.Context, repo, raw, cx.State, requestContext)
+		hydrated, err := liveservice.HydrateRepositoryValue(cx.Context, repo, raw, cx.State, requestContext)
 		if err != nil {
 			return nil, err
 		}
 		view.Snapshots[ref.Repository] = commit
 		candidates = append(candidates, retrieval.Candidate{
 			Ref: ref, Value: hydrated.Value,
-			Observations: append([]knowledge.UnitObservation(nil), hydrated.Observations...),
+			Observations: append([]objectmodel.UnitObservation(nil), hydrated.Observations...),
 		})
 		accesses = append(accesses, observability.KnowledgeAccess{
-			KnowledgeRef: knowledge.PinnedKnowledgeRef{KnowledgeRef: ref, Commit: commit},
-			Observations: append([]knowledge.UnitObservation(nil), hydrated.Observations...),
+			KnowledgeRef: objectmodel.PinnedKnowledgeRef{KnowledgeRef: ref, Commit: commit},
+			Observations: append([]objectmodel.UnitObservation(nil), hydrated.Observations...),
 		})
 	}
 
@@ -220,21 +221,21 @@ func RefineEventFromExecution(cx *Invocation, execution retrieval.RerankExecutio
 			}
 		}
 		event.Candidates = append(event.Candidates, observability.RefineCandidate{
-			KnowledgeRef: knowledge.PinnedKnowledgeRef{KnowledgeRef: candidate.Ref, Commit: commit},
+			KnowledgeRef: objectmodel.PinnedKnowledgeRef{KnowledgeRef: candidate.Ref, Commit: commit},
 			Value:        candidate.Value, ValueDigest: kernel.CanonicalDigest(candidate.Value), OriginalRank: candidate.OriginalRank,
-			RetrievalEvidence: lanes, Observations: append([]knowledge.UnitObservation(nil), candidate.Observations...),
+			RetrievalEvidence: lanes, Observations: append([]objectmodel.UnitObservation(nil), candidate.Observations...),
 		})
 	}
 	if execution.ProviderResult != nil {
 		provider := execution.ProviderResult
 		groups := make([]observability.RefineRankGroup, len(provider.Groups))
 		for i, group := range provider.Groups {
-			groups[i] = observability.RefineRankGroup{Rank: group.Rank, Refs: append([]knowledge.KnowledgeRef(nil), group.Refs...)}
+			groups[i] = observability.RefineRankGroup{Rank: group.Rank, Refs: append([]objectmodel.KnowledgeRef(nil), group.Refs...)}
 		}
 		event.ModelOutput = &observability.RefineModelOutput{
 			Provider: provider.Provider, Model: provider.Model, ModelRevision: provider.ModelRevision,
 			PromptRevision: provider.PromptRevision, DurationMillis: execution.ProviderDuration.Milliseconds(),
-			Groups: groups, Unjudged: append([]knowledge.KnowledgeRef(nil), provider.Unjudged...),
+			Groups: groups, Unjudged: append([]objectmodel.KnowledgeRef(nil), provider.Unjudged...),
 		}
 	}
 	if callErr != nil {
@@ -252,7 +253,7 @@ func VerbResourceAccess(cx *Invocation) (any, error) {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid,
 			"access hydrates a Binding with --aspect; use kc invoke for an object Interface operation")
 	}
-	resolved, err := VerbResolveBinding(cx)
+	address, err := bindingAddress(cx)
 	if err != nil {
 		return nil, err
 	}
@@ -260,39 +261,41 @@ func VerbResourceAccess(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	bindings := []reader.ResolvedBinding{}
-	switch value := resolved.(type) {
-	case reader.ResolvedBinding:
-		bindings = append(bindings, value)
-	case []reader.ResolvedBinding:
-		bindings = append(bindings, value...)
-	default:
-		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "resolved Binding has an unsupported shape")
-	}
-	identity, err := IdentityContextFrom(cx.Flags)
+	request, err := stateRequestContextFrom(cx)
 	if err != nil {
 		return nil, err
 	}
-	trace, err := TraceContextFrom(cx.Flags)
+	return OnTarget(cx, func(declarations *reader.Serving, _ dataset.Service) (any, error) {
+		return resourceAccessAt(cx, declarations, address, lookup, request)
+	}, func(repository kernel.RepositoryID, commit kernel.CommitID) (any, error) {
+		return resourceAccessAt(cx, repositoryServingAt(cx, repository, commit, "resource-access"), address, lookup, request)
+	})
+}
+
+func resourceAccessAt(cx *Invocation, declarations *reader.Serving, address objectmodel.Address, lookup knowledgeserving.StateLookup, request objectmodel.RequestContext) (any, error) {
+	bindings, err := knowledgeserving.ResolveBinding(declarations, address)
 	if err != nil {
 		return nil, err
 	}
-	requestID, err := RequestIDFrom(cx.Flags)
+	values, err := liveservice.OpenRequest(declarations, lookup, request).ReadAddress(cx.Context, address)
 	if err != nil {
 		return nil, err
 	}
-	results := make([]knowledgeserving.StateObservation, 0, len(bindings))
-	for _, binding := range bindings {
-		observation, err := lookup.LookupState(cx.Context, knowledgeserving.StateLookupRequest{
-			Binding: binding, SchemaRef: binding.SchemaRef, Origin: binding.Origin,
-			Identity: identity, Trace: trace, RequestID: requestID,
-		})
-		if err != nil {
-			return nil, err
+	results := make([]knowledgeserving.StateObservation, 0, len(values))
+	for _, value := range values {
+		if len(value.Failures) != 0 {
+			failure := value.Failures[0]
+			return nil, kernel.Fail(failure.Code, "%s", failure.Message)
 		}
-		results = append(results, observation)
+		if len(value.Observations) != 1 {
+			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "access requires one observed Binding value at %s", objectmodel.AddressKey(address))
+		}
+		results = append(results, knowledgeserving.StateObservation{Value: value.Value, Basis: value.Observations[0].Basis})
 	}
-	return map[string]any{"bindings": bindings, "observations": results}, nil
+	return ObservedAccessResult{
+		Output:    map[string]any{"bindings": bindings, "observations": results},
+		Knowledge: KnowledgeAccesses(values),
+	}, nil
 }
 
 func VerbResourceInvoke(cx *Invocation) (any, error) {
@@ -324,28 +327,6 @@ func AccessResourceOperation(cx *Invocation, operation string) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	value, ok := descriptor.Value.(map[string]any)
-	if !ok || StringValue(value["kind"]) != "ResourceDescriptor" {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "object %s is not a ResourceDescriptor", descriptor.ObjectID)
-	}
-	runtime := strings.TrimSpace(StringValue(value["runtime"]))
-	protocol := strings.TrimSpace(StringValue(value["protocol"]))
-	origin := strings.TrimSpace(StringValue(value["origin"]))
-	if origin == "" {
-		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "ResourceDescriptor %s does not declare origin", descriptor.ObjectID)
-	}
-	access, ok := value["access"].(map[string]any)
-	if !ok || runtime == "" || protocol == "" {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "ResourceDescriptor %s requires runtime, protocol and access", descriptor.ObjectID)
-	}
-	operationValue, ok := access[operation].(map[string]any)
-	if !ok {
-		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "ResourceDescriptor %s does not declare operation %s", descriptor.ObjectID, operation)
-	}
-	call := strings.TrimSpace(StringValue(operationValue["call"]))
-	if call == "" {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "ResourceDescriptor %s operation %s requires call", descriptor.ObjectID, operation)
-	}
 	lookup, err := ResourceLookup(cx)
 	if err != nil {
 		return nil, err
@@ -366,45 +347,45 @@ func AccessResourceOperation(cx *Invocation, operation string) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	result, err := accessor.AccessResource(cx.Context, ResourceOperationRequest{
-		Descriptor: ResourceDescriptorCoordinate{
-			ObjectID: descriptor.ObjectID, Repository: descriptor.Repository, Commit: descriptor.Commit,
-		},
-		Runtime: runtime, Protocol: protocol, Origin: origin, Operation: operation, Call: call, Input: input,
-		Identity: StateRuntimeIdentity{
-			Principal: identity.Principal, OnBehalfOf: identity.OnBehalfOf, RequestID: requestID,
-			TraceID: trace.TraceID, SpanID: trace.SpanID, ParentSpanID: trace.ParentSpanID,
-		},
+	request, err := knowledgeserving.DescriptorOperation(ResourceDescriptorCoordinate{
+		ObjectID: descriptor.ObjectID, Repository: descriptor.Repository, Commit: descriptor.Commit,
+	}, descriptor.Value, operation, input, StateRuntimeIdentity{
+		Principal: identity.Principal, OnBehalfOf: identity.OnBehalfOf, RequestID: requestID,
+		TraceID: trace.TraceID, SpanID: trace.SpanID, ParentSpanID: trace.ParentSpanID,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return ObservedAccessResult{Output: result, Knowledge: []observability.KnowledgeAccess{{KnowledgeRef: knowledge.PinnedKnowledgeRef{KnowledgeRef: knowledge.KnowledgeRef{Repository: descriptor.Repository, Object: descriptor.ObjectID}, Commit: descriptor.Commit}}}}, nil
+	result, err := accessor.AccessResource(cx.Context, request)
+	if err != nil {
+		return nil, err
+	}
+	return ObservedAccessResult{Output: result, Knowledge: []observability.KnowledgeAccess{{KnowledgeRef: objectmodel.PinnedKnowledgeRef{KnowledgeRef: objectmodel.KnowledgeRef{Repository: descriptor.Repository, Object: descriptor.ObjectID}, Commit: descriptor.Commit}}}}, nil
 }
 
 func PinnedResourceDescriptor(cx *Invocation) (PinnedDescriptor, error) {
-	result, err := VerbRead(cx)
+	objectID, err := cx.Require("object")
 	if err != nil {
 		return PinnedDescriptor{}, err
 	}
-	switch value := result.(type) {
-	case []knowledgeserving.ReadResult:
-		if len(value) != 1 {
-			return PinnedDescriptor{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved,
-				"ResourceDescriptor %s resolved to %d values", cx.Flag("object"), len(value))
+	result, err := OnTarget(cx, func(declarations *reader.Serving, _ dataset.Service) (any, error) {
+		values, err := declarations.Read(objectmodel.ObjectID(objectID), nil)
+		if err != nil {
+			return nil, err
 		}
-		return PinnedDescriptor{
-			Repository: value[0].Repository, Commit: value[0].Commit,
-			ObjectID: value[0].ObjectID, Value: value[0].Value,
-		}, nil
-	case knowledge.KnowledgeValue:
-		return PinnedDescriptor{
-			Repository: value.Repository, Commit: value.Commit,
-			ObjectID: value.Address.ObjectID, Value: value.Value,
-		}, nil
-	default:
-		return PinnedDescriptor{}, fmt.Errorf("ResourceDescriptor read returned %T", result)
+		if len(values) != 1 {
+			return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "ResourceDescriptor %s resolved to %d values", objectID, len(values))
+		}
+		value := values[0]
+		return PinnedDescriptor{Repository: value.Repository, Commit: value.Commit, ObjectID: value.ObjectID, Value: value.Value}, nil
+	}, func(repository kernel.RepositoryID, commit kernel.CommitID) (any, error) {
+		value, err := cx.WS.Reader.Read(objectmodel.KnowledgeRef{Repository: repository, Object: objectmodel.ObjectID(objectID)}, commit, nil)
+		return PinnedDescriptor{Repository: value.Repository, Commit: value.Commit, ObjectID: value.Address.ObjectID, Value: value.Value}, err
+	})
+	if err != nil {
+		return PinnedDescriptor{}, err
 	}
+	return result.(PinnedDescriptor), nil
 }
 
 // StateRuntimeIdentity / ResourceOperationRequest 等是 resource-access/v1 的
@@ -418,10 +399,10 @@ type ResourceOperationAccessor = knowledgeserving.ResourceOperationAccessor
 type PinnedDescriptor struct {
 	Repository kernel.RepositoryID
 	Commit     kernel.CommitID
-	ObjectID   knowledge.ObjectID
+	ObjectID   objectmodel.ObjectID
 	Value      any
 }
 
-func HydrateSearchHit(ctx context.Context, logical *knowledgeserving.Service, hit retrieval.KnowledgeHit) (retrieval.KnowledgeHit, error) {
-	return knowledgeapp.HydrateSearchHit(ctx, logical, hit)
+func HydrateSearchHit(ctx context.Context, logical *liveservice.Service, hit retrieval.KnowledgeHit) (retrieval.KnowledgeHit, error) {
+	return discoveryservice.HydrateSearchHit(ctx, logical, hit)
 }

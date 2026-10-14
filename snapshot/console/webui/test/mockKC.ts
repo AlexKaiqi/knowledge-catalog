@@ -36,6 +36,8 @@ export function mockKC() {
         if (path.pathname.endsWith('/retire')) { retired = true; return json({ retired: true }); }
         if (path.pathname.endsWith('/datasets/shared')) return json(dataset(Number(path.searchParams.get('revision')) || undefined));
         const pin = { setId: 'shared', revision: body?.pin?.revision ?? revision, ref: `v${body?.pin?.revision ?? revision}`, repositories: { 'kr://example/source': 'c1' }, pinId: 'accepted' };
+        if (/\/datasets\/[^/]+\/resolve$/.test(path.pathname)) return retired ? fault('KNOWLEDGE_SET_INVALID', 'Dataset 已退役', 409) :
+            json({...pin, setId: decodeURIComponent(path.pathname.split('/').at(-2)!), revision: body?.revision ?? revision, ref: `v${body?.revision ?? revision}`});
         if (path.pathname === '/snapshot/v1/files/mounts:list') return json({ pin, mounts: [] });
         if (path.pathname === '/snapshot/v1/files/tree:list') return json({ pin,
             entries: [{ name: body.continuation ? 'second.txt' : 'first.txt', kind: 'file' }],

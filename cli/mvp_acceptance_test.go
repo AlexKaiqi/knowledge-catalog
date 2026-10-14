@@ -14,17 +14,11 @@ func TestMVPProviderConsumerJourney(t *testing.T) {
 	repo := "kr://acme/public/core"
 	body(t, kc(home, "init"))
 	seedRepo(t, home, repo)
-	body(t, kc(home, "put", "--command-id", "schema-1", "--repo", repo,
-		"--object", "schema/runbook.body",
-		"--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
-	receipt := asMap(t, asMap(t, body(t, kc(home, "put", "--command-id", "source-1", "--repo", repo,
-		"--object", "runbook/payment-oncall", "--schema-ref", "schema/runbook.body",
-		"--value", `{"body":"切换支付流量前先检查冻结窗口"}`,
-		"--origin-kind", "SOURCE", "--source-ref", "file:///source/runbooks/payment-oncall.md")))["result"])
+	body(t, kc(home, "put", testObjectReference(t, repo, "schema/runbook.body", ""), "--command-id", "schema-1", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+	receipt := asMap(t, asMap(t, body(t, kc(home, "put", testObjectReference(t, repo, "runbook/payment-oncall", ""), "--command-id", "source-1", "--schema-ref", "schema/runbook.body", "--value", `{"body":"切换支付流量前先检查冻结窗口"}`, "--origin-kind", "SOURCE", "--source-ref", "file:///source/runbooks/payment-oncall.md")))["result"])
 	commit := receipt["newCommit"].(string)
 
-	direct := asMap(t, body(t, kc(home, "read", "--repo", repo,
-		"--object", "runbook/payment-oncall")))
+	direct := asMap(t, body(t, kc(home, "read", testObjectReference(t, repo, "runbook/payment-oncall", ""))))
 	if direct["commit"] != commit || asMap(t, direct["value"])["body"] != "切换支付流量前先检查冻结窗口" {
 		t.Fatalf("provider could not read back the published value: %#v", direct)
 	}
@@ -43,9 +37,8 @@ func TestMVPProviderConsumerJourney(t *testing.T) {
 	if search["completeness"] != "complete" || len(search["hits"].([]any)) != 1 {
 		t.Fatalf("consumer search was not complete at the published dataset: %#v", search)
 	}
-	values := body(t, kc(home, "read", "--dataset", "agent",
-		"--object", "runbook/payment-oncall")).([]any)
-	if len(values) != 1 || asMap(t, values[0])["commit"] != commit {
+	values := asMap(t, body(t, kc(home, "read", testObjectReference(t, repo, "runbook/payment-oncall", ""), "--dataset", "agent")))
+	if values["reference"] != testObjectReference(t, repo, "runbook/payment-oncall", "") || asMap(t, values)["commit"] != commit {
 		t.Fatalf("consumer read did not freeze the published commit: %#v", values)
 	}
 	provenance := body(t, kc(home, "provenance", "--dataset", "agent",

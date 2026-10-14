@@ -3,6 +3,7 @@ package service_test
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"testing"
 
 	"kc/kernel"
@@ -44,7 +45,8 @@ func TestSnapshotRootPrefixReadsDeliveredAndMountRelativeFiles(t *testing.T) {
 		}
 	}
 	page := datasetHTTPCall(t, handler, http.MethodPost, "/snapshot/v1/files/tree:list", map[string]any{"dataset": "root", "pin": pin, "path": ""}, http.StatusOK)
-	if len(page["entries"].([]any)) != 2 {
+	want := []any{map[string]any{"name": "a.json", "kind": "file"}, map[string]any{"name": "b.txt", "kind": "file"}}
+	if !reflect.DeepEqual(page["entries"], want) || page["exhausted"] != true || page["continuation"] != nil {
 		t.Fatalf("root subtree included an unselected neighbor: %#v", page)
 	}
 }

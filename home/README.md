@@ -1,12 +1,17 @@
 # home/
 
-部署装配入口：按声明配置连接独立登记表 Snapshot 权威和已有知识 Snapshot，把 Writer / Reader / ControlPlane / Index 装配到 Server。Snapshot 后端只经 `kc/snapshot` 公开构造与能力契约接入；lakeFS 实现归私有 `snapshot/internal/lakefsimpl`（A-01）；`index/opensearch` 只允许在 stores 族与就绪端口绑定（`readiness_ports.go`：`NewSearchBackendProbe` 把具体索引探测绑定成端口函数，CAP-ORG-01 B7）。Dolt adapter 已退役删除。本包不得 import `cli`、`client` 或 `httpsurface`。
+部署装配入口：按声明配置连接独立登记表 Snapshot 权威和已有知识 Snapshot，把 Writer / Reader / ControlPlane / Index 装配到 Server。Snapshot 后端只经 `kc/snapshot` 公开构造与能力契约接入；lakeFS 实现归私有 `snapshot/internal/lakefsimpl`（A-01）；`declarativeindex/opensearch` 只允许在 stores 族与就绪端口绑定（`readiness_ports.go`：`NewSearchBackendProbe` 把具体索引探测绑定成端口函数，CAP-ORG-01 B7）。Dolt adapter 已退役删除。本包不得 import `cli`、`client` 或 `httpsurface`。
 
 业务 CLI 经 Server 和显式 principal。`kc deployment init --config` 显式初始化；`kc serve --config` 与 `OpenDeployment` 仅恢复。没有公开 `local` 命令或由实例目录扫描得到的部署清单。
 
 ## 声明配置
 
 `ReadDeployment` 接受单个 YAML 或 JSON 文档，拒绝未知字段。`DeploymentConfig` 是配置合同；部署工具负责版本化和分发配置，服务凭证通过环境注入；用户显式连接凭证遵守下文的私有耐久账合同。
+
+`liveaccess.credentialOrigins` 是调用方证明的可信适用 HTTP origin 列表，不启用插件。
+Repo 原生 `kc.plugins` 另行选择 `liveaccess` 实例，Dataset 复用来源选择；根 Home 固定装配
+Index 与 LiveAccess 两类贡献，借用视图共享该选择。LiveAccess 的构造、取值和释放归
+模块入口，配置及结果合同见 [LiveAccess](../liveaccess/README.md)。
 
 `auth` 接受 `local`、`taihu`、`gitea` 或遗留 `lakefs`。组合多用户控制台沿用现有
 `taihu`/`gitea` 认证与 `authURL`，Repo、Dataset 均由 Snapshot 当前规则授权；
@@ -85,7 +90,7 @@ repositoryAccess:
 
 `repositories` 只是运营者批准的连接绑定，不代表 登记表 成员关系。`attach --repo <id>` 使用静态绑定或已供给托管仓的耐久绑定，只读检查已有 Snapshot，再通过一次 登记表 Snapshot 提交完成接入；重复准入不创建新仓或重新发权。没有单独手工 register，也没有持久化的第二份 attached 状态。已有但不兼容的 authority 状态必须报错，不能在接入或恢复时迁移。
 
-`repositories` 必须显式绑定 `kr://kc/system` 的实际 LakeFS Snapshot。`kc deployment init --config` 将随版本交付的 `knowledge/system` 出版源经 System Writer 发布到空仓，然后登记到 登记表；相同出版物只核对，不产生新提交。已初始化部署重新 init 只核对既有 system 内容，缺失或漂移须恢复权威。`kc deployment system publish --config` 保留为显式发布/核对入口，同样不覆盖已有不同版本。
+`repositories` 必须显式绑定 `kr://kc/system` 的实际 LakeFS Snapshot。`kc deployment init --config` 将随版本交付的 `systemrepo/content` 出版源经 System Writer 发布到空仓，然后登记到 登记表；相同出版物只核对，不产生新提交。已初始化部署重新 init 只核对既有 system 内容，缺失或漂移须恢复权威。`kc deployment system publish --config` 保留为显式发布/核对入口，同样不覆盖已有不同版本。
 
 `OpenDeployment` / `kc serve` 只打开并核对实际 system 仓。运行时知识与文件读取全部来自该 Snapshot，引用修改、归档和字面文件写入均拒绝；不存在内置仓或来源失败时的回退。二进制携带出版源和校验信任根，不充当运行时仓。
 
@@ -129,6 +134,25 @@ repositoryAccess:
 
 正式部署的并行读取通过 `ReadView` 隔离每个请求的 Reader、过程账身份和 登记表 已接受状态，不修改进程共享的 journal 或 Writer stamp。视图借用 Store、Writer、命令账本与 Index，保留回执查询能力，调用方不得关闭共享资源。登记表 视图不重新加载 Snapshot 权威、不订阅 Snapshot 事件，也不能持久化变更。只有保证读取不会隐式收养配方的正式部署路径使用该视图；组件夹具的显式装配语义保持独立。
 
+## Repo 插件与运行装配
+
+插件启用来自各 Repo 的原生 `kc.plugins` metadata；格式与贡献合同归
+[`discovery/plugin`](../discovery/plugin/README.md)。Home 按来源构造真实插件入口，
+固定 Object 读取、Writer 和正文缓存保持独立；Dataset 使用来源仓的运行贡献。
+
+自有连接的冷恢复只重建来源句柄，不读取远端插件配置。其尚未核验的配置显式保留为
+来源故障，不能当作未启用；连接详情和凭据修复仍可进入。Server 在激活后台维护前，
+由根 Home 调用一次 `VerifyIndexPlugins`，读取当前 Repo 配置并替换待核验运行视图。
+Handler 构造不触发这一步；显式 `ManagedHTTPHandler.Start`，或嵌入式第一条需要运行资源
+的 typed 任务，完成核验并激活同一个根。静态插件说明保持冷态。
+请求借用的 `ReadView` 无权装配；已核验视图不随请求、凭据轮换或 metadata 更新重新加载，
+运行实例激活后拒绝重新装配。配置变更或故障修复在下一次根装配生效。
+
+`ExplainPlugin` 只读取实际入口登记的静态说明，不打开 Home、来源或引擎，不验证就绪。
+Server 的 `BeginShutdown` 先拒绝新工作，再调用 `StopMaintenance` 取消并等待维护；此时保留查询资源，
+让正在执行的业务 HTTP 完成。排空后调用根 Home 的 `Close`，释放一次所属资源。
+借用视图不关闭根资源；说明缺失或扩展配置失败不改变基础固定读取的合同。
+
 ## 首次准入与受限分享
 
 `AdmissionConfig` 只声明可选的外部申请入口 `requestURL`。KC 的 admission 查询汇总本人
@@ -157,14 +181,14 @@ connections:
 
 用户显式授权的逐仓 credential 是部署凭证环境注入规则的窄例外：仅在模式 `0600` 的私有 `connections.db` credential bucket 保存，和公开 binding 分开，只有具体 adapter 打开时读取。它不进入配置、登记表、知识对象、日志、trace 或客户端 pin。备份必须包括该私有账本及初始化回执；回执存在后账本缺失或损坏会失败，不重新创建空账。
 
-恢复通过公开 Snapshot 构造器打开固定 lakeFS authority，核验仓库绑定和初始 commit；服务、身份或凭证无法核验时失败关闭。普通 Snapshot 操作使用当前 credential，管理查询与轮换继续遵守当前仓级权限和 durable owner。恢复不写入外部仓，也不自动更换 authority；上层只消费 Store 与明确可选能力合同。
+冷恢复从私有账复原固定 lakeFS authority 句柄，不联系 provider。普通 Snapshot 操作读取当前 credential；显式检查与轮换才按各自合同核验仓库绑定、初始 commit 和凭据，失败保持原绑定。管理查询与轮换继续遵守当前仓级权限和 durable owner。恢复不写入外部仓，也不自动更换 authority；上层只消费 Store 与明确可选能力合同。
 
 ## 同版本正文缓存与预热配置
 
-Home 默认装配同一份 `retrieval/cache` 到 Reader、请求级 ReadView、Workspace Serving 与
+Home 默认装配同一份 `object/cache` 到 Reader、请求级 ReadView、Workspace Serving 与
 Index 回读接缝。缓存持有 Snapshot 声明正文，不持有动态 State observation 或裁剪后的权限结果。
 默认预算为 64 MiB 计量字节、4096 条目；该计量不是进程 RSS 上限。关闭 Home 先停止后台消费者，
-再清空缓存。一次性 `Open` 不启动维护，长期 Server 才启动 Controller。
+再清空缓存。一次性 `Open` 不启动维护；Server 在显式启动或嵌入式首次运行任务时启动维护。
 
 部署文件的 `stores.hydrationCache`（本机夹具的 `stores.yaml` 使用同名字段）可以调整：
 

@@ -6,25 +6,31 @@ KC Client 与部署管理的 **transport**：公开 argv、远程 typed Client �
 [`home/`](../home/README.md)；HTTP method+pattern 闭集在 [`httpsurface/`](../httpsurface/README.md)。
 协议实现仍在各自包。
 
-应然设计见 [CLI 交互](../docs/reviewed/cli.md)。公开命令的操作语义（审查用）见 [`SURFACE.md`](SURFACE.md)。落地迁移记录见 [`REFACTOR.md`](REFACTOR.md)，HTTP 迁移记录见 [`HTTP_REFACTOR.md`](HTTP_REFACTOR.md)。路径权威仍是 `surface.go`；HTTP 路由分母是 `httpsurface.Patterns()`，与 mux 登记对账。
+应然设计见 [CLI 交互](../docs/reviewed/cli.md)。公开命令的操作语义（审查用）见 [`SURFACE.md`](SURFACE.md)。落地迁移记录见 [`REFACTOR.md`](REFACTOR.md)，HTTP 迁移记录见 [`HTTP_REFACTOR.md`](HTTP_REFACTOR.md)。路径闭集由 `surface.go` 静态装配 KC 命令及 Snapshot、Object、Discovery、Declarative Index、LiveAccess 五个模块的 `Commands()`；HTTP 路由分母是 `httpsurface.Patterns()`，与 mux 登记对账。
 
-三张表互相不读，`deployment` 与 `serve` 读取显式 `--config`；业务 CLI 只经 Server：
+生产 CLI 与 HTTP 的注册表独立，`deployment` 与 `serve` 读取显式 `--config`；业务 CLI 只经 Server：
 
 | 表 | 文件 | 用途 |
 |---|---|---|
-| 分组 CLI | `surface.go` | 公开命令路径 → 内部操作名；产品命令经 `client/` 调 typed API |
-| CLI 应用操作 | `command.go` | CLI 侧内部 handler 表，委托 `invocation/` 操作体；键通常是公开路径把空格换成连字符。知识面 argv 无 `knowledge` 前缀，操作名仍是 `knowledge-search` 等 |
+| 分组 CLI | `surface.go` 与五个模块的 `cli/commands.go` | 静态装配公开命令路径与输入；产品命令经 typed SDK 调 API |
 | HTTP namespace | `server/service_routes.go` | 显式登记 typed route；调用相同应用操作体，不解析 argv、不读 CLI 表；闭集由 `server/routes.go` 与 `httpsurface` 对账 |
+
+组件测试另外在 `_test.go` 中登记内部 handler 与 stage，通过 `Invocation` 调用同一服务操作。
+这份嵌入装配不进入产品二进制；正式 `Run` 没有本机业务执行分支，也不持有第二份业务 registry。
 
 ```text
 surface.go  ──产品命令──►  remote_*.go  ──►  client/  ──►  HTTP
-command.go  ──应用/测试──►  invocation/verbs_*.go  ──►  typed application executor
+            ├─Snapshot──► snapshot/cli/ ──► snapshot/client/ ──► HTTP
+            ├─Object────► object/cli/ ───► object/client/ ───► HTTP
+            ├─Discovery─► discovery/cli/ ──► discovery/client/ ──► HTTP
+            ├─索引运维──► declarativeindex/cli/ ──► declarativeindex/client/ ──► HTTP
+            └─当前态────► liveaccess/cli/ ──► liveaccess/client/ ──► HTTP
 server/service_routes.go  ──typed HTTP──►  同一组应用操作（不经 CLI parser）
 httpsurface.Patterns()  ──测试对账──►  mux 已登记的 method+pattern
+仅 _test.go 内部操作表 ──► invocation/verbs_*.go ──► 同一组应用操作
 ```
 
-`home_alias.go` 只保留 Store flag 转换，调用 `home.ApplyStoreFlags`；Home 类型与打开函数直接
-从 `home/` 使用，不再由本包重导出。
+部署直接使用 `home/` 的公开入口；根 CLI 不重导出 Home 或通过私有别名打开组件。
 
 ## 文件按簇
 
@@ -32,8 +38,15 @@ httpsurface.Patterns()  ──测试对账──►  mux 已登记的 method+pat
 
 ### CLI 传输
 
-`run.go` 入口；`parse.go` / `flags_operand.go` 把 argv 收成 flags；`surface.go` 解析分组路径；
-`help.go` 保留总览与帮助渲染，`help_snapshot.go` 集中 Snapshot 相关叶子说明。
+`run.go` 入口；`parse.go` 把 argv 收成 flags；`surface.go` 解析分组路径；
+`help.go` 保留总览、跨模块旅程与帮助渲染，根总览组合 Object 本地 `ModelHelp()`；
+所属 `*_adapter.go` 从模块同源声明绑定
+操作数、参数检查、叶说明与帮助组；KC 仓供给帮助仍归宿主；Object 的读取、写入、Schema、历史与来源叶说明归 `object/cli`。
+模块的 `HelpTopics()` 同源提供分组引导与概念页，帮助入口可直接访问；这些主题不加入
+业务命令表。KC 的 consume/compose 旅程衔接来源发现、选源发布、显式授权与文件消费。
+宿主叶说明按 `help_host.go`、`help_writer.go`、`help_governance.go`、
+`help_operations.go` 分任务持有，中央只合并并拒绝重复登记。全部公开叶及 serve 说明具体
+输入、前提、结果、后果、风险与成本、失败恢复和示例；help 的两种公开写法不执行该动作。
 共享 flag 读取与校验分别在 `invoke/flags.go`、
 `invocation/flags_hygiene.go`。
 
@@ -42,25 +55,38 @@ httpsurface.Patterns()  ──测试对账──►  mux 已登记的 method+pat
 `remote.go` 与 `remote_*.go` 把公开 CLI 编成 `client/` 调用。`remote_login.go`
 只管理本机登录态；正式环境默认与按 Server 保存的会话由 Client 读取，不设服务端 Session。
 
-Snapshot 适配按能力收拢，仍在同一个 `cli` 包中：
+`kc` 静态装配可独立组合的 [`snapshot/cli`](../snapshot/cli/README.md)。模块经
+[`snapshot/client`](../snapshot/client/README.md) 的 typed SDK 调用 Snapshot HTTP；
+宿主传入既有认证运输与主体上下文，不另建登录或会话。
 
 | 文件簇 | 职责 |
 |---|---|
-| `remote_repository.go`、`remote_connections.go`、`flags_managed_repository.go` | 仓供给与连接、登记、库存和登记历史 |
-| `remote_dataset.go`、`dataset_recipe.go` | Dataset 请求构造、配方输入与已有内部解析调用 |
-| `dataset_overlay.go`、`dataset_clone.go` | 本机配方合成、已发布文件树物化 |
-| `remote_access.go` | 显式授权管理及规则列表处理 |
-| `datasetfs*.go` | 独立的 `kcfs` 宿主交付入口 |
+| 五个模块 `*_adapter.go`、`remote_dispatch.go` | 按模块声明装配输入/导航，注入同一 Client、转换请求上下文并分派；不复制模块叶规则或输出整形 |
+| `object/cli/commands.go`、`executor.go`、`output.go` | 对象叶声明、统一引用输入、任务执行与产品结果；完整引用传给 Object 服务，宿主不复制规则 |
+| `discovery/cli/` | 通用查询、关系、遍历、访问概览及统一插件说明读取的声明、输入、结果和帮助 |
+| `declarativeindex/cli/` | 插件静态 Affordance、既有投影运维任务及帮助；不持 Index 或 Controller |
+| `liveaccess/cli/` | 当前态访问、调用、绑定说明的声明、参数、产品结果与帮助；采用宿主注入的固定范围 |
+| `snapshot/cli/commands.go`、`executor.go` | 库存、仓登记与登记历史、Dataset 发布/详情/退役与同源 help/flags |
+| `snapshot/cli/recipe.go`、`overlay.go`、`clone.go` | 配方输入、本机配方合成与已发布文件树物化 |
+| `snapshot/cli/files.go`、`file_read.go` | 交付目录分页、字节块与完整单文件下载 |
+| `snapshot/cli/access.go`、`grant_update.go` | 显式授权管理、规则列表与观察旧规则的原子修改 |
+| `remote_repository.go`、`remote_connections.go`、`flags_managed_repository.go` | KC 仓供给、连接、归属恢复与共享等宿主流程 |
 
-`surface.go` 仍是公开路径闭集，`remote_dispatch.go` 负责分派；这些文件不复制
-Snapshot 的发布、授权或文件路由实现。现有函数与调用行为保留，文件归组不新增命令。
+`surface.go` 和各模块 `Commands()` 是可定位的静态来源，`remote_dispatch.go` 负责分派。
+模块不依赖 KC `cli/client/invocation/home`，不复制 Snapshot 的发布、授权或文件路由实现；
+KC 保留全局 parser、认证会话、统一编码、部署与跨模块装配；模块产品结果由模块拥有。
+Snapshot 叶 help 按可供性说明用途、输入、条件、结果、后果、风险与成本、失败恢复及示例，
+独立模块、`kc help <命令>` 与 `<命令> --help` 显示同一完整内容。
+
+`kc plugin <名称> help` 经同一已认证 Server 读取登记说明；`kc help plugin` 本地显示该任务用法。
+知识访问概览沿既有 `operations access-spec describe` 保留逻辑合同并附本次来源的插件帮助入口；
+说明不证明支持或就绪，不在 Schema JSON 中附加运行匹配，不为说明读取启动来源或维护。
 
 ### 部署与应用过程
 
 | 文件 | 负责 |
 |---|---|
 | `deployment.go` / `serve.go` | 显式部署管理与 Server 进程入口 |
-| `home_alias.go` | Store flag 转换 |
 | `invocation/home_audit.go` | stateDir 下的 `audit.jsonl` / `system.jsonl` 耐久过程账 |
 | `invocation/home_hookrun.go` | 动词 pre/post 出站 Hook |
 
@@ -84,14 +110,16 @@ create 只让 KC 能打开该 Repository，不登记来源成员；用户随后�
 
 ### 应用操作
 
-本包 `verbs_*.go` 按 semantic action 登记内部操作，操作体在 `invocation/verbs_*.go`。
+生产 CLI 经模块 SDK 请求 Server，服务端由 `invocation/verbs_*.go` 适配所属任务服务。
+本包旧 command/verbs 注册与嵌入夹具执行链仅保留在 `_test.go`，用于组件测试；
+模块叶参数、帮助、产品结果及回执恢复由所属 CLI/SDK 拥有。
 跨 Dataset / Knowledge / File Gateway 复用的固定版本与消费上下文由
 `invocation/dataset_access.go`、`invocation/task_pin.go` 持有。
 
 公开原始文件入口归 Snapshot Service；语义 Workspace File Gateway 与 `kcfs` 由应用装配。
 旧 `catalog/worktree` Git checkout / sync 已退役，不能作为 Snapshot 合同之外的入口。
 
-`invocation/request_shape.go` 把 flags 编成 `SearchRequest`，共享用例由 `knowledgeapp/` 执行。
+`invocation/request_shape.go` 把 flags 编成 `SearchRequest`，共享用例由 `discovery/service/` 执行。
 `invocation/allow.go` 是授权求值；命名知识集 SEARCH 要 `file.read`
 与 `knowledge.search`，正文走 `delivery/` 按仓 `knowledge.read` 屏蔽。访问证据不在这里。
 
@@ -111,19 +139,24 @@ create 只让 KC 能打开该 Repository，不登记来源成员；用户随后�
 | `server/auth_gitea.go` / `server/auth_taihu.go` / `server/auth_service.go` | 具体认证器 |
 | `invoke/http.go` / `invoke/http_write.go` | 请求解码与统一错误信封 |
 | `server/internal/readiness/` | 分 Surface readiness |
-| `server/serve_state.go` | 保留 StateLookup 公开别名；HTTP adapter 在 `knowledge/serving/state_lookup.go` |
+| `server/serve_state.go` | 保留 StateLookup 公开别名；HTTP adapter 在 `liveaccess/state_lookup.go` |
 | `server/serve_telemetry.go` | HTTP SERVER span 与 completion log |
-| `server/dataset_file_service.go` | 固定 pin 的只读 mount、单目录分页与 range read |
+| [`snapshot/service/file_http.go`](../snapshot/service/file_http.go)、[`file_view.go`](../snapshot/service/file_view.go) | 固定发布的文件网关、单目录分页与字节范围交付 |
 
 ### kcfs
 
-`datasetfs.go` / `datasetfs_daemon.go` / `datasetfs_help.go` 是本机挂载
-进程，经 Workspace File Gateway 读字节。不要和服务端 `server/dataset_file_service.go`
-混读。
+`kcfs` 是 Snapshot 的外部宿主客户端，不属于上面的 Snapshot CLI 文件分组。
+`cmd/kcfs` 是独立进程入口，`cli/datasetfs*.go` 经 Client 消费文件网关，
+根目录 `datasetfs/` 承接挂载计划、FUSE 与宿主生命周期；这些代码保持在 `snapshot/` 之外。
+直接打开夹具 Home 的 projection、prepare、目录分页与相对路径适配只在 `_test.go` 编译；
+正式挂载计划与文件访问都由远程网关返回。
+Snapshot 文件网关拥有固定范围、当前授权与文件交付，宿主挂载职责不进入该模块。
+help 可以交叉链接独立工具，导航关系不改变模块归属。
 
 ### 遥测与证据
 
-本包 `telemetry_*.go` 接入 CLI 调用观察，共享应用 OTel 适配在 `invocation/telemetry*.go`。
+`run.go` 接入产品 CLI 调用观察；嵌入 Invocation 的遥测与证据装配仅随 `_test.go` 编译。
+服务端共享应用 OTel 适配在 `invocation/telemetry*.go`。
 `invocation/observability_access.go` / `invocation/observability_retrieval.go` 写访问账和检索证据，
 不是 `allow.json`。
 
@@ -162,6 +195,10 @@ Taihu 资源方配置使用 `KC_SERVICE_CLIENT_SECRET` 作 introspection 应用�
 
 非秘密连接配置保存为 `$KC_CONFIG_DIR/client.json`（默认 `~/.config/kc`），会话位于该目录 `sessions/<Server摘要>/`，以原子替换和 0600 权限保存。地址优先级是 `--server`、`KC_SERVER_URL`、保存的客户端配置；旧单服务登录文件只作匹配 Server 的兼容读取。切换 Server 不发送旧服务凭证；请求不跟随携带凭证的 HTTP 重定向。CLI 与文件网关使用同一会话，过期后按同一服务续期，注销不会修改已固定的文件视图。local 身份来源对 Taihu Server 返回 `USAGE_INVALID`。
 
+会话保存、过期拒绝与刷新回归调用现行客户端路径；应用秘密与凭证交换通过实际 Server
+broker 验证。`legacy_login_test.go` 仅保留已退役直连 OAuth 交换的历史材料，其断言不代表
+当前产品入口。嵌入 admission 夹具调用真实 Snapshot Service，不另写规则展示算法。
+
 浏览器组织登录的无状态接口为 `POST /identity/v1/authorize`、`POST /identity/v1/authorize:poll` 和 `POST /identity/v1/token`。前两者只传送固定部署的 PAR 请求/状态；token 接口的严格输入由 `client.TokenRequest` 定义。它们不建立 Server Workspace session、不发权，不接受调用者指定上游、应用 ID 或应用秘密。
 
 Resource Access 参考装配按 Domain Schema（或 ResourceDescriptor）上的 `origin` 调用独立 `resource-access/v1` runtime。`kc serve` 不再接受整台机器一个访问 URL。容器间使用对方能解析的服务网络地址；调用方容器的 `localhost` 不指向另一个服务。出站 `POST {origin}/v1/access` 转发已经通过 Server 认证边界的调用方证明：Taihu/Gitea 的 `Authorization`、Taihu 网关的 `X-Tai-Identity`，以及 `X-Resource-Principal`。local 配对只带 principal。接入方可以忽略这些头；KC 不得省略。凭证不进 Schema、flags、访问账或 JSON body。
@@ -199,3 +236,32 @@ Dataset、ref、object、aspect 过滤，不暴露授权账本私有回执。
 清空；省略参数则保留输入配方中的属性。元数据随本次 revision 发布并在库存与历史详情
 回读，不检查任何说明文件。HTTP / Client 与控制台使用相同定义字段；原生 Repository
 元数据由 Snapshot Client 的原 lakeFS 路由读取、增量设置和按键删除。
+
+## Snapshot 详情、文件与授权 CLI
+
+`kc dataset show <id> [--revision <n>] [--limit <n>] [--continuation <cursor>]`
+查看已接受定义与一页历史；`revision` 是所选版，`servingRevision` 是当前服务版。
+历史游标在新发布后失效，退役仍可查看定义；详情可见不发放文件消费权。
+
+`kc files list --dataset <id> [--revision <n>] [--path <dir>] [--limit <n>] [--continuation <cursor>]`
+枚举交付目录的直接子项，条目的 `path` 可继续传给 `files read`。省略路径从交付根开始；
+页面上限默认 50、最多 200，0 使用默认。首次省略发布版只取当前一次，续页须显式沿用返回的
+`revision`；派生条目先于来源目录页，带游标的空页不是完成。响应保留 `dataset`、发布版、
+`pinId`、来源提交、条目和分页结果，但用户不需要传输 pin 文件。
+
+`kc files read --dataset <id> [--revision <n>] --path <file> [--offset <n>] [--length <n>]`
+返回一个 JSON 字节块；`content` 是标准 base64，偏移与总大小按字节，`eof` 表示文件尾。
+默认块大小 512 KiB，最大 4 MiB，0 使用默认。不将二进制解释成文本，也不向 stdout 写原始字节。
+指定 `--out <file>` 下载完整单文件，与范围参数互斥；同一固定发布贯穿全部块，每次仍检查
+当前权限。完整成功后才发布目标，拒绝覆盖既有文件或符号链接；失败清理临时文件。
+源码端仍可能整文件读取后切片，不承诺源端 I/O 或内存受返回范围约束。
+
+`kc grant update --id <id> --file <replacement-rule.json> --expected-file <observed-rule.json>`
+读取两份 `grant list` 中单条规则的规范 JSON；新规则完整替换可编辑字段，省略范围会清空。
+适配明确转换规则的 `repo` 为 Admin PUT 的 `repository`；不接受整份库存或 HTTP 包装请求。
+规则 ID 与来源不可伪改，expected 始终是此前观察，不在提交前拉新值；旧/新范围管理权、
+条件冲突和持久化由现有 Snapshot 原子更新边界判定，失败不留下撤销再新增的中间态。
+
+这些任务的交互由 `snapshot/cli` 拥有，产品入口只经 Server；内部嵌入夹具复用所属服务。
+模块单元测试随 owner 保存，根保留 argv、认证上下文、跨模块旅程与实际 Server 集成测试。
+独立 `kcfs`、根 `datasetfs/` 的挂载职责不进入 Snapshot 目录。

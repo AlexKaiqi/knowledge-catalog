@@ -94,6 +94,13 @@ daemon-mount/stop 控制器边界由 Go + Docker Linux/FUSE 验收。已退役�
 - 已退役能力的正路径测试直接删除，不用永久 `t.Skip` 伪装成证据；冻结能力只保留“公开入口明确拒绝”的反例。
 - 新测试若不能说明“删掉后哪种真实回归会漏掉”，不进入套件。
 
+充分性按 owner 的已选定保证与独立失败方式判断；必要性按移除用例后是否丢失语义或真实
+转换见证判断。测试函数、参数叶与请求次数不能作为风险数。正反用例应保持其它必要条件
+成立，让请求实际到达目标检查：整体消费准入撤销与保留解析准入后的文件消费撤销分别
+证明不同边界，多来源的前一阶段拒绝不能代替后一阶段逐来源检查。失败必须钉准确原因与
+完整权威状态不变，成功必须钉准确集合与数据；快照不能与待修改状态共享嵌套数据。
+规则语义与参数矩阵留最低责任层，传输与公开旅程只重复它们自己的转换或组合风险。
+
 声明与覆盖必须成对：
 
 - 端口、守卫与 conformance 集合必须有生产实现或调用方，并有一个能让它失效的反例入口。只有接口定义而无实现、无调用方按端口编程，或只有文字而无反例的守卫，不得作为「已抽象 / 已保护」的证据。
@@ -331,7 +338,7 @@ setup；默认的两组 feature 场景不自动执行这些独立 Go 用例。C-
 | K-04 | W3 | 过期 `expectedTargetCommit` | `NON_FAST_FORWARD`（K-06） | 已定位 | T2 / S5 |
 | K-05 | W3 | 空 ChangeSet | `USAGE_INVALID` | 已定位 | T3 / write errors |
 | K-06 | W3 | `originKind=DERIVATION` 无 VRV+algorithm | `PRECONDITION_FAILED`；登记空间 不变 | 已定位 | S1 / write errors |
-| K-07 | W3 | `schema_ref` 指向不存在的 `schema/*` | `SCHEMA_REVISION_UNRESOLVED` | 已定位 | `knowledge/writer/schema_test.go` / S1 |
+| K-07 | W3 | `schema_ref` 指向不存在的 `schema/*` | `SCHEMA_REVISION_UNRESOLVED` | 已定位 | `object/writer/schema_test.go` / S1 |
 | K-08 | W2 | 同一 Changeset 先 PUT schema 再引用 | 接受 | 已定位 | schema_test |
 | K-09 | W3 | `schema_ref` 指向外仓 | 拒绝 `SCHEMA_REVISION_UNRESOLVED` | 已定位 | schema_test |
 | K-09a | W3 | PUT Domain Schema | Meta Schema type/access/shape 校验；失败不移动 HEAD | 已定位 | `TestSchemaDefinitionMustConformToSystemMetaSchema` |
@@ -366,9 +373,9 @@ setup；默认的两组 feature 场景不自动执行这些独立 Go 用例。C-
 | B-05 | W2 | PUT 实例 value_source=binding / 声明不完整 | `USAGE_INVALID`，失败关闭 | 已定位 | `TestIngestRejectsInstanceBinding` / `TestValidateBindingRejectsAmbiguousAndIncompleteDeclarations` |
 | B-06 | W2 有手写 frontmatter | `writer commit --dir` / `Ingest` 非法 value_source | Snapshot 扫描失败，不降级成普通 Snapshot value | 已定位 | `TestIngestRejectsMalformedOrInvalidValueSource` |
 | B-07 | W8 两仓同一 Address 都声明 Binding | `binding show --dataset` | `ResolvedBinding[]` 两条；上层必须处理歧义 | 已定位 API；原宿主工具已退役 | Binding API tests |
-| B-08 | W4 State Binding + 注入 StateLookup | `read --dataset` | 返回绑定后的值，同时携带 declaration/observation 双 basis | 已定位 | `knowledge/serving` + HTTP E2E |
+| B-08 | W4 State Binding + 注入 StateLookup | `read --dataset` | 返回绑定后的值，同时携带 declaration/observation 双 basis | 已定位 | `liveaccess` + HTTP E2E |
 | B-09 | W4 State Binding、无 runtime | `read --dataset` | `CAPABILITY_UNSATISFIED`，不得把 `null` 占位当结果 | 已定位 | CLI E2E |
-| B-10 | W4 Stream Binding | 普通 `read --dataset` | `CAPABILITY_UNSATISFIED`，不隐式数组化 Stream | 已定位 | `knowledge/serving` tests |
+| B-10 | W4 Stream Binding | 普通 `read --dataset` | `CAPABILITY_UNSATISFIED`，不隐式数组化 Stream | 已定位 | `liveaccess` tests |
 | B-11 | W4 State Binding | VFS read 同一单元 | 返回固定声明文件且不调用 StateLookup | 已定位 | HTTP VFS/Binding E2E |
 | B-12 | 任意 | `append` / `stream` CLI 或 HTTP | unknown command / 404 | 已定位 | `TestAppendAndStreamSurfacesStayAbsent` |
 | B-13 | W4 + 独立 `resource-access/v1` runtime | `read --dataset` | Knowledge Server 按 Domain Schema `origin` HTTP 传 pinned Binding、已验证身份、调用方认证头（Taihu `Authorization` / `X-Tai-Identity`）与关联信息；runtime 返回 value+basis | 已定位 | `TestHTTPStateLookupCallsIndependentResourceRuntime` `TestHTTPStateLookupForwardsCallerAuthentication` `TestTypedKnowledgeReadForwardsTaihuCallerAuthentication` + `make test-state-runtime-e2e` Docker runtime + HTTP Binding/VFS E2E |
@@ -396,6 +403,32 @@ setup；默认的两组 feature 场景不自动执行这些独立 Go 用例。C-
 | B-26 | U8 | 大量观察中单 key 改变，另一个来源持续失败 | 稳态整体工作量随变更而非总量增长；独立工作继续，受影响查询不虚报完整 | partial：只计 lookup，不证明复制、摘要与索引写入成本或失败隔离 | `TestStateRefreshObjectsOnlyTouchesNamedAddress` |
 | B-27 | U9 | 普通 READ 遇到 Stream；后续请求有界事件窗口及断档恢复 | 普通读取不数组化；未来窗口明确顺序、进度与缺口，订阅独立设计 | partial：只证明当前拒绝边界；窗口与订阅仍为后续方向 | `TestOrdinaryReadRejectsStreamBinding` |
 
+#### LiveAccess 重构验收
+
+本次分母是 [LiveAccess](resource-access.md) 的 U13～U20：五项目标、证据可靠性、插件说明及 Member 索引。
+八组共 16 条规格已入[场景用例库](../../.data/scenes/service-initialized/source-repositories-configured/repository-attached/_specs/liveaccess.yaml)，
+前态、动作、预期及移除后漏检风险以库内规格为准，实施前即可从产品视图查阅和检查。
+下表关联实际执行断言；规格及关联不表示最终候选已经验收通过，正式运行证据以 TASK 为准。旧 U1～U12 保留原局部回归，
+不计入本轮新目标的完成分母，不重复正常成功或为每个传输层复制整套旅程。
+
+| 用例 / 目标 | 库内规格与覆盖 | 已接执行断言 |
+|---|---|---|
+| U13 / 1 | `independent-module`：专属实现独立归属、公开依赖和基础包依赖方向。 | `TestLiveAccessConcreteImplementationsStayInModule`、`TestLiveAccessRuntimeDependencyBoundaries`、`TestLiveAccessCLILeafResponsibilitiesStayWithModule` 及复制/shim/间接依赖毒化反例检查实际所有权；既有 Object 与 Index 分母保留。 |
+| U14 / 2 | `selected-plugin-result`、`replacement-keeps-declaration`、`no-compatible-plugin`：Repo 配置 A/B 并按仓调用、结果采用、更换和缺失/不兼容；Dataset 仅组合来源。 | `TestServerLiveAccessRepoSelectionMixedValuesAndDataset` 用真实 Writer、Repo metadata、SDK/Server 和来源 HTTP 验证 A/B、组合、更换、原声明不变及 missing/unknown/incompatible；旧全局实现和不兼容来源调用计数为零。 |
+| U15 / 3 | `mixed-values`：同对象固定值、31、合法 null 与失败；来源错误、非法 Basis、违反固定 Schema 各独立变体，经 Repo/Dataset 只影响失败位置。 | 同一真实 Server 用例钉 Repo/Dataset 三种失败、固定兄弟、31/null/Member、成功与失败观察分别采用；`TestRepositoryReadAdoptsNewMemberLeafBeforeSelectingWithoutSiblingReads` 和虚拟 Aspect/旧 Schema pin 控制保持选择及范围。 |
+| U16 / 4 | `request-identity-isolation`、`credential-target-boundary`、`redirect-credential-boundary`、`no-credential-in-results-or-evidence`：交错请求、初始/变化目标、重定向及成功/失败泄漏。 | `TestServerLiveAccessInterleavedAuthenticationUsesVerifiedCurrentCaller`、`TestServerLiveAccessCredentialBoundariesPreserveSiblingsAndSafeEvidence` 钉真实认证主体/证明/request/trace、目标变化、307、源值/依据/转义错误与实际留证；HTTP callback 篡改和编码 URL/JSON 秘密各有独立红绿回归。 |
+| U17 / 5 | `audit-original-result`、`audit-separate-authorization`：r1 原值/null/失败及固定依据跨更新重启留存，源离线仍复核；正常读权不等于审计权。 | `TestServerLiveAccessAuditRestoresOriginalReadAndRechecksSeparatePermission` 跨 r2、Snapshot 推进、进程替换、源离线复核原31/null/失败和关联；零来源尝试，旧Snapshot仍按commit可读，读权、审计权及撤权分别生效。 |
+| U18 / 5 | `evidence-persistence-failure`、`retained-evidence-lost`、`evidence-expired`：三个独立故障，可靠保存包含实际值/失败/原依据。 | `TestServerLiveAccessPersistenceFailuresPreventSuccessfulDelivery`、`TestServerLiveAccessAuditDistinguishesCorruptionLossAndExpiry` 与实际文件存储的值/失败/basis独立丢失回归钉过程账/payload故障、损坏、丢失及合法历史承诺到期，不改ID/digest/deadline或补来源值。 |
+| U19 / Affordance | `plugin-help`：`kc plugin liveaccess help` 返回模块登记说明，业务访问计数为零，未知插件明确失败。 | `TestServerLiveAccessHelpUsesProductCLIWithoutHomeRuntime` 经实际 cli.Run→SDK→Server 读取所属说明；仅授权前态也可读，unknown拒绝，构造/业务访问为零。 |
+| U20 / 索引接入 | `indexed-member`：按值 Schema/access 索引 LiveAccess Member 的真实值；命中及原观察回读一致，首次取值失败不索引句柄或失败说明。 | `TestSelectedLiveAccessMemberProjectionRetainsOriginalObservation`、`TestFailedLiveAccessMemberCannotPublishStateProjection` 经真实双插件与 OpenSearch 将占位7替为31/g1；源变47后固定 StateRevision 查询/命中正文仍31，失败无revision、不伪完整零命中。 |
+
+表中规格 ID 均省略共同的 `liveaccess-` 前缀。每条规格的 `risk` 是保留它的理由；相同结果
+组装风险用独立参数变体覆盖，身份串用、凭证目标/重定向/泄漏和三种证据故障分别保留，互不替代。
+
+U14 的一次任务完整选用、资源归属与退出复用[共同插件验收](plugin-extension.md#6-实施顺序与完成条件)，
+索引的声明、范围、固定依据、更新与隔离复用[索引六组用例](declarative-index.md)。
+新增断言分别钉住接线、组合结果、身份和历史证据风险，不为每个传输层重复整套语义。
+
 ### 2.5 R 维护读（`--repo` + `--commit`/`--ref`）
 
 | ID | 前置 | 操作 | 预期 | 现况 | 已有测试 |
@@ -408,7 +441,7 @@ setup；默认的两组 feature 场景不自动执行这些独立 Go 用例。C-
 | R-06 | W3 两版本 | `Reader.Diff` | 两 pinned 上的对象值；无公开 CLI | 已定位 | T12 / `TestCatalogRepoReadFlow` |
 | R-07 | W3 | `provenance` | 本对象信封链；不是 git log，不爬 `sourceRefs` | 已定位 | provider conformance / S5 / T7 citation |
 | R-08 | W3 | 退役的 Knowledge LIST | 公开入口拒绝；维护 scan 不作为消费枚举 | frozen | `TestRemovedCommandsAreRejected` |
-| R-09 | 有 `schema/*` | `schema describe` | AccessHints；非 schema 对象忽略 | 已定位 | `knowledge/reader/schema_test.go` |
+| R-09 | 有 `schema/*` | `schema describe` | AccessHints；非 schema 对象忽略 | 已定位 | `object/reader/schema_test.go` |
 | R-10 | 多 Aspect | `read --aspect` / `readAddress` | 单单元 | 已定位 | S5 |
 | R-11 | 有 permissions Aspect | READ 使用 `AspectSelector` exclude；SEARCH 只按 schema access hints | Canonical 仍在；Reader 不持第二套投影 | 已定位 | T8 |
 | R-12 | W4 | `--dataset` 兼 `--repo`/`--commit`/`--ref` | 拒绝组合 | 已定位 | consume_flow |
@@ -481,7 +514,7 @@ setup；默认的两组 feature 场景不自动执行这些独立 Go 用例。C-
 | I-30 | 反馈是晚于 Agent 请求的独立调用 | typed feedback | 被评价 trace 与 submissionTrace 分离；候选窗外引用拒绝；Agent 自评或多答案歧义不升级，只有用户确认/纠正可形成强标签 | 已定位 | `TestTypedRefineQueryDoesNotUseCurrentRequestTraceAsFilter` / `TestRerankTrainingDoesNotPromoteSelfAcceptedOrAmbiguousAgentAnswers` / `TestRerankTrainingOnlyPromotesHumanCorrections` |
 | I-31 | Provider 返回非法候选或审计窗含成功/失败混合记录 | RERANK + refine query | 非法完整输出随稳定错误落证据；evidence/trace/provider/model/outcome 过滤有效，limit 返回最新匹配记录 | 已定位 | `TestRerankEvidenceFeedbackAndTrainingSampleJourney` / `TestRefineEvidenceTraceAndTrainingSamplesAreRebuildable` |
 | I-32 | SEARCH / RELATION 返回固定候选窗 | retrieval evidence | durable `rt_*` 关联 access；保存 logical request、SearchView、candidate rank/lane/value digest/observation、执行统计与错误；响应返回 retrievalEvidenceId，append 失败则成功结果不交付 | 已定位 | `TestRetrievalEvidenceQueryTraceAndTrainingAreRebuildable` / `TestHTTPSearchRerankPreservesRetrievalEvidenceAndUsesOneFixedView` / `TestRelationRepositoryWorkspaceAndHTTPUseOneExactBasisExecutor` / `TestKnowledgeSearchFailsClosedWhenRetrievalEvidenceCannotPersist` |
-| I-33 | search:rerank 下游 refine 失败或用户只反馈 refine | 跨阶段关联 | 已完成 SEARCH 不继承下游失败；rf→rt 稳定关联，反馈 join key 自动传播，retrieval/rerank 训练视图均可重建 | 已定位 | `TestSearchRerankRecordsCompletedRetrievalWhenOnlyRefineFails` / `TestTypedRetrievalEvidenceQueryAndTraining` |
+| I-33 | search:rerank 下游 refine 失败或用户只反馈 refine | 跨阶段关联 | 已完成 SEARCH 不继承下游失败；rf→rt 稳定关联，反馈 join key 自动传播，discovery/rerank 训练视图均可重建 | 已定位 | `TestSearchRerankRecordsCompletedRetrievalWhenOnlyRefineFails` / `TestTypedRetrievalEvidenceQueryAndTraining` |
 | I-34 | 仓已 COMMIT、Desire 未落盘 | serve 重启或 `CatchUp` | live 投影 `basis == HEAD` 且 READY；SEARCH 命中，无需手工 `projection sync` | 已定位 | `TestProjectionReconcileRecoversMissingDesire` |
 | I-35 | 无 AfterSnapshot / 不挂 hook | `Start` 周期对账 | 结果与通知完整时相同：live basis=HEAD 且可搜 | 已定位 | `TestProjectionStartRecoversWithoutDesire` |
 | I-36 | `READY && Applied==Desired` 但 HEAD 已前进 | `CatchUp` | 不得 skip；必须 `Desire(HEAD)` 后再 Ensure | 已定位 | `TestProjectionCatchUpDoesNotSkipWhenHeadMoved` |
@@ -535,7 +568,7 @@ I-21 已收口 notice → 控制器 pull；I-34..I-39 仍只对账 Snapshot HEAD
 | P-20 | 真实 Taihu IAM | 浏览器 PAR/PKCE 或已签发 Bearer + introspection | `whoami` 为 `taihu:<username>`（或 agent/service 映射），不是工号；错配失败关闭 | gated | `scripts/live-taihu-auth.sh` / `TestLiveTaihuAuthentication` / `make test-taihu-live` |
 | P-21 | 已 hydrate 的知识 ID 信封 | `delivery.Chain.Apply` | 空链原样返回正文；无读权保留 ID、清空正文；有读权保留正文；改 ID/Address `PRECONDITION_FAILED`；后续 Stage 看到前一段输出且可改写正文 | 已定位 | `TestEmptyChainReturnsHydratedBody` `TestRepositoryReadStripsUnauthorizedBodyAndKeepsID` `TestRepositoryReadKeepsAuthorizedBody` `TestChainRejectsIdentityMutation` `TestChainRunsLaterStagesOnStrippedEnvelope` `TestLaterStageMayRewriteVisibleBody` `TestFromValueRoundTripWritesOnlyBody` |
 | P-22 | Schema 声明 name=`text+filter`、expression=`text`、unit=`filter`、measureKey 无 access；只授 `knowledge.search` | MATCH / EQ / field MATCH / READ，再授 `knowledge.read` | `schema.access`：只在声明面上定位；错面 `CAPABILITY_UNSATISFIED` 或零命中。`catalog.allow`：无读权命中清空正文、READ `FORBIDDEN`；授读后见 Canonical（含未编进索引的字段，作为实例证人） | 已定位 | `.data/scenes/` `knowledge-search-granted/` `knowledge-read-granted/` `TestMetricPermissionScenes` / `KC-AGENT-01` |
-| P-23 | local HTTP 三种主体 `taihu:alice` / `agent:copilot` / `service:etl`；grant 按人配置 | 场景过程：whoami → SEARCH/READ → 给 etl search → 给 alice read | `identity.bind`：空凭证 `UNAUTHENTICATED`；拒自报 onBehalfOf。`catalog.allow`：授权键是 principal；他入 grant 不继承；无读权 SEARCH 屏蔽正文、READ `FORBIDDEN` | 已定位 | `.data/scenes/` `principals-granted/` `TestMetricPermissionScenes` / `KC-AGENT-01` |
+| P-23 | local HTTP 三种主体 `taihu:alice` / `agent:copilot` / `service:etl`；Dataset 与仓授权分别配置 | 同一 Dataset 检索回读；未获权 etl 拒绝，补 Dataset 消费授权后重试；独立仓读取仍拒绝 | 主体之间不继承授权；Dataset 消费按发布范围返回正文，不开放来源整仓；本项不作为外部身份提供方或动态源权限的证明 | 已定位 | `.data/scenes/` `dataset-query-principals-granted/` `TestMetricPermissionScenes` / `KC-AGENT-01` |
 | P-24 | 正式部署已认证主体 | 服务库存与成员正文读取 | 库存可发现，正文仍依当前 Repository/Dataset 权限；无独立私有空间 | 已定位 | `.data/scenes/` `service-initialized/` `inventory-read-granted/` 及库存不含正文回归 |
 | P-25 | 已认证无仓 grant | 未声明系统仓读；声明业务仓默认可读；声明系统仓默认可读 | 未声明 FORBIDDEN；声明后可读不可写；系统仓走同一声明，不按保留 ID 放行 | 已定位 | `.data/scenes/` `repository-attached/_meta.yaml`（仓默认可读证据） `TestUndeclaredSystemRepositoryStillRequiresGrant` / `TestAuthenticatedPrincipalReadsDeclaredRepositoryWithoutGrant` / `TestDeclaredSystemRepositoryUsesAuthenticatedDefault` / `TestRuntimeWriterRefusesSystemRepository` |
 
@@ -610,6 +643,49 @@ I-21 已收口 notice → 控制器 pull；I-34..I-39 仍只对账 Snapshot HEAD
 
 ---
 
+### 2.15 对象模块重构验收
+
+本次分母是 [Object Guideline](object-refactor-guideline.md#重构验收用例) 的 U1～U12，按已选定
+保证和独立失败风险组织，不按命令数、测试函数数或目录数计数。表中的前态、动作与 Oracle
+在重构前固定；每组的参数变体／独立故障分别执行，成功分支保证反例实际到达目标检查。
+既有断言只证明其实际范围，`partial`、`gap` 与已有红例不能算作通过。
+
+共享材料复用现有知识发布状态与 `_materials/`，不新建“Object 已就绪”节点。Go 合同各自
+用现有 testkit 建前态：两个不同 Repo 可含同名 `table/orders`；A 中该对象有完整 description
+Aspect 和 columns 下 id／status 两个 Members，另有 `note/kept`。初始 id 含 type、nullable
+与待省略的 description，status 和 note 给出不同确值。Schema 采用、授权、Dataset 与故障
+前态分别沿已有构建或对应测试准备，不让前一反例的拒绝遮住后一个检查。
+
+| 用例 | 前态、动作与准确 Oracle | 复用断言、待补范围与接入位置 | 删除后漏检的风险 |
+|---|---|---|---|
+| U1 / 根帮助 | 无会话、无 Server 配置；根 `kc help` 本身解释五个核心概念、相互联系、基础能力及一个例子。请求计数和本机产物均为零；独立使用者仅沿输出找到读改删入口，不把第二页或系统仓坐标作为理解模型前提。 | `TestHelp`、`TestLocalModelAndLeafHelpNeedNoClient` 和 `TestEveryPublicHelpExplainsUseEffectsAndRecoveryWithoutExecuting` 钉根概念、联系、能力／例子、叶帮助及零业务请求；保留禁止根帮助倾倒完整参数的断言。`TestObjectReferenceCLIUsesOneTargetAcrossReadPutRemove` 证真实入口走通读改删。独立 Agent 在无实现上下文条件下仅沿根／叶帮助完成真实 Server 的 Member 创建、deep 读取、带维护摘要完整替换与删除，并独立确认省略字段及删除后不可读；本轮命令／输出日志沿 TASK.md 记录，不能以自动化指定参数代替该观察。 | 列了命令却不能理解模型，或帮助暗中要求登录、服务和文件。 |
+| U2 / 统一引用与身份 | 对同一实际维护目标依次 READ／PUT／REMOVE，三者只接受同一 URN＋locator；分列寻址即使指向同一对象也拒绝。合法 Repo／object_id 中的保留字符、百分号及中文按选定编码往返，解析坐标逐值相等；非法身份按公开合同拒绝。移动物理路径后原引用仍指同一对象，旧版仍读原值；两仓同 object_id 返回各自确值，不折叠或猜测 Dataset 来源。冲突的对象／语境／版本拒绝且不写仓。 | `TestPublishedImageDiscoveryKeepsBusinessIdentity`、`TestReaderKeepsSameObjectIDInDifferentRepositoriesIndependent` 保留路径迁移与同 Reader 两仓同名；`TestObjectReferenceKeepsIdentitySeparateFromPointer`、`TestReferenceCoordinatesAreBoundBeforeAuthorization` 钉编码回转、分列输入拒绝及服务前身份归一化；`TestObjectReferenceCLIUsesOneTargetAcrossReadPutRemove` 和 `TestDatasetReferenceKeepsAcceptedSourceVersionAndCurrentPermissions` 接真实 CLI→HTTP 同目标及版本冲突。CLI、HTTP 的缺失引用和旧字段反例另覆盖请求前拒绝，不触碰正文、ref 或取值源。 | 读写拆成不同目标、旧字段暗中转换而形成第二入口、身份编码或转义串对象、路径变成身份或跨仓同名误合并。 |
+| U3 / 固定与选择读 | 独立变体验证：对象根、Aspect、Member、深字段、数组位置准确值；空 locator 与省略 fragment 等价，`/` 取空键，`~0`／`~1`／URI 空格及中文转义按键定位。合法 null、false、缺失、越界和非法 pointer 区分。读取中推进 HEAD，内容、实际 Schema 与来源保持原固定依据。另以无关单元的毒化读口和计数器证明不读取它们，响应没有兄弟正文；所选单元内部可整读，不承诺底层字段 I/O。 | `TestPointerSelectionDistinguishesKeysArraysAndMissingValues`、`TestReferenceReadPlansOnlySelectedMaintenanceUnits`、`TestReferenceReadDoesNotFollowHeadWhileLoadingSelectedBody` 分别证 Pointer 确值／失败矩阵、无关单元毒化计划和读取中固定依据；`TestReferenceReadRetainsEachSelectedUnitsRecordedProvenance` 证根／集合／Member／deep 的固定独立来源且不递归外读。Native 窄口及缺规划端口、旧索引缺坐标的反例拒绝 fullscan；Dataset 逻辑 State 兼容另由 LiveAccess 具名用例验证，虚拟 Bound 需范围内类型依据，不承诺底层字段 I/O。 | 混用 HEAD、null 伪装缺失、只裁响应却读完无关内容，或 URI fragment 未被传到服务。 |
+| U4 / 读取维护依据 | 读完整 Member 后，直接用返回的固定版本及维护摘要完整更新，不另发 resolve；新值读回。另仅改同 Member 的其他字段，所选 leaf 值仍相同，维护摘要必须改变；用旧摘要、当前仓基点再次写入必须拒绝，整对象及 Ref 保持。根删除依据对应组装内容，不能用 leaf／单 Member 摘要替代。 | `TestMemberReplacementUsesReadDigestAndPreservesSiblingUnits`、`TestReferenceReadKeepsRootAndCompleteMaintenanceBasis` 与 `TestObjectReferenceCLIUsesOneTargetAcrossReadPutRemove` 证完整单元／deep 同维护摘要、其他字段变化时摘要改变、旧条件拒绝、组合根摘要及真实输出。`TestSelectiveReadKeepsConditionalMaintenanceEvidence` 保留必要依据；集合无单个维护摘要，不用 leaf 值摘要替代。 | 只返回显示值或 leaf digest，旧读结果覆盖了未观察到的并发字段变化。 |
+| U5 / 完整维护 CRUD | 整体值、完整 Aspect、Member 各自创建／替换／删除；完整替换省略旧字段后旧字段消失，兄弟单元与另一对象确值保持。删除选中单元后该单元不可读；根删除后所有原单元不可读，旧 commit 的完整对象保持。复核创建条件，组合对象不能整体 PUT 覆盖。每个维护范围独立建前态，不从文件缺失推导对象删除。 | `TestAspectModificationKeepsSiblingAndIdentity`、provider Writer contract、`TestMemberReplacementUsesReadDigestAndPreservesSiblingUnits`、`TestMaintenanceUnitRemovalPreservesSiblingUnits`、`TestObjectRemovalDeletesAllUnitsAndPreservesFixedHistory` 保留 CRUD 和删除隔离。`TestReferenceMaintenanceUsesActualUnitModelAndPreservesSiblings`、`TestReferenceMaintenanceRequiresAnExplicitNewMemberModel`、`TestReferenceMaintenancePreservesExistingRelationKind` 验统一引用不猜深度或重解释既有种类；真实 CLI 旅程含根删除。原根删除红例已按全部删除 Oracle 修复。 | 字段被合并、误删兄弟或另一对象、整对象删除遗漏成员。 |
+| U6 / 表示一致性 | 未采用 Schema 的对象，分别构造整体值／Aspects、完整 Aspect／Members 冲突，覆盖两种批内顺序及既有表示。整批拒绝，Ref、原对象、原回执保持且无 APPLIED 结果。正向控制显式删除旧表示后建立新表示，最终组装值准确。 | `TestWriterRejectsConflictingFinalAspectRepresentation`、`TestWriterAllowsExplicitAspectRepresentationConversion` 与 provider contract 复用；原冲突四子例保持批内两顺序／既有表示、Ref／正文／回执和显式转换 Oracle，必要行为修复后执行，不削弱为成功检查。 | Schema 可选被误解为表示规则也可选，顺序绕过最终冲突检查。 |
+| U7 / Schema | 独立变体：固定版本有界名单无重复／遗漏，describe 给准确结构、类型和已采用约束；不查询业务对象或外呼。无 Schema 的合法普通内容可发布；采用后省略 SchemaRef 仍继承并校验。非法 Schema、同批非法实例、影响旧实例的演进、仍有引用者的删除各自拒绝且无污染；合法新增可选字段、同批合法声明／实例，以及同批删除全部引用者后删除声明均准确读回同一提交。同身份破坏性迁移方式未选，不进正向目标。 | `TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent`、`TestDescribeSchemaKeepsCompleteConstraintsAtFixedVersions`、`TestSchemaDescriptionDigestCoversConstraintOnlyChanges` 和 `TestSchemaDescribeKeepsCompleteDefinition` 证固定名单及完整约束。继承、非法同批、既有引用者拒绝沿原 Schema 用例；`TestSchemaEvolutionRejectsBreakingReuseAndAllowsOptionalAddition`、`TestSchemaRemovalRequiresNoRemainingReferrers` 现核对合法后态和旧版，tree／native 的批次引用者回归另钉最终集合、有界及显式重建。`TestSchemaInstanceValidationUsesSameChangesetDraft` 合法分支已准确回读同一 NewCommit 的 Schema／组装实例，并核对实际采用声明与 describe 的版本；成功回执不代替正文 Oracle。 | 类型浏览混版本、更新丢约束、只验新实例、已引用声明被破坏或误删。 |
+| U8 / 权限与 Dataset | 其他必要权保留，只撤当前读权，旧引用／pin 也拒绝；授权拒绝时不能先读正文。发布仅含一个 Aspect／Member 时，允许所选范围，完整对象不冒充完整，私有单元与缺失 Schema 不补读；相同来源 commit 在不同布局下身份不变。源同对象推进后旧发布仍旧值，额外源版本冲突拒绝；仅 Dataset 读权不能写源仓。 | `TestConsumerUsesActualServerContract`、原 Dataset 材料／pin 边界用例继续复用；`TestDatasetReferenceKeepsAcceptedSourceVersionAndCurrentPermissions` 证新引用下同对象旧值／旧 commit、冲突来源版本、撤权及消费权不能写源仓。`TestObjectReferencePreservesActualAspectAuthorization`、`TestReferencePlanUsesMaintenanceMetadataWithoutReadingBodies`、`TestNativeReferencePlanRejectsUnprovenOrConflictingCoordinates` 证先用真实维护模型授权、无正文预读，整体 blob 的同名字段不能冒充 Aspect。 | 缓存旧授权、越界补读、HEAD 替换固定来源或消费权变写权。 |
+| U9 / Writer 可靠性 | 先有确值和回执；仓 CAS、单元前置条件及批内后操作失败分别拒绝，Ref／原内容／原回执保持，新内容不出现且无成功回执。成功同命令重试返回同提交，异内容拒绝。分别注入提交前中断、提交后响应或耐久回执丢失，未知结果不得自动重做；恢复只确认原命令。提案只推进候选，次级证据失败不反转已接受提交。 | `TestT2CommitCAS`、`TestT3Atomicity`、`TestT4CommandIdempotency`、`TestProposeSurface`、`TestAcceptedCommitSurvivesEvidenceFailure` 与耐久 command ledger 故障回归保留独立后态。`TestObjectMaintenanceRecoversRealAcceptedWriterAfterLostResponse` 证真实 Writer 已接受却丢响应后仅一个 POST、恢复原回执并按其 commit 回读；SDK 另拒绝确定失败轮询与其他命令回执。组件不重抄 transport，进程内证据不代替真实部署。 | 半批生效、丢更新、响应不明时双写、候选错误发布或已接受提交被回滚。 |
+| U10 / 历史差异来源 | 有同对象创建、无关提交、更新、路径移动和删除；对象 Log 准确归集、独占引入修订并分页，删除修订存在。Reader 两版对照返回各自固定内容；来源保存 SOURCE／DERIVATION 等实际信封，改变或不可达的 sourceRefs 不被读取。拒绝无当前权的历史读取；结构合规不改写来源性质。 | `TestCatalogRepoReadFlow`、`TestTreeRepositoryLogIncludesRemovalRevision`、provider Repository contract 与根删除回归复用固定两版内容、对象 Log／分页和删除历史；`TestReferenceReadRetainsEachSelectedUnitsRecordedProvenance`、`TestCacheClonesPerAddressRecordedProvenance`、`TestCollectionProductViewKeepsEachUnitsOwnSource` 钉多单元 SOURCE／DERIVATION 固定信封、可变来源隔离和不递归读取来源。对象差异 CLI 未选定，不列缺口，也不拿目录 diff 冒充。 | 原始 Git 历史冒充对象历史、删除消失、两端混版本或外呼最新来源补旧证。 |
+| U11 / 独立采用 | 无 Discovery、LiveAccess 或治理实现，建立普通对象、Schema、Relation 及能力声明并固定读写；外部源离线请求计数为零。不能靠扫描替代未装配发现，也不让 Object 基础包解释 runtime／操作。Relation 引用另一仓不读写端点或产生授权。 | `TestObjectPublicationDoesNotRequireIndexOrInstalledHandler`、`TestPublishedExternalTableDiscoveryDoesNotContactOfflineSource`、`TestCrossRepositoryRelationPublishKeepsEndpointRepoUntouched` 保留无插件／来源离线／端点不被读取或发权的断言；统一引用的 Object Service、SDK 和真实 CLI 基础旅程不需安装处理器，专属 Binding 解释移至 LiveAccess；扩展取值与发现单列兼容，不计 Object 基础通过。 | 基础发布暗依赖插件或端点可用、固定声明读取变成外部执行。 |
+| U12 / 结构 | 查实际 imports／公开调用方，类型与组装单一、无反向依赖、深层泄漏或转发壳。Require／Wrap 的实际返回值不能取得写 Ref／Merge／Archive 能力；写入仍经唯一 Writer。结构失败和业务失败分开判读。 | `TestObjectCapabilityModulesOwnTheirImplementations`、`TestObjectCapabilityPublicDepth`、`TestObjectRootsDoNotImportTheirDependentImplementations`、`TestObjectSDKDependencyGuardRejectsWriterImplementation`、CLI 静态库存与真实调用方守卫复核所有权；`TestReaderReturnsActualReadOnlyRepositoryViews` 的 tree／native × Require／Wrap 原四红例现保留 Oracle 并修复。`TestProviderNeutralUnitAlgebraHasNoFileStorageShape` 独立验证单元；静态绿色不表示业务或真实部署通过。 | 只搬目录、重复权威／协议或读口携带写权限。 |
+
+U3 的解码最小向量固定为：单键 `a/b` 用 `/a~1b`，`#/a%2Fb` 选择嵌套 `a→b`，两者返回
+不同确值；`/a.b` 选择字面点号键，`/~01` 只解码一次为键 `~1`。数组 `0` 取第一项，`01`、
+`-`、越界下标分别拒绝；空键、业务 null 与缺失各有独立确值／失败 Oracle。非法 `~2`、尾 `~`
+及错误 percent 编码拒绝。身份编码向量属于 U2，不能以这些 Pointer 向量代替。
+
+新引用的最小 transport 旅程只需一次真实 CLI→HTTP 的 READ（含 fragment／主体／固定依据）→
+Member 完整 PUT→固定版本回读→Member REMOVE，另钉越权与错误维护摘要；组件所有语义不在
+CLI、HTTP 和 provider 上机械重写。上述旅程已接 `TestObjectReferenceCLIUsesOneTargetAcrossReadPutRemove`，授权与原命令恢复分别接具名反例；公开参数、DTO 与编码沿模块合同，不造测试专用协议。
+目录 diff／commit、Discovery、LiveAccess 和治理的受影响行为单列兼容分母；未选定的集合、
+深字段／数组位置删除不进入本次正向目标。
+
+R0 出口要求规格与实际断言映射完整，已有红例保留并进入 R1；对应红例未绿不能进入结构
+切换。新增公开入口实现时先执行目标反例再修实现，运行证据按同次源码保存。产品视图的
+`linked`／`gap` 只表示可追溯，本轮规格、局部测试或静态闸不能冒充新 Object 功能验收。
+
 ## 3. 错误码覆盖
 
 协议信封一律 `{error:{code,message}}`。无测试的码补齐时优先。
@@ -662,7 +738,7 @@ I-21 已收口 notice → 控制器 pull；I-34..I-39 仍只对账 Snapshot HEAD
 | X-08 | 有 schema_ref | propose | 与 COMMIT 同一套解析 | 已定位 | `TestSchemaRefOnPropose` |
 | X-09 | 已有成功 command_id | 重放带 Hook 的命令 | REPLAYED 不打 hook | 已定位 | P-06 |
 | X-10 | 已配置 Gate 与 Hook | pre-merge | pre-merge 成功 ≠ 清单满足 | 已定位 | M-12 |
-| X-11 | 已移除 driver 名 | 部署配置验证 | 不回流成 authority/index/cache | 已定位 | W-09 |
+| X-11 | 已移除 driver 名 | 部署配置验证 | 不回流成 authority/discovery/projection/cache | 已定位 | W-09 |
 | X-12 | permissions Aspect 存在 | `kc grant add` 与 READ | 快照可读；不放行 SELECT、不当 read 闸门 | 已定位 | P-10 |
 
 ---
@@ -698,7 +774,7 @@ kc writer commit --command-id u1 --repo kr://acme/public/core --dir ./drafts
 kc dataset define --dataset agent --revision 1 \
   --source kr://acme/public/core
 kc operations projection sync --repo kr://acme/public/core
-kc read --dataset agent --object runbooks/oncall
+kc read 'urn:kc:object:kr%3A%2F%2Facme%2Fpublic%2Fcore:runbooks%2Foncall' --dataset agent
 kc resolve --dataset agent --object runbooks/oncall
 kc operations access-spec describe --dataset agent                # 治理/运维诊断，不是消费命令
 # 非法

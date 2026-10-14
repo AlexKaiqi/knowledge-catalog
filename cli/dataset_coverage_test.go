@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"context"
+	snapshotclient "kc/snapshot/client"
 	"testing"
 
 	"kc/client"
@@ -90,13 +91,13 @@ func TestDatasetRetireRejectsConsumptionAndPreservesSources(t *testing.T) {
 	headDocs, headData, readDocs, readData := sourceReaders(t, f)
 	f.assertRead(t, accepted.Pin, "reference/policies", "policy v1\n")
 
-	if err := f.operator.SnapshotService().RetireKnowledgeSet(context.Background(), "delivery", client.RequestOptions{}, nil); err != nil {
+	if err := f.operator.SnapshotService().RetireKnowledgeSet(context.Background(), "delivery", snapshotclient.RequestOptions{}, nil); err != nil {
 		t.Fatal(err)
 	}
-	var retiredMounts client.WorkspaceFileMountsResponse
-	err := f.reader.WorkspaceFilesService().Mounts(context.Background(), client.WorkspaceFileMountsRequest{
+	var retiredMounts snapshotclient.WorkspaceFileMountsResponse
+	err := f.reader.WorkspaceFilesService().Mounts(context.Background(), snapshotclient.WorkspaceFileMountsRequest{
 		WorkspaceFileCoordinate: f.coordinate(t, nil),
-	}, client.RequestOptions{}, &retiredMounts)
+	}, snapshotclient.RequestOptions{}, &retiredMounts)
 	if kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
 		t.Fatalf("retired dataset must refuse consumption, got %v", err)
 	}
@@ -105,10 +106,10 @@ func TestDatasetRetireRejectsConsumptionAndPreservesSources(t *testing.T) {
 	// the same explicit lifecycle code as the unpinned resolve above — not a
 	// generic authorization refusal. The pre-retire read of the same pin proves
 	// the refusal is lifecycle-caused.
-	var out client.WorkspaceFileReadResponse
-	err = f.reader.WorkspaceFilesService().Read(context.Background(), client.WorkspaceFileReadRequest{
+	var out snapshotclient.WorkspaceFileReadResponse
+	err = f.reader.WorkspaceFilesService().Read(context.Background(), snapshotclient.WorkspaceFileReadRequest{
 		WorkspaceFileCoordinate: f.coordinate(t, &accepted.Pin), Path: "reference/policies/README.md",
-	}, client.RequestOptions{}, &out)
+	}, snapshotclient.RequestOptions{}, &out)
 	if kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
 		t.Fatalf("retired dataset must refuse pinned reads with the lifecycle code, got %v", err)
 	}
@@ -132,7 +133,7 @@ func TestDatasetRetireRejectsConsumptionAndPreservesSources(t *testing.T) {
 		{Repository: deliveryDocs, Selector: snapshot.DefaultRef, Path: ptr("archive/policy"), SubPath: "handbook/policies"},
 	}
 	if err := f.operator.SnapshotService().DefineKnowledgeSet(context.Background(),
-		client.KnowledgeSetRequest{Dataset: "delivery-archive", Revision: 1, Sources: sources}, client.RequestOptions{}, nil); err != nil {
+		snapshotclient.KnowledgeSetRequest{Dataset: "delivery-archive", Revision: 1, Sources: sources}, snapshotclient.RequestOptions{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	archive := f.coordinate(t, nil)
@@ -140,10 +141,10 @@ func TestDatasetRetireRejectsConsumptionAndPreservesSources(t *testing.T) {
 	// The consumer's grant is scoped to Dataset "delivery" (retired above), so
 	// the source-preservation proof runs on the operator client: the same
 	// sources still support a fresh, fully resolvable dataset.
-	var mounts client.WorkspaceFileMountsResponse
-	if err := f.operator.WorkspaceFilesService().Mounts(context.Background(), client.WorkspaceFileMountsRequest{
+	var mounts snapshotclient.WorkspaceFileMountsResponse
+	if err := f.operator.WorkspaceFilesService().Mounts(context.Background(), snapshotclient.WorkspaceFileMountsRequest{
 		WorkspaceFileCoordinate: archive,
-	}, client.RequestOptions{}, &mounts); err != nil {
+	}, snapshotclient.RequestOptions{}, &mounts); err != nil {
 		t.Fatal(err)
 	}
 	if len(mounts.Mounts) != 1 {
@@ -236,7 +237,7 @@ type attempt struct {
 
 func publishRevision(label string, publisher *client.Client, sources []dataset.KnowledgeSetSource, out chan<- attempt) {
 	err := publisher.SnapshotService().DefineKnowledgeSet(context.Background(),
-		client.KnowledgeSetRequest{Dataset: "delivery", Revision: 2, Sources: sources}, client.RequestOptions{}, nil)
+		snapshotclient.KnowledgeSetRequest{Dataset: "delivery", Revision: 2, Sources: sources}, snapshotclient.RequestOptions{}, nil)
 	out <- attempt{label: label, err: err}
 }
 
@@ -257,10 +258,10 @@ func TestDeliveredReferenceDoesNotPullUnselectedFile(t *testing.T) {
 	opened := f.mounts(t, nil)
 	assertListing(t, f, opened.Pin, "picked", "README.md")
 	f.assertDeliveredRead(t, opened.Pin, "picked/README.md", "metric v2, see details.md\n")
-	var out client.WorkspaceFileReadResponse
-	err := f.reader.WorkspaceFilesService().Read(context.Background(), client.WorkspaceFileReadRequest{
+	var out snapshotclient.WorkspaceFileReadResponse
+	err := f.reader.WorkspaceFilesService().Read(context.Background(), snapshotclient.WorkspaceFileReadRequest{
 		WorkspaceFileCoordinate: f.coordinate(t, &opened.Pin), Path: "picked/details.md",
-	}, client.RequestOptions{}, &out)
+	}, snapshotclient.RequestOptions{}, &out)
 	if err == nil || len(out.Content) != 0 {
 		t.Fatalf("delivered reference must not pull the unselected file: %#v err=%v", out, err)
 	}
@@ -287,10 +288,10 @@ func TestDatasetDeliveryWithoutKnowledgeLayerKeepsPlainBytes(t *testing.T) {
 		t.Fatalf("plain file delivery must publish a mount: %#v", opened.Mounts)
 	}
 	assertListing(t, f, opened.Pin, "plain", "notes.md")
-	var plainRead client.WorkspaceFileReadResponse
-	if err := f.reader.WorkspaceFilesService().Read(context.Background(), client.WorkspaceFileReadRequest{
+	var plainRead snapshotclient.WorkspaceFileReadResponse
+	if err := f.reader.WorkspaceFilesService().Read(context.Background(), snapshotclient.WorkspaceFileReadRequest{
 		WorkspaceFileCoordinate: f.coordinate(t, &opened.Pin), Path: "plain/notes.md",
-	}, client.RequestOptions{}, &plainRead); err != nil {
+	}, snapshotclient.RequestOptions{}, &plainRead); err != nil {
 		t.Fatal(err)
 	}
 	if string(plainRead.Content) != payload || plainRead.TotalBytes != int64(len(payload)) {

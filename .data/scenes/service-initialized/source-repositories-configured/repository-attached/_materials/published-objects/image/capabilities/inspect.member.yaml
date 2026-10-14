@@ -1,0 +1,7 @@
+---
+object_id: image/tea-tin
+aspect_name: interfaces
+member_key: inspect
+schema_ref: schema/inspection.implementation/v1
+---
+{"interfaceRef": "interface/asset.inspect/v1", "purpose": "Inspect image dimensions when a handler is installed."}

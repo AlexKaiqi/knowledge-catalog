@@ -65,7 +65,7 @@ func migrateLegacyIdentity(stateDir string, request IdentityMigrationRequest) (I
 	mu := lock.(*sync.Mutex)
 	mu.Lock()
 	defer mu.Unlock()
-	if _, err := os.Stat(allowPath(absolute)); err != nil {
+	if _, err := os.Stat(inv.AllowPath(absolute)); err != nil {
 		return IdentityMigrationResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "durable authorization state is unavailable")
 	}
 	policy, err := inv.ReadAllow(absolute)
@@ -94,7 +94,7 @@ func migrateLegacyIdentity(stateDir string, request IdentityMigrationRequest) (I
 		policy.IdentityMigrations = map[string]inv.IdentityMigrationReceipt{}
 	}
 	policy.IdentityMigrations[request.LegacyPrincipal] = inv.IdentityMigrationReceipt{Digest: digest, MigratedRules: migrated}
-	if err := writeAllow(absolute, policy); err != nil {
+	if err := inv.WriteAllow(absolute, policy); err != nil {
 		return IdentityMigrationResult{}, err
 	}
 	return IdentityMigrationResult{Status: "APPLIED", Principal: request.User.Username, MigratedRules: migrated}, nil

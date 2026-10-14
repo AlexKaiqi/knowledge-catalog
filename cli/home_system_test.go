@@ -5,7 +5,7 @@ import (
 
 	apphome "kc/home"
 	"kc/internal/testkit"
-	"kc/knowledge"
+	objectmodel "kc/object"
 )
 
 func TestLocalInitPublishesReadableImmutableSystemRepository(t *testing.T) {
@@ -13,24 +13,22 @@ func TestLocalInitPublishesReadableImmutableSystemRepository(t *testing.T) {
 
 	initialized := asMap(t, body(t, kc(home, "init")))
 	system := asMap(t, initialized["system"])
-	if system["repositoryId"] != string(knowledge.SystemRepositoryID) || system["metaSchema"] != string(knowledge.MetaSchemaV1) {
+	if system["repositoryId"] != string(objectmodel.SystemRepositoryID) || system["metaSchema"] != string(objectmodel.MetaSchemaV1) {
 		t.Fatalf("init did not publish System Repository: %#v", initialized)
 	}
 
 	state := asMap(t, body(t, kc(home, "show")))
-	if !hasRepository(state, string(knowledge.SystemRepositoryID)) {
+	if !hasRepository(state, string(objectmodel.SystemRepositoryID)) {
 		t.Fatalf("System Repository is not registered: %#v", state)
 	}
 
 	body(t, kc(home, "local", "grant", "bootstrap", "--principal", "admin"))
 	report := asMap(t, body(t, kc(home, "describe-schema", "--as", "agent:any",
-		"--repo", string(knowledge.SystemRepositoryID), "--object", string(knowledge.MetaSchemaV1))))
+		"--repo", string(objectmodel.SystemRepositoryID), "--object", string(objectmodel.MetaSchemaV1))))
 	if len(report["schemas"].([]any)) != 1 {
 		t.Fatalf("public System Schema read failed: %#v", report)
 	}
-	expectCode(t, kc(home, "put", "--as", "admin", "--command-id", "mutate-system",
-		"--repo", string(knowledge.SystemRepositoryID), "--object", "schema/evil",
-		"--value", `{"entity":"Evil"}`), "FORBIDDEN")
+	expectCode(t, kc(home, "put", testObjectReference(t, string(objectmodel.SystemRepositoryID), "schema/evil", ""), "--as", "admin", "--command-id", "mutate-system", "--value", `{"entity":"Evil"}`), "FORBIDDEN")
 }
 
 func TestLocalSystemPublishSeedsLakeFSAuthority(t *testing.T) {
@@ -45,10 +43,10 @@ func TestLocalSystemPublishSeedsLakeFSAuthority(t *testing.T) {
 	expectCode(t, kc(home, "local", "system", "publish", "--driver", "gitea"), "USAGE_INVALID")
 
 	published := asMap(t, body(t, kc(home, "local", "system", "publish", "--driver", "lakefs", "--dsn", fakeDSN)))
-	if published["repositoryId"] != string(knowledge.SystemRepositoryID) || published["driver"] != "lakefs" || published["seeded"] != true {
+	if published["repositoryId"] != string(objectmodel.SystemRepositoryID) || published["driver"] != "lakefs" || published["seeded"] != true {
 		t.Fatalf("first system publish should seed lakeFS: %#v", published)
 	}
-	if published["metaSchemaDigest"] != string(knowledge.SystemMetaSchemaDigest()) {
+	if published["metaSchemaDigest"] != string(objectmodel.SystemMetaSchemaDigest()) {
 		t.Fatalf("published digest drifted from the binary trust root: %#v", published)
 	}
 	replay := asMap(t, body(t, kc(home, "local", "system", "publish", "--driver", "lakefs", "--dsn", fakeDSN)))
@@ -56,17 +54,17 @@ func TestLocalSystemPublishSeedsLakeFSAuthority(t *testing.T) {
 		t.Fatalf("second publish must verify without rewriting: %#v", replay)
 	}
 
-	expectMsg(t, kc(home, "repo-add", "--repo", string(knowledge.SystemRepositoryID)), "immutable")
+	expectMsg(t, kc(home, "repo-add", "--repo", string(objectmodel.SystemRepositoryID)), "immutable")
 	body(t, kc(home, "init"))
 
 	body(t, kc(home, "local", "grant", "bootstrap", "--principal", "admin"))
 	report := asMap(t, body(t, kc(home, "describe-schema", "--as", "agent:any",
-		"--repo", string(knowledge.SystemRepositoryID), "--object", string(knowledge.MetaSchemaV1))))
+		"--repo", string(objectmodel.SystemRepositoryID), "--object", string(objectmodel.MetaSchemaV1))))
 	if len(report["schemas"].([]any)) != 1 {
 		t.Fatalf("published System Schema is not readable: %#v", report)
 	}
 	status := asMap(t, body(t, kc(home, "status")))
-	item := statusRepo(t, status, string(knowledge.SystemRepositoryID))
+	item := statusRepo(t, status, string(objectmodel.SystemRepositoryID))
 	if item["driver"] != "lakefs" {
 		t.Fatalf("reopened Home must use the published System authority: %#v", item)
 	}

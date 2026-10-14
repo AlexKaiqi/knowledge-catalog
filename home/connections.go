@@ -11,7 +11,7 @@ import (
 	"sync"
 
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 	"kc/snapshot"
 )
 
@@ -159,7 +159,7 @@ func (ws *Home) ConnectRepository(req ConnectionRequest, grant func(RepositoryIn
 		return result, kernel.Fail(kernel.ErrUsageInvalid, "Snapshot repository connections require driver lakefs")
 	}
 	id, err := NormalizeRepositoryID(req.Repository)
-	if err != nil || id != req.Repository || req.Repository == string(knowledge.SystemRepositoryID) || req.Principal == "" {
+	if err != nil || id != req.Repository || req.Repository == string(objectmodel.SystemRepositoryID) || req.Principal == "" {
 		return result, kernel.Fail(kernel.ErrUsageInvalid, "connection requires a valid repository and principal")
 	}
 	if err := validateConnectionCredential(req.Credential); err != nil {

@@ -4,23 +4,23 @@ import (
 	"testing"
 
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 )
 
 func sampleEnvelope(body string) Envelope {
 	return Envelope{
-		ID: knowledge.PinnedKnowledgeRef{
-			KnowledgeRef: knowledge.KnowledgeRef{Repository: "kr://acme/public/core", Object: "runbook/public"},
+		ID: objectmodel.PinnedKnowledgeRef{
+			KnowledgeRef: objectmodel.KnowledgeRef{Repository: "kr://acme/public/core", Object: "runbook/public"},
 			Commit:       "c1",
 		},
-		Address: knowledge.Address{ObjectID: "runbook/public"},
+		Address: objectmodel.Address{ObjectID: "runbook/public"},
 		Value:   map[string]any{"body": body},
-		Provenance: &knowledge.ProvenanceEnvelope{
+		Provenance: &objectmodel.ProvenanceEnvelope{
 			ProducedAt: "2026-09-03T00:00:00Z",
 		},
-		Observations: []knowledge.UnitObservation{{}},
-		Units:        []knowledge.Address{{ObjectID: "runbook/public"}},
-		Declarations: []knowledge.UnitDeclaration{{Address: knowledge.Address{ObjectID: "runbook/public"}}},
+		Observations: []objectmodel.UnitObservation{{}},
+		Units:        []objectmodel.Address{{ObjectID: "runbook/public"}},
+		Declarations: []objectmodel.UnitDeclaration{{Address: objectmodel.Address{ObjectID: "runbook/public"}}},
 	}
 }
 
@@ -37,7 +37,7 @@ func TestEmptyChainReturnsHydratedBody(t *testing.T) {
 
 func TestRepositoryReadStripsUnauthorizedBodyAndKeepsID(t *testing.T) {
 	env := sampleEnvelope("secret procedure")
-	got, err := Chain{RepositoryRead{Allowed: func(string, knowledge.KnowledgeRef) bool { return false }}}.
+	got, err := Chain{RepositoryRead{Allowed: func(string, objectmodel.KnowledgeRef) bool { return false }}}.
 		Apply(Context{Principal: "bot"}, env)
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +55,7 @@ func TestRepositoryReadStripsUnauthorizedBodyAndKeepsID(t *testing.T) {
 
 func TestRepositoryReadKeepsAuthorizedBody(t *testing.T) {
 	env := sampleEnvelope("public procedure")
-	got, err := Chain{RepositoryRead{Allowed: func(principal string, ref knowledge.KnowledgeRef) bool {
+	got, err := Chain{RepositoryRead{Allowed: func(principal string, ref objectmodel.KnowledgeRef) bool {
 		return principal == "bot" && ref.Repository == "kr://acme/public/core"
 	}}}.Apply(Context{Principal: "bot"}, env)
 	if err != nil {
@@ -85,7 +85,7 @@ func TestChainRejectsIdentityMutation(t *testing.T) {
 
 func TestLaterStageMayRewriteVisibleBody(t *testing.T) {
 	got, err := Chain{
-		RepositoryRead{Allowed: func(string, knowledge.KnowledgeRef) bool { return true }},
+		RepositoryRead{Allowed: func(string, objectmodel.KnowledgeRef) bool { return true }},
 		StageFunc(func(_ Context, env Envelope) (Envelope, error) {
 			env.Value = map[string]any{"body": "redacted"}
 			return env, nil
@@ -105,7 +105,7 @@ func TestLaterStageMayRewriteVisibleBody(t *testing.T) {
 func TestChainRunsLaterStagesOnStrippedEnvelope(t *testing.T) {
 	var saw any
 	got, err := Chain{
-		RepositoryRead{Allowed: func(string, knowledge.KnowledgeRef) bool { return false }},
+		RepositoryRead{Allowed: func(string, objectmodel.KnowledgeRef) bool { return false }},
 		StageFunc(func(_ Context, env Envelope) (Envelope, error) {
 			saw = env.Value
 			return env, nil
@@ -123,17 +123,17 @@ func TestChainRunsLaterStagesOnStrippedEnvelope(t *testing.T) {
 }
 
 func TestFromValueUsesObjectRepositoryWhenKnowledgeRefDisagrees(t *testing.T) {
-	value := knowledge.KnowledgeValue{
-		KnowledgeRef: knowledge.KnowledgeRef{Repository: "kr://kc/system", Object: "metric/gmv"},
+	value := objectmodel.KnowledgeValue{
+		KnowledgeRef: objectmodel.KnowledgeRef{Repository: "kr://kc/system", Object: "metric/gmv"},
 		Repository:   "kr://scene/knowledge",
-		Address:      knowledge.Address{ObjectID: "metric/gmv"},
+		Address:      objectmodel.Address{ObjectID: "metric/gmv"},
 		Value:        map[string]any{"definition": map[string]any{"name": "GMV"}},
 	}
 	env := FromValue(value, nil)
 	if env.ID.Repository != "kr://scene/knowledge" || env.ID.Object != "metric/gmv" {
 		t.Fatalf("delivery ID must follow the object's repository: %#v", env.ID)
 	}
-	got, err := Chain{RepositoryRead{Allowed: func(_ string, ref knowledge.KnowledgeRef) bool {
+	got, err := Chain{RepositoryRead{Allowed: func(_ string, ref objectmodel.KnowledgeRef) bool {
 		return ref.Repository == "kr://kc/system"
 	}}}.Apply(Context{Principal: "taihu:alice"}, env)
 	if err != nil {
@@ -145,17 +145,17 @@ func TestFromValueUsesObjectRepositoryWhenKnowledgeRefDisagrees(t *testing.T) {
 }
 
 func TestFromValueRoundTripWritesOnlyBody(t *testing.T) {
-	value := knowledge.KnowledgeValue{
-		KnowledgeRef: knowledge.KnowledgeRef{Repository: "kr://acme/public/core", Object: "runbook/public"},
+	value := objectmodel.KnowledgeValue{
+		KnowledgeRef: objectmodel.KnowledgeRef{Repository: "kr://acme/public/core", Object: "runbook/public"},
 		Repository:   "kr://acme/public/core",
 		Commit:       "c1",
-		Address:      knowledge.Address{ObjectID: "runbook/public"},
+		Address:      objectmodel.Address{ObjectID: "runbook/public"},
 		Value:        map[string]any{"body": "secret"},
-		Provenance:   &knowledge.ProvenanceEnvelope{ProducedAt: "t"},
-		Units:        []knowledge.Address{{ObjectID: "runbook/public"}},
-		Declarations: []knowledge.UnitDeclaration{{Address: knowledge.Address{ObjectID: "runbook/public"}}},
+		Provenance:   &objectmodel.ProvenanceEnvelope{ProducedAt: "t"},
+		Units:        []objectmodel.Address{{ObjectID: "runbook/public"}},
+		Declarations: []objectmodel.UnitDeclaration{{Address: objectmodel.Address{ObjectID: "runbook/public"}}},
 	}
-	env := FromValue(value, []knowledge.UnitObservation{{}})
+	env := FromValue(value, []objectmodel.UnitObservation{{}})
 	stripped, err := Chain{RepositoryRead{}}.Apply(Context{Principal: "bot"}, env)
 	if err != nil {
 		t.Fatal(err)

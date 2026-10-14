@@ -8,11 +8,11 @@ import (
 	"context"
 	"strings"
 
+	retrieval "kc/discovery"
 	"kc/internal/telemetry"
 	"kc/invoke"
 	"kc/kernel"
 	"kc/observability"
-	"kc/retrieval"
 )
 
 func ShapeInvocationResult(result any, err error) invoke.RunResult {
@@ -47,6 +47,14 @@ func EvidenceChain(
 	result any,
 	callErr error,
 ) (any, error) {
+	if callErr == nil {
+		var retainErr error
+		result, retainErr = retainReadResults(ctx, home, flags, result)
+		if retainErr != nil {
+			callErr = retainErr
+			result = nil
+		}
+	}
 	accessStarted := TelemetryNow()
 	evidenceID, accessBytes, accessErr := RecordKnowledgeAccess(home, command, flags, result, callErr)
 	if runtime != nil && knowledgeAccessCommand(command, flags) {

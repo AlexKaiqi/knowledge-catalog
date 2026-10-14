@@ -1,9 +1,9 @@
 # invocation/
 
-执行载体缝合包：一次已解析调用的载体（`Invocation`）、操作体类型（`Command`/`Handler`）及其
-读取方法。CLI 前端与（CAP-ORG-01 B6 起）服务面各跑一次 `Invocation`；两个 transport 互不可
-import，所以载体不能归任何一方所有。与 `internal/telemetry` 同类的共享应用层基础设施，但两
-个顶层 transport 都依赖它，按耦合单元模型立顶层单元（CAP-ORG-01 B5a，§2.4 R3）。
+服务执行载体与适配缝：一次已解析调用的 `Invocation`、`Command`/`Handler` 及其读取方法。
+KC 应用的 typed handler 通过本包连接授权、固定范围、证据与所属任务服务；生产 CLI 经
+各模块 SDK 请求 Server，不在本机运行 Invocation。CLI 的组件测试可在 `_test.go` 中直接
+装配同一操作，嵌入测试路径不进入产品二进制。B5a/B6 的迁移记录保留原批次范围。
 
 ## 边界
 
@@ -13,11 +13,13 @@ BindingScope/KnowledgeRef 读取器；`Command`（Stage + Run）与 `Handler` �
 Inventory discovery 请求验证标记；任务 pin 上下文归一（`--pin`/`--dataset-file` → 内部坐标）；
 **动词操作体（B6 迁入）**：读/写/索引/资源/目录/观测/授权域的 `Verb*` 函数
 （`verbs_read.go`/`verbs_write.go`/`verbs_index.go`/`verbs_resource.go`/`verbs_dataset.go`/
-`stores_observe.go`/`object_log.go`/`schema_browse.go` 等）——cli 注册表经 `Run: inv.VerbX`
-引用，HTTP typed handler 调同一批操作体（API-01）。
+`stores_observe.go`/`object_log.go`/`schema_browse.go` 等）——HTTP typed handler 调用这些适配；
+根 CLI 的内部测试登记以 `Run: inv.VerbX` 复用同一操作（API-01）。
 
-不拥有：flag/JSON/观测词汇（`invoke`，保持纯）；argv 词汇与产品输出（cli）；
-路由闭集与 wire 形状（server）；业务规则本身（`knowledgeapp`，动词体消费它）；
+不拥有：flag/JSON/观测词汇（`invoke`，保持纯）；模块叶参数、帮助与产品结果（各模块 `cli`）；
+全局 argv 与会话（根 `cli`/`client`）；路由闭集与 wire 形状（`server`）；
+业务规则本身（`object/service`、`discovery/service`、`discovery/datasets`、
+`interfaces/service`、`liveaccess/service`、`snapshot/service` 等所属能力）；
 任何 transport 打开的 Home 的生命周期——它只持有被递进来的句柄。
 
 ## 最小用法
@@ -27,21 +29,20 @@ cx := &invocation.Invocation{Command: name, Home: home, WS: opened, Flags: flags
 result, err := cmd.Run(cx)
 ```
 
-cli 经 `invoke_aliases.go` 的类型别名消费（`type invocation = invocation.Invocation`），143 处
-动词体站点零改动。
+消费方直接使用本包公开类型和函数；根 CLI 不保留私有类型转发层。
 
 ## 依赖方向
 
-可以依赖：`invoke`、`home`（只引用句柄类型，绝不 Open）、`kernel`、`knowledge`、
-`knowledge/serving`、`knowledgeapp`（B6 起：动词体消费用例核心）、`snapshot`、`controlplane`、
-stdlib。
+可以依赖：`invoke`、`home`（只引用句柄类型，绝不 Open）、`kernel`、`object`、
+`discovery`、`interfaces`、`liveaccess`、`snapshot` 的所属公开合同与任务服务，
+以及 `controlplane` 和标准库；具体闭集由架构守卫维护。
 禁止 import：`cli`、`server`、`httpsurface`、`client`（denylist 已钉，
 `TestForbiddenDependencies`）。
 
 ## 验证
 
 对象 Interface 的通用消费由 `InvokeObjectInterface` 连接固定 Reader 与装配的注册表，
-CLI 和 typed HTTP 共用此路径。`ObserveObjectInterfaceCall` 将执行回执映射到既有知识访问
+生产 CLI 经 typed HTTP 使用此路径。`ObserveObjectInterfaceCall` 将执行回执映射到既有知识访问
 记录，保留实现 Member、合同及实现 Schema 固定引用；LiveAccess 读取另保留独立观察。
 审计记录保存合同/声明/Schema 摘要及处理器版本，不从任意业务结果里猜测这些身份。
 

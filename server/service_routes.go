@@ -12,10 +12,10 @@ import (
 	"strconv"
 	"strings"
 
-	"kc/index"
+	retrieval "kc/discovery"
+	index "kc/discovery/projection"
 	"kc/kernel"
-	"kc/knowledge"
-	"kc/retrieval"
+	objectmodel "kc/object"
 	"kc/snapshot/dataset"
 )
 
@@ -79,6 +79,8 @@ func (f *httpFacade) registerServiceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /identity/v1/authorize", f.identityAuthorize)
 	mux.HandleFunc("POST /identity/v1/authorize:poll", f.identityAuthorizePoll)
 	mux.HandleFunc("POST /knowledge/v1/objects:read", f.knowledgeRead)
+	mux.HandleFunc("POST /knowledge/v1/objects:put", f.knowledgePut)
+	mux.HandleFunc("POST /knowledge/v1/objects:remove", f.knowledgeRemove)
 	mux.HandleFunc("POST /knowledge/v1/objects:resolve", f.knowledgeResolve)
 	mux.HandleFunc("POST /knowledge/v1/search", f.knowledgeSearch)
 	mux.HandleFunc("POST /knowledge/v1/search:rerank", f.knowledgeSearchRerank)
@@ -117,12 +119,10 @@ type knowledgeScope struct {
 }
 
 type knowledgeReadRequest struct {
-	knowledgeScope
-	Object  string   `json:"object"`
-	Aspect  string   `json:"aspect,omitempty"`
-	Member  string   `json:"member,omitempty"`
-	Include []string `json:"include,omitempty"`
-	Exclude []string `json:"exclude,omitempty"`
+	knowledgeDatasetIdentity
+	Reference string `json:"reference"`
+	Commit    string `json:"commit,omitempty"`
+	Ref       string `json:"ref,omitempty"`
 }
 
 type KnowledgeSearchRequest struct {
@@ -174,7 +174,7 @@ type knowledgeTraverseRequest struct {
 
 type knowledgeRerankRequest struct {
 	knowledgeDatasetIdentity
-	Candidates []knowledge.KnowledgeRef       `json:"candidates"`
+	Candidates []objectmodel.KnowledgeRef     `json:"candidates"`
 	Spec       retrieval.SemanticOperatorSpec `json:"spec"`
 }
 
@@ -287,28 +287,17 @@ func knowledgeCoordinateFlags(workspace, repository, commit, ref string, pin jso
 }
 
 func (request knowledgeReadRequest) Flags() map[string]FlagValue {
-	flags := knowledgeCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
-	if request.Object != "" {
-		flags["object"] = request.Object
-	}
-	if request.Aspect != "" {
-		flags["aspect"] = request.Aspect
-	}
-	if request.Member != "" {
-		flags["member"] = request.Member
-	}
-	if len(request.Include) > 0 {
-		flags["include"] = request.Include
-	}
-	if len(request.Exclude) > 0 {
-		flags["exclude"] = request.Exclude
-	}
+	flags := knowledgeCoordinateFlags(request.Dataset, "", request.Commit, request.Ref, request.Pin, request.Definition)
+	flags["reference"] = request.Reference
 	return flags
 }
 
 func (f *httpFacade) knowledgeRead(w http.ResponseWriter, r *http.Request) {
 	var request knowledgeReadRequest
 	if !decodeServiceRequest(w, r, &request) {
+		return
+	}
+	if !requireObjectReference(w, request.Reference) {
 		return
 	}
 	f.executeTyped(w, r, "knowledge-read", "knowledge.read", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbRead}, request.Flags())
@@ -351,7 +340,7 @@ func (f *httpFacade) knowledgeRerank(w http.ResponseWriter, r *http.Request) {
 	if len(request.Pin) > 0 {
 		flags["pin"] = string(request.Pin)
 	}
-	input := inv.RerankApplicationRequest{Candidates: append([]knowledge.KnowledgeRef(nil), request.Candidates...), Spec: request.Spec}
+	input := inv.RerankApplicationRequest{Candidates: append([]objectmodel.KnowledgeRef(nil), request.Candidates...), Spec: request.Spec}
 	provider := f.options.Reranker
 	f.executeTyped(w, r, "rerank", "knowledge.rerank", inv.Command{Stage: invoke.StageGoverned, Run: func(cx *inv.Invocation) (any, error) {
 		return inv.RerankWorkspace(cx, input, provider)

@@ -20,8 +20,9 @@ path_hint: docs/graph/documents/object-refactor-guideline.okf
     "object-module-refactor-target",
     "object-module-migration-guideline",
     "object-module-public-entry-depth",
-    "object-plugin-extension-system",
-    "object-plugin-installation-and-lifecycle",
-    "publish-discover-access-extension-boundaries"
+    "object-module-contract-and-capabilities",
+    "object-module-urn-and-content-locator-access",
+    "object-module-public-capability-guarantees",
+    "object-module-refactor-acceptance-cases"
   ]
 }

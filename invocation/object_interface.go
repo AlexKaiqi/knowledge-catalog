@@ -4,13 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"kc/interfaces"
+	interfaceservice "kc/interfaces/service"
 	"strings"
 
 	"kc/invoke"
 	"kc/kernel"
-	"kc/knowledge"
-	"kc/knowledge/reader"
-	"kc/knowledge/serving"
+	serving "kc/liveaccess"
+	accesscontract "kc/liveaccess/contract"
+	objectmodel "kc/object"
+	"kc/object/reader"
 	"kc/snapshot/dataset"
 )
 
@@ -22,7 +25,7 @@ func InvokeObjectInterface(cx *Invocation, operation string) (any, error) {
 		return nil, err
 	}
 	return OnTarget(cx, func(declarations *reader.Serving, _ dataset.Service) (any, error) {
-		values, err := declarations.ReadAddress(knowledge.Address{Kind: knowledge.KindMember, ObjectID: knowledge.ObjectID(cx.Flag("object")), AspectName: knowledge.ObjectInterfacesAspect, MemberKey: cx.Flag("implementation")})
+		values, err := declarations.ReadAddress(objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: objectmodel.ObjectID(cx.Flag("object")), AspectName: interfaces.ObjectInterfacesAspect, MemberKey: cx.Flag("implementation")})
 		if err != nil {
 			return nil, err
 		}
@@ -31,10 +34,7 @@ func InvokeObjectInterface(cx *Invocation, operation string) (any, error) {
 		}
 		return invokeObjectInterfaceAt(cx, declarations, values[0].Repository, operation, input)
 	}, func(repository kernel.RepositoryID, commit kernel.CommitID) (any, error) {
-		repositories := map[kernel.RepositoryID]kernel.CommitID{repository: commit}
-		declarations := reader.Open(func(id kernel.RepositoryID) (knowledge.Repository, error) {
-			return cx.WS.Reader.Require(id, kernel.ErrKnowledgeRefUnresolved)
-		}, reader.KnowledgeSetPin{SetID: "interface", Repositories: repositories, Items: reader.WholeRepositoryItems(repositories)})
+		declarations := repositoryServingAt(cx, repository, commit, "interface")
 		return invokeObjectInterfaceAt(cx, declarations, repository, operation, input)
 	})
 }
@@ -44,7 +44,7 @@ func invokeObjectInterfaceAt(cx *Invocation, declarations *reader.Serving, repos
 	if err != nil {
 		return nil, err
 	}
-	implementation, err := declarations.ResolveObjectInterfaceAt(repository, knowledge.ObjectID(cx.Flag("object")), cx.Flag("implementation"))
+	implementation, err := interfaces.ResolveObjectInterfaceAt(declarations, repository, objectmodel.ObjectID(cx.Flag("object")), cx.Flag("implementation"))
 	if err != nil {
 		return nil, err
 	}
@@ -53,16 +53,21 @@ func invokeObjectInterfaceAt(cx *Invocation, declarations *reader.Serving, repos
 		return nil, err
 	}
 	accessor, _ := lookup.(serving.ResourceOperationAccessor)
-	registry, err := serving.WithLiveAccess(cx.ObjectInterfaces, implementation, accessor)
+	registry := cx.ObjectInterfaces
+	if implementation.Contract.Object == accesscontract.LiveAccessInterfaceV1 && cx.WS.LiveAccess != nil {
+		registry, err = cx.WS.LiveAccess.InterfaceRegistryFor(implementation)
+	} else {
+		registry, err = serving.WithLiveAccess(registry, implementation, accessor)
+	}
 	if err != nil {
 		return nil, err
 	}
-	service := serving.OpenInterfaces(declarations, registry, request)
-	service.SetAuthorizer(func(_ context.Context, _ serving.InterfaceCall) error {
+	service := interfaceservice.Open(declarations, registry, request)
+	service.SetAuthorizer(func(_ context.Context, _ interfaces.InterfaceCall) error {
 		observation := invoke.NoObservationTelemetry(cx.Observation)
 		return Authorize(cx.Home, "resource.access", AuthorizationFlags(cx), observation.Authorization, cx.WS)
 	})
-	interfaceRequest := serving.InterfaceRequest{Repository: repository, Object: knowledge.ObjectID(cx.Flag("object")), Implementation: cx.Flag("implementation"), Operation: operation, Input: input}
+	interfaceRequest := interfaces.InterfaceRequest{Repository: repository, Object: objectmodel.ObjectID(cx.Flag("object")), Implementation: cx.Flag("implementation"), Operation: operation, Input: input}
 	result, err := service.Call(cx.Context, interfaceRequest)
 	if err != nil {
 		return nil, err

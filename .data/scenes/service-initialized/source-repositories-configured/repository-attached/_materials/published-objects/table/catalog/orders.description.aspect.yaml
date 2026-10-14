@@ -1,0 +1,12 @@
+---
+object_id: table/external-orders
+aspect_name: definition
+schema_ref: schema/published-object.definition/v1
+---
+{
+  "title": "externalcatalogtoken External orders table",
+  "kind": "table",
+  "summary": "由外部服务管理的订单表；发布的是稳定身份和说明。",
+  "resources": [{"origin": "__OFFLINE_ORIGIN__", "database": "sales", "schema": "public", "table": "orders"}],
+  "internalNote": "hiddenassetnotes"
+}

@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 	"kc/observability"
 )
 
@@ -13,11 +13,11 @@ func TestRefineEvidenceTraceAndTrainingSamplesAreRebuildable(t *testing.T) {
 	store := datedFileStore(t)
 	identity := observability.IdentityContext{Principal: "agent:answer", OnBehalfOf: "user:kai"}
 	trace := observability.TraceContext{TraceID: "trace-rerank", SpanID: "span-rerank"}
-	ref := knowledge.KnowledgeRef{Repository: "kr://acme/runbooks", Object: "runbook/refund"}
+	ref := objectmodel.KnowledgeRef{Repository: "kr://acme/runbooks", Object: "runbook/refund"}
 	accessID, err := store.RecordAccessReceipt(observability.AccessEvent{
 		OccurredAt: "2026-08-31T00:00:00.1Z", Identity: identity, Trace: trace,
 		Action: "knowledge.rerank", Dataset: "agent", Decision: "ALLOW", Result: "RESOLVED",
-		Knowledge: []observability.KnowledgeAccess{{KnowledgeRef: knowledge.PinnedKnowledgeRef{KnowledgeRef: ref, Commit: "c1"}}},
+		Knowledge: []observability.KnowledgeAccess{{KnowledgeRef: objectmodel.PinnedKnowledgeRef{KnowledgeRef: ref, Commit: "c1"}}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -30,13 +30,13 @@ func TestRefineEvidenceTraceAndTrainingSamplesAreRebuildable(t *testing.T) {
 		Spec:            observability.RefineSpec{SpecRef: "urn:rank:refund", Revision: 1, Operator: "SEMANTIC_RERANK", Criterion: "refund timeout relevance"},
 		CandidateDigest: "digest-1", ProjectedBytes: 128,
 		Candidates: []observability.RefineCandidate{{
-			KnowledgeRef: knowledge.PinnedKnowledgeRef{KnowledgeRef: ref, Commit: "c1"}, Value: value,
+			KnowledgeRef: objectmodel.PinnedKnowledgeRef{KnowledgeRef: ref, Commit: "c1"}, Value: value,
 			ValueDigest: kernel.CanonicalDigest(value), OriginalRank: 1,
 			RetrievalEvidence: []observability.RefineLaneEvidence{{Provider: "opensearch", Lane: "lexical", LocalRank: 1}},
 		}},
 		Outcome: "COMPLETED", ModelOutput: &observability.RefineModelOutput{
 			Provider: "llm-native", Model: "gpt-5.6-luna", PromptRevision: "listwise-v1", DurationMillis: 25,
-			Groups: []observability.RefineRankGroup{{Rank: 1, Refs: []knowledge.KnowledgeRef{ref}}}, Unjudged: []knowledge.KnowledgeRef{},
+			Groups: []observability.RefineRankGroup{{Rank: 1, Refs: []objectmodel.KnowledgeRef{ref}}}, Unjudged: []objectmodel.KnowledgeRef{},
 		},
 	})
 	if err != nil {
@@ -44,7 +44,7 @@ func TestRefineEvidenceTraceAndTrainingSamplesAreRebuildable(t *testing.T) {
 	}
 	for _, feedback := range []observability.FeedbackEvent{
 		{OccurredAt: "2026-08-31T00:00:00.3Z", Identity: identity, Trace: trace, Dataset: "agent", Outcome: "answered",
-			RefineEvidenceID: refineID, LabelSource: "agent", Answer: "Inspect the payment gateway timeout.", SelectedRefs: []knowledge.KnowledgeRef{ref}},
+			RefineEvidenceID: refineID, LabelSource: "agent", Answer: "Inspect the payment gateway timeout.", SelectedRefs: []objectmodel.KnowledgeRef{ref}},
 		{OccurredAt: "2026-08-31T00:00:00.4Z", Identity: observability.IdentityContext{Principal: "user:kai"}, Trace: trace,
 			Dataset: "agent", Outcome: "accepted", RefineEvidenceID: refineID, LabelSource: "user"},
 	} {
@@ -70,7 +70,7 @@ func TestRefineEvidenceTraceAndTrainingSamplesAreRebuildable(t *testing.T) {
 		Spec:            observability.RefineSpec{SpecRef: "urn:rank:refund", Revision: 1, Operator: "SEMANTIC_RERANK", Criterion: "refund timeout relevance"},
 		CandidateDigest: "digest-2", ProjectedBytes: 128,
 		Candidates: []observability.RefineCandidate{{
-			KnowledgeRef: knowledge.PinnedKnowledgeRef{KnowledgeRef: ref, Commit: "c1"}, Value: value,
+			KnowledgeRef: objectmodel.PinnedKnowledgeRef{KnowledgeRef: ref, Commit: "c1"}, Value: value,
 			ValueDigest: kernel.CanonicalDigest(value), OriginalRank: 1,
 		}},
 		Outcome: "ERROR", Error: map[string]any{"code": "TEMPORARY_UNAVAILABLE", "message": "timeout"},

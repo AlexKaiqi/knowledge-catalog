@@ -1,6 +1,6 @@
 # delivery/
 
-**交付链**：③ 已经定位并 hydrate 之后、transport 编码之前，把「知识 ID + Canonical」变成调用方可见内容。不是 ④ 协议层，不是出站 Hook，也不进 `retrieval/` / `index/`。
+**交付链**：③ 已经定位并 hydrate 之后、transport 编码之前，把「知识 ID + Canonical」变成调用方可见内容。不是 ④ 协议层，不是出站 Hook，也不进 `discovery/` / `discovery/projection/`。
 
 ```text
 知识 ID（PinnedKnowledgeRef）+ 已 hydrate 的 Canonical

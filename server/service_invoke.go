@@ -7,7 +7,7 @@ package server
 import (
 	inv "kc/invocation"
 	"kc/invoke"
-	knowledgeserving "kc/knowledge/serving"
+	knowledgeserving "kc/liveaccess"
 
 	"bytes"
 	"compress/gzip"
@@ -40,6 +40,10 @@ func (f *httpFacade) executeTyped(w http.ResponseWriter, r *http.Request, name, 
 		}
 	}
 	if strings.HasPrefix(action, "knowledge.") || action == "resource.access" {
+		if err := inv.NormalizeReferenceFlags(flags); err != nil {
+			invoke.WriteInvoke(w, inv.ErrorResult(err))
+			return
+		}
 		if err := inv.RejectMixedKnowledgeBasis(flags); err != nil {
 			invoke.WriteInvoke(w, inv.ErrorResult(err))
 			return
@@ -63,7 +67,11 @@ func (f *httpFacade) executeTyped(w http.ResponseWriter, r *http.Request, name, 
 	if !f.options.localAssertion() {
 		ctx = knowledgeserving.ContextWithCallerCredentials(ctx, knowledgeserving.CallerCredentialsFromHeader(r.Header))
 	}
-	invoke.WriteInvoke(w, inv.InvokeApplicationWithTelemetryAtHome(ctx, f.runtime, name, action, operation, flags, observeStateLookup(f.options.StateLookup, f.runtime), opened, f.options.ObjectInterfaces))
+	var access knowledgeserving.StateLookup
+	if opened.LiveAccess != nil && opened.LiveAccess.Configured() {
+		access = opened.LiveAccess
+	}
+	invoke.WriteInvoke(w, inv.InvokeApplicationWithTelemetryAtHome(ctx, f.runtime, name, action, operation, flags, observeStateLookup(access, f.runtime), opened, f.options.ObjectInterfaces))
 }
 
 // lockTypedInvocation decides the invocation lock from the facade's serving

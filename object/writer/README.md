@@ -1,0 +1,72 @@
+# object/writer/
+
+Writer 是② Knowledge 写入面：一次一个 target、一种 Surface、一个 `command_id`。字面路径写入由 [Snapshot RawWriter](../../snapshot/write_contract.go) 承担。
+
+```text
+COMMIT / PROPOSAL  → Knowledge tree codec → snapshot.TreeStore authority
+ChangeSet          → PUT / REMOVE Address
+```
+
+文件型 authority 的 codec 只读取本次 Operations 涉及的对象 locator 与 unit，并在同一
+TreeChangeSet 更新每对象一个的 `.kc/knowledge-locators/objects/*.entry`；不存在单对象提交时
+重读/重写全仓 manifest 的稳态路径。旧 whole-repository locator 会失败关闭并要求先做显式
+维护入口 `RebuildTreeLocators` 迁移，普通 Writer 请求不会暗中全仓扫描。文件 codec 整批消费根包的
+`object.ApplyUnits`；provider-neutral 单元变更和最终组装只有一份规则，native provider 的 typed
+ChangeSet 合同须保持同一语义，实际文件位置和序列化由格式层处理。
+
+新提交和显式 locator 重建在派生条目中固定每个 Address 的实际 Path，位置迁移仍保留原身份。
+读取无需从文件名猜测 Aspect/Member；旧 paths-only 条目保持原完整读取与维护入口兼容，精确
+选取通过格式层明确报告缺少坐标，不隐式补读其它单元正文。Canonical 正文格式不变。
+Schema 变更同步更新 `.kc/knowledge-locators/schemas.index` 与 `bindings.index`，后一份目录
+固定 `SchemaDefinition.Bound()` 为真的 Schema 身份。旧布局已有 Schema 却缺 Bound 目录时，
+Schema 写入要求显式 `RebuildTreeLocators`，不能隐式扫描全部 Schema 或遗漏未改的 Bound 声明。
+同一提交按涉及对象的变更前与最终单位集维护每 Schema 的引用者条目及完整性标记；省略
+SchemaRef 的继承、改用另一 Schema、路径迁移和整体删除都沿唯一单位代数计算。Schema
+演进只读取该固定版反向条目与引用者维护单元，旧版本 Schema 也用精确 locator；没有完整
+反向元数据时明确要求重建，不隐式遍历全仓或把未知引用者当成零引用。
+
+PUT 替换一个完整 Address 单元，可携带 `schema_ref` 与 provenance。Bound State 写在 Domain Schema `origin` 上，Writer 拒绝实例 `value_source.kind=binding`。动态值要沉淀为知识时，墙外 Collector 显式翻译为 Snapshot ChangeSet 再 COMMIT。
+
+更新未指定 `path_hint` 时保留该 Address 的原有路径；显式指定才迁移。原生 provider 接收原始 ChangeSet，合并现有单元后仅为尚无路径的单元分配默认路径，Writer 不提前把路径省略改写成迁移。
+
+`Ingest` / `Reconcile` 只产生 ChangeSet 预览，不是采集框架，也不是 ingestion control（面 3 只追 published HEAD 的派生投影）。产品 CLI 的目录写入是 `writer commit --dir`；一次性接入大量文件时可加 `--bulk` 显式请求介质的批量写通路——只换对象传输原语，CAS 与 commit 语义不变，介质未提供该能力时整条确定性拒绝；可选 `kc diff --dir` 看同一对照，不把 ChangeSet 交给调用方。HTTP Writer 仍收 ChangeSet（含 `bulkIngest`）。PROPOSAL 只推进 candidate Ref；ControlPlane merge 才推进发布 Ref。人在自有 git 上改 frontmatter 不经过本 CLI 时，进 published 的知识发布仍须过与 COMMIT 相同的校验（CI 代发或只验不写，见 `TASK.md` WRITE-VALIDATE）；本包本轮不新增 validate-only 命令。部署发布 `systemrepo/content` 完整出版物由 `systemrepo.PublishSystem` 聚合并调用专用 Writer：只写入空的实际 `kr://kc/system` Snapshot，已有内容、Address、Schema 绑定和路径必须与当前版本一致，额外或缺失内容文件拒绝。运行时 Writer 保持拒绝系统仓写入。
+
+幂等规则：同 command_id 同 digest 返回原 Receipt（REPLAYED）；同 id 异 digest 是 `IDEMPOTENCY_CONFLICT`。Snapshot CAS 过期是 `NON_FAST_FORWARD`。带 `schema_ref` 的 PUT 必须在 target commit 可解析。DERIVATION 必须携带固定 inputWorkspaceVersionRef 和 algorithm。
+
+Relation PUT 可以引用其他仓的对象；仅校验 `CanonicalRelation` 的结构化信封，不读取或写入端点仓，不为端点发权。单仓 target、CAS、幂等与失败原子性不变。端点是否存在和是否允许读取留给消费上下文处理。
+
+账本先持久化 `PENDING` 再触碰 authority。提交后回执丢失时不得重放；运维以原 digest
+`ResolvePending` 写回已核对回执，或以 `AbandonPending` 明确放弃。`Prune` 只删除超过部署
+保留窗口的 `APPLIED`/`ABANDONED`，永不推断 `PENDING`；Bolt 实现游标删除，不在启动时加载
+全部历史。Canonical 与账本已接受后，次级 evidence sink 失败不反转写入结果。
+
+每个 `schema/*` PUT 先按 System Meta Schema 归一化；未知逻辑 type、物理 access 词或错误
+形状返回 `SCHEMA_UNSUPPORTED`。复用同一 Schema object ID 时先做兼容性 diff；字段删除、
+改类型、新增必填、归属/模式变化或约束收紧返回 `SCHEMA_INCOMPATIBLE`，接入方必须发布新
+major。`schema/core/readme/v1` 是平台 README Aspect：副本必须与 System 出版物 digest 一致，
+实例必须是 Aspect `readme`，正文为 markdown `body`。兼容的文档变化还必须对固定 basis 上全部引用实例成立：Writer 经有界
+`SchemaReferrerLocator` 取回引用者并逐个校验，失配返回 `SCHEMA_INSTANCE_INVALID`；同批
+PUT/REMOVE 的 Address 由本批结果承担。REMOVE 一个仍被引用的 `schema/*` 返回
+`SCHEMA_INCOMPATIBLE`。带 `schema_ref` 的实例 PUT 使用同批 Schema 草稿或目标仓固定 basis
+校验；**省略 `schema_ref` 时继承该 Address 已存储的声明并同样校验**，不符合合同返回
+`SCHEMA_INSTANCE_INVALID`，且不推进 Ref。Bound State 的知识声明由 Domain Schema 承载，
+不通过实例 Binding PUT 写入动态值。
+
+Member 可采用带 origin 的固定值 Schema，其知识值仍按原值 Schema 校验；消费时由
+LiveAccess 采用实际观察。Writer 仍拒绝实例 `value_source.kind=binding`，不将来源值写回
+Snapshot。同提交的固定 locator 记录所采用完整 SchemaRef，保证声明类别及旧版本可复核。
+
+主要文件：`writer.go` 共用校验与 applySnapshot；`commit.go`、`propose.go` 两个 Surface；`schema.go` 校验 Meta Schema、schema_ref 和实例；`idempotency.go` 解释共享 command ledger 中的 Knowledge 请求；`receipt.go` 定义 durable receipt；`preview.go` 只做预览。
+
+```bash
+go run ./cmd/kc -- writer put --command-id schema-1 --repo kr://acme/public/core \
+  --object schema/service.health \
+  --value '{"entity":"Service","aspect":"health","origin":"https://stats.example","fields":{"status":{"type":"string"}}}'
+```
+
+
+声明式索引唯一采用 Schema 字段 `access`。它声明逻辑查询能力，不属于值结构兼容约束；
+删除或收窄 access 可在同一 Schema 身份下发布，旧 pin 继续读取旧声明，新版本按新的
+AccessSpec 摘要维护投影。字段删除、改类型、新增必填、归属/模式和引用约束等结构守卫
+保持；平台 Schema 副本仍须精确匹配系统出版物。普通对象正文中的查询样式数据不赋予
+字段访问能力，也不会触发独立声明解析。

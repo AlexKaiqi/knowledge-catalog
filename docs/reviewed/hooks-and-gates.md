@@ -114,7 +114,7 @@ Hook 共享配置或交付承诺。
 [ControlPlane](../../controlplane/README.md) 持有提案、预览、证据和合并编排，
 [Gate](../../gate/README.md) 持有证据清单与检查，
 [Hook](../../hook/README.md) 持有触发、投递和重试，
-[Writer](../../knowledge/writer/README.md) 持有提交、并发与幂等保证。
+[Writer](../../object/writer/README.md) 持有提交、并发与幂等保证。
 具体动作、证据字段、配置、执行限制与状态转换留在这些合同中。
 
 ## 方向性用例

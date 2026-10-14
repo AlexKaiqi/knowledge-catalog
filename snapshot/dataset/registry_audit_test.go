@@ -74,7 +74,10 @@ func TestSnapshotCatalogDatasetAuditCrossesBackendHistoryPage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hist := cat.Log(catalog.LogQuery{Dataset: "orders", Limit: 20})
+	hist, err := cat.Log(catalog.LogQuery{Dataset: "orders", Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(hist.Commits) != 1 || hist.Commits[0].Commit != want {
 		t.Fatalf("page boundary invented/truncated Dataset history: %#v, want %s", hist, want)
 	}
@@ -142,7 +145,10 @@ func TestSnapshotCatalogDatasetAuditTracksActualChangingCommits(t *testing.T) {
 				if limit < len(want) {
 					queryWant = want[:limit]
 				}
-				hist := cat.Log(catalog.LogQuery{Dataset: "orders", Limit: limit})
+				hist, err := cat.Log(catalog.LogQuery{Dataset: "orders", Limit: limit})
+				if err != nil {
+					t.Fatal(err)
+				}
 				var got []string
 				for _, entry := range hist.Commits {
 					got = append(got, entry.Commit)
@@ -151,11 +157,17 @@ func TestSnapshotCatalogDatasetAuditTracksActualChangingCommits(t *testing.T) {
 					t.Fatalf("limit %d: got %v want %v", limit, got, queryWant)
 				}
 			}
-			all := cat.Log(catalog.LogQuery{Limit: 1})
+			all, err := cat.Log(catalog.LogQuery{Limit: 1})
+			if err != nil {
+				t.Fatal(err)
+			}
 			if len(all.Commits) != 1 || all.Commits[0].Commit != head {
 				t.Fatal("whole Service audit lost latest membership change", all)
 			}
-			missing := cat.Log(catalog.LogQuery{Dataset: "missing", Limit: 20})
+			missing, err := cat.Log(catalog.LogQuery{Dataset: "missing", Limit: 20})
+			if err != nil {
+				t.Fatal(err)
+			}
 			if len(missing.Commits) != 0 {
 				t.Fatal("unrelated commits attributed to absent Dataset", missing)
 			}
@@ -167,7 +179,10 @@ func TestSnapshotCatalogDatasetAuditTracksActualChangingCommits(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			hist := recovered.Log(catalog.LogQuery{Dataset: "orders", Limit: 20})
+			hist, err := recovered.Log(catalog.LogQuery{Dataset: "orders", Limit: 20})
+			if err != nil {
+				t.Fatal(err)
+			}
 			var recoveredCommits []string
 			for _, entry := range hist.Commits {
 				recoveredCommits = append(recoveredCommits, entry.Commit)
@@ -201,7 +216,10 @@ func TestSnapshotCatalogAuditAcrossShortPagesPreservesEachAcceptedCommit(t *test
 		head, _ := reg.Head()
 		want = append([]string{head}, want...)
 	}
-	hist := cat.Log(catalog.LogQuery{Limit: 20})
+	hist, err := cat.Log(catalog.LogQuery{Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
 	var got []string
 	for _, entry := range hist.Commits {
 		got = append(got, entry.Commit)

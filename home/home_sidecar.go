@@ -1,11 +1,13 @@
 package home
 
 import (
+	"errors"
 	"kc/controlplane"
+	indexplugins "kc/discovery/plugin"
 	"kc/gate"
-	"kc/index"
 	"kc/kernel"
-	"kc/knowledge/reader"
+	"kc/object/maintenance"
+	"kc/object/reader"
 	"kc/snapshot/dataset"
 )
 
@@ -17,7 +19,8 @@ func (ws *Home) wireSidecars() {
 }
 
 type indexHook struct {
-	controller *index.Controller
+	controller *maintenance.Coordinator
+	plugins    func() *indexplugins.IndexPlugins
 	knowledge  *reader.Reader
 }
 
@@ -34,14 +37,18 @@ func (h *indexHook) AfterSnapshot(ev dataset.Snapshot) error {
 	if repo == nil {
 		return nil
 	}
-	return h.controller.Desire(repo.ID(), ev.To)
+	var cacheErr error
+	if h.controller != nil {
+		cacheErr = h.controller.Desire(repo.ID(), ev.To)
+	}
+	return errors.Join(cacheErr, h.plugins().AfterSnapshot(ev))
 }
 
 func (ws *Home) attachIndex(cat dataset.Service) {
-	if ws.Projection == nil || cat == nil {
+	if (ws.ObjectMaintenance == nil && ws.Plugins == nil) || cat == nil {
 		return
 	}
-	cat.AddHook(&indexHook{controller: ws.Projection, knowledge: ws.Reader})
+	cat.AddHook(&indexHook{controller: ws.ObjectMaintenance, plugins: func() *indexplugins.IndexPlugins { return ws.Plugins }, knowledge: ws.Reader})
 }
 
 func (ws *Home) AttachMergeGate(plane *controlplane.ControlPlane) {

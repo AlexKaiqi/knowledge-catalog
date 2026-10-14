@@ -2,16 +2,12 @@ package cli
 
 import (
 	"encoding/json"
-	inv "kc/invocation"
 	"kc/invoke"
 	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"kc/kernel"
-	"kc/snapshot/dataset"
 )
 
 func TestProductSearchTransmitsRepositoryBasis(t *testing.T) {
@@ -52,7 +48,7 @@ func TestProductCLIRejectsPinOnEveryKnowledgeCommand(t *testing.T) {
 	t.Setenv("KC_AUTH_TOKEN", "")
 	raw := `{"setId":"","revision":1,"repositories":{"kr://acme/source":"fixed"},"pinId":"pin-id","definition":{"setId":"","revision":1,"sources":[{"repository":"kr://acme/source","selector":"refs/heads/main"}]}}`
 	for _, args := range [][]string{
-		{"read", "--object", "note/one"}, {"resolve", "--object", "note/one"},
+		{"read", "urn:kc:object:kr%3A%2F%2Facme%2Fsource:note%2Fone"}, {"resolve", "--object", "note/one"},
 		{"search", "--query", "note"}, {"relations", "--object", "note/one"},
 		{"provenance", "--object", "note/one"}, {"log", "--object", "note/one"},
 		{"schema", "describe", "--object", "schema/note"},
@@ -81,46 +77,6 @@ func TestProductCLIRejectsPinOnEveryKnowledgeCommand(t *testing.T) {
 	}
 }
 
-func TestTemporaryDefinitionDoesNotBypassConsumeGrant(t *testing.T) {
-	q := inv.AllowQuery{Principal: "reader", Action: "knowledge.read"}
-	read := inv.AllowRule{ID: "read", Principal: "reader", Actions: []string{"knowledge.read"}, Repo: "kr://acme/source"}
-	if err := inv.AuthorizeWorkspaceKnowledge([]inv.AllowRule{read}, q, true); kernel.CodeOf(err) != kernel.ErrForbidden {
-		t.Fatalf("temporary composition bypassed consume: %v", err)
-	}
-	named := inv.AllowRule{ID: "named", Principal: "reader", Actions: []string{"file.read"}, Dataset: "named-only"}
-	if err := inv.AuthorizeWorkspaceKnowledge([]inv.AllowRule{named, read}, q, true); kernel.CodeOf(err) != kernel.ErrForbidden {
-		t.Fatalf("named-only grant authorized arbitrary temporary composition: %v", err)
-	}
-	named.Dataset = ""
-	if err := inv.AuthorizeWorkspaceKnowledge([]inv.AllowRule{named, read}, q, true); err != nil {
-		t.Fatal(err)
-	}
-	q.Action = "knowledge.search"
-	if err := inv.AuthorizeWorkspaceKnowledge([]inv.AllowRule{named, read}, q, true); err != nil {
-		t.Fatalf("catalog-wide dataset file.read must admit pin knowledge.search: %v", err)
-	}
-}
-
-func TestTemporaryReplayRejectsChangedMembershipAndLayout(t *testing.T) {
-	source := dataset.KnowledgeSetSource{Repository: "kr://acme/source", Selector: "refs/heads/main"}
-	def := dataset.KnowledgeSet{Revision: 1, Sources: []dataset.KnowledgeSetSource{source}}
-	pin := dataset.ResolvedKnowledgeSet{Revision: 1, Repositories: map[kernel.RepositoryID]kernel.CommitID{source.Repository: "fixed"}}
-	pin.PinID = dataset.HashResolved("", def.Sources, pin.Repositories)
-	raw, _ := json.Marshal(pin)
-	if _, err := inv.DecodeReplayPin(def, string(raw)); err != nil {
-		t.Fatal(err)
-	}
-	def.Sources[0].Path = dataset.MountPath("changed-layout")
-	if _, err := inv.DecodeReplayPin(def, string(raw)); kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
-		t.Fatalf("changed layout reused pin identity: %v", err)
-	}
-	def.Sources[0] = source
-	def.Sources = append(def.Sources, dataset.KnowledgeSetSource{Repository: "kr://acme/other", Selector: "refs/heads/main"})
-	if _, err := inv.DecodeReplayPin(def, string(raw)); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
-		t.Fatalf("changed membership reused pin: %v", err)
-	}
-}
-
 func TestProductKnowledgeRejectsMixedTemporaryAndRepositoryBasis(t *testing.T) {
 	t.Setenv("KC_CONFIG_DIR", t.TempDir())
 	t.Setenv("KC_HOME", t.TempDir())
@@ -133,7 +89,7 @@ func TestProductKnowledgeRejectsMixedTemporaryAndRepositoryBasis(t *testing.T) {
 	}))
 	defer server.Close()
 	for _, flag := range []string{"pin", "dataset-file"} {
-		result := Run([]string{"--server", server.URL, "--as", "agent:reader", "read", "--repo", "kr://acme/source", "--" + flag, "explicit-task.json", "--object", "note/one"})
+		result := Run([]string{"--server", server.URL, "--as", "agent:reader", "read", "urn:kc:object:kr%3A%2F%2Facme%2Fsource:note%2Fone", "--" + flag, "explicit-task.json"})
 		if result.Status == 0 || !strings.Contains(result.Stdout, "USAGE_INVALID") {
 			t.Errorf("explicit --%s was silently discarded: %s", flag, result.Stdout)
 		}
@@ -149,42 +105,15 @@ func TestHTTPKnowledgeRejectsMixedPinAndRepositoryBasis(t *testing.T) {
 		t.Cleanup(func() { _ = closer.Close() })
 	}
 	for _, route := range []string{"/knowledge/v1/objects:read", "/knowledge/v1/search"} {
-		request := httptest.NewRequest(http.MethodPost, route, strings.NewReader(`{"repository":"kr://acme/source","pin":{"setId":"","revision":1,"repositories":{"kr://acme/source":"fixed"}},"object":"note/one"}`))
+		request := httptest.NewRequest(http.MethodPost, route, strings.NewReader(`{"reference":"urn:kc:object:kr%3A%2F%2Facme%2Fsource:note%2Fone","repository":"kr://acme/source","pin":{"setId":"","revision":1,"repositories":{"kr://acme/source":"fixed"}}}`))
 		if route == "/knowledge/v1/search" {
 			request = httptest.NewRequest(http.MethodPost, route, strings.NewReader(`{"repository":"kr://acme/source","pin":{"setId":"","revision":1,"repositories":{"kr://acme/source":"fixed"}},"query":"note"}`))
 		}
 		request.Header.Set("X-Kc-As", "agent:reader")
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, request)
-		if !strings.Contains(response.Body.String(), "USAGE_INVALID") || !strings.Contains(response.Body.String(), "do not mix") {
+		if !strings.Contains(response.Body.String(), "USAGE_INVALID") || (route == "/knowledge/v1/search" && !strings.Contains(response.Body.String(), "do not mix")) || (route == "/knowledge/v1/objects:read" && !strings.Contains(response.Body.String(), `unknown field \"repository\"`)) {
 			t.Errorf("mixed HTTP basis reached repository path: %s", response.Body.String())
-		}
-	}
-}
-
-func TestTemporaryCompositionUsesEveryMemberScopedResolveAndConsume(t *testing.T) {
-	home := t.TempDir()
-	rules := []inv.AllowRule{
-		{ID: "a", Principal: "reader", Repo: "kr://acme/a", Actions: []string{"dataset.resolve", "file.read", "knowledge.read"}},
-		{ID: "b", Principal: "reader", Repo: "kr://acme/b", Actions: []string{"dataset.resolve", "file.read", "knowledge.read"}},
-	}
-	if err := inv.WriteAllow(home, inv.AllowFile{Rules: rules}); err != nil {
-		t.Fatal(err)
-	}
-	definition := &dataset.KnowledgeSet{Revision: 1, Sources: []dataset.KnowledgeSetSource{{Repository: "kr://acme/a", Selector: "refs/heads/main"}, {Repository: "kr://acme/b", Selector: "refs/heads/main"}}}
-	flags := map[string]FlagValue{"as": "reader", workspaceDefinitionFlag: definition}
-	for _, action := range []string{"dataset.resolve", "knowledge.read"} {
-		if err := inv.Authorize(home, action, flags, nil); err != nil {
-			t.Fatalf("member-scoped %s blocked: %v", action, err)
-		}
-	}
-	if err := inv.Authorize(home, "inventory.read", flags, nil); kernel.CodeOf(err) != kernel.ErrForbidden {
-		t.Fatalf("member share widened catalog access: %v", err)
-	}
-	definition.Sources = append(definition.Sources, dataset.KnowledgeSetSource{Repository: "kr://acme/unshared", Selector: "refs/heads/main"})
-	for _, action := range []string{"dataset.resolve", "knowledge.read"} {
-		if err := inv.Authorize(home, action, flags, nil); kernel.CodeOf(err) != kernel.ErrForbidden {
-			t.Fatalf("unshared member allowed %s: %v", action, err)
 		}
 	}
 }

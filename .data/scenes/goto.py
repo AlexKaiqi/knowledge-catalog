@@ -71,6 +71,12 @@ def apply_target(target: str, *, probe: str | None = None) -> None:
 def validate_live_feature(feature: Path) -> None:
     """Reject unsupported walkthrough syntax before starting any live setup."""
     for step in parse_feature(feature.read_text()):
+        if step["kind"] == "repository-adoption":
+            raise GotoError(
+                f"{feature}: cannot verify required native LiveAccess/{step['instance']} "
+                f"adoption for {step['repository']} through the current walk CLI; "
+                "configure the source authority before service startup and use the "
+                "live lakeFS scene runner to verify this fixture. No construct was applied.")
         if step["kind"] == "error":
             raise GotoError(f"{feature}: live goto supports positive walkthroughs; use the test runner for error cases")
         values = [step["command"]] if step["kind"] == "run" else [cell for row in step.get("rows", []) for cell in row]
@@ -179,7 +185,18 @@ def parse_feature(text: str) -> list[dict]:
             continue
         if keyword in {"Given", "When", "Then", "And"}:
             rest = rest.strip()
-            if rest == "deployment fixture" or rest.startswith("existing repository "):
+            if rest.startswith("existing repository "):
+                source = rest[len("existing repository ") :]
+                repository, selected, instance = source.partition(" with LiveAccess instance ")
+                if len(repository.split()) != 1 or (selected and len(instance.split()) != 1):
+                    raise GotoError(f"invalid existing Repository fixture: {rest}")
+                if selected:
+                    steps.append({"kind": "repository-adoption", "repository": repository,
+                                  "instance": instance})
+                else:
+                    steps.append({"kind": "skip"})
+                continue
+            if rest == "deployment fixture":
                 steps.append({"kind": "skip"})
                 continue
             if rest.startswith("I run `") and rest.endswith("`"):

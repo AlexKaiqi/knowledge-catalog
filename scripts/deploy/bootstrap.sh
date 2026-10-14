@@ -5,7 +5,7 @@ data_root=/var/lib/kc
 deployment_config="${data_root}/deployment.json"
 lakefs_url="${KC_LAKEFS_URL:-http://lakefs:8000}"
 opensearch_url="${KC_OPENSEARCH_URL:-http://opensearch:9200}"
-catalog="${KC_CATALOG:-kr://acme/catalog}"
+registry_id="${KC_REGISTRY_ID:-kr://acme/catalog}"
 principal="${KC_AS:-admin}"
 access="${KC_LAKEFS_ACCESS_KEY:-AKIAKOSLOCALEXAMPLE}"
 secret="${KC_LAKEFS_SECRET_KEY:-wJalrXUtnFEMILocalLakeFSSecret12}"
@@ -74,9 +74,9 @@ ensure_repo kc-system s3://kc-authority/kc-system
 if [[ ! -f "$deployment_config" ]]; then
   fixture-deployment \
     --root "$data_root" \
-    --catalog "$catalog" \
-    --catalog-driver lakefs \
-    --catalog-dsn "${lakefs_url}/kc-catalog" \
+    --registry-id "$registry_id" \
+    --registry-driver lakefs \
+    --registry-dsn "${lakefs_url}/kc-catalog" \
     --principal "$principal" \
     --opensearch "$opensearch_url" \
     --lakefs-repo "kr://kc/system=${lakefs_url}/kc-system" \

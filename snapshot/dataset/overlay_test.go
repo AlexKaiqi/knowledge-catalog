@@ -5,7 +5,7 @@ import (
 
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 	catalog "kc/snapshot/dataset"
 )
 
@@ -95,7 +95,7 @@ func TestResolveHonorsBaseRevCAS(t *testing.T) {
 	if _, err := s.catalog.ResolveKnowledgeSet("locked"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.publicRepo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
+	if _, err := s.publicRepo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
 		TargetRepository:     "kr://acme/public/core",
 		TargetRef:            "refs/heads/main",
 		BaseCommit:           head,

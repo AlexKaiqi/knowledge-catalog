@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"kc/index/opensearch"
+	"kc/declarativeindex/opensearch"
 	"kc/kernel"
 )
 

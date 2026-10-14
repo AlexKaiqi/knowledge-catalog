@@ -12,9 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"crypto/sha256"
-	"encoding/hex"
 	kcclient "kc/client"
+	"kc/invoke"
 	"kc/kernel"
 )
 
@@ -24,16 +23,13 @@ type clientEndpoint struct {
 	Server string `json:"server"`
 }
 
-// clientEndpoint is non-secret packaging/login configuration. Sessions remain
-// separate and each filename is scoped by the complete service base URL.
-
 var tokenRefreshMu sync.Mutex
 
 // newRemoteSessionClient is shared by kc and the long-lived kcfs client. Its
 // authenticator reloads login state for each request, including after logout
 // or token refresh, without changing the request's fixed Workspace pin.
 func newRemoteSessionClient(ctx context.Context, server string, flags map[string]FlagValue) (*kcclient.Client, error) {
-	if flagString(flags, "on-behalf-of") != "" {
+	if invoke.FlagString(flags, "on-behalf-of") != "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "remote delegation comes from the authenticator")
 	}
 	session, err := resolveRemoteSession(ctx, server, flags)
@@ -51,7 +47,7 @@ func newRemoteSessionClient(ctx context.Context, server string, flags map[string
 }
 
 func resolveRemoteSession(ctx context.Context, server string, flags map[string]FlagValue) (kcclient.Session, error) {
-	principal := strings.TrimSpace(flagString(flags, "as"))
+	principal := strings.TrimSpace(invoke.FlagString(flags, "as"))
 	if principal == "" {
 		principal = strings.TrimSpace(os.Getenv("KC_AS"))
 	}
@@ -118,7 +114,7 @@ func persistClientServer(server string) error {
 }
 
 func persistTokenLogin(s taihuSession) error {
-	if err := persistTaihuSession(inv.ServerSessionPath(s.Server, "session-taihu.json"), s); err != nil {
+	if err := inv.WriteJSONFile(inv.ServerSessionPath(s.Server, "session-taihu.json"), s); err != nil {
 		return err
 	}
 	if err := persistClientServer(s.Server); err != nil {
@@ -206,7 +202,7 @@ func currentServerTokenSession(ctx context.Context, server string) (taihuSession
 	}
 	session.ExpiresAt = time.Now().Add(time.Duration(result.ExpiresIn) * time.Second)
 	// Refreshing one service must not switch the user's default service.
-	if err := persistTaihuSession(inv.ServerSessionPath(server, "session-taihu.json"), session); err != nil {
+	if err := inv.WriteJSONFile(inv.ServerSessionPath(server, "session-taihu.json"), session); err != nil {
 		return taihuSession{}, false, err
 	}
 	return session, true, nil
@@ -232,25 +228,6 @@ func verifyTokenPrincipal(ctx context.Context, server, token string) (string, er
 
 func credentialHTTPClient() *http.Client {
 	return &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-}
-
-func savedClientServer() string {
-	for _, path := range []string{filepath.Join(configDir(), "client.json"), filepath.Join(configDir(), "session-taihu.json"), filepath.Join(configDir(), "session-local.json")} {
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		var config clientEndpoint
-		if json.Unmarshal(raw, &config) == nil && normalizeLoginServer(config.Server) != "" {
-			return normalizeLoginServer(config.Server)
-		}
-	}
-	return ""
-}
-
-func serverSessionPath(server, filename string) string {
-	digest := sha256.Sum256([]byte(normalizeLoginServer(server)))
-	return filepath.Join(configDir(), "sessions", hex.EncodeToString(digest[:]), filename)
 }
 
 func normalizeLoginServer(server string) string {

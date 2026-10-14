@@ -13,6 +13,7 @@ import (
 
 	"kc/internal/testkit"
 	"kc/kernel"
+	"kc/liveaccess"
 )
 
 type taihuProofAuthenticator struct{}
@@ -58,6 +59,7 @@ func TestWorkspaceReadHydratesStateBindingThroughTypedKnowledgeAPI(t *testing.T)
 	repositoryID := "kr://acme/public/core"
 	body(t, kc(home, "init"))
 	seedRepo(t, home, repositoryID)
+	adoptLiveAccessFixture(t, home, repositoryID)
 	var runtimeCalls atomic.Int32
 	stateRuntime := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		runtimeCalls.Add(1)
@@ -86,15 +88,12 @@ func TestWorkspaceReadHydratesStateBindingThroughTypedKnowledgeAPI(t *testing.T)
 		})
 	}))
 	defer stateRuntime.Close()
-	body(t, kc(home, "put", "--command-id", "binding-schema", "--repo", repositoryID,
-		"--object", "schema/service.health",
-		"--value", `{"entity":"Service","aspect":"health","origin":"`+stateRuntime.URL+`","fields":{"status":{"type":"string","access":["filter"]}}}`))
-	body(t, kc(home, "put", "--command-id", "binding-entity", "--repo", repositoryID,
-		"--object", "Service:orders", "--aspect", "properties", "--value", `{"name":"orders"}`))
+	body(t, kc(home, "put", testObjectReference(t, repositoryID, "schema/service.health", ""), "--command-id", "binding-schema", "--value", `{"entity":"Service","aspect":"health","origin":"`+stateRuntime.URL+`","fields":{"status":{"type":"string","access":["filter"]}}}`))
+	body(t, kc(home, "put", testObjectReference(t, repositoryID, "Service:orders", "/properties"), "--command-id", "binding-entity", "--value", `{"name":"orders"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", repositoryID+"=refs/heads/main@"))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--dataset", "agent"))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read", "--repo", repositoryID))
-	commit := asMap(t, body(t, kc(home, "read", "--dataset", "agent", "--object", "Service:orders", "--aspect", "properties")).([]any)[0])["commit"].(string)
+	commit := asMap(t, body(t, kc(home, "read", testObjectReference(t, repositoryID, "Service:orders", "/properties"), "--dataset", "agent")))["commit"].(string)
 
 	lookup := serv.NewHTTPStateLookup(stateRuntime.Client())
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{StateLookup: lookup})
@@ -105,12 +104,9 @@ func TestWorkspaceReadHydratesStateBindingThroughTypedKnowledgeAPI(t *testing.T)
 	defer server.Close()
 
 	read := postAny(t, server.URL, "/knowledge/v1/objects:read", map[string]any{
-		"dataset": "agent", "object": "Service:orders", "aspect": "health",
-	}).([]any)
-	if len(read) != 1 {
-		t.Fatalf("%#v", read)
-	}
-	result := asMap(t, read[0])
+		"dataset": "agent", "reference": testObjectReference(t, repositoryID, "Service:orders", "/health"),
+	})
+	result := asMap(t, read)
 	if asMap(t, result["value"])["status"] != "healthy" || result["commit"] != commit {
 		t.Fatalf("hydrated read: commit got=%#v want=%#v value=%#v", result["commit"], commit, result["value"])
 	}
@@ -154,6 +150,7 @@ func TestTypedKnowledgeReadForwardsTaihuCallerAuthentication(t *testing.T) {
 	repositoryID := "kr://acme/public/core"
 	body(t, kc(home, "init"))
 	seedRepo(t, home, repositoryID)
+	adoptLiveAccessFixture(t, home, repositoryID)
 	stateRuntime := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer taihu-token" || r.Header.Get("X-Tai-Identity") != "signed.identity" {
 			t.Fatalf("Taihu caller proof: %#v", r.Header)
@@ -170,16 +167,18 @@ func TestTypedKnowledgeReadForwardsTaihuCallerAuthentication(t *testing.T) {
 		})
 	}))
 	defer stateRuntime.Close()
-	body(t, kc(home, "put", "--command-id", "binding-schema", "--repo", repositoryID,
-		"--object", "schema/service.health",
-		"--value", `{"entity":"Service","aspect":"health","origin":"`+stateRuntime.URL+`","fields":{"status":{"type":"string","access":["filter"]}}}`))
-	body(t, kc(home, "put", "--command-id", "binding-entity", "--repo", repositoryID,
-		"--object", "Service:orders", "--aspect", "properties", "--value", `{"name":"orders"}`))
+	body(t, kc(home, "put", testObjectReference(t, repositoryID, "schema/service.health", ""), "--command-id", "binding-schema", "--value", `{"entity":"Service","aspect":"health","origin":"`+stateRuntime.URL+`","fields":{"status":{"type":"string","access":["filter"]}}}`))
+	body(t, kc(home, "put", testObjectReference(t, repositoryID, "Service:orders", "/properties"), "--command-id", "binding-entity", "--value", `{"name":"orders"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", repositoryID+"=refs/heads/main@"))
 	body(t, kc(home, "allow", "--principal", "alice", "--cmd", "read-workspace", "--dataset", "agent"))
 	body(t, kc(home, "allow", "--principal", "alice", "--cmd", "read", "--repo", repositoryID))
 
-	lookup := serv.NewHTTPStateLookup(stateRuntime.Client())
+	lookup, err := liveaccess.NewHTTPStateLookupWithOptions(liveaccess.HTTPStateLookupOptions{
+		Client: stateRuntime.Client(), CredentialOrigins: []string{stateRuntime.URL},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{
 		Authenticator: taihuProofAuthenticator{}, StateLookup: lookup,
 	})
@@ -189,7 +188,7 @@ func TestTypedKnowledgeReadForwardsTaihuCallerAuthentication(t *testing.T) {
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
-	raw, err := json.Marshal(map[string]any{"dataset": "agent", "object": "Service:orders", "aspect": "health"})
+	raw, err := json.Marshal(map[string]any{"dataset": "agent", "reference": testObjectReference(t, repositoryID, "Service:orders", "/health")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,8 +211,8 @@ func TestTypedKnowledgeReadForwardsTaihuCallerAuthentication(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("Taihu hydrated read: status %d body %#v", resp.StatusCode, payload)
 	}
-	read := payload.([]any)
-	if len(read) != 1 || asMap(t, asMap(t, read[0])["value"])["status"] != "healthy" {
+	read := asMap(t, payload)
+	if read["reference"] != testObjectReference(t, repositoryID, "Service:orders", "/health") || asMap(t, read["value"])["status"] != "healthy" {
 		t.Fatalf("Taihu hydrated read: %#v", payload)
 	}
 }

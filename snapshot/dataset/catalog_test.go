@@ -6,7 +6,7 @@ import (
 
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 	"kc/snapshot"
 	catalog "kc/snapshot/dataset"
 )
@@ -17,7 +17,7 @@ func makeRepo(t *testing.T, repoID string, objects map[string]any) *testkit.Know
 	head := testkit.MustHead(t, repo, "refs/heads/main")
 	for objectID, value := range objects {
 		var err error
-		head, err = repo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
+		head, err = repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
 			TargetRepository: kernel.RepositoryID(repoID), TargetRef: "refs/heads/main",
 			BaseCommit: head, ExpectedTargetCommit: head,
 			Operations: testkit.PutEntity(objectID, value, ""),
@@ -155,7 +155,7 @@ func TestT11ReadViewFollowsBranch(t *testing.T) {
 		t.Fatal(first[0].Value)
 	}
 	head := testkit.MustHead(t, s.publicRepo, "refs/heads/main")
-	if _, err := s.publicRepo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
+	if _, err := s.publicRepo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
 		TargetRepository: "kr://acme/public/core", TargetRef: "refs/heads/main",
 		BaseCommit: head, ExpectedTargetCommit: head,
 		Operations: testkit.PutEntity("policy/P-103", map[string]any{"statement": "later"}, ""),
@@ -197,7 +197,7 @@ func TestT11RegistrySurvives(t *testing.T) {
 		t.Fatal(read, err)
 	}
 	head := testkit.MustHead(t, s.publicRepo, "refs/heads/main")
-	if _, err := s.publicRepo.ApplyKnowledgeCommit(knowledge.CommitChangeSet{
+	if _, err := s.publicRepo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
 		TargetRepository: "kr://acme/public/core", TargetRef: "refs/heads/main",
 		BaseCommit: head, ExpectedTargetCommit: head,
 		Operations: testkit.PutEntity("policy/P-103", map[string]any{"statement": "later"}, ""),
@@ -227,7 +227,11 @@ func TestT11GitRegistryHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	viewLog := again.Log(catalog.LogQuery{Dataset: "v", Limit: 20}).Commits
+	history, err := again.Log(catalog.LogQuery{Dataset: "v", Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	viewLog := history.Commits
 	sawDefine := false
 	for _, item := range viewLog {
 		if strings.HasPrefix(item.Message, "dataset-define") {

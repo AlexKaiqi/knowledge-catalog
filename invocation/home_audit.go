@@ -7,7 +7,7 @@ import (
 
 	"kc/internal/journal"
 	"kc/invoke"
-	"kc/knowledge/writer"
+	"kc/object/writer"
 	"kc/snapshot/dataset"
 )
 

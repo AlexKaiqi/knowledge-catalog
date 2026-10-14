@@ -3,15 +3,15 @@
 Feature: 发表并回读来源权限 Aspect 后对应主体读取仍被拒绝
 
   Scenario: 发表并回读来源权限 Aspect 后对应主体读取仍被拒绝
-    When I run `kc writer put --command-id publish-table-permissions --repo kr://scene/knowledge --object Table:orders --aspect permissions --member user:bob --file $materials/table.orders.permissions.json`
+    When I run `kc writer put urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:Table%3Aorders#/permissions/user:bob --command-id publish-table-permissions --file $materials/table.orders.permissions.json --kind Member`
     Then the output has:
       | disposition         | APPLIED |
       | result.repositoryId | kr://scene/knowledge |
       | result.newCommit    | nonempty |
-    When I run `kc read --repo kr://scene/knowledge --object Table:orders --aspect permissions --member user:bob`
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:Table%3Aorders#/permissions/user:bob`
     Then the output has:
       | objectId | Table:orders |
       | value.privileges.0  | SELECT |
 
-    When I run `kc read --as bob --repo kr://scene/knowledge --object Table:orders`
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:Table%3Aorders --as bob`
     Then error FORBIDDEN

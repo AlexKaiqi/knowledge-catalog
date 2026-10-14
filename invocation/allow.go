@@ -257,7 +257,7 @@ var ErrNotWorkspaceKnowledge = fmt.Errorf("not workspace knowledge")
 
 // AuthorizeWorkspaceKnowledge is the named-dataset gate: file.read on the
 // Dataset admits knowledge interpretation of listed files. It does not admit
-// --repo knowledge.* or writer.*, and it does not imply dataset.resolve.
+// --repo objectmodel.* or writer.*, and it does not imply dataset.resolve.
 func AuthorizeWorkspaceKnowledge(rules []AllowRule, q AllowQuery, temporary ...bool) error {
 	var definition *dataset.KnowledgeSet
 	if len(temporary) > 0 && temporary[0] {
@@ -319,6 +319,9 @@ func AuthorizationFlags(cx *Invocation) map[string]invoke.FlagValue {
 	for name, value := range cx.Flags {
 		derived[name] = value
 	}
+	if aspect := cx.Flag(referenceAspectFlag); aspect != "" {
+		derived["aspect"] = aspect
+	}
 	switch cx.Command {
 	case "writer-receipt":
 		// A command's authority is fixed by its durable ledger entry. The
@@ -348,7 +351,7 @@ func AuthorizationFlags(cx *Invocation) map[string]invoke.FlagValue {
 		derived["dataset"] = preview.SetID
 		return derived
 	default:
-		return cx.Flags
+		return derived
 	}
 }
 

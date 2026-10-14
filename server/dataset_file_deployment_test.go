@@ -18,7 +18,7 @@ import (
 	"kc/internal/telemetry"
 	"kc/internal/testkit"
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 	"kc/snapshot"
 	"kc/snapshot/dataset"
 	snapshotservice "kc/snapshot/service"
@@ -49,7 +49,7 @@ func declaredFileGateway(t *testing.T) (apphome.DeploymentConfig, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := cat.DefineKnowledgeSet("protocol", 1, []dataset.KnowledgeSetSource{{Repository: knowledge.SystemRepositoryID, Selector: snapshot.DefaultRef}}); err != nil {
+	if _, err := cat.DefineKnowledgeSet("protocol", 1, []dataset.KnowledgeSetSource{{Repository: objectmodel.SystemRepositoryID, Selector: snapshot.DefaultRef}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := opened.Close(); err != nil {
@@ -115,7 +115,7 @@ func TestWorkspaceFileGatewayRestoresDeclaredDeployment(t *testing.T) {
 			if err := json.Unmarshal(mountResponse.Body.Bytes(), &mounts); err != nil {
 				t.Fatal(err)
 			}
-			if mounts.Pin.PinID == "" || len(mounts.Mounts) != 1 || mounts.Mounts[0].Repository != knowledge.SystemRepositoryID {
+			if mounts.Pin.PinID == "" || len(mounts.Mounts) != 1 || mounts.Mounts[0].Repository != objectmodel.SystemRepositoryID {
 				t.Fatalf("mounts: %#v", mounts)
 			}
 			fixedPin = mounts.Pin
@@ -141,7 +141,7 @@ func TestWorkspaceFileGatewayRestoresDeclaredDeployment(t *testing.T) {
 			if err := json.Unmarshal(read.Body.Bytes(), &value); err != nil {
 				t.Fatal(err)
 			}
-			if value.Pin.PinID != mounts.Pin.PinID || !bytes.Contains(value.Content, []byte(knowledge.SystemRepositoryID)) {
+			if value.Pin.PinID != mounts.Pin.PinID || !bytes.Contains(value.Content, []byte(objectmodel.SystemRepositoryID)) {
 				t.Fatalf("file: %#v", value)
 			}
 		})
@@ -176,7 +176,7 @@ func TestWorkspaceFileGatewayDeliversSystemKnowledgeTree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = cat.DefineKnowledgeSet("protocol", 2, []dataset.KnowledgeSetSource{{Repository: knowledge.SystemRepositoryID, Selector: snapshot.DefaultRef, Path: dataset.MountPath("knowledge/system")}})
+	_, err = cat.DefineKnowledgeSet("protocol", 2, []dataset.KnowledgeSetSource{{Repository: objectmodel.SystemRepositoryID, Selector: snapshot.DefaultRef, Path: dataset.MountPath("knowledge/system")}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +197,7 @@ func TestWorkspaceFileGatewayDeliversSystemKnowledgeTree(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &mounts); err != nil {
 		t.Fatal(err)
 	}
-	if len(mounts.Mounts) != 1 || mounts.Mounts[0].Repository != knowledge.SystemRepositoryID {
+	if len(mounts.Mounts) != 1 || mounts.Mounts[0].Repository != objectmodel.SystemRepositoryID {
 		t.Fatalf("system mount: %#v", mounts)
 	}
 	coordinate["pin"], coordinate["mountPath"], coordinate["directory"] = mounts.Pin, mounts.Mounts[0].Path, "concepts/object"
@@ -218,7 +218,7 @@ func TestWorkspaceFileGatewayDeliversSystemKnowledgeTree(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer opened.Close()
-	source, err := opened.Store.Require(knowledge.SystemRepositoryID, kernel.ErrCapabilityUnsatisfied)
+	source, err := opened.Store.Require(objectmodel.SystemRepositoryID, kernel.ErrCapabilityUnsatisfied)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,9 +268,9 @@ func TestWorkspaceFileGatewayBorrowsHomeUntilConcurrentReadsFinish(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	source, _ := opened.Store.Get(knowledge.SystemRepositoryID)
+	source, _ := opened.Store.Get(objectmodel.SystemRepositoryID)
 	probe := &fileGatewayCloseProbe{Store: source, TreeReader: source.(snapshot.TreeReader), DirectoryReader: source.(snapshot.DirectoryReader)}
-	opened.Store.Delete(knowledge.SystemRepositoryID)
+	opened.Store.Delete(objectmodel.SystemRepositoryID)
 	if err := opened.Store.Add(probe); err != nil {
 		t.Fatal(err)
 	}
@@ -311,7 +311,7 @@ func TestWorkspaceFileGatewayBorrowsHomeUntilConcurrentReadsFinish(t *testing.T)
 	if err := json.Unmarshal(first.Body.Bytes(), &firstMounts); err != nil {
 		t.Fatal(err)
 	}
-	if firstMounts.Pin.PinID == "" || len(firstMounts.Mounts) != 1 || firstMounts.Mounts[0].Repository != knowledge.SystemRepositoryID {
+	if firstMounts.Pin.PinID == "" || len(firstMounts.Mounts) != 1 || firstMounts.Mounts[0].Repository != objectmodel.SystemRepositoryID {
 		t.Fatalf("module HTTP request did not open its fixed semantic file view: %#v", firstMounts)
 	}
 	entered := make(chan struct{}, 2)

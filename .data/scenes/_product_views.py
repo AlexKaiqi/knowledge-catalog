@@ -40,18 +40,25 @@ def section_claims(path: Path, section: str) -> list[tuple[str, str, int]]:
         if fence:
             continue
         heading = re.match(r"^(#{1,6})\s+(.+?)(?:\s+#+)?\s*$", text)
-        if not heading:
-            continue
-        level, title = len(heading[1]), heading[2]
-        if level <= 2:
-            active = level == 2 and title == section
-            matches += int(active)
-        if not active or level != 3:
-            continue
-        claim = re.match(r"^(U[1-9][0-9]*)[：:]\s*\S", title)
-        if not claim:
-            continue
-        claim_id = claim[1]
+        if heading:
+            level, title = len(heading[1]), heading[2]
+            if level <= 2:
+                active = level == 2 and title == section
+                matches += int(active)
+            if not active or level != 3:
+                continue
+            claim = re.match(r"^(U[1-9][0-9]*)[：:]\s*\S", title)
+            if not claim:
+                continue
+            claim_id = claim[1]
+        else:
+            if not active:
+                continue
+            claim = re.match(r"^\s{0,3}[1-9][0-9]*\.\s+\*\*(U[1-9][0-9]*)\s+([^*：:]+)[：:]\*\*\s*\S", text)
+            if not claim:
+                continue
+            claim_id = claim[1]
+            title = f"{claim_id}：{claim[2].strip()}"
         if claim_id in seen:
             raise ValueError(f"duplicate claim id {claim_id} in {path}")
         seen.add(claim_id)
@@ -112,7 +119,7 @@ def load_claims(repo: Path, registrations, errors: list[str]) -> list[dict]:
                 "view_id": f"product/{document_id}/{claim_id}", "title": title,
                 "source": {"document": document_id, "path": relative, "section": section, "line": line},
                 "gap": gaps.get(claim_id) if isinstance(gaps.get(claim_id), str) else None,
-                "links": [], "execution_status": "not_evaluated",
+                "links": [], "specifications": [], "execution_status": "not_evaluated",
             })
     return claims
 
@@ -155,11 +162,72 @@ def validate_links(raw, label: str, claims: dict, errors: list[str]) -> list[dic
     return links
 
 
-def build_product(root: Path, registrations, states: list[dict]) -> dict:
+def load_specifications(root: Path, states: list[dict], claims: dict, load_yaml_file, errors: list[str]) -> None:
+    """Read prepared cases without promoting them to verification evidence."""
+    hosts = {(root / state["dir"]).resolve(): state for state in states}
+    seen = {}
+    fields = {"id", "title", "claims", "given", "when", "then", "risk"}
+    for directory in sorted(root.rglob("_specs")):
+        label = str(directory.relative_to(root))
+        host = hosts.get(directory.parent.resolve())
+        if host is None or not host["executable"]:
+            errors.append(f"{label}: specifications require an existing executable scene host")
+            continue
+        if not directory.is_dir() or directory.is_symlink():
+            errors.append(f"{label}: specifications must be stored in the host's own directory")
+            continue
+        for path in sorted(directory.glob("*.yaml")):
+            relative = str(path.relative_to(root))
+            if path.is_symlink():
+                errors.append(f"{relative}: specification files must belong to their scene host")
+                continue
+            try:
+                raw = load_yaml_file(path)
+            except (OSError, UnicodeError, ValueError) as exc:
+                errors.append(f"{relative}: {exc}")
+                continue
+            if not isinstance(raw, list) or not raw:
+                errors.append(f"{relative}: specifications must be a nonempty case list")
+                continue
+            for index, item in enumerate(raw, 1):
+                case_label = f"{relative}:{index}"
+                if not isinstance(item, dict) or set(item) != fields:
+                    errors.append(f"{case_label}: specification requires exactly id/title/claims/given/when/then/risk")
+                    continue
+                previous_errors = len(errors)
+                for field in ("id", "title", "risk"):
+                    if not isinstance(item[field], str) or not item[field].strip():
+                        errors.append(f"{case_label}: {field} must be a nonempty string")
+                for field in ("claims", "given", "when", "then"):
+                    value = item[field]
+                    if not isinstance(value, list) or not value or any(not isinstance(step, str) or not step.strip() for step in value):
+                        errors.append(f"{case_label}: {field} must be a nonempty string list")
+                case_id = item["id"]
+                if isinstance(case_id, str) and case_id.strip():
+                    if case_id in seen:
+                        errors.append(f"{case_label}: duplicate specification id {case_id!r}, first declared in {seen[case_id]}")
+                    else:
+                        seen[case_id] = case_label
+                refs = item["claims"]
+                if isinstance(refs, list) and all(isinstance(ref, str) for ref in refs):
+                    if len(set(refs)) != len(refs):
+                        errors.append(f"{case_label}: duplicate specification claim")
+                    for ref in refs:
+                        if ref not in claims:
+                            errors.append(f"{case_label}: unknown product claim {ref!r}")
+                if len(errors) != previous_errors:
+                    continue
+                specification = {**item, "state": host["id"], "file": relative, "execution_status": "not_evaluated"}
+                for ref in refs:
+                    claims[ref]["specifications"].append(specification)
+
+
+def build_product(root: Path, registrations, states: list[dict], load_yaml_file) -> dict:
     errors = []
     repo = root.resolve().parent.parent
     claims = load_claims(repo, registrations, errors)
     by_ref = {claim["ref"]: claim for claim in claims}
+    load_specifications(root, states, by_ref, load_yaml_file, errors)
     tests = None
     for state in states:
         if "verifies" in state:
@@ -230,6 +298,14 @@ def claim_text(claim: dict) -> list[str]:
         lines.append(f"  display selection: {claim['selected_link_count']} of {claim['declared_link_count']} declared links")
     for link in claim["links"]:
         lines.append(f"  {link['case_id']}: {link['detail']}")
+    if "selected_specification_count" in claim:
+        lines.append(f"  specifications shown: {claim['selected_specification_count']} of {claim['declared_specification_count']}")
+    for specification in claim["specifications"]:
+        lines.append(f"  specification {specification['id']}: {specification['title']} [{specification['execution_status']}]")
+        lines.append(f"    host: {specification['state']}; file: {specification['file']}")
+        for field in ("given", "when", "then"):
+            lines.extend(f"    {field}: {step}" for step in specification[field])
+        lines.append(f"    risk: {specification['risk']}")
     if claim["gap"]:
         lines.append(f"  gap: {claim['gap']}")
     return lines

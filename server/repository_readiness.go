@@ -1,11 +1,11 @@
 package server
 
 import (
+	index "kc/discovery/projection"
 	apphome "kc/home"
-	"kc/index"
 	inv "kc/invocation"
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 	"kc/snapshot"
 )
 
@@ -43,7 +43,7 @@ func describeRepositoryReadiness(cx *inv.Invocation, item apphome.ManagedReposit
 		return out
 	}
 	out.Publication, out.PublishedCommit = "PUBLISHED", commit
-	if schemas, ok := repo.(knowledge.SchemaStore); ok {
+	if schemas, ok := repo.(objectmodel.SchemaStore); ok {
 		if ids, err := schemas.SchemaObjectIDs(commit); err == nil {
 			count := len(ids)
 			out.SchemaCount = &count
@@ -56,7 +56,7 @@ func describeRepositoryReadiness(cx *inv.Invocation, item apphome.ManagedReposit
 		}
 		return out
 	}
-	if cx.WS.Index == nil {
+	if cx.WS.Index == nil || (cx.WS.Plugins != nil && !cx.WS.Plugins.ConfiguredFor(repo.ID())) {
 		out.Search = "NOT_CONFIGURED"
 		return out
 	}

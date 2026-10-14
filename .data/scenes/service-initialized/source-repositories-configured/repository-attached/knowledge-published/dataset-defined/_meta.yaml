@@ -54,6 +54,39 @@ evidence:
     tests:
       - "TestDatasetCloneJourney"
     title: "kc dataset clone 经公开 argv 把交付目录树物化为普通本地目录，非空目标被拒绝"
+  - id: "snapshot-cli-published-file-consumption"
+    title: "公开 CLI 发现 Dataset、分页枚举与读取固定发布，并区分历史版和当前版"
+    source: "dataset.files"
+    views:
+      - "consumption"
+      - "lifecycle"
+      - "access-control"
+    tests:
+      - "TestSnapshotCLIConsumerFollowsPublishedFilesAcrossPagesAndVersions"
+    verifies:
+      - claim: "dataset#U2"
+        detail: "经 show 发现 Dataset，再由 dataset show/files list/files read 消费 v2；源仓推进并发布 v3 后，旧目录续页和读取继续使用 v2，历史详情区分 revision 与 servingRevision；撤权后旧版读取返回 FORBIDDEN。"
+  - id: "snapshot-cli-single-file-download"
+    title: "公开 files read 下载完整二进制文件，保留字节与发布版并拒绝已有目标"
+    source: "dataset.files"
+    views:
+      - "consumption"
+    tests:
+      - "TestSnapshotCLISingleFileDownloadPreservesBytesAndExistingTargets"
+    verifies:
+      - claim: "dataset#U9"
+        detail: "经交付路径下载重组目录内的完整二进制文件，回执保留所选发布版，字节逐一相同；已有文件、符号链接及未发布版请求被拒，已有文件保持原样。"
+  - id: "snapshot-cli-observed-grant-update"
+    title: "公开 grant update 原子修改此前观察的规则，过期观察冲突且后续消费服从新权利"
+    source: "access.rules"
+    views:
+      - "access-control"
+      - "consumption"
+    tests:
+      - "TestSnapshotCLIGrantUpdateKeepsObservedRuleAndChangesConsumptionAtomically"
+    verifies:
+      - claim: "dataset#U3"
+        detail: "从 grant list 保存完整旧规则，以 grant update 缩减消费动作并保留规则身份；重用旧观察返回 PRECONDITION_FAILED，随后原消费者的 files read 返回 FORBIDDEN。"
   - source: "dataset.compose"
     views:
       - "consumption"
@@ -61,10 +94,31 @@ evidence:
     tests:
       - "TestDatasetDeliveryRejectsReadsAfterGrantRevocation"
     id: "dataset-delivery-rejects-reads-after-revocation"
-    title: "撤权后同一 pin 的挂载、枚举、挂载相对与交付寻址读取全部拒绝，他人授权不受影响"
+    title: "撤销整条消费授权后同一 pin 的所有文件入口拒绝，他人授权不受影响"
     verifies:
       - claim: "dataset#U3"
-        detail: "授权→发布→pin 内枚举读取通过→经管理面撤权后，同一 pin 的 mounts、目录枚举、挂载相对与交付寻址读取全部返回 FORBIDDEN，且其它主体的授权不受影响。"
+        detail: "授权→发布→pin 内枚举读取通过→经管理面撤销整条消费规则后，同一 pin 的 mounts、目录枚举、挂载相对与交付寻址读取全部返回 FORBIDDEN；该用例保护当前消费准入与耐久撤销接线，不将解析前门拒绝当成独立文件读权检查。"
+  - source: "dataset.compose"
+    views:
+      - "consumption"
+      - "access-control"
+      - "lifecycle"
+    tests:
+      - "TestDatasetDeliveryRechecksFileReadAfterGrantUpdate"
+    title: "保留解析权只撤文件读权，同一 pin 的可交付范围与续页按当前权限重判"
+    verifies:
+      - claim: "dataset#U3"
+        detail: "经正式授权更新仅移除 file.read，解析同一接受版仍成功；旧 pin 不再有可读挂载或目录项、两种文件寻址拒绝、旧游标因可见范围变化拒绝，另一主体仍读取原固定字节。"
+  - source: "dataset.compose"
+    views:
+      - "consumption"
+      - "access-control"
+    tests:
+      - "TestDatasetDeliveryFiltersUnauthorizedSourcesBeforeClone"
+    title: "Repository 与 Dataset 联合授权按交集裁剪交付树，clone 不落盘无权来源"
+    verifies:
+      - claim: "dataset#U1"
+        detail: "两仓目录和逐文件混排发布后，解析权保持，只授一个来源在该 Dataset 的文件读权；已接受 pin 不变，可交付目录及本地 clone 只包含获准来源的准确文件和字节，另一主体仍能读另一来源。"
   - source: "dataset.compose"
     views:
       - "consumption"

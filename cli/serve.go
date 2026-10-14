@@ -13,32 +13,33 @@ import (
 	"time"
 
 	apphome "kc/home"
+	"kc/invoke"
 )
 
 const defaultListen = "127.0.0.1:7380"
 
 func runServe(flags map[string]FlagValue) RunResult {
-	if err := rejectUnknownFlags(flags); err != nil {
+	if err := inv.RejectUnknownFlags(flags); err != nil {
 		return inv.ErrorResult(err)
 	}
-	if err := rejectServeFlags(flags); err != nil {
+	if err := inv.RejectServeFlags(flags); err != nil {
 		return inv.ErrorResult(err)
 	}
-	config, err := apphome.ReadDeployment(flagString(flags, "config"))
+	config, err := apphome.ReadDeployment(invoke.FlagString(flags, "config"))
 	if err != nil {
 		return inv.ErrorResult(err)
 	}
-	if flagString(flags, "auth") == "" {
+	if invoke.FlagString(flags, "auth") == "" {
 		flags["auth"] = config.Auth
 	}
-	if flagString(flags, "auth-url") == "" {
+	if invoke.FlagString(flags, "auth-url") == "" {
 		flags["auth-url"] = config.AuthURL
 	}
 	options, err := server.HTTPServerOptionsFromFlags(flags)
 	if err != nil {
 		return inv.ErrorResult(err)
 	}
-	listen := flagString(flags, "listen")
+	listen := invoke.FlagString(flags, "listen")
 	if listen == "" {
 		listen = config.Listen
 		if listen == "" {
@@ -59,7 +60,7 @@ func runServe(flags map[string]FlagValue) RunResult {
 	}
 	rerankRuntime := "disabled"
 	if options.Reranker != nil {
-		rerankRuntime = strings.TrimSpace(flagString(flags, "rerank-model"))
+		rerankRuntime = strings.TrimSpace(invoke.FlagString(flags, "rerank-model"))
 		if rerankRuntime == "" {
 			rerankRuntime = strings.TrimSpace(os.Getenv("KC_RERANK_MODEL"))
 		}
@@ -68,13 +69,18 @@ func runServe(flags map[string]FlagValue) RunResult {
 	if options.Embedder != nil {
 		embeddingRuntime = strings.TrimSpace(os.Getenv("KC_EMBEDDING_MODEL"))
 	}
-	_, _ = fmt.Fprintf(os.Stdout, "kc service\n  config  %s\n  listen  http://%s\n  console http://%s/console\n  auth    %s\n  state   %s\n  rerank  %s\n  embed   %s\n  APIs    /snapshot/v1 /knowledge/v1 /writer/v1 /governance/v1 /identity/v1 /admin/v1 /operations/v1\n  as      %s\n  corr    header X-Kc-Request-Id\n", flagString(flags, "config"), listen, listen, authMode, stateRuntime, rerankRuntime, embeddingRuntime, identityLine)
-	handler, err := server.HTTPHandlerFromConfig(flagString(flags, "config"), options)
+	_, _ = fmt.Fprintf(os.Stdout, "kc service\n  config  %s\n  listen  http://%s\n  console http://%s/console\n  auth    %s\n  state   %s\n  rerank  %s\n  embed   %s\n  APIs    /snapshot/v1 /knowledge/v1 /writer/v1 /governance/v1 /identity/v1 /admin/v1 /operations/v1\n  as      %s\n  corr    header X-Kc-Request-Id\n", invoke.FlagString(flags, "config"), listen, listen, authMode, stateRuntime, rerankRuntime, embeddingRuntime, identityLine)
+	handler, err := server.HTTPHandlerFromConfig(invoke.FlagString(flags, "config"), options)
 	if err != nil {
 		return inv.ErrorResult(err)
 	}
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		defer func() { _ = closer.Close() }()
+	}
+	if starter, ok := handler.(interface{ Start() error }); ok {
+		if err := starter.Start(); err != nil {
+			return inv.ErrorResult(err)
+		}
 	}
 	server := &http.Server{
 		Addr:              listen,
@@ -93,6 +99,9 @@ func runServe(flags map[string]FlagValue) RunResult {
 			return inv.ErrorResult(err)
 		}
 	case <-stop.Done():
+		if stopper, ok := handler.(interface{ BeginShutdown() }); ok {
+			stopper.BeginShutdown()
+		}
 		ctx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer shutdownCancel()
 		if err := server.Shutdown(ctx); err != nil {
@@ -103,9 +112,4 @@ func runServe(flags map[string]FlagValue) RunResult {
 		}
 	}
 	return RunResult{Status: 0}
-}
-
-// httpHandler serves the typed APIs for one server-owned Home.
-func httpHandler(home string) http.Handler {
-	return server.HTTPHandlerWithOptions(home, server.HTTPServerOptions{})
 }

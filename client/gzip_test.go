@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"kc/client"
-	"kc/knowledge"
+	objectmodel "kc/object"
 )
 
 // TestTypedClientGzipsLargeRequestBodies pins the transport-compression
@@ -53,11 +53,11 @@ func TestTypedClientGzipsLargeRequestBodies(t *testing.T) {
 	big := strings.Repeat("k", 600<<10)
 	receipt := map[string]any{}
 	err = kc.WriterService().Commit(context.Background(), "kr://kaiqidong/compression",
-		client.CommitRequest{CommandID: "gzip-1", ChangeSet: knowledge.ChangeSet{
+		client.CommitRequest{CommandID: "gzip-1", ChangeSet: objectmodel.ChangeSet{
 			TargetRepository: "kr://kaiqidong/compression",
-			Operations: []knowledge.Operation{{
-				Op:      knowledge.OpPut,
-				Address: knowledge.Address{Kind: knowledge.KindEntity, ObjectID: "obj/big"},
+			Operations: []objectmodel.Operation{{
+				Op:      objectmodel.OpPut,
+				Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "obj/big"},
 				Value:   map[string]any{"body": big},
 			}},
 		}}, client.RequestOptions{}, &receipt)
@@ -68,7 +68,7 @@ func TestTypedClientGzipsLargeRequestBodies(t *testing.T) {
 		t.Fatalf("large request body traveled as Content-Encoding %q", gotEncoding)
 	}
 	var sent struct {
-		ChangeSet knowledge.ChangeSet `json:"changeSet"`
+		ChangeSet objectmodel.ChangeSet `json:"changeSet"`
 	}
 	if err := json.Unmarshal(decoded, &sent); err != nil {
 		t.Fatalf("decoded body is not the original JSON: %v", err)

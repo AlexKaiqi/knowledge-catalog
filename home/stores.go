@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"kc/index/opensearch"
+	"kc/declarativeindex/opensearch"
 )
 
 const (

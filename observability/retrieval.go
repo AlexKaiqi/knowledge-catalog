@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"kc/kernel"
-	"kc/knowledge"
+	objectmodel "kc/object"
 )
 
 const (
@@ -25,12 +25,12 @@ type RetrievalLaneEvidence struct {
 }
 
 type RetrievalCandidate struct {
-	KnowledgeRef knowledge.PinnedKnowledgeRef `json:"knowledgeRef"`
-	Rank         int                          `json:"rank"`
-	ValueDigest  kernel.Digest                `json:"valueDigest,omitempty"`
-	Evidence     []RetrievalLaneEvidence      `json:"evidence,omitempty"`
-	Observations []knowledge.UnitObservation  `json:"observations,omitempty"`
-	MatchedRoles []string                     `json:"matchedRoles,omitempty"`
+	KnowledgeRef objectmodel.PinnedKnowledgeRef `json:"knowledgeRef"`
+	Rank         int                            `json:"rank"`
+	ValueDigest  kernel.Digest                  `json:"valueDigest,omitempty"`
+	Evidence     []RetrievalLaneEvidence        `json:"evidence,omitempty"`
+	Observations []objectmodel.UnitObservation  `json:"observations,omitempty"`
+	MatchedRoles []string                       `json:"matchedRoles,omitempty"`
 }
 
 type RetrievalExecution struct {
@@ -95,7 +95,7 @@ func (e RetrievalEvent) Validate() error {
 	if _, err := json.Marshal(e.LogicalRequest); err != nil || e.RequestDigest != kernel.CanonicalDigest(e.LogicalRequest) {
 		return fmt.Errorf("retrieval evidence requires canonical request digest")
 	}
-	seen := map[knowledge.KnowledgeRef]struct{}{}
+	seen := map[objectmodel.KnowledgeRef]struct{}{}
 	for i, candidate := range e.Candidates {
 		if candidate.Rank != i+1 || candidate.KnowledgeRef.Repository == "" || candidate.KnowledgeRef.Commit == "" || candidate.KnowledgeRef.Object == "" {
 			return fmt.Errorf("retrieval candidate requires rank and pinned KnowledgeRef")

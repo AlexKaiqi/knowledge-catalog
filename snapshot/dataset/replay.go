@@ -18,8 +18,13 @@ func (c *service) ReplayPublished(pin ResolvedKnowledgeSet) (ResolvedKnowledgeSe
 	if err != nil {
 		return ResolvedKnowledgeSet{}, err
 	}
-	if check := c.CheckResolved(resolved); check.Outcome != "PASSED" {
-		return ResolvedKnowledgeSet{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "published pin is no longer available")
+	// Replay reconstructs authority coordinates before a consumer's per-source
+	// authorization. It must not read selected file bodies as an availability
+	// probe; explicit CheckResolved owns that check after its caller authorizes it.
+	for repository, commit := range resolved.Repositories {
+		if len(c.checkResolvedRepository(repository, commit)) != 0 {
+			return ResolvedKnowledgeSet{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "published pin is no longer available")
+		}
 	}
 	return resolved, nil
 }

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"kc/client"
+	snapshotclient "kc/snapshot/client"
 )
 
 func TestSingleRegistryInventoryHasNoCatalogCoordinate(t *testing.T) {
@@ -26,7 +27,7 @@ func TestSingleRegistryInventoryHasNoCatalogCoordinate(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out any
-	if err := kc.SnapshotService().Show(context.Background(), client.RequestOptions{}, &out); err != nil {
+	if err := kc.SnapshotService().Show(context.Background(), snapshotclient.RequestOptions{}, &out); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -47,7 +48,7 @@ func TestRegistryAuditPreservesBoundedPagination(t *testing.T) {
 	if _, err := kc.Login(context.Background(), client.LoginRequest{Identity: client.Identity{Principal: "operator"}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := kc.SnapshotService().Audit(context.Background(), 5, "basis+/=", client.RequestOptions{}, nil); err != nil {
+	if err := kc.SnapshotService().Audit(context.Background(), 5, "basis+/=", snapshotclient.RequestOptions{}, nil); err != nil {
 		t.Fatal(err)
 	}
 }

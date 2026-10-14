@@ -58,9 +58,9 @@
 
 本文不定义新字段、错误码、命令或状态机。现有缝以公开类型与包 README 为准：
 
-- 候选定位与维护端口：[`index.Retriever`](../../index/engine.go)、[`ProjectionMaintainer`](../../index/engine.go)；
-- 派生对账：[`index` 控制器合同](../../index/README.md)、`ChangeNotice`、`SnapshotConsumer`；
-- 查询代数与结果：[`retrieval`](../../retrieval/README.md)；
+- 候选定位与维护端口：[`index.Retriever`](../../discovery/projection/engine.go)、[`ProjectionMaintainer`](../../discovery/projection/engine.go)；
+- 派生对账：[`index` 控制器合同](../../declarativeindex/control/README.md)、`ChangeNotice`、`SnapshotConsumer`；
+- 查询代数与结果：[`retrieval`](../../discovery/README.md)；
 - 正文回读：`knowledge.Hydrator`，装配见 [服务边界](service.md)；
 - 采集与通知：[外部资源访问](resource-access.md)。
 
@@ -171,7 +171,7 @@ DataHub GraphQL 的 [`SearchResult.entity`](https://github.com/datahub-project/d
 
 ### 3.3 LlamaIndex Retriever：返回带正文的节点
 
-[LlamaIndex `BaseRetriever.retrieve`](https://github.com/run-llama/llama_index/blob/main/llama-index-core/llama_index/core/base/base_retriever.py) 返回 `List[NodeWithScore]`；节点含 `get_content()` 正文。官方 [from-scratch retriever](https://developers.llamaindex.ai/python/examples/low_level/retrieval/) 示例同样把向量命中的 node 文本交给后续合成。
+[LlamaIndex `BaseRetriever.retrieve`](https://github.com/run-llama/llama_discovery/projection/blob/main/llama-index-core/llama_discovery/projection/core/base/base_retriever.py) 返回 `List[NodeWithScore]`；节点含 `get_content()` 正文。官方 [from-scratch retriever](https://developers.llamaindex.ai/python/examples/low_level/discovery/) 示例同样把向量命中的 node 文本交给后续合成。
 
 **对本仓：** 这是产品名冲突，不是可抄的端口。本仓 Retriever 若返回正文，会直接违反 `C-01`。RAG 合成若需要正文，应在 hydrate 与交付链之后进行，不能让索引载荷冒充知识。
 
