@@ -52,12 +52,12 @@ func TestOpenSearchOperators(t *testing.T) {
 	if err := registry.Add(repo); err != nil {
 		t.Fatal(err)
 	}
-	servingRepo, err := reader.NewReader(registry).Require(repo.ID(), kernel.ErrKnowledgeRefUnresolved)
+	servingRepo, err := reader.NewReader(registry).Require(repo.ID(), kernel.ErrObjectRefUnresolved)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := servingRepo.(objectmodel.BatchReadStore); !ok {
-		t.Fatal("Knowledge service must expose batch Canonical hydration")
+		t.Fatal("Object service must expose batch Canonical hydration")
 	}
 
 	match, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchMATCH("events")))
@@ -68,7 +68,7 @@ func TestOpenSearchOperators(t *testing.T) {
 		t.Fatalf("OpenSearch MATCH modes are implemented exactly: %#v", match)
 	}
 	eq, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchEQ("db", "dw")))
-	if err != nil || len(eq.Hits) != 1 || string(eq.Hits[0].Knowledge.Address.ObjectID) != "Table:b" {
+	if err != nil || len(eq.Hits) != 1 || string(eq.Hits[0].Object.Address.ObjectID) != "Table:b" {
 		t.Fatalf("EQ: %#v %v", objectIDs(eq), err)
 	}
 	in, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchIN("db", "tl", "xx")))
@@ -92,7 +92,7 @@ func TestOpenSearchOperators(t *testing.T) {
 		t.Fatalf("CONTAINS substring: %d %v", len(contains.Hits), err)
 	}
 	containsOne, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchCONTAINS("db", "w")))
-	if err != nil || len(containsOne.Hits) != 1 || containsOne.Hits[0].Knowledge.Address.ObjectID != "Table:b" {
+	if err != nil || len(containsOne.Hits) != 1 || containsOne.Hits[0].Object.Address.ObjectID != "Table:b" {
 		t.Fatalf("CONTAINS distinguished from PREFIX: %#v %v", objectIDs(containsOne), err)
 	}
 	phrase, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchMATCHMode("billing events", retrieval.MatchPhrase)))
@@ -107,15 +107,15 @@ func TestOpenSearchOperators(t *testing.T) {
 	}
 	pageRequest.Continuation = firstPage.Continuation
 	secondPage, err := idx.SearchAt(servingRepo, head, pageRequest)
-	if err != nil || len(secondPage.Hits) != 1 || secondPage.Continuation != "" || secondPage.Hits[0].Knowledge.Address.ObjectID == firstPage.Hits[0].Knowledge.Address.ObjectID {
+	if err != nil || len(secondPage.Hits) != 1 || secondPage.Continuation != "" || secondPage.Hits[0].Object.Address.ObjectID == firstPage.Hits[0].Object.Address.ObjectID {
 		t.Fatalf("PIT second page: first=%#v second=%#v err=%v", objectIDs(firstPage), objectIDs(secondPage), err)
 	}
 	ranged, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchRange(retrieval.OpGT, "n", "5")))
-	if err != nil || len(ranged.Hits) != 1 || ranged.Hits[0].Knowledge.Address.ObjectID != "Table:b" {
+	if err != nil || len(ranged.Hits) != 1 || ranged.Hits[0].Object.Address.ObjectID != "Table:b" {
 		t.Fatalf("typed GT: %#v %v", objectIDs(ranged), err)
 	}
 	neq, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchEXISTS("db"), retrieval.SearchNEQ("db", "tl")))
-	if err != nil || len(neq.Hits) != 1 || neq.Hits[0].Knowledge.Address.ObjectID != "Table:b" {
+	if err != nil || len(neq.Hits) != 1 || neq.Hits[0].Object.Address.ObjectID != "Table:b" {
 		t.Fatalf("NEQ: %#v %v", objectIDs(neq), err)
 	}
 	sorted, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchEXISTS("db"), retrieval.SearchSORT("when", "desc")))
@@ -123,7 +123,7 @@ func TestOpenSearchOperators(t *testing.T) {
 		t.Fatalf("SORT desc: %#v %v", objectIDs(sorted), err)
 	}
 	relations, err := idx.RelationsAt(servingRepo, head, retrieval.RelationPageRequest{Query: retrieval.RelationQuery{
-		Endpoint: objectmodel.KnowledgeRef{Repository: servingRepo.ID(), Object: "Table:a"}, RelationType: "owned-by", Role: "subject",
+		Endpoint: objectmodel.ObjectRef{Repository: servingRepo.ID(), Object: "Table:a"}, RelationType: "owned-by", Role: "subject",
 	}})
 	if err != nil || len(relations.Hits) != 1 || relations.Hits[0].ObjectID != "relation:owned" || len(relations.Hits[0].MatchedRoles) != 1 {
 		t.Fatalf("relation lookup: %#v %v", relations, err)

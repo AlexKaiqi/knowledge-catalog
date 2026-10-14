@@ -66,10 +66,10 @@ func TestCatalogNotifySnapshotSkipsUnregistered(t *testing.T) {
 	}
 }
 
-func TestCatalogHookFailureDoesNotFailDefineKnowledgeSet(t *testing.T) {
+func TestCatalogHookFailureDoesNotFailDefineDataset(t *testing.T) {
 	s := setupFed(t)
 	s.catalog.AddHook(failHook{})
-	if _, err := s.catalog.DefineKnowledgeSet("agent", 1, []catalog.KnowledgeSetSource{
+	if _, err := s.catalog.DefineDataset("agent", 1, []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)

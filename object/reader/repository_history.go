@@ -67,7 +67,7 @@ func (r *treeRepository) Log(objectID objectmodel.ObjectID, commit kernel.Commit
 			introducing = &copyRevision
 			continue
 		}
-		value, err := assembleKnowledgeValue(r.ID(), objectID, candidate, units)
+		value, err := assembleObjectValue(r.ID(), objectID, candidate, units)
 		if err != nil {
 			return nil, err
 		}
@@ -98,9 +98,9 @@ func (r *treeRepository) Log(objectID objectmodel.ObjectID, commit kernel.Commit
 }
 
 func (r *treeRepository) Diff(objectID objectmodel.ObjectID, from, to kernel.CommitID) (objectmodel.ObjectDiff, error) {
-	read := func(commit kernel.CommitID) (*objectmodel.KnowledgeValue, error) {
+	read := func(commit kernel.CommitID) (*objectmodel.ObjectValue, error) {
 		value, err := r.Read(objectID, commit)
-		if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+		if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 			return nil, nil
 		}
 		if err != nil {
@@ -144,14 +144,14 @@ func (r *treeRepository) FastChangedObjects(from, to kernel.CommitID) ([]objectm
 	toPaths := map[objectmodel.ObjectID][]string{}
 	seen := map[objectmodel.ObjectID]struct{}{}
 	for _, path := range paths {
-		if !repofile.KnowledgePath(path) {
+		if !repofile.ObjectPath(path) {
 			continue
 		}
-		if objectID, ok := parseKnowledgeObjectAt(r.tree, path, from); ok {
+		if objectID, ok := parseObjectAt(r.tree, path, from); ok {
 			fromPaths[objectID] = append(fromPaths[objectID], path)
 			seen[objectID] = struct{}{}
 		}
-		if objectID, ok := parseKnowledgeObjectAt(r.tree, path, to); ok {
+		if objectID, ok := parseObjectAt(r.tree, path, to); ok {
 			toPaths[objectID] = append(toPaths[objectID], path)
 			seen[objectID] = struct{}{}
 		}
@@ -166,7 +166,7 @@ func (r *treeRepository) FastChangedObjects(from, to kernel.CommitID) ([]objectm
 	return out, nil
 }
 
-func parseKnowledgeObjectAt(tree snapshot.TreeReader, path string, commit kernel.CommitID) (objectmodel.ObjectID, bool) {
+func parseObjectAt(tree snapshot.TreeReader, path string, commit kernel.CommitID) (objectmodel.ObjectID, bool) {
 	content, err := tree.ReadFile(path, commit)
 	if err != nil {
 		return "", false
@@ -178,12 +178,12 @@ func parseKnowledgeObjectAt(tree snapshot.TreeReader, path string, commit kernel
 	return unit.ObjectID, true
 }
 
-func (r *treeRepository) ReadKnowledgeFile(rel string, commit kernel.CommitID) ([]byte, error) {
+func (r *treeRepository) ReadObjectFile(rel string, commit kernel.CommitID) ([]byte, error) {
 	return r.tree.ReadFile(rel, commit)
 }
 
-func (r *treeRepository) ReadManyAtPaths(objectIDs []objectmodel.ObjectID, commit kernel.CommitID, paths map[objectmodel.ObjectID][]string) (map[objectmodel.ObjectID]objectmodel.KnowledgeValue, error) {
-	out := map[objectmodel.ObjectID]objectmodel.KnowledgeValue{}
+func (r *treeRepository) ReadManyAtPaths(objectIDs []objectmodel.ObjectID, commit kernel.CommitID, paths map[objectmodel.ObjectID][]string) (map[objectmodel.ObjectID]objectmodel.ObjectValue, error) {
+	out := map[objectmodel.ObjectID]objectmodel.ObjectValue{}
 	seen := map[objectmodel.ObjectID]struct{}{}
 	ids := make([]objectmodel.ObjectID, 0, len(objectIDs))
 	for _, objectID := range objectIDs {
@@ -212,7 +212,7 @@ func (r *treeRepository) ReadManyAtPaths(objectIDs []objectmodel.ObjectID, commi
 		if len(units) == 0 {
 			continue
 		}
-		value, err := assembleKnowledgeValue(r.ID(), objectID, commit, units)
+		value, err := assembleObjectValue(r.ID(), objectID, commit, units)
 		if err != nil {
 			return nil, err
 		}

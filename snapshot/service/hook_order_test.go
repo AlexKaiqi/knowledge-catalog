@@ -19,7 +19,7 @@ func TestSnapshotDatasetHTTPHookCannotReplayOrFabricatePublication(t *testing.T)
 	f := newDatasetHTTPFixture(t)
 	f.rules.rules[0].Actions = []string{"inventory.read", "dataset.manage"}
 	hookCalls, prepared := 0, 0
-	f.resources.BeforePublish = func(_ context.Context, _ identity.HTTPIdentity, _ dataset.Service, definition dataset.KnowledgeSet) (dataset.KnowledgeSet, map[string]any, error) {
+	f.resources.BeforePublish = func(_ context.Context, _ identity.HTTPIdentity, _ dataset.Service, definition dataset.Dataset) (dataset.Dataset, map[string]any, error) {
 		prepared++
 		return definition, nil, nil
 	}
@@ -42,7 +42,7 @@ func TestSnapshotDatasetHTTPHookCannotReplayOrFabricatePublication(t *testing.T)
 		t.Fatalf("hook repeated or replaced accepted publication: %#v accepted=%#v err=%v hooks=%d prepared=%d", result, accepted, err, hookCalls, prepared)
 	}
 
-	f.resources.PreparePublication = func(context.Context, identity.HTTPIdentity, dataset.KnowledgeSet) error {
+	f.resources.PreparePublication = func(context.Context, identity.HTTPIdentity, dataset.Dataset) error {
 		return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "external preparation unavailable")
 	}
 	result = datasetHTTPCall(t, service.NewHandler(config), http.MethodPost, base, datasetHTTPDefinition(2, f.source.ID()), http.StatusBadRequest)
@@ -74,7 +74,7 @@ func TestSnapshotDatasetHTTPAuthorizesBeforePublicationHooks(t *testing.T) {
 	before := dataset.NormalizeState(f.catalog.DumpState())
 	f.source.inspections = 0
 	hookCalls, prepared := 0, 0
-	f.resources.BeforePublish = func(_ context.Context, _ identity.HTTPIdentity, _ dataset.Service, definition dataset.KnowledgeSet) (dataset.KnowledgeSet, map[string]any, error) {
+	f.resources.BeforePublish = func(_ context.Context, _ identity.HTTPIdentity, _ dataset.Service, definition dataset.Dataset) (dataset.Dataset, map[string]any, error) {
 		prepared++
 		return definition, nil, nil
 	}

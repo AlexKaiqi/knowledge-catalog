@@ -1,0 +1,18 @@
+---
+object_id: kc/relation/publish-object.uses-interface.writer
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: relations/publish-object.uses-interface.writer.yaml
+---
+relationId: kc/relation/publish-object.uses-interface.writer
+relationType: uses_interface
+direction: DIRECTED
+endpoints:
+  - role: from
+    objectRef:
+      repository: kr://kc/system
+      object: kc/capability/publish-object
+  - role: to
+    objectRef:
+      repository: kr://kc/system
+      object: kc/interface/writer

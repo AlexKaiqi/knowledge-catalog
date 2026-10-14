@@ -41,8 +41,8 @@ func TestPublishedImageDiscoveryKeepsBusinessIdentity(t *testing.T) {
 		t.Fatalf("object locator did not follow the explicit path move: %#v", resolved)
 	}
 	var location objectmodel.Resolution
-	if err := productClient(t, f.server, "agent:object-consumer").KnowledgeService().Resolve(context.Background(),
-		kcclient.KnowledgeResolveRequest{KnowledgeScope: kcclient.KnowledgeScope{Repository: f.repository, Commit: moved},
+	if err := productClient(t, f.server, "agent:object-consumer").Objects().Resolve(context.Background(),
+		kcclient.ObjectResolveRequest{ObjectScope: kcclient.ObjectScope{Repository: f.repository, Commit: moved},
 			Object: "image/tea-tin", Aspect: "definition"}, kcclient.RequestOptions{}, &location); err != nil {
 		t.Fatal(err)
 	}

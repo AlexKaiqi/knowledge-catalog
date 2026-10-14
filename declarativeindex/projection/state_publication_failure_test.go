@@ -104,7 +104,7 @@ func TestStatePublicationFailurePreservesOriginalObservationUntilRetry(t *testin
 				t.Fatalf("failed candidate became the public revision: %s %v", revision, ok)
 			}
 			after, err := idx.SearchStateAtRevision(repo, commit, original.Revision, query("running"))
-			// Timing is diagnostic; compare the full returned knowledge, version,
+			// Timing is diagnostic; compare the full returned object, version,
 			// observation, provider evidence, fixed view and completeness instead.
 			before.Stats, after.Stats = retrieval.SearchExecutionStats{}, retrieval.SearchExecutionStats{}
 			if err != nil || !reflect.DeepEqual(after, before) {
@@ -128,7 +128,7 @@ func TestStatePublicationFailurePreservesOriginalObservationUntilRetry(t *testin
 			}
 			current, err := idx.SearchStateAtRevision(repo, commit, retried.Revision, query("stopped"))
 			if err != nil || current.Completeness != retrieval.CompletenessComplete || len(current.Hits) != 1 ||
-				current.Hits[0].Knowledge.Value.(map[string]any)["runtime"].(map[string]any)["status"] != "stopped" ||
+				current.Hits[0].Object.Value.(map[string]any)["runtime"].(map[string]any)["status"] != "stopped" ||
 				current.Hits[0].Version.Observations[0].Basis.SourceRevision != "r2" || current.SearchView.ProjectionRevisions[repo.ID()] != retried.Revision {
 				t.Fatalf("retry mixed the new candidate and original observation: result=%#v error=%v", current, err)
 			}

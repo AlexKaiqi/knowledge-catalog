@@ -30,7 +30,7 @@ func (transport *testTransport) Do(ctx context.Context, audience string, request
 }
 
 func TestIndependentSnapshotCommandsUseInjectedTransportAndTypedInputs(t *testing.T) {
-	var defined client.KnowledgeSetRequest
+	var defined client.DatasetRequest
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.Header.Get("Authorization") != "Bearer caller-provided" || request.Header.Get("X-Kc-As") != "" {
 			t.Error("module replaced its injected authentication")

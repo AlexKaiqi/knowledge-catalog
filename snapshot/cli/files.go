@@ -76,9 +76,9 @@ func fileListControls(flags map[string]any, revision *int) (int, string, error) 
 	return limit, cursor, nil
 }
 
-func resolveFilesCoordinate(ctx context.Context, client kcclient.Client, id string, revision *int, options kcclient.RequestOptions) (kcclient.WorkspaceFileCoordinate, dataset.ResolvedKnowledgeSet, error) {
-	var pin dataset.ResolvedKnowledgeSet
-	if err := client.SnapshotService().ResolveKnowledgeSet(ctx, id, kcclient.KnowledgeSetResolveRequest{Revision: revision}, options, &pin); err != nil {
+func resolveFilesCoordinate(ctx context.Context, client kcclient.Client, id string, revision *int, options kcclient.RequestOptions) (kcclient.WorkspaceFileCoordinate, dataset.ResolvedDataset, error) {
+	var pin dataset.ResolvedDataset
+	if err := client.SnapshotService().ResolveDataset(ctx, id, kcclient.DatasetResolveRequest{Revision: revision}, options, &pin); err != nil {
 		return kcclient.WorkspaceFileCoordinate{}, pin, err
 	}
 	if pin.SetID != id || pin.Revision <= 0 || pin.PinID == "" || len(pin.Repositories) == 0 || (revision != nil && pin.Revision != *revision) {
@@ -88,12 +88,12 @@ func resolveFilesCoordinate(ctx context.Context, client kcclient.Client, id stri
 	return kcclient.WorkspaceFileCoordinate{Dataset: id, View: "repository", Pin: raw}, pin, err
 }
 
-func sameFilePublication(expected, actual dataset.ResolvedKnowledgeSet) bool {
+func sameFilePublication(expected, actual dataset.ResolvedDataset) bool {
 	return expected.SetID == actual.SetID && expected.Revision == actual.Revision && expected.Ref == actual.Ref && expected.PinID == actual.PinID &&
 		maps.Equal(expected.Repositories, actual.Repositories) && slices.Equal(expected.Items, actual.Items)
 }
 
-func shapeDeliveredPage(pin dataset.ResolvedKnowledgeSet, dir string, limit int, page kcclient.WorkspaceFileDirectoryResponse) (any, error) {
+func shapeDeliveredPage(pin dataset.ResolvedDataset, dir string, limit int, page kcclient.WorkspaceFileDirectoryResponse) (any, error) {
 	if !sameFilePublication(pin, page.Pin) || len(page.Entries) > limit || page.Exhausted != (page.Continuation == "") {
 		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "file directory response changed its publication or paging contract")
 	}
@@ -114,7 +114,7 @@ func shapeDeliveredPage(pin dataset.ResolvedKnowledgeSet, dir string, limit int,
 	return output, nil
 }
 
-func filePublicationOutput(pin dataset.ResolvedKnowledgeSet, delivered string) map[string]any {
+func filePublicationOutput(pin dataset.ResolvedDataset, delivered string) map[string]any {
 	return map[string]any{"dataset": pin.SetID, "revision": pin.Revision, "pinId": pin.PinID, "repositories": pin.Repositories, "path": delivered}
 }
 

@@ -302,10 +302,10 @@ func TestPorcelainChangesReportsWritesAndDeletes(t *testing.T) {
 
 func TestSparseCheckoutHidesUnmountedSubtree(t *testing.T) {
 	d := openDir(t)
-	if err := os.MkdirAll(filepath.Join(d.Root(), "docs/knowledge"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(d.Root(), "docs/object"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	write(t, d, "docs/knowledge/a.md", "a\n")
+	write(t, d, "docs/object/a.md", "a\n")
 	write(t, d, "other.md", "no\n")
 	head, err := d.CommitWorktree("", gitdir.Signature{Message: "seed"})
 	if err != nil {
@@ -316,10 +316,10 @@ func TestSparseCheckoutHidesUnmountedSubtree(t *testing.T) {
 		t.Fatal(err)
 	}
 	wt := gitdir.At(dest)
-	if err := wt.SparseCheckout("docs/knowledge"); err != nil {
+	if err := wt.SparseCheckout("docs/object"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(dest, "docs/knowledge/a.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(dest, "docs/object/a.md")); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(dest, "other.md")); !os.IsNotExist(err) {

@@ -49,12 +49,12 @@ func interfaceFixtureState(t *testing.T) (*reader.Serving, interfaces.ResolvedIn
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: "object/message", AspectName: "interfaces", MemberKey: "friendly"}, SchemaRef: implSchema, Value: map[string]any{"interfaceRef": "interface/prefix/v1", "prefix": "Hello "}},
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: "object/message", AspectName: "interfaces", MemberKey: "formal"}, SchemaRef: implSchema, Value: map[string]any{"interfaceRef": "interface/prefix/v1", "prefix": "Dear "}},
 	}
-	head, err := s.Repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID, Operations: operations})
+	head, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID, Operations: operations})
 	if err != nil {
 		t.Fatal(err)
 	}
 	repositories := map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: head}
-	base := reader.Open(func(id kernel.RepositoryID) (objectmodel.Repository, error) { return s.Repo, nil }, reader.KnowledgeSetPin{SetID: "test", Repositories: repositories, Items: reader.WholeRepositoryItems(repositories)})
+	base := reader.Open(func(id kernel.RepositoryID) (objectmodel.Repository, error) { return s.Repo, nil }, reader.DatasetPin{SetID: "test", Repositories: repositories, Items: reader.WholeRepositoryItems(repositories)})
 	impl, err := interfaces.ResolveObjectInterfaceAt(base, s.RepositoryID, "object/message", "friendly")
 	if err != nil {
 		t.Fatal(err)
@@ -109,7 +109,7 @@ func registerPrefix(t *testing.T, impl interfaces.ResolvedInterface, handler *pr
 
 func TestObjectInterfaceKeepsHistoricalContractAfterHeadAdvance(t *testing.T) {
 	base, impl, state := interfaceFixtureState(t)
-	_, err := state.Repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{TargetRepository: state.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: impl.Commit, ExpectedTargetCommit: impl.Commit, Operations: []objectmodel.Operation{
+	_, err := state.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{TargetRepository: state.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: impl.Commit, ExpectedTargetCommit: impl.Commit, Operations: []objectmodel.Operation{
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: impl.Contract.Object}, Value: map[string]any{"name": "Changed", "meaning": "A newer incompatible contract.", "operations": map[string]any{"other": map[string]any{"effect": "read"}}}},
 		{Op: objectmodel.OpPut, Address: impl.Address, SchemaRef: string(impl.ImplementationSchema.Object), Value: map[string]any{"interfaceRef": string(impl.Contract.Object), "prefix": "New "}},
 	}})
@@ -191,14 +191,14 @@ func TestObjectInterfaceDependenciesCannotEscapeDatasetSlice(t *testing.T) {
 	}
 	slice := reader.Open(base.Member, pin)
 	_, err = interfaces.ResolveObjectInterfaceAt(slice, impl.Repository, impl.Address.ObjectID, "friendly")
-	if kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+	if kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		t.Fatalf("secondary schema read escaped slice: %v", err)
 	}
 	pin.Items = reader.WholeRepositoryItems(pin.Repositories)
 	delete(pin.Repositories, impl.Repository)
 	empty := reader.Open(base.Member, pin)
 	_, err = interfaces.ResolveObjectInterfaceAt(empty, impl.Repository, impl.Address.ObjectID, "friendly")
-	if kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+	if kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		t.Fatalf("primary read escaped pin: %v", err)
 	}
 }

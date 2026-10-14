@@ -14,8 +14,8 @@ import (
 
 // dataset.md 场景覆盖补全：U1 同名文件映射到不同目标、U2 来源版本不可用时
 // 旧版保留、U4 退役拒绝消费且不偷删源内容、U5 并发发布的 revision CAS 与
-// 完整清单、U6 已交付引用不补齐未选中文件、U7 没有知识层的纯文件交付。
-// 全部复用 directoryDelivery 夹具（普通 TreeWriter 文件提交，无知识声明）。
+// 完整清单、U6 已交付引用不补齐未选中文件、U7 没有对象层的纯文件交付。
+// 全部复用 directoryDelivery 夹具（普通 TreeWriter 文件提交，无对象声明）。
 
 // U1：两个来源的同名文件映射到不同目标位置，交付字节与来源身份都保留。
 func TestDatasetFileDeliveryMapsSameNameFilesToDistinctTargets(t *testing.T) {
@@ -26,7 +26,7 @@ func TestDatasetFileDeliveryMapsSameNameFilesToDistinctTargets(t *testing.T) {
 	f.write(t, deliveryDocs, "docs-v2", []snapshot.TreeChange{
 		{Path: "inbox/report.md", Content: []byte("docs report\n")},
 	})
-	sources := []dataset.KnowledgeSetSource{
+	sources := []dataset.DatasetSource{
 		{Repository: deliveryData, Selector: snapshot.DefaultRef, File: "inbox/report.md", Target: "combined/data-report.md"},
 		{Repository: deliveryDocs, Selector: snapshot.DefaultRef, File: "inbox/report.md", Target: "combined/docs-report.md"},
 	}
@@ -69,8 +69,8 @@ func TestDatasetRepublishWithVanishedSelectorKeepsAcceptedVersion(t *testing.T) 
 	accepted := f.mounts(t, nil)
 	sources := directoryDeliverySources("reference/policies", "reference/guides", "data/metrics")
 	sources[0].Selector = "refs/heads/gone-v2"
-	if err := f.publish(2, sources); kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
-		t.Fatalf("vanished selector must be rejected as KNOWLEDGE_SET_INVALID, got %v", err)
+	if err := f.publish(2, sources); kernel.CodeOf(err) != kernel.ErrDatasetInvalid {
+		t.Fatalf("vanished selector must be rejected as DATASET_INVALID, got %v", err)
 	}
 	current := f.mounts(t, nil)
 	if current.Pin.Revision != accepted.Pin.Revision || current.Pin.PinID != accepted.Pin.PinID {
@@ -91,14 +91,14 @@ func TestDatasetRetireRejectsConsumptionAndPreservesSources(t *testing.T) {
 	headDocs, headData, readDocs, readData := sourceReaders(t, f)
 	f.assertRead(t, accepted.Pin, "reference/policies", "policy v1\n")
 
-	if err := f.operator.SnapshotService().RetireKnowledgeSet(context.Background(), "delivery", snapshotclient.RequestOptions{}, nil); err != nil {
+	if err := f.operator.SnapshotService().RetireDataset(context.Background(), "delivery", snapshotclient.RequestOptions{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	var retiredMounts snapshotclient.WorkspaceFileMountsResponse
 	err := f.reader.WorkspaceFilesService().Mounts(context.Background(), snapshotclient.WorkspaceFileMountsRequest{
 		WorkspaceFileCoordinate: f.coordinate(t, nil),
 	}, snapshotclient.RequestOptions{}, &retiredMounts)
-	if kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
+	if kernel.CodeOf(err) != kernel.ErrDatasetInvalid {
 		t.Fatalf("retired dataset must refuse consumption, got %v", err)
 	}
 	// Pinned reads re-evaluate current state per request (dataset.md U3):
@@ -110,10 +110,10 @@ func TestDatasetRetireRejectsConsumptionAndPreservesSources(t *testing.T) {
 	err = f.reader.WorkspaceFilesService().Read(context.Background(), snapshotclient.WorkspaceFileReadRequest{
 		WorkspaceFileCoordinate: f.coordinate(t, &accepted.Pin), Path: "reference/policies/README.md",
 	}, snapshotclient.RequestOptions{}, &out)
-	if kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
+	if kernel.CodeOf(err) != kernel.ErrDatasetInvalid {
 		t.Fatalf("retired dataset must refuse pinned reads with the lifecycle code, got %v", err)
 	}
-	if err := f.publish(2, directoryDeliverySources("reference/policies", "reference/guides", "data/metrics")); kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
+	if err := f.publish(2, directoryDeliverySources("reference/policies", "reference/guides", "data/metrics")); kernel.CodeOf(err) != kernel.ErrDatasetInvalid {
 		t.Fatalf("retired dataset must refuse republish, got %v", err)
 	}
 
@@ -129,11 +129,11 @@ func TestDatasetRetireRejectsConsumptionAndPreservesSources(t *testing.T) {
 	if err != nil || string(content) != "metric v1\n" {
 		t.Fatalf("retirement must keep source bytes: %q err=%v", content, err)
 	}
-	sources := []dataset.KnowledgeSetSource{
+	sources := []dataset.DatasetSource{
 		{Repository: deliveryDocs, Selector: snapshot.DefaultRef, Path: ptr("archive/policy"), SubPath: "handbook/policies"},
 	}
-	if err := f.operator.SnapshotService().DefineKnowledgeSet(context.Background(),
-		snapshotclient.KnowledgeSetRequest{Dataset: "delivery-archive", Revision: 1, Sources: sources}, snapshotclient.RequestOptions{}, nil); err != nil {
+	if err := f.operator.SnapshotService().DefineDataset(context.Background(),
+		snapshotclient.DatasetRequest{Dataset: "delivery-archive", Revision: 1, Sources: sources}, snapshotclient.RequestOptions{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	archive := f.coordinate(t, nil)
@@ -167,7 +167,7 @@ func TestDatasetConcurrentPublishersCannotOverwriteOrRollBack(t *testing.T) {
 	}
 	sourcesA := directoryDeliverySources("reference/policies", "reference/guides", "data/metrics")
 	metrics := "semantic/metrics"
-	sourcesB := []dataset.KnowledgeSetSource{
+	sourcesB := []dataset.DatasetSource{
 		{Repository: deliveryData, Selector: snapshot.DefaultRef, Path: &metrics, SubPath: "semantic/metrics"},
 		{Repository: deliveryDocs, Selector: snapshot.DefaultRef, File: "docs/guides/README.md", Target: "guide.md"},
 	}
@@ -235,9 +235,9 @@ type attempt struct {
 	err   error
 }
 
-func publishRevision(label string, publisher *client.Client, sources []dataset.KnowledgeSetSource, out chan<- attempt) {
-	err := publisher.SnapshotService().DefineKnowledgeSet(context.Background(),
-		snapshotclient.KnowledgeSetRequest{Dataset: "delivery", Revision: 2, Sources: sources}, snapshotclient.RequestOptions{}, nil)
+func publishRevision(label string, publisher *client.Client, sources []dataset.DatasetSource, out chan<- attempt) {
+	err := publisher.SnapshotService().DefineDataset(context.Background(),
+		snapshotclient.DatasetRequest{Dataset: "delivery", Revision: 2, Sources: sources}, snapshotclient.RequestOptions{}, nil)
 	out <- attempt{label: label, err: err}
 }
 
@@ -249,7 +249,7 @@ func TestDeliveredReferenceDoesNotPullUnselectedFile(t *testing.T) {
 		{Path: "semantic/metrics/README.md", Content: []byte("metric v2, see details.md\n")},
 		{Path: "semantic/metrics/details.md", Content: []byte("internal details\n")},
 	})
-	sources := []dataset.KnowledgeSetSource{
+	sources := []dataset.DatasetSource{
 		{Repository: deliveryData, Selector: snapshot.DefaultRef, File: "semantic/metrics/README.md", Target: "picked/README.md"},
 	}
 	if err := f.publish(2, sources); err != nil {
@@ -267,17 +267,17 @@ func TestDeliveredReferenceDoesNotPullUnselectedFile(t *testing.T) {
 	}
 }
 
-// U7：来源只有普通文本、没有知识声明与查询投影时，发布与读取仍然成立；
+// U7：来源只有普通文本、没有对象声明与查询投影时，发布与读取仍然成立；
 // 交付字节逐字节保持原样——文件内的 origin/URL 文本不会被解析、外呼或改写
 // （origin 指向不可路由端口，任何取值尝试都会失败）。
-func TestDatasetDeliveryWithoutKnowledgeLayerKeepsPlainBytes(t *testing.T) {
+func TestDatasetDeliveryWithoutObjectLayerKeepsPlainBytes(t *testing.T) {
 	f := newDirectoryDelivery(t)
 	payload := "---\norigin: http://127.0.0.1:9/v1/access\n---\nfetch https://scheduler.example/never\n"
 	f.write(t, deliveryData, "data-v2", []snapshot.TreeChange{
 		{Path: "plain/notes.md", Content: []byte(payload)},
 	})
 	plain := "plain"
-	sources := []dataset.KnowledgeSetSource{
+	sources := []dataset.DatasetSource{
 		{Repository: deliveryData, Selector: snapshot.DefaultRef, Path: &plain, SubPath: "plain"},
 	}
 	if err := f.publish(2, sources); err != nil {

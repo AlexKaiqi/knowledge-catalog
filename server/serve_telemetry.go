@@ -191,8 +191,8 @@ func httpRoute(r *http.Request) string {
 		return "/repositories/{repository}"
 	case strings.HasPrefix(path, "/snapshot/v1/"):
 		return "/snapshot/v1/{operation}"
-	case strings.HasPrefix(path, "/knowledge/v1/"):
-		return "/knowledge/v1/{operation}"
+	case strings.HasPrefix(path, "/object/v1/"):
+		return "/object/v1/{operation}"
 	case strings.HasPrefix(path, "/dataset-files/v1/"):
 		return "/dataset-files/v1/{operation}"
 	case strings.HasPrefix(path, "/writer/v1/"):

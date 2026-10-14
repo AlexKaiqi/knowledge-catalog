@@ -8,13 +8,13 @@ LiveAccess；Affordance 同时说明对象和系统自身怎样使用。大文�
 能力由底层方案承载，系统整体容量与恢复能力另需验证。
 
 接入方维护自己的内容、模型和来源；消费者采用需要的范围，并保留所用版本与引用依据。
-普通文件可先组合交付，需要结构化知识、查询或动态资源时再增加相应能力。
+普通文件可先组合交付，需要结构化对象、查询或动态资源时再增加相应能力。
 愿景、核心概念与架构见 [`doc/`](doc/README.md)。
 申请访问衔接资源拥有者或既有业务流程；通用自主申请与 Wield 等后续扩展仍属设计方向。
 
 ## 当前 MVP
 
-当前版本是**预配置与既有授权下可用的单实例 Server/Client 参考实现**：即使部署在一台机器上，`kc`、`kcfs` 也只通过 typed API 进入 KC Server；Store 和 Retrieval provider 可以本机部署，但不能绕过知识、授权、证据和索引语义。核心入口已实现，不代表全程自助、所有 adapter 或宿主已完成验收。共享服务试点有条件可用，多实例生产服务尚未验收；边界见[路线](doc/roadmap.md)，验证结论须对应具体运行范围与源码版本。
+当前版本是**预配置与既有授权下可用的单实例 Server/Client 参考实现**：即使部署在一台机器上，`kc`、`kcfs` 也只通过 typed API 进入 KC Server；Store 和 Retrieval provider 可以本机部署，但不能绕过对象、授权、证据和索引语义。核心入口已实现，不代表全程自助、所有 adapter 或宿主已完成验收。共享服务试点有条件可用，多实例生产服务尚未验收；边界见[路线](doc/roadmap.md)，验证结论须对应具体运行范围与源码版本。
 
 完整设计从 [`doc/README.md`](doc/README.md) 开始：愿景、概念、架构、各篇设计与路线。
 本机阅读（UTF-8 HTML）：`make docs-serve`，然后打开提示的地址（默认 `http://127.0.0.1:8766/doc/README.md`）。
@@ -23,27 +23,27 @@ LiveAccess；Affordance 同时说明对象和系统自身怎样使用。大文�
 
 | 角色 | 最短闭环 | 入口 |
 |---|---|---|
-| 知识接入方 | Client `create` → `attach --repo` → `writer commit --dir`（或 `writer put <对象URN>`）→ `read <对象URN>`；来源核对走 `provenance` | `kc help write` |
+| 对象接入方 | Client `create` → `attach --repo` → `writer commit --dir`（或 `writer put <对象URN>`）→ `read <对象URN>`；来源核对走 `provenance` | `kc help write` |
 | 治理方 | `attach --repo <配置源>` → `dataset define --source <repository>` → `grant add`；serve 追 live 投影，必要时 `operations projection sync --repo` | `kc help compose` |
-| 知识消费方 | `连接服务 → show`；已知对象直接 `read <对象URN>`，可加 `--dataset`；未知对象先按仓或 Dataset `search`，再读取命中引用 | `kc help consume` |
+| 对象消费方 | `连接服务 → show`；已知对象直接 `read <对象URN>`，可加 `--dataset`；未知对象先按仓或 Dataset`search`，再读取命中引用 | `kc help consume` |
 
-Dataset 负责文件范围、组合与版本交付，不是写入源仓的前置条件；普通文件无需知识 Schema，结构校验和声明式检索在知识层提供。
+Dataset 负责文件范围、组合与版本交付，不是写入源仓的前置条件；普通文件无需对象 Schema，结构校验和声明式检索在对象层提供。
 
 每个部署显式绑定实际 `kr://kc/system` 仓；部署初始化将 `systemrepo/content` 的模型、入口、机制、使用说明和基础 Schema 经 Writer 发布，启动核对，运行时只读实际仓。接入方在自己的
-Knowledge Repository 中版本化 Domain Schema；Writer 会校验 Schema 文档、兼容性和引用实例。
+Object Repository 中版本化 Domain Schema；Writer 会校验 Schema 文档、兼容性和引用实例。
 `kc deployment system publish --config deployment.yaml` 保留显式发布/核对入口（空仓写入、已占用只校验），不自动覆盖不同版本，也不在启动时挂载内置仓。
-`POST /knowledge/v1/schemas:list`（CLI `kc schema list`）可在选择知识集前分页列出一个固定 Repository 已发布的实体。面向
+`POST /object/v1/schemas:list`（CLI `kc schema list`）可在选择 Dataset 前分页列出一个固定 Repository 已发布的实体。面向
 人、IDE 与通用 Agent 文件工具的默认投影是 Semantic YAML view（例如
 `object/semantic/metrics/*.yaml`），Canonical 单元信封只属于维护/存储形状。产品设计和
 用例见 [`doc/design/object.md`](doc/design/object.md)。
 
-**Knowledge Catalog 语义只有一套**：身份、版本、来源、写边界、知识集组合、维护闭环、联邦读取。不同的是 store adapter。协议分层 ⓪–③（[`doc/architecture.md`](doc/architecture.md)；不要和介质梯子混名）：
+**Knowledge Catalog 语义只有一套**：身份、版本、来源、写边界、 Dataset 组合、维护闭环、联邦读取。不同的是 store adapter。协议分层 ⓪–③（[`doc/architecture.md`](doc/architecture.md)；不要和介质梯子混名）：
 
 ```text
 ③ 检索派生     AccessSpec / RetrievalPlan / CandidateRef / 完整回读
 M 访问物化      StateLookup 端口 + 外部 State / Stream runtime（上层产品）
-② 知识内容     object_id、Aspect、来源信封、schema/*、Binding handle
-① 组合平面     Dataset / 登记空间：来源、文件范围、不可变发布版本与固定 pin
+② 对象内容     object_id、Aspect、来源信封、schema/*、Binding handle
+① 组合平面    Dataset / 登记空间：来源、文件范围、不可变发布版本与固定 pin
 ⓪ 存储适配     Snapshot authority（当前生产实现为 lakeFS）
 ```
 
@@ -51,7 +51,7 @@ M 访问物化      StateLookup 端口 + 外部 State / Stream runtime（上层�
 
 ## 核心理念
 
-> 别把 authority 已经会的版本图重新发明成协议。⓪ 是 Snapshot 坐标与 CAS。① 是组合平面，不是文件仓、不是知识协议。协议在 ② 补身份、来源、写边界与外部访问声明；③ 是可丢派生。
+> 别把 authority 已经会的版本图重新发明成协议。⓪ 是 Snapshot 坐标与 CAS。① 是组合平面，不是文件仓、不是对象协议。协议在 ② 补身份、来源、写边界与外部访问声明；③ 是可丢派生。
 
 - **身份**（RESOLVE，②）：`ObjectIdentity ≠ path`，身份在文件内容（frontmatter），Address = `object_id` + aspect + member。
 - **来源**（GET_PROVENANCE，②）：精确 commit 坐标 + 各单元信封；不是 git log。
@@ -65,10 +65,10 @@ M 访问物化      StateLookup 端口 + 外部 State / Stream runtime（上层�
 | Object / Address | RESOLVE / READ / PUT / REMOVE | 见 Reader / Writer |
 | 来源信封 | GET_PROVENANCE | 对象+commit → `ProvenanceTrace.chain` |
 | 当前态/事件流/时序观测 | Aspect State/Stream Binding | 消费 READ 可 hydrate State；State 字段可进入独立动态投影并返回双 basis；Stream window、TTL/retention、cursor/checkpoint 由上层产品治理 |
-| Dataset（公开 Go 类型 KnowledgeSet） | dataset define / ResolveKnowledgeSet | 发布时冻结文件范围和 commit；消费时固定一个已发布版本 |
+| Dataset（公开 Go 类型 Dataset） | dataset define / ResolveDataset | 发布时冻结文件范围和 commit；消费时固定一个已发布版本 |
 | Object 历史 | LOG / DIFF | 对象+commit → `ObjectRevision[]`；两 commit → `ObjectDiff` |
 | Schema 内省 | DESCRIBE_SCHEMA | 只暴露字段 `text/filter/sort` 逻辑访问语义 |
-| 检索计划 | RetrievalPlan | ResolvedKnowledgeSet + AccessSpec + provider capabilities → 每请求路由 |
+| 检索计划 | RetrievalPlan | ResolvedDataset + AccessSpec + provider capabilities → 每请求路由 |
 | 工作投影 | SEARCH / describe-index | 仅 OpenSearch；本地未配置时 SEARCH 明确缺能力，Snapshot 精确 READ/VFS 不受影响 |
 | 外部资源 | ResourceDescriptor | Agent 读取自包含访问句柄，再走全系统统一访问；默认不沉淀 |
 | Proposal | propose / validateStructure / MERGE | 候选 Ref；结构检查后记录 PASSED/FAILED |
@@ -135,13 +135,13 @@ CLI/服务测试保存，根保留全局 argv、认证上下文、跨模块旅�
 
 `snapshot/dataset` 管理服务唯一登记空间与 Dataset 发布历史，不解释对象内容。客户端选择服务后无需再选择空间。
 
-- **KnowledgeSet** — 命名 Dataset 的不可变发布版本：来源、冻结 commit、文件范围；当前版本指针与历史发布记录分开保存。源分支推进不改变已发布版本
-- **ResolvedKnowledgeSet** — 固定一次消费的 Dataset 版本、文件清单和 `{仓 → commit}`；历史 pin 由服务端发布记录恢复，权限仍按当前状态检查。动态 observation cut 由上层 Retrieval/Materialization 持有
+- **Dataset** — 命名 Dataset 的不可变发布版本：来源、冻结 commit、文件范围；当前版本指针与历史发布记录分开保存。源分支推进不改变已发布版本
+- **ResolvedDataset** — 固定一次消费的 Dataset 版本、文件清单和 `{仓 → commit}`；历史 pin 由服务端发布记录恢复，权限仍按当前状态检查。动态 observation cut 由上层 Retrieval/Materialization 持有
 - **发布与索引** — Dataset 发布与来源提交分别完成。启用检索时，正式发布编排先准备成员固定版本投影，再接受新 Dataset 版本；准备失败保留旧服务版。未配置检索的文件发布不要求索引就绪，也不自动获得搜索能力。默认消费最新已发布版，已打开的固定视图不随更新移动；完整部署恢复和动态覆盖仍按 MVP 范围验收
 - 消费读 / `object_id` 在 `reader.Serving`，不在 登记空间。没有公开全量枚举或宿主直写式 snapshot export；未来若提供导出，必须是显式 typed streaming API，且不是消费 fallback
-- Linux 上用 `kcfs mount --dataset <id> --root <现有项目>` 把已发布 Dataset 的消费 YAML 投影挂入用户工作区，让本地 Agent 像读普通文件一样访问。当前只读，仅适合本机容量能容纳的数据集，不用于超大 Dataset 的本地挂载。入口与身份沿用当前 Client 会话，kcfs 在挂载时内部冻结版本。目录和文件经 typed Knowledge Set File Gateway 读取，客户端不持有 Repository 机器凭证
+- Linux 上用 `kcfs mount --dataset <id> --root <现有项目>` 把已发布 Dataset 的消费 YAML 投影挂入用户工作区，让本地 Agent 像读普通文件一样访问。当前只读，仅适合本机容量能容纳的数据集，不用于超大 Dataset 的本地挂载。入口与身份沿用当前 Client 会话，kcfs 在挂载时内部冻结版本。目录和文件经 typed Dataset File Gateway 读取，客户端不持有 Repository 机器凭证
 
-Writer 幂等日志在配置 `stateDir` 下的 `writer.db`。登记空间 当前态看 `kc show`，权威历史看 `kc registry audit`。`system.jsonl` / `audit.jsonl` 过程账与访问、反馈、检索原始证据同属耐久状态；hitmap 和检索投影可以重建。配置、登记空间 Snapshot 权威、知识 Snapshot 与服务状态都需要独立恢复来源；客户端登录态、配方和 pin 由客户端保存。文件职责见 [`home/README.md`](home/README.md)、[`snapshot/dataset/README.md`](snapshot/dataset/README.md) 与 [`doc/design/service.md`](doc/design/service.md)。
+Writer 幂等日志在配置 `stateDir` 下的 `writer.db`。登记空间 当前态看 `kc show`，权威历史看 `kc registry audit`。`system.jsonl` / `audit.jsonl` 过程账与访问、反馈、检索原始证据同属耐久状态；hitmap 和检索投影可以重建。配置、登记空间 Snapshot 权威、对象 Snapshot 与服务状态都需要独立恢复来源；客户端登录态、配方和 pin 由客户端保存。文件职责见 [`home/README.md`](home/README.md)、[`snapshot/dataset/README.md`](snapshot/dataset/README.md) 与 [`doc/design/service.md`](doc/design/service.md)。
 
 ## 运行
 
@@ -185,18 +185,18 @@ managedRepositories:
   driver: lakefs
   dsn: https://lakefs.example
   root: s3://kc-authority
-  creatorActions: [writer.preview, writer.commit, knowledge.read, knowledge.provenance, knowledge.schema.read]
+  creatorActions: [writer.preview, writer.commit, object.read, object.provenance, object.schema.read]
 ```
 
-Snapshot 机器凭据由部署环境注入；配置不含 token。配置、登记空间 Snapshot 权威、知识 Snapshot、`stateDir` 中的 grants/gates/receipts/治理过程/原始证据都必须持久保存。`cacheDir` 可以删除重建；缺失耐久状态时启动失败，不重新创建一个空 登记空间。平台仓通过显式 `kc create --name` 申请；自有仓通过 `kc create --url --credential-file` 连接；两者都在随后显式 `kc attach --repo` 时才进入当前 登记空间。绑定与创建结果持久保存，无需逐仓改配置；外部仓不存在时失败。creatorActions 不提供默认权限，调用者只获得部署明确选择的窄动作；重放与重启不补回已撤销 grant。
+Snapshot 机器凭据由部署环境注入；配置不含 token。配置、登记空间 Snapshot 权威、对象 Snapshot、`stateDir` 中的 grants/gates/receipts/治理过程/原始证据都必须持久保存。`cacheDir` 可以删除重建；缺失耐久状态时启动失败，不重新创建一个空 登记空间。平台仓通过显式 `kc create --name` 申请；自有仓通过 `kc create --url --credential-file` 连接；两者都在随后显式 `kc attach --repo` 时才进入当前 登记空间。绑定与创建结果持久保存，无需逐仓改配置；外部仓不存在时失败。creatorActions 不提供默认权限，调用者只获得部署明确选择的窄动作；重放与重启不补回已撤销 grant。
 
 按角色进入可先用 `kc help consume`、`kc help write`、`kc help compose`；
 三个角色帮助先给出同一套 登记空间/Repository/Dataset 心智模型，再给最短
 操作路径；`kc help` 保留完整协议表。
 
-Agent 使用同一分组 `kc` CLI 和普通 shell/文件工具，经 Server 与显式身份消费知识。
+Agent 使用同一分组 `kc` CLI 和普通 shell/文件工具，经 Server 与显式身份消费对象。
 未知对象使用 `kc search`，字段合同使用
-`kc schema describe`，已知对象直接 `kc read`。不存在公开知识
+`kc schema describe`，已知对象直接 `kc read`。不存在公开对象
 枚举或 SEARCH→LIST 降级；可选只读文件挂载由 `kcfs` 提供，不存在 KC 服务端 Session Store。
 本仓库 DSH 宿主集成及专属模型验收运行器已退役。通用 Agent 的概念解释、入口选择、恢复与
 任务效果仍需独立的真实模型证据，当前未执行；验收边界见
@@ -225,7 +225,7 @@ kc writer put "$RUNBOOK_REFERENCE" --command-id sync-1 --schema-ref schema/runbo
   --origin-kind SOURCE --source-ref file:///source/runbooks/payment-oncall.md
 kc read "$RUNBOOK_REFERENCE"
 
-# 治理方：命名知识集、发权。serve 追 live 投影；sync 用于历史 EnsureAt / 强制重建 / 排障。
+# 治理方：命名 Dataset、发权。serve 追 live 投影；sync 用于历史 EnsureAt / 强制重建 / 排障。
 kc dataset define agent --revision 1 --source "$REPOSITORY"
 kc operations projection sync --repo "$REPOSITORY"
 kc registry audit
@@ -265,7 +265,7 @@ kc serve --config deployment.yaml # auth: gitea / authURL / bootstrapPrincipal �
 
 | 测试 | 不变量 |
 |---|---|
-| T1 Path Move | 文件移动后 ObjectIdentity / KnowledgeRef 不变 |
+| T1 Path Move | 文件移动后 ObjectIdentity / ObjectRef 不变 |
 | T2 Commit CAS | 过期 expected target commit 被拒绝 |
 | T3 Atomicity | 任一操作失败无部分提交 |
 | T4 Command Idempotency | 精确重试返回原 Receipt；异内容冲突 |
@@ -275,8 +275,8 @@ kc serve --config deployment.yaml # auth: gitea / authURL / bootstrapPrincipal �
 | T8 Retrieval Projection | `discovery/projection/` 通用执行合同与 `declarativeindex/projection/` 可重建投影定位 + Canonical 回读；非权威、basis/lag；`AspectSelector` 只裁显式 READ |
 | T9 Maintenance Loop | 完整多 Repository Preview、validateStructure、Validation basis；Merge 更新源仓，重新发布 Dataset 后新请求可见 |
 | T10 Refine | SEM_FILTER 三值；SEM_RERANK 单次 listwise Provider、Ref-preserving RankGroup、fixed-basis/lane evidence、输入字节预算；Responses-compatible Luna 可选实测 |
-| T11 登记空间 | Dataset Registry、不可变发布记录、故障传播、来源不覆盖、固定已发布版本 |
-| T12 Snapshot + Knowledge composition | Snapshot 身份/CAS/历史 + 上层 Reader/Writer 的 LOG/DIFF/REMOVE、幂等、schema_ref、PROPOSAL |
+| T11 登记空间 |Dataset Registry、不可变发布记录、故障传播、来源不覆盖、固定已发布版本 |
+| T12 Snapshot + Object composition | Snapshot 身份/CAS/历史 + 上层 Reader/Writer 的 LOG/DIFF/REMOVE、幂等、schema_ref、PROPOSAL |
 | Hook / Gate | pre 非 0 无 commit；REPLAYED 不打 hook；post 只含指针；缺 suite 不能 merge；Preview 变了旧 PASSED 作废 |
 | Collector helper | `patch` 不误删；`reconcile` 只在 Observed∩Scope 上 REMOVE；超 Scope 拒绝；预览可 COMMIT |
 | End-to-end journey | `cli/mvp_acceptance_test.go` 固定接入方/消费方最短闭环；`cli/user_journey_test.go` 再覆盖 HTTP 读写、proposal、权限和生命周期 |

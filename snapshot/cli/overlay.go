@@ -7,7 +7,7 @@ import (
 	"kc/snapshot/dataset"
 )
 
-func clientKnowledgeSetOverlay(flags map[string]any) (any, error) {
+func clientDatasetOverlay(flags map[string]any) (any, error) {
 	file, err := requireRemoteFlag(flags, "file")
 	if err != nil {
 		return nil, err
@@ -20,7 +20,7 @@ func clientKnowledgeSetOverlay(flags map[string]any) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	recipe, err := dataset.ParseKnowledgeSetRecipe(raw)
+	recipe, err := dataset.ParseDatasetRecipe(raw)
 	if err != nil {
 		return nil, err
 	}
@@ -28,20 +28,20 @@ func clientKnowledgeSetOverlay(flags map[string]any) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	overlay, err := dataset.ParseKnowledgeSetOverlay(raw)
+	overlay, err := dataset.ParseDatasetOverlay(raw)
 	if err != nil {
 		return nil, err
 	}
-	definition, err := dataset.MergeOverlay(dataset.KnowledgeSet{SetID: recipe.Name, Revision: 1, Sources: recipe.Sources(), Metadata: recipe.Metadata}, overlay)
+	definition, err := dataset.MergeOverlay(dataset.Dataset{SetID: recipe.Name, Revision: 1, Sources: recipe.Sources(), Metadata: recipe.Metadata}, overlay)
 	if err != nil {
 		return nil, err
 	}
 	if out := flagString(flags, "out"); out != "" {
-		merged, ok := dataset.RecipeFromKnowledgeSet(definition)
+		merged, ok := dataset.RecipeFromDataset(definition)
 		if !ok {
-			return nil, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "overlay does not produce a portable recipe")
+			return nil, kernel.Fail(kernel.ErrDatasetInvalid, "overlay does not produce a portable recipe")
 		}
-		body, err := dataset.FormatKnowledgeSetRecipe(merged)
+		body, err := dataset.FormatDatasetRecipe(merged)
 		if err != nil {
 			return nil, err
 		}

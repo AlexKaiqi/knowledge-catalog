@@ -21,13 +21,13 @@ import (
 func TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange(t *testing.T) {
 	home := t.TempDir()
 	projectRepo := "kr://acme/docs"
-	mustKnowledgeSetFSRun(t, home, "init")
-	mustKnowledgeSetFSRun(t, home, "repo-add", "--repo", projectRepo, "--dsn", internalLakeFSRepoDSN(t))
-	mustKnowledgeSetFSRun(t, home, "register", "--repo", projectRepo)
+	mustDatasetFSRun(t, home, "init")
+	mustDatasetFSRun(t, home, "repo-add", "--repo", projectRepo, "--dsn", internalLakeFSRepoDSN(t))
+	mustDatasetFSRun(t, home, "register", "--repo", projectRepo)
 	mustRawTreeWrite(t, home, projectRepo, "files", "shared/a.txt", "alpha")
 	mustRawTreeWrite(t, home, projectRepo, "nested", "shared/nested/b.txt", "bravo")
-	mustKnowledgeSetFSRun(t, home, "dataset", "define", "--dataset", "agent", "--revision", "1",
-		"--source", projectRepo+"=refs/heads/main@knowledge@shared")
+	mustDatasetFSRun(t, home, "dataset", "define", "--dataset", "agent", "--revision", "1",
+		"--source", projectRepo+"=refs/heads/main@object@shared")
 	for _, args := range [][]string{
 		{"grant", "add", "--principal", "agent:test", "--action", "dataset.resolve", "--dataset", "agent"},
 		{"grant", "add", "--principal", "agent:test", "--action", "file.read", "--repo", projectRepo},
@@ -48,18 +48,18 @@ func TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange(t *testing.T)
 	})
 	pin := mounts["pin"]
 	mountList := mounts["mounts"].([]any)
-	if len(mountList) != 1 || mountList[0].(map[string]any)["path"] != "knowledge" {
+	if len(mountList) != 1 || mountList[0].(map[string]any)["path"] != "object" {
 		t.Fatalf("mounts = %#v", mounts)
 	}
 	first := postWorkspaceFiles(t, server.URL+"/snapshot/v1/files/tree:list", map[string]any{
-		"dataset": "agent", "pin": pin, "mountPath": "knowledge", "limit": 1,
+		"dataset": "agent", "pin": pin, "mountPath": "object", "limit": 1,
 	})
 	entries := first["entries"].([]any)
 	if len(entries) != 1 || entries[0].(map[string]any)["name"] != "a.txt" || first["continuation"] == nil {
 		t.Fatalf("first directory page = %#v", first)
 	}
 	second := postWorkspaceFiles(t, server.URL+"/snapshot/v1/files/tree:list", map[string]any{
-		"dataset": "agent", "pin": pin, "mountPath": "knowledge", "limit": 1,
+		"dataset": "agent", "pin": pin, "mountPath": "object", "limit": 1,
 		"continuation": first["continuation"],
 	})
 	secondEntry := second["entries"].([]any)[0].(map[string]any)
@@ -67,7 +67,7 @@ func TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange(t *testing.T)
 		t.Fatalf("second directory page = %#v", second)
 	}
 	read := postWorkspaceFiles(t, server.URL+"/snapshot/v1/files/file:read", map[string]any{
-		"dataset": "agent", "pin": pin, "mountPath": "knowledge", "file": "a.txt", "offset": 1, "length": 3,
+		"dataset": "agent", "pin": pin, "mountPath": "object", "file": "a.txt", "offset": 1, "length": 3,
 	})
 	content, err := io.ReadAll(bytes.NewReader(mustDecodeBase64(t, read["content"].(string))))
 	if err != nil || string(content) != "lph" || read["eof"] != false {
@@ -76,14 +76,14 @@ func TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange(t *testing.T)
 
 	// A directory continuation is bound to its mount commit and directory.
 	bad := serviceRequest(t, server.URL+"/snapshot/v1/files/tree:list", map[string]any{
-		"dataset": "agent", "pin": pin, "mountPath": "knowledge", "directory": "nested", "limit": 1,
+		"dataset": "agent", "pin": pin, "mountPath": "object", "directory": "nested", "limit": 1,
 		"continuation": first["continuation"],
 	})
 	if bad.Code != http.StatusConflict {
 		t.Fatalf("continuation replay status = %d body %s", bad.Code, bad.Body.String())
 	}
 
-	var resolved dataset.ResolvedKnowledgeSet
+	var resolved dataset.ResolvedDataset
 	raw, _ := json.Marshal(pin)
 	if err := json.Unmarshal(raw, &resolved); err != nil || resolved.PinID == "" {
 		t.Fatalf("invalid returned pin: %#v %v", pin, err)
@@ -105,9 +105,9 @@ func TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange(t *testing.T)
 func TestWorkspaceFileGatewayBuildsSemanticYAMLViewWithoutRepositoryMountPaths(t *testing.T) {
 	home := t.TempDir()
 	repository := "kr://acme/semantic"
-	mustKnowledgeSetFSRun(t, home, "init")
-	mustKnowledgeSetFSRun(t, home, "repo-add", "--repo", repository, "--dsn", internalLakeFSRepoDSN(t))
-	mustKnowledgeSetFSRun(t, home, "register", "--repo", repository)
+	mustDatasetFSRun(t, home, "init")
+	mustDatasetFSRun(t, home, "repo-add", "--repo", repository, "--dsn", internalLakeFSRepoDSN(t))
+	mustDatasetFSRun(t, home, "register", "--repo", repository)
 	opened, err := apphome.Open(home)
 	if err != nil {
 		t.Fatal(err)
@@ -130,7 +130,7 @@ func TestWorkspaceFileGatewayBuildsSemanticYAMLViewWithoutRepositoryMountPaths(t
 	if err != nil {
 		t.Fatal(err)
 	}
-	mustKnowledgeSetFSRun(t, home, "dataset", "define", "--dataset", "sales", "--revision", "1",
+	mustDatasetFSRun(t, home, "dataset", "define", "--dataset", "sales", "--revision", "1",
 		"--source", repository+"=refs/heads/main")
 	for _, args := range [][]string{
 		{"grant", "add", "--principal", "agent:test", "--action", "dataset.resolve", "--dataset", "sales"},
@@ -152,12 +152,12 @@ func TestWorkspaceFileGatewayBuildsSemanticYAMLViewWithoutRepositoryMountPaths(t
 	})
 	pin := mounts["pin"]
 	mount := mounts["mounts"].([]any)[0].(map[string]any)
-	if mount["path"] != "knowledge/semantic" || mount["subPath"] != inv.SemanticFileViewV1 {
+	if mount["path"] != "object/semantic" || mount["subPath"] != inv.SemanticFileViewV1 {
 		t.Fatalf("semantic mounts = %#v", mounts)
 	}
 	metrics := postWorkspaceFiles(t, server.URL+"/snapshot/v1/files/tree:list", map[string]any{
 		"dataset": "sales", "view": "semantic", "pin": pin,
-		"mountPath": "knowledge/semantic", "directory": "metrics",
+		"mountPath": "object/semantic", "directory": "metrics",
 	})
 	entries := metrics["entries"].([]any)
 	if len(entries) != 1 || !strings.HasPrefix(entries[0].(map[string]any)["name"].(string), "gross-merchandise-value--") {
@@ -166,7 +166,7 @@ func TestWorkspaceFileGatewayBuildsSemanticYAMLViewWithoutRepositoryMountPaths(t
 	file := entries[0].(map[string]any)["name"].(string)
 	read := postWorkspaceFiles(t, server.URL+"/snapshot/v1/files/file:read", map[string]any{
 		"dataset": "sales", "view": "semantic", "pin": pin,
-		"mountPath": "knowledge/semantic", "file": "metrics/" + file,
+		"mountPath": "object/semantic", "file": "metrics/" + file,
 	})
 	content := string(mustDecodeBase64(t, read["content"].(string)))
 	for _, want := range []string{"object_id: metric/gmv", "definition:", "expression: SUM(price)", "schema/metric/definition/v1"} {

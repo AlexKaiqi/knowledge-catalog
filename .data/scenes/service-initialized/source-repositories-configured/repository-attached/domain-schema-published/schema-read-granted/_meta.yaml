@@ -6,7 +6,7 @@ role: consumer
 surface: both
 publishes:
   - access.rules
-summary: knowledge.schema.read 可 browse/describe；不被 inventory.read 隐含；不放行实例正文
+summary: object.schema.read 可 browse/describe；不被 inventory.read 隐含；不放行实例正文
 evidence:
   - id: normalized-schema-fields-and-access
     title: Schema 内省返回规范字段与访问声明
@@ -38,4 +38,4 @@ probes:
       - publication
       - consumption
     title: Schema 内省返回字段路径并保持响应边界
-fixture: schema-reader 对知识仓仅持 knowledge.schema.read，可作为目录浏览与内省的同一授权前态。
+fixture: schema-reader 对仓仅持 object.schema.read，可作为目录浏览与内省的同一授权前态。

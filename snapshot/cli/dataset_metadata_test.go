@@ -34,7 +34,7 @@ func TestDatasetMetadataUsesFlagOrPortableRecipe(t *testing.T) {
 			calls := 0
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				calls++
-				var request client.KnowledgeSetRequest
+				var request client.DatasetRequest
 				if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 					t.Fatal(err)
 				}

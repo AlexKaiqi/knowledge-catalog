@@ -27,7 +27,7 @@ type gitLikeEmptyLocatorStore struct {
 
 func (s *gitLikeEmptyLocatorStore) ReadDirectory(request snapshot.DirectoryRequest) (snapshot.DirectoryPage, error) {
 	if request.Directory == repofile.LocatorObjectDirectory {
-		return snapshot.DirectoryPage{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved,
+		return snapshot.DirectoryPage{}, kernel.Fail(kernel.ErrObjectRefUnresolved,
 			"empty directories are absent")
 	}
 	return s.DirectoryReader.ReadDirectory(request)
@@ -47,7 +47,7 @@ func (r *countingRepository) ReadFile(path string, commit kernel.CommitID) ([]by
 	return r.TreeStore.ReadFile(path, commit)
 }
 
-func TestKnowledgeServiceBatchHydratesOneTreeWithoutCrossRequestObjectCache(t *testing.T) {
+func TestObjectsBatchHydratesOneTreeWithoutCrossRequestObjectCache(t *testing.T) {
 	base := testkit.MakeRepository(t, "kr://acme/public/core")
 	var err error
 	root, err := base.Head(snapshot.DefaultRef)
@@ -77,13 +77,13 @@ func TestKnowledgeServiceBatchHydratesOneTreeWithoutCrossRequestObjectCache(t *t
 	commit := receipt.Result.CommitID
 	counting.listCalls, counting.readCalls = 0, 0
 	service := reader.NewReader(registry)
-	repo, err := service.Require(base.ID(), kernel.ErrKnowledgeRefUnresolved)
+	repo, err := service.Require(base.ID(), kernel.ErrObjectRefUnresolved)
 	if err != nil {
 		t.Fatal(err)
 	}
 	batch, ok := repo.(objectmodel.BatchReadStore)
 	if !ok {
-		t.Fatal("knowledge service repository must expose batch hydration")
+		t.Fatal("object service repository must expose batch hydration")
 	}
 	values, err := batch.ReadMany([]objectmodel.ObjectID{"metric/gmv", "table/orders"}, commit)
 	if err != nil {
@@ -163,7 +163,7 @@ func TestObjectIdentityPageTreatsAbsentCompletedLocatorDirectoryAsEmpty(t *testi
 	if err := wrappedStores.Add(gitLike); err != nil {
 		t.Fatal(err)
 	}
-	repo, err := reader.NewReader(wrappedStores).Require(raw.ID(), kernel.ErrKnowledgeRefUnresolved)
+	repo, err := reader.NewReader(wrappedStores).Require(raw.ID(), kernel.ErrObjectRefUnresolved)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +207,7 @@ func TestTreeProviderSchemaIndexTracksSchemaWithoutRepositoryScan(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	repo, err := reader.NewReader(stores).Require(raw.ID(), kernel.ErrKnowledgeRefUnresolved)
+	repo, err := reader.NewReader(stores).Require(raw.ID(), kernel.ErrObjectRefUnresolved)
 	if err != nil {
 		t.Fatal(err)
 	}

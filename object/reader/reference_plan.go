@@ -85,7 +85,7 @@ func (r *nativeReadRepository) PlanReference(ref objectmodel.Reference, commit k
 
 func (r *datasetRepository) PlanReference(ref objectmodel.Reference, commit kernel.CommitID) ([]objectmodel.Address, error) {
 	if ref.Repository != r.ID() || commit != r.commit {
-		return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "reference planning is outside Dataset source basis")
+		return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "reference planning is outside Dataset source basis")
 	}
 	// Metadata describes coordinates only. The actual read still requires all
 	// selected body paths to be present in this accepted publication.

@@ -138,10 +138,10 @@ func newAcceptanceFixture(t *testing.T, options server.HTTPServerOptions) *accep
 	if err := home.InitializeDeployment(f.config, func(directory, principal string) error {
 		return inv.WriteAllow(directory, inv.AllowFile{Rules: []inv.AllowRule{
 			{ID: "operator", Principal: principal, Actions: []string{"*"}},
-			{ID: "reader", Principal: "reader", Actions: []string{"knowledge.read", "resource.access", "dataset.resolve", "file.read"}},
+			{ID: "reader", Principal: "reader", Actions: []string{"object.read", "resource.access", "dataset.resolve", "file.read"}},
 			{ID: "auditor", Principal: "auditor", Actions: []string{"audit.read"}},
-			{ID: "alice", Principal: "alice", Actions: []string{"knowledge.read"}},
-			{ID: "bob", Principal: "bob", Actions: []string{"knowledge.read"}},
+			{ID: "alice", Principal: "alice", Actions: []string{"object.read"}},
+			{ID: "bob", Principal: "bob", Actions: []string{"object.read"}},
 		}})
 	}); err != nil {
 		t.Fatal(err)
@@ -267,10 +267,10 @@ func acceptanceReference(t *testing.T, repo kernel.RepositoryID, locator string)
 	return reference
 }
 
-func (f *acceptanceFixture) read(t *testing.T, principal, requestID string, request kcclient.KnowledgeReadRequest) (*objectmodel.ObservedValue, error) {
+func (f *acceptanceFixture) read(t *testing.T, principal, requestID string, request kcclient.ObjectReadRequest) (*objectmodel.ObservedValue, error) {
 	t.Helper()
 	var row objectmodel.ObservedValue
-	err := f.client(t, principal).KnowledgeService().Read(context.Background(), request, kcclient.RequestOptions{RequestID: requestID}, &row)
+	err := f.client(t, principal).Objects().Read(context.Background(), request, kcclient.RequestOptions{RequestID: requestID}, &row)
 	if err != nil {
 		return nil, err
 	}

@@ -53,7 +53,7 @@ func (s *datasetHTTPSource) Archive() error { return nil }
 func (s *datasetHTTPSource) ReadFile(file string, commit kernel.CommitID) ([]byte, error) {
 	body, ok := s.files[commit][file]
 	if !ok {
-		return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "file %s is missing from %s", file, commit)
+		return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "file %s is missing from %s", file, commit)
 	}
 	return append([]byte{}, body...), nil
 }
@@ -144,7 +144,7 @@ func datasetHTTPCall(t *testing.T, handler http.Handler, method, target string, 
 }
 
 func datasetHTTPDefinition(revision int, source kernel.RepositoryID) map[string]any {
-	return map[string]any{"dataset": "files", "revision": revision, "sources": []dataset.KnowledgeSetSource{{Repository: source, Selector: snapshot.DefaultRef, File: "plain.txt", Target: "docs/plain.txt"}}}
+	return map[string]any{"dataset": "files", "revision": revision, "sources": []dataset.DatasetSource{{Repository: source, Selector: snapshot.DefaultRef, File: "plain.txt", Target: "docs/plain.txt"}}}
 }
 
 func assertDatasetHTTPState(t *testing.T, f *datasetHTTPFixture, before dataset.State) {
@@ -154,13 +154,13 @@ func assertDatasetHTTPState(t *testing.T, f *datasetHTTPFixture, before dataset.
 	}
 }
 
-func datasetHTTPPin(t *testing.T, response map[string]any) dataset.ResolvedKnowledgeSet {
+func datasetHTTPPin(t *testing.T, response map[string]any) dataset.ResolvedDataset {
 	t.Helper()
 	raw, err := json.Marshal(response)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var pin dataset.ResolvedKnowledgeSet
+	var pin dataset.ResolvedDataset
 	if err := dataset.DecodeJSON(raw, &pin); err != nil {
 		t.Fatal(err)
 	}
@@ -243,7 +243,7 @@ func TestDatasetHTTPTemporarySourceCheckIsCompleteAndPolicyPluggable(t *testing.
 		t.Fatal(err)
 	}
 	body := datasetHTTPDefinition(1, f.source.ID())
-	body["sources"] = []dataset.KnowledgeSetSource{{Repository: f.source.ID(), Selector: snapshot.DefaultRef, File: "a", Target: "a"}, {Repository: second.ID(), Selector: snapshot.DefaultRef, File: "b", Target: "b"}}
+	body["sources"] = []dataset.DatasetSource{{Repository: f.source.ID(), Selector: snapshot.DefaultRef, File: "a", Target: "a"}, {Repository: second.ID(), Selector: snapshot.DefaultRef, File: "b", Target: "b"}}
 	before := dataset.NormalizeState(f.catalog.DumpState())
 	f.rules.rules = []access.Rule{{ID: "one", Principal: "alice", Repo: string(f.source.ID()), Actions: []string{"dataset.resolve", "file.read"}}}
 	datasetHTTPCall(t, f.handler(), "POST", "/snapshot/v1/datasets:resolve", body, 403)
@@ -256,7 +256,7 @@ func TestDatasetHTTPTemporarySourceCheckIsCompleteAndPolicyPluggable(t *testing.
 	f.rules.rules[1].Actions = append(f.rules.rules[1].Actions, "file.read")
 	wantRepositories := map[kernel.RepositoryID]kernel.CommitID{f.source.ID(): "c1", second.ID(): "c2"}
 	wantItems := []dataset.DatasetItem{{Target: "a", Repository: f.source.ID(), Commit: "c1", Kind: dataset.DatasetItemFile, File: "a"}, {Target: "b", Repository: second.ID(), Commit: "c2", Kind: dataset.DatasetItemFile, File: "b"}}
-	assertPin := func(pin dataset.ResolvedKnowledgeSet) {
+	assertPin := func(pin dataset.ResolvedDataset) {
 		t.Helper()
 		if pin.SetID != "files" || pin.Revision != 1 || !reflect.DeepEqual(pin.Repositories, wantRepositories) || !reflect.DeepEqual(pin.Items, wantItems) {
 			t.Fatalf("temporary policy or response lost exact fixed scope: %#v", pin)
@@ -295,7 +295,7 @@ func TestDatasetHTTPTemporarySourceCheckIsCompleteAndPolicyPluggable(t *testing.
 
 func TestDatasetHTTPDiscoveryMarkerReachesPolicyOnlyForResolve(t *testing.T) {
 	f := newDatasetHTTPFixture(t)
-	if _, err := f.catalog.DefineKnowledgeSet("files", 1, []dataset.KnowledgeSetSource{{Repository: f.source.ID(), Selector: snapshot.DefaultRef}}); err != nil {
+	if _, err := f.catalog.DefineDataset("files", 1, []dataset.DatasetSource{{Repository: f.source.ID(), Selector: snapshot.DefaultRef}}); err != nil {
 		t.Fatal(err)
 	}
 	var discovered bool
@@ -318,8 +318,8 @@ func TestDatasetHTTPDiscoveryMarkerReachesPolicyOnlyForResolve(t *testing.T) {
 
 func TestDatasetHTTPPublicationPreparesThenSwitchesOnce(t *testing.T) {
 	f := newDatasetHTTPFixture(t)
-	var candidate dataset.KnowledgeSet
-	f.resources.BeforePublish = func(_ context.Context, _ identity.HTTPIdentity, _ dataset.Service, definition dataset.KnowledgeSet) (dataset.KnowledgeSet, map[string]any, error) {
+	var candidate dataset.Dataset
+	f.resources.BeforePublish = func(_ context.Context, _ identity.HTTPIdentity, _ dataset.Service, definition dataset.Dataset) (dataset.Dataset, map[string]any, error) {
 		if _, err := f.catalog.Set("files"); err == nil {
 			t.Fatal("candidate became current before preparation")
 		}
@@ -329,7 +329,7 @@ func TestDatasetHTTPPublicationPreparesThenSwitchesOnce(t *testing.T) {
 		f.source.head = "c2"
 		return definition, map[string]any{"recipeFile": ".kc-dataset.yaml", "setId": "hijack"}, nil
 	}
-	f.resources.PreparePublication = func(_ context.Context, _ identity.HTTPIdentity, definition dataset.KnowledgeSet) error {
+	f.resources.PreparePublication = func(_ context.Context, _ identity.HTTPIdentity, definition dataset.Dataset) error {
 		candidate = definition
 		if definition.Sources[0].Commit != "c2" {
 			t.Fatal("publication missed the prepared source version")
@@ -352,7 +352,7 @@ func TestDatasetHTTPPublicationPreparesThenSwitchesOnce(t *testing.T) {
 func TestDatasetHTTPPreparationFailureKeepsServingVersion(t *testing.T) {
 	f := newDatasetHTTPFixture(t)
 	datasetHTTPCall(t, f.handler(), "POST", "/snapshot/v1/datasets", datasetHTTPDefinition(1, f.source.ID()), 200)
-	f.resources.PreparePublication = func(context.Context, identity.HTTPIdentity, dataset.KnowledgeSet) error {
+	f.resources.PreparePublication = func(context.Context, identity.HTTPIdentity, dataset.Dataset) error {
 		return kernel.Fail(kernel.ErrTemporaryUnavailable, "capability not ready")
 	}
 	datasetHTTPCall(t, f.handler(), "POST", "/snapshot/v1/datasets", datasetHTTPDefinition(2, f.source.ID()), 503)
@@ -380,7 +380,7 @@ func TestDatasetHTTPRejectsInvalidWireAndHistoryQueries(t *testing.T) {
 
 func TestDatasetHTTPNamedResolveDoesNotGrantTemporarySources(t *testing.T) {
 	f := newDatasetHTTPFixture(t)
-	if _, err := f.catalog.DefineKnowledgeSet("files", 1, []dataset.KnowledgeSetSource{{Repository: f.source.ID(), Selector: snapshot.DefaultRef}}); err != nil {
+	if _, err := f.catalog.DefineDataset("files", 1, []dataset.DatasetSource{{Repository: f.source.ID(), Selector: snapshot.DefaultRef}}); err != nil {
 		t.Fatal(err)
 	}
 	before := dataset.NormalizeState(f.catalog.DumpState())
@@ -432,7 +432,7 @@ func TestDatasetHTTPBeforePublishCannotRedirectOrContinueAfterRevocation(t *test
 			before := dataset.NormalizeState(f.catalog.DumpState())
 			called := false
 			inspectionsAtCallback := 0
-			f.resources.BeforePublish = func(_ context.Context, _ identity.HTTPIdentity, _ dataset.Service, definition dataset.KnowledgeSet) (dataset.KnowledgeSet, map[string]any, error) {
+			f.resources.BeforePublish = func(_ context.Context, _ identity.HTTPIdentity, _ dataset.Service, definition dataset.Dataset) (dataset.Dataset, map[string]any, error) {
 				called = true
 				inspectionsAtCallback = f.source.inspections
 				if mode == "identity" {

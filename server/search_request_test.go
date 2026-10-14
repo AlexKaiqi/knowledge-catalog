@@ -53,9 +53,9 @@ func TestSearchRequestParsesExplicitFieldRef(t *testing.T) {
 	}
 }
 
-func TestHTTPKnowledgeSearchRequestPreservesEveryPublicOperator(t *testing.T) {
-	wire := KnowledgeSearchRequest{
-		knowledgeScope: knowledgeScope{Dataset: "agent"}, In: []string{"owner=a,b"}, Exists: []string{"active"},
+func TestHTTPObjectSearchRequestPreservesEveryPublicOperator(t *testing.T) {
+	wire := ObjectSearchRequest{
+		objectScope: objectScope{Dataset: "agent"}, In: []string{"owner=a,b"}, Exists: []string{"active"},
 		Missing: []string{"deleted"}, Prefix: []string{"name=customer."}, Contains: []string{"name=tomer"},
 		GreaterThan: []string{"score=1"}, GreaterEqual: []string{"score=2"},
 		LessThan: []string{"score=9"}, LessEqual: []string{"score=8"},
@@ -75,7 +75,7 @@ func TestHTTPKnowledgeSearchRequestPreservesEveryPublicOperator(t *testing.T) {
 	}
 }
 
-func TestHTTPKnowledgeSearchRequestPreservesExpressionAndOrder(t *testing.T) {
+func TestHTTPObjectSearchRequestPreservesExpressionAndOrder(t *testing.T) {
 	expression := retrieval.SearchAll(
 		retrieval.SearchAny(
 			retrieval.SearchLeaf(retrieval.SearchMATCH("payment")),
@@ -84,8 +84,8 @@ func TestHTTPKnowledgeSearchRequestPreservesExpressionAndOrder(t *testing.T) {
 		retrieval.SearchLeaf(retrieval.SearchEQ("team", "payments")),
 	)
 	order := retrieval.SearchSORT("severity", "asc")
-	wire := KnowledgeSearchRequest{
-		knowledgeScope: knowledgeScope{Dataset: "agent"}, Expression: &expression, Order: &order, Limit: 1,
+	wire := ObjectSearchRequest{
+		objectScope: objectScope{Dataset: "agent"}, Expression: &expression, Order: &order, Limit: 1,
 	}
 	req, err := wire.searchRequest()
 	if err != nil {

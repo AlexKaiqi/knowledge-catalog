@@ -40,7 +40,7 @@ func managedHumanJourney(t *testing.T) {
 		current.ServeHTTP(w, r)
 	}))
 	defer server.Close()
-	pool := apphome.ManagedRepositoryConfig{Driver: "lakefs", PublicURL: server.URL, CreatorActions: []string{"writer.preview", "writer.commit", "writer.receipt.read", "knowledge.read", "knowledge.provenance", "knowledge.schema.read", "dataset.resolve", "file.read", "repository.metadata.read", "repository.shares.manage"}, ShareActions: []string{"knowledge.read", "knowledge.provenance", "dataset.resolve", "file.read"}}
+	pool := apphome.ManagedRepositoryConfig{Driver: "lakefs", PublicURL: server.URL, CreatorActions: []string{"writer.preview", "writer.commit", "writer.receipt.read", "object.read", "object.provenance", "object.schema.read", "dataset.resolve", "file.read", "repository.metadata.read", "repository.shares.manage"}, ShareActions: []string{"object.read", "object.provenance", "dataset.resolve", "file.read"}}
 	fake := testkit.NewLakeFSFake(t)
 	pool.DSN = fake.Origin()
 	pool.Root = "s3://kc-authority"
@@ -137,12 +137,12 @@ func managedHumanJourney(t *testing.T) {
 	}
 	body(t, run("admission", "show"))
 	body(t, run("show"))
-	created := asMap(t, body(t, run("create", "--name", "team-knowledge")))
+	created := asMap(t, body(t, run("create", "--name", "team-object")))
 	if _, leaked := created["commandId"]; leaked {
 		t.Fatalf("ordinary creation exposes its internal allocation command: %#v", created)
 	}
 	repository, _ := created["repositoryId"].(string)
-	if repository == "" || created["owner"] != "kaiqidong" || created["name"] != "team-knowledge" || created["status"] != "APPLIED" {
+	if repository == "" || created["owner"] != "kaiqidong" || created["name"] != "team-object" || created["status"] != "APPLIED" {
 		t.Fatalf("create did not allocate a human-owned repository: %#v", created)
 	}
 	management, _ := created["managementURL"].(string)
@@ -190,7 +190,7 @@ func managedHumanJourney(t *testing.T) {
 	if receipt["commandId"] != "human-first-publication" || receipt["status"] != "APPLIED" {
 		t.Fatalf("author cannot recover own publication: %#v", receipt)
 	}
-	share := repositoryShareAdd(providerClient, repository, "consumer", "knowledge.read,knowledge.provenance,dataset.resolve,file.read")
+	share := repositoryShareAdd(providerClient, repository, "consumer", "object.read,object.provenance,dataset.resolve,file.read")
 	listed := repositoryShareList(providerClient, repository)
 	if len(listed.Shares) != 1 || listed.Shares[0].ID != share.ID || listed.Shares[0].Principal != "consumer" {
 		t.Fatalf("provider cannot recover the issued share: %#v", listed)
@@ -205,7 +205,7 @@ func managedHumanJourney(t *testing.T) {
 	consumerClient := productClient(t, server.URL, "consumer")
 	// A consumer cannot re-share, enumerate grants, or revoke the owner's
 	// share. The succeeding read and pin prove denial kept legitimate rights.
-	expectRepositoryShareCode(consumerClient, repository, "another-reader", "knowledge.read", "FORBIDDEN")
+	expectRepositoryShareCode(consumerClient, repository, "another-reader", "object.read", "FORBIDDEN")
 	expectRepositorySharesCode(consumerClient, repository, "FORBIDDEN")
 	expectRepositoryShareRevokeCode(consumerClient, repository, shareID, "FORBIDDEN")
 	read := asMap(t, body(t, run("read", testObjectReference(t, repository, "note/one", ""), "--commit", commit)))
@@ -226,7 +226,7 @@ func managedHumanJourney(t *testing.T) {
 	_ = current.(interface{ Close() error }).Close()
 	open()
 	guard.Unlock()
-	replayed := asMap(t, body(t, run("create", "--name", "team-knowledge")))
+	replayed := asMap(t, body(t, run("create", "--name", "team-object")))
 	if replayed["repositoryId"] != repository || replayed["managementURL"] != management || replayed["status"] != "REPLAYED" {
 		t.Fatalf("restart created a different resource: %#v", replayed)
 	}

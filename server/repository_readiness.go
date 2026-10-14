@@ -10,7 +10,7 @@ import (
 )
 
 // RepositoryReadiness keeps publication and search readiness separate.
-// README is a knowledge object on the repository, not title/summary here.
+// README is an object on the repository, not title/summary here.
 // A missing projection is never reported as an empty search result.
 type RepositoryReadiness struct {
 	Publication     string           `json:"publication"`

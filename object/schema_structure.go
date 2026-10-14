@@ -5,7 +5,7 @@ import "kc/kernel"
 // SchemaStructureDigest identifies a normalized schema for handler support
 // matching, excluding only field query access declarations. Every other schema
 // semantic remains part of the match. This does not replace the complete schema
-// digest and pinned reference retained as knowledge and execution evidence.
+// digest and pinned reference retained as object and execution evidence.
 func SchemaStructureDigest(definition SchemaDefinition) kernel.Digest {
 	structure := definition
 	if definition.Fields != nil {

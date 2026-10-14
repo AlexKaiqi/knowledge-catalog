@@ -20,7 +20,7 @@ func TestSnapshotDatasetCheckAuthorizesAllFixedSourcesBeforeBodyProbes(t *testin
 	if err := fixture.catalog.RegisterRepository(second.id); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := fixture.catalog.DefineKnowledgeSet("files", 1, []dataset.KnowledgeSetSource{
+	if _, err := fixture.catalog.DefineDataset("files", 1, []dataset.DatasetSource{
 		{Repository: first.id, Selector: snapshot.DefaultRef, File: "reference/a.json", Target: "first.json"},
 		{Repository: second.id, Selector: snapshot.DefaultRef, File: "selected.txt", Target: "second.txt"},
 	}); err != nil {
@@ -42,7 +42,7 @@ func TestSnapshotDatasetCheckAuthorizesAllFixedSourcesBeforeBodyProbes(t *testin
 	delete(second.files["c1"], "selected.txt")
 	result := datasetHTTPCall(t, fixture.handler(), http.MethodPost, "/snapshot/v1/datasets/files/check", map[string]any{}, http.StatusOK)
 	issues := result["issues"].([]any)
-	if result["outcome"] != "FAILED" || len(issues) != 1 || issues[0].(map[string]any)["code"] != string(kernel.ErrKnowledgeRefUnresolved) || first.reads != 1 || second.reads != 1 {
+	if result["outcome"] != "FAILED" || len(issues) != 1 || issues[0].(map[string]any)["code"] != string(kernel.ErrObjectRefUnresolved) || first.reads != 1 || second.reads != 1 {
 		t.Fatalf("authorized consistency check did not probe actual fixed files: %#v reads=%d/%d", result, first.reads, second.reads)
 	}
 	if testkit.MustHead(t, fixture.authority, snapshot.DefaultRef) != head {
@@ -52,10 +52,10 @@ func TestSnapshotDatasetCheckAuthorizesAllFixedSourcesBeforeBodyProbes(t *testin
 
 func TestSnapshotDatasetCheckCannotBorrowNamedGrantForForgedFileCoordinates(t *testing.T) {
 	fixture, source := newFileHTTPFixture(t)
-	if _, err := fixture.catalog.DefineKnowledgeSet("files", 1, []dataset.KnowledgeSetSource{{Repository: source.id, Selector: snapshot.DefaultRef, File: "reference/a.json", Target: "public.json"}}); err != nil {
+	if _, err := fixture.catalog.DefineDataset("files", 1, []dataset.DatasetSource{{Repository: source.id, Selector: snapshot.DefaultRef, File: "reference/a.json", Target: "public.json"}}); err != nil {
 		t.Fatal(err)
 	}
-	pin, err := fixture.catalog.ResolveKnowledgeSet("files")
+	pin, err := fixture.catalog.ResolveDataset("files")
 	if err != nil {
 		t.Fatal(err)
 	}

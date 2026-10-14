@@ -11,12 +11,12 @@ import (
 // ParseSourceMappings reads portable repository[=selector][@path[@subPath]] mappings.
 // An omitted selector uses snapshot.DefaultRef. An omitted path leaves Path nil;
 // a trailing @ declares the root mount, and a second @ selects the source subtree.
-func ParseSourceMappings(items []string) ([]KnowledgeSetSource, error) {
-	var sources []KnowledgeSetSource
+func ParseSourceMappings(items []string) ([]DatasetSource, error) {
+	var sources []DatasetSource
 	for _, item := range items {
 		item = strings.TrimSpace(item)
 		if item == "" {
-			return nil, fmt.Errorf("--source requires a knowledge source id")
+			return nil, fmt.Errorf("--source requires an object source id")
 		}
 		repoSelector, rest, hasPath := strings.Cut(item, "@")
 		repo, selector, ok := strings.Cut(repoSelector, "=")
@@ -30,7 +30,7 @@ func ParseSourceMappings(items []string) ([]KnowledgeSetSource, error) {
 		if repo == "" {
 			return nil, fmt.Errorf("--source must be <repository>[=selector][@path[@subPath]], got %s", item)
 		}
-		src := KnowledgeSetSource{Repository: kernel.RepositoryID(repo), Selector: selector}
+		src := DatasetSource{Repository: kernel.RepositoryID(repo), Selector: selector}
 		if hasPath {
 			path, subPath, _ := strings.Cut(rest, "@")
 			src.Path = MountPath(path)
@@ -46,11 +46,11 @@ func ParseSourceMappings(items []string) ([]KnowledgeSetSource, error) {
 
 // ParseFileMappings reads portable repository[=selector]@file@target mappings.
 // Each mapping selects a source file and its delivered path; an empty input has no entries.
-func ParseFileMappings(items []string) ([]KnowledgeSetSource, error) {
+func ParseFileMappings(items []string) ([]DatasetSource, error) {
 	if len(items) == 0 {
 		return nil, nil
 	}
-	out := make([]KnowledgeSetSource, 0, len(items))
+	out := make([]DatasetSource, 0, len(items))
 	for _, item := range items {
 		item = strings.TrimSpace(item)
 		if item == "" {
@@ -69,7 +69,7 @@ func ParseFileMappings(items []string) ([]KnowledgeSetSource, error) {
 		if repo == "" {
 			return nil, fmt.Errorf("--file-source must be <repository>[=<selector>]@<file>@<target>, got %s", item)
 		}
-		out = append(out, KnowledgeSetSource{
+		out = append(out, DatasetSource{
 			Repository: kernel.RepositoryID(repo), Selector: selector, File: file, Target: target,
 		})
 	}

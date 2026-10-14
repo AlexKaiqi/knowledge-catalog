@@ -99,7 +99,7 @@ func (e MaintenanceExecutor) Execute(ctx context.Context, operation objectmodel.
 
 func maintenanceUnits(repo objectmodel.Repository, id objectmodel.ObjectID, base kernel.CommitID) ([]objectmodel.Address, error) {
 	value, err := repo.Read(id, base)
-	if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+	if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 		return nil, nil
 	}
 	if err != nil {

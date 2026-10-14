@@ -89,7 +89,7 @@ func TestInventoryDiscoveryActualServerPinsSelectedSourcesAndMasksBodies(t *test
 		t.Fatalf("coordinate resolve required body grants %d %#v", status, pin)
 	}
 	search := func() map[string]any {
-		status, out := post("viewer", "/knowledge/v1/search", map[string]any{
+		status, out := post("viewer", "/object/v1/search", map[string]any{
 			"dataset": "published", "pin": pin, "inventoryDiscovery": true, "query": "discovery phrase",
 		})
 		if status != http.StatusOK {
@@ -117,7 +117,7 @@ func TestInventoryDiscoveryActualServerPinsSelectedSourcesAndMasksBodies(t *test
 	if strings.Contains(string(raw), "confidential") || strings.Contains(string(raw), "excludedbody") {
 		t.Fatalf("discovery leaked Canonical body %s", raw)
 	}
-	readGrant := asMap(t, body(t, admin("grant", "add", "--principal", "viewer", "--repo", repos[0], "--action", "knowledge.read")))
+	readGrant := asMap(t, body(t, admin("grant", "add", "--principal", "viewer", "--repo", repos[0], "--action", "object.read")))
 	result = search()
 	checkSelection(result)
 	raw, _ = json.Marshal(result)
@@ -142,7 +142,7 @@ func TestInventoryDiscoveryActualServerPinsSelectedSourcesAndMasksBodies(t *test
 		if tc.definition != nil {
 			input["definition"] = tc.definition
 		}
-		status, out := post("viewer", "/knowledge/v1/search", input)
+		status, out := post("viewer", "/object/v1/search", input)
 		if status < 400 || asMap(t, out["error"])["code"] != tc.code {
 			t.Fatalf("discovery scope bypass %d %#v", status, out)
 		}
@@ -150,7 +150,7 @@ func TestInventoryDiscoveryActualServerPinsSelectedSourcesAndMasksBodies(t *test
 	// CATALOG-02: an authenticated principal discovers a public Catalog
 	// without a grant; discovery delivery stays masked (no bodies) and is
 	// pinned to the configured discovery Workspace.
-	status, out := post("stranger", "/knowledge/v1/search", map[string]any{
+	status, out := post("stranger", "/object/v1/search", map[string]any{
 		"dataset": "published", "pin": pin, "inventoryDiscovery": true, "query": "discovery phrase",
 	})
 	if status != http.StatusOK || out["completeness"] != "complete" {

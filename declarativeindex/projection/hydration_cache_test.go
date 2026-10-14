@@ -38,10 +38,10 @@ func TestSearchReusesHydrationCacheAcrossQueriesAndRejectsWrongBasis(t *testing.
 		if err != nil || len(result.Hits) != 1 {
 			t.Fatalf("cached query: %+v %v", result, err)
 		}
-		if result.Hits[0].Knowledge.Value.(map[string]any)["body"] != "runbook alpha" {
+		if result.Hits[0].Object.Value.(map[string]any)["body"] != "runbook alpha" {
 			t.Fatal("shared cached value was mutated")
 		}
-		result.Hits[0].Knowledge.Value.(map[string]any)["body"] = "caller mutation"
+		result.Hits[0].Object.Value.(map[string]any)["body"] = "caller mutation"
 	}
 	objectReads := 0
 	for _, batch := range wrapped.batches {

@@ -245,7 +245,7 @@ func productObjectID(obj map[string]any) string {
 			return v
 		}
 	}
-	if ref, ok := asObjectMap(obj["knowledgeRef"]); ok {
+	if ref, ok := asObjectMap(obj["objectRef"]); ok {
 		if v := stringField(ref, "object"); v != "" {
 			return v
 		}

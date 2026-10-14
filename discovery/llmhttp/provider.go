@@ -136,7 +136,7 @@ func (p *Provider) Rerank(ctx context.Context, request retrieval.RerankRequest) 
 	if p == nil {
 		return retrieval.RerankProviderResult{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "LLM reranker is not configured")
 	}
-	ids := make(map[string]objectmodel.KnowledgeRef, len(request.Candidates))
+	ids := make(map[string]objectmodel.ObjectRef, len(request.Candidates))
 	candidates := make([]modelCandidate, len(request.Candidates))
 	for i, candidate := range request.Candidates {
 		id := fmt.Sprintf("candidate_%d", i+1)
@@ -228,8 +228,8 @@ func (p *Provider) Rerank(ctx context.Context, request retrieval.RerankRequest) 
 	return result, nil
 }
 
-func resolveCandidateIDs(known map[string]objectmodel.KnowledgeRef, ids []string) ([]objectmodel.KnowledgeRef, error) {
-	refs := make([]objectmodel.KnowledgeRef, len(ids))
+func resolveCandidateIDs(known map[string]objectmodel.ObjectRef, ids []string) ([]objectmodel.ObjectRef, error) {
+	refs := make([]objectmodel.ObjectRef, len(ids))
 	for i, id := range ids {
 		ref, ok := known[id]
 		if !ok {

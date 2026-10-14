@@ -16,7 +16,7 @@ import (
 
 func applyInterfaceOperations(t *testing.T, state testkit.Setup, base kernel.CommitID, operations []objectmodel.Operation) kernel.CommitID {
 	t.Helper()
-	head, err := state.Repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{TargetRepository: state.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: base, ExpectedTargetCommit: base, Operations: operations})
+	head, err := state.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{TargetRepository: state.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: base, ExpectedTargetCommit: base, Operations: operations})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +39,7 @@ func fixedInterfaceAccessReader(t *testing.T, contracts, state testkit.Setup, co
 			return contracts.Repo, nil
 		}
 		return state.Repo, nil
-	}, reader.KnowledgeSetPin{SetID: "interface-access", Repositories: repositories, Items: reader.WholeRepositoryItems(repositories)})
+	}, reader.DatasetPin{SetID: "interface-access", Repositories: repositories, Items: reader.WholeRepositoryItems(repositories)})
 	implementation, err := interfaces.ResolveObjectInterfaceAt(base, state.RepositoryID, "object/message", "friendly")
 	if err != nil {
 		t.Fatal(err)

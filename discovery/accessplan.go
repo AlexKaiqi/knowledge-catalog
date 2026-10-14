@@ -17,9 +17,9 @@ type AccessPlan struct {
 
 type AccessContractProvider func(objectmodel.Repository, kernel.CommitID) (AccessSpec, error)
 
-func PlanAccess(lookup reader.MemberLookup, pin reader.KnowledgeSetPin, providers ...AccessContractProvider) (AccessPlan, error) {
+func PlanAccess(lookup reader.MemberLookup, pin reader.DatasetPin, providers ...AccessContractProvider) (AccessPlan, error) {
 	if len(pin.Items) == 0 {
-		return AccessPlan{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "dataset pin has no published file list")
+		return AccessPlan{}, kernel.Fail(kernel.ErrDatasetInvalid, "dataset pin has no published file list")
 	}
 	plan := AccessPlan{
 		SetID:              pin.SetID,

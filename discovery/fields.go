@@ -26,7 +26,7 @@ type FieldSet struct {
 }
 
 // ExtractFields interprets the actual adopted Schema of each maintained unit.
-func ExtractFields(repo objectmodel.Repository, value objectmodel.KnowledgeValue, observations []objectmodel.UnitObservation, spec AccessSpec) (FieldSet, error) {
+func ExtractFields(repo objectmodel.Repository, value objectmodel.ObjectValue, observations []objectmodel.UnitObservation, spec AccessSpec) (FieldSet, error) {
 	doc := FieldSet{Kind: fieldObjectKind(value)}
 	eligible := map[string]struct{}{}
 	seenCells := map[string]struct{}{}
@@ -126,7 +126,7 @@ func isStreamBindingUnit(unit objectmodel.UnitDeclaration) bool {
 	return isBindingUnit(unit) && unit.ValueSource.Binding != nil && unit.ValueSource.Binding.Mode == objectmodel.BindingStream
 }
 
-func fieldObjectKind(value objectmodel.KnowledgeValue) objectmodel.AddressKind {
+func fieldObjectKind(value objectmodel.ObjectValue) objectmodel.AddressKind {
 	if value.Address.Kind == objectmodel.KindRelation {
 		return objectmodel.KindRelation
 	}
@@ -138,7 +138,7 @@ func fieldObjectKind(value objectmodel.KnowledgeValue) objectmodel.AddressKind {
 	return objectmodel.KindEntity
 }
 
-func fieldUnits(repo objectmodel.Repository, value objectmodel.KnowledgeValue) []objectmodel.UnitDeclaration {
+func fieldUnits(repo objectmodel.Repository, value objectmodel.ObjectValue) []objectmodel.UnitDeclaration {
 	if len(value.Declarations) > 0 {
 		return value.Declarations
 	}

@@ -1,14 +1,14 @@
 # object/writer/
 
-Writer 是② Knowledge 写入面：一次一个 target、一种 Surface、一个 `command_id`。字面路径写入由 [Snapshot RawWriter](../../snapshot/write_contract.go) 承担。
+Writer 是② Object 写入面：一次一个 target、一种 Surface、一个 `command_id`。字面路径写入由 [Snapshot RawWriter](../../snapshot/write_contract.go) 承担。
 
 ```text
-COMMIT / PROPOSAL  → Knowledge tree codec → snapshot.TreeStore authority
+COMMIT / PROPOSAL  → Object tree codec → snapshot.TreeStore authority
 ChangeSet          → PUT / REMOVE Address
 ```
 
 文件型 authority 的 codec 只读取本次 Operations 涉及的对象 locator 与 unit，并在同一
-TreeChangeSet 更新每对象一个的 `.kc/knowledge-locators/objects/*.entry`；不存在单对象提交时
+TreeChangeSet 更新每对象一个的 `.kc/object-locators/objects/*.entry`；不存在单对象提交时
 重读/重写全仓 manifest 的稳态路径。旧 whole-repository locator 会失败关闭并要求先做显式
 维护入口 `RebuildTreeLocators` 迁移，普通 Writer 请求不会暗中全仓扫描。文件 codec 整批消费根包的
 `object.ApplyUnits`；provider-neutral 单元变更和最终组装只有一份规则，native provider 的 typed
@@ -17,7 +17,7 @@ ChangeSet 合同须保持同一语义，实际文件位置和序列化由格式�
 新提交和显式 locator 重建在派生条目中固定每个 Address 的实际 Path，位置迁移仍保留原身份。
 读取无需从文件名猜测 Aspect/Member；旧 paths-only 条目保持原完整读取与维护入口兼容，精确
 选取通过格式层明确报告缺少坐标，不隐式补读其它单元正文。Canonical 正文格式不变。
-Schema 变更同步更新 `.kc/knowledge-locators/schemas.index` 与 `bindings.index`，后一份目录
+Schema 变更同步更新 `.kc/object-locators/schemas.index` 与 `bindings.index`，后一份目录
 固定 `SchemaDefinition.Bound()` 为真的 Schema 身份。旧布局已有 Schema 却缺 Bound 目录时，
 Schema 写入要求显式 `RebuildTreeLocators`，不能隐式扫描全部 Schema 或遗漏未改的 Bound 声明。
 同一提交按涉及对象的变更前与最终单位集维护每 Schema 的引用者条目及完整性标记；省略
@@ -25,11 +25,11 @@ SchemaRef 的继承、改用另一 Schema、路径迁移和整体删除都沿唯
 演进只读取该固定版反向条目与引用者维护单元，旧版本 Schema 也用精确 locator；没有完整
 反向元数据时明确要求重建，不隐式遍历全仓或把未知引用者当成零引用。
 
-PUT 替换一个完整 Address 单元，可携带 `schema_ref` 与 provenance。Bound State 写在 Domain Schema `origin` 上，Writer 拒绝实例 `value_source.kind=binding`。动态值要沉淀为知识时，墙外 Collector 显式翻译为 Snapshot ChangeSet 再 COMMIT。
+PUT 替换一个完整 Address 单元，可携带 `schema_ref` 与 provenance。Bound State 写在 Domain Schema `origin` 上，Writer 拒绝实例 `value_source.kind=binding`。动态值要沉淀为对象时，墙外 Collector 显式翻译为 Snapshot ChangeSet 再 COMMIT。
 
 更新未指定 `path_hint` 时保留该 Address 的原有路径；显式指定才迁移。原生 provider 接收原始 ChangeSet，合并现有单元后仅为尚无路径的单元分配默认路径，Writer 不提前把路径省略改写成迁移。
 
-`Ingest` / `Reconcile` 只产生 ChangeSet 预览，不是采集框架，也不是 ingestion control（面 3 只追 published HEAD 的派生投影）。产品 CLI 的目录写入是 `writer commit --dir`；一次性接入大量文件时可加 `--bulk` 显式请求介质的批量写通路——只换对象传输原语，CAS 与 commit 语义不变，介质未提供该能力时整条确定性拒绝；可选 `kc diff --dir` 看同一对照，不把 ChangeSet 交给调用方。HTTP Writer 仍收 ChangeSet（含 `bulkIngest`）。PROPOSAL 只推进 candidate Ref；ControlPlane merge 才推进发布 Ref。人在自有 git 上改 frontmatter 不经过本 CLI 时，进 published 的知识发布仍须过与 COMMIT 相同的校验（CI 代发或只验不写，见 `TASK.md` WRITE-VALIDATE）；本包本轮不新增 validate-only 命令。部署发布 `systemrepo/content` 完整出版物由 `systemrepo.PublishSystem` 聚合并调用专用 Writer：只写入空的实际 `kr://kc/system` Snapshot，已有内容、Address、Schema 绑定和路径必须与当前版本一致，额外或缺失内容文件拒绝。运行时 Writer 保持拒绝系统仓写入。
+`Ingest` / `Reconcile` 只产生 ChangeSet 预览，不是采集框架，也不是 ingestion control（面 3 只追 published HEAD 的派生投影）。产品 CLI 的目录写入是 `writer commit --dir`；一次性接入大量文件时可加 `--bulk` 显式请求介质的批量写通路——只换对象传输原语，CAS 与 commit 语义不变，介质未提供该能力时整条确定性拒绝；可选 `kc diff --dir` 看同一对照，不把 ChangeSet 交给调用方。HTTP Writer 仍收 ChangeSet（含 `bulkIngest`）。PROPOSAL 只推进 candidate Ref；ControlPlane merge 才推进发布 Ref。人在自有 git 上改 frontmatter 不经过本 CLI 时，进 published 的对象发布仍须过与 COMMIT 相同的校验（CI 代发或只验不写，见 `TASK.md` WRITE-VALIDATE）；本包本轮不新增 validate-only 命令。部署发布 `systemrepo/content` 完整出版物由 `systemrepo.PublishSystem` 聚合并调用专用 Writer：只写入空的实际 `kr://kc/system` Snapshot，已有内容、Address、Schema 绑定和路径必须与当前版本一致，额外或缺失内容文件拒绝。运行时 Writer 保持拒绝系统仓写入。
 
 幂等规则：同 command_id 同 digest 返回原 Receipt（REPLAYED）；同 id 异 digest 是 `IDEMPOTENCY_CONFLICT`。Snapshot CAS 过期是 `NON_FAST_FORWARD`。带 `schema_ref` 的 PUT 必须在 target commit 可解析。DERIVATION 必须携带固定 inputWorkspaceVersionRef 和 algorithm。
 
@@ -49,14 +49,14 @@ major。`schema/core/readme/v1` 是平台 README Aspect：副本必须与 System
 PUT/REMOVE 的 Address 由本批结果承担。REMOVE 一个仍被引用的 `schema/*` 返回
 `SCHEMA_INCOMPATIBLE`。带 `schema_ref` 的实例 PUT 使用同批 Schema 草稿或目标仓固定 basis
 校验；**省略 `schema_ref` 时继承该 Address 已存储的声明并同样校验**，不符合合同返回
-`SCHEMA_INSTANCE_INVALID`，且不推进 Ref。Bound State 的知识声明由 Domain Schema 承载，
+`SCHEMA_INSTANCE_INVALID`，且不推进 Ref。Bound State 的对象声明由 Domain Schema 承载，
 不通过实例 Binding PUT 写入动态值。
 
-Member 可采用带 origin 的固定值 Schema，其知识值仍按原值 Schema 校验；消费时由
+Member 可采用带 origin 的固定值 Schema，其对象值仍按原值 Schema 校验；消费时由
 LiveAccess 采用实际观察。Writer 仍拒绝实例 `value_source.kind=binding`，不将来源值写回
 Snapshot。同提交的固定 locator 记录所采用完整 SchemaRef，保证声明类别及旧版本可复核。
 
-主要文件：`writer.go` 共用校验与 applySnapshot；`commit.go`、`propose.go` 两个 Surface；`schema.go` 校验 Meta Schema、schema_ref 和实例；`idempotency.go` 解释共享 command ledger 中的 Knowledge 请求；`receipt.go` 定义 durable receipt；`preview.go` 只做预览。
+主要文件：`writer.go` 共用校验与 applySnapshot；`commit.go`、`propose.go` 两个 Surface；`schema.go` 校验 Meta Schema、schema_ref 和实例；`idempotency.go` 解释共享 command ledger 中的 Object 请求；`receipt.go` 定义 durable receipt；`preview.go` 只做预览。
 
 ```bash
 go run ./cmd/kc -- writer put --command-id schema-1 --repo kr://acme/public/core \

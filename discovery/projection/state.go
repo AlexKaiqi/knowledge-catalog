@@ -24,5 +24,5 @@ type StateSync struct {
 // ObservationSource supplies verified logical values on fixed declaration coordinates.
 // Projection has no source protocol, credentials or HTTP dependency.
 type ObservationSource interface {
-	ObserveRepositoryValue(context.Context, objectmodel.Repository, objectmodel.KnowledgeValue) (objectmodel.ObservedValue, error)
+	ObserveRepositoryValue(context.Context, objectmodel.Repository, objectmodel.ObjectValue) (objectmodel.ObservedValue, error)
 }

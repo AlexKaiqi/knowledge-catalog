@@ -12,7 +12,7 @@ var rootHelp = `kc — Knowledge Catalog CLI
 
 身份        登录并查看当前身份与已有权限
 组合        查看登记空间、挂接 Repository、发权
-知识        发现对象类型、搜索和读取知识
+对象        发现对象类型、搜索和读取对象
 发布        把目录里的最终样子发布到一个 Repository
 治理（进阶）校验并合入 Proposal
 运维        投影、Hook、Gate 与审计
@@ -25,11 +25,11 @@ var rootHelp = `kc — Knowledge Catalog CLI
 授权与登记历史：kc help grant | kc help registry
 只读文件视图：kcfs help
 命令帮助：kc help <组> [<动词>]
-知识访问概览：kc help operations access-spec describe
+对象访问概览：kc help operations access-spec describe
 读取插件说明：kc plugin <名称> help；本地查看调用方法：kc help plugin
 ` + "\n" + objectcli.ModelHelp()
 
-const consumeHelp = `kc help consume — 连接服务并读取知识
+const consumeHelp = `kc help consume — 连接服务并读取对象
 
 第一次使用先取得服务地址与该部署支持的登录方式：kc help login。
 要消费原始文件，走 kc help files；要理解来源仓与固定交付范围，走 kc help snapshot。
@@ -53,7 +53,7 @@ const writeHelp = `kc help write — 创建并发布一个 Repository
   kc writer commit --command-id <id> --repo <id> --dir <drafts>
   kc attach --repo <id>
   kc grant add --repo <id> --principal <user> \
-    --action knowledge.read,knowledge.search,knowledge.schema.read
+    --action object.read,object.search,object.schema.read
 
 提交前可看：kc diff --repo <id> --dir <drafts>
 `
@@ -139,7 +139,7 @@ var helpGroups = composeLiveAccessHelpGroups(composeDeclarativeIndexHelpGroups(c
 	"identity":    {"login", "logout", "whoami", "admission show"},
 	"admission":   {"admission show"},
 	"composition": {"create"},
-	"knowledge":   {},
+	"object":      {},
 	"publishing":  {"diff", "writer commit", "writer head", "writer receipt"},
 	"writer":      {"writer commit", "writer head", "writer receipt"},
 	"governance":  {"governance proposal create", "governance preview create", "governance preview validate", "governance validation record", "governance proposal merge"},

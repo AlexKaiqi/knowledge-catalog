@@ -18,7 +18,7 @@ import (
 // request DTOs below are resource-specific: no endpoint accepts a CLI verb or
 // an arbitrary flag map.
 func (f *httpFacade) registerManagementRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /knowledge/v1/plugins/{name}", f.pluginHelp)
+	mux.HandleFunc("GET /object/v1/plugins/{name}", f.pluginHelp)
 	f.registerRepositoryRoutes(mux)
 	f.snapshotStoreService().Register(mux)
 	mux.HandleFunc("POST /snapshot/v1/repositories:create", f.registryRepositoryCreate)
@@ -254,7 +254,7 @@ func (f *httpFacade) projectionDescribe(w http.ResponseWriter, r *http.Request) 
 func (f *httpFacade) accessSpecDescribe(w http.ResponseWriter, r *http.Request) {
 	var q accessSpecDescribeRequest
 	if decodeServiceRequest(w, r, &q) {
-		f.executeTyped(w, r, "operations-access-spec-describe", "knowledge.access.describe", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbDescribeAccess}, knowledgeCoordinateFlags(q.Dataset, q.Repository, "", "", q.Pin))
+		f.executeTyped(w, r, "operations-access-spec-describe", "object.access.describe", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbDescribeAccess}, objectCoordinateFlags(q.Dataset, q.Repository, "", "", q.Pin))
 	}
 }
 
@@ -361,7 +361,7 @@ func (f *httpFacade) feedbackRecord(w http.ResponseWriter, r *http.Request) {
 		RetrievalEvidenceID string                          `json:"retrievalEvidenceId,omitempty"`
 		RefineEvidenceID    string                          `json:"refineEvidenceId,omitempty"`
 		Answer              string                          `json:"answer,omitempty"`
-		SelectedRefs        []objectmodel.KnowledgeRef      `json:"selectedRefs,omitempty"`
+		SelectedRefs        []objectmodel.ObjectRef         `json:"selectedRefs,omitempty"`
 		IdealGroups         []observability.RefineRankGroup `json:"idealGroups,omitempty"`
 	}
 	if decodeServiceRequest(w, r, &q) {
@@ -373,7 +373,7 @@ func (f *httpFacade) feedbackRecord(w http.ResponseWriter, r *http.Request) {
 		// A feedback submission is a new traced request. Keep its transport
 		// trace separate from the earlier Agent trace being labelled.
 		flags["_feedback-target-trace-id"] = q.TraceID
-		flags["_feedback-selected"] = append([]objectmodel.KnowledgeRef(nil), q.SelectedRefs...)
+		flags["_feedback-selected"] = append([]objectmodel.ObjectRef(nil), q.SelectedRefs...)
 		flags["_feedback-ideal"] = append([]observability.RefineRankGroup(nil), q.IdealGroups...)
 		f.executeTyped(w, r, "operations-feedback-record", "feedback.write", inv.Command{Stage: invoke.StageHome, Run: inv.VerbRecordFeedback}, flags)
 	}

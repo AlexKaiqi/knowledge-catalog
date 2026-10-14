@@ -10,4 +10,4 @@ path_hint: concepts/registration/definition.md
 
 登记空间 说明哪些来源已登记以及采用哪些版本与文件范围。发现库存不意味着成员仓正文可读，组合不需要先解释 Schema。
 
-相关说明：[知识仓](../repository/definition.md)、[Dataset](../dataset/definition.md)、[身份认证与授权](../../mechanisms/authorization/definition.md)。
+相关说明：[仓](../repository/definition.md)、[Dataset](../dataset/definition.md)、[身份认证与授权](../../mechanisms/authorization/definition.md)。

@@ -20,10 +20,10 @@ func Affordance() PluginAffordance {
   Schema 字段通过 text/filter/sort 明确开放文本发现、类型化过滤或排序；三种资格互不蕴含。
   查看固定声明用 kc schema describe；字段有歧义时使用 schema::aspect::path。
 用法：
-  kc search --repo kr://scene/knowledge --query runbook
+  kc search --repo kr://scene/object --query runbook
   kc search --dataset scene-set --eq amount=100 --sort amount:asc
-  kc relations --repo kr://scene/knowledge --object metric/gmv
-  kc traverse --repo kr://scene/knowledge --object metric/gmv --max-hops 2
+  kc relations --repo kr://scene/object --object metric/gmv
+  kc traverse --repo kr://scene/object --object metric/gmv --max-hops 2
 条件与保证：
   Repo 配置插件；Dataset 使用本次来源仓的贡献及固定范围，不另安装插件。
   先验证声明资格、提供方组合能力、固定版本就绪及当前授权；声明本身不证明能够执行。

@@ -21,7 +21,7 @@ type workspaceFileMountsResponse = files.FileMountsResponse
 type workspaceFileDirectoryResponse = files.FileDirectoryResponse
 type workspaceFileReadResponse = files.FileReadResponse
 
-func (f *httpFacade) snapshotSemanticView(ctx context.Context, opened *Home, caller identity.HTTPIdentity, coordinate files.FileCoordinate, cat dataset.Service, definition dataset.KnowledgeSet, pin dataset.ResolvedKnowledgeSet) (files.FileView, error) {
+func (f *httpFacade) snapshotSemanticView(ctx context.Context, opened *Home, caller identity.HTTPIdentity, coordinate files.FileCoordinate, cat dataset.Service, definition dataset.Dataset, pin dataset.ResolvedDataset) (files.FileView, error) {
 	if coordinate.View != inv.SemanticFileViewV1 && coordinate.View != "semantic" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "view must be repository or semantic")
 	}
@@ -83,6 +83,6 @@ func (f *httpFacade) snapshotRecordFileRead(ctx context.Context, opened *Home, c
 	if evidence.File != "" {
 		result = map[string]any{"mountPath": evidence.MountPath, "file": evidence.File, "repository": evidence.Repository, "commit": evidence.Commit}
 	}
-	_, _, err = inv.RecordKnowledgeAccess(opened.Dir, "file-read", flags, result, evidence.Err)
+	_, _, err = inv.RecordObjectAccess(opened.Dir, "file-read", flags, result, evidence.Err)
 	return err
 }

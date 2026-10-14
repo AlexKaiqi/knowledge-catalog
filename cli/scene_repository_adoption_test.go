@@ -14,10 +14,10 @@ func TestSceneRepositoryFixtureRequiresExplicitAccessSelection(t *testing.T) {
 		given, instance string
 		invalid         bool
 	}{
-		{"existing repository kr://scene/knowledge", "", false},
-		{"existing repository kr://scene/knowledge with LiveAccess instance main", "main", false},
-		{"existing repository kr://scene/knowledge with LiveAccess instance", "", true},
-		{"existing repository kr://scene/knowledge with LiveAccess instance main extra", "", true},
+		{"existing repository kr://scene/object", "", false},
+		{"existing repository kr://scene/object with LiveAccess instance main", "main", false},
+		{"existing repository kr://scene/object with LiveAccess instance", "", true},
+		{"existing repository kr://scene/object with LiveAccess instance main extra", "", true},
 	} {
 		t.Run(test.given, func(t *testing.T) {
 			feature, err := parseSceneFeature("Feature: source\nScenario: fixture\nGiven " + test.given + "\n")
@@ -31,7 +31,7 @@ func TestSceneRepositoryFixtureRequiresExplicitAccessSelection(t *testing.T) {
 				t.Fatalf("explicit source fixture did not parse: %#v %v", feature, err)
 			}
 			step := feature.scenarios[0].steps[0]
-			if step.object != "kr://scene/knowledge" || step.accessInstance != test.instance {
+			if step.object != "kr://scene/object" || step.accessInstance != test.instance {
 				t.Fatalf("fixture input acquired an implicit selection: %#v", step)
 			}
 		})

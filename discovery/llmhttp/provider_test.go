@@ -20,8 +20,8 @@ func providerRequest() retrieval.RerankRequest {
 			Criterion: "refund timeout relevance", OutputContract: retrieval.OutputContract{},
 		},
 		Candidates: []retrieval.Candidate{
-			{Ref: objectmodel.KnowledgeRef{Repository: "kr://acme/core", Object: "p1"}, Value: map[string]any{"body": "deploy"}},
-			{Ref: objectmodel.KnowledgeRef{Repository: "kr://acme/core", Object: "p2"}, Value: map[string]any{"body": "refund timeout"}},
+			{Ref: objectmodel.ObjectRef{Repository: "kr://acme/core", Object: "p1"}, Value: map[string]any{"body": "deploy"}},
+			{Ref: objectmodel.ObjectRef{Repository: "kr://acme/core", Object: "p2"}, Value: map[string]any{"body": "refund timeout"}},
 		},
 	}
 }

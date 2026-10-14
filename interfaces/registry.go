@@ -15,19 +15,19 @@ type InterfaceHandler interface {
 	Execute(context.Context, InterfaceCall) (InterfaceResult, error)
 }
 
-// InterfaceRegistration binds one handler release to exact immutable knowledge
+// InterfaceRegistration binds one handler release to exact immutable object
 // contracts and implementation schema structures. Field access declarations do
 // not affect support matching. Supporting another implementation form adds a
 // registration rather than a business type branch to dispatch.
 type InterfaceRegistration struct {
-	Contract                            objectmodel.PinnedKnowledgeRef
+	Contract                            objectmodel.PinnedObjectRef
 	ContractDigest                      kernel.Digest
 	ImplementationSchemaStructureDigest kernel.Digest
 	HandlerRevision                     string
 	Handler                             InterfaceHandler
 }
 
-// InterfaceRegistry is deployment wiring, not another knowledge authority.
+// InterfaceRegistry is deployment wiring, not another object authority.
 // Registration is synchronized and rejects ambiguous support.
 type InterfaceRegistry struct {
 	mu            sync.RWMutex

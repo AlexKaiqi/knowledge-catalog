@@ -36,7 +36,7 @@ type UnitVersion struct {
 	ValueBasis        string                   `json:"valueBasis"`
 }
 
-type KnowledgeVersion struct {
+type ObjectVersion struct {
 	Repository        kernel.RepositoryID           `json:"repository"`
 	ObjectID          objectmodel.ObjectID          `json:"objectId"`
 	DeclarationCommit kernel.CommitID               `json:"declarationCommit"`
@@ -44,10 +44,10 @@ type KnowledgeVersion struct {
 	Observations      []objectmodel.UnitObservation `json:"observations,omitempty"`
 }
 
-type KnowledgeHit struct {
-	Knowledge objectmodel.KnowledgeValue `json:"knowledge"`
-	Version   KnowledgeVersion           `json:"version"`
-	Evidence  []LaneEvidence             `json:"evidence"`
+type ObjectHit struct {
+	Object   objectmodel.ObjectValue `json:"object"`
+	Version  ObjectVersion           `json:"version"`
+	Evidence []LaneEvidence          `json:"evidence"`
 }
 
 type SearchResult struct {
@@ -55,13 +55,13 @@ type SearchResult struct {
 	SearchView          SearchView           `json:"searchView"`
 	Completeness        Completeness         `json:"completeness"`
 	Claims              []string             `json:"claims,omitempty"`
-	Hits                []KnowledgeHit       `json:"hits"`
+	Hits                []ObjectHit          `json:"hits"`
 	Continuation        string               `json:"continuation,omitempty"`
 	Stats               SearchExecutionStats `json:"-"`
 }
 
-func VersionOf(value objectmodel.KnowledgeValue) KnowledgeVersion {
-	version := KnowledgeVersion{
+func VersionOf(value objectmodel.ObjectValue) ObjectVersion {
+	version := ObjectVersion{
 		Repository: value.Repository, ObjectID: value.Address.ObjectID,
 		DeclarationCommit: value.Commit, Units: []UnitVersion{},
 	}

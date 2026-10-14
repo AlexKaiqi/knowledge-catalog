@@ -171,7 +171,7 @@ func TestDirectResourceAccessValidatesPinnedObservation(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ws, flags, binding := directAccessFixture(t)
 			lookup := &directAccessLookup{result: liveaccess.StateObservation{Value: test.value, Basis: test.basis}}
-			output, err := ExecuteApplicationOperation(context.Background(), "knowledge-access", "resource.access",
+			output, err := ExecuteApplicationOperation(context.Background(), "object-access", "resource.access",
 				Command{Stage: invoke.StageGoverned, Run: VerbResourceAccess}, flags, lookup, ws, ws.Dir, nil)
 			assertDirectAccessLookup(t, lookup, binding)
 			if test.code != "" {
@@ -209,7 +209,7 @@ func TestDirectResourceAccessRecordsActualAccessEvidence(t *testing.T) {
 			lookup.source = directAccessHTTPSource(t, lookup)
 			ctx := liveaccess.ContextWithCallerCredentials(context.Background(), liveaccess.CallerCredentialsFromHeader(directAccessProof()))
 			started := time.Now().UTC()
-			result := InvokeApplicationWithTelemetryAtHome(ctx, nil, "knowledge-access", "resource.access",
+			result := InvokeApplicationWithTelemetryAtHome(ctx, nil, "object-access", "resource.access",
 				Command{Stage: invoke.StageGoverned, Run: VerbResourceAccess}, flags, lookup, ws)
 			finished := time.Now().UTC()
 			assertDirectAccessLookup(t, lookup, binding)
@@ -250,11 +250,11 @@ func TestDirectResourceAccessRecordsActualAccessEvidence(t *testing.T) {
 				t.Fatal(err)
 			}
 			assertDirectAccessNoProof(t, audit)
-			for _, target := range event.Knowledge {
-				if target.KnowledgeRef.Repository != binding.Repository || target.KnowledgeRef.Object != binding.Address.ObjectID {
+			for _, target := range event.Object {
+				if target.ObjectRef.Repository != binding.Repository || target.ObjectRef.Object != binding.Address.ObjectID {
 					continue
 				}
-				if target.KnowledgeRef.Commit != binding.DeclarationCommit || target.Address == nil || *target.Address != binding.Address {
+				if target.ObjectRef.Commit != binding.DeclarationCommit || target.Address == nil || *target.Address != binding.Address {
 					t.Fatalf("access evidence lost its fixed declaration: %#v", target)
 				}
 				if test.sourceErr == nil && (len(target.Observations) != 1 || target.Observations[0].DeclarationDigest != binding.DeclarationDigest || target.Observations[0].Basis != lookup.result.Basis) {

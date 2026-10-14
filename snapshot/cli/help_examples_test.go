@@ -23,24 +23,24 @@ func TestSnapshotHelpRecipeExamplesAreCompletePortableInputs(t *testing.T) {
 	if !bytes.Equal(raw, exampleYAML(t, overlay, "recipe.yaml")) {
 		t.Fatal("define and overlay describe different base recipes")
 	}
-	recipe, err := dataset.ParseKnowledgeSetRecipe(raw)
+	recipe, err := dataset.ParseDatasetRecipe(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := dataset.KnowledgeSet{
+	want := dataset.Dataset{
 		SetID: "delivery", Revision: 1,
 		Metadata: map[string]string{"description": "项目材料", "audience": "分析团队"},
-		Sources: []dataset.KnowledgeSetSource{
+		Sources: []dataset.DatasetSource{
 			{Repository: "docs", Selector: snapshot.DefaultRef, Path: dataset.MountPath("reference"), SubPath: "handbook"},
 			{Repository: "archive", Selector: snapshot.DefaultRef, Path: dataset.MountPath("legacy"), SubPath: "handouts"},
 			{Repository: "metrics", Selector: snapshot.DefaultRef, File: "exports/kpi.csv", Target: "data/kpi.csv"},
 		},
 	}
-	definition := dataset.KnowledgeSet{SetID: recipe.Name, Revision: 1, Sources: recipe.Sources(), Metadata: recipe.Metadata}
+	definition := dataset.Dataset{SetID: recipe.Name, Revision: 1, Sources: recipe.Sources(), Metadata: recipe.Metadata}
 	if !reflect.DeepEqual(definition, want) {
 		t.Fatalf("the documented recipe changed its selected files, paths or metadata: %#v", definition)
 	}
-	if err := dataset.ValidateKnowledgeSet(definition); err != nil {
+	if err := dataset.ValidateDataset(definition); err != nil {
 		t.Fatal(err)
 	}
 	file := filepath.Join(t.TempDir(), "recipe.yaml")
@@ -56,7 +56,7 @@ func TestSnapshotHelpRecipeExamplesAreCompletePortableInputs(t *testing.T) {
 func TestSnapshotHelpOverlayExamplesRunOfflineWithoutPublishing(t *testing.T) {
 	help := exampleHelp(t, "dataset overlay")
 	recipeRaw, overlayRaw := exampleYAML(t, help, "recipe.yaml"), exampleYAML(t, help, "overlay.yaml")
-	if _, err := dataset.ParseKnowledgeSetOverlay(overlayRaw); err != nil {
+	if _, err := dataset.ParseDatasetOverlay(overlayRaw); err != nil {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
@@ -78,7 +78,7 @@ func TestSnapshotHelpOverlayExamplesRunOfflineWithoutPublishing(t *testing.T) {
 	if !reflect.DeepEqual(value, want) {
 		t.Fatalf("offline stdout changed the documented range/paths/metadata or froze an unpublished source: %#v", value)
 	}
-	if err := dataset.ValidateKnowledgeSet(want); err != nil {
+	if err := dataset.ValidateDataset(want); err != nil {
 		t.Fatal(err)
 	}
 	flags["out"] = outputFile
@@ -90,16 +90,16 @@ func TestSnapshotHelpOverlayExamplesRunOfflineWithoutPublishing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	merged, err := dataset.ParseKnowledgeSetRecipe(output)
+	merged, err := dataset.ParseDatasetRecipe(output)
 	if err != nil {
 		t.Fatal(err)
 	}
-	definition := dataset.KnowledgeSet{SetID: merged.Name, Revision: 1, Sources: merged.Sources(), Metadata: merged.Metadata}
+	definition := dataset.Dataset{SetID: merged.Name, Revision: 1, Sources: merged.Sources(), Metadata: merged.Metadata}
 	// Portable recipes list mounts before files; the selected coordinates and
 	// target paths must survive that representation change exactly.
-	wantPortable := dataset.KnowledgeSet{
+	wantPortable := dataset.Dataset{
 		SetID: want.SetID, Revision: want.Revision, Metadata: want.Metadata,
-		Sources: []dataset.KnowledgeSetSource{want.Sources[0], want.Sources[2], want.Sources[1], want.Sources[3]},
+		Sources: []dataset.DatasetSource{want.Sources[0], want.Sources[2], want.Sources[1], want.Sources[3]},
 	}
 	if !reflect.DeepEqual(definition, wantPortable) {
 		t.Fatalf("portable output changed the verified candidate: %#v", definition)
@@ -111,11 +111,11 @@ func TestSnapshotHelpOverlayExamplesRunOfflineWithoutPublishing(t *testing.T) {
 	}
 }
 
-func exampleMergedDefinition() dataset.KnowledgeSet {
-	return dataset.KnowledgeSet{
+func exampleMergedDefinition() dataset.Dataset {
+	return dataset.Dataset{
 		SetID: "delivery", Revision: 1,
 		Metadata: map[string]string{"description": "项目材料", "audience": "分析团队"},
-		Sources: []dataset.KnowledgeSetSource{
+		Sources: []dataset.DatasetSource{
 			{Repository: "docs", Selector: snapshot.DefaultRef, Path: dataset.MountPath("reference"), SubPath: "guides"},
 			{Repository: "metrics", Selector: snapshot.DefaultRef, File: "exports/latest.csv", Target: "data/kpi.csv"},
 			{Repository: "assets", Selector: snapshot.DefaultRef, Path: dataset.MountPath("media"), SubPath: "images"},
@@ -133,15 +133,15 @@ func TestSnapshotHelpBaseRevExampleKeepsAHeadCheckRatherThanACommitSelector(t *t
 		t.Fatal("the recipe no longer shows where the optional head check belongs")
 	}
 	raw = bytes.Replace(raw, []byte(optional), []byte(`    baseRev: "`+commit+`"`), 1)
-	recipe, err := dataset.ParseKnowledgeSetRecipe(raw)
+	recipe, err := dataset.ParseDatasetRecipe(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
-	overlay, err := dataset.ParseKnowledgeSetOverlay(exampleYAML(t, help, "overlay.yaml"))
+	overlay, err := dataset.ParseDatasetOverlay(exampleYAML(t, help, "overlay.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	definition, err := dataset.MergeOverlay(dataset.KnowledgeSet{
+	definition, err := dataset.MergeOverlay(dataset.Dataset{
 		SetID: recipe.Name, Revision: 1, Sources: recipe.Sources(), Metadata: recipe.Metadata,
 	}, overlay)
 	if err != nil {
@@ -166,9 +166,9 @@ func TestSnapshotHelpYAMLSelectorsMustBeExplicit(t *testing.T) {
 			raw := bytes.Replace(exampleYAML(t, help, file), []byte("    selector: refs/heads/main\n"), nil, 1)
 			var err error
 			if file == "recipe.yaml" {
-				_, err = dataset.ParseKnowledgeSetRecipe(raw)
+				_, err = dataset.ParseDatasetRecipe(raw)
 			} else {
-				_, err = dataset.ParseKnowledgeSetOverlay(raw)
+				_, err = dataset.ParseDatasetOverlay(raw)
 			}
 			if kernel.CodeOf(err) != kernel.ErrUsageInvalid {
 				t.Fatalf("omitting YAML selector unexpectedly behaved like omitted argv selector: %v", err)
@@ -180,22 +180,22 @@ func TestSnapshotHelpYAMLSelectorsMustBeExplicit(t *testing.T) {
 func TestSnapshotHelpArgvMappingsKeepDefaultSelectorAndSourceTargetOrder(t *testing.T) {
 	for _, row := range []struct {
 		input string
-		want  dataset.KnowledgeSetSource
+		want  dataset.DatasetSource
 	}{
-		{"docs", dataset.KnowledgeSetSource{Repository: "docs", Selector: snapshot.DefaultRef}},
-		{"docs=@", dataset.KnowledgeSetSource{Repository: "docs", Selector: snapshot.DefaultRef, Path: dataset.MountPath("")}},
-		{"kr://scene/knowledge@", dataset.KnowledgeSetSource{Repository: "kr://scene/knowledge", Selector: snapshot.DefaultRef, Path: dataset.MountPath("")}},
-		{"docs@reference@handbook", dataset.KnowledgeSetSource{Repository: "docs", Selector: snapshot.DefaultRef, Path: dataset.MountPath("reference"), SubPath: "handbook"}},
-		{"docs=HEAD@reference@handbook", dataset.KnowledgeSetSource{Repository: "docs", Selector: "HEAD", Path: dataset.MountPath("reference"), SubPath: "handbook"}},
-		{"docs=refs/heads/release@reference@handbook", dataset.KnowledgeSetSource{Repository: "docs", Selector: "refs/heads/release", Path: dataset.MountPath("reference"), SubPath: "handbook"}},
+		{"docs", dataset.DatasetSource{Repository: "docs", Selector: snapshot.DefaultRef}},
+		{"docs=@", dataset.DatasetSource{Repository: "docs", Selector: snapshot.DefaultRef, Path: dataset.MountPath("")}},
+		{"kr://scene/object@", dataset.DatasetSource{Repository: "kr://scene/object", Selector: snapshot.DefaultRef, Path: dataset.MountPath("")}},
+		{"docs@reference@handbook", dataset.DatasetSource{Repository: "docs", Selector: snapshot.DefaultRef, Path: dataset.MountPath("reference"), SubPath: "handbook"}},
+		{"docs=HEAD@reference@handbook", dataset.DatasetSource{Repository: "docs", Selector: "HEAD", Path: dataset.MountPath("reference"), SubPath: "handbook"}},
+		{"docs=refs/heads/release@reference@handbook", dataset.DatasetSource{Repository: "docs", Selector: "refs/heads/release", Path: dataset.MountPath("reference"), SubPath: "handbook"}},
 	} {
 		sources, err := dataset.ParseSourceMappings([]string{row.input})
-		if err != nil || !reflect.DeepEqual(sources, []dataset.KnowledgeSetSource{row.want}) {
+		if err != nil || !reflect.DeepEqual(sources, []dataset.DatasetSource{row.want}) {
 			t.Errorf("source example changed: %s → %#v (%v)", row.input, sources, err)
 		}
 	}
 	files, err := dataset.ParseFileMappings([]string{"docs@handbook/start.md@reference/index.md"})
-	want := []dataset.KnowledgeSetSource{{Repository: "docs", Selector: snapshot.DefaultRef, File: "handbook/start.md", Target: "reference/index.md"}}
+	want := []dataset.DatasetSource{{Repository: "docs", Selector: snapshot.DefaultRef, File: "handbook/start.md", Target: "reference/index.md"}}
 	if err != nil || !reflect.DeepEqual(files, want) {
 		t.Fatalf("file-source example swapped source/target or omitted its default selector: %#v %v", files, err)
 	}
@@ -214,7 +214,7 @@ func TestSnapshotHelpOverlayKeepsUnsupportedSelectorsBeforeSourceResolution(t *t
 	if !reflect.DeepEqual(definition, want) {
 		t.Fatalf("offline overlay must preserve nonempty, consistent unresolved selectors: %#v", definition)
 	}
-	if err := dataset.ValidateKnowledgeSet(definition); err != nil {
+	if err := dataset.ValidateDataset(definition); err != nil {
 		t.Fatalf("shape validation unexpectedly resolved a source reference: %v", err)
 	}
 	for _, claim := range []string{"发布时由连接的 lakeFS 解析", "selector: main", "本机成功不证明输入全合法"} {
@@ -235,16 +235,16 @@ func TestSnapshotHelpOverlayKeepsUncompiledFileTargetsUntilFileListValidation(t 
 	if !reflect.DeepEqual(definition, want) {
 		t.Fatalf("offline overlay did not preserve the uncompiled file target: %#v", definition)
 	}
-	if err := dataset.ValidateKnowledgeSet(definition); err != nil {
+	if err := dataset.ValidateDataset(definition); err != nil {
 		t.Fatalf("shape validation unexpectedly compiled per-file paths: %v", err)
 	}
-	// ReplayDefinition uses the same file-list compiler as PrepareKnowledgeSet,
+	// ReplayDefinition uses the same file-list compiler as PrepareDataset,
 	// without opening sources or accepting a Dataset publication.
-	pin, err := dataset.ReplayDefinition(definition, dataset.ResolvedKnowledgeSet{
+	pin, err := dataset.ReplayDefinition(definition, dataset.ResolvedDataset{
 		SetID: definition.SetID, Revision: definition.Revision,
 		Repositories: map[kernel.RepositoryID]kernel.CommitID{"docs": "test-fixed", "metrics": "test-fixed", "assets": "test-fixed"},
 	})
-	if kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid || len(pin.Items) != 0 {
+	if kernel.CodeOf(err) != kernel.ErrDatasetInvalid || len(pin.Items) != 0 {
 		t.Fatalf("an escaping candidate became a compiled delivery list: %#v %v", pin, err)
 	}
 	for _, claim := range []string{"target: ../outside.csv", "发布前编译文件清单时", "不能成为合法交付"} {
@@ -257,16 +257,16 @@ func TestSnapshotHelpOverlayKeepsUncompiledFileTargetsUntilFileListValidation(t 
 func TestSnapshotHelpOverlayEmptyPatchReturnsBaseWithoutCombinationValidation(t *testing.T) {
 	help := exampleHelp(t, "dataset overlay")
 	raw := bytes.Replace(exampleYAML(t, help, "recipe.yaml"), []byte("path: reference"), []byte("path: ../outside"), 1)
-	recipe, err := dataset.ParseKnowledgeSetRecipe(raw)
+	recipe, err := dataset.ParseDatasetRecipe(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := dataset.KnowledgeSet{SetID: recipe.Name, Revision: 1, Sources: recipe.Sources(), Metadata: recipe.Metadata}
+	want := dataset.Dataset{SetID: recipe.Name, Revision: 1, Sources: recipe.Sources(), Metadata: recipe.Metadata}
 	definition := executeOfflineExample(t, raw, []byte("{}\n"))
 	if !reflect.DeepEqual(definition, want) {
 		t.Fatalf("empty patch changed or reinterpreted its base recipe: %#v", definition)
 	}
-	if kernel.CodeOf(dataset.ValidateKnowledgeSet(definition)) != kernel.ErrKnowledgeSetInvalid {
+	if kernel.CodeOf(dataset.ValidateDataset(definition)) != kernel.ErrDatasetInvalid {
 		t.Fatal("the directory traversal fixture must fail the separate combination validator")
 	}
 	if !strings.Contains(help, "空补丁只返回底稿、不补做组合校验") {
@@ -274,7 +274,7 @@ func TestSnapshotHelpOverlayEmptyPatchReturnsBaseWithoutCombinationValidation(t 
 	}
 }
 
-func executeOfflineExample(t *testing.T, recipeRaw, overlayRaw []byte) dataset.KnowledgeSet {
+func executeOfflineExample(t *testing.T, recipeRaw, overlayRaw []byte) dataset.Dataset {
 	t.Helper()
 	dir := t.TempDir()
 	recipeFile, overlayFile := filepath.Join(dir, "recipe.yaml"), filepath.Join(dir, "overlay.yaml")
@@ -286,7 +286,7 @@ func executeOfflineExample(t *testing.T, recipeRaw, overlayRaw []byte) dataset.K
 	if err != nil {
 		t.Fatal(err)
 	}
-	definition, ok := value.(dataset.KnowledgeSet)
+	definition, ok := value.(dataset.Dataset)
 	if !ok {
 		t.Fatalf("offline overlay returned an accepted or remote result instead of a candidate: %#v", value)
 	}

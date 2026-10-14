@@ -26,7 +26,7 @@ type datasetPreparationSource struct {
 	dsn       string
 	at        kernel.CommitID
 	mount     string
-	canonical objectmodel.KnowledgeValue
+	canonical objectmodel.ObjectValue
 }
 
 func newDatasetPreparationHome(t *testing.T, indexedPlugin string, metadataStatus int) (*Home, datasetPreparationSource, datasetPreparationSource) {
@@ -94,13 +94,13 @@ func seedDatasetPreparationSource(t *testing.T, fake *testkit.LakeFSFake, mount,
 	}
 	repo := testkit.OpenRepository(t, raw)
 	root := testkit.MustHead(t, raw, snapshot.DefaultRef)
-	knowledge, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	object, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: source.id, TargetRef: snapshot.DefaultRef, BaseCommit: root, ExpectedTargetCommit: root,
 		Operations: []objectmodel.Operation{
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/article"}, PathHint: "knowledge/schema.yaml", Value: map[string]any{
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/article"}, PathHint: "object/schema.yaml", Value: map[string]any{
 				"entity": "Article", "fields": map[string]any{"body": map[string]any{"type": "string", "access": []any{"text"}}},
 			}},
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: objectmodel.ObjectID("article/" + mount)}, PathHint: "knowledge/article.yaml", SchemaRef: "schema/article", Value: map[string]any{
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: objectmodel.ObjectID("article/" + mount)}, PathHint: "object/article.yaml", SchemaRef: "schema/article", Value: map[string]any{
 				"body": "runbook " + mount, "detail": "complete canonical " + mount,
 			}},
 		},
@@ -117,7 +117,7 @@ func seedDatasetPreparationSource(t *testing.T, fake *testkit.LakeFSFake, mount,
 		t.Fatal(err)
 	}
 	receipt, err := writer.Commit("literal-note", snapshot.TreeChangeSet{
-		TargetRepository: source.id, TargetRef: snapshot.DefaultRef, BaseCommit: knowledge, ExpectedTargetCommit: knowledge,
+		TargetRepository: source.id, TargetRef: snapshot.DefaultRef, BaseCommit: object, ExpectedTargetCommit: object,
 		Changes: []snapshot.TreeChange{{Path: "notes/readme.txt", Content: []byte("literal " + mount)}},
 	})
 	if err != nil {
@@ -131,8 +131,8 @@ func seedDatasetPreparationSource(t *testing.T, fake *testkit.LakeFSFake, mount,
 	return source
 }
 
-func (s datasetPreparationSource) mapping() dataset.KnowledgeSetSource {
-	return dataset.KnowledgeSetSource{Repository: s.id, Selector: snapshot.DefaultRef, BaseRev: string(s.at), Path: dataset.MountPath(s.mount)}
+func (s datasetPreparationSource) mapping() dataset.DatasetSource {
+	return dataset.DatasetSource{Repository: s.id, Selector: snapshot.DefaultRef, BaseRev: string(s.at), Path: dataset.MountPath(s.mount)}
 }
 
 func datasetPreparationPublisher(ws *Home) discoverydatasets.DatasetPublisher {
@@ -142,18 +142,18 @@ func datasetPreparationPublisher(ws *Home) discoverydatasets.DatasetPublisher {
 	}
 }
 
-func assertDatasetPreparationReads(t *testing.T, ws *Home, def dataset.KnowledgeSet, sources ...datasetPreparationSource) {
+func assertDatasetPreparationReads(t *testing.T, ws *Home, def dataset.Dataset, sources ...datasetPreparationSource) {
 	t.Helper()
-	resolved, err := ws.Datasets.ResolveKnowledgeSet(def.SetID)
+	resolved, err := ws.Datasets.ResolveDataset(def.SetID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pin := reader.KnowledgeSetPin{SetID: resolved.SetID, Revision: resolved.Revision, Repositories: resolved.Repositories}
+	pin := reader.DatasetPin{SetID: resolved.SetID, Revision: resolved.Revision, Repositories: resolved.Repositories}
 	for _, item := range resolved.Items {
 		pin.Items = append(pin.Items, reader.DatasetItem{Target: item.Target, Repository: item.Repository, Commit: item.Commit, Kind: item.Kind, Prefix: item.Prefix, File: item.File})
 	}
 	serving := reader.Open(func(id kernel.RepositoryID) (objectmodel.Repository, error) {
-		return ws.Reader.Require(id, kernel.ErrKnowledgeRefUnresolved)
+		return ws.Reader.Require(id, kernel.ErrObjectRefUnresolved)
 	}, pin)
 	for _, source := range sources {
 		file, err := ws.Datasets.ReadVirtualFileAt(def, resolved, source.mount+"/notes/readme.txt")

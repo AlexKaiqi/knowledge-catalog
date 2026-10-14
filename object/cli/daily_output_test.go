@@ -10,7 +10,7 @@ func TestReadDailyProductView(t *testing.T) {
 	read := Shape("read", map[string]any{
 		"reference":    "urn:kc:object:kr%3A%2F%2Fx:note%2Fhello#/readme",
 		"locator":      "/readme",
-		"knowledgeRef": map[string]any{"object": "note/hello", "repository": "kr://x"},
+		"objectRef":    map[string]any{"object": "note/hello", "repository": "kr://x"},
 		"repository":   "kr://x",
 		"commit":       "c1",
 		"address":      map[string]any{"objectId": "note/hello", "aspectName": "readme", "kind": "Aspect"},

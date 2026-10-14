@@ -66,7 +66,7 @@ func (c *service) UnregisterRepository(repositoryID kernel.RepositoryID) error {
 		return kernel.Fail(kernel.ErrUsageInvalid, "repository id is required")
 	}
 	if _, ok := c.repositories[id]; !ok {
-		return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "repository %s is not registered in this service", id)
+		return kernel.Fail(kernel.ErrDatasetInvalid, "repository %s is not registered in this service", id)
 	}
 	next := c.dumpState()
 	filtered := next.Repositories[:0]
@@ -79,19 +79,19 @@ func (c *service) UnregisterRepository(repositoryID kernel.RepositoryID) error {
 	return c.persist(next, "unregister "+id)
 }
 
-func (c *service) RetireKnowledgeSet(setID string) error {
+func (c *service) RetireDataset(setID string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if err := c.ensureWritable(); err != nil {
 		return err
 	}
 	if _, ok := c.datasets[setID]; !ok {
-		return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "dataset %s is not defined in this service", setID)
+		return kernel.Fail(kernel.ErrDatasetInvalid, "dataset %s is not defined in this service", setID)
 	}
 	next := c.dumpState()
-	for i := range next.KnowledgeSets {
-		if next.KnowledgeSets[i].SetID == setID {
-			next.KnowledgeSets[i].Retired = true
+	for i := range next.Datasets {
+		if next.Datasets[i].SetID == setID {
+			next.Datasets[i].Retired = true
 		}
 	}
 	return c.persist(next, "dataset-retire "+setID)
@@ -106,7 +106,7 @@ func (c *service) ensureWritable() error {
 
 func (c *service) requireRepository(repositoryID kernel.RepositoryID) error {
 	if !c.HasRepository(repositoryID) {
-		return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "repository %s is not registered in this service", repositoryID)
+		return kernel.Fail(kernel.ErrDatasetInvalid, "repository %s is not registered in this service", repositoryID)
 	}
 	return nil
 }

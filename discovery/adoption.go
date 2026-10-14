@@ -104,7 +104,7 @@ func AccessSpecFromAdoptions(repo objectmodel.Repository, commit kernel.CommitID
 		verified := false
 		for _, address := range adoption.Witnesses {
 			unit, err := repo.ResolveAddress(address, commit)
-			if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+			if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 				continue
 			}
 			if err != nil {

@@ -8,7 +8,7 @@ import (
 
 func TestDatasetScenePublishesItsSchemaDependencies(t *testing.T) {
 	cache := newSceneHomeCache(t)
-	node := cache.nodes["knowledge-set-defined"]
+	node := cache.nodes["semantic-dataset-defined"]
 	world := cache.replayConstructs(t, append(append([]string{}, node.Ancestors...), node.ID), &sceneRunReport{})
 	defer world.close()
 	plan := body(t, kc(world.home, "operations", "access-spec", "describe", "--dataset", "scene-set"))

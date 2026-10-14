@@ -15,10 +15,10 @@ func TestFileStoreTraceAndVersionedHitmap(t *testing.T) {
 	identity := observability.IdentityContext{Principal: "agent:finance", OnBehalfOf: "user:kai"}
 	trace := observability.TraceContext{TraceID: "trace-1", SpanID: "span-1"}
 	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Metric:gmv", AspectName: "definition"}
-	target := observability.KnowledgeAccess{
-		KnowledgeRef: objectmodel.PinnedKnowledgeRef{
-			KnowledgeRef: objectmodel.KnowledgeRef{Repository: "kr://acme/semantics", Object: "Metric:gmv"},
-			Commit:       "commit-v1",
+	target := observability.ObjectAccess{
+		ObjectRef: objectmodel.PinnedObjectRef{
+			ObjectRef: objectmodel.ObjectRef{Repository: "kr://acme/semantics", Object: "Metric:gmv"},
+			Commit:    "commit-v1",
 		},
 		Address: &address,
 	}
@@ -26,7 +26,7 @@ func TestFileStoreTraceAndVersionedHitmap(t *testing.T) {
 		if _, err := store.RecordAccess(context.Background(), observability.AccessEvent{
 			OccurredAt: []string{"2026-08-25T00:00:00.1Z", "2026-08-25T00:00:00.2Z"}[index],
 			Identity:   identity, Trace: trace, Action: action, Decision: "ALLOW", Result: "RESOLVED",
-			Knowledge: []observability.KnowledgeAccess{target},
+			Object: []observability.ObjectAccess{target},
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -46,15 +46,15 @@ func TestFileStoreTraceAndVersionedHitmap(t *testing.T) {
 	if err != nil || len(hits) != 1 {
 		t.Fatalf("hits %#v %v", hits, err)
 	}
-	if hits[0].Hits != 2 || hits[0].KnowledgeRef.Commit != "commit-v1" || hits[0].Principals["agent:finance"] != 2 || hits[0].OnBehalfOf["user:kai"] != 2 {
+	if hits[0].Hits != 2 || hits[0].ObjectRef.Commit != "commit-v1" || hits[0].Principals["agent:finance"] != 2 || hits[0].OnBehalfOf["user:kai"] != 2 {
 		t.Fatal(hits[0])
 	}
 
-	target.KnowledgeRef.Commit = "commit-v2"
+	target.ObjectRef.Commit = "commit-v2"
 	if _, err := store.RecordAccess(context.Background(), observability.AccessEvent{
 		OccurredAt: "2026-08-25T00:00:00.3Z",
 		Identity:   identity, Trace: trace, Action: "read", Decision: "ALLOW", Result: "RESOLVED",
-		Knowledge: []observability.KnowledgeAccess{target},
+		Object: []observability.ObjectAccess{target},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestFileStoreTraceAndVersionedHitmap(t *testing.T) {
 	if err != nil || len(hits) != 2 {
 		t.Fatalf("versioned hits %#v %v", hits, err)
 	}
-	if hits[0].KnowledgeRef.Commit != "commit-v1" || hits[0].Hits != 2 || hits[1].KnowledgeRef.Commit != "commit-v2" || hits[1].Hits != 1 {
+	if hits[0].ObjectRef.Commit != "commit-v1" || hits[0].Hits != 2 || hits[1].ObjectRef.Commit != "commit-v2" || hits[1].Hits != 1 {
 		t.Fatal(hits)
 	}
 }
@@ -114,21 +114,21 @@ func TestAccessReceiptIsGeneratedOnlyAfterDurableAppend(t *testing.T) {
 
 func TestFileStoreAccessQueryByTimeRepositoryPrincipalAndContinuation(t *testing.T) {
 	store := datedFileStore(t)
-	repoA := objectmodel.PinnedKnowledgeRef{
-		KnowledgeRef: objectmodel.KnowledgeRef{Repository: "kr://acme/semantics", Object: "Metric:gmv"},
-		Commit:       "c1",
+	repoA := objectmodel.PinnedObjectRef{
+		ObjectRef: objectmodel.ObjectRef{Repository: "kr://acme/semantics", Object: "Metric:gmv"},
+		Commit:    "c1",
 	}
-	repoB := objectmodel.PinnedKnowledgeRef{
-		KnowledgeRef: objectmodel.KnowledgeRef{Repository: "kr://acme/runbooks", Object: "runbook/refund"},
-		Commit:       "c1",
+	repoB := objectmodel.PinnedObjectRef{
+		ObjectRef: objectmodel.ObjectRef{Repository: "kr://acme/runbooks", Object: "runbook/refund"},
+		Commit:    "c1",
 	}
 	agent := observability.IdentityContext{Principal: "agent:finance"}
 	user := observability.IdentityContext{Principal: "user:kai"}
-	write := func(at string, identity observability.IdentityContext, ref objectmodel.PinnedKnowledgeRef) string {
+	write := func(at string, identity observability.IdentityContext, ref objectmodel.PinnedObjectRef) string {
 		t.Helper()
 		id, err := store.RecordAccessReceipt(observability.AccessEvent{
 			OccurredAt: at, Identity: identity, Action: "read", Decision: "ALLOW", Result: "RESOLVED",
-			Knowledge: []observability.KnowledgeAccess{{KnowledgeRef: ref}},
+			Object: []observability.ObjectAccess{{ObjectRef: ref}},
 		})
 		if err != nil {
 			t.Fatal(err)

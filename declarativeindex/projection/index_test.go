@@ -184,7 +184,7 @@ func TestSupersetResidualRestoresCompleteAndContinuesCandidates(t *testing.T) {
 	request := retrieval.SearchOf(retrieval.SearchEQ("db", "tl"))
 	request.Limit = 1
 	first, err := idx.SearchAt(repo, head, request)
-	if err != nil || first.Completeness != retrieval.CompletenessComplete || len(first.Hits) != 1 || first.Hits[0].Knowledge.Address.ObjectID != "Table:a" || first.Continuation == "" {
+	if err != nil || first.Completeness != retrieval.CompletenessComplete || len(first.Hits) != 1 || first.Hits[0].Object.Address.ObjectID != "Table:a" || first.Continuation == "" {
 		t.Fatalf("first residual page: %#v %v", first, err)
 	}
 	if first.Stats.Candidates != 2 || first.Stats.Hydrated != 2 || first.Stats.Dropped != 1 {
@@ -195,7 +195,7 @@ func TestSupersetResidualRestoresCompleteAndContinuesCandidates(t *testing.T) {
 	}
 	request.Continuation = first.Continuation
 	second, err := idx.SearchAt(repo, head, request)
-	if err != nil || second.Completeness != retrieval.CompletenessComplete || len(second.Hits) != 1 || second.Hits[0].Knowledge.Address.ObjectID != "Table:b" || second.Continuation != "" {
+	if err != nil || second.Completeness != retrieval.CompletenessComplete || len(second.Hits) != 1 || second.Hits[0].Object.Address.ObjectID != "Table:b" || second.Continuation != "" {
 		t.Fatalf("second residual page: %#v %v", second, err)
 	}
 	if second.Stats.Candidates != 1 || second.Stats.Hydrated != 1 || second.Stats.Dropped != 0 {
@@ -343,8 +343,8 @@ func TestIndexPermissionsWhenHinted(t *testing.T) {
 		t.Fatal(err)
 	}
 	hits, err := idx.SearchAt(repo, head, retrieval.SearchOf(retrieval.SearchEQ("principal", "user:a")))
-	if err != nil || len(hits.Hits) != 1 || hits.Hits[0].Knowledge.Address.ObjectID != "Table:t" {
-		t.Fatalf("hinted permissions are knowledge: %#v %v", hits, err)
+	if err != nil || len(hits.Hits) != 1 || hits.Hits[0].Object.Address.ObjectID != "Table:t" {
+		t.Fatalf("hinted permissions are object: %#v %v", hits, err)
 	}
 	miss, err := idx.SearchAt(repo, head, retrieval.SearchOf(retrieval.SearchEQ("principal", "user:b")))
 	if err != nil || len(miss.Hits) != 0 {
@@ -451,11 +451,11 @@ func TestIndexSchemaRefSelectsFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	alpha, err := idx.SearchAt(repo, head, retrieval.SearchOf(retrieval.SearchMATCH("alphasecret")))
-	if err != nil || len(alpha.Hits) != 1 || string(alpha.Hits[0].Knowledge.Address.ObjectID) != "Doc:a" {
+	if err != nil || len(alpha.Hits) != 1 || string(alpha.Hits[0].Object.Address.ObjectID) != "Doc:a" {
 		t.Fatalf("alpha: %#v %v", alpha.Hits, err)
 	}
 	beta, err := idx.SearchAt(repo, head, retrieval.SearchOf(retrieval.SearchMATCH("betanote")))
-	if err != nil || len(beta.Hits) != 1 || string(beta.Hits[0].Knowledge.Address.ObjectID) != "Doc:b" {
+	if err != nil || len(beta.Hits) != 1 || string(beta.Hits[0].Object.Address.ObjectID) != "Doc:b" {
 		t.Fatalf("beta: %#v %v", beta.Hits, err)
 	}
 }
@@ -518,8 +518,8 @@ func TestSearchAtDoesNotRewindLive(t *testing.T) {
 	if err != nil || len(pinHits.Hits) != 1 {
 		t.Fatalf("pin search: %#v %v", pinHits, err)
 	}
-	if pinHits.Hits[0].Knowledge.Commit != c1 {
-		t.Fatalf("hydrate must use the pin, got %s", pinHits.Hits[0].Knowledge.Commit)
+	if pinHits.Hits[0].Object.Commit != c1 {
+		t.Fatalf("hydrate must use the pin, got %s", pinHits.Hits[0].Object.Commit)
 	}
 	laterOnPin, err := idx.SearchAt(repo, c1, retrieval.SearchOf(retrieval.SearchMATCH("later")))
 	if err != nil || len(laterOnPin.Hits) != 0 {
@@ -571,7 +571,7 @@ func TestIndexSharedPathUntypedObjectKeepsLiveAtHead(t *testing.T) {
 		t.Fatalf("untyped note sharing path text must not stall live: %#v %v", desc, err)
 	}
 	hits, err := idx.SearchAt(repo, c3, retrieval.SearchOf(retrieval.SearchMATCH("semantic")))
-	if err != nil || len(hits.Hits) != 1 || hits.Hits[0].Knowledge.Address.ObjectID != "Note:channel" {
+	if err != nil || len(hits.Hits) != 1 || hits.Hits[0].Object.Address.ObjectID != "Note:channel" {
 		t.Fatalf("note must be searchable after shared-path compile: %#v %v", hits, err)
 	}
 	pin, err := idx.DescribeAt(repo, c2)

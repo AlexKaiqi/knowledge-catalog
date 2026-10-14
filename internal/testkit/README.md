@@ -11,4 +11,4 @@
 | `gitea.go` | 进程级 Gitea 测试服务装置；使用包须在 `TestMain` 调 `StopGitea`，不得遗留容器 |
 
 具体适配器合同归具体适配器包；lakeFS 夹具运行 Repository/Writer conformance，真实部署另行验收。
-Gitea 装置供身份认证测试使用。通用知识包测试不得 import 具体 adapter，也不应隐式启动它们。
+Gitea 装置供身份认证测试使用。通用对象包测试不得 import 具体 adapter，也不应隐式启动它们。

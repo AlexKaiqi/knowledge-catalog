@@ -32,12 +32,12 @@ for _, r := range server.Routes() {
 
 ## 插件说明与运行装配
 
-`GET /knowledge/v1/plugins/{name}` 经当前认证主体及 `inventory.read` 返回实际登记的
+`GET /object/v1/plugins/{name}` 经当前认证主体及 `inventory.read` 返回实际登记的
 静态用途、用法和任务入口。它不接受目标或 query 参数，不打开 Home 或构造来源、
 Index、Controller；只有授权文件而没有运行布局时也可读取。说明不代表支持或就绪。
 根 CLI 的离线帮助与此服务读取分别由所属 CLI/SDK 接入。
 
-既有 access-spec describe 继续沿 `knowledge.access.describe` 和获准的固定来源范围，
+既有 access-spec describe 继续沿 `object.access.describe` 和获准的固定来源范围，
 在原 `AccessPlan` 根字段之外附插件简述和帮助入口，不修改 Schema 返回。
 正常服务运行在激活 workers 前由根 Home 执行一次 `VerifyIndexPlugins`；自有连接的
 冷管理恢复不探测插件配置。运行视图不随请求或凭据轮换热加载；变更在下一次根装配生效。

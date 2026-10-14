@@ -25,7 +25,7 @@ func TestWriterRejectsEmptyBusinessObjectIdentityWithoutAdvancingVersion(t *test
 				registry := snapshot.NewRegistry()
 				var store snapshot.Store = base.Snapshot()
 				if native {
-					store = &nativeSchemaRepository{KnowledgeRepository: base}
+					store = &nativeSchemaRepository{ObjectRepository: base}
 				}
 				if err := registry.Add(store); err != nil {
 					t.Fatal(err)

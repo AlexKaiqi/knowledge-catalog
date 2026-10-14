@@ -28,7 +28,7 @@ func resolveObjectInterface(r interfaceResolver, repo objectmodel.Repository, ob
 		return ResolvedInterface{}, err
 	}
 	if declaration.Status != objectmodel.StatusResolved {
-		return ResolvedInterface{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "interface implementation is not resolved at its fixed basis")
+		return ResolvedInterface{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "interface implementation is not resolved at its fixed basis")
 	}
 	implementation, err := ParseInterfaceImplementation(value.Value)
 	if err != nil {
@@ -77,32 +77,32 @@ func resolveObjectInterface(r interfaceResolver, repo objectmodel.Repository, ob
 	return out, nil
 }
 
-func (r interfaceResolver) schema(repository kernel.RepositoryID, commit kernel.CommitID, ref string) (objectmodel.PinnedKnowledgeRef, objectmodel.SchemaDefinition, error) {
+func (r interfaceResolver) schema(repository kernel.RepositoryID, commit kernel.CommitID, ref string) (objectmodel.PinnedObjectRef, objectmodel.SchemaDefinition, error) {
 	parsed, ok := objectmodel.ParseSchemaRef(ref)
 	if !ok || (parsed.Repository != "" && parsed.Repository != repository) {
-		return objectmodel.PinnedKnowledgeRef{}, objectmodel.SchemaDefinition{}, kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "interface schema_ref %q must identify a same-repository schema", ref)
+		return objectmodel.PinnedObjectRef{}, objectmodel.SchemaDefinition{}, kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "interface schema_ref %q must identify a same-repository schema", ref)
 	}
 	if parsed.Commit != "" {
 		commit = parsed.Commit
 	}
 	repo, err := r.lookup(repository, commit)
 	if err != nil {
-		return objectmodel.PinnedKnowledgeRef{}, objectmodel.SchemaDefinition{}, err
+		return objectmodel.PinnedObjectRef{}, objectmodel.SchemaDefinition{}, err
 	}
 	value, err := repo.Read(parsed.Object, commit)
 	if err != nil {
-		return objectmodel.PinnedKnowledgeRef{}, objectmodel.SchemaDefinition{}, err
+		return objectmodel.PinnedObjectRef{}, objectmodel.SchemaDefinition{}, err
 	}
 	schema, err := objectmodel.ParseSchemaDefinition(parsed.Object, value.Value)
-	return objectmodel.PinnedKnowledgeRef{KnowledgeRef: objectmodel.KnowledgeRef{Repository: repository, Object: parsed.Object}, Commit: commit}, schema, err
+	return objectmodel.PinnedObjectRef{ObjectRef: objectmodel.ObjectRef{Repository: repository, Object: parsed.Object}, Commit: commit}, schema, err
 }
 
-func (r interfaceResolver) reference(ref string) (objectmodel.PinnedKnowledgeRef, error) {
+func (r interfaceResolver) reference(ref string) (objectmodel.PinnedObjectRef, error) {
 	if !strings.HasPrefix(ref, "kc://") {
 		if strings.TrimSpace(ref) == "" || strings.Contains(ref, "@") {
-			return objectmodel.PinnedKnowledgeRef{}, kernel.Fail(kernel.ErrUsageInvalid, "invalid interfaceRef %q", ref)
+			return objectmodel.PinnedObjectRef{}, kernel.Fail(kernel.ErrUsageInvalid, "invalid interfaceRef %q", ref)
 		}
-		return objectmodel.PinnedKnowledgeRef{KnowledgeRef: objectmodel.KnowledgeRef{Repository: r.repository, Object: objectmodel.ObjectID(ref)}, Commit: r.commit}, nil
+		return objectmodel.PinnedObjectRef{ObjectRef: objectmodel.ObjectRef{Repository: r.repository, Object: objectmodel.ObjectID(ref)}, Commit: r.commit}, nil
 	}
 	refs := r.pins
 	if refs == nil {
@@ -111,8 +111,8 @@ func (r interfaceResolver) reference(ref string) (objectmodel.PinnedKnowledgeRef
 	for repository, commit := range refs {
 		prefix := objectmodel.FormatPinnedRef(repository, commit, "")
 		if strings.HasPrefix(ref, prefix) && len(ref) > len(prefix) {
-			return objectmodel.PinnedKnowledgeRef{KnowledgeRef: objectmodel.KnowledgeRef{Repository: repository, Object: objectmodel.ObjectID(strings.TrimPrefix(ref, prefix))}, Commit: commit}, nil
+			return objectmodel.PinnedObjectRef{ObjectRef: objectmodel.ObjectRef{Repository: repository, Object: objectmodel.ObjectID(strings.TrimPrefix(ref, prefix))}, Commit: commit}, nil
 		}
 	}
-	return objectmodel.PinnedKnowledgeRef{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "interfaceRef %q is not explicitly available at this pinned scope", ref)
+	return objectmodel.PinnedObjectRef{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "interfaceRef %q is not explicitly available at this pinned scope", ref)
 }

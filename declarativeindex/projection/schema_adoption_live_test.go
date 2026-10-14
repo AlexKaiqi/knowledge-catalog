@@ -8,16 +8,16 @@ import (
 	"kc/internal/testkit"
 	"kc/kernel"
 	objectmodel "kc/object"
-	knowledgemaintenance "kc/object/maintenance"
+	objectmaintenance "kc/object/maintenance"
 	"kc/snapshot"
 )
 
-type adoptionConsumerRepository struct{ *testkit.KnowledgeRepository }
+type adoptionConsumerRepository struct{ *testkit.ObjectRepository }
 
 func (*adoptionConsumerRepository) SchemaReferrerAddresses(objectmodel.ObjectID, kernel.CommitID) ([]objectmodel.Address, error) {
 	panic("consumer enumerated adoption dependencies")
 }
-func (*adoptionConsumerRepository) ScanSnapshotPage(kernel.CommitID, knowledgemaintenance.ScanRequest) (knowledgemaintenance.ScanPage, error) {
+func (*adoptionConsumerRepository) ScanSnapshotPage(kernel.CommitID, objectmaintenance.ScanRequest) (objectmaintenance.ScanPage, error) {
 	panic("consumer scanned object bodies")
 }
 func (r *adoptionConsumerRepository) SchemaObjectIDs(at kernel.CommitID) ([]objectmodel.ObjectID, error) {
@@ -29,7 +29,7 @@ func TestPinnedSchemaDiscoveryRetainsVerifiedAccessAfterProjectionReopen(t *test
 	commit := func(operations ...objectmodel.Operation) kernel.CommitID {
 		t.Helper()
 		base := testkit.MustHead(t, repo, snapshot.DefaultRef)
-		at, err := repo.ApplyKnowledgeCommit(objectmodel.ChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef,
+		at, err := repo.ApplyObjectCommit(objectmodel.ChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef,
 			BaseCommit: base, ExpectedTargetCommit: base, Operations: operations})
 		if err != nil {
 			t.Fatal(err)
@@ -78,7 +78,7 @@ func TestPinnedSchemaDiscoveryRetainsVerifiedAccessAfterProjectionReopen(t *test
 		}
 		for i, expected := range query.want {
 			hit := result.Hits[i]
-			if hit.Knowledge.Address.ObjectID != expected || hit.Knowledge.Commit != head || hit.Version.DeclarationCommit != head {
+			if hit.Object.Address.ObjectID != expected || hit.Object.Commit != head || hit.Version.DeclarationCommit != head {
 				t.Fatalf("%s lost object or version: %#v", query.clause.Op, hit)
 			}
 		}

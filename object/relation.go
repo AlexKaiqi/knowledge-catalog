@@ -14,10 +14,10 @@ const (
 )
 
 // RelationEndpoint is one typed role in a Canonical Relation. ObjectRef is a
-// repository-qualified, path-independent KnowledgeRef.
+// repository-qualified, path-independent ObjectRef.
 type RelationEndpoint struct {
-	Role      string       `json:"role"`
-	ObjectRef KnowledgeRef `json:"objectRef"`
+	Role      string    `json:"role"`
+	ObjectRef ObjectRef `json:"objectRef"`
 }
 
 // CanonicalRelation is the common envelope shared by domain relation types.
@@ -68,7 +68,7 @@ func DecodeRelation(address Address, value any) (CanonicalRelation, error) {
 			return CanonicalRelation{}, kernel.Fail(kernel.ErrUsageInvalid, "relation %s endpoint %d must be an object", address.ObjectID, i)
 		}
 		role, roleOK := relationField(item, "role")
-		objectRef, refOK := relationKnowledgeRef(item["objectRef"])
+		objectRef, refOK := relationObjectRef(item["objectRef"])
 		endpoint := RelationEndpoint{Role: role, ObjectRef: objectRef}
 		if !roleOK || !refOK || endpoint.Role == "" {
 			return CanonicalRelation{}, kernel.Fail(kernel.ErrUsageInvalid, "relation %s endpoint %d requires role and objectRef", address.ObjectID, i)
@@ -105,15 +105,15 @@ func relationField(body map[string]any, field string) (string, bool) {
 	return strings.TrimSpace(text), ok
 }
 
-func relationKnowledgeRef(raw any) (KnowledgeRef, bool) {
+func relationObjectRef(raw any) (ObjectRef, bool) {
 	body, ok := raw.(map[string]any)
 	if !ok {
-		return KnowledgeRef{}, false
+		return ObjectRef{}, false
 	}
 	repository, repositoryOK := relationField(body, "repository")
 	object, objectOK := relationField(body, "object")
 	if !repositoryOK || !objectOK || repository == "" || object == "" {
-		return KnowledgeRef{}, false
+		return ObjectRef{}, false
 	}
-	return KnowledgeRef{Repository: kernel.RepositoryID(repository), Object: ObjectID(object)}, true
+	return ObjectRef{Repository: kernel.RepositoryID(repository), Object: ObjectID(object)}, true
 }

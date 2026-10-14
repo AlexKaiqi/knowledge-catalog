@@ -2,7 +2,7 @@
 """Scale scene smoke runner: drive the performance scene tree end to end.
 
 这不是压测 runner，而是 scenes/ 用例树的**可运行性验证**（SMOKE）：
-- 只经公开 HTTP surface 施压（writer / knowledge / operations / snapshot）；
+- 只经公开 HTTP surface 施压（writer / object / operations / snapshot）；
 - 只绑定 env 配置指向的已部署 KC Server，不启动、不编排任何容器；
 - 以远小于资格档的量级阶梯执行 upload / object-size / read / browse /
   index-update 五族探针，验证链路跑通、计数对账、指标计算与判读正确。
@@ -378,7 +378,7 @@ class SmokeRun:
         rows = []
         for i in range(samples):
             obj = hot[i % len(hot)] if i % 4 == 0 else f"bench/doc-{(i * 7) % self.next_doc:08d}"
-            elapsed, status, _ = self.client.call("POST", "/knowledge/v1/objects:read",
+            elapsed, status, _ = self.client.call("POST", "/object/v1/objects:read",
                                                   {"repository": self.repo, "object": obj})
             rows.append({"object": obj, "ok": status == 200, "ms": elapsed * 1000})
         self.append_samples("probe-read-latency-curve", rows)
@@ -401,7 +401,7 @@ class SmokeRun:
         start = time.monotonic()
         deadline = start + timeout_s
         while time.monotonic() < deadline:
-            _, status, _ = self.client.call("POST", "/knowledge/v1/search",
+            _, status, _ = self.client.call("POST", "/object/v1/search",
                                             {"repository": self.repo, "query": "payload", "limit": 1})
             if status == 200:
                 return (time.monotonic() - start) * 1000
@@ -429,7 +429,7 @@ class SmokeRun:
             self.results["probe-browse-list-curve"] = {"index.recovery_after_burst_ms": None}
             return
         timed = []
-        elapsed, st, _ = self.client.call("POST", "/knowledge/v1/schemas:list", {"repository": self.repo})
+        elapsed, st, _ = self.client.call("POST", "/object/v1/schemas:list", {"repository": self.repo})
         if st == 200:
             timed.append(elapsed * 1000)
         pages = 0
@@ -438,7 +438,7 @@ class SmokeRun:
             body = {"repository": self.repo, "query": "payload", "limit": 10}
             if continuation:
                 body["continuation"] = continuation
-            elapsed, st, page = self.client.call("POST", "/knowledge/v1/search", body)
+            elapsed, st, page = self.client.call("POST", "/object/v1/search", body)
             pages += 1
             if st == 200:
                 timed.append(elapsed * 1000)
@@ -477,7 +477,7 @@ class SmokeRun:
             visible = None
             last_error = ""
             while time.time() < deadline:
-                _, status, sr = self.client.call("POST", "/knowledge/v1/search",
+                _, status, sr = self.client.call("POST", "/object/v1/search",
                                                  {"repository": self.repo, "query": marker, "limit": 10})
                 if status != 200:
                     # 投影重建窗口内 search 可能瞬态失败；记录并重试
@@ -485,7 +485,7 @@ class SmokeRun:
                     time.sleep(0.5)
                     continue
                 hits = sr.get("hits") or []
-                if any(h.get("knowledge", {}).get("knowledgeRef", {}).get("object", "").endswith(f"doc-{first:08d}") for h in hits):
+                if any(h.get("object", {}).get("objectRef", {}).get("object", "").endswith(f"doc-{first:08d}") for h in hits):
                     visible = time.perf_counter()
                     break
                 time.sleep(0.25)
@@ -507,7 +507,7 @@ class SmokeRun:
     # ---- 计数与摘要判定
     def verify_counts(self):
         _, status, desc = self.client.call("POST", "/operations/v1/projections:describe", {"repository": self.repo})
-        # 投影 objectCount 只数可检索知识文档，不含 schema 对象（与 projection controller 口径一致）
+        # 投影 objectCount 只数可检索对象文档，不含 schema 对象（与 projection controller 口径一致）
         expected = self.next_doc
         if status != 200:
             self.note("counts", "INVALID", "projection describe unavailable")

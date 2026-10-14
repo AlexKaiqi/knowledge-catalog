@@ -67,9 +67,9 @@ func TestDatasetRegressionSemanticVFSMustRespectDatasetScope(t *testing.T) {
 	}
 	// The private object's deterministic semantic address is still forbidden
 	// when requested directly, even though it was absent from enumeration.
-	request["file"] = semanticview.Path(objectmodel.KnowledgeValue{Address: objectmodel.Address{ObjectID: "secret"}}, "")
+	request["file"] = semanticview.Path(objectmodel.ObjectValue{Address: objectmodel.Address{ObjectID: "secret"}}, "")
 	status, result, _ = httpSurfaceRequest(t, server, http.MethodPost, "/snapshot/v1/files/file:read", request, principal)
-	if status != http.StatusNotFound || asMap(t, asMap(t, result)["error"])["code"] != string(kernel.ErrKnowledgeRefUnresolved) {
+	if status != http.StatusNotFound || asMap(t, asMap(t, result)["error"])["code"] != string(kernel.ErrObjectRefUnresolved) {
 		t.Fatalf("excluded semantic file did not fail its scope contract: HTTP %d %#v", status, result)
 	}
 }

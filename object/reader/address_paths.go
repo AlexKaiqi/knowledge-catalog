@@ -12,7 +12,7 @@ func (r *treeRepository) addressAtPaths(address objectmodel.Address, commit kern
 		return repofile.Unit{}, err
 	}
 	if !found {
-		return repofile.Unit{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "address is outside selected file paths")
+		return repofile.Unit{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "address is outside selected file paths")
 	}
 	return unit, nil
 }
@@ -41,12 +41,12 @@ func (r *treeRepository) addressUnit(address objectmodel.Address, commit kernel.
 	return r.readmeAddressUnit(address, commit, paths)
 }
 
-func (r *treeRepository) ReadAddressAtPaths(address objectmodel.Address, commit kernel.CommitID, paths []string) (objectmodel.KnowledgeValue, error) {
+func (r *treeRepository) ReadAddressAtPaths(address objectmodel.Address, commit kernel.CommitID, paths []string) (objectmodel.ObjectValue, error) {
 	unit, err := r.addressAtPaths(address, commit, paths)
 	if err != nil {
-		return objectmodel.KnowledgeValue{}, err
+		return objectmodel.ObjectValue{}, err
 	}
-	return objectmodel.KnowledgeValue{KnowledgeRef: objectmodel.KnowledgeRef{Repository: r.ID(), Object: address.ObjectID}, Repository: r.ID(), Commit: commit, Address: unit.Address, Value: unit.Value, Provenance: unit.Provenance, Declarations: []objectmodel.UnitDeclaration{repofile.DeclarationOf(unit)}}, nil
+	return objectmodel.ObjectValue{ObjectRef: objectmodel.ObjectRef{Repository: r.ID(), Object: address.ObjectID}, Repository: r.ID(), Commit: commit, Address: unit.Address, Value: unit.Value, Provenance: unit.Provenance, Declarations: []objectmodel.UnitDeclaration{repofile.DeclarationOf(unit)}}, nil
 }
 
 func (r *treeRepository) ResolveAddressAtPaths(address objectmodel.Address, commit kernel.CommitID, paths []string) (objectmodel.Resolution, error) {

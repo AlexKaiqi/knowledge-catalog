@@ -10,12 +10,12 @@ import (
 	"kc/kernel"
 )
 
-// ResolvedKnowledgeSet is one command pin: the published file list at a Dataset
+// ResolvedDataset is one command pin: the published file list at a Dataset
 // version (and the {Repository → commit} map that list implies). Taken at
-// ResolveKnowledgeSet from frozen source commits, or an overlay for preview.
+// ResolveDataset from frozen source commits, or an overlay for preview.
 // Not a registry object. service stops here: no object_id, no event payload.
 
-type ResolvedKnowledgeSet struct {
+type ResolvedDataset struct {
 	SetID    string `json:"setId"`
 	Revision int    `json:"revision"`
 	// Ref is the published Dataset version label: "vN" for this revision.
@@ -31,28 +31,28 @@ type ResolvedKnowledgeSet struct {
 	PinID string `json:"pinId,omitempty"`
 }
 
-type KnowledgeSetIssue struct {
+type DatasetIssue struct {
 	Repository kernel.RepositoryID `json:"repository"`
 	Code       kernel.ErrorCode    `json:"code"`
 	Message    string              `json:"message"`
 }
 
-type KnowledgeSetCheck struct {
-	SetID   string              `json:"setId"`
-	Outcome string              `json:"outcome"`
-	Issues  []KnowledgeSetIssue `json:"issues"`
+type DatasetCheck struct {
+	SetID   string         `json:"setId"`
+	Outcome string         `json:"outcome"`
+	Issues  []DatasetIssue `json:"issues"`
 }
 
 // HashResolved is the content-address of everything that determines what a
 // consumer would read at this pin. Revision is excluded: two recipe edits
 // that leave membership, layout and commits unchanged are the same pin.
-func HashResolved(setID string, sources []KnowledgeSetSource, repos map[kernel.RepositoryID]kernel.CommitID) string {
+func HashResolved(setID string, sources []DatasetSource, repos map[kernel.RepositoryID]kernel.CommitID) string {
 	keys := make([]string, 0, len(repos))
 	for k := range repos {
 		keys = append(keys, string(k))
 	}
 	sort.Strings(keys)
-	byRepo := map[kernel.RepositoryID][]KnowledgeSetSource{}
+	byRepo := map[kernel.RepositoryID][]DatasetSource{}
 	for _, src := range sources {
 		byRepo[src.Repository] = append(byRepo[src.Repository], src)
 	}
@@ -90,7 +90,7 @@ func HashResolved(setID string, sources []KnowledgeSetSource, repos map[kernel.R
 }
 
 // mountHashToken distinguishes "not a mount" from "mounted at root": both
-// are legal KnowledgeSetSource.Path values but they are not the same pin.
+// are legal DatasetSource.Path values but they are not the same pin.
 func mountHashToken(path *string) string {
 	if path == nil {
 		return "-"
@@ -98,34 +98,34 @@ func mountHashToken(path *string) string {
 	return normalizeMountPath(*path)
 }
 
-func (c *service) ResolveKnowledgeSet(setID string) (ResolvedKnowledgeSet, error) {
-	return c.ResolveKnowledgeSetOverlay(setID, nil)
+func (c *service) ResolveDataset(setID string) (ResolvedDataset, error) {
+	return c.ResolveDatasetOverlay(setID, nil)
 }
 
-func (c *service) ResolveKnowledgeSetOverlay(setID string, overlay map[kernel.RepositoryID]kernel.CommitID) (ResolvedKnowledgeSet, error) {
+func (c *service) ResolveDatasetOverlay(setID string, overlay map[kernel.RepositoryID]kernel.CommitID) (ResolvedDataset, error) {
 	def, err := c.Set(setID)
 	if err != nil {
-		return ResolvedKnowledgeSet{}, err
+		return ResolvedDataset{}, err
 	}
 	return c.ResolveDefinitionOverlay(def, overlay)
 }
 
-func (c *service) ResolveDefinition(def KnowledgeSet) (ResolvedKnowledgeSet, error) {
+func (c *service) ResolveDefinition(def Dataset) (ResolvedDataset, error) {
 	return c.ResolveDefinitionOverlay(def, nil)
 }
 
-func (c *service) ResolveDefinitionOverlay(def KnowledgeSet, overlay map[kernel.RepositoryID]kernel.CommitID) (ResolvedKnowledgeSet, error) {
+func (c *service) ResolveDefinitionOverlay(def Dataset, overlay map[kernel.RepositoryID]kernel.CommitID) (ResolvedDataset, error) {
 	if def.Retired {
-		return ResolvedKnowledgeSet{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "workspace %s is retired", def.SetID)
+		return ResolvedDataset{}, kernel.Fail(kernel.ErrDatasetInvalid, "workspace %s is retired", def.SetID)
 	}
 	if len(def.Sources) == 0 {
-		return ResolvedKnowledgeSet{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "a workspace must contain at least one repository")
+		return ResolvedDataset{}, kernel.Fail(kernel.ErrDatasetInvalid, "a workspace must contain at least one repository")
 	}
 	if err := validateMountPaths(def.Sources); err != nil {
-		return ResolvedKnowledgeSet{}, err
+		return ResolvedDataset{}, err
 	}
 	if err := validateSourceCoordinates(def.Sources); err != nil {
-		return ResolvedKnowledgeSet{}, err
+		return ResolvedDataset{}, err
 	}
 	repositories := map[kernel.RepositoryID]kernel.CommitID{}
 	for _, src := range def.Sources {
@@ -133,38 +133,38 @@ func (c *service) ResolveDefinitionOverlay(def KnowledgeSet, overlay map[kernel.
 			continue
 		}
 		if err := c.requireRepository(src.Repository); err != nil {
-			return ResolvedKnowledgeSet{}, err
+			return ResolvedDataset{}, err
 		}
-		if _, err := c.store.Require(src.Repository, kernel.ErrKnowledgeSetInvalid); err != nil {
-			return ResolvedKnowledgeSet{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "workspace recipe names unknown repository %s", src.Repository)
+		if _, err := c.store.Require(src.Repository, kernel.ErrDatasetInvalid); err != nil {
+			return ResolvedDataset{}, kernel.Fail(kernel.ErrDatasetInvalid, "workspace recipe names unknown repository %s", src.Repository)
 		}
 		repo, _ := c.store.Get(src.Repository)
 		if repo.Archived() {
-			return ResolvedKnowledgeSet{}, kernel.Fail(kernel.ErrRepositoryArchived, "repository %s is archived", src.Repository)
+			return ResolvedDataset{}, kernel.Fail(kernel.ErrRepositoryArchived, "repository %s is archived", src.Repository)
 		}
 		var commit kernel.CommitID
 		if overlayCommit, hit := overlay[src.Repository]; hit {
 			if !repo.HasCommit(overlayCommit) {
-				return ResolvedKnowledgeSet{}, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s does not exist in %s", overlayCommit, src.Repository)
+				return ResolvedDataset{}, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s does not exist in %s", overlayCommit, src.Repository)
 			}
 			commit = overlayCommit
 		} else if src.Commit != "" {
 			if !repo.HasCommit(src.Commit) {
-				return ResolvedKnowledgeSet{}, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s does not exist in %s", src.Commit, src.Repository)
+				return ResolvedDataset{}, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s does not exist in %s", src.Commit, src.Repository)
 			}
 			commit = src.Commit
 		} else {
 			resolved, ok := repo.GetRef(src.Selector)
 			if !ok {
-				return ResolvedKnowledgeSet{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "repository %s has no ref %s", src.Repository, src.Selector)
+				return ResolvedDataset{}, kernel.Fail(kernel.ErrDatasetInvalid, "repository %s has no ref %s", src.Repository, src.Selector)
 			}
 			if src.BaseRev != "" {
 				want := kernel.CommitID(src.BaseRev)
 				if !repo.HasCommit(want) {
-					return ResolvedKnowledgeSet{}, kernel.Fail(kernel.ErrVersionUnresolved, "baseRev %s does not exist in %s", src.BaseRev, src.Repository)
+					return ResolvedDataset{}, kernel.Fail(kernel.ErrVersionUnresolved, "baseRev %s does not exist in %s", src.BaseRev, src.Repository)
 				}
 				if resolved != want {
-					return ResolvedKnowledgeSet{}, kernel.Fail(kernel.ErrNonFastForward,
+					return ResolvedDataset{}, kernel.Fail(kernel.ErrNonFastForward,
 						"repository %s selector %s is at %s, recipe baseRev is %s", src.Repository, src.Selector, resolved, src.BaseRev)
 				}
 			}
@@ -174,14 +174,14 @@ func (c *service) ResolveDefinitionOverlay(def KnowledgeSet, overlay map[kernel.
 	}
 	for repositoryID := range overlay {
 		if _, ok := repositories[repositoryID]; !ok {
-			return ResolvedKnowledgeSet{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "repository %s is not in the workspace", repositoryID)
+			return ResolvedDataset{}, kernel.Fail(kernel.ErrDatasetInvalid, "repository %s is not in the workspace", repositoryID)
 		}
 	}
 	items, err := datasetItemsFromSources(def.Sources, repositories)
 	if err != nil {
-		return ResolvedKnowledgeSet{}, err
+		return ResolvedDataset{}, err
 	}
-	return ResolvedKnowledgeSet{
+	return ResolvedDataset{
 		SetID:        def.SetID,
 		Revision:     def.Revision,
 		Ref:          DatasetVersionRef(def.Revision),
@@ -199,12 +199,12 @@ func DatasetVersionRef(revision int) string {
 	return "v" + strconv.Itoa(revision)
 }
 
-func (c *service) CheckResolved(resolved ResolvedKnowledgeSet) KnowledgeSetCheck {
-	issues := []KnowledgeSetIssue{}
+func (c *service) CheckResolved(resolved ResolvedDataset) DatasetCheck {
+	issues := []DatasetIssue{}
 	for repositoryID, commit := range resolved.Repositories {
 		issues = append(issues, c.checkResolvedItems(resolved, repositoryID, commit)...)
 	}
-	return knowledgeSetCheck(resolved.SetID, issues)
+	return datasetCheck(resolved.SetID, issues)
 }
 
 // CheckResolvedRepository validates the one member a path-routed operation
@@ -212,19 +212,19 @@ func (c *service) CheckResolved(resolved ResolvedKnowledgeSet) KnowledgeSetCheck
 // identity, membership and PinID against the effective definition. This keeps
 // one VFS file read proportional to its owning Repository instead of probing
 // every unrelated member in the Workspace.
-func (c *service) CheckResolvedRepository(resolved ResolvedKnowledgeSet, repositoryID kernel.RepositoryID) KnowledgeSetCheck {
+func (c *service) CheckResolvedRepository(resolved ResolvedDataset, repositoryID kernel.RepositoryID) DatasetCheck {
 	commit, ok := resolved.Repositories[repositoryID]
 	if !ok {
-		return knowledgeSetCheck(resolved.SetID, []KnowledgeSetIssue{{
+		return datasetCheck(resolved.SetID, []DatasetIssue{{
 			Repository: repositoryID,
-			Code:       kernel.ErrKnowledgeSetInvalid,
+			Code:       kernel.ErrDatasetInvalid,
 			Message:    "resolved pin has no commit for repository " + string(repositoryID),
 		}})
 	}
-	return knowledgeSetCheck(resolved.SetID, c.checkResolvedRepository(repositoryID, commit))
+	return datasetCheck(resolved.SetID, c.checkResolvedRepository(repositoryID, commit))
 }
 
-func (c *service) checkResolvedItems(resolved ResolvedKnowledgeSet, repositoryID kernel.RepositoryID, commit kernel.CommitID) []KnowledgeSetIssue {
+func (c *service) checkResolvedItems(resolved ResolvedDataset, repositoryID kernel.RepositoryID, commit kernel.CommitID) []DatasetIssue {
 	issues := c.checkResolvedRepository(repositoryID, commit)
 	if len(issues) != 0 {
 		return issues
@@ -234,36 +234,36 @@ func (c *service) checkResolvedItems(resolved ResolvedKnowledgeSet, repositoryID
 			continue
 		}
 		if item.Commit != commit {
-			issues = append(issues, KnowledgeSetIssue{Repository: repositoryID, Code: kernel.ErrKnowledgeSetInvalid, Message: "selected file disagrees with resolved repository commit"})
+			issues = append(issues, DatasetIssue{Repository: repositoryID, Code: kernel.ErrDatasetInvalid, Message: "selected file disagrees with resolved repository commit"})
 			continue
 		}
 		if err := c.validateSelectedFile(item); err != nil {
-			issues = append(issues, KnowledgeSetIssue{Repository: repositoryID, Code: kernel.CodeOf(err), Message: err.Error()})
+			issues = append(issues, DatasetIssue{Repository: repositoryID, Code: kernel.CodeOf(err), Message: err.Error()})
 		}
 	}
 	return issues
 }
 
-func (c *service) checkResolvedRepository(repositoryID kernel.RepositoryID, commit kernel.CommitID) []KnowledgeSetIssue {
+func (c *service) checkResolvedRepository(repositoryID kernel.RepositoryID, commit kernel.CommitID) []DatasetIssue {
 	if !c.HasRepository(repositoryID) {
-		return []KnowledgeSetIssue{{Repository: repositoryID, Code: kernel.ErrKnowledgeSetInvalid, Message: "repository is not registered in this service"}}
+		return []DatasetIssue{{Repository: repositoryID, Code: kernel.ErrDatasetInvalid, Message: "repository is not registered in this service"}}
 	}
 	if c.store == nil {
-		return []KnowledgeSetIssue{{Repository: repositoryID, Code: kernel.ErrCapabilityUnsatisfied, Message: "service has no snapshot store"}}
+		return []DatasetIssue{{Repository: repositoryID, Code: kernel.ErrCapabilityUnsatisfied, Message: "service has no snapshot store"}}
 	}
 	repo, ok := c.store.Get(repositoryID)
 	if !ok {
-		return []KnowledgeSetIssue{{
+		return []DatasetIssue{{
 			Repository: repositoryID,
 			Code:       kernel.ErrUsageInvalid,
 			Message:    "repository " + string(repositoryID) + " is not attached",
 		}}
 	}
 	if repo.Archived() {
-		return []KnowledgeSetIssue{{Repository: repositoryID, Code: kernel.ErrRepositoryArchived, Message: "repository is archived"}}
+		return []DatasetIssue{{Repository: repositoryID, Code: kernel.ErrRepositoryArchived, Message: "repository is archived"}}
 	}
 	if !repo.HasCommit(commit) {
-		return []KnowledgeSetIssue{{
+		return []DatasetIssue{{
 			Repository: repositoryID,
 			Code:       kernel.ErrVersionUnresolved,
 			Message:    "commit " + string(commit) + " does not exist in " + string(repositoryID),
@@ -272,10 +272,10 @@ func (c *service) checkResolvedRepository(repositoryID kernel.RepositoryID, comm
 	return nil
 }
 
-func knowledgeSetCheck(setID string, issues []KnowledgeSetIssue) KnowledgeSetCheck {
+func datasetCheck(setID string, issues []DatasetIssue) DatasetCheck {
 	outcome := "PASSED"
 	if len(issues) > 0 {
 		outcome = "FAILED"
 	}
-	return KnowledgeSetCheck{SetID: setID, Outcome: outcome, Issues: issues}
+	return DatasetCheck{SetID: setID, Outcome: outcome, Issues: issues}
 }

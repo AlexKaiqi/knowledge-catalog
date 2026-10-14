@@ -15,10 +15,10 @@ type ResolvedInterface struct {
 	Commit                              kernel.CommitID                         `json:"commit"`
 	Address                             objectmodel.Address                     `json:"address"`
 	DeclarationDigest                   kernel.Digest                           `json:"declarationDigest"`
-	Contract                            objectmodel.PinnedKnowledgeRef          `json:"contract"`
+	Contract                            objectmodel.PinnedObjectRef             `json:"contract"`
 	ContractDigest                      kernel.Digest                           `json:"contractDigest"`
 	Definition                          InterfaceDefinition                     `json:"definition"`
-	ImplementationSchema                objectmodel.PinnedKnowledgeRef          `json:"implementationSchema"`
+	ImplementationSchema                objectmodel.PinnedObjectRef             `json:"implementationSchema"`
 	ImplementationSchemaDigest          kernel.Digest                           `json:"implementationSchemaDigest"`
 	ImplementationSchemaStructureDigest kernel.Digest                           `json:"implementationSchemaStructureDigest"`
 	Implementation                      map[string]any                          `json:"implementation"`
@@ -27,7 +27,7 @@ type ResolvedInterface struct {
 }
 
 func ResolveObjectInterface(r *reader.Reader, repository kernel.RepositoryID, commit kernel.CommitID, object objectmodel.ObjectID, member string) (ResolvedInterface, error) {
-	repo, err := r.Require(repository, kernel.ErrKnowledgeRefUnresolved)
+	repo, err := r.Require(repository, kernel.ErrObjectRefUnresolved)
 	if err != nil {
 		return ResolvedInterface{}, err
 	}
@@ -39,7 +39,7 @@ func ResolveObjectInterface(r *reader.Reader, repository kernel.RepositoryID, co
 func ResolveRepoObjectInterface(repo objectmodel.Repository, commit kernel.CommitID, object objectmodel.ObjectID, member string) (ResolvedInterface, error) {
 	return resolveObjectInterface(interfaceResolver{repository: repo.ID(), commit: commit, lookup: func(id kernel.RepositoryID, at kernel.CommitID) (objectmodel.Repository, error) {
 		if id != repo.ID() {
-			return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "interface dependency repository %s is not available", id)
+			return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "interface dependency repository %s is not available", id)
 		}
 		if !repo.HasCommit(at) {
 			return nil, kernel.Fail(kernel.ErrVersionUnresolved, "interface dependency commit %s is unavailable", at)
@@ -57,7 +57,7 @@ func ResolveObjectInterfaceAt(s *reader.Serving, repository kernel.RepositoryID,
 	}
 	resolver := interfaceResolver{repository: repository, commit: s.Pin().Repositories[repository], pins: s.Pin().Repositories, lookup: func(id kernel.RepositoryID, at kernel.CommitID) (objectmodel.Repository, error) {
 		if s.Pin().Repositories[id] != at {
-			return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "interface dependency is outside dataset release")
+			return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "interface dependency is outside dataset release")
 		}
 		return s.Member(id)
 	}}

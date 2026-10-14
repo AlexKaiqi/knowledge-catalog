@@ -27,7 +27,7 @@ const guideDataset = `Dataset 是命名、版本化的文件交付范围，保�
 完整旅程：kc help compose / kc help files；可复制输入：kc help recipe。
 定义查看权、管理权和文件消费权分开；固定版仍受当前权限、来源保留和退役状态约束。`
 
-const guideFiles = `消费 Dataset 的原始交付文件，不需要先学习知识对象、Schema 或建立检索索引。
+const guideFiles = `消费 Dataset 的原始交付文件，不需要先学习对象、Schema 或建立检索索引。
 --path 是交付树中的相对路径，不是原仓路径或对象 ID；只读已选入的材料。
 
 从已有 Dataset 开始（示例 delivery，示例发布版 1）：

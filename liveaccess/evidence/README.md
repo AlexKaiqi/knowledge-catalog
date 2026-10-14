@@ -2,7 +2,7 @@
 
 本包保留消费者读取实际采用的动态值、合法 null 或单值失败，以及固定声明和原观察依据。
 Snapshot 内容仍以固定版本及位置复核；访问过程账只保存本包的 `Reference`，不复制实际载荷。
-审计授权和按请求定位由应用服务负责；本包不访问来源，也不把保留结果变成知识对象。
+审计授权和按请求定位由应用服务负责；本包不访问来源，也不把保留结果变成对象。
 
 - `Sample` 区分 `ValueOutcome` 与 `FailureOutcome`。成功必须有同地址、固定 commit 和声明摘要的合法 `UnitObservation`；失败只含原因，不含值或成功观察。合法 null 明确编码，缺少值不能当作 null。
 - `NewCollector` / `WithCollector` / `Capture` 只在消费请求中捕获已经采用的结果。调用方在选择及核验后捕获，未采用单元不登记；无 Collector 的投影维护不形成消费证据。`Values` / `CapturedValues` 返回独立副本及复制错误。

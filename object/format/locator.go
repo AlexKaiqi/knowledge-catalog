@@ -13,15 +13,15 @@ import (
 // LocatorManifestPath is layer ② exact-read metadata for tree-backed
 // authorities. It maps object identities to bounded unit paths; it contains no
 // relation endpoints, predicates, or searchable body fields.
-const LocatorManifestPath = ".kc/knowledge-units.index"
+const LocatorManifestPath = ".kc/object-units.index"
 
 // LocatorObjectDirectory contains one small entry per object. The filename is
 // a canonical digest rather than the object identity, so identities never
 // become paths and an exact lookup reads one bounded blob.
-const LocatorObjectDirectory = ".kc/knowledge-locators/objects"
-const LocatorCompletePath = ".kc/knowledge-locators/complete"
-const LocatorSchemaIndexPath = ".kc/knowledge-locators/schemas.index"
-const LocatorBindingIndexPath = ".kc/knowledge-locators/bindings.index"
+const LocatorObjectDirectory = ".kc/object-locators/objects"
+const LocatorCompletePath = ".kc/object-locators/complete"
+const LocatorSchemaIndexPath = ".kc/object-locators/schemas.index"
+const LocatorBindingIndexPath = ".kc/object-locators/bindings.index"
 const LocatorCompleteBody = "v2\n"
 
 type ObjectLocatorEntry struct {
@@ -111,16 +111,16 @@ func ReadObjectLocator(tree snapshot.TreeReader, objectID objectmodel.ObjectID, 
 		}
 		return paths, nil
 	}
-	if kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+	if kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		return nil, err
 	}
 	if _, completeErr := tree.ReadFile(LocatorCompletePath, commit); completeErr == nil {
 		return nil, nil
-	} else if kernel.CodeOf(completeErr) != kernel.ErrKnowledgeRefUnresolved {
+	} else if kernel.CodeOf(completeErr) != kernel.ErrObjectRefUnresolved {
 		return nil, completeErr
 	}
 	raw, err = tree.ReadFile(LocatorManifestPath, commit)
-	if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+	if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 		return nil, nil
 	}
 	if err != nil {
@@ -129,7 +129,7 @@ func ReadObjectLocator(tree snapshot.TreeReader, objectID objectmodel.ObjectID, 
 	manifest, err := DecodeLocatorManifest(raw)
 	if err != nil {
 		return nil, kernel.Fail(kernel.ErrPreconditionFailed,
-			"invalid legacy knowledge locator at %s: %v", commit, err)
+			"invalid legacy object locator at %s: %v", commit, err)
 	}
 	return append([]string(nil), manifest.Objects[objectID]...), nil
 }

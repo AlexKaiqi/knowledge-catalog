@@ -9,9 +9,9 @@ import (
 	catalog "kc/snapshot/dataset"
 )
 
-func TestOpenKnowledgeSetDoesNotFollowLaterCommitUntilRepublish(t *testing.T) {
+func TestOpenDatasetDoesNotFollowLaterCommitUntilRepublish(t *testing.T) {
 	s := setupFed(t)
-	defined, err := s.catalog.DefineKnowledgeSet("v", 1, []catalog.KnowledgeSetSource{
+	defined, err := s.catalog.DefineDataset("v", 1, []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 		{Repository: "kr://acme/groups/payments", Selector: "refs/heads/main"},
 	})
@@ -23,7 +23,7 @@ func TestOpenKnowledgeSetDoesNotFollowLaterCommitUntilRepublish(t *testing.T) {
 		t.Fatal("publish must freeze source commits")
 	}
 	head := testkit.MustHead(t, s.publicRepo, "refs/heads/main")
-	later, err := s.publicRepo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	later, err := s.publicRepo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: "kr://acme/public/core", TargetRef: "refs/heads/main",
 		BaseCommit: head, ExpectedTargetCommit: head,
 		Operations: testkit.PutEntity("policy/P-103", map[string]any{"statement": "later"}, ""),
@@ -32,7 +32,7 @@ func TestOpenKnowledgeSetDoesNotFollowLaterCommitUntilRepublish(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	serving, err := testkit.OpenKnowledgeSet(s.catalog, "v")
+	serving, err := testkit.OpenDataset(s.catalog, "v")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,13 +84,13 @@ func TestOpenKnowledgeSetDoesNotFollowLaterCommitUntilRepublish(t *testing.T) {
 			t.Fatal(item.Commit, published)
 		}
 	}
-	if _, err := s.catalog.DefineKnowledgeSet("v", 2, []catalog.KnowledgeSetSource{
+	if _, err := s.catalog.DefineDataset("v", 2, []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 		{Repository: "kr://acme/groups/payments", Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	nextServing, err := testkit.OpenKnowledgeSet(s.catalog, "v")
+	nextServing, err := testkit.OpenDataset(s.catalog, "v")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,24 +114,24 @@ func TestOpenKnowledgeSetDoesNotFollowLaterCommitUntilRepublish(t *testing.T) {
 	if err != nil || len(missing) != 0 {
 		t.Fatal(missing, err)
 	}
-	_, err = testkit.OpenKnowledgeSet(s.catalog, "missing")
-	testkit.ExpectCode(t, err, kernel.ErrKnowledgeSetInvalid)
+	_, err = testkit.OpenDataset(s.catalog, "missing")
+	testkit.ExpectCode(t, err, kernel.ErrDatasetInvalid)
 }
 
-func TestOpenedKnowledgeSetPinDoesNotMoveWithLaterCommit(t *testing.T) {
+func TestOpenedDatasetPinDoesNotMoveWithLaterCommit(t *testing.T) {
 	s := setupFed(t)
-	if _, err := s.catalog.DefineKnowledgeSet("v", 1, []catalog.KnowledgeSetSource{
+	if _, err := s.catalog.DefineDataset("v", 1, []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	serving, err := testkit.OpenKnowledgeSet(s.catalog, "v")
+	serving, err := testkit.OpenDataset(s.catalog, "v")
 	if err != nil {
 		t.Fatal(err)
 	}
 	opened := serving.Pin().Repositories["kr://acme/public/core"]
 	head := testkit.MustHead(t, s.publicRepo, "refs/heads/main")
-	if _, err := s.publicRepo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	if _, err := s.publicRepo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: "kr://acme/public/core", TargetRef: "refs/heads/main",
 		BaseCommit: head, ExpectedTargetCommit: head,
 		Operations: testkit.PutEntity("policy/P-103", map[string]any{"statement": "after-open"}, ""),
@@ -145,7 +145,7 @@ func TestOpenedKnowledgeSetPinDoesNotMoveWithLaterCommit(t *testing.T) {
 	if reads[0].Commit != opened {
 		t.Fatal(reads[0].Commit, opened)
 	}
-	next, err := testkit.OpenKnowledgeSet(s.catalog, "v")
+	next, err := testkit.OpenDataset(s.catalog, "v")
 	if err != nil {
 		t.Fatal(err)
 	}

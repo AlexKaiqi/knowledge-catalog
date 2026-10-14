@@ -206,7 +206,7 @@ func openExistingAuthority(item HomeRepo) (snapshot.Store, error) {
 }
 
 // openRegistryAuthority opens the independent Registry Snapshot. Registry is not a
-// Knowledge Repository: registry authorities open existing remote Snapshots.
+// Object Repository: registry authorities open existing remote Snapshots.
 func openRegistryAuthority(binding RegistryBinding) (snapshot.Store, error) {
 	switch binding.Driver {
 	case "lakefs":

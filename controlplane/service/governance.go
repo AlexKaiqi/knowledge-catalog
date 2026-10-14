@@ -37,11 +37,11 @@ func (e ProposalExecutor) Execute(_ context.Context, request ProposalRequest) (c
 }
 
 type PreviewCreator interface {
-	CreatePreviewAt(dataset.ResolvedKnowledgeSet, controlplane.Proposal) (controlplane.Preview, error)
+	CreatePreviewAt(dataset.ResolvedDataset, controlplane.Proposal) (controlplane.Preview, error)
 }
 
 type PreviewRequest struct {
-	Resolved dataset.ResolvedKnowledgeSet
+	Resolved dataset.ResolvedDataset
 	Proposal controlplane.Proposal
 }
 

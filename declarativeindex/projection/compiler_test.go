@@ -35,7 +35,7 @@ func TestProjectionCompilerRequiresObservationForBindingEligibility(t *testing.T
 		Kind:    objectmodel.ValueSourceBinding,
 		Binding: &objectmodel.BindingDeclaration{Mode: objectmodel.BindingState, Runtime: "fixture", Protocol: "resource-access/v1", Operations: map[string]objectmodel.BindingOperation{"lookup": {Call: "status"}}},
 	})
-	value := objectmodel.KnowledgeValue{
+	value := objectmodel.ObjectValue{
 		Commit: "c1", Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "Table:orders"},
 		Value: map[string]any{"status": nil},
 		Declarations: []objectmodel.UnitDeclaration{{
@@ -75,7 +75,7 @@ func TestProjectionCompilerTreatsMembersAsMaintenanceUnits(t *testing.T) {
 		FieldRef: retrieval.FieldRef{Schema: "schema/tag", Aspect: "tags", Path: "label"},
 		Type:     "string", Access: []reader.AccessHint{reader.HintFilter, reader.HintText},
 	}}}
-	value := objectmodel.KnowledgeValue{
+	value := objectmodel.ObjectValue{
 		Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "Table:orders"},
 		Value: map[string]any{"tags": map[string]any{
 			"owner": map[string]any{"label": "finance"},
@@ -103,7 +103,7 @@ func TestProjectionCompilerPreservesMissingApplicability(t *testing.T) {
 		FieldRef: retrieval.FieldRef{Schema: "schema/table", Aspect: "structure", Path: "owner"},
 		Type:     "string", Access: []reader.AccessHint{reader.HintFilter},
 	}
-	value := objectmodel.KnowledgeValue{
+	value := objectmodel.ObjectValue{
 		Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "Table:orders"},
 		Value:   map[string]any{"structure": map[string]any{"name": "orders"}},
 		Declarations: []objectmodel.UnitDeclaration{{
@@ -121,7 +121,7 @@ func TestProjectionCompilerPreservesMissingApplicability(t *testing.T) {
 }
 
 func TestProjectionCompilerEmitsRelationCore(t *testing.T) {
-	value := objectmodel.KnowledgeValue{
+	value := objectmodel.ObjectValue{
 		Address: objectmodel.Address{Kind: objectmodel.KindRelation, ObjectID: "relation:owned"},
 		Value: map[string]any{
 			"relationId": "relation:owned", "relationType": "owned-by", "direction": "DIRECTED",
@@ -141,7 +141,7 @@ func TestProjectionCompilerEmitsRelationCore(t *testing.T) {
 }
 
 func TestProjectionCompilerRejectsInvalidTypedValue(t *testing.T) {
-	value := objectmodel.KnowledgeValue{
+	value := objectmodel.ObjectValue{
 		Address:      objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "Policy:P-1"},
 		Value:        map[string]any{"score": "not-a-number"},
 		Declarations: []objectmodel.UnitDeclaration{{Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "Policy:P-1"}, SchemaRef: "schema/policy"}},
@@ -159,7 +159,7 @@ func TestProjectionCompilerIndexesObjectReferenceAsKeyword(t *testing.T) {
 		FieldRef: retrieval.FieldRef{Schema: "schema/table", Aspect: "properties", Path: "platformRef"},
 		Type:     "object_ref", Access: []reader.AccessHint{reader.HintFilter},
 	}
-	value := objectmodel.KnowledgeValue{
+	value := objectmodel.ObjectValue{
 		Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "Table:orders"},
 		Value:   map[string]any{"properties": map[string]any{"platformRef": "Platform:warehouse"}},
 		Declarations: []objectmodel.UnitDeclaration{{
@@ -182,7 +182,7 @@ func TestProjectionCompilerIndexesReadmeBodyAsText(t *testing.T) {
 		Type:     "string", Access: []reader.AccessHint{reader.HintText},
 	}
 	body := "# Payments warehouse\n\nPublished metrics."
-	value := objectmodel.KnowledgeValue{
+	value := objectmodel.ObjectValue{
 		Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "payments"},
 		Value:   map[string]any{objectmodel.ReadmeAspect: map[string]any{"body": body}},
 		Declarations: []objectmodel.UnitDeclaration{{
@@ -195,7 +195,7 @@ func TestProjectionCompilerIndexesReadmeBodyAsText(t *testing.T) {
 		t.Fatal(err)
 	}
 	if doc.Text != body {
-		t.Fatalf("README SEARCH must index the knowledge body, not a file path: %#v", doc)
+		t.Fatalf("README SEARCH must index the object body, not a file path: %#v", doc)
 	}
 	if len(doc.Cells) != 1 || doc.Cells[0].TextValue != body || doc.Cells[0].StringValue != nil {
 		t.Fatalf("body is text access, not a keyword term: %#v", doc.Cells)
@@ -212,7 +212,7 @@ func TestProjectionCompilerSkipsStreamBindingUnits(t *testing.T) {
 		Kind:    objectmodel.ValueSourceBinding,
 		Binding: &objectmodel.BindingDeclaration{Mode: objectmodel.BindingStream, Runtime: "fixture", Protocol: "resource-access/v1", Operations: map[string]objectmodel.BindingOperation{"read": {Call: "events"}}},
 	})
-	value := objectmodel.KnowledgeValue{
+	value := objectmodel.ObjectValue{
 		Commit: "c1", Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "Job:orders"},
 		Value: map[string]any{"events": map[string]any{"last": "should-not-index"}},
 		Declarations: []objectmodel.UnitDeclaration{{
@@ -228,6 +228,6 @@ func TestProjectionCompilerSkipsStreamBindingUnits(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(doc.Cells) != 0 || len(doc.EligibleFields) != 0 {
-		t.Fatalf("Stream Binding must not become a snapshot knowledge document: %#v", doc)
+		t.Fatalf("Stream Binding must not become a snapshot object document: %#v", doc)
 	}
 }

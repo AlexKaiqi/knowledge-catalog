@@ -21,13 +21,13 @@ func (ws *Home) wireSidecars() {
 type indexHook struct {
 	controller *maintenance.Coordinator
 	plugins    func() *indexplugins.IndexPlugins
-	knowledge  *reader.Reader
+	object     *reader.Reader
 }
 
 // Indexing is layer ③ over ②: a member attached as a plain snapshot has nothing
 // to index, so it advances without an index pass rather than failing the write.
 func (h *indexHook) AfterSnapshot(ev dataset.Snapshot) error {
-	repo, err := h.knowledge.Wrap(ev.Repository, kernel.ErrCapabilityUnsatisfied)
+	repo, err := h.object.Wrap(ev.Repository, kernel.ErrCapabilityUnsatisfied)
 	if err != nil {
 		if kernel.CodeOf(err) == kernel.ErrCapabilityUnsatisfied {
 			return nil
@@ -48,7 +48,7 @@ func (ws *Home) attachIndex(cat dataset.Service) {
 	if (ws.ObjectMaintenance == nil && ws.Plugins == nil) || cat == nil {
 		return
 	}
-	cat.AddHook(&indexHook{controller: ws.ObjectMaintenance, plugins: func() *indexplugins.IndexPlugins { return ws.Plugins }, knowledge: ws.Reader})
+	cat.AddHook(&indexHook{controller: ws.ObjectMaintenance, plugins: func() *indexplugins.IndexPlugins { return ws.Plugins }, object: ws.Reader})
 }
 
 func (ws *Home) AttachMergeGate(plane *controlplane.ControlPlane) {

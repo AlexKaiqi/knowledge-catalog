@@ -1,0 +1,17 @@
+---
+object_id: kc/capability/search-object
+aspect_name: entrypoints
+kind: Aspect
+path_hint: capabilities/search-object/entrypoints.yaml
+schema_ref: schema/system/capability-entrypoints/v1
+---
+{
+  "commands": [
+    {
+      "action": "object.search",
+      "command": "kc search",
+      "description": "在固定仓或 Dataset 上按 Schema 字段的查询声明检索对象，列出匹配对象",
+      "help": "kc help search"
+    }
+  ]
+}

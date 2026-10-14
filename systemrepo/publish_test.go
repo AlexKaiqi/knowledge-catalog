@@ -87,7 +87,7 @@ func TestPublishSystemSeedsEmptyTreeAndRefusesOverwrite(t *testing.T) {
 		}
 		unit := repofile.Parse(string(raw))
 		if unit == nil {
-			t.Fatalf("published file is not a knowledge unit: %s", file)
+			t.Fatalf("published file is not an object unit: %s", file)
 		}
 		if objectmodel.IsSchemaObject(unit.ObjectID) && !strings.HasPrefix(file, objectmodel.CanonicalSchemaDir+"/") {
 			t.Fatalf("system publication must use the _schemas/ tree, got %s", file)
@@ -136,10 +136,10 @@ func TestPublishSystemRejectsSelfDescriptionDrift(t *testing.T) {
 	}{
 		{"readme", "README.md", "Knowledge Catalog", "Altered Catalog", false},
 		{"concept", "concepts/object/definition.md", "具有独立身份", "没有独立身份", false},
-		{"entrypoint", "capabilities/read-knowledge/entrypoints.yaml", "kc read", "kc invented", false},
-		{"schema binding", "capabilities/read-knowledge/definition.md", "capability-definition/v1", "capability-usage/v1", false},
+		{"entrypoint", "capabilities/read-object/entrypoints.yaml", "kc read", "kc invented", false},
+		{"schema binding", "capabilities/read-object/definition.md", "capability-definition/v1", "capability-usage/v1", false},
 		{"missing guide", "guides/first-publication/guide.md", "", "", true},
-		{"missing relation", "relations/first-publication.uses.publish-knowledge.yaml", "", "", true},
+		{"missing relation", "relations/first-publication.uses.publish-object.yaml", "", "", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := testkit.MakeRepository(t, string(objectmodel.SystemRepositoryID))

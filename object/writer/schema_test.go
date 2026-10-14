@@ -8,24 +8,24 @@ import (
 	"kc/internal/testkit"
 	"kc/kernel"
 	objectmodel "kc/object"
-	knowledgemaintenance "kc/object/maintenance"
+	objectmaintenance "kc/object/maintenance"
 	"kc/object/writer"
 	"kc/snapshot"
 )
 
 type nativeSchemaRepository struct {
-	*testkit.KnowledgeRepository
+	*testkit.ObjectRepository
 }
 
-func (*nativeSchemaRepository) NativeKnowledgeRepository() {}
+func (*nativeSchemaRepository) NativeObjectRepository() {}
 func (*nativeSchemaRepository) ReadFile(string, kernel.CommitID) ([]byte, error) {
 	return nil, errors.New("native schema validation must not read the compatibility tree")
 }
 func (*nativeSchemaRepository) ListFiles(kernel.CommitID) ([]string, error) {
 	return nil, errors.New("native schema validation must not list the compatibility tree")
 }
-func (r *nativeSchemaRepository) ApplyKnowledgeChange(_ string, change objectmodel.ChangeSet) (kernel.CommitID, error) {
-	return r.ApplyKnowledgeCommit(change)
+func (r *nativeSchemaRepository) ApplyObjectChange(_ string, change objectmodel.ChangeSet) (kernel.CommitID, error) {
+	return r.ApplyObjectCommit(change)
 }
 
 // schemaDoc is an entity-level Domain Schema. These fixtures exercise
@@ -394,7 +394,7 @@ func TestSchemaRemovalRequiresNoRemainingReferrers(t *testing.T) {
 		{Kind: objectmodel.KindAspect, ObjectID: "policy/A", AspectName: "structure"},
 	} {
 		_, err := s.Reader.ReadAddress(s.RepositoryID, address, removed.Result.NewCommit)
-		testkit.ExpectCode(t, err, kernel.ErrKnowledgeRefUnresolved)
+		testkit.ExpectCode(t, err, kernel.ErrObjectRefUnresolved)
 	}
 	assertSchemaLifecycleValue(t, s, "schema/policy/structure/v1", published.Result.NewCommit, strictPolicySchema())
 	assertSchemaLifecycleValue(t, s, "policy/A", published.Result.NewCommit, map[string]any{"structure": map[string]any{"name": "freeze"}})
@@ -402,11 +402,11 @@ func TestSchemaRemovalRequiresNoRemainingReferrers(t *testing.T) {
 
 func assertSchemaLifecycleValue(t *testing.T, s testkit.Setup, id objectmodel.ObjectID, commit kernel.CommitID, want any) {
 	t.Helper()
-	value, err := s.Reader.Read(objectmodel.KnowledgeRef{Repository: s.RepositoryID, Object: id}, commit, nil)
+	value, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: id}, commit, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if value.Commit != commit || value.KnowledgeRef.Object != id || kernel.CanonicalDigest(value.Value) != kernel.CanonicalDigest(want) {
+	if value.Commit != commit || value.ObjectRef.Object != id || kernel.CanonicalDigest(value.Value) != kernel.CanonicalDigest(want) {
 		t.Fatalf("Schema lifecycle lost fixed value: got=%#v want object=%s commit=%s value=%#v", value, id, commit, want)
 	}
 }
@@ -487,13 +487,13 @@ func TestSchemaRefPriorCommitAccepted(t *testing.T) {
 	}
 }
 
-func TestSchemaRefPriorCommitUsesNativeKnowledgeLookup(t *testing.T) {
+func TestSchemaRefPriorCommitUsesNativeObjectLookup(t *testing.T) {
 	base := testkit.MakeRepository(t, "kr://acme/public/native")
 	root, err := base.Head(snapshot.DefaultRef)
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := base.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	first, err := base.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: base.ID(), TargetRef: snapshot.DefaultRef,
 		BaseCommit: root, ExpectedTargetCommit: root,
 		Operations: []objectmodel.Operation{{
@@ -503,7 +503,7 @@ func TestSchemaRefPriorCommitUsesNativeKnowledgeLookup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	native := &nativeSchemaRepository{KnowledgeRepository: base}
+	native := &nativeSchemaRepository{ObjectRepository: base}
 	store := snapshot.NewRegistry()
 	if err := store.Add(native); err != nil {
 		t.Fatal(err)
@@ -704,23 +704,23 @@ func TestForkPublishProposesNewObject(t *testing.T) {
 	if testkit.MustHead(t, pub.Repo, "refs/heads/main") != pubHead {
 		t.Fatal("propose moved public main")
 	}
-	if _, err := pub.Reader.Read(objectmodel.KnowledgeRef{Repository: personal.ID(), Object: "drafts/metric-x"}, draft.Result.CommitID, nil); err != nil {
+	if _, err := pub.Reader.Read(objectmodel.ObjectRef{Repository: personal.ID(), Object: "drafts/metric-x"}, draft.Result.CommitID, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pub.Reader.Read(objectmodel.KnowledgeRef{Repository: pub.RepositoryID, Object: "metrics/x"}, pubHead, nil); err == nil {
+	if _, err := pub.Reader.Read(objectmodel.ObjectRef{Repository: pub.RepositoryID, Object: "metrics/x"}, pubHead, nil); err == nil {
 		t.Fatal("new object leaked onto public main")
 	} else {
-		testkit.ExpectCode(t, err, kernel.ErrKnowledgeRefUnresolved)
+		testkit.ExpectCode(t, err, kernel.ErrObjectRefUnresolved)
 	}
 	repoAtHead, err := pub.Reader.Require(pub.RepositoryID, kernel.ErrCapabilityUnsatisfied)
 	if err != nil {
 		t.Fatal(err)
 	}
-	scanner, err := knowledgemaintenance.RequireScanner(repoAtHead)
+	scanner, err := objectmaintenance.RequireScanner(repoAtHead)
 	if err != nil {
 		t.Fatal(err)
 	}
-	page, err := scanner.ScanSnapshotPage(pubHead, knowledgemaintenance.ScanRequest{Limit: 100})
+	page, err := scanner.ScanSnapshotPage(pubHead, objectmaintenance.ScanRequest{Limit: 100})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -729,7 +729,7 @@ func TestForkPublishProposesNewObject(t *testing.T) {
 			t.Fatal("personal object copied into public")
 		}
 	}
-	trace, err := pub.Reader.GetProvenance(objectmodel.KnowledgeRef{Repository: pub.RepositoryID, Object: "metrics/x"}, proposed.Result.CommitID)
+	trace, err := pub.Reader.GetProvenance(objectmodel.ObjectRef{Repository: pub.RepositoryID, Object: "metrics/x"}, proposed.Result.CommitID)
 	if err != nil {
 		t.Fatal(err)
 	}

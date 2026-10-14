@@ -54,7 +54,7 @@ func TestSnapshotRepositoryHTTPFeedsStandaloneFilePublication(t *testing.T) {
 func TestSnapshotRepositoryHTTPInventoryDoesNotGrantOtherScopes(t *testing.T) {
 	fixture, source := newFileHTTPFixture(t)
 	fixture.rules.rules[0].Actions = []string{"inventory.read", "dataset.resolve"}
-	if _, err := fixture.catalog.DefineKnowledgeSet("files", 1, []dataset.KnowledgeSetSource{{Repository: source.id, Selector: snapshot.DefaultRef, File: "reference/a.json", Target: "public.json"}}); err != nil {
+	if _, err := fixture.catalog.DefineDataset("files", 1, []dataset.DatasetSource{{Repository: source.id, Selector: snapshot.DefaultRef, File: "reference/a.json", Target: "public.json"}}); err != nil {
 		t.Fatal(err)
 	}
 	source.reads = 0 // Publication validates bytes; inventory must not read them.
@@ -107,7 +107,7 @@ func TestSnapshotRepositoryHTTPRejectsRetiredCatalogSelection(t *testing.T) {
 	request := datasetHTTPDefinition(1, fixture.source.id)
 	request["catalog"] = "foreign"
 	datasetHTTPCall(t, fixture.handler(), http.MethodPost, "/snapshot/v1/datasets", request, http.StatusBadRequest)
-	if extended || len(fixture.catalog.DumpState().KnowledgeSets) != 0 {
+	if extended || len(fixture.catalog.DumpState().Datasets) != 0 {
 		t.Fatal("retired selector exposed inventory or accepted publication")
 	}
 }

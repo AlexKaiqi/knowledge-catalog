@@ -4,12 +4,12 @@ import (
 	"testing"
 )
 
-func TestAccessExtractionDoesNotInterpretKnowledgePayloadAsEvidence(t *testing.T) {
+func TestAccessExtractionDoesNotInterpretObjectPayloadAsEvidence(t *testing.T) {
 	result := map[string]any{
-		"repository": "kr://acme/knowledge",
+		"repository": "kr://acme/object",
 		"commit":     "commit-real",
-		"knowledgeRef": map[string]any{
-			"repository": "kr://acme/knowledge",
+		"objectRef": map[string]any{
+			"repository": "kr://acme/object",
 			"object":     "Policy:real",
 		},
 		"value": map[string]any{
@@ -18,8 +18,8 @@ func TestAccessExtractionDoesNotInterpretKnowledgePayloadAsEvidence(t *testing.T
 			"objectId":   "payload-business-id",
 		},
 	}
-	hits := KnowledgeAccesses(result)
-	if len(hits) != 1 || hits[0].KnowledgeRef.Object != "Policy:real" {
+	hits := ObjectAccesses(result)
+	if len(hits) != 1 || hits[0].ObjectRef.Object != "Policy:real" {
 		t.Fatalf("payload fields became access evidence: %#v", hits)
 	}
 }
@@ -37,13 +37,13 @@ func TestCheckoutExtractionSeparatesSnapshotsFromFiles(t *testing.T) {
 	}
 }
 
-func TestSearchResultExtractionUsesHydratedKnowledge(t *testing.T) {
+func TestSearchResultExtractionUsesHydratedObject(t *testing.T) {
 	result := map[string]any{"hits": []any{
-		map[string]any{"knowledge": map[string]any{
-			"repository": "kr://acme/knowledge",
+		map[string]any{"object": map[string]any{
+			"repository": "kr://acme/object",
 			"commit":     "commit-search",
-			"knowledgeRef": map[string]any{
-				"repository": "kr://acme/knowledge",
+			"objectRef": map[string]any{
+				"repository": "kr://acme/object",
 				"object":     "Metric:gmv",
 			},
 			"value": map[string]any{"repository": "opaque", "commit": "opaque", "objectId": "opaque"},
@@ -53,8 +53,8 @@ func TestSearchResultExtractionUsesHydratedKnowledge(t *testing.T) {
 			"basis": map[string]any{"bindingGeneration": "g1", "consistency": "latest-only", "observedAt": "2026-08-27T13:00:00Z"},
 		}}}},
 	}}
-	hits := KnowledgeAccesses(result)
-	if len(hits) != 1 || hits[0].KnowledgeRef.Object != "Metric:gmv" || hits[0].KnowledgeRef.Commit != "commit-search" {
+	hits := ObjectAccesses(result)
+	if len(hits) != 1 || hits[0].ObjectRef.Object != "Metric:gmv" || hits[0].ObjectRef.Commit != "commit-search" {
 		t.Fatalf("hydrated search evidence missing: %#v", hits)
 	}
 	if len(hits[0].Observations) != 1 || hits[0].Observations[0].Basis.BindingGeneration != "g1" {

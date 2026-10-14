@@ -15,7 +15,7 @@ import (
 
 func publishedLiveImplementation(t *testing.T) interfaces.ResolvedInterface {
 	t.Helper()
-	live := interfaces.ResolvedInterface{Repository: "kr://test/live", Commit: "live-7", Address: objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: "table/orders", AspectName: interfaces.ObjectInterfacesAspect, MemberKey: "live"}, Contract: objectmodel.PinnedKnowledgeRef{KnowledgeRef: objectmodel.KnowledgeRef{Repository: "kr://test/live", Object: liveaccesscontract.LiveAccessInterfaceV1}, Commit: "live-7"}, ImplementationSchema: objectmodel.PinnedKnowledgeRef{KnowledgeRef: objectmodel.KnowledgeRef{Repository: "kr://test/live", Object: liveaccesscontract.LiveAccessImplementationSchemaV1}, Commit: "live-7"}}
+	live := interfaces.ResolvedInterface{Repository: "kr://test/live", Commit: "live-7", Address: objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: "table/orders", AspectName: interfaces.ObjectInterfacesAspect, MemberKey: "live"}, Contract: objectmodel.PinnedObjectRef{ObjectRef: objectmodel.ObjectRef{Repository: "kr://test/live", Object: liveaccesscontract.LiveAccessInterfaceV1}, Commit: "live-7"}, ImplementationSchema: objectmodel.PinnedObjectRef{ObjectRef: objectmodel.ObjectRef{Repository: "kr://test/live", Object: liveaccesscontract.LiveAccessImplementationSchemaV1}, Commit: "live-7"}}
 	for _, operation := range systemrepo.SystemPublicationOperations() {
 		switch operation.Address.ObjectID {
 		case liveaccesscontract.LiveAccessInterfaceV1:

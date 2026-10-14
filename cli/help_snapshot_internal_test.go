@@ -78,7 +78,7 @@ func TestSnapshotHelpDescribesResourceEffects(t *testing.T) {
 
 func TestSnapshotFileViewHelpDistinguishesPlanAndMount(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	if status := RunKnowledgeSetFS([]string{"help"}, &stdout, &stderr); status != 0 {
+	if status := RunDatasetFS([]string{"help"}, &stdout, &stderr); status != 0 {
 		t.Fatalf("file-view help failed: %d %s", status, stderr.String())
 	}
 	for _, claim := range []string{"plan", "exits", "mount", "SIGINT", "per-file", "kc dataset clone", "repository", "original bytes"} {

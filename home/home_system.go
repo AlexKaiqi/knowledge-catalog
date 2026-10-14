@@ -35,11 +35,11 @@ func EnsureSystemRepository(home string) (kernel.CommitID, error) {
 	if err != nil {
 		return "", err
 	}
-	knowledgeRepo, err := ws.Reader.Require(objectmodel.SystemRepositoryID, kernel.ErrCapabilityUnsatisfied)
+	objectRepo, err := ws.Reader.Require(objectmodel.SystemRepositoryID, kernel.ErrCapabilityUnsatisfied)
 	if err != nil {
 		return "", err
 	}
-	if err := verifySystemPublication(knowledgeRepo, repo, head); err != nil {
+	if err := verifySystemPublication(objectRepo, repo, head); err != nil {
 		return "", err
 	}
 	return head, nil

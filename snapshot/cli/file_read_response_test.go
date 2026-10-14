@@ -19,7 +19,7 @@ import (
 func TestFileDownloadFailuresDoNotPublishPartialTargets(t *testing.T) {
 	for _, failure := range []string{"revoked", "changed-version", "changed-source", "changed-pinned-source", "changed-source-path", "changed-size", "no-progress"} {
 		t.Run(failure, func(t *testing.T) {
-			pin := dataset.ResolvedKnowledgeSet{SetID: "delivery", Revision: 2, PinID: "fixed", Repositories: map[kernel.RepositoryID]kernel.CommitID{"docs": "commit", "archive": "archive-commit"}}
+			pin := dataset.ResolvedDataset{SetID: "delivery", Revision: 2, PinID: "fixed", Repositories: map[kernel.RepositoryID]kernel.CommitID{"docs": "commit", "archive": "archive-commit"}}
 			calls := 0
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")

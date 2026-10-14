@@ -130,7 +130,7 @@ func (e ObjectLogExecutor) Execute(_ context.Context, request ObjectLogRequest) 
 		}
 		revisions, logErr := e.ReadLog(repositoryID, pin[repositoryID], query)
 		if logErr != nil {
-			if kernel.CodeOf(logErr) == kernel.ErrKnowledgeRefUnresolved {
+			if kernel.CodeOf(logErr) == kernel.ErrObjectRefUnresolved {
 				continue
 			}
 			return ObjectLogPage{}, logErr

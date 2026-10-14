@@ -14,7 +14,7 @@ import (
 	"kc/snapshot"
 )
 
-// Exercise the published knowledge path, not a manually assembled AccessSpec.
+// Exercise the published object path, not a manually assembled AccessSpec.
 func TestPublishedSchemaTypedSearchPreservesLongTextIntegersAndTime(t *testing.T) {
 	repo := testfixture.MakeIndexRepository(t, "kr://mvp/typed")
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
@@ -28,7 +28,7 @@ func TestPublishedSchemaTypedSearchPreservesLongTextIntegersAndTime(t *testing.T
 	}}}
 	for n, stamp := range []string{"2026-09-08T00:00:00.000000001Z", "2026-09-08T08:00:00.000000002+08:00", "2026-09-08T00:00:00.000000003Z"} {
 		ops = append(ops, objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: objectmodel.ObjectID(fmt.Sprintf("article/%d", n))}, SchemaRef: "schema/article", Value: map[string]any{
-			"body": strings.Repeat("规范知识 reliability ", 4000), "rank": int64(9007199254740992) + int64(n), "when": stamp, "day": "2026-09-08",
+			"body": strings.Repeat("规范对象 reliability ", 4000), "rank": int64(9007199254740992) + int64(n), "when": stamp, "day": "2026-09-08",
 		}})
 	}
 	head := testfixture.PutAt(t, repo, root, ops)
@@ -57,7 +57,7 @@ func TestPublishedSchemaTypedSearchPreservesLongTextIntegersAndTime(t *testing.T
 				t.Fatalf("got=%v completeness=%s want=%v", mvpHitIDs(got), got.Completeness, test.want)
 			}
 			for _, hit := range got.Hits {
-				if hit.Knowledge.Commit != head || hit.Version.DeclarationCommit != head {
+				if hit.Object.Commit != head || hit.Version.DeclarationCommit != head {
 					t.Fatalf("lost fixed basis: %+v", hit.Version)
 				}
 			}
@@ -94,7 +94,7 @@ func TestPublishedSchemaTypedSearchPreservesLongTextIntegersAndTime(t *testing.T
 
 // This validates the available consumption operations with explicit decisions;
 // it makes no claim about a language model's mapping or exploration quality.
-func TestControlledVocabularyAndProgressiveReadingUseFixedKnowledgeBasis(t *testing.T) {
+func TestControlledVocabularyAndProgressiveReadingUseFixedObjectBasis(t *testing.T) {
 	repo := testfixture.MakeIndexRepository(t, "kr://mvp/exploration")
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
 	head := testfixture.PutAt(t, repo, root, []objectmodel.Operation{
@@ -122,16 +122,16 @@ func TestControlledVocabularyAndProgressiveReadingUseFixedKnowledgeBasis(t *test
 	if err != nil || !reflect.DeepEqual(mvpHitIDs(concepts), []string{"concept/refund"}) {
 		t.Fatalf("vocabulary lookup: %v %v", mvpHitIDs(concepts), err)
 	}
-	conceptRef := concepts.Hits[0].Knowledge.Address.ObjectID
+	conceptRef := concepts.Hits[0].Object.Address.ObjectID
 	guides, err := idx.SearchAt(repo, head, retrieval.SearchOf(retrieval.SearchEQ("concept", string(conceptRef))))
 	if err != nil || !reflect.DeepEqual(mvpHitIDs(guides), []string{"guide/refund"}) {
 		t.Fatalf("mapped concept lookup: %v %v", mvpHitIDs(guides), err)
 	}
-	relations, err := idx.RelationsAt(repo, head, retrieval.RelationPageRequest{Query: retrieval.RelationQuery{Endpoint: objectmodel.KnowledgeRef{Repository: repo.ID(), Object: "guide/refund"}, RelationType: "explained-by", Role: "subject"}})
+	relations, err := idx.RelationsAt(repo, head, retrieval.RelationPageRequest{Query: retrieval.RelationQuery{Endpoint: objectmodel.ObjectRef{Repository: repo.ID(), Object: "guide/refund"}, RelationType: "explained-by", Role: "subject"}})
 	if err != nil || len(relations.Hits) != 1 {
 		t.Fatalf("progressive relation lookup: %+v %v", relations, err)
 	}
-	var detail objectmodel.KnowledgeRef
+	var detail objectmodel.ObjectRef
 	for _, endpoint := range relations.Hits[0].Relation.Endpoints {
 		if endpoint.Role == "detail" {
 			detail = endpoint.ObjectRef
@@ -152,7 +152,7 @@ func TestControlledVocabularyAndProgressiveReadingUseFixedKnowledgeBasis(t *test
 func mvpHitIDs(result retrieval.SearchResult) []string {
 	ids := make([]string, len(result.Hits))
 	for i, hit := range result.Hits {
-		ids[i] = string(hit.Knowledge.Address.ObjectID)
+		ids[i] = string(hit.Object.Address.ObjectID)
 	}
 	return ids
 }

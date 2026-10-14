@@ -10,4 +10,4 @@ path_hint: concepts/member/definition.md
 
 成员键表达集合内的身份，展示顺序不构成身份。集合型 Schema 约束成员值，Reader 可以组装整个集合。
 
-相关说明：[切面](../aspect/definition.md)、[知识地址](../address/definition.md)、[Schema](../schema/definition.md)。
+相关说明：[切面](../aspect/definition.md)、[对象地址](../address/definition.md)、[Schema](../schema/definition.md)。

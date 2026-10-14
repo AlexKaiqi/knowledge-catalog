@@ -135,7 +135,7 @@ func newMemberProjectionFixture(t *testing.T, mode string) memberProjectionFixtu
 		t.Fatal(err)
 	}
 	rd := reader.NewReader(registry)
-	repo, err := rd.Require(raw.ID(), kernel.ErrKnowledgeRefUnresolved)
+	repo, err := rd.Require(raw.ID(), kernel.ErrObjectRefUnresolved)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func newMemberProjectionFixture(t *testing.T, mode string) memberProjectionFixtu
 	}
 	t.Cleanup(func() { _ = access.Close() })
 	entry := indexplugin.Entry(indexplugin.Options{Directory: t.TempDir(), Lookup: func(id kernel.RepositoryID) (objectmodel.Repository, error) {
-		return rd.Require(id, kernel.ErrKnowledgeRefUnresolved)
+		return rd.Require(id, kernel.ErrObjectRefUnresolved)
 	}, Datasets: testkit.OpenDatasets(t, registry), Engine: func(instance string) ports.EngineOpener {
 		return opensearch.Open(opensearch.Config{URL: endpoint, Namespace: namespace + "/" + instance, PrimaryShards: 1})
 	}})
@@ -182,8 +182,8 @@ func assertMemberObservation(t *testing.T, f memberProjectionFixture, result ret
 	}
 	hit := result.Hits[0]
 	want := map[string]any{"definition": map[string]any{"owner": "fixed"}, "readings": map[string]any{"primary": map[string]any{"value": float64(31)}}}
-	if hit.Knowledge.Repository != f.repo.ID() || hit.Knowledge.Commit != f.commit || hit.Knowledge.Address.ObjectID != f.address.ObjectID ||
-		kernel.CanonicalDigest(hit.Knowledge.Value) != kernel.CanonicalDigest(want) || len(hit.Version.Observations) != 1 {
+	if hit.Object.Repository != f.repo.ID() || hit.Object.Commit != f.commit || hit.Object.Address.ObjectID != f.address.ObjectID ||
+		kernel.CanonicalDigest(hit.Object.Value) != kernel.CanonicalDigest(want) || len(hit.Version.Observations) != 1 {
 		t.Fatalf("Member index read returned its placeholder or another source value: %#v", hit)
 	}
 	observation := hit.Version.Observations[0]
@@ -191,13 +191,13 @@ func assertMemberObservation(t *testing.T, f memberProjectionFixture, result ret
 		observation.Basis.BindingGeneration != "g1" || observation.Basis.SourceRevision != "r31" {
 		t.Fatalf("Member result lost its original successful basis: %#v", hit.Version)
 	}
-	for _, declaration := range hit.Knowledge.Declarations {
+	for _, declaration := range hit.Object.Declarations {
 		if declaration.Address == f.address && declaration.SchemaRef == "schema/sensor.readings" && declaration.ValueSource != nil &&
 			declaration.ValueSource.Kind == objectmodel.ValueSourceBinding && declaration.DeclarationDigest == observation.DeclarationDigest {
 			return
 		}
 	}
-	t.Fatalf("Member result lost the actual adopted Schema and declaration: %#v", hit.Knowledge.Declarations)
+	t.Fatalf("Member result lost the actual adopted Schema and declaration: %#v", hit.Object.Declarations)
 }
 
 func TestSelectedLiveAccessMemberProjectionRetainsOriginalObservation(t *testing.T) {

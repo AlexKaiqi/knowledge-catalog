@@ -18,7 +18,7 @@ func TestCatalogFailedCommitLeavesStateAndHeadUnchanged(t *testing.T) {
 			if err := cat.RegisterRepository("kr://atomic/source"); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := cat.DefineKnowledgeSet("task", 1, []catalog.KnowledgeSetSource{{Repository: "kr://atomic/source", Selector: snapshot.DefaultRef}}); err != nil {
+			if _, err := cat.DefineDataset("task", 1, []catalog.DatasetSource{{Repository: "kr://atomic/source", Selector: snapshot.DefaultRef}}); err != nil {
 				t.Fatal(err)
 			}
 			before := catalog.NormalizeState(cat.DumpState())
@@ -31,10 +31,10 @@ func TestCatalogFailedCommitLeavesStateAndHeadUnchanged(t *testing.T) {
 				case "register":
 					return cat.RegisterRepository("kr://atomic/other")
 				case "define":
-					_, err := cat.DefineKnowledgeSet("task", 2, []catalog.KnowledgeSetSource{{Repository: "kr://atomic/source", Selector: snapshot.DefaultRef}})
+					_, err := cat.DefineDataset("task", 2, []catalog.DatasetSource{{Repository: "kr://atomic/source", Selector: snapshot.DefaultRef}})
 					return err
 				case "retire":
-					return cat.RetireKnowledgeSet("task")
+					return cat.RetireDataset("task")
 				default:
 					return cat.UnregisterRepository("kr://atomic/source")
 				}

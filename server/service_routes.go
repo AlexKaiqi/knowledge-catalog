@@ -78,55 +78,55 @@ func (f *httpFacade) registerServiceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /identity/v1/token", f.identityToken)
 	mux.HandleFunc("POST /identity/v1/authorize", f.identityAuthorize)
 	mux.HandleFunc("POST /identity/v1/authorize:poll", f.identityAuthorizePoll)
-	mux.HandleFunc("POST /knowledge/v1/objects:read", f.knowledgeRead)
-	mux.HandleFunc("POST /knowledge/v1/objects:put", f.knowledgePut)
-	mux.HandleFunc("POST /knowledge/v1/objects:remove", f.knowledgeRemove)
-	mux.HandleFunc("POST /knowledge/v1/objects:resolve", f.knowledgeResolve)
-	mux.HandleFunc("POST /knowledge/v1/search", f.knowledgeSearch)
-	mux.HandleFunc("POST /knowledge/v1/search:rerank", f.knowledgeSearchRerank)
-	mux.HandleFunc("POST /knowledge/v1/rerank", f.knowledgeRerank)
-	mux.HandleFunc("POST /knowledge/v1/relations:query", f.knowledgeRelations)
-	mux.HandleFunc("POST /knowledge/v1/traverse:query", f.knowledgeTraverse)
-	mux.HandleFunc("POST /knowledge/v1/provenance:describe", f.knowledgeProvenance)
-	mux.HandleFunc("POST /knowledge/v1/log:query", f.knowledgeLog)
-	mux.HandleFunc("POST /knowledge/v1/schemas:describe", f.knowledgeSchema)
-	mux.HandleFunc("POST /knowledge/v1/schemas:list", f.knowledgeSchemaPage)
-	mux.HandleFunc("POST /knowledge/v1/bindings:resolve", f.knowledgeBinding)
-	mux.HandleFunc("POST /knowledge/v1/resources:access", f.knowledgeResourceAccess)
+	mux.HandleFunc("POST /object/v1/objects:read", f.objectRead)
+	mux.HandleFunc("POST /object/v1/objects:put", f.objectPut)
+	mux.HandleFunc("POST /object/v1/objects:remove", f.objectRemove)
+	mux.HandleFunc("POST /object/v1/objects:resolve", f.objectResolve)
+	mux.HandleFunc("POST /object/v1/search", f.objectSearch)
+	mux.HandleFunc("POST /object/v1/search:rerank", f.objectSearchRerank)
+	mux.HandleFunc("POST /object/v1/rerank", f.objectRerank)
+	mux.HandleFunc("POST /object/v1/relations:query", f.objectRelations)
+	mux.HandleFunc("POST /object/v1/traverse:query", f.objectTraverse)
+	mux.HandleFunc("POST /object/v1/provenance:describe", f.objectProvenance)
+	mux.HandleFunc("POST /object/v1/log:query", f.objectLog)
+	mux.HandleFunc("POST /object/v1/schemas:describe", f.objectSchema)
+	mux.HandleFunc("POST /object/v1/schemas:list", f.objectSchemaPage)
+	mux.HandleFunc("POST /object/v1/bindings:resolve", f.objectBinding)
+	mux.HandleFunc("POST /object/v1/resources:access", f.objectResourceAccess)
 	mux.HandleFunc("POST /operations/v1/projections:sync", f.projectionSync)
 	mux.HandleFunc("POST /operations/v1/projections:notice", f.projectionNotify)
 }
 
-// knowledgeDatasetIdentity is the shared dataset-channel identity envelope:
+// objectDatasetIdentity is the shared dataset-channel identity envelope:
 // a named workspace, or an inline published pin/definition.
-type knowledgeDatasetIdentity struct {
-	Dataset    string                `json:"dataset,omitempty"`
-	Pin        json.RawMessage       `json:"pin,omitempty"`
-	Definition *dataset.KnowledgeSet `json:"definition,omitempty"`
+type objectDatasetIdentity struct {
+	Dataset    string           `json:"dataset,omitempty"`
+	Pin        json.RawMessage  `json:"pin,omitempty"`
+	Definition *dataset.Dataset `json:"definition,omitempty"`
 }
 
-// knowledgeScope is the full scope envelope of knowledge API requests: the
+// objectScope is the full scope envelope of object API requests: the
 // dataset identity or one fixed repository basis. Kept flat so request
 // literals stay readable; embedded in every request struct, the JSON wire
 // contract is unchanged.
-type knowledgeScope struct {
-	Dataset    string                `json:"dataset,omitempty"`
-	Pin        json.RawMessage       `json:"pin,omitempty"`
-	Definition *dataset.KnowledgeSet `json:"definition,omitempty"`
-	Repository string                `json:"repository,omitempty"`
-	Commit     string                `json:"commit,omitempty"`
-	Ref        string                `json:"ref,omitempty"`
+type objectScope struct {
+	Dataset    string           `json:"dataset,omitempty"`
+	Pin        json.RawMessage  `json:"pin,omitempty"`
+	Definition *dataset.Dataset `json:"definition,omitempty"`
+	Repository string           `json:"repository,omitempty"`
+	Commit     string           `json:"commit,omitempty"`
+	Ref        string           `json:"ref,omitempty"`
 }
 
-type knowledgeReadRequest struct {
-	knowledgeDatasetIdentity
+type objectReadRequest struct {
+	objectDatasetIdentity
 	Reference string `json:"reference"`
 	Commit    string `json:"commit,omitempty"`
 	Ref       string `json:"ref,omitempty"`
 }
 
-type KnowledgeSearchRequest struct {
-	knowledgeScope
+type ObjectSearchRequest struct {
+	objectScope
 	InventoryDiscovery bool                    `json:"inventoryDiscovery,omitempty"`
 	Query              string                  `json:"query,omitempty"`
 	Match              []string                `json:"match,omitempty"`
@@ -150,8 +150,8 @@ type KnowledgeSearchRequest struct {
 	Recall             string                  `json:"recall,omitempty"`
 }
 
-type knowledgeRelationsRequest struct {
-	knowledgeScope
+type objectRelationsRequest struct {
+	objectScope
 	Endpoint     string `json:"endpoint"`
 	RelationType string `json:"relationType,omitempty"`
 	Role         string `json:"role,omitempty"`
@@ -160,8 +160,8 @@ type knowledgeRelationsRequest struct {
 	Continuation string `json:"continuation,omitempty"`
 }
 
-type knowledgeTraverseRequest struct {
-	knowledgeScope
+type objectTraverseRequest struct {
+	objectScope
 	Endpoint     string `json:"endpoint"`
 	RelationType string `json:"relationType,omitempty"`
 	Role         string `json:"role,omitempty"`
@@ -172,30 +172,30 @@ type knowledgeTraverseRequest struct {
 	Continuation string `json:"continuation,omitempty"`
 }
 
-type knowledgeRerankRequest struct {
-	knowledgeDatasetIdentity
-	Candidates []objectmodel.KnowledgeRef     `json:"candidates"`
+type objectRerankRequest struct {
+	objectDatasetIdentity
+	Candidates []objectmodel.ObjectRef        `json:"candidates"`
 	Spec       retrieval.SemanticOperatorSpec `json:"spec"`
 }
 
-type knowledgeSearchRerankRequest struct {
-	KnowledgeSearchRequest
+type objectSearchRerankRequest struct {
+	ObjectSearchRequest
 	Spec retrieval.SemanticOperatorSpec `json:"spec"`
 }
 
-type knowledgeObjectRequest struct {
-	knowledgeScope
+type objectRequest struct {
+	objectScope
 	Object       string `json:"object"`
 	Limit        int    `json:"limit,omitempty"`
 	Continuation string `json:"continuation,omitempty"`
 }
 
-type knowledgeSchemaRequest struct {
-	knowledgeScope
+type objectSchemaRequest struct {
+	objectScope
 	Object string `json:"object,omitempty"`
 }
 
-type knowledgeSchemaPageRequest struct {
+type objectSchemaPageRequest struct {
 	Repository   string `json:"repository"`
 	Commit       string `json:"commit,omitempty"`
 	Ref          string `json:"ref,omitempty"`
@@ -203,15 +203,15 @@ type knowledgeSchemaPageRequest struct {
 	Continuation string `json:"continuation,omitempty"`
 }
 
-type knowledgeBindingRequest struct {
-	knowledgeScope
+type objectBindingRequest struct {
+	objectScope
 	Object string `json:"object"`
 	Aspect string `json:"aspect"`
 	Member string `json:"member,omitempty"`
 }
 
-type knowledgeResourceAccessRequest struct {
-	knowledgeScope
+type objectResourceAccessRequest struct {
+	objectScope
 	Object         string          `json:"object"`
 	Aspect         string          `json:"aspect,omitempty"`
 	Member         string          `json:"member,omitempty"`
@@ -220,7 +220,7 @@ type knowledgeResourceAccessRequest struct {
 	Implementation string          `json:"implementation,omitempty"`
 }
 
-func (request KnowledgeSearchRequest) Flags() map[string]FlagValue {
+func (request ObjectSearchRequest) Flags() map[string]FlagValue {
 	flags := map[string]FlagValue{
 		"dataset": request.Dataset, "query": request.Query,
 		"repo": request.Repository, "commit": request.Commit, "ref": request.Ref,
@@ -247,7 +247,7 @@ func (request KnowledgeSearchRequest) Flags() map[string]FlagValue {
 	return compactFlags(flags)
 }
 
-func (request KnowledgeSearchRequest) searchRequest() (retrieval.SearchRequest, error) {
+func (request ObjectSearchRequest) searchRequest() (retrieval.SearchRequest, error) {
 	result, err := inv.SearchRequestFromFlags(request.Flags())
 	if err != nil {
 		return retrieval.SearchRequest{}, err
@@ -272,7 +272,7 @@ type projectionSyncRequest struct {
 	Ref        string `json:"ref,omitempty"`
 }
 
-func knowledgeCoordinateFlags(workspace, repository, commit, ref string, pin json.RawMessage, definition ...*dataset.KnowledgeSet) map[string]FlagValue {
+func objectCoordinateFlags(workspace, repository, commit, ref string, pin json.RawMessage, definition ...*dataset.Dataset) map[string]FlagValue {
 	flags := compactFlags(map[string]FlagValue{
 		"dataset": workspace,
 		"repo":    repository, "commit": commit, "ref": ref,
@@ -286,32 +286,32 @@ func knowledgeCoordinateFlags(workspace, repository, commit, ref string, pin jso
 	return flags
 }
 
-func (request knowledgeReadRequest) Flags() map[string]FlagValue {
-	flags := knowledgeCoordinateFlags(request.Dataset, "", request.Commit, request.Ref, request.Pin, request.Definition)
+func (request objectReadRequest) Flags() map[string]FlagValue {
+	flags := objectCoordinateFlags(request.Dataset, "", request.Commit, request.Ref, request.Pin, request.Definition)
 	flags["reference"] = request.Reference
 	return flags
 }
 
-func (f *httpFacade) knowledgeRead(w http.ResponseWriter, r *http.Request) {
-	var request knowledgeReadRequest
+func (f *httpFacade) objectRead(w http.ResponseWriter, r *http.Request) {
+	var request objectReadRequest
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
 	if !requireObjectReference(w, request.Reference) {
 		return
 	}
-	f.executeTyped(w, r, "knowledge-read", "knowledge.read", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbRead}, request.Flags())
+	f.executeTyped(w, r, "object-read", "object.read", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbRead}, request.Flags())
 }
 
-func (f *httpFacade) knowledgeResolve(w http.ResponseWriter, r *http.Request) {
-	var request knowledgeBindingRequest
+func (f *httpFacade) objectResolve(w http.ResponseWriter, r *http.Request) {
+	var request objectBindingRequest
 	if decodeServiceRequest(w, r, &request) {
-		f.executeTyped(w, r, "knowledge-resolve", "knowledge.read", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbResolveObject}, request.Flags())
+		f.executeTyped(w, r, "object-resolve", "object.read", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbResolveObject}, request.Flags())
 	}
 }
 
-func (f *httpFacade) knowledgeSearch(w http.ResponseWriter, r *http.Request) {
-	var request KnowledgeSearchRequest
+func (f *httpFacade) objectSearch(w http.ResponseWriter, r *http.Request) {
+	var request ObjectSearchRequest
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
@@ -325,11 +325,11 @@ func (f *httpFacade) knowledgeSearch(w http.ResponseWriter, r *http.Request) {
 	if f.options.Embedder != nil {
 		flags["_embedder"] = f.options.Embedder
 	}
-	f.executeTyped(w, r, "knowledge-search", "knowledge.search", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbSearch}, flags)
+	f.executeTyped(w, r, "object-search", "object.search", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbSearch}, flags)
 }
 
-func (f *httpFacade) knowledgeRerank(w http.ResponseWriter, r *http.Request) {
-	var request knowledgeRerankRequest
+func (f *httpFacade) objectRerank(w http.ResponseWriter, r *http.Request) {
+	var request objectRerankRequest
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
@@ -340,15 +340,15 @@ func (f *httpFacade) knowledgeRerank(w http.ResponseWriter, r *http.Request) {
 	if len(request.Pin) > 0 {
 		flags["pin"] = string(request.Pin)
 	}
-	input := inv.RerankApplicationRequest{Candidates: append([]objectmodel.KnowledgeRef(nil), request.Candidates...), Spec: request.Spec}
+	input := inv.RerankApplicationRequest{Candidates: append([]objectmodel.ObjectRef(nil), request.Candidates...), Spec: request.Spec}
 	provider := f.options.Reranker
-	f.executeTyped(w, r, "rerank", "knowledge.rerank", inv.Command{Stage: invoke.StageGoverned, Run: func(cx *inv.Invocation) (any, error) {
+	f.executeTyped(w, r, "rerank", "object.rerank", inv.Command{Stage: invoke.StageGoverned, Run: func(cx *inv.Invocation) (any, error) {
 		return inv.RerankWorkspace(cx, input, provider)
 	}}, flags)
 }
 
-func (f *httpFacade) knowledgeSearchRerank(w http.ResponseWriter, r *http.Request) {
-	var request knowledgeSearchRerankRequest
+func (f *httpFacade) objectSearchRerank(w http.ResponseWriter, r *http.Request) {
+	var request objectSearchRerankRequest
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
@@ -370,17 +370,17 @@ func (f *httpFacade) knowledgeSearchRerank(w http.ResponseWriter, r *http.Reques
 	flags["_search-request"] = search
 	provider := f.options.Reranker
 	spec := request.Spec
-	f.executeTyped(w, r, "search-rerank", "knowledge.rerank", inv.Command{Stage: invoke.StageGoverned, Run: func(cx *inv.Invocation) (any, error) {
+	f.executeTyped(w, r, "search-rerank", "object.rerank", inv.Command{Stage: invoke.StageGoverned, Run: func(cx *inv.Invocation) (any, error) {
 		return inv.SearchAndRerankWorkspace(cx, spec, provider)
 	}}, flags)
 }
 
-func (f *httpFacade) knowledgeRelations(w http.ResponseWriter, r *http.Request) {
-	var request knowledgeRelationsRequest
+func (f *httpFacade) objectRelations(w http.ResponseWriter, r *http.Request) {
+	var request objectRelationsRequest
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	flags := knowledgeCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
+	flags := objectCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
 	if request.Endpoint != "" {
 		flags["object"] = request.Endpoint
 	}
@@ -399,15 +399,15 @@ func (f *httpFacade) knowledgeRelations(w http.ResponseWriter, r *http.Request) 
 	if request.Continuation != "" {
 		flags["continuation"] = request.Continuation
 	}
-	f.executeTyped(w, r, "knowledge-relations", "knowledge.relations", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbRelations}, flags)
+	f.executeTyped(w, r, "object-relations", "object.relations", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbRelations}, flags)
 }
 
-func (f *httpFacade) knowledgeTraverse(w http.ResponseWriter, r *http.Request) {
-	var request knowledgeTraverseRequest
+func (f *httpFacade) objectTraverse(w http.ResponseWriter, r *http.Request) {
+	var request objectTraverseRequest
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	flags := knowledgeCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
+	flags := objectCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
 	if request.Endpoint != "" {
 		flags["object"] = request.Endpoint
 	}
@@ -432,11 +432,11 @@ func (f *httpFacade) knowledgeTraverse(w http.ResponseWriter, r *http.Request) {
 	if request.Continuation != "" {
 		flags["continuation"] = request.Continuation
 	}
-	f.executeTyped(w, r, "knowledge-traverse", "knowledge.traverse", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbTraverse}, flags)
+	f.executeTyped(w, r, "object-traverse", "object.traverse", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbTraverse}, flags)
 }
 
-func (request knowledgeObjectRequest) Flags() map[string]FlagValue {
-	flags := knowledgeCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
+func (request objectRequest) Flags() map[string]FlagValue {
+	flags := objectCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
 	if request.Object != "" {
 		flags["object"] = request.Object
 	}
@@ -449,16 +449,16 @@ func (request knowledgeObjectRequest) Flags() map[string]FlagValue {
 	return flags
 }
 
-func (request knowledgeSchemaRequest) Flags() map[string]FlagValue {
-	flags := knowledgeCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
+func (request objectSchemaRequest) Flags() map[string]FlagValue {
+	flags := objectCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
 	if request.Object != "" {
 		flags["object"] = request.Object
 	}
 	return flags
 }
 
-func (request knowledgeBindingRequest) Flags() map[string]FlagValue {
-	flags := knowledgeCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
+func (request objectBindingRequest) Flags() map[string]FlagValue {
+	flags := objectCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
 	if request.Object != "" {
 		flags["object"] = request.Object
 	}
@@ -471,7 +471,7 @@ func (request knowledgeBindingRequest) Flags() map[string]FlagValue {
 	return flags
 }
 
-func (request knowledgeResourceAccessRequest) Flags() map[string]FlagValue {
+func (request objectResourceAccessRequest) Flags() map[string]FlagValue {
 	flags := compactFlags(map[string]FlagValue{
 		"dataset": request.Dataset, "object": request.Object,
 		"repo": request.Repository, "commit": request.Commit, "ref": request.Ref,
@@ -490,29 +490,29 @@ func (request knowledgeResourceAccessRequest) Flags() map[string]FlagValue {
 	return flags
 }
 
-func (f *httpFacade) knowledgeProvenance(w http.ResponseWriter, r *http.Request) {
-	var request knowledgeObjectRequest
+func (f *httpFacade) objectProvenance(w http.ResponseWriter, r *http.Request) {
+	var request objectRequest
 	if decodeServiceRequest(w, r, &request) {
-		f.executeTyped(w, r, "knowledge-provenance", "knowledge.provenance", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbProvenance}, request.Flags())
+		f.executeTyped(w, r, "object-provenance", "object.provenance", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbProvenance}, request.Flags())
 	}
 }
 
-func (f *httpFacade) knowledgeLog(w http.ResponseWriter, r *http.Request) {
-	var request knowledgeObjectRequest
+func (f *httpFacade) objectLog(w http.ResponseWriter, r *http.Request) {
+	var request objectRequest
 	if decodeServiceRequest(w, r, &request) {
-		f.executeTyped(w, r, "knowledge-log", "knowledge.history.read", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbLog}, request.Flags())
+		f.executeTyped(w, r, "object-log", "object.history.read", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbLog}, request.Flags())
 	}
 }
 
-func (f *httpFacade) knowledgeSchema(w http.ResponseWriter, r *http.Request) {
-	var request knowledgeSchemaRequest
+func (f *httpFacade) objectSchema(w http.ResponseWriter, r *http.Request) {
+	var request objectSchemaRequest
 	if decodeServiceRequest(w, r, &request) {
-		f.executeTyped(w, r, "knowledge-schema-describe", "knowledge.schema.read", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbDescribeSchema}, request.Flags())
+		f.executeTyped(w, r, "object-schema-describe", "object.schema.read", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbDescribeSchema}, request.Flags())
 	}
 }
 
-func (f *httpFacade) knowledgeSchemaPage(w http.ResponseWriter, r *http.Request) {
-	var request knowledgeSchemaPageRequest
+func (f *httpFacade) objectSchemaPage(w http.ResponseWriter, r *http.Request) {
+	var request objectSchemaPageRequest
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
@@ -523,25 +523,25 @@ func (f *httpFacade) knowledgeSchemaPage(w http.ResponseWriter, r *http.Request)
 	if request.Limit > 0 {
 		flags["limit"] = request.Limit
 	}
-	f.executeTyped(w, r, "knowledge-schema-list", "knowledge.schema.read", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbBrowseSchemas}, flags)
+	f.executeTyped(w, r, "object-schema-list", "object.schema.read", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbBrowseSchemas}, flags)
 }
 
-func (f *httpFacade) knowledgeBinding(w http.ResponseWriter, r *http.Request) {
-	var request knowledgeBindingRequest
+func (f *httpFacade) objectBinding(w http.ResponseWriter, r *http.Request) {
+	var request objectBindingRequest
 	if decodeServiceRequest(w, r, &request) {
-		f.executeTyped(w, r, "knowledge-binding-show", "knowledge.binding.resolve", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbResolveBinding}, request.Flags())
+		f.executeTyped(w, r, "object-binding-show", "object.binding.resolve", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbResolveBinding}, request.Flags())
 	}
 }
 
-func (f *httpFacade) knowledgeResourceAccess(w http.ResponseWriter, r *http.Request) {
-	var request knowledgeResourceAccessRequest
+func (f *httpFacade) objectResourceAccess(w http.ResponseWriter, r *http.Request) {
+	var request objectResourceAccessRequest
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	handler := "knowledge-access"
+	handler := "object-access"
 	run := inv.VerbResourceAccess
 	if strings.TrimSpace(request.Operation) != "" || strings.TrimSpace(request.Implementation) != "" {
-		handler = "knowledge-invoke"
+		handler = "object-invoke"
 		run = inv.VerbResourceInvoke
 	}
 	f.executeTyped(w, r, handler, "resource.access", inv.Command{Stage: invoke.StageGoverned, Run: run}, request.Flags())

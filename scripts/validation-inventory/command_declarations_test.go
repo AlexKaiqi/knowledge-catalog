@@ -22,7 +22,7 @@ func TestInventoryReadsExplicitModuleCompositionWithSourceLocations(t *testing.T
 	fset, file := commandSource(t, "cli/surface.go", `package fixture
 import snapshotcli "kc/snapshot/cli"
 var cliSurface = composeCLICommands(snapshotcli.Commands(), map[string]commandSurface{
-  "read": {"knowledge-read", "knowledge.read"},
+  "read": {"object-read", "object.read"},
 })`)
 	root, err := cliDeclarations(fset, file, "cli/surface.go")
 	if err != nil || !usesSnapshotCommands(file) {
@@ -40,7 +40,7 @@ var commandEntries = []Command{
 	if err := validateCommandInventory(entries); err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 2 || entries[0] != (commandEntry{"dataset show", "inventory.read", "snapshot/cli/commands.go", 3}) || entries[1] != (commandEntry{"read", "knowledge.read", "cli/surface.go", 4}) {
+	if len(entries) != 2 || entries[0] != (commandEntry{"dataset show", "inventory.read", "snapshot/cli/commands.go", 3}) || entries[1] != (commandEntry{"read", "object.read", "cli/surface.go", 4}) {
 		t.Fatalf("composition omitted a module or counted help examples: %#v", entries)
 	}
 }
@@ -50,7 +50,7 @@ func TestInventoryReadsBothOwnedCLIContributions(t *testing.T) {
 import snapshotcli "kc/snapshot/cli"
 import objectcli "kc/object/cli"
 var cliSurface = composeObjectCLICommands(objectcli.Commands(), composeCLICommands(snapshotcli.Commands(), map[string]commandSurface{
-  "search": {"knowledge-search", "knowledge.search"},
+  "search": {"object-search", "object.search"},
 }))`)
 	entries, err := cliDeclarations(fset, file, "cli/surface.go")
 	if err != nil || len(entries) != 1 || entries[0].Command != "search" || !usesSnapshotCommands(file) {
@@ -130,7 +130,7 @@ func TestInventoryRejectsInvalidModuleDeclarationsAndDuplicateOwners(t *testing.
 			}
 		})
 	}
-	err := validateCommandInventory([]commandEntry{{"read", "knowledge.read", "cli/surface.go", 4}, {"read", "file.read", "snapshot/cli/commands.go", 3}})
+	err := validateCommandInventory([]commandEntry{{"read", "object.read", "cli/surface.go", 4}, {"read", "file.read", "snapshot/cli/commands.go", 3}})
 	if err == nil || !strings.Contains(err.Error(), "cli/surface.go:4") || !strings.Contains(err.Error(), "snapshot/cli/commands.go:3") {
 		t.Fatalf("duplicate command must identify both owners: %v", err)
 	}
@@ -140,7 +140,7 @@ func TestInventoryIncludesOwnedLiveAccessCommandsAndRejectsForeignOrRepeatedCont
 	imports := `package fixture
 import accesscli "kc/liveaccess/cli"
 var cliSurface = `
-	expression := `composeLiveAccessCLICommands(accesscli.Commands(),map[string]commandSurface{"read":{"knowledge-read","knowledge.read"}})`
+	expression := `composeLiveAccessCLICommands(accesscli.Commands(),map[string]commandSurface{"read":{"object-read","object.read"}})`
 	fset, file := commandSource(t, "cli/surface.go", imports+expression)
 	expr, _ := namedValue(file, "cliSurface")
 	_, modules, err := commandComposition(file, expr)

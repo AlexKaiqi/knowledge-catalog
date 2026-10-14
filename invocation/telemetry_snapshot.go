@@ -15,7 +15,7 @@ import (
 
 // Snapshot I/O is observed by wrapping the Registry member. Wrappers keep the
 // inner method set: a Store-only member stays Store-only, and UnitLocator is
-// not invented. Knowledge, Registry, and Writer keep ordinary type assertions.
+// not invented. Object, Registry, and Writer keep ordinary type assertions.
 
 type observedSnapshot struct {
 	inner   snapshot.Store
@@ -41,7 +41,7 @@ type observedTreeAuthority struct {
 	changes   snapshot.ChangeStore
 }
 
-type observedKnowledgeTree struct {
+type observedObjectTree struct {
 	*observedTreeAuthority
 	locator objectmodel.UnitLocator
 }
@@ -51,7 +51,7 @@ func ObserveSnapshotStore(store snapshot.Store, runtime *telemetry.Runtime, fall
 		return store
 	}
 	switch store.(type) {
-	case *observedSnapshot, *observedTreeAuthority, *observedKnowledgeTree:
+	case *observedSnapshot, *observedTreeAuthority, *observedObjectTree:
 		return store
 	}
 	if _, ok := store.(objectmodel.NativeRepository); ok {
@@ -72,7 +72,7 @@ func ObserveSnapshotStore(store snapshot.Store, runtime *telemetry.Runtime, fall
 			changes:          changes,
 		}
 		if hasLocator {
-			return &observedKnowledgeTree{observedTreeAuthority: authority, locator: locator}
+			return &observedObjectTree{observedTreeAuthority: authority, locator: locator}
 		}
 		return authority
 	}
@@ -235,7 +235,7 @@ func (o *observedTreeAuthority) ChangedPaths(from, to kernel.CommitID) ([]string
 	return paths, err
 }
 
-func (o *observedKnowledgeTree) ObjectUnitPaths(objectID objectmodel.ObjectID, commit kernel.CommitID) ([]string, error) {
+func (o *observedObjectTree) ObjectUnitPaths(objectID objectmodel.ObjectID, commit kernel.CommitID) ([]string, error) {
 	var paths []string
 	err := o.observe("other", 0, func() error {
 		var innerErr error
@@ -276,5 +276,5 @@ var _ snapshot.TreeStore = (*observedTreeAuthority)(nil)
 var _ snapshot.DirectoryReader = (*observedTreeAuthority)(nil)
 var _ snapshot.HistoryStore = (*observedTreeAuthority)(nil)
 var _ snapshot.ChangeStore = (*observedTreeAuthority)(nil)
-var _ snapshot.TreeStore = (*observedKnowledgeTree)(nil)
-var _ objectmodel.UnitLocator = (*observedKnowledgeTree)(nil)
+var _ snapshot.TreeStore = (*observedObjectTree)(nil)
+var _ objectmodel.UnitLocator = (*observedObjectTree)(nil)

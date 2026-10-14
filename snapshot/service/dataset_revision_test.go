@@ -77,7 +77,7 @@ func TestNamedDatasetHistoricalResolveHonorsCurrentLifecycle(t *testing.T) {
 				t.Fatalf("historical lifecycle fixture did not start from an accepted basis: %#v", pin)
 			}
 			if state == "retired" {
-				if err := f.catalog.RetireKnowledgeSet("files"); err != nil {
+				if err := f.catalog.RetireDataset("files"); err != nil {
 					t.Fatal(err)
 				}
 			} else if state == "unregistered" {
@@ -91,7 +91,7 @@ func TestNamedDatasetHistoricalResolveHonorsCurrentLifecycle(t *testing.T) {
 			}
 			before := dataset.NormalizeState(f.catalog.DumpState())
 			result := datasetHTTPCall(t, h, http.MethodPost, "/snapshot/v1/datasets/files/resolve", map[string]any{"revision": 1}, http.StatusBadRequest)
-			if result["error"].(map[string]any)["code"] != string(kernel.ErrKnowledgeSetInvalid) {
+			if result["error"].(map[string]any)["code"] != string(kernel.ErrDatasetInvalid) {
 				t.Fatalf("historical resolve replaced its current lifecycle error: %#v", result)
 			}
 			assertDatasetHTTPState(t, f, before)
@@ -123,14 +123,14 @@ func TestExplicitDatasetRevisionDoesNotAdoptARecipe(t *testing.T) {
 			adoptions := 0
 			f.resources.EnsureDataset = func(_ context.Context, _ identity.HTTPIdentity, cat dataset.Service, id string) error {
 				adoptions++
-				_, err := cat.DefineKnowledgeSet(id, 1, []dataset.KnowledgeSetSource{{Repository: f.source.ID(), Selector: snapshot.DefaultRef, File: "plain.txt", Target: "docs/plain.txt"}})
+				_, err := cat.DefineDataset(id, 1, []dataset.DatasetSource{{Repository: f.source.ID(), Selector: snapshot.DefaultRef, File: "plain.txt", Target: "docs/plain.txt"}})
 				return err
 			}
 			before := dataset.NormalizeState(f.catalog.DumpState())
 			h := f.handler()
 			base := "/snapshot/v1/datasets/files/resolve"
 			result := datasetHTTPCall(t, h, http.MethodPost, base, map[string]any{"revision": revision}, http.StatusBadRequest)
-			if result["error"].(map[string]any)["code"] != string(kernel.ErrKnowledgeSetInvalid) {
+			if result["error"].(map[string]any)["code"] != string(kernel.ErrDatasetInvalid) {
 				t.Fatalf("missing Dataset did not retain its lifecycle error: %#v", result)
 			}
 			if adoptions != 0 || !reflect.DeepEqual(dataset.NormalizeState(f.catalog.DumpState()), before) {

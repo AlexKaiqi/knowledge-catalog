@@ -93,7 +93,7 @@ func TestDeploymentSurvivesInstanceReplacement(t *testing.T) {
 	}
 	expectCode(t, call("attach", "--repo", "kr://recover/unconfigured"), "PRECONDITION_FAILED")
 	body(t, call("dataset", "define", "incident", "--revision", "1", "--source", "kr://recover/source"))
-	body(t, call("grant", "add", "--principal", "agent:reader", "--action", "knowledge.read", "--repo", "kr://recover/source"))
+	body(t, call("grant", "add", "--principal", "agent:reader", "--action", "object.read", "--repo", "kr://recover/source"))
 	body(t, call("operations", "gate", "add", "--on", "merge", "--repo", "kr://recover/source", "--require", "suite:recovery-suite"))
 	sink := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusServiceUnavailable) }))
 	defer sink.Close()
@@ -137,7 +137,7 @@ func TestDeploymentSurvivesInstanceReplacement(t *testing.T) {
 		}
 	}
 	if got := body(t, call("writer", "head", "--repo", "kr://recover/source")); !reflect.DeepEqual(got, oldHead) {
-		t.Fatal("recovery changed knowledge HEAD")
+		t.Fatal("recovery changed object HEAD")
 	}
 	if got := body(t, call("show")); !reflect.DeepEqual(got, catalogState) {
 		t.Fatal("Catalog membership/recipe lost on replacement")

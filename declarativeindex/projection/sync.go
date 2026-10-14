@@ -5,7 +5,7 @@ import (
 	ports "kc/discovery/projection"
 	"kc/kernel"
 	objectmodel "kc/object"
-	knowledgemaintenance "kc/object/maintenance"
+	objectmaintenance "kc/object/maintenance"
 )
 
 func (idx *Index) Ensure(repo objectmodel.Repository, commit kernel.CommitID) (ports.IndexSync, error) {
@@ -43,7 +43,7 @@ func (idx *Index) Ensure(repo objectmodel.Repository, commit kernel.CommitID) (p
 		}
 		return idx.applyChangedObjects(eng, repo, meta.Basis, commit, spec, objects, ports.IndexCauseContent)
 	}
-	ids, err := knowledgemaintenance.ChangedObjectIDs(repo, meta.Basis, commit)
+	ids, err := objectmaintenance.ChangedObjectIDs(repo, meta.Basis, commit)
 	if err != nil {
 		return ports.IndexSync{}, err
 	}
@@ -217,7 +217,7 @@ func (idx *Index) rebuild(eng ports.Engine, repo objectmodel.Repository, commit 
 			batch = batch[:0]
 			return nil
 		}
-		err = knowledgemaintenance.WalkRepository(repo, commit, func(value objectmodel.KnowledgeValue) error {
+		err = objectmaintenance.WalkRepository(repo, commit, func(value objectmodel.ObjectValue) error {
 			doc, include, err := compileValue(repo, value, spec)
 			if err != nil {
 				return err
@@ -246,7 +246,7 @@ func (idx *Index) rebuild(eng ports.Engine, repo objectmodel.Repository, commit 
 		}, nil
 	}
 	var docs []ports.CompiledDoc
-	err := knowledgemaintenance.WalkRepository(repo, commit, func(value objectmodel.KnowledgeValue) error {
+	err := objectmaintenance.WalkRepository(repo, commit, func(value objectmodel.ObjectValue) error {
 		doc, ok, err := compileValue(repo, value, spec)
 		if err != nil {
 			return err
@@ -327,7 +327,7 @@ func (idx *Index) applyHydrated(eng ports.Engine, repo objectmodel.Repository, f
 }
 
 func compileProjectionBatch(repo objectmodel.Repository, commit kernel.CommitID, ids []objectmodel.ObjectID, spec retrieval.AccessSpec, paths map[objectmodel.ObjectID][]string) (map[objectmodel.ObjectID]ports.CompiledDoc, error) {
-	var values map[objectmodel.ObjectID]objectmodel.KnowledgeValue
+	var values map[objectmodel.ObjectID]objectmodel.ObjectValue
 	var err error
 	if hydrator, ok := repo.(objectmodel.UnitPathsHydrator); ok && paths != nil {
 		values, err = hydrator.ReadManyAtPaths(ids, commit, paths)

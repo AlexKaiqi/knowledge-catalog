@@ -87,5 +87,5 @@ func pointerArrayIndex(token string, length int, locator string) (int, error) {
 }
 
 func pointerMissing(locator string) error {
-	return kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "locator %q does not select an existing node", locator)
+	return kernel.Fail(kernel.ErrObjectRefUnresolved, "locator %q does not select an existing node", locator)
 }

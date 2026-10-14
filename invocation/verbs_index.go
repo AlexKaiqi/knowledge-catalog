@@ -2,7 +2,7 @@ package invocation
 
 import (
 	discoveryservice "kc/discovery/service"
-	knowledgeserving "kc/liveaccess"
+	objectserving "kc/liveaccess"
 
 	index "kc/discovery/projection"
 	"kc/invoke"
@@ -150,11 +150,11 @@ func VerbDescribeAccess(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	var resolved dataset.ResolvedKnowledgeSet
+	var resolved dataset.ResolvedDataset
 	if repository := invoke.FlagString(cx.Flags, "repo"); repository != "" && invoke.FlagString(cx.Flags, "dataset") == "" {
-		resolved, err = cat.ResolveDefinition(dataset.KnowledgeSet{
+		resolved, err = cat.ResolveDefinition(dataset.Dataset{
 			Revision: 1,
-			Sources:  []dataset.KnowledgeSetSource{{Repository: kernel.RepositoryID(repository), Selector: snapshot.DefaultRef}},
+			Sources:  []dataset.DatasetSource{{Repository: kernel.RepositoryID(repository), Selector: snapshot.DefaultRef}},
 		})
 	} else {
 		setID, workspaceErr := cx.SetID()
@@ -166,7 +166,7 @@ func VerbDescribeAccess(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	pin := KnowledgeSetPin(resolved)
+	pin := DatasetPin(resolved)
 	if err := RequireCompleteWorkspaceRead(cx.Home, cx.Flags, pin, ""); err != nil {
 		return nil, err
 	}
@@ -187,7 +187,7 @@ func VerbDescribeAccess(cx *Invocation) (any, error) {
 
 // ResourceLookup uses an explicit component port or the Repository-selected
 // LiveAccess registry. A static read needs no external lookup.
-func ResourceLookup(cx *Invocation) (knowledgeserving.StateLookup, error) {
+func ResourceLookup(cx *Invocation) (objectserving.StateLookup, error) {
 	if cx.State != nil {
 		return cx.State, nil
 	}

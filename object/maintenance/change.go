@@ -51,7 +51,7 @@ func ChangedObjectIDs(repo objectmodel.Repository, from, to kernel.CommitID) ([]
 
 func objectIDsAt(scanner SnapshotScanner, commit kernel.CommitID) ([]objectmodel.ObjectID, error) {
 	out := []objectmodel.ObjectID{}
-	err := WalkSnapshot(scanner, commit, func(value objectmodel.KnowledgeValue) error {
+	err := WalkSnapshot(scanner, commit, func(value objectmodel.ObjectValue) error {
 		out = append(out, value.Address.ObjectID)
 		return nil
 	})
@@ -60,7 +60,7 @@ func objectIDsAt(scanner SnapshotScanner, commit kernel.CommitID) ([]objectmodel
 
 func digestIndex(scanner SnapshotScanner, commit kernel.CommitID) (map[objectmodel.ObjectID]kernel.Digest, error) {
 	out := map[objectmodel.ObjectID]kernel.Digest{}
-	err := WalkSnapshot(scanner, commit, func(value objectmodel.KnowledgeValue) error {
+	err := WalkSnapshot(scanner, commit, func(value objectmodel.ObjectValue) error {
 		out[value.Address.ObjectID] = kernel.CanonicalDigest(value.Value)
 		return nil
 	})

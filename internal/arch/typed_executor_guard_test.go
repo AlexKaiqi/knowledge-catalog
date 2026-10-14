@@ -20,16 +20,16 @@ import liveservice "kc/liveaccess/service"
 func readRepositoryObserved() { liveservice.ReadRepository() }`,
 		"cli/commands_test.go": `package cli
 import inv "kc/invocation"
-func readVerbs() map[string]command { return map[string]command{"knowledge-read": {Run: inv.VerbRead}} }
-func indexVerbs() map[string]command { return map[string]command{"knowledge-search": {Run: inv.VerbSearch}} }`,
+func readVerbs() map[string]command { return map[string]command{"object-read": {Run: inv.VerbRead}} }
+func indexVerbs() map[string]command { return map[string]command{"object-search": {Run: inv.VerbSearch}} }`,
 		"server/routes.go": `package server
 import inv "kc/invocation"
 func (f *httpFacade) registerServiceRoutes(mux Mux) {
- mux.HandleFunc("POST /knowledge/v1/objects:read", f.knowledgeRead)
- mux.HandleFunc("POST /knowledge/v1/search", f.knowledgeSearch)
+ mux.HandleFunc("POST /object/v1/objects:read", f.objectRead)
+ mux.HandleFunc("POST /object/v1/search", f.objectSearch)
 }
-func (f *httpFacade) knowledgeRead() { f.executeTyped(w,r,"knowledge-read","knowledge.read",inv.Command{Run: inv.VerbRead},flags) }
-func (f *httpFacade) knowledgeSearch() { f.executeTyped(w,r,"knowledge-search","knowledge.search",inv.Command{Run: inv.VerbSearch},flags) }
+func (f *httpFacade) objectRead() { f.executeTyped(w,r,"object-read","object.read",inv.Command{Run: inv.VerbRead},flags) }
+func (f *httpFacade) objectSearch() { f.executeTyped(w,r,"object-search","object.search",inv.Command{Run: inv.VerbSearch},flags) }
 func (f *httpFacade) executeTyped() { inv.InvokeApplicationWithTelemetryAtHome() }`,
 	}
 	parse := func(sources map[string]string) map[string]*ast.File {
@@ -52,11 +52,11 @@ func (f *httpFacade) executeTyped() { inv.InvokeApplicationWithTelemetryAtHome()
 		{"foreign executor alias", "invocation/repository_read.go", `"kc/liveaccess/service"`, `"kc/unrelated/service"`, "VerbRead does not call"},
 		{"shadowed executor alias", "invocation/repository_read.go", "liveservice.ReadRepository()", "liveservice := other; liveservice.ReadRepository()", "VerbRead does not call"},
 		{"constructed but not executed search", "invocation/verbs.go", "(discovery.SearchExecutor{}).Execute()", "_ = discovery.SearchExecutor{}", "VerbSearch does not call"},
-		{"missing CLI route", "cli/commands_test.go", `"knowledge-read": {Run: inv.VerbRead}`, `"unrelated": {Run: inv.VerbRead}`, "route is not bound"},
-		{"missing HTTP registration", "server/routes.go", `mux.HandleFunc("POST /knowledge/v1/objects:read", f.knowledgeRead)`, "", "route is not bound"},
+		{"missing CLI route", "cli/commands_test.go", `"object-read": {Run: inv.VerbRead}`, `"unrelated": {Run: inv.VerbRead}`, "route is not bound"},
+		{"missing HTTP registration", "server/routes.go", `mux.HandleFunc("POST /object/v1/objects:read", f.objectRead)`, "", "route is not bound"},
 		{"comment cannot bind Run", "server/routes.go", "Run: inv.VerbRead", "Run: nil /* Run: inv.VerbRead */", "route is not bound"},
 		{"foreign invocation alias", "server/routes.go", `"kc/invocation"`, `"kc/unrelated/invocation"`, "route is not bound"},
-		{"handler uses another facade", "server/routes.go", "f.executeTyped(w,r,\"knowledge-read\"", "other.executeTyped(w,r,\"knowledge-read\"", "route is not bound"},
+		{"handler uses another facade", "server/routes.go", "f.executeTyped(w,r,\"object-read\"", "other.executeTyped(w,r,\"object-read\"", "route is not bound"},
 		{"called helper detours around executor", "invocation/repository_read.go", "liveservice.ReadRepository()", "unrelated()", "VerbRead does not call"},
 		{"recursive detour", "invocation/repository_read.go", "liveservice.ReadRepository()", "readRepositoryObserved()", "VerbRead does not call"},
 	} {

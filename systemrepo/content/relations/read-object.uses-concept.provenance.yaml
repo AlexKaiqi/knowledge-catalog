@@ -1,0 +1,18 @@
+---
+object_id: kc/relation/read-object.uses-concept.provenance
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: relations/read-object.uses-concept.provenance.yaml
+---
+relationId: kc/relation/read-object.uses-concept.provenance
+relationType: uses_concept
+direction: DIRECTED
+endpoints:
+  - role: from
+    objectRef:
+      repository: kr://kc/system
+      object: kc/capability/read-object
+  - role: to
+    objectRef:
+      repository: kr://kc/system
+      object: kc/concept/provenance

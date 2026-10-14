@@ -19,7 +19,7 @@ func TestE2EReadPayloadHoistsDefinitionBeforeAuthorize(t *testing.T) {
 	const namedReader = "agent:named-reader"
 	if err := inv.WriteAllow(home, inv.AllowFile{Rules: []inv.AllowRule{
 		{ID: "1", Principal: namedReader, Actions: []string{"dataset.resolve", "file.read"}, Dataset: label},
-		{ID: "2", Principal: namedReader, Actions: []string{"knowledge.read"}, Repo: repositoryID},
+		{ID: "2", Principal: namedReader, Actions: []string{"object.read"}, Repo: repositoryID},
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func TestE2EReadPayloadHoistsDefinitionBeforeAuthorize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var request knowledgeReadRequest
+	var request objectReadRequest
 	if err := dataset.DecodeJSON(body, &request); err != nil {
 		t.Fatal(err)
 	}
@@ -47,15 +47,15 @@ func TestE2EReadPayloadHoistsDefinitionBeforeAuthorize(t *testing.T) {
 	if err := inv.HoistTaskPinDefinition(flags); err != nil {
 		t.Fatal(err)
 	}
-	if err := inv.PrepareKnowledgePinContext(flags); err != nil {
+	if err := inv.PrepareObjectPinContext(flags); err != nil {
 		t.Fatal(err)
 	}
-	if err := inv.Authorize(home, "knowledge.read", flags, nil); err == nil {
+	if err := inv.Authorize(home, "object.read", flags, nil); err == nil {
 		t.Fatalf("authorize accepted impersonation: %#v", flags)
 	}
 }
 
-func TestHTTPKnowledgeReadFlagsExtractTemporaryDefinition(t *testing.T) {
+func TestHTTPObjectReadFlagsExtractTemporaryDefinition(t *testing.T) {
 	repositoryID := "kr://acme/temporary-label/source"
 	const label = "trusted"
 	pinWithDefinition := map[string]any{
@@ -71,22 +71,22 @@ func TestHTTPKnowledgeReadFlagsExtractTemporaryDefinition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, err := json.Marshal(knowledgeReadRequest{
-		knowledgeDatasetIdentity: knowledgeDatasetIdentity{Pin: mustRaw(t, pinWithDefinition)}, Reference: reference,
+	body, err := json.Marshal(objectReadRequest{
+		objectDatasetIdentity: objectDatasetIdentity{Pin: mustRaw(t, pinWithDefinition)}, Reference: reference,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	var request knowledgeReadRequest
+	var request objectReadRequest
 	if err := dataset.DecodeJSON(body, &request); err != nil {
 		t.Fatal(err)
 	}
 	flags := request.Flags()
 	flags["as"] = "agent:named-reader"
-	if err := inv.PrepareKnowledgePinContext(flags); err != nil {
+	if err := inv.PrepareObjectPinContext(flags); err != nil {
 		t.Fatalf("prepare: %v", err)
 	}
-	if inv.SuppliedKnowledgeSet(flags) == nil {
+	if inv.SuppliedDataset(flags) == nil {
 		t.Fatalf("HTTP flags lost definition: %#v pin=%s", flags, string(request.Pin))
 	}
 }
@@ -112,7 +112,7 @@ func TestNamedReaderPublishedWorkspaceConsumeOnlyAdmitsComposition(t *testing.T)
 		t.Fatal(err)
 	}
 	flags := map[string]FlagValue{"as": namedReader, "object": "Policy:label", "dataset": label}
-	if err := inv.Authorize(home, "knowledge.read", flags, nil); err != nil {
+	if err := inv.Authorize(home, "object.read", flags, nil); err != nil {
 		t.Fatalf("consume must admit the composition gate: %v", err)
 	}
 	if !inv.AllowedRepoRead(home, flags, repositoryID, "Policy:label") {
@@ -120,7 +120,7 @@ func TestNamedReaderPublishedWorkspaceConsumeOnlyAdmitsComposition(t *testing.T)
 	}
 	repoFlags := map[string]FlagValue{"as": namedReader, "object": "Policy:label", "repo": repositoryID}
 	if inv.AllowedRepoRead(home, repoFlags, repositoryID, "Policy:label") {
-		t.Fatal("dataset file.read must not admit --repo knowledge.read")
+		t.Fatal("dataset file.read must not admit --repo object.read")
 	}
 }
 
@@ -131,18 +131,18 @@ func TestNamedReaderCannotUseTemporaryPinWithDefinition(t *testing.T) {
 	const namedReader = "agent:named-reader"
 	rules := []inv.AllowRule{
 		{ID: "1", Principal: namedReader, Actions: []string{"dataset.resolve", "file.read"}, Dataset: label},
-		{ID: "2", Principal: namedReader, Actions: []string{"knowledge.read"}, Repo: repositoryID},
+		{ID: "2", Principal: namedReader, Actions: []string{"object.read"}, Repo: repositoryID},
 	}
 	if err := inv.WriteAllow(home, inv.AllowFile{Rules: rules}); err != nil {
 		t.Fatal(err)
 	}
-	definition := &dataset.KnowledgeSet{
+	definition := &dataset.Dataset{
 		SetID:    label,
 		Revision: 1,
-		Sources:  []dataset.KnowledgeSetSource{{Repository: kernel.RepositoryID(repositoryID), Selector: snapshot.DefaultRef}},
+		Sources:  []dataset.DatasetSource{{Repository: kernel.RepositoryID(repositoryID), Selector: snapshot.DefaultRef}},
 	}
-	pin := inv.TaskKnowledgeSetPin{
-		ResolvedKnowledgeSet: dataset.ResolvedKnowledgeSet{SetID: label, Revision: 1, Repositories: map[kernel.RepositoryID]kernel.CommitID{kernel.RepositoryID(repositoryID): "fixed"}},
+	pin := inv.TaskDatasetPin{
+		ResolvedDataset: dataset.ResolvedDataset{SetID: label, Revision: 1, Repositories: map[kernel.RepositoryID]kernel.CommitID{kernel.RepositoryID(repositoryID): "fixed"}},
 
 		Definition: definition,
 	}
@@ -151,16 +151,16 @@ func TestNamedReaderCannotUseTemporaryPinWithDefinition(t *testing.T) {
 		t.Fatal(err)
 	}
 	flags := map[string]FlagValue{"as": namedReader, "object": "Policy:label", "pin": string(rawPin)}
-	if err := inv.PrepareKnowledgePinContext(flags); err != nil {
+	if err := inv.PrepareObjectPinContext(flags); err != nil {
 		t.Fatalf("prepare: %v", err)
 	}
-	if inv.SuppliedKnowledgeSet(flags) == nil {
+	if inv.SuppliedDataset(flags) == nil {
 		t.Fatalf("definition not extracted: %#v", flags)
 	}
 	if invoke.FlagString(flags, "dataset") != "" {
 		t.Fatalf("workspace not cleared: %q", invoke.FlagString(flags, "dataset"))
 	}
-	if err := inv.Authorize(home, "knowledge.read", flags, nil); err == nil {
+	if err := inv.Authorize(home, "object.read", flags, nil); err == nil {
 		t.Fatal("expected forbidden")
 	} else if kernel.CodeOf(err) != kernel.ErrForbidden {
 		t.Fatalf("unexpected: %v", err)

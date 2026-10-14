@@ -8,22 +8,22 @@ import (
 	catalog "kc/snapshot/dataset"
 )
 
-func TestKnowledgeSetRecipeRoundTripPreservesRootPath(t *testing.T) {
-	def := catalog.KnowledgeSet{
+func TestDatasetRecipeRoundTripPreservesRootPath(t *testing.T) {
+	def := catalog.Dataset{
 		SetID: "notes",
-		Sources: []catalog.KnowledgeSetSource{
+		Sources: []catalog.DatasetSource{
 			{Repository: "kr://acme/personals/alice", Selector: "refs/heads/main", Path: catalog.MountPath("")},
 			{Repository: "kr://acme/public/semantic", Selector: "refs/heads/stable", Path: catalog.MountPath("refs/semantic"), SubPath: "metrics"},
 		},
 	}
-	rec, ok := catalog.RecipeFromKnowledgeSet(def)
+	rec, ok := catalog.RecipeFromDataset(def)
 	if !ok || rec.Name != "notes" || len(rec.Mounts) != 2 {
 		t.Fatalf("%#v %v", rec, ok)
 	}
 	if rec.Mounts[0].Path != "" {
 		t.Fatalf("root mount path must be empty string in the file, got %q", rec.Mounts[0].Path)
 	}
-	raw, err := catalog.FormatKnowledgeSetRecipe(rec)
+	raw, err := catalog.FormatDatasetRecipe(rec)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +33,7 @@ func TestKnowledgeSetRecipeRoundTripPreservesRootPath(t *testing.T) {
 			t.Fatalf("yaml: %s", raw)
 		}
 	}
-	got, err := catalog.ParseKnowledgeSetRecipe(raw)
+	got, err := catalog.ParseDatasetRecipe(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,40 +50,40 @@ func TestKnowledgeSetRecipeRoundTripPreservesRootPath(t *testing.T) {
 }
 
 func TestRecipeFromViewRejectsFederatedRead(t *testing.T) {
-	def := catalog.KnowledgeSet{
+	def := catalog.Dataset{
 		SetID: "agent",
-		Sources: []catalog.KnowledgeSetSource{
+		Sources: []catalog.DatasetSource{
 			{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 		},
 	}
-	if _, ok := catalog.RecipeFromKnowledgeSet(def); ok {
+	if _, ok := catalog.RecipeFromDataset(def); ok {
 		t.Fatal("federated-read workspaces must not emit a hitchhiking recipe file")
 	}
 }
 
-func TestParseKnowledgeSetRecipeRequiresNameAndMounts(t *testing.T) {
-	if _, err := catalog.ParseKnowledgeSetRecipe([]byte("mounts: []\n")); err == nil {
+func TestParseDatasetRecipeRequiresNameAndMounts(t *testing.T) {
+	if _, err := catalog.ParseDatasetRecipe([]byte("mounts: []\n")); err == nil {
 		t.Fatal("missing name")
 	}
-	if _, err := catalog.ParseKnowledgeSetRecipe([]byte("name: notes\nmounts: []\n")); err == nil {
+	if _, err := catalog.ParseDatasetRecipe([]byte("name: notes\nmounts: []\n")); err == nil {
 		t.Fatal("empty mounts")
 	}
 }
 
 func TestDatasetRecipeMetadataRoundTripAndIsolation(t *testing.T) {
-	definition := catalog.KnowledgeSet{
+	definition := catalog.Dataset{
 		SetID: "delivery", Metadata: map[string]string{"description": "portable delivery", "custom": "42", "": ""},
-		Sources: []catalog.KnowledgeSetSource{{Repository: "source", Selector: "refs/heads/main", File: "visible.txt", Target: "public.txt"}},
+		Sources: []catalog.DatasetSource{{Repository: "source", Selector: "refs/heads/main", File: "visible.txt", Target: "public.txt"}},
 	}
-	recipe, ok := catalog.RecipeFromKnowledgeSet(definition)
+	recipe, ok := catalog.RecipeFromDataset(definition)
 	if !ok {
 		t.Fatal("file recipe not generated")
 	}
-	raw, err := catalog.FormatKnowledgeSetRecipe(recipe)
+	raw, err := catalog.FormatDatasetRecipe(recipe)
 	if err != nil {
 		t.Fatal(err)
 	}
-	parsed, err := catalog.ParseKnowledgeSetRecipe(raw)
+	parsed, err := catalog.ParseDatasetRecipe(raw)
 	if err != nil || !reflect.DeepEqual(parsed.Metadata, definition.Metadata) || !reflect.DeepEqual(parsed.Sources(), definition.Sources) {
 		t.Fatalf("portable metadata changed file selection: %#v %v", parsed, err)
 	}
@@ -91,7 +91,7 @@ func TestDatasetRecipeMetadataRoundTripAndIsolation(t *testing.T) {
 	if definition.Metadata["description"] != "portable delivery" {
 		t.Fatal("portable recipe shares definition metadata")
 	}
-	if _, err := catalog.ParseKnowledgeSetRecipe([]byte("name: legacy\nmounts:\n  - repository: source\n    selector: refs/heads/main\n    path: ''\n")); err != nil {
+	if _, err := catalog.ParseDatasetRecipe([]byte("name: legacy\nmounts:\n  - repository: source\n    selector: refs/heads/main\n    path: ''\n")); err != nil {
 		t.Fatalf("old recipe without metadata rejected: %v", err)
 	}
 }
@@ -102,7 +102,7 @@ func TestDatasetRecipeMetadataRequiresStringKeysAndValues(t *testing.T) {
 		"description: {nested: value}", "42: value", "null", "[]", "description: first\n  description: second",
 	} {
 		raw := "name: delivery\nfiles:\n  - repository: source\n    selector: refs/heads/main\n    file: visible.txt\n    target: public.txt\nmetadata:\n  " + metadata + "\n"
-		if _, err := catalog.ParseKnowledgeSetRecipe([]byte(raw)); err == nil {
+		if _, err := catalog.ParseDatasetRecipe([]byte(raw)); err == nil {
 			t.Fatalf("portable recipe accepted invalid string metadata: %s", metadata)
 		}
 	}

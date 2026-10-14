@@ -100,12 +100,12 @@ func TestSemanticWindowRecallApproximateEnvelopeAndFailClosed(t *testing.T) {
 	if len(result.Hits) == 0 {
 		t.Fatal("semantic window returned no hits")
 	}
-	if result.Hits[0].Knowledge.Address.ObjectID != "policy/P-1" {
-		t.Fatalf("nearest hit = %s, want policy/P-1", result.Hits[0].Knowledge.Address.ObjectID)
+	if result.Hits[0].Object.Address.ObjectID != "policy/P-1" {
+		t.Fatalf("nearest hit = %s, want policy/P-1", result.Hits[0].Object.Address.ObjectID)
 	}
 	for _, hit := range result.Hits {
-		if hit.Knowledge.Commit != head {
-			t.Fatalf("hit hydrated at wrong basis: %#v", hit.Knowledge)
+		if hit.Object.Commit != head {
+			t.Fatalf("hit hydrated at wrong basis: %#v", hit.Object)
 		}
 	}
 
@@ -120,7 +120,7 @@ type semanticTestLookup struct{ repo objectmodel.Repository }
 
 func (l semanticTestLookup) Require(id kernel.RepositoryID, _ kernel.ErrorCode) (objectmodel.Repository, error) {
 	if id != l.repo.ID() {
-		return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "missing repository")
+		return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "missing repository")
 	}
 	return l.repo, nil
 }
@@ -166,7 +166,7 @@ func TestSemanticExecutorEndToEndOverVectorProjection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Completeness != retrieval.CompletenessPartial || len(result.Hits) == 0 || result.Hits[0].Knowledge.Address.ObjectID != "policy/P-1" {
+	if result.Completeness != retrieval.CompletenessPartial || len(result.Hits) == 0 || result.Hits[0].Object.Address.ObjectID != "policy/P-1" {
 		t.Fatalf("semantic executor result: completeness=%s hits=%d", result.Completeness, len(result.Hits))
 	}
 	claims := strings.Join(result.Claims, "\n")

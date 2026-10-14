@@ -52,15 +52,15 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 
 	resolvedObject := body(t, kc(h, "resolve", "--dataset", "agent", "--object", "policy/A")).([]any)
 	if len(resolvedObject) != 1 || asMap(t, resolvedObject[0])["status"] != "RESOLVED" {
-		t.Fatalf("knowledge resolve: %#v", resolvedObject)
+		t.Fatalf("object resolve: %#v", resolvedObject)
 	}
 	if asMap(t, resolvedObject[0])["commit"] != c2 {
-		t.Fatalf("knowledge resolve must freeze this command's pin: %#v", resolvedObject)
+		t.Fatalf("object resolve must freeze this command's pin: %#v", resolvedObject)
 	}
 	aspectResolved := body(t, kc(h, "resolve", "--dataset", "agent",
 		"--object", "ETLTask:daily-orders", "--aspect", "io")).([]any)
 	if len(aspectResolved) != 1 || asMap(t, aspectResolved[0])["status"] != "RESOLVED" {
-		t.Fatalf("knowledge resolve --aspect: %#v", aspectResolved)
+		t.Fatalf("object resolve --aspect: %#v", aspectResolved)
 	}
 	missingAspect := body(t, kc(h, "resolve", "--dataset", "agent",
 		"--object", "ETLTask:daily-orders", "--aspect", "missing")).([]any)
@@ -182,12 +182,12 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	body(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--dataset", "agent", "--commit", c2))
 	expectCode(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--dataset", "agent", "--commit", c1), "USAGE_INVALID")
 	expectCode(t, kc(h, "list", "--dataset", "agent", "--ref", "refs/heads/main"), "USAGE_INVALID")
-	expectCode(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--dataset", "missing"), "KNOWLEDGE_SET_INVALID")
+	expectCode(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--dataset", "missing"), "DATASET_INVALID")
 	expectMsg(t, kc(h, "promote", "--dataset", "agent"), "unknown command promote")
 	expectMsg(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--release", "stable"), "unknown flag --release")
 }
 
-func TestKnowledgeSetAuthorizationCoverageIsHonest(t *testing.T) {
+func TestDatasetAuthorizationCoverageIsHonest(t *testing.T) {
 	h := testkit.TempDir(t)
 	public := "kr://acme/public/runbooks"
 	private := "kr://acme/private/runbooks"
@@ -200,9 +200,9 @@ func TestKnowledgeSetAuthorizationCoverageIsHonest(t *testing.T) {
 	body(t, kc(h, "put", testObjectReference(t, private, "runbook/private", ""), "--command-id", "private-body", "--schema-ref", "schema/runbook.body", "--value", `{"body":"payment private procedure"}`))
 	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1",
 		"--source", public+"=refs/heads/main", "--source", private+"=refs/heads/main"))
-	body(t, kc(h, "allow", "--principal", "bot", "--action", "file.read,dataset.resolve,knowledge.search", "--dataset", "agent"))
+	body(t, kc(h, "allow", "--principal", "bot", "--action", "file.read,dataset.resolve,object.search", "--dataset", "agent"))
 	body(t, kc(h, "allow", "--principal", "bot", "--cmd", "read", "--repo", public))
-	body(t, kc(h, "allow", "--principal", "bot", "--action", "knowledge.history.read", "--repo", public))
+	body(t, kc(h, "allow", "--principal", "bot", "--action", "object.history.read", "--repo", public))
 
 	expectCode(t, kc(h, "read", testObjectReference(t, private, "runbook/private", ""), "--as", "bot"), "FORBIDDEN")
 	body(t, kc(h, "read", testObjectReference(t, public, "runbook/public", ""), "--as", "bot"))
@@ -250,7 +250,7 @@ func TestKnowledgeSetAuthorizationCoverageIsHonest(t *testing.T) {
 	}
 }
 
-func TestCatalogReadDiscoversWithoutKnowledgeRead(t *testing.T) {
+func TestCatalogReadDiscoversWithoutObjectRead(t *testing.T) {
 	h := testkit.TempDir(t)
 	repo := "kr://acme/public/runbooks"
 	body(t, kc(h, "init"))
@@ -273,7 +273,7 @@ func TestRepoSearchDeliveryStripsUnauthorizedBody(t *testing.T) {
 	seedRepo(t, h, repo)
 	body(t, kc(h, "put", testObjectReference(t, repo, "schema/runbook.body", ""), "--command-id", "schema", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
 	body(t, kc(h, "put", testObjectReference(t, repo, "runbook/public", ""), "--command-id", "body", "--schema-ref", "schema/runbook.body", "--value", `{"body":"payment public procedure"}`))
-	body(t, kc(h, "allow", "--principal", "bot", "--action", "knowledge.search", "--repo", repo))
+	body(t, kc(h, "allow", "--principal", "bot", "--action", "object.search", "--repo", repo))
 	if !searchAvailable() {
 		expectCode(t, kc(h, "search", "--as", "bot", "--repo", repo, "--query", "payment"), "CAPABILITY_UNSATISFIED")
 		return
@@ -290,11 +290,11 @@ func TestRepoSearchDeliveryStripsUnauthorizedBody(t *testing.T) {
 		t.Fatalf("CLI search lists identity without Canonical body: %#v", search)
 	}
 
-	body(t, kc(h, "allow", "--principal", "bot", "--action", "knowledge.read", "--repo", repo))
+	body(t, kc(h, "allow", "--principal", "bot", "--action", "object.read", "--repo", repo))
 	granted := asMap(t, body(t, kc(h, "search", "--as", "bot", "--repo", repo, "--query", "payment")))
 	grantedHit := asMap(t, granted["hits"].([]any)[0])
 	if grantedHit["objectId"] != "runbook/public" || grantedHit["value"] != nil {
-		t.Fatalf("CLI search still lists identity after knowledge.read: %#v", granted)
+		t.Fatalf("CLI search still lists identity after object.read: %#v", granted)
 	}
 }
 
@@ -308,7 +308,7 @@ func TestHTTPWorkspaceSearchKeepsDatasetFileReadBody(t *testing.T) {
 	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1",
 		"--source", repo+"=refs/heads/main"))
 	body(t, kc(h, "allow", "--principal", "taihu:alice", "--action", "file.read", "--dataset", "agent"))
-	body(t, kc(h, "allow", "--principal", "taihu:alice", "--action", "knowledge.search", "--repo", repo))
+	body(t, kc(h, "allow", "--principal", "taihu:alice", "--action", "object.search", "--repo", repo))
 	if !searchAvailable() {
 		expectCode(t, kc(h, "search", "--as", "taihu:alice", "--dataset", "agent", "--query", "payment"), "CAPABILITY_UNSATISFIED")
 		return
@@ -324,7 +324,7 @@ func TestHTTPWorkspaceSearchKeepsDatasetFileReadBody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	request, err := http.NewRequest(http.MethodPost, server.URL+"/knowledge/v1/search", bytes.NewReader(raw))
+	request, err := http.NewRequest(http.MethodPost, server.URL+"/object/v1/search", bytes.NewReader(raw))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -347,16 +347,16 @@ func TestHTTPWorkspaceSearchKeepsDatasetFileReadBody(t *testing.T) {
 	if len(hits) != 1 {
 		t.Fatalf("SEARCH must still locate the object: %#v", payload)
 	}
-	knowledge := asMap(t, asMap(t, hits[0])["knowledge"])
-	if asMap(t, knowledge["value"])["body"] != "payment public procedure" {
+	object := asMap(t, asMap(t, hits[0])["object"])
+	if asMap(t, object["value"])["body"] != "payment public procedure" {
 		t.Fatalf("Dataset file.read must deliver in-scope Canonical body: %#v", payload)
 	}
-	if asMap(t, knowledge["knowledgeRef"])["object"] == "" {
+	if asMap(t, object["objectRef"])["object"] == "" {
 		t.Fatalf("masked hit must keep coordinates: %#v", hits[0])
 	}
 }
 
-func TestKnowledgeOnlyWorkspaceCannotCheckoutByScanning(t *testing.T) {
+func TestObjectOnlyWorkspaceCannotCheckoutByScanning(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 	group := "kr://acme/groups/payments"
@@ -390,14 +390,14 @@ func TestKnowledgeOnlyWorkspaceCannotCheckoutByScanning(t *testing.T) {
 	defer response.Body.Close()
 	bodyBytes, _ := io.ReadAll(response.Body)
 	if response.StatusCode == http.StatusOK {
-		t.Fatalf("knowledge-only workspace must not project a file tree: %s", bodyBytes)
+		t.Fatalf("object-only workspace must not project a file tree: %s", bodyBytes)
 	}
 	var payload map[string]any
 	if err := json.Unmarshal(bodyBytes, &payload); err != nil {
 		t.Fatal(err, string(bodyBytes))
 	}
 	if asMap(t, payload["error"])["code"] != "CAPABILITY_UNSATISFIED" {
-		t.Fatalf("file gateway must fail closed instead of scanning knowledge objects: %#v", payload)
+		t.Fatalf("file gateway must fail closed instead of scanning objects: %#v", payload)
 	}
 }
 
@@ -417,7 +417,7 @@ func TestDatasetSearchExcludesPathsOutsidePublishedList(t *testing.T) {
 		t.Fatalf("prefix dataset must read listed files: %#v", listed)
 	}
 	secret := kc(h, "read", testObjectReference(t, core, "secret", ""), "--dataset", "docs")
-	expectCode(t, secret, "KNOWLEDGE_REF_UNRESOLVED")
+	expectCode(t, secret, "OBJECT_REF_UNRESOLVED")
 	if strings.Contains(secret.Stdout, "secret payment procedure") {
 		t.Fatal("prefix Dataset read leaked a file outside its published list", secret.Stdout)
 	}

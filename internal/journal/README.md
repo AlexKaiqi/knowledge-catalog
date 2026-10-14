@@ -1,6 +1,6 @@
 # internal/journal/
 
-本机过程账与幂等 stamp 的 JSONL 机制，不是 Catalog 历史、知识 LOG 或外部事件流。
+本机过程账与幂等 stamp 的 JSONL 机制，不是 Catalog 历史、对象 LOG 或外部事件流。
 
 | 文件 | 负责 |
 |---|---|

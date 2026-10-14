@@ -57,7 +57,7 @@ func TestLakeFSRepeatedReadsReuseCommitExistence(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := range 3 {
-		if _, err := repo.ReadFile("objects/missing.bin", root); kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+		if _, err := repo.ReadFile("objects/missing.bin", root); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 			t.Fatalf("read %d: want missing-object error, got %v", i, err)
 		}
 	}

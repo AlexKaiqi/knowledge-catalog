@@ -14,7 +14,7 @@ schema_ref: schema/system/capability-entrypoints/v1
       "help": "kc help access"
     },
     {
-      "action": "knowledge.binding.resolve",
+      "action": "object.binding.resolve",
       "command": "kc binding show",
       "description": "查看 Binding 声明",
       "help": "kc help binding show"

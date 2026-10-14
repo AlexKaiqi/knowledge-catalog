@@ -230,7 +230,7 @@ func relationGeneration(meta ports.Meta) string {
 	}))
 }
 
-func relationHitAt(repository kernel.RepositoryID, commit kernel.CommitID, query retrieval.RelationQuery, value objectmodel.KnowledgeValue, evidence []retrieval.LaneEvidence) (retrieval.RelationHit, bool, error) {
+func relationHitAt(repository kernel.RepositoryID, commit kernel.CommitID, query retrieval.RelationQuery, value objectmodel.ObjectValue, evidence []retrieval.LaneEvidence) (retrieval.RelationHit, bool, error) {
 	address, ok := relationAddress(value)
 	if !ok {
 		return retrieval.RelationHit{}, false, nil
@@ -256,13 +256,13 @@ func relationHitAt(repository kernel.RepositoryID, commit kernel.CommitID, query
 	}
 	sort.Strings(roles)
 	return retrieval.RelationHit{
-		KnowledgeRef: objectmodel.KnowledgeRef{Repository: repository, Object: address.ObjectID},
-		Repository:   repository, Commit: commit, ObjectID: address.ObjectID,
+		ObjectRef:  objectmodel.ObjectRef{Repository: repository, Object: address.ObjectID},
+		Repository: repository, Commit: commit, ObjectID: address.ObjectID,
 		MatchedRoles: roles, Relation: relation, Evidence: evidence,
 	}, true, nil
 }
 
-func relationAddress(value objectmodel.KnowledgeValue) (objectmodel.Address, bool) {
+func relationAddress(value objectmodel.ObjectValue) (objectmodel.Address, bool) {
 	if value.Address.Kind == objectmodel.KindRelation {
 		return value.Address, true
 	}

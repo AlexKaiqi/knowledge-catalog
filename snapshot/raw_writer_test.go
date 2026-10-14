@@ -78,7 +78,7 @@ func TestRawWriteRejectsIdempotencyConflict(t *testing.T) {
 	testkit.ExpectCode(t, err, kernel.ErrIdempotencyConflict)
 }
 
-func TestRawAndKnowledgeWritesShareCommandNamespace(t *testing.T) {
+func TestRawAndObjectWritesShareCommandNamespace(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	if _, err := s.Writer.Commit("one-command", objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
@@ -86,7 +86,7 @@ func TestRawAndKnowledgeWritesShareCommandNamespace(t *testing.T) {
 		Operations: []objectmodel.Operation{{
 			Op:      objectmodel.OpPut,
 			Address: objectmodel.Address{ObjectID: "note/a", Kind: objectmodel.KindEntity},
-			Value:   map[string]any{"body": "knowledge"},
+			Value:   map[string]any{"body": "object"},
 		}},
 	}); err != nil {
 		t.Fatal(err)
@@ -100,7 +100,7 @@ func TestRawAndKnowledgeWritesShareCommandNamespace(t *testing.T) {
 }
 
 // A target with no TreeStore capability is refused at the seam, naming
-// the missing capability — matching the pattern Store.Knowledge already
+// the missing capability — matching the pattern Store.Object already
 // established for the ② capability.
 func TestRawWriteRefusesTargetWithoutCapability(t *testing.T) {
 	s := testkit.NewSetup(t, "")
@@ -125,7 +125,7 @@ func TestRawWriteRefusesTargetWithoutCapability(t *testing.T) {
 }
 
 // plainRawSnapshot drops TreeStore the same way catalog's plainSnapshot
-// drops Knowledge: embedding the interface, not the concrete type, so the
+// drops Object: embedding the interface, not the concrete type, so the
 // method set is exactly what snapshot.Store declares.
 type plainRawSnapshot struct{ snapshot.Store }
 

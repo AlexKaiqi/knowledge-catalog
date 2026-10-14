@@ -11,13 +11,13 @@ import (
 	catalog "kc/snapshot/dataset"
 )
 
-func makeRepo(t *testing.T, repoID string, objects map[string]any) *testkit.KnowledgeRepository {
+func makeRepo(t *testing.T, repoID string, objects map[string]any) *testkit.ObjectRepository {
 	t.Helper()
 	repo := testkit.MakeRepository(t, repoID)
 	head := testkit.MustHead(t, repo, "refs/heads/main")
 	for objectID, value := range objects {
 		var err error
-		head, err = repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+		head, err = repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 			TargetRepository: kernel.RepositoryID(repoID), TargetRef: "refs/heads/main",
 			BaseCommit: head, ExpectedTargetCommit: head,
 			Operations: testkit.PutEntity(objectID, value, ""),
@@ -32,7 +32,7 @@ func makeRepo(t *testing.T, repoID string, objects map[string]any) *testkit.Know
 type fed struct {
 	catalog    catalog.Service
 	store      snapshot.Registry
-	publicRepo *testkit.KnowledgeRepository
+	publicRepo *testkit.ObjectRepository
 	registry   catalog.Registry
 	authority  *catalogMem
 }
@@ -46,7 +46,7 @@ func setupFed(t *testing.T) fed {
 	})
 	personalRepo := makeRepo(t, "kr://acme/personals/alice", map[string]any{"note/oncall": map[string]any{"text": "check freeze"}})
 	store := snapshot.NewRegistry()
-	for _, repo := range []*testkit.KnowledgeRepository{publicRepo, groupRepo, personalRepo} {
+	for _, repo := range []*testkit.ObjectRepository{publicRepo, groupRepo, personalRepo} {
 		if err := store.Add(repo); err != nil {
 			t.Fatal(err)
 		}
@@ -62,18 +62,18 @@ func setupFed(t *testing.T) fed {
 
 func TestT11ResolveView(t *testing.T) {
 	s := setupFed(t)
-	if _, err := s.catalog.DefineKnowledgeSet("alice-default", 1, []catalog.KnowledgeSetSource{
+	if _, err := s.catalog.DefineDataset("alice-default", 1, []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 		{Repository: "kr://acme/groups/payments", Selector: "refs/heads/main"},
 		{Repository: "kr://acme/personals/alice", Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	r1, err := s.catalog.ResolveKnowledgeSet("alice-default")
+	r1, err := s.catalog.ResolveDataset("alice-default")
 	if err != nil {
 		t.Fatal(err)
 	}
-	r2, err := s.catalog.ResolveKnowledgeSet("alice-default")
+	r2, err := s.catalog.ResolveDataset("alice-default")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,12 +87,12 @@ func TestT11ResolveView(t *testing.T) {
 
 func TestT11RejectsDuplicateAndUnresolved(t *testing.T) {
 	s := setupFed(t)
-	_, err := s.catalog.DefineKnowledgeSet("dup", 1, []catalog.KnowledgeSetSource{
+	_, err := s.catalog.DefineDataset("dup", 1, []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 	})
-	testkit.ExpectCode(t, err, kernel.ErrKnowledgeSetInvalid)
-	if _, err := s.catalog.DefineKnowledgeSet("bad-ref", 1, []catalog.KnowledgeSetSource{
+	testkit.ExpectCode(t, err, kernel.ErrDatasetInvalid)
+	if _, err := s.catalog.DefineDataset("bad-ref", 1, []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/missing"},
 	}); err == nil {
 		t.Fatal("publish must fail when the selector cannot be frozen to a commit")
@@ -101,7 +101,7 @@ func TestT11RejectsDuplicateAndUnresolved(t *testing.T) {
 
 func TestT11FederatedReadDoesNotOverride(t *testing.T) {
 	s := setupFed(t)
-	if _, err := s.catalog.DefineKnowledgeSet("v", 1, []catalog.KnowledgeSetSource{
+	if _, err := s.catalog.DefineDataset("v", 1, []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 		{Repository: "kr://acme/groups/payments", Selector: "refs/heads/main"},
 	}); err != nil {
@@ -128,7 +128,7 @@ func TestT11FederatedReadDoesNotOverride(t *testing.T) {
 
 func TestT11PropagatesUnmounted(t *testing.T) {
 	s := setupFed(t)
-	if _, err := s.catalog.DefineKnowledgeSet("v", 1, []catalog.KnowledgeSetSource{
+	if _, err := s.catalog.DefineDataset("v", 1, []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
@@ -139,12 +139,12 @@ func TestT11PropagatesUnmounted(t *testing.T) {
 	}
 	s.store.Delete("kr://acme/public/core")
 	_, err = testkit.FederatedRead(s.catalog, "v", "absent")
-	testkit.ExpectCode(t, err, kernel.ErrKnowledgeSetInvalid)
+	testkit.ExpectCode(t, err, kernel.ErrDatasetInvalid)
 }
 
 func TestT11ReadViewFollowsBranch(t *testing.T) {
 	s := setupFed(t)
-	if _, err := s.catalog.DefineKnowledgeSet("v", 1, []catalog.KnowledgeSetSource{{Repository: "kr://acme/public/core", Selector: "refs/heads/main"}}); err != nil {
+	if _, err := s.catalog.DefineDataset("v", 1, []catalog.DatasetSource{{Repository: "kr://acme/public/core", Selector: "refs/heads/main"}}); err != nil {
 		t.Fatal(err)
 	}
 	first, err := testkit.FederatedRead(s.catalog, "v", "policy/P-103")
@@ -155,7 +155,7 @@ func TestT11ReadViewFollowsBranch(t *testing.T) {
 		t.Fatal(first[0].Value)
 	}
 	head := testkit.MustHead(t, s.publicRepo, "refs/heads/main")
-	if _, err := s.publicRepo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	if _, err := s.publicRepo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: "kr://acme/public/core", TargetRef: "refs/heads/main",
 		BaseCommit: head, ExpectedTargetCommit: head,
 		Operations: testkit.PutEntity("policy/P-103", map[string]any{"statement": "later"}, ""),
@@ -166,7 +166,7 @@ func TestT11ReadViewFollowsBranch(t *testing.T) {
 	if err != nil || next[0].Value.(map[string]any)["statement"] != "public v1" {
 		t.Fatal("published dataset must stay frozen until republish", next, err)
 	}
-	if _, err := s.catalog.DefineKnowledgeSet("v", 2, []catalog.KnowledgeSetSource{{Repository: "kr://acme/public/core", Selector: "refs/heads/main"}}); err != nil {
+	if _, err := s.catalog.DefineDataset("v", 2, []catalog.DatasetSource{{Repository: "kr://acme/public/core", Selector: "refs/heads/main"}}); err != nil {
 		t.Fatal(err)
 	}
 	next, err = testkit.FederatedRead(s.catalog, "v", "policy/P-103")
@@ -174,7 +174,7 @@ func TestT11ReadViewFollowsBranch(t *testing.T) {
 		t.Fatal(next, err)
 	}
 	_, err = testkit.FederatedRead(s.catalog, "missing", "policy/P-103")
-	testkit.ExpectCode(t, err, kernel.ErrKnowledgeSetInvalid)
+	testkit.ExpectCode(t, err, kernel.ErrDatasetInvalid)
 }
 
 func TestT11NilRegistryRejected(t *testing.T) {
@@ -185,7 +185,7 @@ func TestT11NilRegistryRejected(t *testing.T) {
 func TestT11RegistrySurvives(t *testing.T) {
 	s := setupFed(t)
 	cat := s.catalog
-	if _, err := cat.DefineKnowledgeSet("v", 1, []catalog.KnowledgeSetSource{{Repository: "kr://acme/public/core", Selector: "refs/heads/main"}}); err != nil {
+	if _, err := cat.DefineDataset("v", 1, []catalog.DatasetSource{{Repository: "kr://acme/public/core", Selector: "refs/heads/main"}}); err != nil {
 		t.Fatal(err)
 	}
 	again, err := catalog.NewService(s.store, s.registry)
@@ -197,7 +197,7 @@ func TestT11RegistrySurvives(t *testing.T) {
 		t.Fatal(read, err)
 	}
 	head := testkit.MustHead(t, s.publicRepo, "refs/heads/main")
-	if _, err := s.publicRepo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	if _, err := s.publicRepo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: "kr://acme/public/core", TargetRef: "refs/heads/main",
 		BaseCommit: head, ExpectedTargetCommit: head,
 		Operations: testkit.PutEntity("policy/P-103", map[string]any{"statement": "later"}, ""),
@@ -212,10 +212,10 @@ func TestT11RegistrySurvives(t *testing.T) {
 
 func TestT11GitRegistryHistory(t *testing.T) {
 	s := setupFed(t)
-	if _, err := s.catalog.DefineKnowledgeSet("v", 1, []catalog.KnowledgeSetSource{{Repository: "kr://acme/public/core", Selector: "refs/heads/main"}}); err != nil {
+	if _, err := s.catalog.DefineDataset("v", 1, []catalog.DatasetSource{{Repository: "kr://acme/public/core", Selector: "refs/heads/main"}}); err != nil {
 		t.Fatal(err)
 	}
-	resolved, err := s.catalog.ResolveKnowledgeSet("v")
+	resolved, err := s.catalog.ResolveDataset("v")
 	if err != nil {
 		t.Fatal(err)
 	}

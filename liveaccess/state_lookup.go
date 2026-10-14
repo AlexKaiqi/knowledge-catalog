@@ -50,7 +50,7 @@ type ResourceOperationAccessor interface {
 
 const maxStateRuntimeResponseBytes = 8 << 20
 
-// HTTPStateLookup is the Knowledge Server adapter for resource-access/v1.
+// HTTPStateLookup is the Object Server adapter for resource-access/v1.
 // Each request posts to the origin declared on that Binding's Domain Schema
 // (or ResourceDescriptor). The adapter does not pin a server-wide URL.
 type HTTPStateLookup struct {
@@ -102,7 +102,7 @@ type stateRuntimeResponse struct {
 
 // AccessResource invokes one operation declared by a pinned
 // ResourceDescriptor. The operation name and call come from Canonical
-// knowledge; credentials and source-specific behavior remain in the runtime.
+// object; credentials and source-specific behavior remain in the runtime.
 func (h *HTTPStateLookup) AccessResource(ctx context.Context, request ResourceOperationRequest) (any, error) {
 	if h == nil || h.client == nil {
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "resource runtime HTTP adapter is not configured")
@@ -307,7 +307,7 @@ func resourceRuntimeHTTPError(status int, raw []byte) error {
 		return kernel.Fail(kernel.ErrForbidden, "resource runtime denied access: %s", message)
 	}
 	switch code {
-	case kernel.ErrUsageInvalid, kernel.ErrPreconditionFailed, kernel.ErrKnowledgeRefUnresolved,
+	case kernel.ErrUsageInvalid, kernel.ErrPreconditionFailed, kernel.ErrObjectRefUnresolved,
 		kernel.ErrCapabilityUnsatisfied, kernel.ErrForbidden, kernel.ErrUnauthenticated:
 		return kernel.Fail(code, "resource runtime: %s", message)
 	}

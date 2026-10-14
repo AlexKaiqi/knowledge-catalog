@@ -10,23 +10,23 @@ import (
 	"kc/internal/testkit"
 	"kc/kernel"
 	objectmodel "kc/object"
-	knowledgemaintenance "kc/object/maintenance"
+	objectmaintenance "kc/object/maintenance"
 	"kc/object/reader"
 	"kc/snapshot"
 )
 
 type panicScannerRepository struct {
-	*testkit.KnowledgeRepository
+	*testkit.ObjectRepository
 }
 
-func (*panicScannerRepository) ScanSnapshotPage(kernel.CommitID, knowledgemaintenance.ScanRequest) (knowledgemaintenance.ScanPage, error) {
+func (*panicScannerRepository) ScanSnapshotPage(kernel.CommitID, objectmaintenance.ScanRequest) (objectmaintenance.ScanPage, error) {
 	panic("consumer path called maintenance scanner")
 }
 
 func TestConsumerReadSchemaSearchAndRelationsNeverCallMaintenanceScanner(t *testing.T) {
 	repo := testkit.MakeRepository(t, "kr://acme/no-consumer-scan")
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
-	commit, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	commit, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef,
 		BaseCommit: root, ExpectedTargetCommit: root,
 		Operations: []objectmodel.Operation{
@@ -47,7 +47,7 @@ func TestConsumerReadSchemaSearchAndRelationsNeverCallMaintenanceScanner(t *test
 	if _, err := idx.Ensure(repo, commit); err != nil {
 		t.Fatal(err)
 	}
-	poison := &panicScannerRepository{KnowledgeRepository: repo}
+	poison := &panicScannerRepository{ObjectRepository: repo}
 	if _, err := poison.Read("policy/a", commit); err != nil {
 		t.Fatal(err)
 	}

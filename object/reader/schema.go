@@ -77,7 +77,7 @@ func DescribeRepoSchema(repo objectmodel.Repository, commitID kernel.CommitID, o
 			if err != nil {
 				return SchemaReport{}, err
 			}
-			values := map[objectmodel.ObjectID]objectmodel.KnowledgeValue{}
+			values := map[objectmodel.ObjectID]objectmodel.ObjectValue{}
 			if batch, ok := repo.(objectmodel.BatchReadStore); ok {
 				values, err = batch.ReadMany(ids, commitID)
 				if err != nil {

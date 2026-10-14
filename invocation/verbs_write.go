@@ -302,7 +302,7 @@ func CurrentDigests(r *reader.Reader, repositoryID kernel.RepositoryID, commit k
 	for _, op := range ops {
 		resolution, err := r.ResolveAddress(repositoryID, op.Address, commit)
 		if err != nil {
-			if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+			if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 				continue
 			}
 			return nil, err

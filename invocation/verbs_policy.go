@@ -173,7 +173,7 @@ func VerbObserveStores(cx *Invocation) (any, error) {
 	return ObservePublicStores(stores, file, nil, nil), nil
 }
 
-func VerbCheckKnowledgeSet(cx *Invocation) (any, error) {
+func VerbCheckDataset(cx *Invocation) (any, error) {
 	cat, err := PickDatasets(cx.WS, cx.Flags)
 	if err != nil {
 		return nil, err

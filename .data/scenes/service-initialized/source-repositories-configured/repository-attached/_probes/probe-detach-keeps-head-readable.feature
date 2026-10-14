@@ -3,21 +3,21 @@
 Feature: 解除成员登记后 System 仍可见且该仓 HEAD 仍可读
 
   Scenario: 解除成员登记后 System 仍可见且该仓 HEAD 仍可读
-    When I run `kc detach --repo kr://scene/knowledge`
+    When I run `kc detach --repo kr://scene/object`
     Then the output has:
-      | repositoryId | kr://scene/knowledge |
+      | repositoryId | kr://scene/object |
       | detached     | true |
-    When I run `kc writer head --repo kr://scene/knowledge`
+    When I run `kc writer head --repo kr://scene/object`
     Then the output has:
       | home      | absent |
       | namespace | absent |
-      | repository | kr://scene/knowledge |
+      | repository | kr://scene/object |
       | commit     | nonempty |
 
     When I run `kc show`
     Then the output includes:
       | repositories[].id | kr://kc/system |
-    When I run `kc writer head --repo kr://scene/knowledge`
+    When I run `kc writer head --repo kr://scene/object`
     Then the output has:
-      | repository | kr://scene/knowledge |
+      | repository | kr://scene/object |
       | commit     | nonempty |

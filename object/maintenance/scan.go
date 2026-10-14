@@ -13,7 +13,7 @@ type ScanRequest struct {
 }
 
 type ScanPage struct {
-	Values       []objectmodel.KnowledgeValue
+	Values       []objectmodel.ObjectValue
 	Continuation string
 	Exhausted    bool
 }
@@ -73,7 +73,7 @@ func (s *pagedRepositoryScanner) ScanSnapshotPage(commit kernel.CommitID, reques
 	if err != nil {
 		return ScanPage{}, err
 	}
-	page := ScanPage{Values: make([]objectmodel.KnowledgeValue, 0, len(identities.ObjectIDs)),
+	page := ScanPage{Values: make([]objectmodel.ObjectValue, 0, len(identities.ObjectIDs)),
 		Continuation: identities.Continuation, Exhausted: identities.Exhausted}
 	for _, objectID := range identities.ObjectIDs {
 		value, ok := values[objectID]
@@ -86,7 +86,7 @@ func (s *pagedRepositoryScanner) ScanSnapshotPage(commit kernel.CommitID, reques
 	return page, nil
 }
 
-func WalkSnapshot(scanner SnapshotScanner, commit kernel.CommitID, visit func(objectmodel.KnowledgeValue) error) error {
+func WalkSnapshot(scanner SnapshotScanner, commit kernel.CommitID, visit func(objectmodel.ObjectValue) error) error {
 	request := ScanRequest{Limit: MaxScanLimit}
 	for {
 		page, err := scanner.ScanSnapshotPage(commit, request)
@@ -108,7 +108,7 @@ func WalkSnapshot(scanner SnapshotScanner, commit kernel.CommitID, visit func(ob
 	}
 }
 
-func WalkRepository(value any, commit kernel.CommitID, visit func(objectmodel.KnowledgeValue) error) error {
+func WalkRepository(value any, commit kernel.CommitID, visit func(objectmodel.ObjectValue) error) error {
 	scanner, err := RequireScanner(value)
 	if err != nil {
 		return err

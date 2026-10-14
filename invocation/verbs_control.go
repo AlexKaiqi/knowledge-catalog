@@ -72,7 +72,7 @@ func VerbPreview(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := PrepareKnowledgePinContext(cx.Flags); err != nil {
+	if err := PrepareObjectPinContext(cx.Flags); err != nil {
 		return nil, err
 	}
 	if cx.Flag("dataset") == "" && cx.Flag("pin") == "" {

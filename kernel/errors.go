@@ -60,8 +60,8 @@ const (
 	// ErrTargetRepositoryDenied: write target is not this Snapshot.
 	ErrTargetRepositoryDenied ErrorCode = "TARGET_REPOSITORY_DENIED"
 
-	// ErrKnowledgeRefUnresolved: version exists; object or event is missing there.
-	ErrKnowledgeRefUnresolved ErrorCode = "KNOWLEDGE_REF_UNRESOLVED"
+	// ErrObjectRefUnresolved: version exists; object or event is missing there.
+	ErrObjectRefUnresolved ErrorCode = "OBJECT_REF_UNRESOLVED"
 
 	// ErrVersionUnresolved: commit or ref coordinate does not exist.
 	ErrVersionUnresolved ErrorCode = "VERSION_UNRESOLVED"
@@ -79,10 +79,10 @@ const (
 	// ErrValidationBasisMismatch: PASSED report is not bound to this exact Preview.
 	ErrValidationBasisMismatch ErrorCode = "VALIDATION_BASIS_MISMATCH"
 
-	// ErrKnowledgeSetInvalid: knowledge-set recipe cannot be used (unknown,
+	// ErrDatasetInvalid: dataset recipe cannot be used (unknown,
 	// retired, duplicate source, empty sources, selector has no such ref).
 	// Unmounted members are ErrUsageInvalid.
-	ErrKnowledgeSetInvalid ErrorCode = "KNOWLEDGE_SET_INVALID"
+	ErrDatasetInvalid ErrorCode = "DATASET_INVALID"
 
 	// ErrForbidden: --as did not hit allow.json.
 	ErrForbidden ErrorCode = "FORBIDDEN"

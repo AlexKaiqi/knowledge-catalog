@@ -42,7 +42,7 @@ func memberSourceOperations(bound bool) []objectmodel.Operation {
 }
 
 func selectedMemberScope(repo objectmodel.Repository, commit kernel.CommitID) *reader.Serving {
-	return reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return repo, nil }, reader.KnowledgeSetPin{
+	return reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return repo, nil }, reader.DatasetPin{
 		Repositories: map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit},
 		Items:        []reader.DatasetItem{{Repository: repo.ID(), Commit: commit, Kind: "prefix", Prefix: "public"}},
 	})
@@ -76,7 +76,7 @@ func assertScopedMemberCategory(t *testing.T, scope *reader.Serving, bound bool)
 		t.Fatalf("fixed source classification changed read scope: %#v requests=%#v error=%v", values, lookup.requests, err)
 	}
 	if bound {
-		assertUnitFailure(t, values[0], address, kernel.ErrKnowledgeRefUnresolved)
+		assertUnitFailure(t, values[0], address, kernel.ErrObjectRefUnresolved)
 		samples := collectedSamples(t, collector)
 		if len(samples) != 1 || samples[0].Outcome != evidence.FailureOutcome || samples[0].Observation != nil ||
 			samples[0].Declaration.ValueSource == nil || samples[0].Declaration.ValueSource.Kind != objectmodel.ValueSourceBinding {
@@ -91,28 +91,28 @@ func assertScopedMemberCategory(t *testing.T, scope *reader.Serving, bound bool)
 }
 
 type nativeMemberSourceFixture struct {
-	*testkit.KnowledgeRepository
+	*testkit.ObjectRepository
 	bound       bool
 	schemaReads int
 }
 
-func (*nativeMemberSourceFixture) NativeKnowledgeRepository() {}
+func (*nativeMemberSourceFixture) NativeObjectRepository() {}
 
-func (n *nativeMemberSourceFixture) Read(id objectmodel.ObjectID, commit kernel.CommitID) (objectmodel.KnowledgeValue, error) {
+func (n *nativeMemberSourceFixture) Read(id objectmodel.ObjectID, commit kernel.CommitID) (objectmodel.ObjectValue, error) {
 	if objectmodel.IsSchemaObject(id) {
 		n.schemaReads++
-		return objectmodel.KnowledgeValue{}, fmt.Errorf("unpublished native Schema must not be read")
+		return objectmodel.ObjectValue{}, fmt.Errorf("unpublished native Schema must not be read")
 	}
-	value, err := n.KnowledgeRepository.Read(id, commit)
+	value, err := n.ObjectRepository.Read(id, commit)
 	return n.declare(value), err
 }
 
-func (n *nativeMemberSourceFixture) ReadAddress(address objectmodel.Address, commit kernel.CommitID) (objectmodel.KnowledgeValue, error) {
-	value, err := n.KnowledgeRepository.ReadAddress(address, commit)
+func (n *nativeMemberSourceFixture) ReadAddress(address objectmodel.Address, commit kernel.CommitID) (objectmodel.ObjectValue, error) {
+	value, err := n.ObjectRepository.ReadAddress(address, commit)
 	return n.declare(value), err
 }
 
-func (n *nativeMemberSourceFixture) declare(value objectmodel.KnowledgeValue) objectmodel.KnowledgeValue {
+func (n *nativeMemberSourceFixture) declare(value objectmodel.ObjectValue) objectmodel.ObjectValue {
 	if n.bound {
 		for i := range value.Declarations {
 			value.Declarations[i].ValueSource = (&objectmodel.SchemaDefinition{Aspect: "readings", Origin: "https://source.example"}).BindingSource()
@@ -131,7 +131,7 @@ func TestNativeMemberKeepsDefaultSnapshotAndExplicitBindingCategories(t *testing
 			if err != nil {
 				t.Fatal(err)
 			}
-			native := &nativeMemberSourceFixture{KnowledgeRepository: s.Repo, bound: bound}
+			native := &nativeMemberSourceFixture{ObjectRepository: s.Repo, bound: bound}
 			repo, err := reader.NewReader(nil).Wrap(native, kernel.ErrCapabilityUnsatisfied)
 			if err != nil {
 				t.Fatal(err)

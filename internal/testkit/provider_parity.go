@@ -8,13 +8,13 @@ import (
 
 	"kc/kernel"
 	objectmodel "kc/object"
-	knowledgemaintenance "kc/object/maintenance"
+	objectmaintenance "kc/object/maintenance"
 	"kc/object/reader"
 	"kc/object/writer"
 	"kc/snapshot"
 )
 
-// ProviderParityContract applies one deterministic knowledge operation script
+// ProviderParityContract applies one deterministic object operation script
 // to two independent providers. Commits are aligned by script step because
 // physical commit identifiers are intentionally provider-specific.
 func ProviderParityContract(
@@ -106,7 +106,7 @@ func ProviderParityContract(
 		}
 		leftCode = kernel.CodeOf(readMissing(left.repo, left.head()))
 		rightCode = kernel.CodeOf(readMissing(right.repo, right.head()))
-		if leftCode != rightCode || leftCode != kernel.ErrKnowledgeRefUnresolved {
+		if leftCode != rightCode || leftCode != kernel.ErrObjectRefUnresolved {
 			t.Fatalf("missing read codes differ: left=%s right=%s", leftCode, rightCode)
 		}
 	})
@@ -183,7 +183,7 @@ func readMissing(repo objectmodel.Repository, commit kernel.CommitID) error {
 
 type parityObservation struct {
 	Resolutions map[objectmodel.ObjectID]objectmodel.Resolution
-	Values      map[objectmodel.ObjectID]objectmodel.KnowledgeValue
+	Values      map[objectmodel.ObjectID]objectmodel.ObjectValue
 	Provenance  map[objectmodel.ObjectID]objectmodel.ProvenanceTrace
 	ObjectIDs   []objectmodel.ObjectID
 	Changed     []objectmodel.ObjectID
@@ -213,7 +213,7 @@ func observeParity(t *testing.T, side *paritySide) parityObservation {
 	current := side.head()
 	out := parityObservation{
 		Resolutions: map[objectmodel.ObjectID]objectmodel.Resolution{},
-		Values:      map[objectmodel.ObjectID]objectmodel.KnowledgeValue{},
+		Values:      map[objectmodel.ObjectID]objectmodel.ObjectValue{},
 		Provenance:  map[objectmodel.ObjectID]objectmodel.ProvenanceTrace{},
 		History:     map[objectmodel.ObjectID][]parityRevision{},
 	}
@@ -252,11 +252,11 @@ func observeParity(t *testing.T, side *paritySide) parityObservation {
 		}
 		out.History[id] = normalizeHistory(history, side.commits)
 	}
-	scanner, err := knowledgemaintenance.RequireScanner(side.repo)
+	scanner, err := objectmaintenance.RequireScanner(side.repo)
 	if err != nil {
 		t.Fatal(err)
 	}
-	page, err := scanner.ScanSnapshotPage(current, knowledgemaintenance.ScanRequest{Limit: 100})
+	page, err := scanner.ScanSnapshotPage(current, objectmaintenance.ScanRequest{Limit: 100})
 	if err != nil {
 		t.Fatal(err)
 	}

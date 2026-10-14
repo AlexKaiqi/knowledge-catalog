@@ -162,7 +162,7 @@ func Parse(content string) *Unit {
 	if objectmodel.IsReadmeSchema(schemaRef) || (obj["entity"] != "" && strings.HasSuffix(strings.ToLower(obj["path_hint"]), ".md")) {
 		value = map[string]any{"body": body}
 	} else if kernel.UnmarshalJSON([]byte(body), &value) != nil && looksLikeStructuredYAML(body) {
-		// Knowledge drafts are commonly authored as YAML. Decode the
+		// Object drafts are commonly authored as YAML. Decode the
 		// payload into the same JSON-shaped value accepted by Writer so ingest is
 		// a mechanical preview, not a fixture-specific domain translation step.
 		// Plain Markdown/text remains a string because it is a valid YAML scalar.

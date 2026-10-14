@@ -49,7 +49,7 @@ type EvidenceConfig struct {
 }
 
 // RegistryBinding locates an independent Snapshot authority that stores Registry
-// registry files. It is not a Knowledge Repository and must not reuse a member
+// registry files. It is not an Object Repository and must not reuse a member
 // repository identity. Initialization may create the Registry ref; opening a
 // deployment never creates that ref.
 type RegistryBinding struct {

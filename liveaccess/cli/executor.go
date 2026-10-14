@@ -26,9 +26,9 @@ func flagString(flags map[string]any, name string) string {
 	return strings.TrimSpace(fmt.Sprint(flags[name]))
 }
 
-func (e *executor) scope(flags map[string]any) objectclient.KnowledgeScope {
+func (e *executor) scope(flags map[string]any) objectclient.ObjectScope {
 	if repo := flagString(flags, "repo"); repo != "" {
-		return objectclient.KnowledgeScope{Repository: repo, Commit: flagString(flags, "commit"), Ref: flagString(flags, "ref")}
+		return objectclient.ObjectScope{Repository: repo, Commit: flagString(flags, "commit"), Ref: flagString(flags, "ref")}
 	}
 	scope := e.context.Scope
 	if dataset := flagString(flags, "dataset"); dataset != "" {
@@ -54,10 +54,10 @@ func (e *executor) Execute(ctx context.Context, path string, flags map[string]an
 	}
 	var output any
 	if path == "binding show" {
-		err := e.client.ResolveBinding(ctx, BindingRequest{KnowledgeScope: e.scope(flags), Object: flagString(flags, "object"), Aspect: flagString(flags, "aspect"), Member: flagString(flags, "member")}, options, &output)
+		err := e.client.ResolveBinding(ctx, BindingRequest{ObjectScope: e.scope(flags), Object: flagString(flags, "object"), Aspect: flagString(flags, "aspect"), Member: flagString(flags, "member")}, options, &output)
 		return output, err
 	}
-	request := AccessRequest{KnowledgeScope: e.scope(flags), Object: flagString(flags, "object")}
+	request := AccessRequest{ObjectScope: e.scope(flags), Object: flagString(flags, "object")}
 	if path == "invoke" {
 		request.Implementation, request.Operation = flagString(flags, "implementation"), flagString(flags, "operation")
 		request.Input = json.RawMessage(flagString(flags, "input"))

@@ -14,7 +14,7 @@ func (r *schemaResolver) prepareFinalUnits(cs objectmodel.ChangeSet) error {
 	if r.nativeOK {
 		return r.prepareNativeFinalUnits(cs)
 	}
-	idx, err := readChangedKnowledgeObjects(r.tree, r.at, cs.Operations)
+	idx, err := readChangedObjects(r.tree, r.at, cs.Operations)
 	if err != nil {
 		return err
 	}
@@ -99,7 +99,7 @@ func (r *schemaResolver) prepareNativeFinalUnits(cs objectmodel.ChangeSet) error
 	existing := []objectmodel.Unit{}
 	for _, id := range changedObjectIDs(cs.Operations) {
 		value, err := r.native.Read(id, r.at)
-		if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+		if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 			continue
 		}
 		if err != nil {
@@ -125,7 +125,7 @@ func (r *schemaResolver) prepareNativeFinalUnits(cs objectmodel.ChangeSet) error
 	return nil
 }
 
-func (r *schemaResolver) nativePlanningUnits(id objectmodel.ObjectID, value objectmodel.KnowledgeValue) ([]objectmodel.Unit, error) {
+func (r *schemaResolver) nativePlanningUnits(id objectmodel.ObjectID, value objectmodel.ObjectValue) ([]objectmodel.Unit, error) {
 	addresses := map[string]objectmodel.Address{}
 	for _, declaration := range value.Declarations {
 		addresses[objectmodel.AddressKey(declaration.Address)] = declaration.Address

@@ -15,8 +15,8 @@ Provider 只返回带 basis 的 `CandidateRef`，不得把 `_source`、stored fi
 `RelationRetrieveRequest.Repository/Basis` 指向关系存储仓；`Query.Endpoint` 是独立的端点引用，二者的 Repository 可以不同。Dataset 一跳查询扇出到固定成员投影，不因端点引用而查询范围外的仓；候选仍在关系存储仓同 commit 回读。端点角色与完整引用必须关联匹配，不能混配多个端点的字段。
 
 Workspace 是调用范围，不是检索字段。物理文档不得保存 Workspace/PinID；上层从
-ResolvedKnowledgeSet 为每个 pin 成员 `(repository, commit)` 生成 fragment，复用对应投影后再合并。
-公开命中经交付链按仓 `knowledge.read` 屏蔽正文（`doc/design/permissions.md`）。
+ResolvedDataset 为每个 pin 成员 `(repository, commit)` 生成 fragment，复用对应投影后再合并。
+公开命中经交付链按仓 `object.read` 屏蔽正文（`doc/design/permissions.md`）。
 OpenSearch 多 index、`_msearch` 或 PinID 级短期 alias 只是可丢优化。
 
 ## TRAVERSE：有界邻域闭包
@@ -29,7 +29,7 @@ OpenSearch 多 index、`_msearch` 或 PinID 级短期 alias 只是可丢优化�
   只过滤节点集合，不过滤边）；`edges` 是入选关系对象（保留自身 `repository/commit` 坐标与完整
   关系端点，每条边恰好返回一次）；不枚举全部路径、不承诺最短路径。
 - 引用到范围外对象的 frontier **止步并列 boundary**（`BoundaryOutsideScope`）；boundary 不透露
-  关系体之外的任何信息，也不扩大授权（PERMISSIONS `knowledge.traverse`）。
+  关系体之外的任何信息，也不扩大授权（PERMISSIONS `object.traverse`）。
 - 页是闭包的不相交增量，`Continuation` 绑定查询摘要、固定范围视图与范围身份（Dataset 为清单
   摘要），变更后按 `PRECONDITION_FAILED` 拒绝；`Exhausted=true` 表示闭包已完整。
 - 每一跳复用同一关系执行 lane（`index.RelationsAtContext`：layer ③ 候选 → 同 commit authority
@@ -39,14 +39,14 @@ OpenSearch 多 index、`_msearch` 或 PinID 级短期 alias 只是可丢优化�
 SearchRequest → RetrievalPlan → CandidateRef
               → object/reader READ（同一 basis）
 			  → workspace: liveaccess State hydrate
-              → SearchResult(SearchView, Completeness, KnowledgeHit)
+              → SearchResult(SearchView, Completeness, ObjectHit)
 ```
 
 `SearchRequest` 有两种互斥形态：既有 `clauses` 继续表示隐式 `All`；组合查询使用
 `expression = Clause | All | Any`，`SORT` 独立留在请求级，不能进入表达式。两种形态不能混用。
 表达式深度和叶子数有协议上限，防止嵌套输入把 planner/provider 变成无界工作。`Not` 暂不进入
 逻辑合同：只有物理计划证明存在有界全集时，补集才是可执行的候选定位。现有 CLI flags 仍只生成
-兼容的隐式 `All`；不为组合查询发明字符串 DSL。typed `POST /knowledge/v1/search` 使用
+兼容的隐式 `All`；不为组合查询发明字符串 DSL。typed `POST /object/v1/search` 使用
 `expression` 传树、使用 `order` 传请求级 `SORT`，并拒绝与旧 `query/match/equal/...` 或旧
 `sort` 混用。
 
@@ -54,16 +54,16 @@ Provider 仍逐叶子 `Probe`；显式表达式还必须实现 `index.Expression
 `All/Any` 组合。只有叶子能力、没有组合证明的 Provider 在执行前返回
 `CAPABILITY_UNSATISFIED`，不得把叶子均支持推导成任意组合均支持。
 
-命中后的 Snapshot 回读必须使用请求开始时钉死的 commit，不能改读 HEAD。纯 Snapshot 查询使用 Snapshot projection；涉及 State Binding 字段时使用独立动态 projection，并从其同 revision Serving State 回读。`SearchView` 只携带紧凑 projection revision，每个命中的 observation basis 放在 `KnowledgeVersion.observations`，避免结果信封随全库规模增长。
+命中后的 Snapshot 回读必须使用请求开始时钉死的 commit，不能改读 HEAD。纯 Snapshot 查询使用 Snapshot projection；涉及 State Binding 字段时使用独立动态 projection，并从其同 revision Serving State 回读。`SearchView` 只携带紧凑 projection revision，每个命中的 observation basis 放在 `ObjectVersion.observations`，避免结果信封随全库规模增长。
 
 每次实际执行 `SEARCH` 或一跳 `RELATION` 后，应用层在 access evidence 之后追加通用
 `retrieval.jsonl`：保存逻辑请求、固定 SearchView、最终候选 Ref/rank、provider lane、回读 basis、
-候选/ hydrate/丢弃计数、完整性与错误，不复制完整知识正文。成功结果返回 `retrievalEvidenceId`；
+候选/ hydrate/丢弃计数、完整性与错误，不复制完整对象正文。成功结果返回 `retrievalEvidenceId`；
 feedback 可直接监督该候选窗，或经下游 refine 自动关联。详见
 [服务边界](../doc/design/service.md)。
 
 Refine 是可选、Ref-preserving 的 `SEMANTIC_FILTER` / `SEMANTIC_RERANK`。公开
-`POST /knowledge/v1/rerank` 接受固定 Workspace 上的显式 KnowledgeRef 集合；应用层逐 Ref 授权并
+`POST /object/v1/rerank` 接受固定 Workspace 上的显式 ObjectRef 集合；应用层逐 Ref 授权并
 在同一 pin Canonical 回读、执行 `EvaluationProjection` 后，才调用注入的批量 `Reranker`。Provider
 必须把每个输入 Ref 恰好放入一个 RankGroup 或 `unjudged`；未知、重复、遗漏 Ref 均失败关闭。
 `topK` 只是输出选择，已评判但未入选者进入 `notSelected`，不能伪装成 `unjudged`。结果记录
@@ -71,7 +71,7 @@ provider/model/spec revision/candidate digest/SearchView；未配置 Provider �
 `CAPABILITY_UNSATISFIED`，普通 SEARCH 不受影响。`KeywordJudge` / `KeywordScorer` 仍只是确定性
 合同夹具，不代表生产模型。
 
-MVP 另提供 `POST /knowledge/v1/search:rerank`：服务端先执行一个无 continuation、最多 200 条的
+MVP 另提供 `POST /object/v1/search:rerank`：服务端先执行一个无 continuation、最多 200 条的
 固定候选窗口，再把同一 `SearchView` 上已授权、已 hydrate 的命中单次 listwise 交给 Reranker。
 结果同时返回 retrieval 与 rerank 两阶段证据；原始 provider/lane/local rank 进入候选摘要证据，但
 不会发送给语义模型。投影后请求信封限制为每候选 32 KiB、整窗 128 KiB，超限在出站前

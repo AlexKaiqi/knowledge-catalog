@@ -43,7 +43,7 @@ func (r *nativeReferencePlanRepo) PlanReference(objectmodel.Reference, kernel.Co
 
 func TestNativeReferencePlanRejectsUnprovenOrConflictingCoordinates(t *testing.T) {
 	rd, guard, _, at := newReferenceReadFixture(t)
-	base, err := rd.Require(guard.ID(), kernel.ErrKnowledgeRefUnresolved)
+	base, err := rd.Require(guard.ID(), kernel.ErrObjectRefUnresolved)
 	if err != nil {
 		t.Fatal(err)
 	}

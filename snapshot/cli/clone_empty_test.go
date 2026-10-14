@@ -16,9 +16,9 @@ import (
 	"kc/snapshot/dataset"
 )
 
-func cloneRecordingSDK(t *testing.T, read func(http.ResponseWriter, client.WorkspaceFileReadRequest, dataset.ResolvedKnowledgeSet)) (client.Client, *testTransport) {
+func cloneRecordingSDK(t *testing.T, read func(http.ResponseWriter, client.WorkspaceFileReadRequest, dataset.ResolvedDataset)) (client.Client, *testTransport) {
 	t.Helper()
-	pin := dataset.ResolvedKnowledgeSet{SetID: "delivery", Revision: 1, PinID: "fixed-publication", Repositories: map[kernel.RepositoryID]kernel.CommitID{"kr://source": "fixed-commit"}, Items: []dataset.DatasetItem{{Kind: dataset.DatasetItemFile, Repository: "kr://source", Commit: "fixed-commit", File: "source.bin", Target: "file.bin"}}}
+	pin := dataset.ResolvedDataset{SetID: "delivery", Revision: 1, PinID: "fixed-publication", Repositories: map[kernel.RepositoryID]kernel.CommitID{"kr://source": "fixed-commit"}, Items: []dataset.DatasetItem{{Kind: dataset.DatasetItemFile, Repository: "kr://source", Commit: "fixed-commit", File: "source.bin", Target: "file.bin"}}}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost || request.Header.Get("Authorization") != "Bearer caller-provided" {
 			t.Errorf("clone did not use the configured transport: %s %s", request.Method, request.URL.Path)
@@ -35,7 +35,7 @@ func cloneRecordingSDK(t *testing.T, read func(http.ResponseWriter, client.Works
 			if err := json.NewDecoder(request.Body).Decode(&input); err != nil {
 				t.Error(err)
 			}
-			var fixed dataset.ResolvedKnowledgeSet
+			var fixed dataset.ResolvedDataset
 			if json.Unmarshal(input.Pin, &fixed) != nil || fixed.PinID != pin.PinID || input.Path != "file.bin" {
 				t.Errorf("clone file request lost its publication or delivered path: %#v", input)
 			}
@@ -55,7 +55,7 @@ func cloneRecordingSDK(t *testing.T, read func(http.ResponseWriter, client.Works
 }
 
 func TestModuleCloneMaterializesZeroByteFileAndCountsIt(t *testing.T) {
-	sdk, transport := cloneRecordingSDK(t, func(w http.ResponseWriter, input client.WorkspaceFileReadRequest, pin dataset.ResolvedKnowledgeSet) {
+	sdk, transport := cloneRecordingSDK(t, func(w http.ResponseWriter, input client.WorkspaceFileReadRequest, pin dataset.ResolvedDataset) {
 		if input.Offset != 0 {
 			t.Errorf("empty file requested another range: %d", input.Offset)
 		}
@@ -83,7 +83,7 @@ func TestModuleCloneMaterializesZeroByteFileAndCountsIt(t *testing.T) {
 }
 
 func TestModuleCloneNonAdvancingResponseDoesNotCreateAnEmptyFile(t *testing.T) {
-	sdk, _ := cloneRecordingSDK(t, func(w http.ResponseWriter, input client.WorkspaceFileReadRequest, pin dataset.ResolvedKnowledgeSet) {
+	sdk, _ := cloneRecordingSDK(t, func(w http.ResponseWriter, input client.WorkspaceFileReadRequest, pin dataset.ResolvedDataset) {
 		_ = json.NewEncoder(w).Encode(client.WorkspaceFileReadResponse{Pin: pin, Path: input.Path, EOF: false})
 	})
 	target := filepath.Join(t.TempDir(), "cloned")
@@ -97,7 +97,7 @@ func TestModuleCloneNonAdvancingResponseDoesNotCreateAnEmptyFile(t *testing.T) {
 }
 
 func TestModuleCloneReadFailurePreservesPreviouslyWrittenBytes(t *testing.T) {
-	sdk, _ := cloneRecordingSDK(t, func(w http.ResponseWriter, input client.WorkspaceFileReadRequest, pin dataset.ResolvedKnowledgeSet) {
+	sdk, _ := cloneRecordingSDK(t, func(w http.ResponseWriter, input client.WorkspaceFileReadRequest, pin dataset.ResolvedDataset) {
 		if input.Offset == 0 {
 			_ = json.NewEncoder(w).Encode(client.WorkspaceFileReadResponse{Pin: pin, Path: input.Path, Content: []byte("partial"), TotalBytes: 20})
 			return

@@ -19,7 +19,7 @@ func TestDeploymentContractRetiresLocalAndManualRegistration(t *testing.T) {
 }
 
 func TestDeploymentContractHelpWorksBeforeConnectionAndIdentity(t *testing.T) {
-	for _, args := range [][]string{{"knowledge", "--help"}, {"read", "--help"}, {"help", "knowledge"}, {"deployment", "--help"}} {
+	for _, args := range [][]string{{"object", "--help"}, {"read", "--help"}, {"help", "object"}, {"deployment", "--help"}} {
 		result := Run(args)
 		if result.Status != 0 || !strings.Contains(result.Stdout, "kc") {
 			t.Errorf("offline help %v: %s", args, result.Stdout)

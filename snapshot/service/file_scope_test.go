@@ -17,14 +17,14 @@ type auditedDatasetService struct {
 	opened int
 }
 
-func (s *auditedDatasetService) Set(id string) (dataset.KnowledgeSet, error) {
+func (s *auditedDatasetService) Set(id string) (dataset.Dataset, error) {
 	s.opened++
 	return s.Service.Set(id)
 }
 
 func TestSnapshotFileAuthorizationPrecedesDatasetLookup(t *testing.T) {
 	fixture, source := newFileHTTPFixture(t)
-	if _, err := fixture.catalog.DefineKnowledgeSet("files", 1, []dataset.KnowledgeSetSource{{Repository: source.id, Selector: "refs/heads/main", File: "reference/a.json", Target: "public.json"}}); err != nil {
+	if _, err := fixture.catalog.DefineDataset("files", 1, []dataset.DatasetSource{{Repository: source.id, Selector: "refs/heads/main", File: "reference/a.json", Target: "public.json"}}); err != nil {
 		t.Fatal(err)
 	}
 	source.reads = 0 // Publication is outside the unauthorized lookup observation.
@@ -63,13 +63,13 @@ func TestSnapshotFileRejectsRetiredCatalogSelectorBeforeLookup(t *testing.T) {
 
 func TestSnapshotFileRechecksCurrentAuthorizationBeforeBytes(t *testing.T) {
 	fixture, source := newFileHTTPFixture(t)
-	if _, err := fixture.catalog.DefineKnowledgeSet("files", 1, []dataset.KnowledgeSetSource{
+	if _, err := fixture.catalog.DefineDataset("files", 1, []dataset.DatasetSource{
 		{Repository: source.id, Selector: "refs/heads/main", Path: dataset.MountPath("docs"), SubPath: "reference"},
 		{Repository: source.id, Selector: "refs/heads/main", File: "reference/a.json", Target: "public.json"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	pin, err := fixture.catalog.ResolveKnowledgeSet("files")
+	pin, err := fixture.catalog.ResolveDataset("files")
 	if err != nil {
 		t.Fatal(err)
 	}

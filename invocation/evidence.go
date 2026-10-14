@@ -56,8 +56,8 @@ func EvidenceChain(
 		}
 	}
 	accessStarted := TelemetryNow()
-	evidenceID, accessBytes, accessErr := RecordKnowledgeAccess(home, command, flags, result, callErr)
-	if runtime != nil && knowledgeAccessCommand(command, flags) {
+	evidenceID, accessBytes, accessErr := RecordObjectAccess(home, command, flags, result, callErr)
+	if runtime != nil && objectAccessCommand(command, flags) {
 		runtime.RecordEvidence(ctx, "access", TelemetryOutcome(accessErr), TelemetrySince(accessStarted), accessBytes)
 		ObserveEvidenceDisk(runtime, home)
 	}

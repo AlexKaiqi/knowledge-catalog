@@ -45,17 +45,17 @@ management policy adapters. Moving their typed client does not claim every
 endpoint is mounted by a minimal Snapshot handler. Routes and authorization
 remain the deployed service's contract.
 
-`KnowledgeSetRequest.Metadata` is an optional string map. Publication accepts the
+`DatasetRequest.Metadata` is an optional string map. Publication accepts the
 complete map with its revision; omission or `{}` publishes no metadata. Dataset
 inventory, selected historical detail and portable recipes preserve accepted
 attributes. This capability does not read or interpret explanatory files.
 
 `ShowDataset` accepts `DatasetShowOptions{Revision, Limit, Continuation}`. Nil
 revision selects the current release; a positive explicit revision selects an
-accepted historical release, independently of its history page. `KnowledgeSet`
-uses default options. `ResolveKnowledgeSet` accepts an optional positive
-`KnowledgeSetResolveRequest.Revision`, mutually exclusive with `Pin`.
-`CheckKnowledgeSet` retains its pin contract and rejects a revision selector.
+accepted historical release, independently of its history page. `Dataset`
+uses default options. `ResolveDataset` accepts an optional positive
+`DatasetResolveRequest.Revision`, mutually exclusive with `Pin`.
+`CheckDataset` retains its pin contract and rejects a revision selector.
 Current retirement, registration, availability and authorization still apply.
 
 `RepositoryMetadata`, `SetRepositoryMetadata` and `DeleteRepositoryMetadata`

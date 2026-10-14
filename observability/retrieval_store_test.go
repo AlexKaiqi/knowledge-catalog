@@ -13,23 +13,23 @@ func TestRetrievalEvidenceQueryTraceAndTrainingAreRebuildable(t *testing.T) {
 	store := datedFileStore(t)
 	identity := observability.IdentityContext{Principal: "agent:answer", OnBehalfOf: "user:kai"}
 	trace := observability.TraceContext{TraceID: "trace-search", SpanID: "span-search"}
-	ref := objectmodel.KnowledgeRef{Repository: "kr://acme/runbooks", Object: "runbook/refund"}
+	ref := objectmodel.ObjectRef{Repository: "kr://acme/runbooks", Object: "runbook/refund"}
 	accessID, err := store.RecordAccessReceipt(observability.AccessEvent{
 		OccurredAt: "2026-08-31T00:00:00.1Z", Identity: identity, Trace: trace,
-		Action: "knowledge.search", Dataset: "agent", Decision: "ALLOW", Result: "RESOLVED",
-		Knowledge: []observability.KnowledgeAccess{{KnowledgeRef: objectmodel.PinnedKnowledgeRef{KnowledgeRef: ref, Commit: "c1"}}},
+		Action: "object.search", Dataset: "agent", Decision: "ALLOW", Result: "RESOLVED",
+		Object: []observability.ObjectAccess{{ObjectRef: objectmodel.PinnedObjectRef{ObjectRef: ref, Commit: "c1"}}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	logical := map[string]any{"clauses": []any{map[string]any{"op": "MATCH", "value": "refund timeout"}}, "limit": 10}
 	candidates := []observability.RetrievalCandidate{{
-		KnowledgeRef: objectmodel.PinnedKnowledgeRef{KnowledgeRef: ref, Commit: "c1"}, Rank: 1,
+		ObjectRef: objectmodel.PinnedObjectRef{ObjectRef: ref, Commit: "c1"}, Rank: 1,
 		ValueDigest: "value-1", Evidence: []observability.RetrievalLaneEvidence{{Provider: "opensearch", Lane: "lexical", Guarantee: "exact", LocalRank: 1}},
 	}}
 	retrievalID, err := store.RecordRetrievalReceipt(observability.RetrievalEvent{
 		AccessEvidenceID: accessID, OccurredAt: "2026-08-31T00:00:00.2Z", Identity: identity, Trace: trace,
-		Action: "knowledge.search", Dataset: "agent", Operator: observability.RetrievalOperatorSearch,
+		Action: "object.search", Dataset: "agent", Operator: observability.RetrievalOperatorSearch,
 		LogicalRequest: logical, RequestDigest: kernel.CanonicalDigest(logical),
 		SearchView:   observability.RefineSearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{ref.Repository: "c1"}},
 		Completeness: "complete", Execution: observability.RetrievalExecution{Candidates: 1, Hydrated: 1},
@@ -40,7 +40,7 @@ func TestRetrievalEvidenceQueryTraceAndTrainingAreRebuildable(t *testing.T) {
 	}
 	for _, feedback := range []observability.FeedbackEvent{
 		{OccurredAt: "2026-08-31T00:00:00.3Z", Identity: identity, Trace: trace, Dataset: "agent", Outcome: "answered",
-			RetrievalEvidenceID: retrievalID, LabelSource: "agent", Answer: "Inspect the refund timeout.", SelectedRefs: []objectmodel.KnowledgeRef{ref}},
+			RetrievalEvidenceID: retrievalID, LabelSource: "agent", Answer: "Inspect the refund timeout.", SelectedRefs: []objectmodel.ObjectRef{ref}},
 		{OccurredAt: "2026-08-31T00:00:00.4Z", Identity: observability.IdentityContext{Principal: "user:kai"}, Trace: trace,
 			Dataset: "agent", Outcome: "accepted", RetrievalEvidenceID: retrievalID, LabelSource: "user"},
 	} {

@@ -109,7 +109,7 @@ func (c *Cache) Warm(ctx context.Context, repo objectmodel.Repository, commit ke
 			return nil
 		}
 		_, readErr := c.readAddress(repo, commit, address, epoch)
-		if kernel.CodeOf(readErr) == kernel.ErrKnowledgeRefUnresolved {
+		if kernel.CodeOf(readErr) == kernel.ErrObjectRefUnresolved {
 			continue
 		}
 		if readErr != nil {

@@ -48,7 +48,7 @@ func TestGrantHTTPListFiltersWithoutEvaluationOrPrivateLedger(t *testing.T) {
 		{ID: "one", Principal: "reader", Dataset: "one", Actions: []string{"file.read"}},
 		{ID: "two", Principal: "other", Dataset: "one", Actions: []string{"file.read"}},
 		{ID: "three", Principal: "reader", Dataset: "two", Actions: []string{"file.read"}},
-		{ID: "four", Principal: "reader", Repo: "repo-A", Ref: "main", Object: "data/*", Aspect: "body", Actions: []string{"knowledge.read"}},
+		{ID: "four", Principal: "reader", Repo: "repo-A", Ref: "main", Object: "data/*", Aspect: "body", Actions: []string{"object.read"}},
 	})
 	for _, query := range []string{"?dataset=two&principal=reader&action=file.read", "?repository=repo-A&ref=main&object=data%2F%2A&aspect=body&principal=reader"} {
 		value := grantRequestForTest(t, handler, "operator", http.MethodGet, "/admin/v1/grants"+query, "", http.StatusOK)
@@ -86,7 +86,7 @@ func TestGrantAdministrationUsesExplicitAndDurableScopes(t *testing.T) {
 	grantRequestForTest(t, handler, "read-A", http.MethodGet, "/admin/v1/grants?repository=repo-B", "", http.StatusForbidden)
 	grantRequestForTest(t, handler, "read-repo", http.MethodGet, "/admin/v1/grants?repository=repo-A", "", http.StatusOK)
 	grantRequestForTest(t, handler, "manage-A", http.MethodGet, "/admin/v1/grants?repository=repo-A", "", http.StatusForbidden)
-	grantRequestForTest(t, handler, "manage-A", http.MethodPost, "/admin/v1/grants", `{"principal":"reader","actions":["knowledge.read"],"repository":"repo-B"}`, http.StatusForbidden)
+	grantRequestForTest(t, handler, "manage-A", http.MethodPost, "/admin/v1/grants", `{"principal":"reader","actions":["object.read"],"repository":"repo-B"}`, http.StatusForbidden)
 	grantRequestForTest(t, handler, "manage-A", http.MethodDelete, "/admin/v1/grants/target-B?repository=repo-A", "", http.StatusForbidden)
 	grantRequestForTest(t, handler, "manage-B", http.MethodDelete, "/admin/v1/grants/target-B", "", http.StatusOK)
 	grantRequestForTest(t, handler, "manage-dataset", http.MethodPost, "/admin/v1/grants", `{"principal":"reader","actions":["file.read"],"dataset":"one"}`, http.StatusOK)
@@ -99,7 +99,7 @@ func TestGrantAdministrationUsesExplicitAndDurableScopes(t *testing.T) {
 
 func TestGrantAdministrationDoesNotInterpretTargetGlobsAsConcreteObjects(t *testing.T) {
 	_, handler := grantTestFacade(t, []inv.AllowRule{{ID: "limited", Principal: "operator", Repo: "repo-A", Object: "data/?", Actions: []string{"admin.grants.manage"}}})
-	grantRequestForTest(t, handler, "operator", http.MethodPost, "/admin/v1/grants", `{"principal":"reader","actions":["knowledge.read"],"repository":"repo-A","object":"data/*"}`, http.StatusForbidden)
+	grantRequestForTest(t, handler, "operator", http.MethodPost, "/admin/v1/grants", `{"principal":"reader","actions":["object.read"],"repository":"repo-A","object":"data/*"}`, http.StatusForbidden)
 }
 
 func TestGrantHTTPRejectsUnknownOrRepeatedFilters(t *testing.T) {

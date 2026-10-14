@@ -241,7 +241,7 @@ func VerbRecordFeedback(cx *Invocation) (any, error) {
 	refineEvidenceID := strings.TrimSpace(invoke.FlagString(cx.Flags, "_refine-evidence-id"))
 	retrievalEvidenceID := strings.TrimSpace(invoke.FlagString(cx.Flags, "_retrieval-evidence-id"))
 	answer := strings.TrimSpace(invoke.FlagString(cx.Flags, "_feedback-answer"))
-	selected, _ := cx.Flags["_feedback-selected"].([]objectmodel.KnowledgeRef)
+	selected, _ := cx.Flags["_feedback-selected"].([]objectmodel.ObjectRef)
 	ideal, _ := cx.Flags["_feedback-ideal"].([]observability.RefineRankGroup)
 	if refineEvidenceID != "" {
 		refines, err := store.Refine(observability.RefineQuery{EvidenceID: refineEvidenceID, Limit: 1})
@@ -285,7 +285,7 @@ func VerbRecordFeedback(cx *Invocation) (any, error) {
 		Identity: identity, Trace: trace, SubmissionTrace: recordedSubmissionTrace, Dataset: setID, Outcome: outcome, Message: message,
 		RetrievalEvidenceID: retrievalEvidenceID,
 		RefineEvidenceID:    refineEvidenceID, LabelSource: labelSource, Answer: answer,
-		SelectedRefs: append([]objectmodel.KnowledgeRef(nil), selected...), IdealGroups: append([]observability.RefineRankGroup(nil), ideal...),
+		SelectedRefs: append([]objectmodel.ObjectRef(nil), selected...), IdealGroups: append([]observability.RefineRankGroup(nil), ideal...),
 	}
 	if err := RecordFeedbackWithTelemetry(cx.Observation, store, event); err != nil {
 		return nil, err
@@ -293,12 +293,12 @@ func VerbRecordFeedback(cx *Invocation) (any, error) {
 	return map[string]any{"traceId": traceID, "retrievalEvidenceId": retrievalEvidenceID, "refineEvidenceId": refineEvidenceID, "outcome": outcome, "recorded": true}, nil
 }
 
-func ValidateFeedbackRefs(refine observability.RefineEvent, selected []objectmodel.KnowledgeRef, ideal []observability.RefineRankGroup) error {
-	allowed := map[objectmodel.KnowledgeRef]struct{}{}
+func ValidateFeedbackRefs(refine observability.RefineEvent, selected []objectmodel.ObjectRef, ideal []observability.RefineRankGroup) error {
+	allowed := map[objectmodel.ObjectRef]struct{}{}
 	for _, candidate := range refine.Candidates {
-		allowed[candidate.KnowledgeRef.KnowledgeRef] = struct{}{}
+		allowed[candidate.ObjectRef.ObjectRef] = struct{}{}
 	}
-	check := func(ref objectmodel.KnowledgeRef) error {
+	check := func(ref objectmodel.ObjectRef) error {
 		if _, ok := allowed[ref]; !ok {
 			return kernel.Fail(kernel.ErrUsageInvalid, "feedback ref is not a candidate in refine evidence")
 		}
@@ -319,12 +319,12 @@ func ValidateFeedbackRefs(refine observability.RefineEvent, selected []objectmod
 	return nil
 }
 
-func ValidateRetrievalFeedbackRefs(retrievalEvent observability.RetrievalEvent, selected []objectmodel.KnowledgeRef, ideal []observability.RefineRankGroup) error {
-	allowed := map[objectmodel.KnowledgeRef]struct{}{}
+func ValidateRetrievalFeedbackRefs(retrievalEvent observability.RetrievalEvent, selected []objectmodel.ObjectRef, ideal []observability.RefineRankGroup) error {
+	allowed := map[objectmodel.ObjectRef]struct{}{}
 	for _, candidate := range retrievalEvent.Candidates {
-		allowed[candidate.KnowledgeRef.KnowledgeRef] = struct{}{}
+		allowed[candidate.ObjectRef.ObjectRef] = struct{}{}
 	}
-	check := func(ref objectmodel.KnowledgeRef) error {
+	check := func(ref objectmodel.ObjectRef) error {
 		if _, ok := allowed[ref]; !ok {
 			return kernel.Fail(kernel.ErrUsageInvalid, "feedback ref is not a candidate in retrieval evidence")
 		}

@@ -1,16 +1,16 @@
 # snapshot/access
 
 Explicit grants for Snapshot Store services: principal, action and resource
-scope. The package has no dependency on Home, Invocation, Knowledge, Server or
+scope. The package has no dependency on Home, Invocation, Object, Server or
 an index. Actions are opaque semantic names; the matcher does not translate
-knowledge actions or infer authority from native lakeFS roles.
+object actions or infer authority from native lakeFS roles.
 
 `Rule` and `GrantList` use one service authority. Repository and Dataset are
 exact selectors; a combined Repository + Dataset scope is their intersection.
 An empty resource scope addresses service-wide actions. Ref and Aspect are exact optional
 qualifiers; Object retains its existing `path.Match` pattern behavior as an
 opaque application qualifier. Object is **not** the source file path of a
-Dataset and is not interpreted as a knowledge object identity. Dataset file
+Dataset and is not interpreted as an object identity. Dataset file
 coordinates and the accepted publication determine file selection independently.
 Legacy command-to-action mappings remain in the KC adapter. Rule decoding
 preserves the established retired-field rejection and on-read
@@ -22,7 +22,7 @@ audit use `inventory.read`, `repositories.manage` / `repositories.create`, and
 
 `Match` is the shared explicit-rule evaluator. It does not evaluate public
 service inventory discovery, authenticated repository defaults, local-owner bypass,
-temporary knowledge definitions or application delivery policy. Those policies
+temporary object definitions or application delivery policy. Those policies
 remain in the caller and use the same evaluator.
 
 `Service` provides authenticated inventory, add, update and revoke operations through a

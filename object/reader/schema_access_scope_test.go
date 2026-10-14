@@ -42,7 +42,7 @@ func TestSchemaAccessCompilationReadsOnlyScopedSchemaUnits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pin := reader.KnowledgeSetPin{
+	pin := reader.DatasetPin{
 		Repositories: map[kernel.RepositoryID]kernel.CommitID{raw.ID(): published.Result.CommitID},
 		Items:        []reader.DatasetItem{{Repository: raw.ID(), Commit: published.Result.CommitID, Kind: "prefix", Prefix: "public"}},
 	}

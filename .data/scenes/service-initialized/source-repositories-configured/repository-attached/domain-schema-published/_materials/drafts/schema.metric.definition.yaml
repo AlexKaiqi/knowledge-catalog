@@ -1,7 +1,7 @@
 ---
 object_id: schema/metric.definition
 ---
-# repo: kr://scene/knowledge
+# repo: kr://scene/object
 entity: Metric
 description: 业务指标的定义。
 aspect: definition

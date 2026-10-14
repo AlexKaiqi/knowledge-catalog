@@ -18,7 +18,7 @@ func (g *registry) stateFromYAML(files map[string][]byte) (State, error) {
 		switch {
 		case strings.HasPrefix(path, repositoryFilePrefix):
 			if meta.Repositories != nil {
-				return State{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "mixed service membership layouts at %s", path)
+				return State{}, kernel.Fail(kernel.ErrDatasetInvalid, "mixed service membership layouts at %s", path)
 			}
 			id, err := legacyRegistryMember(path, body)
 			if err != nil {
@@ -26,7 +26,7 @@ func (g *registry) stateFromYAML(files map[string][]byte) (State, error) {
 			}
 			state.Repositories = append(state.Repositories, id)
 		case isDatasetRegistryFile(path), strings.HasPrefix(path, datasetVersionPrefix):
-			def, err := asKnowledgeSetYAML(body)
+			def, err := asDatasetYAML(body)
 			if err != nil {
 				return State{}, registryFormatError(path, err)
 			}
@@ -34,7 +34,7 @@ func (g *registry) stateFromYAML(files map[string][]byte) (State, error) {
 				return State{}, err
 			}
 			if isDatasetRegistryFile(path) {
-				state.KnowledgeSets = append(state.KnowledgeSets, def)
+				state.Datasets = append(state.Datasets, def)
 			} else {
 				state.DatasetVersions = append(state.DatasetVersions, def)
 			}
@@ -55,7 +55,7 @@ func (g *registry) readRegistryMeta(files map[string][]byte) (registryMeta, erro
 	body, current := files[RegistryFile()]
 	legacy, old := files["catalog.yaml"]
 	if current && old {
-		return registryMeta{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "mixed registry metadata layouts")
+		return registryMeta{}, kernel.Fail(kernel.ErrDatasetInvalid, "mixed registry metadata layouts")
 	}
 	if current {
 		var meta registryMeta
@@ -71,7 +71,7 @@ func (g *registry) readRegistryMeta(files map[string][]byte) (registryMeta, erro
 		return meta, nil
 	}
 	if !old {
-		return registryMeta{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "registry metadata is missing")
+		return registryMeta{}, kernel.Fail(kernel.ErrDatasetInvalid, "registry metadata is missing")
 	}
 	var meta struct {
 		ID           string   `json:"id"`
@@ -82,7 +82,7 @@ func (g *registry) readRegistryMeta(files map[string][]byte) (registryMeta, erro
 		return registryMeta{}, registryFormatError("catalog.yaml", err)
 	}
 	if strings.TrimSpace(meta.ID) == "" || meta.Archived {
-		return registryMeta{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "legacy registry requires nonempty identity and an active authority")
+		return registryMeta{}, kernel.Fail(kernel.ErrDatasetInvalid, "legacy registry requires nonempty identity and an active authority")
 	}
 	if meta.ID != g.AuthorityID() {
 		return registryMeta{}, kernel.Fail(kernel.ErrPreconditionFailed, "legacy registry identity does not match Snapshot authority; an explicit migration is required")
@@ -91,17 +91,17 @@ func (g *registry) readRegistryMeta(files map[string][]byte) (registryMeta, erro
 }
 
 func registryFormatError(path string, err error) error {
-	return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "invalid registry file %s: %v", path, err)
+	return kernel.Fail(kernel.ErrDatasetInvalid, "invalid registry file %s: %v", path, err)
 }
 
 func validateRegistryMeta(meta registryMeta) error {
 	if strings.TrimSpace(meta.AuthorityID) == "" {
-		return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "registry.yaml requires a nonempty authorityId")
+		return kernel.Fail(kernel.ErrDatasetInvalid, "registry.yaml requires a nonempty authorityId")
 	}
 	seen := map[string]bool{}
 	for _, id := range meta.Repositories {
 		if strings.TrimSpace(id) == "" || seen[id] {
-			return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "registry.yaml requires unique nonempty repository identities")
+			return kernel.Fail(kernel.ErrDatasetInvalid, "registry.yaml requires unique nonempty repository identities")
 		}
 		seen[id] = true
 	}
@@ -121,33 +121,33 @@ func legacyRegistryMember(path string, body []byte) (string, error) {
 		id = row.LegacyID
 	}
 	if strings.TrimSpace(id) == "" || (row.Repository != "" && row.LegacyID != "") || path != RepositoryFile(id) {
-		return "", kernel.Fail(kernel.ErrKnowledgeSetInvalid, "invalid legacy repository identity at %s", path)
+		return "", kernel.Fail(kernel.ErrDatasetInvalid, "invalid legacy repository identity at %s", path)
 	}
 	return id, nil
 }
 
-func validateRegistryDefinition(path string, def KnowledgeSet) error {
+func validateRegistryDefinition(path string, def Dataset) error {
 	if strings.TrimSpace(def.SetID) == "" || def.Revision <= 0 {
-		return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "%s requires dataset identity and positive revision", path)
+		return kernel.Fail(kernel.ErrDatasetInvalid, "%s requires dataset identity and positive revision", path)
 	}
-	expected := KnowledgeSetYAML(def.SetID)
+	expected := DatasetYAML(def.SetID)
 	if strings.HasPrefix(path, datasetVersionPrefix) {
 		expected = datasetVersionFile(def.SetID, def.Revision)
 		if def.Retired {
-			return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "%s must not store current retirement policy", path)
+			return kernel.Fail(kernel.ErrDatasetInvalid, "%s must not store current retirement policy", path)
 		}
 	}
 	if path != expected {
-		return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "dataset identity does not match registry path %s", path)
+		return kernel.Fail(kernel.ErrDatasetInvalid, "dataset identity does not match registry path %s", path)
 	}
 	shape := def
 	shape.Retired = false // Retired Dataset records remain recoverable.
-	if err := ValidateKnowledgeSet(shape); err != nil {
+	if err := ValidateDataset(shape); err != nil {
 		return registryFormatError(path, err)
 	}
 	for _, source := range def.Sources {
 		if strings.TrimSpace(string(source.Commit)) == "" {
-			return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "%s requires frozen source commits", path)
+			return kernel.Fail(kernel.ErrDatasetInvalid, "%s requires frozen source commits", path)
 		}
 	}
 	items, err := datasetItemsFromSources(def.Sources, nil)
@@ -155,36 +155,36 @@ func validateRegistryDefinition(path string, def KnowledgeSet) error {
 		return registryFormatError(path, err)
 	}
 	if def.Items != nil && kernel.CanonicalDigest(def.Items) != kernel.CanonicalDigest(items) {
-		return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "%s items disagree with frozen sources", path)
+		return kernel.Fail(kernel.ErrDatasetInvalid, "%s items disagree with frozen sources", path)
 	}
 	return nil
 }
 
 func validateRegistryReleases(state State) error {
-	versions := map[string]map[int]KnowledgeSet{}
+	versions := map[string]map[int]Dataset{}
 	latest := map[string]int{}
 	for _, release := range state.DatasetVersions {
 		if versions[release.SetID] == nil {
-			versions[release.SetID] = map[int]KnowledgeSet{}
+			versions[release.SetID] = map[int]Dataset{}
 		}
 		if _, exists := versions[release.SetID][release.Revision]; exists {
-			return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "duplicate dataset release identity")
+			return kernel.Fail(kernel.ErrDatasetInvalid, "duplicate dataset release identity")
 		}
 		versions[release.SetID][release.Revision] = release
 		latest[release.SetID] = max(latest[release.SetID], release.Revision)
 	}
-	for _, current := range state.KnowledgeSets {
+	for _, current := range state.Datasets {
 		if current.Revision < latest[current.SetID] {
-			return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "dataset %s current version precedes an accepted release", current.SetID)
+			return kernel.Fail(kernel.ErrDatasetInvalid, "dataset %s current version precedes an accepted release", current.SetID)
 		}
 		if release, ok := versions[current.SetID][current.Revision]; ok && registryDefinitionDigest(current) != registryDefinitionDigest(release) {
-			return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "dataset %s current definition disagrees with its release", current.SetID)
+			return kernel.Fail(kernel.ErrDatasetInvalid, "dataset %s current definition disagrees with its release", current.SetID)
 		}
 	}
 	return nil
 }
 
-func registryDefinitionDigest(def KnowledgeSet) kernel.Digest {
+func registryDefinitionDigest(def Dataset) kernel.Digest {
 	def.Retired = false
 	def.Items, _ = datasetItemsFromSources(def.Sources, nil)
 	return kernel.CanonicalDigest(def)

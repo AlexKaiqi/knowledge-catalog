@@ -25,8 +25,8 @@ func TestDiscoveryCLIRepeatedScalarFlagsKeepLastValue(t *testing.T) {
 				"limit": []string{"invalid-old-limit", "7"}, "continuation": []string{"old-cursor", "current-cursor"},
 			},
 			request: client.SearchRequest{
-				KnowledgeScope: client.KnowledgeScope{Repository: "r", Commit: "c", Ref: "main"},
-				Query:          "current", MatchMode: "all", Equal: []string{"amount=1", "amount=2"}, Sort: []string{"name:asc", "amount:desc"},
+				ObjectScope: client.ObjectScope{Repository: "r", Commit: "c", Ref: "main"},
+				Query:       "current", MatchMode: "all", Equal: []string{"amount=1", "amount=2"}, Sort: []string{"name:asc", "amount:desc"},
 				Limit: 7, Continuation: "current-cursor",
 			},
 		},
@@ -38,7 +38,7 @@ func TestDiscoveryCLIRepeatedScalarFlagsKeepLastValue(t *testing.T) {
 				"continuation": []string{"old-cursor", "current-cursor"},
 			},
 			request: client.RelationsRequest{
-				KnowledgeScope: client.KnowledgeScope{Repository: "r"}, Endpoint: "Table:orders", Direction: "DIRECTED", Limit: 7, Continuation: "current-cursor",
+				ObjectScope: client.ObjectScope{Repository: "r"}, Endpoint: "Table:orders", Direction: "DIRECTED", Limit: 7, Continuation: "current-cursor",
 			},
 		},
 		{
@@ -49,7 +49,7 @@ func TestDiscoveryCLIRepeatedScalarFlagsKeepLastValue(t *testing.T) {
 				"limit": []string{"invalid-old-limit", "7"}, "continuation": []string{"old-cursor", "current-cursor"},
 			},
 			request: client.TraverseRequest{
-				KnowledgeScope: client.KnowledgeScope{Dataset: "d"}, Endpoint: "Table:orders", MinHops: 1, MaxHops: 2, Limit: 7, Continuation: "current-cursor",
+				ObjectScope: client.ObjectScope{Dataset: "d"}, Endpoint: "Table:orders", MinHops: 1, MaxHops: 2, Limit: 7, Continuation: "current-cursor",
 			},
 		},
 		{

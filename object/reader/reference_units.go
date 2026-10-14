@@ -32,7 +32,7 @@ func readRepositoryReferenceUnits(repo objectmodel.Repository, ref objectmodel.R
 		return nil, err
 	}
 	if len(units) == 0 {
-		return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "reference has no selected maintenance units")
+		return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "reference has no selected maintenance units")
 	}
 	tokens, _ := objectmodel.PointerTokens(ref.Locator)
 	seen := map[string]struct{}{}
@@ -75,7 +75,7 @@ func (r *treeRepository) ReadReferenceUnits(ref objectmodel.Reference, commit ke
 			return nil, err
 		}
 		if len(units) == 0 {
-			return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "object has no maintenance content")
+			return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "object has no maintenance content")
 		}
 		return repofile.ToObjectUnits(units), nil
 	}
@@ -96,7 +96,7 @@ type referenceUnitsPathsReader interface {
 
 func (r *datasetRepository) ReadReferenceUnits(ref objectmodel.Reference, commit kernel.CommitID) ([]objectmodel.Unit, error) {
 	if ref.Repository != r.ID() || commit != r.commit {
-		return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "reference is outside dataset source basis")
+		return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "reference is outside dataset source basis")
 	}
 	if ref.Locator == "" {
 		if err := r.check(ref.Object, commit); err != nil {

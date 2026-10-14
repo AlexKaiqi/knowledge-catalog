@@ -3,14 +3,14 @@
 Feature: domain-schema-published
 
   Scenario: construct
-    When I run `kc writer commit --command-id publish-domain-schema --repo kr://scene/knowledge --dir $materials/drafts`
+    When I run `kc writer commit --command-id publish-domain-schema --repo kr://scene/object --dir $materials/drafts`
     Then the output has:
       | disposition         | APPLIED |
-      | result.repositoryId | kr://scene/knowledge |
+      | result.repositoryId | kr://scene/object |
       | result.newCommit    | nonempty |
-    When I run `kc schema list --repo kr://scene/knowledge`
+    When I run `kc schema list --repo kr://scene/object`
     Then the output has:
-      | repository   | kr://scene/knowledge |
+      | repository   | kr://scene/object |
       | continuation | absent |
     Then the output includes:
       | schemas[].objectId | schema/metric.definition |

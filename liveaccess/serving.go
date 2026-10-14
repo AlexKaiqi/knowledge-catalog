@@ -1,4 +1,4 @@
-// Package serving exposes the consumer Knowledge value surface. Repository
+// Package serving exposes the consumer Object value surface. Repository
 // Reader stays pinned and declaration-only; this package composes it with an
 // injected wall-out State runtime so callers receive logical Aspect values.
 package liveaccess

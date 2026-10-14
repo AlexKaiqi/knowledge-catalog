@@ -67,7 +67,7 @@ func TestStateRefreshFindsDynamicValueWithoutChangingSnapshot(t *testing.T) {
 	if err != nil || len(result.Hits) != 1 || len(result.Hits[0].Version.Observations) != 1 {
 		t.Fatalf("dynamic search: %#v %v", result, err)
 	}
-	value := result.Hits[0].Knowledge.Value.(map[string]any)
+	value := result.Hits[0].Object.Value.(map[string]any)
 	if value["runtime"].(map[string]any)["status"] != "running" {
 		t.Fatalf("search hit did not hydrate from published Serving State: %#v", value)
 	}
@@ -78,7 +78,7 @@ func TestStateRefreshFindsDynamicValueWithoutChangingSnapshot(t *testing.T) {
 	if body, _ := raw.Value.(map[string]any); body["runtime"] != nil {
 		t.Fatalf("State refresh must not write observation to Snapshot: %#v", raw)
 	}
-	if _, err := repo.ReadAddress(address, commit); kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+	if _, err := repo.ReadAddress(address, commit); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		t.Fatalf("Bound State must not occupy a Snapshot unit: %#v %v", address, err)
 	}
 	head, err := repo.Head(snapshot.DefaultRef)
@@ -211,7 +211,7 @@ func TestDynamicProjectionPublicEnvelopesStayCompact(t *testing.T) {
 			t.Fatal(err)
 		}
 		if strings.Contains(string(raw), "observations") || len(raw) > 512 {
-			t.Fatalf("%s envelope grows with knowledge cardinality: %s", name, raw)
+			t.Fatalf("%s envelope grows with object cardinality: %s", name, raw)
 		}
 	}
 }

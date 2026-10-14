@@ -60,7 +60,7 @@ func PublishSystem(store snapshot.Store) (PublishResult, error) {
 		BaseCommit:           head,
 		ExpectedTargetCommit: head,
 		Operations:           operations,
-		Message:              "Publish system knowledge",
+		Message:              "Publish system object",
 	})
 	if err != nil {
 		return PublishResult{}, err
@@ -106,7 +106,7 @@ func inspectSystemUnits(store snapshot.Store, head kernel.CommitID, operations [
 				return objectmodel.Operation{Op: objectmodel.OpPut, Address: unit.Address, PathHint: unit.PathHint, SchemaRef: unit.SchemaRef, Value: unit.Value}, nil
 			}
 		}
-		return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved,
+		return nil, kernel.Fail(kernel.ErrObjectRefUnresolved,
 			"system address %s is missing at commit %s", objectmodel.AddressKey(address), head)
 	})
 }
@@ -130,7 +130,7 @@ func inspectSystemValues(head kernel.CommitID, operations []objectmodel.Operatio
 	for _, operation := range operations {
 		current, err := value(operation.Address)
 		if err != nil {
-			if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+			if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 				missing++
 				continue
 			}

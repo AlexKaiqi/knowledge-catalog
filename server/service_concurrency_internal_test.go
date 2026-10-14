@@ -13,11 +13,11 @@ import (
 // share the read lock.
 func TestTypedReadInvocationsShareTheReadLock(t *testing.T) {
 	facade := &httpFacade{deployment: &apphome.DeploymentConfig{}}
-	firstUnlock := facade.lockTypedInvocation("knowledge.read")
+	firstUnlock := facade.lockTypedInvocation("object.read")
 	defer firstUnlock()
 
 	acquired := make(chan func(), 1)
-	go func() { acquired <- facade.lockTypedInvocation("knowledge.search") }()
+	go func() { acquired <- facade.lockTypedInvocation("object.search") }()
 	select {
 	case unlock := <-acquired:
 		unlock()
@@ -31,11 +31,11 @@ func TestTypedReadInvocationsShareTheReadLock(t *testing.T) {
 // mutations (race detector: observeHome → SetJournal data race).
 func TestTypedFixtureReadsSerializeWithEachOther(t *testing.T) {
 	facade := &httpFacade{}
-	firstUnlock := facade.lockTypedInvocation("knowledge.read")
+	firstUnlock := facade.lockTypedInvocation("object.read")
 	defer firstUnlock()
 
 	acquired := make(chan func(), 1)
-	go func() { acquired <- facade.lockTypedInvocation("knowledge.search") }()
+	go func() { acquired <- facade.lockTypedInvocation("object.search") }()
 	select {
 	case unlock := <-acquired:
 		unlock()
@@ -48,7 +48,7 @@ func TestTypedMutationExcludesReadsUntilItFinishes(t *testing.T) {
 	facade := &httpFacade{}
 	writeUnlock := facade.lockTypedInvocation("writer.commit")
 	acquired := make(chan func(), 1)
-	go func() { acquired <- facade.lockTypedInvocation("knowledge.read") }()
+	go func() { acquired <- facade.lockTypedInvocation("object.read") }()
 
 	select {
 	case unlock := <-acquired:
@@ -67,11 +67,11 @@ func TestTypedMutationExcludesReadsUntilItFinishes(t *testing.T) {
 
 func TestTypedInvocationReadOnlyClassification(t *testing.T) {
 	for _, action := range []string{
-		"inventory.read", "registry.audit.read", "knowledge.read", "knowledge.search",
-		"knowledge.relations", "knowledge.provenance", "knowledge.history.read",
-		"knowledge.schema.read", "knowledge.binding.resolve", "dataset.resolve",
+		"inventory.read", "registry.audit.read", "object.read", "object.search",
+		"object.relations", "object.provenance", "object.history.read",
+		"object.schema.read", "object.binding.resolve", "dataset.resolve",
 		"writer.receipt.read", "admin.grants.read", "projection.read",
-		"knowledge.access.describe", "operations.hooks.read", "operations.gates.read", "audit.read",
+		"object.access.describe", "operations.hooks.read", "operations.gates.read", "audit.read",
 	} {
 		if !inv.TypedInvocationReadOnly(action) {
 			t.Errorf("%s should be read-only", action)

@@ -123,7 +123,7 @@ func (v *fileView) deliveredChildren(directory string) ([]snapshot.DirectoryEntr
 	claimed := map[string]string{}
 	claim := func(name, kind string) error {
 		if prior, exists := claimed[name]; exists && prior != kind {
-			return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "delivered path %s/%s has conflicting sources", mountLabelFor(directory), name)
+			return kernel.Fail(kernel.ErrDatasetInvalid, "delivered path %s/%s has conflicting sources", mountLabelFor(directory), name)
 		}
 		claimed[name] = kind
 		return nil
@@ -191,7 +191,7 @@ func mergeDeliveredSourceEntries(source, derived []snapshot.DirectoryEntry, dire
 	for _, entry := range source {
 		if kind, exists := known[entry.Name]; exists {
 			if kind != "directory" || entry.Kind != "directory" {
-				return nil, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "delivered path %s/%s has conflicting sources", mountLabelFor(directory), entry.Name)
+				return nil, kernel.Fail(kernel.ErrDatasetInvalid, "delivered path %s/%s has conflicting sources", mountLabelFor(directory), entry.Name)
 			}
 			continue
 		}

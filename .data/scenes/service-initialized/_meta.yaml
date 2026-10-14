@@ -46,8 +46,8 @@ evidence:
     views:
       - "consumption"
     tests:
-      - "TestCatalogViewsChecksAndKnowledgeResolve"
-    title: "发现 登记空间 与实体并按固定来源解析知识"
+      - "TestCatalogViewsChecksAndObjectResolve"
+    title: "发现 登记空间 与实体并按固定来源解析对象"
   - source: "deployment.recovery"
     views:
       - "lifecycle"
@@ -109,16 +109,16 @@ evidence:
       - "consumption"
       - "lifecycle"
     tests:
-      - "TestSystemKnowledgeCanBeReadThroughAuthenticatedServer"
+      - "TestSystemObjectCanBeReadThroughAuthenticatedServer"
       - "TestSystemCLIEntrypoints"
-      - "TestWorkspaceFileGatewayDeliversSystemKnowledgeTree"
+      - "TestWorkspaceFileGatewayDeliversSystemObjectTree"
       - "TestDeploymentRejectsDriftedSystemDescription"
       - "TestPublishSystemRejectsSelfDescriptionDrift"
       - "TestPublishSystemRejectsUnexpectedFiles"
     verifies:
       - claim: "object#U8"
         detail: "已认证主体在无搜索投影时读回导读、概念、任务与能力切面；Dataset 文件交付保持原始字节和 pin，调用入口与实际叶子 help 同源核对，篡改、缺失或额外出版物内容被发布与恢复检查拒绝。"
-    title: "系统仓交付固定版本自描述知识并拒绝出版物漂移"
+    title: "系统仓交付固定版本自描述对象并拒绝出版物漂移"
   - id: "object-model-existing-help-and-publication"
     title: "既有叶帮助离线、系统模型定义可认证读取"
     source: "system.schema"
@@ -126,10 +126,10 @@ evidence:
       - "consumption"
     tests:
       - "TestEveryPublicHelpExplainsUseEffectsAndRecoveryWithoutExecuting"
-      - "TestSystemKnowledgeCanBeReadThroughAuthenticatedServer"
+      - "TestSystemObjectCanBeReadThroughAuthenticatedServer"
     verifies:
       - claim: "object#U9"
-        detail: "叶子 help 无网络／本机产物，已认证 Server 可读取系统导读和 Object 定义的固定 commit；根 help 概念、联系、例子及零知识走读仍为明确 gap。"
+        detail: "叶子 help 无网络／本机产物，已认证 Server 可读取系统导读和 Object 定义的固定 commit；根 help 概念、联系、例子及零对象走读仍为明确 gap。"
 probes:
   - file: "probe-status.feature"
     source: "dataset.registry"

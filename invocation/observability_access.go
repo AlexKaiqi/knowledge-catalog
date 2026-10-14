@@ -23,7 +23,7 @@ const (
 
 type ObservedAccessResult struct {
 	Output          any
-	Knowledge       []observability.KnowledgeAccess
+	Object          []observability.ObjectAccess
 	RetrievalSource any
 	Refine          *observability.RefineEvent
 	LiveAccess      *readresults.Reference
@@ -66,19 +66,19 @@ func TraceContextFrom(flags map[string]invoke.FlagValue) (observability.TraceCon
 	return ctx, ctx.Validate()
 }
 
-func knowledgeAccessCommand(command string, flags map[string]invoke.FlagValue) bool {
+func objectAccessCommand(command string, flags map[string]invoke.FlagValue) bool {
 	switch command {
-	case "pin", "knowledge-resolve", "knowledge-binding-show", "knowledge-read", "knowledge-access",
-		"knowledge-relations", "knowledge-traverse", "knowledge-search", "rerank", "search-rerank", "knowledge-provenance",
-		"knowledge-schema-describe", "operations-access-spec-describe", "knowledge-log", "knowledge-invoke":
+	case "pin", "object-resolve", "object-binding-show", "object-read", "object-access",
+		"object-relations", "object-traverse", "object-search", "rerank", "search-rerank", "object-provenance",
+		"object-schema-describe", "operations-access-spec-describe", "object-log", "object-invoke":
 		return true
 	default:
 		return false
 	}
 }
 
-func RecordKnowledgeAccess(home, command string, flags map[string]invoke.FlagValue, result any, callErr error) (string, int64, error) {
-	if !knowledgeAccessCommand(command, flags) {
+func RecordObjectAccess(home, command string, flags map[string]invoke.FlagValue, result any, callErr error) (string, int64, error) {
+	if !objectAccessCommand(command, flags) {
 		return "", -1, nil
 	}
 	identity, err := IdentityContextFrom(flags)
@@ -112,7 +112,7 @@ func RecordKnowledgeAccess(home, command string, flags map[string]invoke.FlagVal
 		Decision:  decision,
 		RuleID:    MatchedRuleID(home, ActionOf(command, flags), flags),
 		Result:    outcome,
-		Knowledge: KnowledgeAccesses(result),
+		Object:    ObjectAccesses(result),
 		Files:     FileAccesses(result),
 		Error:     fault,
 	}
@@ -122,9 +122,9 @@ func RecordKnowledgeAccess(home, command string, flags map[string]invoke.FlagVal
 	if command == "file-mounts" {
 		event.Snapshots = SnapshotAccesses(accessOutput(result))
 	}
-	if len(event.Knowledge) == 0 {
-		if target, ok := requestedKnowledge(flags); ok {
-			event.Knowledge = append(event.Knowledge, target)
+	if len(event.Object) == 0 {
+		if target, ok := requestedObject(flags); ok {
+			event.Object = append(event.Object, target)
 		}
 	}
 	store := observability.NewFileStore(home)
@@ -132,16 +132,16 @@ func RecordKnowledgeAccess(home, command string, flags map[string]invoke.FlagVal
 	return id, store.LastAppendBytes(), err
 }
 
-func requestedKnowledge(flags map[string]invoke.FlagValue) (observability.KnowledgeAccess, bool) {
+func requestedObject(flags map[string]invoke.FlagValue) (observability.ObjectAccess, bool) {
 	repo := invoke.FlagString(flags, "repo")
 	commit := invoke.FlagString(flags, ResolvedCommitFlag)
 	object := invoke.FlagString(flags, "object")
 	if repo == "" || commit == "" || object == "" {
-		return observability.KnowledgeAccess{}, false
+		return observability.ObjectAccess{}, false
 	}
-	ref := objectmodel.PinnedKnowledgeRef{
-		KnowledgeRef: objectmodel.KnowledgeRef{Repository: kernel.RepositoryID(repo), Object: objectmodel.ObjectID(object)},
-		Commit:       kernel.CommitID(commit),
+	ref := objectmodel.PinnedObjectRef{
+		ObjectRef: objectmodel.ObjectRef{Repository: kernel.RepositoryID(repo), Object: objectmodel.ObjectID(object)},
+		Commit:    kernel.CommitID(commit),
 	}
 	var address *objectmodel.Address
 	if parsed, err := AddressFrom(flags); err == nil {
@@ -150,15 +150,15 @@ func requestedKnowledge(flags map[string]invoke.FlagValue) (observability.Knowle
 	if implementation := invoke.FlagString(flags, "implementation"); implementation != "" {
 		address = &objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: ref.Object, AspectName: interfaces.ObjectInterfacesAspect, MemberKey: implementation}
 	}
-	return observability.KnowledgeAccess{KnowledgeRef: ref, Address: address}, true
+	return observability.ObjectAccess{ObjectRef: ref, Address: address}, true
 }
 
-func KnowledgeAccesses(result any) []observability.KnowledgeAccess {
+func ObjectAccesses(result any) []observability.ObjectAccess {
 	if observed, ok := result.(ObservedAccessResult); ok {
-		return observed.Knowledge
+		return observed.Object
 	}
 	root := JSONValue(result)
-	out := []observability.KnowledgeAccess{}
+	out := []observability.ObjectAccess{}
 	seen := map[string]bool{}
 	var walk func(any)
 	walk = func(value any) {
@@ -168,13 +168,13 @@ func KnowledgeAccesses(result any) []observability.KnowledgeAccess {
 				walk(child)
 			}
 		case map[string]any:
-			// A SEARCH hit keeps observation bases in KnowledgeVersion while
+			// A SEARCH hit keeps observation bases in ObjectVersion while
 			// the accessed repository/object coordinates live in objectmodel.
 			// Join those envelope fields before the ordinary value walker runs;
 			// never inspect the opaque business payload itself.
-			if rawKnowledge, ok := current["knowledge"].(map[string]any); ok {
-				joined := make(map[string]any, len(rawKnowledge)+1)
-				for key, child := range rawKnowledge {
+			if rawObject, ok := current["object"].(map[string]any); ok {
+				joined := make(map[string]any, len(rawObject)+1)
+				for key, child := range rawObject {
 					joined[key] = child
 				}
 				if version, ok := current["version"].(map[string]any); ok {
@@ -188,7 +188,7 @@ func KnowledgeAccesses(result any) []observability.KnowledgeAccess {
 			repo := StringValue(current["repository"])
 			commit := StringValue(current["commit"])
 			object := StringValue(current["objectId"])
-			if ref, ok := current["knowledgeRef"].(map[string]any); ok {
+			if ref, ok := current["objectRef"].(map[string]any); ok {
 				if candidate := StringValue(ref["repository"]); candidate != "" {
 					repo = candidate
 				}
@@ -225,19 +225,19 @@ func KnowledgeAccesses(result any) []observability.KnowledgeAccess {
 							}
 						}
 					}
-					out = append(out, observability.KnowledgeAccess{
+					out = append(out, observability.ObjectAccess{
 						Reference: StringValue(current["reference"]), Locator: StringValue(current["locator"]),
-						KnowledgeRef: objectmodel.PinnedKnowledgeRef{
-							KnowledgeRef: objectmodel.KnowledgeRef{Repository: kernel.RepositoryID(repo), Object: objectmodel.ObjectID(object)},
-							Commit:       kernel.CommitID(commit),
+						ObjectRef: objectmodel.PinnedObjectRef{
+							ObjectRef: objectmodel.ObjectRef{Repository: kernel.RepositoryID(repo), Object: objectmodel.ObjectID(object)},
+							Commit:    kernel.CommitID(commit),
 						},
 						Address: address, Observations: observations,
 					})
 				}
 			}
-			// Only response-envelope fields can contain additional knowledge
-			// values. "value" and provenance are opaque knowledge payloads.
-			for _, name := range []string{"schemas", "from", "to", "hits", "knowledge"} {
+			// Only response-envelope fields can contain additional object
+			// values. "value" and provenance are opaque object payloads.
+			for _, name := range []string{"schemas", "from", "to", "hits", "object"} {
 				if child, ok := current[name]; ok {
 					walk(child)
 				}

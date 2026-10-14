@@ -78,14 +78,14 @@ func TestObjectReferenceCLIUsesOneTargetAcrossReadPutRemove(t *testing.T) {
 		t.Fatalf("fixed old version drifted: %#v", old)
 	}
 	body(t, run("writer", "remove", member, "--command-id", "id-remove", "--if-digest", updated["digest"].(string)))
-	expectCode(t, run("read", member), string(kernel.ErrKnowledgeRefUnresolved))
+	expectCode(t, run("read", member), string(kernel.ErrObjectRefUnresolved))
 	status := asMap(t, body(t, run("read", ordersReference(t, repo, "/columns/status"))))
 	if asMap(t, status["value"])["type"] != "integer" {
 		t.Fatalf("Member REMOVE changed its sibling: %#v", status)
 	}
 	root := asMap(t, body(t, run("read", ordersReference(t, repo, ""))))
 	body(t, run("writer", "remove", ordersReference(t, repo, ""), "--command-id", "orders-remove", "--if-digest", root["digest"].(string)))
-	expectCode(t, run("read", ordersReference(t, repo, "")), string(kernel.ErrKnowledgeRefUnresolved))
+	expectCode(t, run("read", ordersReference(t, repo, "")), string(kernel.ErrObjectRefUnresolved))
 	body(t, run("read", member, "--commit", oldCommit))
 }
 
@@ -130,7 +130,7 @@ type loseAcceptedObjectResponse struct {
 
 func (l *loseAcceptedObjectResponse) RoundTrip(request *http.Request) (*http.Response, error) {
 	response, err := http.DefaultTransport.RoundTrip(request)
-	if err != nil || request.URL.Path != "/knowledge/v1/objects:put" {
+	if err != nil || request.URL.Path != "/object/v1/objects:put" {
 		return response, err
 	}
 	l.mu.Lock()
@@ -181,7 +181,7 @@ func TestObjectReferencePreservesActualAspectAuthorization(t *testing.T) {
 	admin := func(args ...string) kcRunResult { return kcRemote(t, url, "operator", args...) }
 	member := ordersReference(t, repo, "/columns/id")
 	body(t, admin("writer", "put", member, "--kind", "Member", "--command-id", "scope-seed", "--value", `{"type":"string"}`))
-	body(t, admin("grant", "add", "--principal", "column-editor", "--repo", repo, "--object", "table/orders", "--aspect", "columns", "--action", "knowledge.read,writer.commit"))
+	body(t, admin("grant", "add", "--principal", "column-editor", "--repo", repo, "--object", "table/orders", "--aspect", "columns", "--action", "object.read,writer.commit"))
 	run := func(args ...string) kcRunResult { return kcRemote(t, url, "column-editor", args...) }
 	body(t, run("read", testObjectReference(t, repo, "table/orders", "/columns/id")))
 	leaf := asMap(t, body(t, run("read", ordersReference(t, repo, "/columns/id/type"))))

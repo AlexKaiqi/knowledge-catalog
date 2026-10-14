@@ -35,7 +35,6 @@ func (s *service) Update(ctx context.Context, principal, id string, expected, re
 			return nil, err
 		}
 		publicOld := old
-		publicOld.Cmds = nil
 		if len(publicOld.Actions) == 0 {
 			publicOld.Actions = nil
 		}
@@ -52,7 +51,7 @@ func (s *service) Update(ctx context.Context, principal, id string, expected, re
 			return nil, err
 		}
 		receipt = requested
-		receipt.ID, receipt.SharedBy, receipt.ShareID, receipt.Cmds = old.ID, old.SharedBy, old.ShareID, nil
+		receipt.ID, receipt.SharedBy, receipt.ShareID = old.ID, old.SharedBy, old.ShareID
 		receipt.Actions = slices.Clone(requested.Actions)
 		updated := slices.Clone(rules)
 		for i := range updated {

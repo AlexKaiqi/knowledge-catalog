@@ -50,7 +50,7 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	body(t, kc(home, "grant", "add", "--principal", providerLogin, "--action", "dataset.manage", "--dataset", setID))
 	body(t, kc(home, "grant", "add", "--principal", providerLogin, "--action", "repository.dataset.publish", "--repo", repositoryID, "--dataset", setID, "--ref", snapshot.DefaultRef))
 	body(t, kc(home, "grant", "add", "--principal", consumerLogin, "--action", "file.read,dataset.resolve", "--dataset", setID))
-	body(t, kc(home, "grant", "add", "--principal", consumerLogin, "--action", "knowledge.read,knowledge.search", "--repo", repositoryID))
+	body(t, kc(home, "grant", "add", "--principal", consumerLogin, "--action", "object.read,object.search", "--repo", repositoryID))
 
 	authenticator, err := serv.NewGiteaAuthenticator(giteaURL, http.DefaultClient)
 	if err != nil {
@@ -121,13 +121,13 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	search := asMap(t, liveServiceOK(t, server, "/knowledge/v1/search", map[string]any{
+	search := asMap(t, liveServiceOK(t, server, "/object/v1/search", map[string]any{
 		"dataset": setID, "pin": json.RawMessage(pinJSON), "query": "冻结窗口",
 	}, consumerAuth))
 	if search["completeness"] != "complete" || len(search["hits"].([]any)) != 1 {
 		t.Fatalf("consumer search: %#v", search)
 	}
-	values := asMap(t, liveServiceOK(t, server, "/knowledge/v1/objects:read", map[string]any{
+	values := asMap(t, liveServiceOK(t, server, "/object/v1/objects:read", map[string]any{
 		"dataset": setID, "pin": json.RawMessage(pinJSON), "reference": testObjectReference(t, repositoryID, "runbook/payment-oncall", ""),
 	}, consumerAuth))
 	if values["reference"] != testObjectReference(t, repositoryID, "runbook/payment-oncall", "") || values["commit"] != firstCommit {
@@ -150,7 +150,7 @@ func TestLiveServiceProviderConsumerJourney(t *testing.T) {
 	if asMap(t, newPin["repositories"])[repositoryID] != secondCommit || secondCommit == firstCommit {
 		t.Fatalf("new resolve did not advance: old=%s new=%#v", firstCommit, newPin)
 	}
-	oldSearch := asMap(t, liveServiceOK(t, server, "/knowledge/v1/search", map[string]any{
+	oldSearch := asMap(t, liveServiceOK(t, server, "/object/v1/search", map[string]any{
 		"dataset": setID, "pin": json.RawMessage(pinJSON), "query": "容量水位",
 	}, consumerAuth))
 	if len(oldSearch["hits"].([]any)) != 0 {

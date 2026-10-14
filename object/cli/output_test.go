@@ -6,7 +6,7 @@ import (
 )
 
 func TestSelectiveReadKeepsConditionalMaintenanceEvidence(t *testing.T) {
-	raw := map[string]any{"reference": testReference, "locator": "/columns/order_id/constraints/nullable", "repository": "kr://scene/knowledge", "commit": "c1", "address": map[string]any{"objectId": "table/orders", "aspectName": "columns", "memberKey": "order_id", "kind": "Member"}, "digest": "full-member-digest", "value": false, "declarations": []any{map[string]any{"schemaRef": "pinned-schema", "provenance": map[string]any{"sourceRefs": []any{"source"}}}}}
+	raw := map[string]any{"reference": testReference, "locator": "/columns/order_id/constraints/nullable", "repository": "kr://scene/object", "commit": "c1", "address": map[string]any{"objectId": "table/orders", "aspectName": "columns", "memberKey": "order_id", "kind": "Member"}, "digest": "full-member-digest", "value": false, "declarations": []any{map[string]any{"schemaRef": "pinned-schema", "provenance": map[string]any{"sourceRefs": []any{"source"}}}}}
 	got := Shape("read", raw).(map[string]any)
 	for _, key := range []string{"reference", "locator", "repository", "commit", "address", "digest", "value", "declarations"} {
 		if !reflect.DeepEqual(got[key], raw[key]) {

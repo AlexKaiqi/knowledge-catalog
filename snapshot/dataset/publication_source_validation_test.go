@@ -107,24 +107,24 @@ func TestDatasetPublicationRejectsActualSourceTargetConflicts(t *testing.T) {
 			writePublicationFiles(t, prefix.catalogMem, map[string]string{test.sourcePath: "prefix bytes", "docs/old.txt": "old bytes"})
 			writePublicationFiles(t, file, map[string]string{"selected.txt": "file bytes"})
 			service, registry := publicationService(t, prefix, file)
-			sources := []catalog.KnowledgeSetSource{{Repository: prefix.ID(), Selector: snapshot.DefaultRef, Path: catalog.MountPath("bundle"), SubPath: "docs"}}
-			accepted, err := service.DefineKnowledgeSet("delivery", 1, sources)
+			sources := []catalog.DatasetSource{{Repository: prefix.ID(), Selector: snapshot.DefaultRef, Path: catalog.MountPath("bundle"), SubPath: "docs"}}
+			accepted, err := service.DefineDataset("delivery", 1, sources)
 			if err != nil {
 				t.Fatal(err)
 			}
 			head, _ := registry.Head()
 			before := catalog.NormalizeState(service.DumpState())
-			sources = append(sources, catalog.KnowledgeSetSource{Repository: file.ID(), Selector: snapshot.DefaultRef, File: "selected.txt", Target: test.target})
+			sources = append(sources, catalog.DatasetSource{Repository: file.ID(), Selector: snapshot.DefaultRef, File: "selected.txt", Target: test.target})
 			for _, publish := range []func() error{
-				func() error { _, err := service.DefineKnowledgeSet("delivery", 2, sources); return err },
+				func() error { _, err := service.DefineDataset("delivery", 2, sources); return err },
 				func() error {
 					sources[0].Commit, _ = prefix.Head(snapshot.DefaultRef)
 					sources[1].Commit, _ = file.Head(snapshot.DefaultRef)
-					_, err := service.PublishKnowledgeSet(catalog.KnowledgeSet{SetID: "delivery", Revision: 2, Sources: sources})
+					_, err := service.PublishDataset(catalog.Dataset{SetID: "delivery", Revision: 2, Sources: sources})
 					return err
 				},
 			} {
-				if err := publish(); kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
+				if err := publish(); kernel.CodeOf(err) != kernel.ErrDatasetInvalid {
 					t.Errorf("actual target conflict was accepted: %v", err)
 				}
 				if got, _ := registry.Head(); got != head || !reflect.DeepEqual(before, catalog.NormalizeState(service.DumpState())) {
@@ -142,29 +142,29 @@ func TestDatasetPublicationRejectsMissingSelectedFileAndCheckFails(t *testing.T)
 	source := newCatalogMem("kr://publication/source")
 	commit := writePublicationFiles(t, source, map[string]string{"present.txt": "accepted"})
 	service, registry := publicationService(t, source)
-	sources := []catalog.KnowledgeSetSource{{Repository: source.ID(), Selector: snapshot.DefaultRef, File: "present.txt", Target: "selected.txt"}}
-	if _, err := service.DefineKnowledgeSet("delivery", 1, sources); err != nil {
+	sources := []catalog.DatasetSource{{Repository: source.ID(), Selector: snapshot.DefaultRef, File: "present.txt", Target: "selected.txt"}}
+	if _, err := service.DefineDataset("delivery", 1, sources); err != nil {
 		t.Fatal(err)
 	}
 	head, _ := registry.Head()
 	before := catalog.NormalizeState(service.DumpState())
 	sources[0].File, sources[0].Commit = "missing.txt", commit
 	for _, publish := range []func() error{
-		func() error { _, err := service.DefineKnowledgeSet("delivery", 2, sources); return err },
+		func() error { _, err := service.DefineDataset("delivery", 2, sources); return err },
 		func() error {
-			_, err := service.PublishKnowledgeSet(catalog.KnowledgeSet{SetID: "delivery", Revision: 2, Sources: sources})
+			_, err := service.PublishDataset(catalog.Dataset{SetID: "delivery", Revision: 2, Sources: sources})
 			return err
 		},
 	} {
-		if err := publish(); kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+		if err := publish(); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 			t.Errorf("missing selected file was accepted: %v", err)
 		}
 		if got, _ := registry.Head(); got != head || !reflect.DeepEqual(before, catalog.NormalizeState(service.DumpState())) {
 			t.Fatal("missing-file rejection changed HEAD/current/release history")
 		}
 	}
-	pin := catalog.ResolvedKnowledgeSet{SetID: "bad", Repositories: map[kernel.RepositoryID]kernel.CommitID{source.ID(): commit}, Items: []catalog.DatasetItem{{Kind: catalog.DatasetItemFile, Repository: source.ID(), Commit: commit, File: "missing.txt", Target: "selected.txt"}}}
-	if check := service.CheckResolved(pin); check.Outcome != "FAILED" || len(check.Issues) != 1 || check.Issues[0].Code != kernel.ErrKnowledgeRefUnresolved {
+	pin := catalog.ResolvedDataset{SetID: "bad", Repositories: map[kernel.RepositoryID]kernel.CommitID{source.ID(): commit}, Items: []catalog.DatasetItem{{Kind: catalog.DatasetItemFile, Repository: source.ID(), Commit: commit, File: "missing.txt", Target: "selected.txt"}}}
+	if check := service.CheckResolved(pin); check.Outcome != "FAILED" || len(check.Issues) != 1 || check.Issues[0].Code != kernel.ErrObjectRefUnresolved {
 		t.Fatalf("nonexistent selected file passed consistency check: %#v", check)
 	}
 }
@@ -177,8 +177,8 @@ func TestDatasetRootFallbackRejectsFilesAtDeclaredMountDirectories(t *testing.T)
 			writePublicationFiles(t, root.catalogMem, map[string]string{collision: "colliding bytes", "docs/keep.txt": "fallback sibling"})
 			writePublicationFiles(t, selected.catalogMem, map[string]string{"private/selected.txt": "selected bytes"})
 			service, registry := publicationService(t, root, selected)
-			sources := []catalog.KnowledgeSetSource{{Repository: root.ID(), Selector: snapshot.DefaultRef, Path: catalog.MountPath(""), SubPath: "docs"}}
-			accepted, err := service.DefineKnowledgeSet("delivery", 1, sources)
+			sources := []catalog.DatasetSource{{Repository: root.ID(), Selector: snapshot.DefaultRef, Path: catalog.MountPath(""), SubPath: "docs"}}
+			accepted, err := service.DefineDataset("delivery", 1, sources)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -188,17 +188,17 @@ func TestDatasetRootFallbackRejectsFilesAtDeclaredMountDirectories(t *testing.T)
 			if err != nil {
 				t.Fatal(err)
 			}
-			sources = append(sources, catalog.KnowledgeSetSource{Repository: selected.ID(), Selector: snapshot.DefaultRef, Path: catalog.MountPath("guide/private"), SubPath: "private"})
+			sources = append(sources, catalog.DatasetSource{Repository: selected.ID(), Selector: snapshot.DefaultRef, Path: catalog.MountPath("guide/private"), SubPath: "private"})
 			for _, publish := range []func() error{
-				func() error { _, err := service.DefineKnowledgeSet("delivery", 2, sources); return err },
+				func() error { _, err := service.DefineDataset("delivery", 2, sources); return err },
 				func() error {
 					sources[0].Commit, _ = root.Head(snapshot.DefaultRef)
 					sources[1].Commit, _ = selected.Head(snapshot.DefaultRef)
-					_, err := service.PublishKnowledgeSet(catalog.KnowledgeSet{SetID: "delivery", Revision: 2, Sources: sources})
+					_, err := service.PublishDataset(catalog.Dataset{SetID: "delivery", Revision: 2, Sources: sources})
 					return err
 				},
 			} {
-				if err := publish(); kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
+				if err := publish(); kernel.CodeOf(err) != kernel.ErrDatasetInvalid {
 					t.Errorf("root fallback file was accepted at a declared directory: %v", err)
 				}
 				afterHistory, historyErr := service.Log(catalog.LogQuery{Limit: 20})
@@ -238,7 +238,7 @@ func TestDatasetRootFallbackDirectoryProbesPreserveValidLayoutsAndRequireCapabil
 			service, registry := publicationService(t, source, selected)
 			head, _ := registry.Head()
 			before := catalog.NormalizeState(service.DumpState())
-			_, err := service.DefineKnowledgeSet("delivery", 1, []catalog.KnowledgeSetSource{
+			_, err := service.DefineDataset("delivery", 1, []catalog.DatasetSource{
 				{Repository: root.ID(), Selector: snapshot.DefaultRef, Path: catalog.MountPath(""), SubPath: "docs"},
 				{Repository: selected.ID(), Selector: snapshot.DefaultRef, Path: catalog.MountPath("guide/private"), SubPath: "private"},
 			})
@@ -279,7 +279,7 @@ func TestSnapshotRegistryRejectsErasedAuthorityWithoutReinitializing(t *testing.
 		t.Fatal(err)
 	}
 	for _, open := range []func(snapshot.Store, string) (catalog.Registry, error){catalog.OpenSnapshotRegistry, catalog.CreateSnapshotRegistry} {
-		if _, err := open(authority, ""); kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
+		if _, err := open(authority, ""); kernel.CodeOf(err) != kernel.ErrDatasetInvalid {
 			t.Errorf("erased accepted authority was treated as new: %v", err)
 		}
 		if got, _ := authority.Head(snapshot.DefaultRef); got != erased {

@@ -122,7 +122,7 @@ func TestDatasetConsoleManagementHistoryAndByteContract(t *testing.T) {
 	if status != http.StatusBadRequest || !ok || fault["code"] != string(kernel.ErrUsageInvalid) {
 		t.Fatalf("history pagination silently switched publication basis: %d %#v", status, stale)
 	}
-	if err := f.operator.SnapshotService().RetireKnowledgeSet(context.Background(), "delivery", snapshotclient.RequestOptions{}, nil); err != nil {
+	if err := f.operator.SnapshotService().RetireDataset(context.Background(), "delivery", snapshotclient.RequestOptions{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	status, view = get("?revision=1", "agent:publisher")

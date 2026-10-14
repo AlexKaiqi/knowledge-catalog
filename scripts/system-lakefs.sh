@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start lakeFS + MinIO, bind registry / System / knowledge Snapshot authorities,
+# Start lakeFS + MinIO, bind registry / System / object Snapshot authorities,
 # initialize a KC deployment, and print the env a server can reuse.
 set -euo pipefail
 
@@ -15,7 +15,7 @@ ENV_FILE="${HOME_DIR}/system-lakefs.env"
 DEPLOYMENT_CONFIG="${HOME_DIR}/deployment.json"
 REGISTRY_ID="${KC_REGISTRY_ID:-kr://acme/registry}"
 PRINCIPAL="${KC_AS:-admin}"
-KNOWLEDGE="${KC_KNOWLEDGE_REPO:-kr://acme/knowledge}"
+OBJECT="${KC_OBJECT_REPO:-kr://acme/object}"
 LAKEFS_ACCESS="${KC_LAKEFS_ACCESS_KEY:-AKIAKOSLOCALEXAMPLE}"
 LAKEFS_SECRET="${KC_LAKEFS_SECRET_KEY:-wJalrXUtnFEMILocalLakeFSSecret12}"
 MINIO_USER="${KC_MINIO_USER:-kcminio}"
@@ -147,7 +147,7 @@ ensure_deployment() {
       --registry-dsn "$(lakefs_base)/kc-catalog" \
       --principal "$PRINCIPAL" \
       --lakefs-repo "kr://kc/system=$(lakefs_base)/kc-system" \
-      --lakefs-repo "${KNOWLEDGE}=$(lakefs_base)/kc-knowledge" >/dev/null
+      --lakefs-repo "${OBJECT}=$(lakefs_base)/kc-object" >/dev/null
   fi
   "$GO" run ./cmd/kc -- deployment init --config "$DEPLOYMENT_CONFIG" >/dev/null
 }
@@ -224,7 +224,7 @@ cmd_up() {
   setup_lakefs
   ensure_repo kc-catalog s3://kc-authority/kc-catalog
   ensure_repo kc-system s3://kc-authority/kc-system
-  ensure_repo kc-knowledge s3://kc-authority/kc-knowledge
+  ensure_repo kc-object s3://kc-authority/kc-object
   write_env
   echo "initializing KC deployment on lakeFS"
   ensure_deployment
@@ -253,7 +253,7 @@ LakeFS Snapshot is ready.
   KC typed API   http://127.0.0.1:${KC_LISTEN_PORT}   (browser / is 404)
   ttyd (kc CLI)  http://127.0.0.1:${TTYD_PORT}/
 
-Registry / System / knowledge repositories are independent lakeFS repos.
+Registry / System / object repositories are independent lakeFS repos.
 Credential is injected as KC_LAKEFS_CREDENTIAL; it is not in the DSN.
 
 Stop with: ./scripts/system-lakefs.sh down

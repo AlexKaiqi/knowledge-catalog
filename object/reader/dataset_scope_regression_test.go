@@ -23,7 +23,7 @@ func (privateBindingGuard) BindingSchemaObjectIDs(kernel.CommitID) ([]objectmode
 
 func TestDatasetRegressionDatasetMustNotReadOutsideAspect(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	commit, err := s.Repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	commit, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: []objectmodel.Operation{
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "service/A", AspectName: "public"}, PathHint: "public/a.yaml", Value: map[string]any{"body": "public"}},
@@ -32,7 +32,7 @@ func TestDatasetRegressionDatasetMustNotReadOutsideAspect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	serving := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return s.Repo.Repository, nil }, reader.KnowledgeSetPin{
+	serving := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return s.Repo.Repository, nil }, reader.DatasetPin{
 		SetID: "public-only", Repositories: map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit},
 		Items: []reader.DatasetItem{{Repository: s.RepositoryID, Commit: commit, Kind: "prefix", Prefix: "public"}}})
 	rows, err := serving.ReadAddress(objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "service/A", AspectName: "private"})
@@ -52,22 +52,22 @@ func TestDatasetRegressionDatasetMustNotReadOutsideAspect(t *testing.T) {
 	if contains, err := serving.Contains(s.RepositoryID, "service/A"); err != nil || contains {
 		t.Fatalf("partial object eligible for search: %v %v", contains, err)
 	}
-	full := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return s.Repo, nil }, reader.KnowledgeSetPin{Repositories: map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit}, Items: reader.WholeRepositoryItems(map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit})})
+	full := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return s.Repo, nil }, reader.DatasetPin{Repositories: map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit}, Items: reader.WholeRepositoryItems(map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit})})
 	if rows, err := full.Read("service/A", nil); err != nil || len(rows) != 1 {
 		t.Fatalf("complete publication cannot read object: %#v %v", rows, err)
 	}
 }
 
-func TestDatasetMemberCannotReadAuxiliaryKnowledgeOutsideScope(t *testing.T) {
+func TestDatasetMemberCannotReadAuxiliaryObjectOutsideScope(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	commit, err := s.Repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID, Operations: []objectmodel.Operation{
+	commit, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID, Operations: []objectmodel.Operation{
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "public"}, PathHint: "public/a.yaml", Value: map[string]any{"body": "visible"}},
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/private"}, PathHint: "private/schema.yaml", Value: map[string]any{"entity": "Private", "fields": map[string]any{"secret": map[string]any{"type": "string", "access": []any{"filter"}}}}},
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	pin := reader.KnowledgeSetPin{Repositories: map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit}, Items: []reader.DatasetItem{{Repository: s.RepositoryID, Commit: commit, Kind: "prefix", Prefix: "public"}}}
+	pin := reader.DatasetPin{Repositories: map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit}, Items: []reader.DatasetItem{{Repository: s.RepositoryID, Commit: commit, Kind: "prefix", Prefix: "public"}}}
 	guard := privateBindingGuard{Repository: s.Repo, UnitLocator: s.Repo.Repository.(objectmodel.UnitLocator), SchemaStore: s.Repo.Repository.(objectmodel.SchemaStore)}
 	scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return guard, nil }, pin)
 	pin.Items[0].Prefix = "" // caller mutation must not broaden the accepted pin

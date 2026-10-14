@@ -51,7 +51,7 @@ func TestLiveHTTPDynamicStateSearchJourney(t *testing.T) {
 	if asMap(t, sync["state"])["revision"] == "" {
 		t.Fatalf("index-sync did not publish State projection: %#v", sync)
 	}
-	search := asMap(t, postAny(t, server.URL, "/knowledge/v1/search", map[string]any{
+	search := asMap(t, postAny(t, server.URL, "/object/v1/search", map[string]any{
 		"dataset": "agent", "query": "healthy",
 	}))
 	hits := search["hits"].([]any)
@@ -59,7 +59,7 @@ func TestLiveHTTPDynamicStateSearchJourney(t *testing.T) {
 		t.Fatalf("dynamic field did not discover candidate: %#v", search)
 	}
 	hit := asMap(t, hits[0])
-	if asMap(t, asMap(t, hit["knowledge"])["value"])["health"] == nil {
+	if asMap(t, asMap(t, hit["object"])["value"])["health"] == nil {
 		t.Fatalf("dynamic hit was not hydrated: %#v", hit)
 	}
 	if len(asMap(t, hit["version"])["observations"].([]any)) != 1 {

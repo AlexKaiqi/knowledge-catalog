@@ -40,16 +40,16 @@ func newMetadataDataset(t *testing.T) (catalog.Service, catalog.Registry, *catal
 	return service, registry, authority, source
 }
 
-func publishMetadataDataset(t *testing.T, service catalog.Service, revision int, metadata map[string]string) catalog.KnowledgeSet {
+func publishMetadataDataset(t *testing.T, service catalog.Service, revision int, metadata map[string]string) catalog.Dataset {
 	t.Helper()
-	def, err := service.PrepareKnowledgeSet("delivery", revision, []catalog.KnowledgeSetSource{{
+	def, err := service.PrepareDataset("delivery", revision, []catalog.DatasetSource{{
 		Repository: "kr://metadata/source", Selector: snapshot.DefaultRef, File: "visible.txt", Target: "public.txt",
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	def.Metadata = metadata
-	accepted, err := service.PublishKnowledgeSet(def)
+	accepted, err := service.PublishDataset(def)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestDatasetMetadataPublicationRecoveryAndVersionIsolation(t *testing.T) {
 	}
 	var release string
 	for _, path := range paths {
-		if path != "registry.yaml" && path != catalog.KnowledgeSetYAML("delivery") {
+		if path != "registry.yaml" && path != catalog.DatasetYAML("delivery") {
 			release = path
 		}
 	}
@@ -80,7 +80,7 @@ func TestDatasetMetadataPublicationRecoveryAndVersionIsolation(t *testing.T) {
 		t.Fatal("metadata changed the published file scope", latest)
 	}
 	latest.Metadata["description"] = "attempted overwrite"
-	if _, err := service.PublishKnowledgeSet(latest); kernel.CodeOf(err) != kernel.ErrNonFastForward {
+	if _, err := service.PublishDataset(latest); kernel.CodeOf(err) != kernel.ErrNonFastForward {
 		t.Fatalf("same-revision metadata rewrite accepted: %v", err)
 	}
 	currentHead, _ := registry.Head()
@@ -115,7 +115,7 @@ func TestDatasetMetadataPublicationRecoveryAndVersionIsolation(t *testing.T) {
 		t.Fatalf("read view metadata moved with publication: %#v %v", fixed, err)
 	}
 	cleared := publishMetadataDataset(t, recovered, 3, nil)
-	if _, present := catalog.PublicKnowledgeSet(cleared)["metadata"]; present {
+	if _, present := catalog.PublicDataset(cleared)["metadata"]; present {
 		t.Fatal("omitted metadata was inherited or synthesized")
 	}
 }
@@ -126,12 +126,12 @@ func TestDatasetMetadataMapsAreIndependent(t *testing.T) {
 	accepted := publishMetadataDataset(t, service, 1, input)
 	input["description"] = "changed input"
 	accepted.Metadata["description"] = "changed result"
-	readers := map[string]func() catalog.KnowledgeSet{
-		"set":              func() catalog.KnowledgeSet { def, _ := service.Set("delivery"); return def },
-		"version":          func() catalog.KnowledgeSet { def, _ := service.DatasetVersion("delivery", 1); return def },
-		"current state":    func() catalog.KnowledgeSet { return service.DumpState().KnowledgeSets[0] },
-		"historical state": func() catalog.KnowledgeSet { return service.DumpState().DatasetVersions[0] },
-		"read view":        func() catalog.KnowledgeSet { def, _ := service.ReadView(nil).Set("delivery"); return def },
+	readers := map[string]func() catalog.Dataset{
+		"set":              func() catalog.Dataset { def, _ := service.Set("delivery"); return def },
+		"version":          func() catalog.Dataset { def, _ := service.DatasetVersion("delivery", 1); return def },
+		"current state":    func() catalog.Dataset { return service.DumpState().Datasets[0] },
+		"historical state": func() catalog.Dataset { return service.DumpState().DatasetVersions[0] },
+		"read view":        func() catalog.Dataset { def, _ := service.ReadView(nil).Set("delivery"); return def },
 	}
 	for name, read := range readers {
 		def := read()
@@ -145,20 +145,20 @@ func TestDatasetMetadataMapsAreIndependent(t *testing.T) {
 	}
 	state := service.DumpState()
 	normalized := catalog.NormalizeState(state)
-	normalized.KnowledgeSets[0].Metadata["description"] = "normalized current"
+	normalized.Datasets[0].Metadata["description"] = "normalized current"
 	normalized.DatasetVersions[0].Metadata["description"] = "normalized history"
 	service.LoadState(state)
-	state.KnowledgeSets[0].Metadata["description"] = "load input"
+	state.Datasets[0].Metadata["description"] = "load input"
 	state.DatasetVersions[0].Metadata["description"] = "load history"
 	def, _ := service.Set("delivery")
 	historical, _ := service.DatasetVersion("delivery", 1)
 	if def.Metadata["description"] != "accepted" || historical.Metadata["description"] != "accepted" {
 		t.Fatal("NormalizeState or LoadState shared a metadata map")
 	}
-	for _, public := range []map[string]any{catalog.PublicKnowledgeSet(def), catalog.PublicKnowledgeSets([]catalog.KnowledgeSet{def})[0]} {
+	for _, public := range []map[string]any{catalog.PublicDataset(def), catalog.PublicDatasets([]catalog.Dataset{def})[0]} {
 		public["metadata"].(map[string]string)["description"] = "summary"
 	}
-	detail, err := catalog.ManagementView(catalog.State{KnowledgeSets: []catalog.KnowledgeSet{def}}, "delivery", 0, catalog.ManagementOptions{})
+	detail, err := catalog.ManagementView(catalog.State{Datasets: []catalog.Dataset{def}}, "delivery", 0, catalog.ManagementOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,13 +174,13 @@ func TestDatasetMetadataPublicationFailureKeepsAcceptedState(t *testing.T) {
 	before := catalog.NormalizeState(service.DumpState())
 	head, _ := registry.Head()
 	sourceHead, _ := source.Head(snapshot.DefaultRef)
-	candidate, err := service.PrepareKnowledgeSet("delivery", 2, before.KnowledgeSets[0].Sources)
+	candidate, err := service.PrepareDataset("delivery", 2, before.Datasets[0].Sources)
 	if err != nil {
 		t.Fatal(err)
 	}
 	candidate.Metadata = map[string]string{"description": "candidate"}
 	authority.applyErr = errors.New("registry write failed")
-	if _, err := service.PublishKnowledgeSet(candidate); err == nil {
+	if _, err := service.PublishDataset(candidate); err == nil {
 		t.Fatal("failed metadata publication reported success")
 	}
 	if after := catalog.NormalizeState(service.DumpState()); !reflect.DeepEqual(after, before) {
@@ -190,7 +190,7 @@ func TestDatasetMetadataPublicationFailureKeepsAcceptedState(t *testing.T) {
 		t.Fatal("failed metadata publication advanced registry HEAD")
 	}
 	authority.applyErr = nil
-	if _, err := service.PublishKnowledgeSet(candidate); err != nil {
+	if _, err := service.PublishDataset(candidate); err != nil {
 		t.Fatalf("metadata publication could not resume: %v", err)
 	}
 	if after, _ := source.Head(snapshot.DefaultRef); after != sourceHead {
@@ -205,7 +205,7 @@ func TestDatasetRegistryRejectsAcceptedMetadataRewriteAndRemoval(t *testing.T) {
 	for _, operation := range []string{"rewrite", "remove"} {
 		state := service.DumpState()
 		if operation == "rewrite" {
-			state.KnowledgeSets[0].Metadata["description"] = "rewritten"
+			state.Datasets[0].Metadata["description"] = "rewritten"
 			state.DatasetVersions[0].Metadata["description"] = "rewritten"
 		} else {
 			state.DatasetVersions = nil
@@ -221,7 +221,7 @@ func TestDatasetRegistryRejectsAcceptedMetadataRewriteAndRemoval(t *testing.T) {
 
 func TestDatasetMetadataJSONRequiresStringValues(t *testing.T) {
 	for _, metadata := range []string{`{"description":42}`, `{"description":true}`, `{"description":{"nested":"value"}}`, `{"description":null}`, `{"duplicate":"one","duplicate":"two"}`, `[]`, `null`} {
-		var definition catalog.KnowledgeSet
+		var definition catalog.Dataset
 		if err := catalog.DecodeJSON([]byte(`{"metadata":`+metadata+`}`), &definition); err == nil {
 			t.Fatalf("accepted non-string metadata: %s", metadata)
 		}
@@ -230,12 +230,12 @@ func TestDatasetMetadataJSONRequiresStringValues(t *testing.T) {
 			t.Fatalf("string-map decoder accepted invalid metadata: %s", metadata)
 		}
 	}
-	def := catalog.KnowledgeSet{Metadata: map[string]string{"number": "42", "custom": "", "description": "delivery"}}
+	def := catalog.Dataset{Metadata: map[string]string{"number": "42", "custom": "", "description": "delivery"}}
 	raw, err := json.Marshal(def)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var decoded catalog.KnowledgeSet
+	var decoded catalog.Dataset
 	if err := catalog.DecodeJSON(raw, &decoded); err != nil || !reflect.DeepEqual(decoded.Metadata, def.Metadata) {
 		t.Fatalf("string metadata did not round-trip: %#v %v", decoded, err)
 	}

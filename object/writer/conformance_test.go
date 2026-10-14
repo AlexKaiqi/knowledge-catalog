@@ -6,7 +6,7 @@ import (
 	"kc/internal/testkit"
 	"kc/kernel"
 	objectmodel "kc/object"
-	knowledgemaintenance "kc/object/maintenance"
+	objectmaintenance "kc/object/maintenance"
 	"kc/object/writer"
 )
 
@@ -44,7 +44,7 @@ func TestT1PathMove(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	res, err := s.Reader.Resolve(objectmodel.KnowledgeRef{Repository: s.RepositoryID, Object: "policy/P-103"}, c2.Result.CommitID)
+	res, err := s.Reader.Resolve(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: "policy/P-103"}, c2.Result.CommitID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,10 +77,10 @@ func TestT2CommitCAS(t *testing.T) {
 	if head := testkit.MustHead(t, s.Repo, "refs/heads/main"); head != accepted.Result.CommitID {
 		t.Fatalf("rejected CAS advanced Ref: got %s, want %s", head, accepted.Result.CommitID)
 	}
-	if _, err := s.Reader.Read(objectmodel.KnowledgeRef{Repository: s.RepositoryID, Object: "b"}, accepted.Result.CommitID, nil); kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+	if _, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: "b"}, accepted.Result.CommitID, nil); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		t.Fatalf("rejected CAS published b: %v", err)
 	}
-	original, err := s.Reader.Read(objectmodel.KnowledgeRef{Repository: s.RepositoryID, Object: "a"}, accepted.Result.CommitID, nil)
+	original, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: "a"}, accepted.Result.CommitID, nil)
 	if err != nil || kernel.CanonicalDigest(original.Value) != kernel.CanonicalDigest(1) {
 		t.Fatalf("rejected CAS changed a: %#v, %v", original, err)
 	}
@@ -126,11 +126,11 @@ func TestT3Atomicity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scanner, err := knowledgemaintenance.RequireScanner(repo)
+	scanner, err := objectmaintenance.RequireScanner(repo)
 	if err != nil {
 		t.Fatal(err)
 	}
-	page, err := scanner.ScanSnapshotPage(head, knowledgemaintenance.ScanRequest{Limit: 10})
+	page, err := scanner.ScanSnapshotPage(head, objectmaintenance.ScanRequest{Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -51,7 +51,7 @@ func TestDatasetShowPreservesQueryAndDefaultEntry(t *testing.T) {
 	if output["metadata"].(map[string]any)["description"] != "selected version" {
 		t.Fatalf("selected metadata lost: %#v", output)
 	}
-	if err := kc.SnapshotService().KnowledgeSet(context.Background(), "delivery group", snapshotclient.RequestOptions{}, nil); err != nil {
+	if err := kc.SnapshotService().Dataset(context.Background(), "delivery group", snapshotclient.RequestOptions{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	for _, revision := range []int{0, -1} {
@@ -79,17 +79,17 @@ func TestDatasetResolveRevisionIsExplicitAndExclusive(t *testing.T) {
 		_, _ = w.Write([]byte(`{"setId":"delivery","revision":1}`))
 	}))
 	revision := 1
-	if err := kc.SnapshotService().ResolveKnowledgeSet(context.Background(), "delivery", snapshotclient.KnowledgeSetResolveRequest{Revision: &revision}, snapshotclient.RequestOptions{}, nil); err != nil {
+	if err := kc.SnapshotService().ResolveDataset(context.Background(), "delivery", snapshotclient.DatasetResolveRequest{Revision: &revision}, snapshotclient.RequestOptions{}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := kc.SnapshotService().CheckKnowledgeSet(context.Background(), "delivery", snapshotclient.KnowledgeSetResolveRequest{Revision: &revision}, snapshotclient.RequestOptions{}, nil); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
+	if err := kc.SnapshotService().CheckDataset(context.Background(), "delivery", snapshotclient.DatasetResolveRequest{Revision: &revision}, snapshotclient.RequestOptions{}, nil); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
 		t.Fatalf("check accepted a new revision selector: %v", err)
 	}
-	for _, request := range []snapshotclient.KnowledgeSetResolveRequest{
+	for _, request := range []snapshotclient.DatasetResolveRequest{
 		{Revision: new(int)},
 		{Revision: &revision, Pin: json.RawMessage(`{}`)},
 	} {
-		if err := kc.SnapshotService().ResolveKnowledgeSet(context.Background(), "delivery", request, snapshotclient.RequestOptions{}, nil); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
+		if err := kc.SnapshotService().ResolveDataset(context.Background(), "delivery", request, snapshotclient.RequestOptions{}, nil); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
 			t.Fatalf("invalid resolve selector: %v", err)
 		}
 	}

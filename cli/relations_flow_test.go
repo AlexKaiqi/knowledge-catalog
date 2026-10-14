@@ -114,15 +114,15 @@ func TestRelationRepositoryWorkspaceAndHTTPUseOneExactBasisExecutor(t *testing.T
 	}
 
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--dataset", "agent"))
-	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "knowledge.relations", "--repo", repository))
-	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "knowledge.read", "--repo", repository))
+	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "object.relations", "--repo", repository))
+	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "object.read", "--repo", repository))
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
-	httpResult := postAny(t, server.URL, "/knowledge/v1/relations:query", map[string]any{
+	httpResult := postAny(t, server.URL, "/object/v1/relations:query", map[string]any{
 		"dataset": "agent", "endpoint": "kc://acme/public/core/Table:orders",
 		"relationType": "owned-by", "role": "subject", "direction": "DIRECTED",
 	})

@@ -9,13 +9,13 @@ import (
 )
 
 func TestT7GroundingCitation(t *testing.T) {
-	value := objectmodel.KnowledgeValue{
-		KnowledgeRef: objectmodel.KnowledgeRef{Repository: "kr://acme/public/core", Object: "policy/P-103"},
-		Repository:   "kr://acme/public/core",
-		Commit:       "abc123",
-		Address:      objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "policy/P-103"},
-		Value:        map[string]any{"statement": "v1"},
-		Provenance:   &objectmodel.ProvenanceEnvelope{OriginKind: objectmodel.OriginDefinition, ActorRef: "core-council", SourceRefs: []string{"handbook-v1"}},
+	value := objectmodel.ObjectValue{
+		ObjectRef:  objectmodel.ObjectRef{Repository: "kr://acme/public/core", Object: "policy/P-103"},
+		Repository: "kr://acme/public/core",
+		Commit:     "abc123",
+		Address:    objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "policy/P-103"},
+		Value:      map[string]any{"statement": "v1"},
+		Provenance: &objectmodel.ProvenanceEnvelope{OriginKind: objectmodel.OriginDefinition, ActorRef: "core-council", SourceRefs: []string{"handbook-v1"}},
 	}
 	citation := reader.NewGroundingCitation(value)
 	if citation.PinnedRef != "kc://acme/public/core@abc123/policy/P-103" {

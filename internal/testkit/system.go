@@ -11,7 +11,7 @@ import (
 
 // MakeSystemRepository publishes onto an actual Snapshot fixture and uses the
 // same tree interpretation path as deployed system repositories.
-func MakeSystemRepository(t *testing.T) *KnowledgeRepository {
+func MakeSystemRepository(t *testing.T) *ObjectRepository {
 	t.Helper()
 	source := MakeTreeStore(t, string(objectmodel.SystemRepositoryID))
 	if _, err := systemrepo.PublishSystem(source); err != nil {
@@ -37,7 +37,7 @@ func (r *nativeSystemRepository) Merge(ref string, candidate, expected kernel.Co
 }
 func (r *nativeSystemRepository) Archive() error { return r.control.Archive() }
 
-func (*nativeSystemRepository) NativeKnowledgeRepository() {}
+func (*nativeSystemRepository) NativeObjectRepository() {}
 
 type NativeSnapshotRepository interface {
 	objectmodel.NativeRepository

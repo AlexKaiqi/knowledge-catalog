@@ -40,7 +40,7 @@ func ResolveRepoBinding(repo objectmodel.Repository, commit kernel.CommitID, add
 	if instErr == nil {
 		return instance, nil
 	}
-	if kernel.CodeOf(instErr) == kernel.ErrKnowledgeRefUnresolved {
+	if kernel.CodeOf(instErr) == kernel.ErrObjectRefUnresolved {
 		return ResolvedBinding{}, err
 	}
 	return ResolvedBinding{}, instErr
@@ -86,7 +86,7 @@ func resolveInstanceBinding(repo objectmodel.Repository, commit kernel.CommitID,
 		return ResolvedBinding{}, err
 	}
 	if resolution.Status != objectmodel.StatusResolved {
-		return ResolvedBinding{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "binding address %s is not resolved at %s", objectmodel.AddressKey(address), commit)
+		return ResolvedBinding{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "binding address %s is not resolved at %s", objectmodel.AddressKey(address), commit)
 	}
 	return resolveLegacyDeclaration(repo, commit, objectmodel.UnitDeclaration{Address: address, ValueSource: resolution.ValueSource, SchemaRef: resolution.SchemaRef, DeclarationDigest: resolution.DeclarationDigest})
 }
@@ -164,7 +164,7 @@ func resolveLegacyDeclaration(repo objectmodel.Repository, commit kernel.CommitI
 	}
 	descriptor, err := repo.Read(binding.DescriptorRef, commit)
 	if err != nil {
-		return ResolvedBinding{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "descriptor %s is not resolved at %s", binding.DescriptorRef, commit)
+		return ResolvedBinding{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "descriptor %s is not resolved at %s", binding.DescriptorRef, commit)
 	}
 	value, ok := descriptor.Value.(map[string]any)
 	if ok && value["kind"] != "ResourceDescriptor" {

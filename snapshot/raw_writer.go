@@ -1,6 +1,6 @@
 // Package treewriter is the layer ⓪ write service for literal path bytes.
 // It knows TreeChangeSet, CAS, command replay and Snapshot advancement, but no
-// object_id, Address, Aspect, Schema or other Knowledge semantics.
+// object_id, Address, Aspect, Schema or other Object semantics.
 package snapshot
 
 import (

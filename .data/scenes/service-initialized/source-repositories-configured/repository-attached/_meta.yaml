@@ -6,7 +6,7 @@ views:
   - "access-control"
 publishes:
   - "writer.snapshot"
-  - "knowledge.readme"
+  - "object.readme"
   - "access.rules"
   - "catalog.lifecycle"
   - "control.proposal"
@@ -183,24 +183,24 @@ evidence:
       - "TestPrePutDeniedLeavesNoCommit"
       - "TestPostPutPointersOnly"
     title: "写前 Hook 拒绝不产生提交，写后 Hook 仅携带指针"
-  - source: "knowledge.readme"
+  - source: "object.readme"
     views:
       - "publication"
       - "consumption"
     tests:
-      - "TestCatalogShowRepositoriesStayIdentityAndReadmeIsKnowledge"
+      - "TestCatalogShowRepositoriesStayIdentityAndReadmeIsObject"
     verifies:
       - claim: "service#U5"
-        detail: "登记空间 库存列出 System 与业务仓身份及知识集，README 作为知识对象写入并由 READ 回读，库存不含 README 正文或描述字段。"
-    title: "列举库存只返回身份，README 通过知识读取返回正文"
+        detail: "登记空间 库存列出 System 与业务仓身份及 Dataset，README 作为对象写入并由 READ 回读，库存不含 README 正文或描述字段。"
+    title: "列举库存只返回身份，README 通过对象读取返回正文"
   - id: "inventory-without-body"
     title: "授予库存读权后可发现成员，正文仍需独立读权"
     views:
       - "access-control"
     source: "access.rules"
     tests:
-      - "TestCatalogReadDiscoversWithoutKnowledgeRead"
-      - "TestCatalogInventoryDoesNotHideReposWithoutKnowledgeRead"
+      - "TestCatalogReadDiscoversWithoutObjectRead"
+      - "TestCatalogInventoryDoesNotHideReposWithoutObjectRead"
   - id: "declared-repository-read-boundary"
     title: "读取已声明仓默认放行，未声明仓仍需授权"
     views:
@@ -249,9 +249,9 @@ evidence:
       - "consumption"
     tests:
       - "TestResolveDescriptorBindingAtPinnedCommit"
-      - "TestCatalogViewsChecksAndKnowledgeResolve"
+      - "TestCatalogViewsChecksAndObjectResolve"
     id: "descriptor-resolves-fixed-version"
-    title: "资源描述符按固定版本解析并检查知识视图"
+    title: "资源描述符按固定版本解析并检查对象视图"
   - source: "binding.observation"
     views:
       - "publication"
@@ -294,7 +294,7 @@ evidence:
       - "TestStateBindingHydratesConsumerReadAndKeepsBothBases"
       - "TestBoundReadFailsClosedWithoutStateRuntime"
       - "TestStateRuntimeFailuresAndInvalidBasisFailHonestly"
-      - "TestWorkspaceReadHydratesStateBindingThroughTypedKnowledgeAPI"
+      - "TestWorkspaceReadHydratesStateBindingThroughTypedObjectAPI"
       - "TestBusinessNullContrastsPlaceholderAndNeverFallsBackToScan"
       - "TestDirectResourceAccessValidatesPinnedObservation"
     verifies:
@@ -321,7 +321,7 @@ evidence:
     tests:
       - "TestHTTPStateLookupForwardsCallerAuthentication"
       - "TestHTTPStateLookupRequiresCallerPrincipal"
-      - "TestTypedKnowledgeReadForwardsTaihuCallerAuthentication"
+      - "TestTypedObjectReadForwardsTaihuCallerAuthentication"
     verifies:
       - claim: "liveaccess#U7"
         detail: "认证证明在请求头中传递、主体随调用保留，证明不进入请求正文；缺主体时拒绝调用，不证明目标信任、audience 或后台身份隔离。"
@@ -360,7 +360,7 @@ evidence:
       - "consumption"
     tests:
       - "TestDirectResourceAccessRecordsActualAccessEvidence"
-      - "TestKnowledgeReadFailsClosedWhenAccessEvidenceCannotPersist"
+      - "TestObjectReadFailsClosedWhenAccessEvidenceCannotPersist"
       - "TestAccessReceiptIsGeneratedOnlyAfterDurableAppend"
       - "TestLatestOnlyRecordLossAndExpiryFailDistinguishably"
     verifies:
@@ -385,12 +385,12 @@ evidence:
       - "access-control"
     tests:
       - "TestResolveDescriptorBindingAtPinnedCommit"
-      - "TestCatalogViewsChecksAndKnowledgeResolve"
+      - "TestCatalogViewsChecksAndObjectResolve"
     id: "resource-resolution-preserves-authorization"
-    title: "描述符解析与知识视图检查保持资源边界"
+    title: "描述符解析与对象视图检查保持资源边界"
   - id: "object-model-and-owned-cli"
     title: "根帮助本地说明对象模型且模块输出保持所属合同"
-    source: "knowledge.readme"
+    source: "object.readme"
     views:
       - "consumption"
     tests:
@@ -450,7 +450,7 @@ evidence:
       - "consumption"
       - "access-control"
     tests:
-      - "TestNativeReadViewPreservesBoundedKnowledgePorts"
+      - "TestNativeReadViewPreservesBoundedObjectPorts"
       - "TestDatasetNativeBindingCoordinatesRequireMetadataOnlyPort"
       - "TestNativeReadViewRejectsMissingBoundedPort"
       - "TestNativeReferenceSelectionWithoutPlanningPortDoesNotLoadObject"
@@ -560,7 +560,7 @@ evidence:
       - "TestConsumerUsesActualServerContract"
       - "TestDatasetExecutorsAuthorizeBeforeResolution"
       - "TestDatasetRegressionDatasetMustNotReadOutsideAspect"
-      - "TestDatasetMemberCannotReadAuxiliaryKnowledgeOutsideScope"
+      - "TestDatasetMemberCannotReadAuxiliaryObjectOutsideScope"
       - "TestDatasetRegressionHTTPDatasetPinCannotBroadenScope"
       - "TestDatasetReferenceReadKeepsSourceAndPublishedUnitScope"
       - "TestDatasetReferenceKeepsAcceptedSourceVersionAndCurrentPermissions"
@@ -693,4 +693,4 @@ probes:
     views:
       - "access-control"
       - "publication"
-fixture: "登记空间 成员表已登记既有的 knowledge 与 graph 仓，两个业务仓尚无 Schema。"
+fixture: "登记空间 成员表已登记既有的 object 与 graph 仓，两个业务仓尚无 Schema。"

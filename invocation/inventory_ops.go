@@ -51,22 +51,22 @@ func InventoryView(state dataset.State) map[string]any {
 	state = dataset.NormalizeState(state)
 	out := map[string]any{
 		"repositories": state.Repositories,
-		"datasets":     PublicKnowledgeSets(state.KnowledgeSets),
+		"datasets":     PublicDatasets(state.Datasets),
 	}
 	return out
 }
 
-func PublicKnowledgeSets(workspaces []dataset.KnowledgeSet) []map[string]any {
-	return dataset.PublicKnowledgeSets(workspaces)
+func PublicDatasets(workspaces []dataset.Dataset) []map[string]any {
+	return dataset.PublicDatasets(workspaces)
 }
 
-func PublicKnowledgeSet(workspace dataset.KnowledgeSet) map[string]any {
-	return dataset.PublicKnowledgeSet(workspace)
+func PublicDataset(workspace dataset.Dataset) map[string]any {
+	return dataset.PublicDataset(workspace)
 }
 
 // RepositoryInventory is the consumer Registry inventory: registered
 // Repository ids plus schemaCount at published HEAD. RegistryState still stores
-// ids; this assembly stays in the application layer. README is a knowledge
+// ids; this assembly stays in the application layer. README is an object
 // object, not title/summary columns on this list.
 func RepositoryInventory(ws *kchome.Home, ids []string) []map[string]any {
 	out := make([]map[string]any, 0, len(ids))

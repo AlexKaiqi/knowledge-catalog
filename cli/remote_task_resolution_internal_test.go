@@ -17,7 +17,7 @@ func TestTypedTaskResolutionPreservesAnonymousDefinitionAndOutput(t *testing.T) 
 		if r.Method != http.MethodPost || r.URL.Path != "/snapshot/v1/datasets:resolve" || r.Header.Get("X-Kc-As") != "agent:test" || r.Header.Get("X-Kc-Request-Id") != "task-A" {
 			t.Errorf("typed task request lost route or identity: %s %s %#v", r.Method, r.URL, r.Header)
 		}
-		var request snapshotclient.KnowledgeSetRequest
+		var request snapshotclient.DatasetRequest
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			t.Error(err)
 		}
@@ -40,7 +40,7 @@ func TestTypedTaskResolutionPreservesAnonymousDefinitionAndOutput(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	pin, ok := result.(inv.TaskKnowledgeSetPin)
+	pin, ok := result.(inv.TaskDatasetPin)
 	if !ok || pin.PinID != "fixed-task" || pin.Definition == nil || pin.Definition.Revision != 2 || len(pin.Definition.Sources) != 2 || pin.Definition.Metadata["custom"] != "value" {
 		t.Fatalf("typed task did not preserve the replay definition: %#v", result)
 	}

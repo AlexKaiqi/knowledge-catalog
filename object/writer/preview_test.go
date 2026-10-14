@@ -110,7 +110,7 @@ func TestIngestFrontmatterYAMLPayload(t *testing.T) {
 	}
 	value, ok := preview.ChangeSet.Operations[0].Value.(map[string]any)
 	if !ok || value["entity"] != "Metric" || value["aspect"] != "definition" {
-		t.Fatalf("YAML payload was not decoded as a structured knowledge value: %#v", preview.ChangeSet.Operations[0].Value)
+		t.Fatalf("YAML payload was not decoded as a structured object value: %#v", preview.ChangeSet.Operations[0].Value)
 	}
 	if preview.ChangeSet.Operations[0].PathHint != "_schemas/metric.definition.aspect.yaml" {
 		t.Fatalf("schema ingest must land under _schemas/: %#v", preview.ChangeSet.Operations[0].PathHint)

@@ -16,7 +16,7 @@ from typing import Any
 import shop
 import source
 
-REPOSITORY = os.environ.get("KC_NOTICE_REPOSITORY", os.environ.get("KC_REPOSITORY", "kr://scene/knowledge"))
+REPOSITORY = os.environ.get("KC_NOTICE_REPOSITORY", os.environ.get("KC_REPOSITORY", "kr://scene/object"))
 SERVER = os.environ.get("KC_SERVER_URL", "").rstrip("/")
 PRINCIPAL = os.environ.get("KC_AS", os.environ.get("KC_NOTICE_PRINCIPAL", "agent:observer"))
 ASPECT = os.environ.get("KC_NOTICE_ASPECT", "stats")

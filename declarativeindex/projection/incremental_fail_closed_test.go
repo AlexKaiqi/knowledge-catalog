@@ -9,11 +9,11 @@ import (
 	"kc/internal/testkit"
 	"kc/kernel"
 	objectmodel "kc/object"
-	knowledgemaintenance "kc/object/maintenance"
+	objectmaintenance "kc/object/maintenance"
 )
 
 type failingIncrementalRepository struct {
-	*testkit.KnowledgeRepository
+	*testkit.ObjectRepository
 	scans int
 }
 
@@ -21,9 +21,9 @@ func (r *failingIncrementalRepository) FastChangedObjectIDs(kernel.CommitID, ker
 	return nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "native change lookup failed")
 }
 
-func (r *failingIncrementalRepository) ScanSnapshotPage(kernel.CommitID, knowledgemaintenance.ScanRequest) (knowledgemaintenance.ScanPage, error) {
+func (r *failingIncrementalRepository) ScanSnapshotPage(kernel.CommitID, objectmaintenance.ScanRequest) (objectmaintenance.ScanPage, error) {
 	r.scans++
-	return knowledgemaintenance.ScanPage{}, kernel.Fail(kernel.ErrPreconditionFailed, "incremental failure must not rebuild")
+	return objectmaintenance.ScanPage{}, kernel.Fail(kernel.ErrPreconditionFailed, "incremental failure must not rebuild")
 }
 
 func TestEnsureFailsClosedWhenIncrementalChangeLookupFails(t *testing.T) {
@@ -40,7 +40,7 @@ func TestEnsureFailsClosedWhenIncrementalChangeLookupFails(t *testing.T) {
 	}
 	second := testfixture.PutAt(t, setup.Repo, first,
 		testkit.PutEntity("policy/A", map[string]any{"version": 2}, ""))
-	poison := &failingIncrementalRepository{KnowledgeRepository: setup.Repo}
+	poison := &failingIncrementalRepository{ObjectRepository: setup.Repo}
 	_, err := idx.Ensure(poison, second)
 	if kernel.CodeOf(err) != kernel.ErrTemporaryUnavailable {
 		t.Fatalf("incremental capability failure must be preserved, got %v", err)

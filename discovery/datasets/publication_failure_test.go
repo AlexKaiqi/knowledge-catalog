@@ -35,14 +35,14 @@ type recordingPublicationRegistry struct {
 	events *[]string
 }
 
-func (r recordingPublicationRegistry) PrepareKnowledgeSet(id string, revision int, sources []dataset.KnowledgeSetSource) (dataset.KnowledgeSet, error) {
+func (r recordingPublicationRegistry) PrepareDataset(id string, revision int, sources []dataset.DatasetSource) (dataset.Dataset, error) {
 	*r.events = append(*r.events, "freeze")
-	return r.DatasetRegistry.PrepareKnowledgeSet(id, revision, sources)
+	return r.DatasetRegistry.PrepareDataset(id, revision, sources)
 }
 
-func (r recordingPublicationRegistry) PublishKnowledgeSet(def dataset.KnowledgeSet) (dataset.KnowledgeSet, error) {
+func (r recordingPublicationRegistry) PublishDataset(def dataset.Dataset) (dataset.Dataset, error) {
 	*r.events = append(*r.events, "accept")
-	return r.DatasetRegistry.PublishKnowledgeSet(def)
+	return r.DatasetRegistry.PublishDataset(def)
 }
 
 type publicationFailureFixture struct {
@@ -50,8 +50,8 @@ type publicationFailureFixture struct {
 	authority     *publicationFaultAuthority
 	registry      dataset.Registry
 	service       dataset.Service
-	sources       []dataset.KnowledgeSetSource
-	oldRelease    dataset.KnowledgeSet
+	sources       []dataset.DatasetSource
+	oldRelease    dataset.Dataset
 	nextCommit    kernel.CommitID
 	acceptedState dataset.State
 	authorityHead string
@@ -84,13 +84,13 @@ func newPublicationFailureFixture(t *testing.T) publicationFailureFixture {
 		t.Fatal(err)
 	}
 	testkit.RegisterMounted(t, service, s.Store)
-	sources := []dataset.KnowledgeSetSource{{Repository: s.RepositoryID, Selector: snapshot.DefaultRef, Path: dataset.MountPath("articles")}}
-	old, err := service.PrepareKnowledgeSet("reading", 1, sources)
+	sources := []dataset.DatasetSource{{Repository: s.RepositoryID, Selector: snapshot.DefaultRef, Path: dataset.MountPath("articles")}}
+	old, err := service.PrepareDataset("reading", 1, sources)
 	if err != nil {
 		t.Fatal(err)
 	}
 	old.Metadata = map[string]string{"description": "accepted a"}
-	old, err = service.PublishKnowledgeSet(old)
+	old, err = service.PublishDataset(old)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +156,7 @@ func TestDatasetPublicationFailuresPreserveAcceptedReleaseAndSourceCommit(t *tes
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			var events []string
-			var frozen dataset.KnowledgeSet
+			var frozen dataset.Dataset
 			problem := kernel.Fail(kernel.ErrTemporaryUnavailable, "registry acceptance unavailable")
 			executor := DatasetPublisher{
 				Registry: recordingPublicationRegistry{DatasetRegistry: f.service, events: &events},
@@ -164,7 +164,7 @@ func TestDatasetPublicationFailuresPreserveAcceptedReleaseAndSourceCommit(t *tes
 					events = append(events, "authorize")
 					return nil
 				},
-				Prepare: func(_ context.Context, def dataset.KnowledgeSet) error {
+				Prepare: func(_ context.Context, def dataset.Dataset) error {
 					events = append(events, "prepare")
 					frozen = def
 					if len(def.Sources) != 1 || def.Sources[0].Commit != f.nextCommit || len(def.Items) != 1 || def.Items[0].Commit != f.nextCommit ||
@@ -181,13 +181,13 @@ func TestDatasetPublicationFailuresPreserveAcceptedReleaseAndSourceCommit(t *tes
 			}
 			request := DatasetPublication{Dataset: "reading", Revision: 2, Sources: f.sources, Metadata: map[string]string{"description": "candidate b"}}
 			if stage == "freeze" {
-				request.Sources = []dataset.KnowledgeSetSource{{Repository: f.setup.RepositoryID, Selector: "refs/heads/missing"}}
+				request.Sources = []dataset.DatasetSource{{Repository: f.setup.RepositoryID, Selector: "refs/heads/missing"}}
 			}
 			result, err := executor.Execute(ctx, request)
 			want := []string{"authorize", "freeze"}
 			switch stage {
 			case "freeze":
-				if kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid || !strings.Contains(err.Error(), "has no ref refs/heads/missing") {
+				if kernel.CodeOf(err) != kernel.ErrDatasetInvalid || !strings.Contains(err.Error(), "has no ref refs/heads/missing") {
 					t.Fatalf("freeze failure lost its cause: %v", err)
 				}
 			case "accept":
@@ -201,7 +201,7 @@ func TestDatasetPublicationFailuresPreserveAcceptedReleaseAndSourceCommit(t *tes
 					t.Fatalf("cancellation reached registry acceptance: error=%v attempts=%d", err, f.authority.attempts)
 				}
 			}
-			if !reflect.DeepEqual(events, want) || !reflect.DeepEqual(result, dataset.KnowledgeSet{}) {
+			if !reflect.DeepEqual(events, want) || !reflect.DeepEqual(result, dataset.Dataset{}) {
 				t.Fatalf("failed publication reported acceptance or ran later stages: events=%v result=%#v", events, result)
 			}
 			f.assertUnchanged(t)
@@ -213,7 +213,7 @@ func TestDatasetPublicationFailuresPreserveAcceptedReleaseAndSourceCommit(t *tes
 			latest := commitPublicationSource(t, f.setup, f.nextCommit, "c")
 			f.authority.err = nil
 			request.Sources = frozen.Sources
-			executor.Prepare = func(_ context.Context, def dataset.KnowledgeSet) error {
+			executor.Prepare = func(_ context.Context, def dataset.Dataset) error {
 				if !reflect.DeepEqual(def, frozen) {
 					t.Fatalf("retry changed its prepared basis: got=%#v want=%#v", def, frozen)
 				}

@@ -35,18 +35,18 @@ func TestSystemRepositoryPublishesReadmeSchemaAndInstance(t *testing.T) {
 	if !ok || !strings.Contains(body, "KC 协议仓") {
 		t.Fatalf("system readme value %#v", readme.Value)
 	}
-	files, ok := any(repo).(objectmodel.KnowledgeFileReader)
+	files, ok := any(repo).(objectmodel.ObjectFileReader)
 	if !ok {
 		t.Fatal("SystemRepository must expose README.md")
 	}
-	raw, err := files.ReadKnowledgeFile(objectmodel.RepositoryReadmePath, head)
+	raw, err := files.ReadObjectFile(objectmodel.RepositoryReadmePath, head)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if string(raw) == "" {
 		t.Fatal("published README.md is empty")
 	}
-	schemaYAML, err := files.ReadKnowledgeFile("_schemas/readme.v1.aspect.yaml", head)
+	schemaYAML, err := files.ReadObjectFile("_schemas/readme.v1.aspect.yaml", head)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -18,7 +18,7 @@ func TestDatasetRegistryMetadataRequiresStringKeysAndValues(t *testing.T) {
 			"dataset-orders.yaml": storedDataset + "metadata:\n  " + metadata + "\n",
 		})
 		before, _ := store.Head(snapshot.DefaultRef)
-		if _, err := catalog.OpenSnapshotRegistry(store, ""); kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
+		if _, err := catalog.OpenSnapshotRegistry(store, ""); kernel.CodeOf(err) != kernel.ErrDatasetInvalid {
 			t.Fatalf("registry accepted invalid metadata %q: %v", metadata, err)
 		}
 		if after, _ := store.Head(snapshot.DefaultRef); after != before {
@@ -39,7 +39,7 @@ func TestDatasetMetadataLegacyRecoveryPreservesAcceptedRevision(t *testing.T) {
 	}
 	service := catalogFromRegistry(t, registry, "table-meta")
 	state := service.DumpState()
-	state.KnowledgeSets[0].Metadata = map[string]string{"description": "attempted rewrite"}
+	state.Datasets[0].Metadata = map[string]string{"description": "attempted rewrite"}
 	state.DatasetVersions[0].Metadata = map[string]string{"description": "attempted rewrite"}
 	if err := registry.Save(state, "legacy rewrite", "", "", ""); kernel.CodeOf(err) != kernel.ErrNonFastForward {
 		t.Fatalf("metadata rewrote a legacy accepted revision: %v", err)
@@ -47,14 +47,14 @@ func TestDatasetMetadataLegacyRecoveryPreservesAcceptedRevision(t *testing.T) {
 	if head, _ := store.Head(snapshot.DefaultRef); head != before {
 		t.Fatal("rejected legacy rewrite migrated the authority")
 	}
-	def, err := service.PrepareKnowledgeSet("orders", 2, []catalog.KnowledgeSetSource{{
+	def, err := service.PrepareDataset("orders", 2, []catalog.DatasetSource{{
 		Repository: "table-meta", Selector: snapshot.DefaultRef, Path: catalog.MountPath("tables"), SubPath: "tables",
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	def.Metadata = map[string]string{"description": "new revision"}
-	if _, err := service.PublishKnowledgeSet(def); err != nil {
+	if _, err := service.PublishDataset(def); err != nil {
 		t.Fatalf("metadata prevented first legitimate old-ledger migration: %v", err)
 	}
 	reopened, err := catalog.OpenSnapshotRegistry(store, "")
@@ -62,7 +62,7 @@ func TestDatasetMetadataLegacyRecoveryPreservesAcceptedRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	state, err = reopened.Load()
-	if err != nil || state.KnowledgeSets[0].Metadata["description"] != "new revision" {
+	if err != nil || state.Datasets[0].Metadata["description"] != "new revision" {
 		t.Fatalf("new metadata lost on legacy recovery: %#v %v", state, err)
 	}
 	old, err := service.DatasetVersion("orders", 1)

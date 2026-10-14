@@ -177,20 +177,20 @@ groups:
           (
             kc:slo:read_availability:burn_rate1h > 14.4
             and kc:slo:read_availability:burn_rate5m > 14.4
-            and sum(increase(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved|error"}[5m])) >= 20
+            and sum(increase(kc_operation_executions_total{kc_face="object",kc_operation="object-read",kc_outcome=~"ok|unresolved|error"}[5m])) >= 20
           )
           or
           (
             kc:slo:read_availability:burn_rate6h > 6
             and kc:slo:read_availability:burn_rate30m > 6
-            and sum(increase(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved|error"}[30m])) >= 20
+            and sum(increase(kc_operation_executions_total{kc_face="object",kc_operation="object-read",kc_outcome=~"ok|unresolved|error"}[30m])) >= 20
           )
         for: 2m
         labels:
           severity: critical
         annotations:
           summary: Canonical READ is rapidly consuming its 30-day error budget
-          nextQuery: 'sum by (kc_outcome) (increase(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read"}[1h]))'
+          nextQuery: 'sum by (kc_outcome) (increase(kc_operation_executions_total{kc_face="object",kc_operation="object-read"}[1h]))'
           dashboard: /d/kc-capacity-behavior/knowledge-catalog-capacity-and-behavior
           runbook: Split authority and assembly errors from valid unresolved reads, then inspect the slow or failed READ trace.
 
@@ -198,13 +198,13 @@ groups:
         expr: |
           kc:slo:read_availability:burn_rate1d > 3
           and kc:slo:read_availability:burn_rate2h > 3
-          and sum(increase(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved|error"}[2h])) >= 100
+          and sum(increase(kc_operation_executions_total{kc_face="object",kc_operation="object-read",kc_outcome=~"ok|unresolved|error"}[2h])) >= 100
         for: 15m
         labels:
           severity: warning
         annotations:
           summary: Canonical READ is persistently consuming its 30-day error budget
-          nextQuery: 'sum by (kc_outcome) (increase(kc_operation_executions_total{kc_face="knowledge",kc_operation="knowledge-read"}[6h]))'
+          nextQuery: 'sum by (kc_outcome) (increase(kc_operation_executions_total{kc_face="object",kc_operation="object-read"}[6h]))'
           dashboard: /d/kc-capacity-behavior/knowledge-catalog-capacity-and-behavior
           runbook: Review recurring technical errors and authority latency before the condition becomes a fast burn.
 
@@ -247,7 +247,7 @@ groups:
       - alert: KCReadP95AboveSharedObjective
         expr: |
           kc:sli:read_latency_seconds:p95 > 0.5
-          and sum(increase(kc_operation_duration_seconds_count{kc_face="knowledge",kc_operation="knowledge-read",kc_outcome=~"ok|unresolved"}[5m])) >= 20
+          and sum(increase(kc_operation_duration_seconds_count{kc_face="object",kc_operation="object-read",kc_outcome=~"ok|unresolved"}[5m])) >= 20
         for: 10m
         labels:
           severity: warning

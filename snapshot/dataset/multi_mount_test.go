@@ -9,13 +9,13 @@ import (
 )
 
 func TestOneRepositoryCanProjectSeveralDisjointSubtrees(t *testing.T) {
-	setup := testkit.NewSetup(t, "kr://acme/team/knowledge")
+	setup := testkit.NewSetup(t, "kr://acme/team/object")
 	cat := testkit.OpenDatasets(t, setup.Store)
-	sources := []catalog.KnowledgeSetSource{
+	sources := []catalog.DatasetSource{
 		{Repository: setup.RepositoryID, Selector: "refs/heads/main", Path: catalog.MountPath("docs/team"), SubPath: "handbook"},
-		{Repository: setup.RepositoryID, Selector: "refs/heads/main", Path: catalog.MountPath("knowledge/runbooks"), SubPath: "runbooks"},
+		{Repository: setup.RepositoryID, Selector: "refs/heads/main", Path: catalog.MountPath("object/runbooks"), SubPath: "runbooks"},
 	}
-	def, err := cat.DefineKnowledgeSet("agent", 1, sources)
+	def, err := cat.DefineDataset("agent", 1, sources)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,26 +34,26 @@ func TestOneRepositoryCanProjectSeveralDisjointSubtrees(t *testing.T) {
 		t.Fatalf("mounts must share one commit: %#v", mounts)
 	}
 
-	changed := append([]catalog.KnowledgeSetSource{}, sources...)
-	changed[1].Path = catalog.MountPath("knowledge/operations")
+	changed := append([]catalog.DatasetSource{}, sources...)
+	changed[1].Path = catalog.MountPath("object/operations")
 	if catalog.HashResolved("agent", sources, resolved.Repositories) == catalog.HashResolved("agent", changed, resolved.Repositories) {
 		t.Fatal("all mount paths must participate in PinID")
 	}
 }
 
 func TestRepeatedRepositoryMustShareCoordinateAndDisjointSubPaths(t *testing.T) {
-	setup := testkit.NewSetup(t, "kr://acme/team/knowledge")
+	setup := testkit.NewSetup(t, "kr://acme/team/object")
 	cat := testkit.OpenDatasets(t, setup.Store)
-	base := catalog.KnowledgeSetSource{
+	base := catalog.DatasetSource{
 		Repository: setup.RepositoryID, Selector: "refs/heads/main", Path: catalog.MountPath("docs/team"), SubPath: "handbook",
 	}
-	for name, second := range map[string]catalog.KnowledgeSetSource{
+	for name, second := range map[string]catalog.DatasetSource{
 		"selector": {Repository: setup.RepositoryID, Selector: "refs/heads/stable", Path: catalog.MountPath("runbooks"), SubPath: "runbooks"},
 		"subpath":  {Repository: setup.RepositoryID, Selector: "refs/heads/main", Path: catalog.MountPath("docs/details"), SubPath: "handbook/details"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := cat.DefineKnowledgeSet("bad-"+name, 1, []catalog.KnowledgeSetSource{base, second})
-			testkit.ExpectCode(t, err, kernel.ErrKnowledgeSetInvalid)
+			_, err := cat.DefineDataset("bad-"+name, 1, []catalog.DatasetSource{base, second})
+			testkit.ExpectCode(t, err, kernel.ErrDatasetInvalid)
 		})
 	}
 }

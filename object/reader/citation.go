@@ -9,11 +9,11 @@ import (
 // Not a write surface, not GET_PROVENANCE, not a Dataset service object.
 
 type GroundingCitation struct {
-	KnowledgeRef      objectmodel.KnowledgeRef `json:"knowledgeRef"`
-	PinnedRef         string                   `json:"pinnedRef"`
-	Digest            kernel.Digest            `json:"digest,omitempty"`
-	Fragment          string                   `json:"fragment,omitempty"`
-	ProvenanceSummary *ProvenanceSummary       `json:"provenanceSummary,omitempty"`
+	ObjectRef         objectmodel.ObjectRef `json:"objectRef"`
+	PinnedRef         string                `json:"pinnedRef"`
+	Digest            kernel.Digest         `json:"digest,omitempty"`
+	Fragment          string                `json:"fragment,omitempty"`
+	ProvenanceSummary *ProvenanceSummary    `json:"provenanceSummary,omitempty"`
 }
 
 type ProvenanceSummary struct {
@@ -22,11 +22,11 @@ type ProvenanceSummary struct {
 	OriginKind string   `json:"originKind,omitempty"`
 }
 
-func NewGroundingCitation(value objectmodel.KnowledgeValue) GroundingCitation {
+func NewGroundingCitation(value objectmodel.ObjectValue) GroundingCitation {
 	citation := GroundingCitation{
-		KnowledgeRef: value.KnowledgeRef,
-		PinnedRef:    objectmodel.FormatPinnedRef(value.Repository, value.Commit, value.Address.ObjectID),
-		Digest:       kernel.CanonicalDigest(value.Value),
+		ObjectRef: value.ObjectRef,
+		PinnedRef: objectmodel.FormatPinnedRef(value.Repository, value.Commit, value.Address.ObjectID),
+		Digest:    kernel.CanonicalDigest(value.Value),
 	}
 	if value.Provenance != nil {
 		citation.ProvenanceSummary = &ProvenanceSummary{

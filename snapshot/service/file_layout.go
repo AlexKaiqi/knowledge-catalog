@@ -58,7 +58,7 @@ func (v *fileView) literalRoute(delivered string) (dataset.DatasetItem, error) {
 	}
 	item, err := dataset.RouteDatasetFile(v.items, delivered)
 	if err != nil {
-		if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+		if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 			return item, kernel.Fail(kernel.ErrForbidden, "delivered path is not present or not authorized")
 		}
 		return item, err
@@ -109,7 +109,7 @@ func (v *fileView) literalMountFor(directory string) (dataset.VirtualMount, erro
 		return dataset.VirtualMount{}, err
 	}
 	if item.Kind == dataset.DatasetItemFile {
-		return dataset.VirtualMount{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "delivered path is a file")
+		return dataset.VirtualMount{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "delivered path is a file")
 	}
 	mount, _ := v.visiblePrefix(item)
 	return mount, nil
@@ -139,7 +139,7 @@ func (v *fileView) rejectFileDirectory(directory string) error {
 		if err := v.checkFileConflict(item.Target); err != nil {
 			return err
 		}
-		return kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "delivered path is a file")
+		return kernel.Fail(kernel.ErrObjectRefUnresolved, "delivered path is a file")
 	}
 	return nil
 }
@@ -177,7 +177,7 @@ func (v *fileView) filterSourceChildren(source []snapshot.DirectoryEntry, direct
 			if !visible {
 				continue
 			}
-			return nil, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "delivered path %s is a declared directory with source file content", target)
+			return nil, kernel.Fail(kernel.ErrDatasetInvalid, "delivered path %s is a declared directory with source file content", target)
 		}
 		item, err := dataset.RouteDatasetFile(v.items, target)
 		if err != nil {

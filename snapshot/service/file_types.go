@@ -41,22 +41,22 @@ type FileReadRequest struct {
 }
 
 type FileMountsResponse struct {
-	Pin    dataset.ResolvedKnowledgeSet `json:"pin"`
-	Mounts []dataset.VirtualMount       `json:"mounts"`
+	Pin    dataset.ResolvedDataset `json:"pin"`
+	Mounts []dataset.VirtualMount  `json:"mounts"`
 }
 
 type FileDirectoryResponse struct {
-	Pin          dataset.ResolvedKnowledgeSet `json:"pin"`
-	Mount        dataset.VirtualMount         `json:"mount"`
-	Entries      []snapshot.DirectoryEntry    `json:"entries"`
-	Continuation string                       `json:"continuation,omitempty"`
-	Exhausted    bool                         `json:"exhausted"`
+	Pin          dataset.ResolvedDataset   `json:"pin"`
+	Mount        dataset.VirtualMount      `json:"mount"`
+	Entries      []snapshot.DirectoryEntry `json:"entries"`
+	Continuation string                    `json:"continuation,omitempty"`
+	Exhausted    bool                      `json:"exhausted"`
 }
 
 type FileReadResponse struct {
-	Pin   dataset.ResolvedKnowledgeSet `json:"pin"`
-	Mount dataset.VirtualMount         `json:"mount"`
-	File  string                       `json:"file"`
+	Pin   dataset.ResolvedDataset `json:"pin"`
+	Mount dataset.VirtualMount    `json:"mount"`
+	File  string                  `json:"file"`
 	// Path echoes the delivered path: mount-relative reads report
 	// mountPath/file joined; delivered reads echo the requested path.
 	Path       string               `json:"path,omitempty"`

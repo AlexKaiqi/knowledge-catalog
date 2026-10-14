@@ -21,14 +21,14 @@ Hook 是出站，不能冒充这条入站通知。
 Feature: observation-refreshed
 
   Scenario: construct
-    When I run `kc operations projection notice --repo kr://scene/knowledge --object Service:orders --aspect health`
+    When I run `kc operations projection notice --repo kr://scene/object --object Service:orders --aspect health`
     Then the output has:
-      | repository  | kr://scene/knowledge |
+      | repository  | kr://scene/object |
       | basisCommit | nonempty |
       | revision    | nonempty |
-    When I run `kc writer head --repo kr://scene/knowledge`
+    When I run `kc writer head --repo kr://scene/object`
     Then the output has:
-      | repository | kr://scene/knowledge |
+      | repository | kr://scene/object |
       | commit     | nonempty |
 ```
 
@@ -38,8 +38,8 @@ Feature: observation-refreshed
 Feature: observation-refreshed probe
 
   Scenario: notice does not move HEAD
-    When I run `kc writer head --repo kr://scene/knowledge`
+    When I run `kc writer head --repo kr://scene/object`
     Then the output has:
-      | repository | kr://scene/knowledge |
+      | repository | kr://scene/object |
       | commit     | nonempty |
 ```

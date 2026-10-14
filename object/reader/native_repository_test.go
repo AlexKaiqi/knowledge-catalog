@@ -12,16 +12,16 @@ import (
 	"kc/snapshot"
 )
 
-type nativeReadFixture struct{ *testkit.KnowledgeRepository }
+type nativeReadFixture struct{ *testkit.ObjectRepository }
 
-func (*nativeReadFixture) NativeKnowledgeRepository() {}
+func (*nativeReadFixture) NativeObjectRepository() {}
 
-func TestNativeReadViewPreservesBoundedKnowledgePorts(t *testing.T) {
+func TestNativeReadViewPreservesBoundedObjectPorts(t *testing.T) {
 	raw := testkit.MakeRepository(t, "kr://reader/native-ports")
 	root := testkit.MustHead(t, raw, snapshot.DefaultRef)
 	const schemaID objectmodel.ObjectID = "schema/note"
 	address := objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "note/one"}
-	at, err := raw.ApplyKnowledgeCommit(objectmodel.ChangeSet{
+	at, err := raw.ApplyObjectCommit(objectmodel.ChangeSet{
 		TargetRepository: raw.ID(), TargetRef: snapshot.DefaultRef,
 		BaseCommit: root, ExpectedTargetCommit: root,
 		Operations: []objectmodel.Operation{
@@ -55,18 +55,18 @@ func TestNativeReadViewPreservesBoundedKnowledgePorts(t *testing.T) {
 		t.Fatalf("native batch read lost its values: %#v %v", values, err)
 	}
 	got := values[address.ObjectID]
-	if got.Repository != raw.ID() || got.Commit != at || got.KnowledgeRef.Object != address.ObjectID ||
+	if got.Repository != raw.ID() || got.Commit != at || got.ObjectRef.Object != address.ObjectID ||
 		!reflect.DeepEqual(got.Value, map[string]any{"body": "fixed native value"}) {
 		t.Fatalf("native batch read changed fixed coordinates or value: %#v", got)
 	}
 }
 
 type unsafeNativeBindingFixture struct {
-	*testkit.KnowledgeRepository
+	*testkit.ObjectRepository
 	bindingCalls int
 }
 
-func (*unsafeNativeBindingFixture) NativeKnowledgeRepository() {}
+func (*unsafeNativeBindingFixture) NativeObjectRepository() {}
 
 func (r *unsafeNativeBindingFixture) BindingSchemaObjectIDs(kernel.CommitID) ([]objectmodel.ObjectID, error) {
 	r.bindingCalls++
@@ -85,10 +85,10 @@ func TestDatasetNativeBindingCoordinatesRequireMetadataOnlyPort(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw := &unsafeNativeBindingFixture{KnowledgeRepository: s.Repo}
+	raw := &unsafeNativeBindingFixture{ObjectRepository: s.Repo}
 	rd := reader.NewReader(nil)
 	at := published.Result.NewCommit
-	scope := reader.Open(rd.Lookup(func(kernel.RepositoryID) (snapshot.Store, error) { return raw, nil }), reader.KnowledgeSetPin{
+	scope := reader.Open(rd.Lookup(func(kernel.RepositoryID) (snapshot.Store, error) { return raw, nil }), reader.DatasetPin{
 		Repositories: map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: at},
 		Items:        []reader.DatasetItem{{Repository: s.RepositoryID, Commit: at, Kind: "prefix", Prefix: "public"}},
 	})
@@ -125,7 +125,7 @@ type nativeReferenceCounter struct {
 	reads int
 }
 
-func (r *nativeReferenceCounter) Read(id objectmodel.ObjectID, at kernel.CommitID) (objectmodel.KnowledgeValue, error) {
+func (r *nativeReferenceCounter) Read(id objectmodel.ObjectID, at kernel.CommitID) (objectmodel.ObjectValue, error) {
 	r.reads++
 	return r.NativeSnapshotRepository.Read(id, at)
 }
@@ -141,7 +141,7 @@ func TestNativeReferenceSelectionWithoutPlanningPortDoesNotLoadObject(t *testing
 	ref := objectmodel.Reference{Repository: raw.ID(), Object: objectmodel.SystemReadmeObjectID}
 	value, err := rd.ReadReference(ref, at)
 	if err != nil || value.Commit != at || value.Digest != kernel.CanonicalDigest(value.Value) || raw.reads != 1 {
-		t.Fatalf("native root read changed fixed knowledge: %#v reads=%d err=%v", value, raw.reads, err)
+		t.Fatalf("native root read changed fixed object: %#v reads=%d err=%v", value, raw.reads, err)
 	}
 	ref.Locator = "/readme"
 	if _, err := rd.ReadReference(ref, at); kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {

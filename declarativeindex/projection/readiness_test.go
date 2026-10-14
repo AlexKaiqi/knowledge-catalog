@@ -25,12 +25,12 @@ func (*readinessProjection) Retrieve(ports.RetrieveRequest) (ports.CandidatePage
 }
 func (e *readinessProjection) Count() (int, error) { e.countCalls++; return 0, nil }
 
-type readinessFixedRepository struct{ *testkit.KnowledgeRepository }
+type readinessFixedRepository struct{ *testkit.ObjectRepository }
 
 func (*readinessFixedRepository) Head(string) (kernel.CommitID, error) {
 	panic("fixed readiness must not follow HEAD")
 }
-func (*readinessFixedRepository) Read(objectmodel.ObjectID, kernel.CommitID) (objectmodel.KnowledgeValue, error) {
+func (*readinessFixedRepository) Read(objectmodel.ObjectID, kernel.CommitID) (objectmodel.ObjectValue, error) {
 	panic("readiness must not hydrate objects")
 }
 

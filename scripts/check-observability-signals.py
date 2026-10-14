@@ -71,15 +71,15 @@ def main() -> int:
     if f'kc_operation="{selector}"' not in recording:
         errors.append(f"READ SLI must select kc_operation={selector!r}")
     if re.search(r'kc_operation="read"', recording):
-        errors.append('READ SLI still selects kc_operation="read"; live command is knowledge-read')
+        errors.append('READ SLI still selects kc_operation="read"; live command is object-read')
     if re.search(r'kc_operation="read"', alerts):
-        errors.append('READ alerts still select kc_operation="read"; live command is knowledge-read')
+        errors.append('READ alerts still select kc_operation="read"; live command is object-read')
 
     if "clamp_min" in overview_raw:
         errors.append("System Status dashboard must not clamp missing traffic into 0%")
     for needle in (
         "kc_writer_commands_total",
-        'kc_operation="knowledge-read"',
+        'kc_operation="object-read"',
         "kc_search_requests_total",
         "kc:sli:writer_availability:ratio",
         "kc:sli:read_availability:ratio",

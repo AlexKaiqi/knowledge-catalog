@@ -5,7 +5,7 @@
 没有可创建、选择、切换或归档的 Catalog 资源。
 
 底层 `snapshot.Store` 提供单仓版本、文件树和条件推进；本包只处理来源仓、固定 commit、
-文件路径和交付路径，不解释知识对象、Aspect、Schema 或索引。来源标识是
+文件路径和交付路径，不解释对象、Aspect、Schema 或索引。来源标识是
 `RepositoryID + CommitID + File/SubPath`；`Target/Path` 只决定交付位置。
 
 ## 公开入口与状态
@@ -21,7 +21,7 @@
 一个仓不会自动授予消费权，登记也不把整仓加入每个 Dataset。
 
 `RegisterRepository` / `UnregisterRepository` 改变成员准入。
-`RetireKnowledgeSet` 改变当前 Dataset 的消费政策；来源仓归档仍由 Snapshot 仓生命周期
+`RetireDataset` 改变当前 Dataset 的消费政策；来源仓归档仍由 Snapshot 仓生命周期
 决定。本包没有整份登记空间的归档动作。
 
 ## 发布与消费
@@ -32,9 +32,9 @@ argv 或其它输入 adapter 使用，不读取 flags、环境或 Home。目录�
 `repository[=selector]@file@target`。省略 selector 使用 `snapshot.DefaultRef`；省略目录
 `@path` 与显式根映射 `@` 保持区别。解析不冻结版本、登记成员或授权，发布仍走下面的服务。
 
-`PrepareKnowledgeSet` 冻结候选来源；`PublishKnowledgeSet` 原子接受发布记录并推进当前
-版本；`DefineKnowledgeSet` 是这两步的纯文件组合入口。新 revision 必须大于当前版，
-不得覆盖已接受版本或倒退。源分支前进不会改变已发布 Dataset，知识投影准备由上层负责。
+`PrepareDataset` 冻结候选来源；`PublishDataset` 原子接受发布记录并推进当前
+版本；`DefineDataset` 是这两步的纯文件组合入口。新 revision 必须大于当前版，
+不得覆盖已接受版本或倒退。源分支前进不会改变已发布 Dataset，对象投影准备由上层负责。
 准备与发布均核对逐文件选择的冻结源文件可读性，并按目标路径核对与目录来源的真实内容
 冲突；失败不推进当前版本、发布历史或登记 HEAD。冲突探测只读取可能相撞的路径及其
 祖先，并用 `DirectoryReader` 的单项页检查目标下是否存在内容，不扫描来源 prefix。
@@ -47,7 +47,7 @@ argv 或其它输入 adapter 使用，不读取 flags、环境或 Home。目录�
 `RouteDatasetFile(items, deliveredPath)` 从已固定清单编译单文件来源坐标：精确单文件条目
 优先，其余路径按显式 prefix 或根 fallback 路由。返回既有 `DatasetItem` 的副本；prefix
 结果保留原映射字段，并把映射后的原仓路径放在 `File`。无匹配返回
-`KNOWLEDGE_REF_UNRESOLVED`，空或逃逸路径返回 `USAGE_INVALID`。该纯 helper 不读取正文
+`OBJECT_REF_UNRESOLVED`，空或逃逸路径返回 `USAGE_INVALID`。该纯 helper 不读取正文
 或证明文件存在。显式单文件占用根 fallback 的精确目标；源祖先文件或目标下的源内容
 仍不能造成文件与目录冲突。`ReadVirtualFileAt` 复用该编译并核对固定 commit；旧虚拟读取
 入口的未归属路径继续返回 `USAGE_INVALID`。
@@ -55,9 +55,9 @@ argv 或其它输入 adapter 使用，不读取 flags、环境或 Home。目录�
 消费者对旧清单失败关闭；它只检查该显式文件目标，不枚举 prefix。调用方须先授权
 冲突依据来源，再提供取得 Store 的回调。
 
-`KnowledgeSet.Metadata` 是可选的字符串键值 map，与文件选择一起固定在发布 revision 中。
-调用方可以在 `PrepareKnowledgeSet` 返回的候选上设置 metadata，再交给 `PublishKnowledgeSet`；
-原有 `DefineKnowledgeSet` / `PrepareKnowledgeSet` 签名保持不变。metadata 原样进入当前定义、
+`Dataset.Metadata` 是可选的字符串键值 map，与文件选择一起固定在发布 revision 中。
+调用方可以在 `PrepareDataset` 返回的候选上设置 metadata，再交给 `PublishDataset`；
+原有 `DefineDataset` / `PrepareDataset` 签名保持不变。metadata 原样进入当前定义、
 不可变发布历史、库存摘要、管理详情与 `.kc-dataset.yaml` 便携配方。`description` 可以作为
 普通自定义 key 使用，不是必填字段，也不引入 Schema 或嵌套值。省略 metadata 的旧记录继续
 恢复；修改或清除 metadata 需要发布新的 revision。map 在状态、视图与返回值之间独立复制。
@@ -82,7 +82,7 @@ metadata 不读取、识别或处理 README，不增加任何来源或文件范�
 
 ## 持久格式与恢复
 
-登记权威是独立 Snapshot，普通 YAML 文件不使用知识文件信封：
+登记权威是独立 Snapshot，普通 YAML 文件不使用对象文件信封：
 
 | 文件 | 内容 |
 |---|---|
@@ -95,7 +95,7 @@ metadata 不读取、识别或处理 README，不增加任何来源或文件范�
 旧句柄不会伪造接受，后续需核对或重开实际权威。并发读取或启动不会初始化、迁移或重建权威。
 `SetObserver` 配置的 observer 接收登记持久化的实际操作结果：原操作失败时，无论回调返回
 nil 或其它错误，都原样保留原失败及错误码；原操作成功后，记录失败明确返回给调用方。
-记录错误不回滚已接受的成员或 Dataset，也不证明登记 HEAD 未推进。`PublishKnowledgeSet`
+记录错误不回滚已接受的成员或 Dataset，也不证明登记 HEAD 未推进。`PublishDataset`
 在返回错误时可以不返回定义；调用方应核对 `DumpState` 或重开实际权威的已接受记录，
 再决定是否重试，不能把 observer 错误解释为未发布。
 缺失、错误类型、未知字段、重复键、null、多个 YAML 文档、身份或文件名不匹配均失败。
@@ -116,7 +116,7 @@ nil 或其它错误，都原样保留原失败及错误码；原操作成功后�
 
 回归覆盖文件发布与交付布局、固定来源、范围校验、当前退役、历史回放、只读视图、
 权威身份、失败保持、并发 CAS 和只读旧账恢复。上层依赖仅进入公开根包/一级能力；
-本包不依赖 Knowledge、索引、Home、Invocation、Server 或具体 Snapshot adapter。
+本包不依赖 Object、索引、Home、Invocation、Server 或具体 Snapshot adapter。
 包内夹具验证不等于真实 lakeFS 部署验收。
 
 ## 按已接受发布选择消费范围

@@ -14,7 +14,7 @@ func TestNativeWriterPreservesOmittedPathAndAllowsExplicitMove(t *testing.T) {
 	for _, kind := range []objectmodel.AddressKind{objectmodel.KindEntity, objectmodel.KindAspect, objectmodel.KindRelation} {
 		t.Run(string(kind), func(t *testing.T) {
 			base := testkit.MakeRepository(t, "kr://test/native-path")
-			native := &nativeSchemaRepository{KnowledgeRepository: base}
+			native := &nativeSchemaRepository{ObjectRepository: base}
 			registry := snapshot.NewRegistry()
 			if err := registry.Add(native); err != nil {
 				t.Fatal(err)

@@ -11,7 +11,7 @@
 保留 Index 供正在执行的业务 HTTP 完成；资源由宿主在请求排空后通过 `Own` 释放一次。
 
 入口按来源 Repo 限制 lookup 与维护库存，Dataset 不另建实例。稳定 `main` 接纳既有目录与
-物理 namespace，其它实例使用明确的目录和 namespace；不改变知识身份。
+物理 namespace，其它实例使用明确的目录和 namespace；不改变对象身份。
 当前未退役 Dataset 的固定来源经 `ServingBasisDemand.Bases` 交给控制器，HEAD 不可读
 也不阻断合法固定版本恢复。工作账不是需求来源，空分区不会执行旧任务。
 Repo 配置、一次根运行装配与关闭合同见

@@ -3,7 +3,7 @@
 Feature: probe gates
 
   Scenario: gate add list remove
-    When I run `kc operations gate add --on merge --repo kr://scene/knowledge --require suite:scene-contract`
+    When I run `kc operations gate add --on merge --repo kr://scene/object --require suite:scene-contract`
     Then the output has:
       | id  | nonempty |
       | on  | merge |

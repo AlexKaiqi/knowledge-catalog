@@ -23,9 +23,9 @@ func New(config Config) (Client, error) {
 }
 
 func (c *client) ResolveBinding(ctx context.Context, request BindingRequest, options RequestOptions, output any) error {
-	return httpjson.Do(ctx, c.transport, c.baseURL, "POST", "/knowledge/v1/bindings:resolve", request, options.RequestID, output)
+	return httpjson.Do(ctx, c.transport, c.baseURL, "POST", "/object/v1/bindings:resolve", request, options.RequestID, output)
 }
 
 func (c *client) AccessResource(ctx context.Context, request AccessRequest, options RequestOptions, output any) error {
-	return httpjson.Do(ctx, c.transport, c.baseURL, "POST", "/knowledge/v1/resources:access", request, options.RequestID, output)
+	return httpjson.Do(ctx, c.transport, c.baseURL, "POST", "/object/v1/resources:access", request, options.RequestID, output)
 }

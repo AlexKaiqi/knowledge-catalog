@@ -12,7 +12,7 @@ func TestMarkdownAspectRoundTripPreservesBody(t *testing.T) {
 	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "guide/intro", AspectName: "definition"}
 	// A colon and a fenced YAML example must remain Markdown, not be decoded as
 	// a YAML value. The schema is deliberately not the reserved README schema.
-	value := map[string]any{"body": "# Definition\n\nMeaning: knowledge\n\n```yaml\nfield: value\n```"}
+	value := map[string]any{"body": "# Definition\n\nMeaning: object\n\n```yaml\nfield: value\n```"}
 	raw, err := repofile.Serialize(address, "guides/intro/definition.md", "schema/guide.definition", nil, value)
 	if err != nil {
 		t.Fatal(err)

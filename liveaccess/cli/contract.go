@@ -16,7 +16,7 @@ type RequestOptions = accessclient.RequestOptions
 
 // Context is a fixed caller basis supplied by the host's existing Dataset pin
 // adapter. It contains no authentication proof or arbitrary source endpoint.
-type Context struct{ Scope objectclient.KnowledgeScope }
+type Context struct{ Scope objectclient.ObjectScope }
 
 type BindingRequest = accessclient.BindingRequest
 type AccessRequest = accessclient.AccessRequest

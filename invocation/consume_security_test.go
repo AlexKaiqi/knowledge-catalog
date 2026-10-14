@@ -24,20 +24,20 @@ func TestAllowedRepoReadFailsClosedWhenPolicyCannotBeRead(t *testing.T) {
 	}
 }
 
-func TestDatasetFileReadDoesNotImplyRepoKnowledge(t *testing.T) {
+func TestDatasetFileReadDoesNotImplyRepoObject(t *testing.T) {
 	rules := []AllowRule{{
 		ID: "ws", Principal: "bot", Actions: []string{"file.read"},
 		Dataset: "agent",
 	}}
 	if _, ok := MatchAllow(rules, AllowQuery{
-		Principal: "bot", Action: "knowledge.read", Repo: "kr://acme/public/core",
+		Principal: "bot", Action: "object.read", Repo: "kr://acme/public/core",
 	}); ok {
-		t.Fatal("dataset file.read must not grant repository knowledge.read")
+		t.Fatal("dataset file.read must not grant repository object.read")
 	}
 	if _, ok := MatchAllow(rules, AllowQuery{
-		Principal: "bot", Action: "knowledge.search", Repo: "kr://acme/public/core",
+		Principal: "bot", Action: "object.search", Repo: "kr://acme/public/core",
 	}); ok {
-		t.Fatal("dataset file.read must not grant repository knowledge.search")
+		t.Fatal("dataset file.read must not grant repository object.search")
 	}
 	if _, ok := MatchAllow(rules, AllowQuery{
 		Principal: "bot", Action: "dataset.resolve",
@@ -53,21 +53,21 @@ func TestDatasetFileReadDoesNotImplyRepoKnowledge(t *testing.T) {
 	}
 }
 
-func TestKnowledgeSetConsumeDoesNotImplyKnowledgeActions(t *testing.T) {
+func TestDatasetConsumeDoesNotImplyObjectActions(t *testing.T) {
 	rules := []AllowRule{{
 		ID: "ws", Principal: "bot", Actions: []string{"file.read"},
 		Dataset: "agent",
 	}}
 	if _, ok := MatchAllow(rules, AllowQuery{
-		Principal: "bot", Action: "knowledge.read", Repo: "kr://acme/public/core",
+		Principal: "bot", Action: "object.read", Repo: "kr://acme/public/core",
 	}); ok {
-		t.Fatal("file.read must not grant knowledge.read")
+		t.Fatal("file.read must not grant object.read")
 	}
 	if _, ok := MatchAllow(rules, AllowQuery{
-		Principal: "bot", Action: "knowledge.search",
+		Principal: "bot", Action: "object.search",
 		Dataset: "agent",
 	}); ok {
-		t.Fatal("file.read must not grant knowledge.search")
+		t.Fatal("file.read must not grant object.search")
 	}
 	if _, ok := MatchAllow(rules, AllowQuery{
 		Principal: "bot", Action: "dataset.consume",
@@ -110,7 +110,7 @@ func TestValidateActionsRejectsRetiredDatasetNames(t *testing.T) {
 	}
 }
 
-func TestAuthorizeKnowledgeSetKnowledgeSeparatesConsumeFromSearch(t *testing.T) {
+func TestAuthorizeDatasetObjectSeparatesConsumeFromSearch(t *testing.T) {
 	workspace := "agent"
 	repo := "kr://acme/public/core"
 	consume := AllowRule{
@@ -118,27 +118,27 @@ func TestAuthorizeKnowledgeSetKnowledgeSeparatesConsumeFromSearch(t *testing.T) 
 		Dataset: workspace,
 	}
 	searchRepo := AllowRule{
-		ID: "search", Principal: "bot", Actions: []string{"knowledge.search"}, Repo: repo,
+		ID: "search", Principal: "bot", Actions: []string{"object.search"}, Repo: repo,
 	}
 	catalogRead := AllowRule{
 		ID: "cat", Principal: "bot", Actions: []string{"inventory.read"}}
 	searchQ := AllowQuery{
-		Principal: "bot", Action: "knowledge.search", Dataset: workspace,
+		Principal: "bot", Action: "object.search", Dataset: workspace,
 	}
-	if err := AuthorizeWorkspaceKnowledge([]AllowRule{consume}, searchQ); err != nil {
-		t.Fatalf("dataset file.read must admit pin knowledge.search: %v", err)
+	if err := AuthorizeWorkspaceObject([]AllowRule{consume}, searchQ); err != nil {
+		t.Fatalf("dataset file.read must admit pin object.search: %v", err)
 	}
-	if err := AuthorizeWorkspaceKnowledge([]AllowRule{catalogRead, searchRepo}, searchQ); kernel.CodeOf(err) != kernel.ErrForbidden {
+	if err := AuthorizeWorkspaceObject([]AllowRule{catalogRead, searchRepo}, searchQ); kernel.CodeOf(err) != kernel.ErrForbidden {
 		t.Fatalf("inventory.read must not skip named-dataset file.read: %v", err)
 	}
 	readQ := searchQ
-	readQ.Action = "knowledge.read"
-	if err := AuthorizeWorkspaceKnowledge([]AllowRule{consume}, readQ); err != nil {
-		t.Fatalf("dataset file.read admits pin knowledge.read: %v", err)
+	readQ.Action = "object.read"
+	if err := AuthorizeWorkspaceObject([]AllowRule{consume}, readQ); err != nil {
+		t.Fatalf("dataset file.read admits pin object.read: %v", err)
 	}
-	if err := AuthorizeWorkspaceKnowledge([]AllowRule{consume}, AllowQuery{
-		Principal: "bot", Action: "knowledge.search", Repo: repo,
-	}); err != ErrNotWorkspaceKnowledge {
+	if err := AuthorizeWorkspaceObject([]AllowRule{consume}, AllowQuery{
+		Principal: "bot", Action: "object.search", Repo: repo,
+	}); err != ErrNotWorkspaceObject {
 		t.Fatalf("--repo SEARCH is not a named-dataset gate: %v", err)
 	}
 }
@@ -146,23 +146,23 @@ func TestAuthorizeKnowledgeSetKnowledgeSeparatesConsumeFromSearch(t *testing.T) 
 func TestDeliverSearchHitStripsSearchOnlyGrant(t *testing.T) {
 	homeDir := t.TempDir()
 	if err := WriteAllow(homeDir, AllowFile{Rules: []AllowRule{
-		{ID: "s", Principal: "taihu:alice", Actions: []string{"knowledge.search"}, Repo: "kr://scene/knowledge"},
+		{ID: "s", Principal: "taihu:alice", Actions: []string{"object.search"}, Repo: "kr://scene/object"},
 	}}); err != nil {
 		t.Fatal(err)
 	}
 	flags := map[string]invoke.FlagValue{"as": "taihu:alice", "dataset": "scene-set"}
-	hit := retrieval.KnowledgeHit{Knowledge: objectmodel.KnowledgeValue{
-		KnowledgeRef: objectmodel.KnowledgeRef{Repository: "kr://scene/knowledge", Object: "metric/gmv"},
-		Repository:   "kr://scene/knowledge",
-		Address:      objectmodel.Address{ObjectID: "metric/gmv"},
-		Value:        map[string]any{"definition": map[string]any{"name": "Gross merchandise value"}},
+	hit := retrieval.ObjectHit{Object: objectmodel.ObjectValue{
+		ObjectRef:  objectmodel.ObjectRef{Repository: "kr://scene/object", Object: "metric/gmv"},
+		Repository: "kr://scene/object",
+		Address:    objectmodel.Address{ObjectID: "metric/gmv"},
+		Value:      map[string]any{"definition": map[string]any{"name": "Gross merchandise value"}},
 	}}
 	out, err := DeliverSearchHit(homeDir, flags, hit)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out.Knowledge.Value != nil {
-		t.Fatalf("search-only must strip Canonical: %#v", out.Knowledge)
+	if out.Object.Value != nil {
+		t.Fatalf("search-only must strip Canonical: %#v", out.Object)
 	}
 }
 
@@ -174,41 +174,41 @@ func TestDeliverSearchHitKeepsDatasetFileReadBody(t *testing.T) {
 		t.Fatal(err)
 	}
 	flags := map[string]invoke.FlagValue{"as": "taihu:alice", "dataset": "scene-set"}
-	hit := retrieval.KnowledgeHit{Knowledge: objectmodel.KnowledgeValue{
-		KnowledgeRef: objectmodel.KnowledgeRef{Repository: "kr://scene/knowledge", Object: "metric/gmv"},
-		Repository:   "kr://scene/knowledge",
-		Address:      objectmodel.Address{ObjectID: "metric/gmv"},
-		Value:        map[string]any{"definition": map[string]any{"name": "Gross merchandise value"}},
+	hit := retrieval.ObjectHit{Object: objectmodel.ObjectValue{
+		ObjectRef:  objectmodel.ObjectRef{Repository: "kr://scene/object", Object: "metric/gmv"},
+		Repository: "kr://scene/object",
+		Address:    objectmodel.Address{ObjectID: "metric/gmv"},
+		Value:      map[string]any{"definition": map[string]any{"name": "Gross merchandise value"}},
 	}}
 	out, err := DeliverSearchHit(homeDir, flags, hit)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out.Knowledge.Value == nil {
-		t.Fatal("dataset file.read must deliver listed-file bodies without repository knowledge.read")
+	if out.Object.Value == nil {
+		t.Fatal("dataset file.read must deliver listed-file bodies without repository object.read")
 	}
 }
 
 func TestDeliverSearchHitStripsInstanceMisTaggedAsSystemRepository(t *testing.T) {
 	homeDir := t.TempDir()
 	if err := WriteAllow(homeDir, AllowFile{Rules: []AllowRule{
-		{ID: "s", Principal: "taihu:alice", Actions: []string{"knowledge.search"}, Repo: "kr://scene/knowledge"},
+		{ID: "s", Principal: "taihu:alice", Actions: []string{"object.search"}, Repo: "kr://scene/object"},
 	}}); err != nil {
 		t.Fatal(err)
 	}
 	flags := map[string]invoke.FlagValue{"as": "taihu:alice"}
-	hit := retrieval.KnowledgeHit{Knowledge: objectmodel.KnowledgeValue{
-		KnowledgeRef: objectmodel.KnowledgeRef{Repository: objectmodel.SystemRepositoryID, Object: "metric/gmv"},
-		Repository:   objectmodel.SystemRepositoryID,
-		Address:      objectmodel.Address{ObjectID: "metric/gmv"},
-		Value:        map[string]any{"definition": map[string]any{"name": "Gross merchandise value"}},
+	hit := retrieval.ObjectHit{Object: objectmodel.ObjectValue{
+		ObjectRef:  objectmodel.ObjectRef{Repository: objectmodel.SystemRepositoryID, Object: "metric/gmv"},
+		Repository: objectmodel.SystemRepositoryID,
+		Address:    objectmodel.Address{ObjectID: "metric/gmv"},
+		Value:      map[string]any{"definition": map[string]any{"name": "Gross merchandise value"}},
 	}}
 	out, err := DeliverSearchHit(homeDir, flags, hit)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out.Knowledge.Value != nil {
-		t.Fatalf("undeclared repository must strip Canonical like any other repo: %#v", out.Knowledge)
+	if out.Object.Value != nil {
+		t.Fatalf("undeclared repository must strip Canonical like any other repo: %#v", out.Object)
 	}
 }
 
@@ -218,17 +218,17 @@ func TestDeliverSearchHitKeepsDeclaredRepositoryBody(t *testing.T) {
 		t.Fatal(err)
 	}
 	flags := map[string]invoke.FlagValue{"as": "taihu:alice"}
-	hit := retrieval.KnowledgeHit{Knowledge: objectmodel.KnowledgeValue{
-		KnowledgeRef: objectmodel.KnowledgeRef{Repository: objectmodel.SystemRepositoryID, Object: "schema/meta/schema-definition/v1"},
-		Repository:   objectmodel.SystemRepositoryID,
-		Address:      objectmodel.Address{ObjectID: "schema/meta/schema-definition/v1"},
-		Value:        map[string]any{"title": "schema definition"},
+	hit := retrieval.ObjectHit{Object: objectmodel.ObjectValue{
+		ObjectRef:  objectmodel.ObjectRef{Repository: objectmodel.SystemRepositoryID, Object: "schema/meta/schema-definition/v1"},
+		Repository: objectmodel.SystemRepositoryID,
+		Address:    objectmodel.Address{ObjectID: "schema/meta/schema-definition/v1"},
+		Value:      map[string]any{"title": "schema definition"},
 	}}
 	out, err := DeliverSearchHit(homeDir, flags, hit)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out.Knowledge.Value == nil {
+	if out.Object.Value == nil {
 		t.Fatal("authenticated default must deliver the declared repository body")
 	}
 }

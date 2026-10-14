@@ -12,11 +12,11 @@ probes:
     source: "dataset.registry"
     views:
       - "access-control"
-    title: "未登记业务仓不能进入知识集"
+    title: "未登记业务仓不能进入 Dataset "
   - file: "probe-write-without-register.feature"
     source: "writer.snapshot"
     views:
       - "access-control"
     title: "已配置未登记的源可由 Writer 维护并回读"
-fixture: "两个既有业务 Snapshot 已配置到测试环境但尚未进入 登记空间；知识仓原生 Repo metadata 显式选择 LiveAccess/main，保留独立索引选择，关系仓不默认选择 LiveAccess。供未登记边界、接入与后续绑定访问复用。"
-summary: "知识仓与关系仓已配置，知识仓显式采用 LiveAccess/main；登记空间仍只登记 System Repository。"
+fixture: "两个既有业务 Snapshot 已配置到测试环境但尚未进入 登记空间；仓原生 Repo metadata 显式选择 LiveAccess/main，保留独立索引选择，关系仓不默认选择 LiveAccess。供未登记边界、接入与后续绑定访问复用。"
+summary: "仓与关系仓已配置，仓显式采用 LiveAccess/main；登记空间仍只登记 System Repository。"

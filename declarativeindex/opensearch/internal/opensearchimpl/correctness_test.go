@@ -334,7 +334,7 @@ func TestOpenSearchContinuationRequiresCurrentPublication(t *testing.T) {
 			if _, err := engine.Retrieve(index.RetrieveRequest{Search: query, Spec: spec, Continuation: token}); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
 				t.Fatalf("continuation followed changed publication: %v", err)
 			}
-			req := retrieval.RelationRetrieveRequest{Repository: "repo", Basis: "c1", Query: retrieval.RelationQuery{Endpoint: objectmodel.KnowledgeRef{Repository: "repo", Object: "entity/a"}}}
+			req := retrieval.RelationRetrieveRequest{Repository: "repo", Basis: "c1", Query: retrieval.RelationQuery{Endpoint: objectmodel.ObjectRef{Repository: "repo", Object: "entity/a"}}}
 			req.Continuation = encodePITContinuation(pitContinuation{Basis: "c1", Repository: "repo", Generation: "g1", Query: string(retrieval.RelationQueryDigest(req.Query))})
 			if _, err := engine.RetrieveRelations(req); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
 				t.Fatalf("relation continuation followed changed publication: %v", err)
@@ -372,7 +372,7 @@ func TestOpenSearchPITCreationRejectsConcurrentPublication(t *testing.T) {
 			engine := &openSearchEngine{base: server.URL, http: server.Client()}
 			var err error
 			if relation {
-				_, err = engine.RetrieveRelations(retrieval.RelationRetrieveRequest{Repository: "repo", Basis: "c1", Query: retrieval.RelationQuery{Endpoint: objectmodel.KnowledgeRef{Repository: "repo", Object: "entity/a"}}})
+				_, err = engine.RetrieveRelations(retrieval.RelationRetrieveRequest{Repository: "repo", Basis: "c1", Query: retrieval.RelationQuery{Endpoint: objectmodel.ObjectRef{Repository: "repo", Object: "entity/a"}}})
 			} else {
 				query, spec := responseTestSearch()
 				spec.Commit = "c1"

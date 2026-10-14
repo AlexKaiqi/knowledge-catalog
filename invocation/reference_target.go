@@ -81,7 +81,7 @@ func readDatasetReference(cx *Invocation, ref objectmodel.Reference) ([]objectmo
 	}
 	commit, selected := serving.Pin().Repositories[ref.Repository]
 	if !selected {
-		return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "reference source is outside the Dataset publication")
+		return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "reference source is outside the Dataset publication")
 	}
 	if expected := cx.Flag(referenceCommitFlag); expected != "" && expected != string(commit) {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "reference source commit conflicts with the Dataset publication")
@@ -119,7 +119,7 @@ func maintainReference(cx *Invocation, operation objectmodel.OpKind, value any) 
 	return (objectservice.MaintenanceExecutor{
 		Writer: cx.WS.Writer,
 		Repository: func(id kernel.RepositoryID) (objectmodel.Repository, error) {
-			return cx.WS.Reader.Require(id, kernel.ErrKnowledgeRefUnresolved)
+			return cx.WS.Reader.Require(id, kernel.ErrObjectRefUnresolved)
 		},
 	}).Execute(cx.Context, operation, objectservice.MaintenanceRequest{
 		Reference: cx.Flag("reference"), CommandID: cx.Flag("command-id"), Ref: cx.Flag("ref"),

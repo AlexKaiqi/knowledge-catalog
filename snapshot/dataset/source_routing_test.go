@@ -14,7 +14,7 @@ func TestDatasetRootFallbackAndFileRoutesUseFrozenSources(t *testing.T) {
 	writePublicationFiles(t, root.catalogMem, map[string]string{"docs/root.txt": "root overwritten", "docs/unclaimed.txt": "root fallback", "docs/bundle/added.txt": "hidden root"})
 	writePublicationFiles(t, pieces.catalogMem, map[string]string{"chosen.txt": "explicit file", "manual/guide.txt": "mounted file"})
 	service, _ := publicationService(t, root, pieces)
-	def, err := service.DefineKnowledgeSet("mixed", 1, []catalog.KnowledgeSetSource{
+	def, err := service.DefineDataset("mixed", 1, []catalog.DatasetSource{
 		{Repository: root.ID(), Selector: snapshot.DefaultRef, Path: catalog.MountPath(""), SubPath: "docs"},
 		{Repository: pieces.ID(), Selector: snapshot.DefaultRef, Path: catalog.MountPath("bundle"), SubPath: "manual"},
 		{Repository: pieces.ID(), Selector: snapshot.DefaultRef, File: "chosen.txt", Target: "root.txt"},
@@ -23,7 +23,7 @@ func TestDatasetRootFallbackAndFileRoutesUseFrozenSources(t *testing.T) {
 	if err != nil {
 		t.Fatal("valid root fallback and same-repository fragments were rejected", err)
 	}
-	pin, err := service.ResolveKnowledgeSet("mixed")
+	pin, err := service.ResolveDataset("mixed")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,11 +59,11 @@ func TestDatasetRootFileOverrideRejectsSourceFileDirectoryConflicts(t *testing.T
 		writePublicationFiles(t, file, map[string]string{"chosen.txt": "selected"})
 		service, registry := publicationService(t, root, file)
 		head, _ := registry.Head()
-		_, err := service.DefineKnowledgeSet("bad", 1, []catalog.KnowledgeSetSource{
+		_, err := service.DefineDataset("bad", 1, []catalog.DatasetSource{
 			{Repository: root.ID(), Selector: snapshot.DefaultRef, Path: catalog.MountPath(""), SubPath: "docs"},
 			{Repository: file.ID(), Selector: snapshot.DefaultRef, File: "chosen.txt", Target: test.target},
 		})
-		if kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
+		if kernel.CodeOf(err) != kernel.ErrDatasetInvalid {
 			t.Fatalf("root file/directory conflict was accepted: %v", err)
 		}
 		if after, _ := registry.Head(); after != head {
@@ -79,7 +79,7 @@ func TestDatasetFileRouteRejectsEscapesAndUnselectedPaths(t *testing.T) {
 			t.Fatalf("unsafe delivered path was compiled: %q %v", input, err)
 		}
 	}
-	if _, err := catalog.RouteDatasetFile(items, "source.txt"); kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+	if _, err := catalog.RouteDatasetFile(items, "source.txt"); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		t.Fatal("original source path was admitted into delivered scope", err)
 	}
 }
@@ -91,7 +91,7 @@ func TestDatasetMixedPublicationFailsClosedWithoutDirectoryCapability(t *testing
 	writePublicationFiles(t, file, map[string]string{"chosen.txt": "selected"})
 	service, registry := publicationService(t, prefix, file)
 	head, _ := registry.Head()
-	_, err := service.DefineKnowledgeSet("mixed", 1, []catalog.KnowledgeSetSource{
+	_, err := service.DefineDataset("mixed", 1, []catalog.DatasetSource{
 		{Repository: prefix.ID(), Selector: snapshot.DefaultRef, Path: catalog.MountPath("bundle"), SubPath: "docs"},
 		{Repository: file.ID(), Selector: snapshot.DefaultRef, File: "chosen.txt", Target: "bundle/added.txt"},
 	})
@@ -107,7 +107,7 @@ func TestDatasetVirtualReadRequiresDeclaredDirectoryMapping(t *testing.T) {
 	source := newCatalogMem("kr://routing/unmounted")
 	writePublicationFiles(t, source, map[string]string{"plain.txt": "source bytes"})
 	service, _ := publicationService(t, source)
-	if _, err := service.DefineKnowledgeSet("unmounted", 1, []catalog.KnowledgeSetSource{{Repository: source.ID(), Selector: snapshot.DefaultRef}}); err != nil {
+	if _, err := service.DefineDataset("unmounted", 1, []catalog.DatasetSource{{Repository: source.ID(), Selector: snapshot.DefaultRef}}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := service.ReadVirtualFile("unmounted", string(source.ID())+"/plain.txt"); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
@@ -123,7 +123,7 @@ func TestSnapshotRegistryCreationRejectsForeignContentAndUnprovableRoot(t *testi
 		store snapshot.Store
 		code  kernel.ErrorCode
 	}{
-		{foreign, kernel.ErrKnowledgeSetInvalid},
+		{foreign, kernel.ErrDatasetInvalid},
 		{plainTreeSnapshot{Store: unprovable, TreeStore: unprovable}, kernel.ErrCapabilityUnsatisfied},
 	} {
 		before, _ := test.store.Head(snapshot.DefaultRef)

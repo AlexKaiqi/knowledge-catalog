@@ -18,7 +18,7 @@ from typing import Any
 import shop
 import source
 
-REPOSITORY = os.environ.get("KC_REPOSITORY", "kr://scene/knowledge")
+REPOSITORY = os.environ.get("KC_REPOSITORY", "kr://scene/object")
 PLATFORM_REF = "platform/mysql"
 
 

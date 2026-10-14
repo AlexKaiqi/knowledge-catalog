@@ -136,7 +136,7 @@ func newSchemaResolver(target snapshot.Store, cs objectmodel.ChangeSet) (*schema
 	tree, treeOK := snapshot.TreeStoreOf(target)
 	if !nativeOK && !treeOK {
 		return nil, kernel.Fail(kernel.ErrSchemaRevisionUnresolved,
-			"repository %s has no immutable knowledge access for schema resolution", target.ID())
+			"repository %s has no immutable object access for schema resolution", target.ID())
 	}
 	at := cs.ExpectedTargetCommit
 	if at == "" {
@@ -164,7 +164,7 @@ func (r *schemaResolver) schemaValue(objectID objectmodel.ObjectID, commit kerne
 		return nil, kernel.Fail(kernel.ErrSchemaRevisionUnresolved,
 			"repository %s cannot resolve schema %s", r.target.ID(), objectID)
 	}
-	units, err := readKnowledgeObject(r.tree, objectID, commit)
+	units, err := readObject(r.tree, objectID, commit)
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +235,7 @@ func (r *schemaResolver) checkSchemaUpdate(
 ) error {
 	current, readErr := r.schemaValue(objectID, r.at)
 	if readErr != nil {
-		if code := kernel.CodeOf(readErr); code == kernel.ErrKnowledgeRefUnresolved || code == kernel.ErrSchemaRevisionUnresolved {
+		if code := kernel.CodeOf(readErr); code == kernel.ErrObjectRefUnresolved || code == kernel.ErrSchemaRevisionUnresolved {
 			// First publication: nothing can reference it yet.
 			return nil
 		}
@@ -345,7 +345,7 @@ func (r *schemaResolver) unitValue(address objectmodel.Address) (any, bool, erro
 	if r.nativeOK {
 		resolution, err := r.native.ResolveAddress(address, r.at)
 		if err != nil {
-			if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+			if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 				return nil, false, nil
 			}
 			return nil, false, err
@@ -358,7 +358,7 @@ func (r *schemaResolver) unitValue(address objectmodel.Address) (any, bool, erro
 		}
 		value, err := r.native.ReadAddress(address, r.at)
 		if err != nil {
-			if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+			if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 				return nil, false, nil
 			}
 			return nil, false, err

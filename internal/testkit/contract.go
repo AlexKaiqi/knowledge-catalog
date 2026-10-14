@@ -6,15 +6,15 @@ import (
 
 	"kc/kernel"
 	objectmodel "kc/object"
-	knowledgemaintenance "kc/object/maintenance"
+	objectmaintenance "kc/object/maintenance"
 	"kc/object/reader"
 	"kc/object/writer"
 	"kc/snapshot"
 )
 
-// RepositoryContract runs T12 against any Snapshot+Knowledge factory.
+// RepositoryContract runs T12 against any Snapshot+Object factory.
 // snapshot.Store: ID, Head, GetRef, HasCommit, CreateRef, Merge, Archive.
-// Knowledge: ApplyKnowledgeCommit, Resolve, Read, ResolveAddress, ReadAddress,
+// Object: ApplyObjectCommit, Resolve, Read, ResolveAddress, ReadAddress,
 // GetProvenance, Log, Diff. Maintenance scan is an optional provider SPI;
 // Retrieval is a separate layer ③ contract.
 // Dynamic observations are intentionally outside the Snapshot contract.
@@ -35,11 +35,11 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 		if head, ok := repo.GetRef("HEAD"); !ok || head != root {
 			t.Fatalf("HEAD %s %v", head, ok)
 		}
-		first, err := repo.ApplyKnowledgeCommit(CommitChange(repo.ID(), root, "policy/P-1", map[string]any{"version": 1}, "policies/P-1.json"))
+		first, err := repo.ApplyObjectCommit(CommitChange(repo.ID(), root, "policy/P-1", map[string]any{"version": 1}, "policies/P-1.json"))
 		if err != nil {
 			t.Fatal(err)
 		}
-		second, err := repo.ApplyKnowledgeCommit(CommitChange(repo.ID(), first, "policy/P-1", map[string]any{"version": 2}, "archive/P-1.json"))
+		second, err := repo.ApplyObjectCommit(CommitChange(repo.ID(), first, "policy/P-1", map[string]any{"version": 2}, "archive/P-1.json"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -56,10 +56,10 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 	t.Run("rejects stale ref preconditions", func(t *testing.T) {
 		repo := openRepository(t, create, "kr://conformance/cas")
 		root := MustHead(t, repo, "refs/heads/main")
-		if _, err := repo.ApplyKnowledgeCommit(CommitChange(repo.ID(), root, "a", 1, "")); err != nil {
+		if _, err := repo.ApplyObjectCommit(CommitChange(repo.ID(), root, "a", 1, "")); err != nil {
 			t.Fatal(err)
 		}
-		_, err := repo.ApplyKnowledgeCommit(CommitChange(repo.ID(), root, "b", 2, ""))
+		_, err := repo.ApplyObjectCommit(CommitChange(repo.ID(), root, "b", 2, ""))
 		ExpectCode(t, err, kernel.ErrNonFastForward)
 	})
 
@@ -67,7 +67,7 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 		repo := openRepository(t, create, "kr://conformance/version")
 		root := MustHead(t, repo, "refs/heads/main")
 		_, err := repo.Read("absent", root)
-		ExpectCode(t, err, kernel.ErrKnowledgeRefUnresolved)
+		ExpectCode(t, err, kernel.ErrObjectRefUnresolved)
 		_, err = repo.Read("absent", "missing-version")
 		ExpectCode(t, err, kernel.ErrVersionUnresolved)
 		_, err = repo.Head("refs/heads/missing")
@@ -88,7 +88,7 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 	t.Run("treats aspect writes as independent units", func(t *testing.T) {
 		repo := openRepository(t, create, "kr://conformance/aspect")
 		root := MustHead(t, repo, "refs/heads/main")
-		first, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+		first, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 			TargetRepository: repo.ID(), TargetRef: "refs/heads/main",
 			BaseCommit: root, ExpectedTargetCommit: root,
 			Operations: []objectmodel.Operation{{
@@ -98,7 +98,7 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 		if err != nil {
 			t.Fatal(err)
 		}
-		second, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+		second, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 			TargetRepository: repo.ID(), TargetRef: "refs/heads/main",
 			BaseCommit: first, ExpectedTargetCommit: first,
 			Operations: []objectmodel.Operation{{
@@ -130,15 +130,15 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 	t.Run("logs introducing commits and diffs two pinned versions", func(t *testing.T) {
 		repo := openRepository(t, create, "kr://conformance/log")
 		root := MustHead(t, repo, "refs/heads/main")
-		first, err := repo.ApplyKnowledgeCommit(CommitChange(repo.ID(), root, "policy/P-1", map[string]any{"version": 1}, ""))
+		first, err := repo.ApplyObjectCommit(CommitChange(repo.ID(), root, "policy/P-1", map[string]any{"version": 1}, ""))
 		if err != nil {
 			t.Fatal(err)
 		}
-		second, err := repo.ApplyKnowledgeCommit(CommitChange(repo.ID(), first, "policy/P-1", map[string]any{"version": 2}, ""))
+		second, err := repo.ApplyObjectCommit(CommitChange(repo.ID(), first, "policy/P-1", map[string]any{"version": 2}, ""))
 		if err != nil {
 			t.Fatal(err)
 		}
-		later, err := repo.ApplyKnowledgeCommit(CommitChange(repo.ID(), second, "other/unrelated", map[string]any{"x": 1}, ""))
+		later, err := repo.ApplyObjectCommit(CommitChange(repo.ID(), second, "other/unrelated", map[string]any{"x": 1}, ""))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -191,7 +191,7 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 	t.Run("lists live objects and keeps provenance on the unit", func(t *testing.T) {
 		repo := openRepository(t, create, "kr://conformance/list")
 		root := MustHead(t, repo, "refs/heads/main")
-		first, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+		first, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 			TargetRepository: repo.ID(), TargetRef: "refs/heads/main",
 			BaseCommit: root, ExpectedTargetCommit: root, Message: "seed",
 			Provenance: &objectmodel.ProvenanceEnvelope{OriginKind: objectmodel.OriginSource, SourceRefs: []string{"handbook"}},
@@ -200,15 +200,15 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 		if err != nil {
 			t.Fatal(err)
 		}
-		second, err := repo.ApplyKnowledgeCommit(CommitChange(repo.ID(), first, "policy/B", map[string]any{"v": 2}, ""))
+		second, err := repo.ApplyObjectCommit(CommitChange(repo.ID(), first, "policy/B", map[string]any{"v": 2}, ""))
 		if err != nil {
 			t.Fatal(err)
 		}
-		scanner, err := knowledgemaintenance.RequireScanner(repo.Repository)
+		scanner, err := objectmaintenance.RequireScanner(repo.Repository)
 		if err != nil {
 			t.Fatal(err)
 		}
-		page, err := scanner.ScanSnapshotPage(second, knowledgemaintenance.ScanRequest{Limit: 10})
+		page, err := scanner.ScanSnapshotPage(second, objectmaintenance.ScanRequest{Limit: 10})
 		if err != nil || len(page.Values) != 2 || !page.Exhausted {
 			t.Fatalf("list %d %v", len(page.Values), err)
 		}
@@ -228,11 +228,11 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 	t.Run("remove marks the object REMOVED and keeps the prior commit readable", func(t *testing.T) {
 		repo := openRepository(t, create, "kr://conformance/remove")
 		root := MustHead(t, repo, "refs/heads/main")
-		first, err := repo.ApplyKnowledgeCommit(CommitChange(repo.ID(), root, "policy/drop", map[string]any{"v": 1}, ""))
+		first, err := repo.ApplyObjectCommit(CommitChange(repo.ID(), root, "policy/drop", map[string]any{"v": 1}, ""))
 		if err != nil {
 			t.Fatal(err)
 		}
-		second, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+		second, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 			TargetRepository: repo.ID(), TargetRef: "refs/heads/main",
 			BaseCommit: first, ExpectedTargetCommit: first,
 			Operations: []objectmodel.Operation{{
@@ -247,16 +247,16 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 			t.Fatalf("%#v %v", res, err)
 		}
 		_, err = repo.Read("policy/drop", second)
-		ExpectCode(t, err, kernel.ErrKnowledgeRefUnresolved)
+		ExpectCode(t, err, kernel.ErrObjectRefUnresolved)
 		kept, err := repo.Read("policy/drop", first)
 		if err != nil || asInt(kept.Value.(map[string]any)["v"]) != 1 {
 			t.Fatalf("%#v %v", kept, err)
 		}
-		scanner, err := knowledgemaintenance.RequireScanner(repo.Repository)
+		scanner, err := objectmaintenance.RequireScanner(repo.Repository)
 		if err != nil {
 			t.Fatal(err)
 		}
-		page, err := scanner.ScanSnapshotPage(second, knowledgemaintenance.ScanRequest{Limit: 10})
+		page, err := scanner.ScanSnapshotPage(second, objectmaintenance.ScanRequest{Limit: 10})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -270,11 +270,11 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 	t.Run("rejects IfAbsent on an existing unit", func(t *testing.T) {
 		repo := openRepository(t, create, "kr://conformance/if-absent")
 		root := MustHead(t, repo, "refs/heads/main")
-		first, err := repo.ApplyKnowledgeCommit(CommitChange(repo.ID(), root, "policy/A", 1, ""))
+		first, err := repo.ApplyObjectCommit(CommitChange(repo.ID(), root, "policy/A", 1, ""))
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, err = repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+		_, err = repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 			TargetRepository: repo.ID(), TargetRef: "refs/heads/main",
 			BaseCommit: first, ExpectedTargetCommit: first,
 			Operations: []objectmodel.Operation{{
@@ -294,7 +294,7 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 		if err := repo.CreateRef("refs/heads/candidate", root); err != nil {
 			t.Fatal(err)
 		}
-		candidate, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+		candidate, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 			TargetRepository: repo.ID(), TargetRef: "refs/heads/candidate",
 			BaseCommit: root, ExpectedTargetCommit: root,
 			Operations: PutEntity("from-candidate", map[string]any{"v": 1}, ""),
@@ -319,7 +319,7 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 		if err := diverged.CreateRef("refs/heads/candidate", base); err != nil {
 			t.Fatal(err)
 		}
-		side, err := diverged.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+		side, err := diverged.ApplyObjectCommit(objectmodel.CommitChangeSet{
 			TargetRepository: diverged.ID(), TargetRef: "refs/heads/candidate",
 			BaseCommit: base, ExpectedTargetCommit: base,
 			Operations: PutEntity("candidate", 1, ""),
@@ -327,7 +327,7 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 		if err != nil {
 			t.Fatal(err)
 		}
-		main, err := diverged.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+		main, err := diverged.ApplyObjectCommit(objectmodel.CommitChangeSet{
 			TargetRepository: diverged.ID(), TargetRef: "refs/heads/main",
 			BaseCommit: base, ExpectedTargetCommit: base,
 			Operations: PutEntity("main", 2, ""),
@@ -343,7 +343,7 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 		if err := stale.CreateRef("refs/heads/candidate", staleBase); err != nil {
 			t.Fatal(err)
 		}
-		staleSide, err := stale.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+		staleSide, err := stale.ApplyObjectCommit(objectmodel.CommitChangeSet{
 			TargetRepository: stale.ID(), TargetRef: "refs/heads/candidate",
 			BaseCommit: staleBase, ExpectedTargetCommit: staleBase,
 			Operations: PutEntity("candidate", 1, ""),
@@ -351,7 +351,7 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := stale.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+		if _, err := stale.ApplyObjectCommit(objectmodel.CommitChangeSet{
 			TargetRepository: stale.ID(), TargetRef: "refs/heads/main",
 			BaseCommit: staleBase, ExpectedTargetCommit: staleBase,
 			Operations: PutEntity("main", 2, ""),
@@ -386,7 +386,7 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 		if !repo.Archived() {
 			t.Fatal("archive did not stick")
 		}
-		_, err := repo.ApplyKnowledgeCommit(CommitChange(repo.ID(), root, "after", 1, ""))
+		_, err := repo.ApplyObjectCommit(CommitChange(repo.ID(), root, "after", 1, ""))
 		ExpectCode(t, err, kernel.ErrRepositoryArchived)
 		err = repo.CreateRef("refs/heads/later", root)
 		ExpectCode(t, err, kernel.ErrRepositoryArchived)
@@ -428,7 +428,7 @@ func (r *repositoryHarness) Merge(ref string, candidate, expected kernel.CommitI
 }
 func (r *repositoryHarness) Archive() error { return r.raw.Archive() }
 
-func (r *repositoryHarness) ApplyKnowledgeCommit(cs objectmodel.ChangeSet) (kernel.CommitID, error) {
+func (r *repositoryHarness) ApplyObjectCommit(cs objectmodel.ChangeSet) (kernel.CommitID, error) {
 	r.next++
 	receipt, err := r.writer.Commit(fmt.Sprintf("contract-%d", r.next), cs)
 	return receipt.Result.CommitID, err

@@ -17,7 +17,7 @@ func prepareReferenceAuthorization(cx *Invocation, action string) error {
 	if err != nil || ref == nil || ref.Locator == "" || ServingWorkspace(cx.Flags) || OwnerBypass(cx.Flags) {
 		return err
 	}
-	if action != "knowledge.read" && action != "writer.commit" {
+	if action != "object.read" && action != "writer.commit" {
 		return nil
 	}
 	tokens, err := objectmodel.PointerTokens(ref.Locator)
@@ -46,7 +46,7 @@ func prepareReferenceAuthorization(cx *Invocation, action string) error {
 	if err != nil {
 		return err
 	}
-	if action != "knowledge.read" {
+	if action != "object.read" {
 		address, err := objectservice.ResolveMaintenanceAddress(*ref, objectmodel.AddressKind(cx.Flag("kind")), coordinates)
 		if err != nil {
 			return err
@@ -66,7 +66,7 @@ func prepareReferenceAuthorization(cx *Invocation, action string) error {
 }
 
 func referenceAuthorizationBasis(cx *Invocation, action string, ref objectmodel.Reference) (kernel.CommitID, error) {
-	if action == "knowledge.read" {
+	if action == "object.read" {
 		_, commit, err := PinCommit(cx.WS, cx.Flags)
 		if err == nil {
 			cx.Flags["commit"] = string(commit)
@@ -80,7 +80,7 @@ func referenceAuthorizationBasis(cx *Invocation, action string, ref objectmodel.
 		}
 	}
 	if base == "" {
-		repo, err := cx.WS.Reader.Require(ref.Repository, kernel.ErrKnowledgeRefUnresolved)
+		repo, err := cx.WS.Reader.Require(ref.Repository, kernel.ErrObjectRefUnresolved)
 		if err != nil {
 			return "", err
 		}

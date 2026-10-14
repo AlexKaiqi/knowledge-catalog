@@ -230,7 +230,7 @@ func errorStatus(err error) int {
 		return http.StatusUnauthorized
 	case kernel.ErrForbidden:
 		return http.StatusForbidden
-	case kernel.ErrKnowledgeRefUnresolved, kernel.ErrVersionUnresolved:
+	case kernel.ErrObjectRefUnresolved, kernel.ErrVersionUnresolved:
 		return http.StatusNotFound
 	case kernel.ErrTemporaryUnavailable:
 		return http.StatusServiceUnavailable

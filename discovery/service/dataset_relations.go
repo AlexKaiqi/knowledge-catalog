@@ -32,7 +32,7 @@ func (e DatasetRelationsExecutor) Execute(ctx context.Context, request retrieval
 		return retrieval.RelationPage{}, err
 	}
 	if !allowed {
-		return retrieval.RelationPage{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "relation endpoint is outside dataset")
+		return retrieval.RelationPage{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "relation endpoint is outside dataset")
 	}
 	ctx, cancel := index.WithSearchBudget(ctx, index.SearchBudget{})
 	defer cancel()

@@ -233,7 +233,7 @@ func (ws *Home) verifyManagedBinding(id kernel.RepositoryID) error {
 }
 
 func validateCreatorActions(actions []string) error {
-	allowed := []string{"writer.preview", "writer.commit", "writer.receipt.read", "repository.metadata.read", "repository.shares.manage", "repositories.manage", "governance.proposal.create", "governance.merge", "governance.preview.create", "governance.validate", "governance.validation.record", "projection.read", "dataset.resolve", "file.read", "knowledge.read", "knowledge.provenance", "knowledge.history.read", "knowledge.schema.read", "knowledge.search", "knowledge.relations"}
+	allowed := []string{"writer.preview", "writer.commit", "writer.receipt.read", "repository.metadata.read", "repository.shares.manage", "repositories.manage", "governance.proposal.create", "governance.merge", "governance.preview.create", "governance.validate", "governance.validation.record", "projection.read", "dataset.resolve", "file.read", "object.read", "object.provenance", "object.history.read", "object.schema.read", "object.search", "object.relations"}
 	if len(actions) == 0 {
 		return kernel.Fail(kernel.ErrUsageInvalid, "managed repositories require an explicit nonempty creatorActions policy")
 	}
@@ -287,7 +287,7 @@ func validateManagedPool(pool ManagedRepositoryConfig, c DeploymentConfig) error
 }
 
 func validateShareActions(actions []string) error {
-	allowed := []string{"knowledge.read", "knowledge.search", "knowledge.schema.read", "knowledge.provenance", "knowledge.history.read", "knowledge.relations", "dataset.resolve", "file.read"}
+	allowed := []string{"object.read", "object.search", "object.schema.read", "object.provenance", "object.history.read", "object.relations", "dataset.resolve", "file.read"}
 	seen := map[string]bool{}
 	for _, action := range actions {
 		if (!slices.Contains(allowed, action) && !access.IsRepositoryReadAction(action)) || seen[action] {

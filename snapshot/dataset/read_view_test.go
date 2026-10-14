@@ -15,7 +15,7 @@ func TestCatalogReadViewKeepsAcceptedStateAndCannotPersist(t *testing.T) {
 	if err := original.RegisterRepository("kr://read-view/source"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := original.DefineKnowledgeSet("task", 1, []catalog.KnowledgeSetSource{{Repository: "kr://read-view/source", Selector: snapshot.DefaultRef}}); err != nil {
+	if _, err := original.DefineDataset("task", 1, []catalog.DatasetSource{{Repository: "kr://read-view/source", Selector: snapshot.DefaultRef}}); err != nil {
 		t.Fatal(err)
 	}
 	accepted := catalog.NormalizeState(original.DumpState())
@@ -33,10 +33,10 @@ func TestCatalogReadViewKeepsAcceptedStateAndCannotPersist(t *testing.T) {
 	for name, mutate := range map[string]func() error{
 		"register": func() error { return view.RegisterRepository("kr://read-view/forbidden") },
 		"define": func() error {
-			_, err := view.DefineKnowledgeSet("task", 2, accepted.KnowledgeSets[0].Sources)
+			_, err := view.DefineDataset("task", 2, accepted.Datasets[0].Sources)
 			return err
 		},
-		"retire": func() error { return view.RetireKnowledgeSet("task") },
+		"retire": func() error { return view.RetireDataset("task") },
 		"create": view.RecordCreated,
 	} {
 		if err := mutate(); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {

@@ -38,11 +38,11 @@ func (w *Writer) RebuildTreeLocators(commandID string, repository kernel.Reposit
 			"repository %s has no file locator maintenance capability", repository)
 	}
 	digest := string(kernel.CanonicalDigest(map[string]any{
-		"operation": "rebuild-knowledge-locators", "repository": repository,
+		"operation": "rebuild-object-locators", "repository": repository,
 		"targetRef": targetRef, "expected": expected,
 	}))
 	entry, replayed, err := w.commands.Execute(commandID, digest, snapshot.CommandRequest{
-		Kind: "KNOWLEDGE_LOCATOR_REBUILD", RepositoryID: string(repository),
+		Kind: "OBJECT_LOCATOR_REBUILD", RepositoryID: string(repository),
 		TargetRef: targetRef, BaseCommit: string(expected), ExpectedTargetCommit: string(expected),
 	}, func() (_ any, err error) {
 		writeStarted := false
@@ -114,7 +114,7 @@ func (w *Writer) RebuildTreeLocators(commandID string, repository kernel.Reposit
 		next, err := tree.ApplyTreeCommit(snapshot.TreeChangeSet{
 			TargetRepository: repository, TargetRef: targetRef,
 			BaseCommit: expected, ExpectedTargetCommit: expected,
-			Changes: changes, Message: "rebuild bounded knowledge locators",
+			Changes: changes, Message: "rebuild bounded object locators",
 			RequestID: commandID,
 		})
 		if err != nil {

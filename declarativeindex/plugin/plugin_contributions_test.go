@@ -60,7 +60,7 @@ func newPluginFixture(t *testing.T) *pluginFixture {
 }
 
 func (f *pluginFixture) lookup(id kernel.RepositoryID) (objectmodel.Repository, error) {
-	return f.reader.Require(id, kernel.ErrKnowledgeRefUnresolved)
+	return f.reader.Require(id, kernel.ErrObjectRefUnresolved)
 }
 
 func (f *pluginFixture) entry(t *testing.T) consumerplugin.IndexPluginEntry {
@@ -97,7 +97,7 @@ func TestIndexPluginsExecuteRealSourceContributionsAndKeepDatasetMappings(t *tes
 		t.Fatalf("unknown explanation: %v", err)
 	}
 	query := retrieval.SearchOf(retrieval.SearchMATCH("runbook"))
-	var sources []dataset.KnowledgeSetSource
+	var sources []dataset.DatasetSource
 	for n := 0; n < 2; n++ {
 		s := f.setups[n]
 		at := testkit.MustHead(t, s.Repo, snapshot.DefaultRef)
@@ -110,15 +110,15 @@ func TestIndexPluginsExecuteRealSourceContributionsAndKeepDatasetMappings(t *tes
 		}
 		result, err := plugins.SearchAtContext(context.Background(), repo, at, query)
 		assertPluginHit(t, result, err, s.RepositoryID, at, fmt.Sprintf("runbook source %d at a", n+1))
-		sources = append(sources, dataset.KnowledgeSetSource{Repository: s.RepositoryID, BaseRev: string(at), Selector: snapshot.DefaultRef, Path: dataset.MountPath(fmt.Sprintf("source-%d", n+1))})
+		sources = append(sources, dataset.DatasetSource{Repository: s.RepositoryID, BaseRev: string(at), Selector: snapshot.DefaultRef, Path: dataset.MountPath(fmt.Sprintf("source-%d", n+1))})
 	}
 	for _, set := range []string{"first", "second"} {
-		if _, err := f.cat.DefineKnowledgeSet(set, 1, sources); err != nil {
+		if _, err := f.cat.DefineDataset(set, 1, sources); err != nil {
 			t.Fatal(err)
 		}
 	}
 	for _, set := range []string{"first", "second"} {
-		resolved, err := f.cat.ResolveKnowledgeSet(set)
+		resolved, err := f.cat.ResolveDataset(set)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -139,19 +139,19 @@ func TestIndexPluginsExecuteRealSourceContributionsAndKeepDatasetMappings(t *tes
 			Resolve: func(context.Context) (*reader.Serving, service.LogicalHydrator, error) {
 				return serving, liveservice.Open(serving, nil, kernel.IdentityContext{}), nil
 			},
-			Deliver: func(_ context.Context, hit retrieval.KnowledgeHit) (retrieval.KnowledgeHit, error) { return hit, nil },
+			Deliver: func(_ context.Context, hit retrieval.ObjectHit) (retrieval.ObjectHit, error) { return hit, nil },
 		}
 		result, err := executor.Execute(context.Background(), query)
 		if err != nil || result.Completeness != retrieval.CompletenessComplete || len(result.Hits) != 2 || !reflect.DeepEqual(result.SearchView.Snapshots, pin.Repositories) {
 			t.Fatalf("Dataset %s lost source mapping/basis: %#v %v", set, result, err)
 		}
 		for _, hit := range result.Hits {
-			repo, err := f.lookup(hit.Knowledge.Repository)
+			repo, err := f.lookup(hit.Object.Repository)
 			if err != nil {
 				t.Fatal(err)
 			}
 			canonical, err := repo.Read("article/one", pin.Repositories[repo.ID()])
-			if err != nil || !reflect.DeepEqual(hit.Knowledge, canonical) || !reflect.DeepEqual(hit.Version, retrieval.VersionOf(canonical)) {
+			if err != nil || !reflect.DeepEqual(hit.Object, canonical) || !reflect.DeepEqual(hit.Version, retrieval.VersionOf(canonical)) {
 				t.Fatalf("Dataset %s did not return actual source canonical value: %#v %v", set, hit, err)
 			}
 		}
@@ -176,7 +176,7 @@ func TestIndexPluginsExecuteRealSourceContributionsAndKeepDatasetMappings(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	value, err := f.reader.Read(objectmodel.KnowledgeRef{Repository: plain.RepositoryID, Object: "article/one"}, at, nil)
+	value, err := f.reader.Read(objectmodel.ObjectRef{Repository: plain.RepositoryID, Object: "article/one"}, at, nil)
 	if err != nil || value.Value.(map[string]any)["body"] != "runbook source 3 at a" {
 		t.Fatalf("unconfigured source lost basic reads: %#v %v", value, err)
 	}
@@ -195,8 +195,8 @@ func TestIndexPluginsExecuteRealSourceContributionsAndKeepDatasetMappings(t *tes
 	}
 }
 
-func pluginDatasetPin(resolved dataset.ResolvedKnowledgeSet) reader.KnowledgeSetPin {
-	pin := reader.KnowledgeSetPin{SetID: resolved.SetID, Revision: resolved.Revision, Repositories: resolved.Repositories}
+func pluginDatasetPin(resolved dataset.ResolvedDataset) reader.DatasetPin {
+	pin := reader.DatasetPin{SetID: resolved.SetID, Revision: resolved.Revision, Repositories: resolved.Repositories}
 	for _, item := range resolved.Items {
 		pin.Items = append(pin.Items, reader.DatasetItem{Target: item.Target, Repository: item.Repository, Commit: item.Commit, Kind: item.Kind, Prefix: item.Prefix, File: item.File})
 	}
@@ -269,7 +269,7 @@ func TestIndexPluginsRejectOtherInstanceContinuationBeforeBackend(t *testing.T) 
 		repositories, bases = append(repositories, repo), append(bases, at)
 	}
 	first, err := plugins.SearchAtContext(context.Background(), repositories[0], bases[0], query)
-	if err != nil || len(first.Hits) != 1 || first.Continuation == "" || first.Hits[0].Knowledge.Address.ObjectID != "article/one" {
+	if err != nil || len(first.Hits) != 1 || first.Continuation == "" || first.Hits[0].Object.Address.ObjectID != "article/one" {
 		t.Fatalf("real index did not produce a first page: %#v %v", first, err)
 	}
 	query.Continuation = first.Continuation
@@ -278,7 +278,7 @@ func TestIndexPluginsRejectOtherInstanceContinuationBeforeBackend(t *testing.T) 
 		t.Fatalf("other instance's page entered physical backend: %v", err)
 	}
 	second, err := plugins.SearchAtContext(context.Background(), repositories[0], bases[0], query)
-	if err != nil || len(second.Hits) != 1 || second.Hits[0].Knowledge.Address.ObjectID != "article/two" || second.Hits[0].Knowledge.Commit != bases[0] || second.Hits[0].Knowledge.Value.(map[string]any)["body"] != "runbook second page" {
+	if err != nil || len(second.Hits) != 1 || second.Hits[0].Object.Address.ObjectID != "article/two" || second.Hits[0].Object.Commit != bases[0] || second.Hits[0].Object.Value.(map[string]any)["body"] != "runbook second page" {
 		t.Fatalf("own continuation lost actual canonical second page: %#v %v", second, err)
 	}
 }
@@ -289,7 +289,7 @@ func assertPluginHit(t *testing.T, result retrieval.SearchResult, err error, rep
 		t.Fatalf("actual index query: %#v %v", result, err)
 	}
 	hit := result.Hits[0]
-	if hit.Knowledge.Repository != repo || hit.Knowledge.Commit != at || hit.Knowledge.Address.ObjectID != "article/one" || hit.Knowledge.Value.(map[string]any)["body"] != body || hit.Version.DeclarationCommit != at {
+	if hit.Object.Repository != repo || hit.Object.Commit != at || hit.Object.Address.ObjectID != "article/one" || hit.Object.Value.(map[string]any)["body"] != body || hit.Version.DeclarationCommit != at {
 		t.Fatalf("query did not read exact source canonical value: %#v", hit)
 	}
 }

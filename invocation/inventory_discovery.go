@@ -29,11 +29,11 @@ func PrepareInventoryDiscovery(ws *home.Home, action string, flags map[string]in
 	if flags[InventoryDiscoveryFlag] != true {
 		return nil
 	}
-	if action != "dataset.resolve" && action != "knowledge.search" {
-		return kernel.Fail(kernel.ErrUsageInvalid, "inventoryDiscovery is only valid for ResolveKnowledgeSet and SEARCH")
+	if action != "dataset.resolve" && action != "object.search" {
+		return kernel.Fail(kernel.ErrUsageInvalid, "inventoryDiscovery is only valid for ResolveDataset and SEARCH")
 	}
 	workspace := invoke.FlagString(flags, "dataset")
-	if workspace == "" || invoke.FlagString(flags, "repo") != "" || invoke.FlagString(flags, "commit") != "" || invoke.FlagString(flags, "ref") != "" || SuppliedKnowledgeSet(flags) != nil {
+	if workspace == "" || invoke.FlagString(flags, "repo") != "" || invoke.FlagString(flags, "commit") != "" || invoke.FlagString(flags, "ref") != "" || SuppliedDataset(flags) != nil {
 		return kernel.Fail(kernel.ErrUsageInvalid, "inventoryDiscovery requires the configured published Dataset")
 	}
 	configured := ConfiguredDiscoveryWorkspace(ws)
@@ -43,8 +43,8 @@ func PrepareInventoryDiscovery(ws *home.Home, action string, flags map[string]in
 	if workspace != configured {
 		return kernel.Fail(kernel.ErrForbidden, "Workspace is not the configured inventory discovery Workspace")
 	}
-	if action == "knowledge.search" && invoke.FlagString(flags, "pin") == "" {
-		return kernel.Fail(kernel.ErrUsageInvalid, "inventory discovery SEARCH requires a fixed pin from ResolveKnowledgeSet")
+	if action == "object.search" && invoke.FlagString(flags, "pin") == "" {
+		return kernel.Fail(kernel.ErrUsageInvalid, "inventory discovery SEARCH requires a fixed pin from ResolveDataset")
 	}
 	flags[VerifiedInventoryDiscoveryFlag] = InventoryDiscoveryContext{workspace}
 	return nil

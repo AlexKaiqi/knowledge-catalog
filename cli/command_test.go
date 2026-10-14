@@ -165,13 +165,13 @@ func TestInternalHandlersMatchPublicCLIPaths(t *testing.T) {
 	for path, surface := range cliSurface {
 		want := strings.ReplaceAll(path, " ", "-")
 		if path == "plugin" {
-			if surface.Handler != "knowledge-plugin-help" {
+			if surface.Handler != "object-plugin-help" {
 				t.Errorf("plugin help must use its sole explanation handler, got %q", surface.Handler)
 			}
 			continue
 		}
-		if strings.HasPrefix(surface.Handler, "knowledge-") {
-			want = "knowledge-" + want
+		if strings.HasPrefix(surface.Handler, "object-") {
+			want = "object-" + want
 		}
 		if surface.Handler != want {
 			t.Errorf("%s: internal handler %q, want public path %q", path, surface.Handler, want)
@@ -206,11 +206,11 @@ func TestRemovedCommandsAreRejected(t *testing.T) {
 		{"inspect"}, {"checkout"}, {"sync"}, {"snapshot-export"},
 		{"pack"},
 		{"writer", "ingest"}, {"catalog", "workspace", "list"}, {"catalog", "workspace", "resolve"},
-		{"identity", "whoami"}, {"knowledge", "schema", "browse"}, {"knowledge", "binding", "resolve"},
-		{"knowledge"}, {"knowledge", "search"}, {"knowledge", "read"}, {"knowledge", "resolve"},
-		{"knowledge", "relations"}, {"knowledge", "provenance"}, {"knowledge", "log"},
-		{"knowledge", "schema", "list"}, {"knowledge", "schema", "describe"},
-		{"knowledge", "binding", "show"}, {"knowledge", "access"}, {"knowledge", "invoke"},
+		{"identity", "whoami"}, {"object", "schema", "browse"}, {"object", "binding", "resolve"},
+		{"object"}, {"object", "search"}, {"object", "read"}, {"object", "resolve"},
+		{"object", "relations"}, {"object", "provenance"}, {"object", "log"},
+		{"object", "schema", "list"}, {"object", "schema", "describe"},
+		{"object", "binding", "show"}, {"object", "access"}, {"object", "invoke"},
 		{"resource", "access"}, {"operations", "projection", "notify"}, {"catalog", "repository", "list"},
 		{"admission", "request"},
 		{"admin", "grant", "add"},
@@ -366,7 +366,7 @@ func TestEveryInternalOperationReferencedByCLIHasTheDeclaredStage(t *testing.T) 
 			}
 			continue
 		}
-		if knowledgeCLIPath(path) || strings.HasPrefix(path, "writer ") || strings.HasPrefix(path, "governance ") {
+		if objectCLIPath(path) || strings.HasPrefix(path, "writer ") || strings.HasPrefix(path, "governance ") {
 			if cmd.Stage != invoke.StageGoverned {
 				t.Errorf("%s should be governed", path)
 			}
@@ -374,7 +374,7 @@ func TestEveryInternalOperationReferencedByCLIHasTheDeclaredStage(t *testing.T) 
 	}
 }
 
-func TestKnowledgeHistoryCommandsRejectAddressCoordinatesOnThePublicSurface(t *testing.T) {
+func TestObjectHistoryCommandsRejectAddressCoordinatesOnThePublicSurface(t *testing.T) {
 	for _, argv := range [][]string{
 		{"--server", "http://127.0.0.1:9", "log", "--dataset", "agent", "--object", "policy/x", "--aspect", "io"},
 		{"--server", "http://127.0.0.1:9", "log", "--dataset", "agent", "--object", "policy/x", "--member", "user:bob"},

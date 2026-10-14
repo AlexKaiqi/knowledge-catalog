@@ -113,7 +113,7 @@ func TestDiscoveryCLIUsesHostFixedContextAndKeepsRepositoryRequestsSeparate(t *t
 
 func TestDiscoveryProductViewsPreserveScopeAndKeepOverviewFacts(t *testing.T) {
 	view := map[string]any{"snapshots": map[string]any{"r": "c1"}}
-	search := map[string]any{"searchView": view, "completeness": "partial", "claims": []any{"budget"}, "continuation": "next", "hits": []any{map[string]any{"knowledge": map[string]any{"repository": "r", "commit": "c1", "address": map[string]any{"objectId": "policy/P-1"}, "value": "protected"}}}}
+	search := map[string]any{"searchView": view, "completeness": "partial", "claims": []any{"budget"}, "continuation": "next", "hits": []any{map[string]any{"object": map[string]any{"repository": "r", "commit": "c1", "address": map[string]any{"objectId": "policy/P-1"}, "value": "protected"}}}}
 	got := Shape("search", search).(map[string]any)
 	if !reflect.DeepEqual(got["searchView"], view) || got["completeness"] != "partial" || got["continuation"] != "next" {
 		t.Fatalf("product view lost query guarantees: %#v", got)

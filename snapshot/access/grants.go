@@ -46,7 +46,6 @@ func Inventory(rules []Rule, filter Query) GrantList {
 			continue
 		}
 		rule.Actions = slices.Clone(rule.Actions)
-		rule.Cmds = nil
 		out.Rules = append(out.Rules, rule)
 	}
 	return out

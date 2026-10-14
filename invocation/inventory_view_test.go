@@ -10,11 +10,11 @@ import (
 func TestPublicCatalogViewHidesSelectors(t *testing.T) {
 	view := InventoryView(dataset.State{
 		Repositories: []string{"kr://acme/public/core", "kr://kc/system"},
-		KnowledgeSets: []dataset.KnowledgeSet{{
+		Datasets: []dataset.Dataset{{
 			SetID:    "oncall",
 			Revision: 1,
-			Sources: []dataset.KnowledgeSetSource{
-				{Repository: "kr://acme/public/core", Selector: snapshot.DefaultRef, Path: dataset.MountPath("knowledge")},
+			Sources: []dataset.DatasetSource{
+				{Repository: "kr://acme/public/core", Selector: snapshot.DefaultRef, Path: dataset.MountPath("object")},
 				{Repository: "kr://acme/public/core", Selector: snapshot.DefaultRef},
 			},
 		}},

@@ -13,12 +13,12 @@ import (
 func TestDatasetHTTPPublicationHooksObserveOneAuthoritativeSwitch(t *testing.T) {
 	f := newDatasetHTTPFixture(t)
 	events := []string{}
-	f.resources.BeforePublish = func(_ context.Context, _ identity.HTTPIdentity, _ dataset.Service, definition dataset.KnowledgeSet) (dataset.KnowledgeSet, map[string]any, error) {
+	f.resources.BeforePublish = func(_ context.Context, _ identity.HTTPIdentity, _ dataset.Service, definition dataset.Dataset) (dataset.Dataset, map[string]any, error) {
 		events = append(events, "portable")
 		f.source.head = "c2"
 		return definition, nil, nil
 	}
-	f.resources.PreparePublication = func(_ context.Context, _ identity.HTTPIdentity, definition dataset.KnowledgeSet) error {
+	f.resources.PreparePublication = func(_ context.Context, _ identity.HTTPIdentity, definition dataset.Dataset) error {
 		events = append(events, "ready")
 		if _, err := f.catalog.Set("files"); err == nil {
 			t.Fatal("current pointer advanced before capability preparation")
@@ -57,13 +57,13 @@ func TestDatasetHTTPPreHookRevocationPrecedesPreparationAndRetirement(t *testing
 	for _, operation := range []string{"dataset-define", "dataset-retire"} {
 		t.Run(operation, func(t *testing.T) {
 			fixture := newDatasetHTTPFixture(t)
-			if _, err := fixture.catalog.DefineKnowledgeSet("files", 1, []dataset.KnowledgeSetSource{{Repository: fixture.source.id, Selector: "refs/heads/main"}}); err != nil {
+			if _, err := fixture.catalog.DefineDataset("files", 1, []dataset.DatasetSource{{Repository: fixture.source.id, Selector: "refs/heads/main"}}); err != nil {
 				t.Fatal(err)
 			}
 			before := dataset.NormalizeState(fixture.catalog.DumpState())
 			fixture.source.inspections = 0
 			prepared, hookCalls := 0, 0
-			fixture.resources.BeforePublish = func(_ context.Context, _ identity.HTTPIdentity, _ dataset.Service, definition dataset.KnowledgeSet) (dataset.KnowledgeSet, map[string]any, error) {
+			fixture.resources.BeforePublish = func(_ context.Context, _ identity.HTTPIdentity, _ dataset.Service, definition dataset.Dataset) (dataset.Dataset, map[string]any, error) {
 				prepared++
 				return definition, nil, nil
 			}

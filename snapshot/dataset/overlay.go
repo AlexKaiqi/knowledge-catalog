@@ -21,41 +21,41 @@ func OverlayFile(home, principal, setID string) string {
 	return filepath.Join(home, "overlays", fileToken(principal), fileToken(setID)+yamlExt)
 }
 
-// KnowledgeSetOverlay is the on-disk shape of OverlayFile. It is not a service
+// DatasetOverlay is the on-disk shape of OverlayFile. It is not a service
 // registry object and never hitchhikes on git.
-type KnowledgeSetOverlay struct {
-	Name   string                  `yaml:"name,omitempty" json:"name,omitempty"`
-	Remove []string                `yaml:"remove,omitempty" json:"remove,omitempty"`
-	Mounts []KnowledgeSetMount     `yaml:"mounts,omitempty" json:"mounts,omitempty"`
-	Files  []KnowledgeSetFileMount `yaml:"files,omitempty" json:"files,omitempty"`
+type DatasetOverlay struct {
+	Name   string             `yaml:"name,omitempty" json:"name,omitempty"`
+	Remove []string           `yaml:"remove,omitempty" json:"remove,omitempty"`
+	Mounts []DatasetMount     `yaml:"mounts,omitempty" json:"mounts,omitempty"`
+	Files  []DatasetFileMount `yaml:"files,omitempty" json:"files,omitempty"`
 }
 
-func ParseKnowledgeSetOverlay(raw []byte) (KnowledgeSetOverlay, error) {
-	var over KnowledgeSetOverlay
+func ParseDatasetOverlay(raw []byte) (DatasetOverlay, error) {
+	var over DatasetOverlay
 	if err := yaml.Unmarshal(raw, &over); err != nil {
-		return KnowledgeSetOverlay{}, kernel.Fail(kernel.ErrUsageInvalid, "invalid dataset overlay: %v", err)
+		return DatasetOverlay{}, kernel.Fail(kernel.ErrUsageInvalid, "invalid dataset overlay: %v", err)
 	}
 	for i, m := range over.Mounts {
 		if strings.TrimSpace(m.Repository) == "" || strings.TrimSpace(m.Selector) == "" {
-			return KnowledgeSetOverlay{}, kernel.Fail(kernel.ErrUsageInvalid, "overlay mount %d needs repository and selector", i)
+			return DatasetOverlay{}, kernel.Fail(kernel.ErrUsageInvalid, "overlay mount %d needs repository and selector", i)
 		}
 	}
 	for i, f := range over.Files {
 		if strings.TrimSpace(f.Repository) == "" || strings.TrimSpace(f.Selector) == "" ||
 			strings.TrimSpace(f.File) == "" || strings.TrimSpace(f.Target) == "" {
-			return KnowledgeSetOverlay{}, kernel.Fail(kernel.ErrUsageInvalid,
+			return DatasetOverlay{}, kernel.Fail(kernel.ErrUsageInvalid,
 				"overlay file %d needs repository, selector, file and target", i)
 		}
 	}
 	for i, id := range over.Remove {
 		if strings.TrimSpace(id) == "" {
-			return KnowledgeSetOverlay{}, kernel.Fail(kernel.ErrUsageInvalid, "overlay remove %d is empty", i)
+			return DatasetOverlay{}, kernel.Fail(kernel.ErrUsageInvalid, "overlay remove %d is empty", i)
 		}
 	}
 	return over, nil
 }
 
-func (o KnowledgeSetOverlay) empty() bool {
+func (o DatasetOverlay) empty() bool {
 	return len(o.Remove) == 0 && len(o.Mounts) == 0 && len(o.Files) == 0
 }
 
@@ -64,12 +64,12 @@ func (o KnowledgeSetOverlay) empty() bool {
 // an overlay mount replaces the base mount at the same Workspace path or adds
 // a new path, and an overlay file replaces the base file entry at the same
 // delivered target or adds a new one.
-func MergeOverlay(base KnowledgeSet, overlay KnowledgeSetOverlay) (KnowledgeSet, error) {
+func MergeOverlay(base Dataset, overlay DatasetOverlay) (Dataset, error) {
 	if overlay.empty() {
-		return cloneKnowledgeSet(base), nil
+		return cloneDataset(base), nil
 	}
 	if overlay.Name != "" && overlay.Name != base.SetID {
-		return KnowledgeSet{}, kernel.Fail(kernel.ErrUsageInvalid,
+		return Dataset{}, kernel.Fail(kernel.ErrUsageInvalid,
 			"overlay name %s does not match workspace %s", overlay.Name, base.SetID)
 	}
 	drop := map[kernel.RepositoryID]struct{}{}
@@ -83,12 +83,12 @@ func MergeOverlay(base KnowledgeSet, overlay KnowledgeSetOverlay) (KnowledgeSet,
 			}
 		}
 		if !found {
-			return KnowledgeSet{}, kernel.Fail(kernel.ErrUsageInvalid,
+			return Dataset{}, kernel.Fail(kernel.ErrUsageInvalid,
 				"overlay remove names repository %s which is not in workspace %s", id, base.SetID)
 		}
 		drop[rid] = struct{}{}
 	}
-	sources := make([]KnowledgeSetSource, 0, len(base.Sources)+len(overlay.Mounts)+len(overlay.Files))
+	sources := make([]DatasetSource, 0, len(base.Sources)+len(overlay.Mounts)+len(overlay.Files))
 	index := map[string]int{}
 	fileIndex := map[string]int{}
 	for _, src := range base.Sources {
@@ -97,7 +97,7 @@ func MergeOverlay(base KnowledgeSet, overlay KnowledgeSetOverlay) (KnowledgeSet,
 		}
 		if !src.IsFileEntry() {
 			if src.Path == nil {
-				return KnowledgeSet{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid,
+				return Dataset{}, kernel.Fail(kernel.ErrDatasetInvalid,
 					"workspace %s has a source without a mount path; a mount overlay cannot be applied", base.SetID)
 			}
 			index[normalizeMountPath(*src.Path)] = len(sources)
@@ -112,7 +112,7 @@ func MergeOverlay(base KnowledgeSet, overlay KnowledgeSetOverlay) (KnowledgeSet,
 	// inherits that repository's one frozen coordinate instead of splitting
 	// it; a different selector stays a genuine coordinate conflict and is
 	// rejected by validateSourceCoordinates below.
-	frozen := map[kernel.RepositoryID]KnowledgeSetSource{}
+	frozen := map[kernel.RepositoryID]DatasetSource{}
 	for _, src := range sources {
 		if src.Commit == "" && src.BaseRev == "" {
 			continue
@@ -126,7 +126,7 @@ func MergeOverlay(base KnowledgeSet, overlay KnowledgeSetOverlay) (KnowledgeSet,
 			delete(frozen, src.Repository) // inconsistent base; validation rejects it later
 		}
 	}
-	inherit := func(src KnowledgeSetSource) KnowledgeSetSource {
+	inherit := func(src DatasetSource) DatasetSource {
 		if src.Commit != "" || src.BaseRev != "" {
 			return src
 		}
@@ -140,10 +140,10 @@ func MergeOverlay(base KnowledgeSet, overlay KnowledgeSetOverlay) (KnowledgeSet,
 		rid := kernel.RepositoryID(m.Repository)
 		mountPath := normalizeMountPath(m.Path)
 		if _, dup := seenOverlay[mountPath]; dup {
-			return KnowledgeSet{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "mount path %s appears twice in the overlay", mountLabel(mountPath))
+			return Dataset{}, kernel.Fail(kernel.ErrDatasetInvalid, "mount path %s appears twice in the overlay", mountLabel(mountPath))
 		}
 		seenOverlay[mountPath] = struct{}{}
-		src := inherit(KnowledgeSetSource{
+		src := inherit(DatasetSource{
 			Repository: rid,
 			Selector:   m.Selector,
 			Path:       MountPath(m.Path),
@@ -164,10 +164,10 @@ func MergeOverlay(base KnowledgeSet, overlay KnowledgeSetOverlay) (KnowledgeSet,
 		}
 		target := normalizeMountPath(f.Target)
 		if _, dup := seenFiles[target]; dup {
-			return KnowledgeSet{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "delivered target %s appears twice in the overlay", target)
+			return Dataset{}, kernel.Fail(kernel.ErrDatasetInvalid, "delivered target %s appears twice in the overlay", target)
 		}
 		seenFiles[target] = struct{}{}
-		src := inherit(KnowledgeSetSource{
+		src := inherit(DatasetSource{
 			Repository: kernel.RepositoryID(f.Repository),
 			Selector:   f.Selector,
 			File:       f.File,
@@ -184,15 +184,15 @@ func MergeOverlay(base KnowledgeSet, overlay KnowledgeSetOverlay) (KnowledgeSet,
 		sources = append(sources, src)
 	}
 	if len(sources) == 0 {
-		return KnowledgeSet{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "a workspace must contain at least one repository")
+		return Dataset{}, kernel.Fail(kernel.ErrDatasetInvalid, "a workspace must contain at least one repository")
 	}
 	if err := validateMountPaths(sources); err != nil {
-		return KnowledgeSet{}, err
+		return Dataset{}, err
 	}
 	if err := validateSourceCoordinates(sources); err != nil {
-		return KnowledgeSet{}, err
+		return Dataset{}, err
 	}
-	out := cloneKnowledgeSet(base)
+	out := cloneDataset(base)
 	out.Sources = sources
 	out.Items = nil
 	return out, nil

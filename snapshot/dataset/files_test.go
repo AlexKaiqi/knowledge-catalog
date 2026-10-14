@@ -7,7 +7,7 @@ import (
 )
 
 func TestWorkspaceJSONDoesNotAcceptLegacyCompositionKeys(t *testing.T) {
-	var pin catalog.ResolvedKnowledgeSet
+	var pin catalog.ResolvedDataset
 	if err := catalog.DecodeJSON([]byte(`{"setId":"agent","revision":1,"repositories":{}}`), &pin); err != nil {
 		t.Fatal(err)
 	}

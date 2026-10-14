@@ -31,13 +31,13 @@ func TestHTTPTemporaryWorkspaceLabelCannotImpersonatePublishedWorkspace(t *testi
 	body(t, kc(home, "grant", "add", "--principal", namedReader,
 		"--action", "dataset.resolve,file.read", "--dataset", label))
 	body(t, kc(home, "grant", "add", "--principal", namedReader,
-		"--action", "knowledge.read", "--repo", repositoryID))
+		"--action", "object.read", "--repo", repositoryID))
 	body(t, kc(home, "grant", "add", "--principal", memberReader,
-		"--action", "dataset.resolve,file.read,knowledge.read", "--repo", repositoryID))
+		"--action", "dataset.resolve,file.read,object.read", "--repo", repositoryID))
 	body(t, kc(home, "grant", "add", "--principal", namedSearcher,
 		"--action", "file.read"))
 	body(t, kc(home, "grant", "add", "--principal", namedSearcher,
-		"--action", "knowledge.search", "--dataset", label))
+		"--action", "object.search", "--dataset", label))
 
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
@@ -64,7 +64,7 @@ func TestHTTPTemporaryWorkspaceLabelCannotImpersonatePublishedWorkspace(t *testi
 	pinWithDefinition := cloneJSONMap(t, asMap(t, temporaryPin))
 	pinWithDefinition["definition"] = definition
 	read := map[string]any{"pin": pinWithDefinition, "reference": testObjectReference(t, repositoryID, "Policy:label", "")}
-	status, result, _ := httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:read", read, memberReader)
+	status, result, _ := httpSurfaceRequest(t, server, http.MethodPost, "/object/v1/objects:read", read, memberReader)
 	if status != http.StatusOK {
 		t.Fatalf("fixed temporary pin must replay with its original label: %d %#v", status, result)
 	}
@@ -88,25 +88,25 @@ func TestHTTPTemporaryWorkspaceLabelCannotImpersonatePublishedWorkspace(t *testi
 	if replayed.Status == 0 || !strings.Contains(replayed.Stdout, "rejects --pin") {
 		t.Fatalf("product CLI must reject --pin; use HTTP resolve/read for temporary replay: %s", replayed.Stdout)
 	}
-	status, rejected, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:read", read, namedReader)
+	status, rejected, _ = httpSurfaceRequest(t, server, http.MethodPost, "/object/v1/objects:read", read, namedReader)
 	if status != http.StatusForbidden {
 		t.Fatalf("temporary pin must not borrow published Workspace consume: %d %#v", status, rejected)
 	}
-	status, rejected, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:read", map[string]any{
+	status, rejected, _ = httpSurfaceRequest(t, server, http.MethodPost, "/object/v1/objects:read", map[string]any{
 		"dataset": label, "definition": definition, "pin": temporaryPin, "reference": testObjectReference(t, repositoryID, "Policy:label", ""),
 	}, memberReader)
 	if status != http.StatusBadRequest {
 		t.Fatalf("explicit named selector mixed with temporary definition was accepted: %d %#v", status, rejected)
 	}
 	// A separately supplied named selector cannot turn a caller-owned definition
-	// into published authority, including at the knowledge verb admission gate.
+	// into published authority, including at the object verb admission gate.
 	search := map[string]any{"dataset": label, "definition": definition, "pin": temporaryPin, "query": "label"}
-	status, rejected, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/search", search, namedSearcher)
+	status, rejected, _ = httpSurfaceRequest(t, server, http.MethodPost, "/object/v1/search", search, namedSearcher)
 	if status != http.StatusForbidden {
-		t.Fatalf("temporary definition borrowed a named knowledge.search grant: %d %#v", status, rejected)
+		t.Fatalf("temporary definition borrowed a named object.search grant: %d %#v", status, rejected)
 	}
 	search["inventoryDiscovery"] = true
-	status, rejected, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/search", search, namedSearcher)
+	status, rejected, _ = httpSurfaceRequest(t, server, http.MethodPost, "/object/v1/search", search, namedSearcher)
 	if status != http.StatusBadRequest {
 		t.Fatalf("temporary label forged Catalog discovery context: %d %#v", status, rejected)
 	}

@@ -15,7 +15,7 @@ func TestGrantClientUsesExistingInventoryCoordinates(t *testing.T) {
 	requests := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests++
-		if r.Method != http.MethodGet || r.URL.Path != "/admin/v1/grants" || r.URL.Query().Get("repository") != "kr://acme/one" || r.URL.Query().Get("principal") != "agent:reader" || r.URL.Query().Get("object") != "data/*" || r.URL.Query().Get("action") != "knowledge.read" {
+		if r.Method != http.MethodGet || r.URL.Path != "/admin/v1/grants" || r.URL.Query().Get("repository") != "kr://acme/one" || r.URL.Query().Get("principal") != "agent:reader" || r.URL.Query().Get("object") != "data/*" || r.URL.Query().Get("action") != "object.read" {
 			t.Errorf("typed inventory query lost coordinates: %s %s", r.Method, r.URL.RequestURI())
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -29,7 +29,7 @@ func TestGrantClientUsesExistingInventoryCoordinates(t *testing.T) {
 	if _, err := kc.Login(context.Background(), client.LoginRequest{Identity: client.Identity{Principal: "operator"}}); err != nil {
 		t.Fatal(err)
 	}
-	query := snapshotclient.GrantRequest{Principal: "agent:reader", Repository: "kr://acme/one", Object: "data/*", Actions: []string{"knowledge.read"}}
+	query := snapshotclient.GrantRequest{Principal: "agent:reader", Repository: "kr://acme/one", Object: "data/*", Actions: []string{"object.read"}}
 	var output map[string]any
 	if err := kc.AdminService().GrantsMatching(context.Background(), query, snapshotclient.RequestOptions{}, &output); err != nil || output["rules"] == nil {
 		t.Fatalf("inventory: %#v %v", output, err)

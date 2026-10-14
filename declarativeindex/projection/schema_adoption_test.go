@@ -23,7 +23,7 @@ func TestDiscoveryUsesEachUnitsActuallyAdoptedSchemaAccess(t *testing.T) {
 	commit := func(operations ...objectmodel.Operation) kernel.CommitID {
 		t.Helper()
 		base := testkit.MustHead(t, repo, snapshot.DefaultRef)
-		at, err := repo.ApplyKnowledgeCommit(objectmodel.ChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef,
+		at, err := repo.ApplyObjectCommit(objectmodel.ChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef,
 			BaseCommit: base, ExpectedTargetCommit: base, Operations: operations})
 		if err != nil {
 			t.Fatal(err)

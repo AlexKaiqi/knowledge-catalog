@@ -1,0 +1,7 @@
+name: personal-task
+remove: [kr://scene/object]
+mounts:
+  - repository: kr://scene/object
+    selector: refs/heads/main
+    path: references
+    subPath: metrics/metric/gmv

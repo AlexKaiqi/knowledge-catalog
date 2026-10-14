@@ -19,7 +19,7 @@ func (tree *metadataOnlyTree) ReadFile(name string, _ kernel.CommitID) ([]byte, 
 	if raw, ok := tree.files[name]; ok {
 		return raw, nil
 	}
-	return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "file %s is absent", name)
+	return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "file %s is absent", name)
 }
 
 func (*metadataOnlyTree) ListFiles(kernel.CommitID) ([]string, error) {

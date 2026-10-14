@@ -78,7 +78,7 @@ func (s *catalogMem) ReadFile(path string, commit kernel.CommitID) ([]byte, erro
 	}
 	body, ok := files[path]
 	if !ok {
-		return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "missing %s", path)
+		return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "missing %s", path)
 	}
 	return append([]byte(nil), body...), nil
 }
@@ -140,7 +140,7 @@ func (s *catalogMem) CommitHistory(commit kernel.CommitID, limit int) ([]kernel.
 	return out, nil
 }
 
-func TestSnapshotRegistryPersistsMembershipWithoutKnowledgeSemantics(t *testing.T) {
+func TestSnapshotRegistryPersistsMembershipWithoutObjectSemantics(t *testing.T) {
 	id := "kr://acme/catalog"
 	store := newCatalogMem(id)
 	created, err := catalog.CreateSnapshotRegistry(store, "")

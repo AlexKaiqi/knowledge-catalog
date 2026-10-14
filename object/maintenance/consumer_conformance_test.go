@@ -321,7 +321,7 @@ func TestSnapshotConsumerHeadFailureDoesNotLeaveReady(t *testing.T) {
 	}
 }
 
-func committedConsumerPolicy(t *testing.T) (*testkit.KnowledgeRepository, kernel.CommitID, kernel.CommitID) {
+func committedConsumerPolicy(t *testing.T) (*testkit.ObjectRepository, kernel.CommitID, kernel.CommitID) {
 	t.Helper()
 	repo := testkit.MakeRepository(t, "kr://object/consumer/core")
 	root, err := repo.Head("")
@@ -335,9 +335,9 @@ func committedConsumerPolicy(t *testing.T) (*testkit.KnowledgeRepository, kernel
 	return repo, root, head
 }
 
-func consumerPutAt(t *testing.T, repo *testkit.KnowledgeRepository, at kernel.CommitID, operations []objectmodel.Operation) kernel.CommitID {
+func consumerPutAt(t *testing.T, repo *testkit.ObjectRepository, at kernel.CommitID, operations []objectmodel.Operation) kernel.CommitID {
 	t.Helper()
-	next, err := repo.ApplyKnowledgeCommit(objectmodel.ChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: at, ExpectedTargetCommit: at, Operations: operations})
+	next, err := repo.ApplyObjectCommit(objectmodel.ChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: at, ExpectedTargetCommit: at, Operations: operations})
 	if err != nil {
 		t.Fatal(err)
 	}

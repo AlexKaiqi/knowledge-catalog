@@ -13,7 +13,7 @@
 set -euo pipefail
 
 CHECKOUT="${1:?usage: assemble-doc.sh <checkout-dir> [output-file]}"
-OUTPUT="${2:-docs/KNOWLEDGE_CATALOG_DESIGN.md}"
+OUTPUT="${2:-docs/OBJECT_CATALOG_DESIGN.md}"
 
 # 去掉 block 的 frontmatter（---...---）与 worksurface 注释。
 strip_block() {

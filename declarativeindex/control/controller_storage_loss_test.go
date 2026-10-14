@@ -27,7 +27,7 @@ func TestProjectionControllerRecoversPhysicalLossWithReadyLedger(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			repo := testkit.MakeRepository(t, "kr://acme/public/storage-loss")
 			root := testkit.MustHead(t, repo, snapshot.DefaultRef)
-			head, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+			head, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 				TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef,
 				BaseCommit: root, ExpectedTargetCommit: root,
 				Operations: []objectmodel.Operation{
@@ -120,7 +120,7 @@ func TestProjectionControllerRecoversPhysicalLossWithReadyLedger(t *testing.T) {
 			}
 			assertStorageLossSearchEqual(t, storageLossSearch(t, reopened, repo, head), want)
 			if current := testkit.MustHead(t, repo, snapshot.DefaultRef); current != head {
-				t.Fatalf("projection recovery changed knowledge HEAD: got %s want %s", current, head)
+				t.Fatalf("projection recovery changed object HEAD: got %s want %s", current, head)
 			}
 		})
 	}
@@ -164,9 +164,9 @@ func storageLossSearch(t *testing.T, idx *query.Index, repo objectmodel.Reposito
 		t.Fatalf("complete fixed-basis search: %#v err=%v", result, err)
 	}
 	for _, hit := range result.Hits {
-		canonical, err := repo.Read(hit.Knowledge.Address.ObjectID, head)
-		if err != nil || !reflect.DeepEqual(hit.Knowledge, canonical) || !reflect.DeepEqual(hit.Version, retrieval.VersionOf(canonical)) {
-			t.Fatalf("hit differs from complete knowledge and version at %s: %#v err=%v", head, hit, err)
+		canonical, err := repo.Read(hit.Object.Address.ObjectID, head)
+		if err != nil || !reflect.DeepEqual(hit.Object, canonical) || !reflect.DeepEqual(hit.Version, retrieval.VersionOf(canonical)) {
+			t.Fatalf("hit differs from complete object and version at %s: %#v err=%v", head, hit, err)
 		}
 	}
 	return result

@@ -91,7 +91,7 @@ func TestIndexControlReopeningEmptyDemandDoesNotExecuteRetiredWork(t *testing.T)
 					t.Fatal(err)
 				}
 			}
-			if err := f.base.cat.RetireKnowledgeSet("retired-a"); err != nil {
+			if err := f.base.cat.RetireDataset("retired-a"); err != nil {
 				t.Fatal(err)
 			}
 			if err := runtime.plugins.Close(); err != nil {
@@ -296,7 +296,7 @@ func assertControlState(t *testing.T, f *controlRecoveryFixture, runtime *contro
 		expected[aspect] = value
 	}
 	expected["runtime"] = map[string]any{"status": status}
-	if hit.Knowledge.Repository != id || hit.Knowledge.Commit != at || hit.Knowledge.Address != canonical.Address || hit.Knowledge.KnowledgeRef != canonical.KnowledgeRef || !reflect.DeepEqual(hit.Knowledge.Value, expected) || hit.Version.DeclarationCommit != at || len(hit.Version.Observations) != 1 || hit.Version.Observations[0].Basis.SourceRevision != sourceRevision {
+	if hit.Object.Repository != id || hit.Object.Commit != at || hit.Object.Address != canonical.Address || hit.Object.ObjectRef != canonical.ObjectRef || !reflect.DeepEqual(hit.Object.Value, expected) || hit.Version.DeclarationCommit != at || len(hit.Version.Observations) != 1 || hit.Version.Observations[0].Basis.SourceRevision != sourceRevision {
 		t.Errorf("fixed State result mixed canonical body or observation: %#v", hit)
 	}
 }

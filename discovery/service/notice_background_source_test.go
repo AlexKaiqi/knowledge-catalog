@@ -47,7 +47,7 @@ func (c *rejectingNoticeController) Notify(notice index.ChangeNotice) error {
 func noticeBackgroundFixture(t *testing.T) (objectmodel.Repository, kernel.CommitID) {
 	t.Helper()
 	setup := testkit.NewSetup(t, "kr://acme/public/notice-source")
-	commit, err := setup.Repo.ApplyKnowledgeCommit(objectmodel.ChangeSet{
+	commit, err := setup.Repo.ApplyObjectCommit(objectmodel.ChangeSet{
 		TargetRepository: setup.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: setup.RootCommitID, ExpectedTargetCommit: setup.RootCommitID,
 		Operations: []objectmodel.Operation{

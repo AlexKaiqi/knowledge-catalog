@@ -72,7 +72,7 @@ func TestLiveAccessBindingUsesScopedSchemaCoordinatesWithoutPrivateReads(t *test
 	at := published.Result.NewCommit
 	guard := &bindingScopeGuard{Store: raw, TreeStore: raw.(snapshot.TreeStore)}
 	rd := reader.NewReader(nil)
-	scope := reader.Open(rd.Lookup(func(kernel.RepositoryID) (snapshot.Store, error) { return guard, nil }), reader.KnowledgeSetPin{
+	scope := reader.Open(rd.Lookup(func(kernel.RepositoryID) (snapshot.Store, error) { return guard, nil }), reader.DatasetPin{
 		Repositories: map[kernel.RepositoryID]kernel.CommitID{raw.ID(): at},
 		Items:        []reader.DatasetItem{{Repository: raw.ID(), Commit: at, Kind: "prefix", Prefix: "public"}},
 	})

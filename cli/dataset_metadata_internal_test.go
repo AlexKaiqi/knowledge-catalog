@@ -21,7 +21,7 @@ func TestSnapshotArgvPublishesMetadataAndKeepsHostActionPrivate(t *testing.T) {
 		}
 		switch r.Method + " " + r.URL.Path {
 		case "POST /snapshot/v1/datasets":
-			var request snapshotclient.KnowledgeSetRequest
+			var request snapshotclient.DatasetRequest
 			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 				t.Error(err)
 			}

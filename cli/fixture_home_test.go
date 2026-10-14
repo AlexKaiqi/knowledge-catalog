@@ -213,7 +213,7 @@ func verbStatus(cx *inv.Invocation) (any, error) {
 		"repos":        repos,
 		"stores":       kchome.PublicStores(ws.Stores),
 		"registry":     map[string]any{"head": registryHead},
-		"datasets":     inv.PublicKnowledgeSets(state.KnowledgeSets),
+		"datasets":     inv.PublicDatasets(state.Datasets),
 		"repositories": state.Repositories,
 	}, nil
 }

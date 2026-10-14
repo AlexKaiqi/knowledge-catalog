@@ -111,15 +111,15 @@ func TestIndexPluginsKeepUnavailableConfigurationFailureLocalToItsSource(t *test
 			assertPluginHit(t, result, err, b.RepositoryID, atB, "runbook source 2 at a")
 			for _, set := range []struct {
 				name    string
-				sources []dataset.KnowledgeSetSource
+				sources []dataset.DatasetSource
 			}{
-				{"only-b", []dataset.KnowledgeSetSource{{Repository: b.RepositoryID, BaseRev: string(atB), Selector: snapshot.DefaultRef, Path: dataset.MountPath("b")}}},
-				{"with-a", []dataset.KnowledgeSetSource{{Repository: a.RepositoryID, BaseRev: string(atA), Selector: snapshot.DefaultRef, Path: dataset.MountPath("a")}, {Repository: b.RepositoryID, BaseRev: string(atB), Selector: snapshot.DefaultRef, Path: dataset.MountPath("b")}}},
+				{"only-b", []dataset.DatasetSource{{Repository: b.RepositoryID, BaseRev: string(atB), Selector: snapshot.DefaultRef, Path: dataset.MountPath("b")}}},
+				{"with-a", []dataset.DatasetSource{{Repository: a.RepositoryID, BaseRev: string(atA), Selector: snapshot.DefaultRef, Path: dataset.MountPath("a")}, {Repository: b.RepositoryID, BaseRev: string(atB), Selector: snapshot.DefaultRef, Path: dataset.MountPath("b")}}},
 			} {
-				if _, err := f.cat.DefineKnowledgeSet(set.name, 1, set.sources); err != nil {
+				if _, err := f.cat.DefineDataset(set.name, 1, set.sources); err != nil {
 					t.Fatal(err)
 				}
-				resolved, err := f.cat.ResolveKnowledgeSet(set.name)
+				resolved, err := f.cat.ResolveDataset(set.name)
 				if err != nil {
 					t.Fatal(err)
 				}

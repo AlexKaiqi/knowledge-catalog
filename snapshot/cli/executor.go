@@ -32,7 +32,7 @@ func (e *executor) Execute(ctx context.Context, path string, flags map[string]an
 		}
 	}
 	if path == "dataset overlay" {
-		return clientKnowledgeSetOverlay(flags)
+		return clientDatasetOverlay(flags)
 	}
 	if e.client == nil {
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Snapshot CLI requires an authenticated HTTP client")
@@ -62,11 +62,11 @@ func (e *executor) dataset(ctx context.Context, path string, flags map[string]an
 			return nil, inputErr
 		}
 		revision, _ := remoteIntFlag(flags, "revision")
-		err = service.DefineKnowledgeSet(ctx, client.KnowledgeSetRequest{Dataset: flagString(flags, "dataset"), Revision: revision, Sources: definition.Sources, Metadata: definition.Metadata}, options, &output)
+		err = service.DefineDataset(ctx, client.DatasetRequest{Dataset: flagString(flags, "dataset"), Revision: revision, Sources: definition.Sources, Metadata: definition.Metadata}, options, &output)
 	case "dataset show":
 		return runRemoteDatasetShow(ctx, service, flags, options)
 	case "dataset retire":
-		err = service.RetireKnowledgeSet(ctx, flagString(flags, "dataset"), options, &output)
+		err = service.RetireDataset(ctx, flagString(flags, "dataset"), options, &output)
 	}
 	return output, err
 }

@@ -48,7 +48,7 @@ func TestConsumerUsesActualServerContract(t *testing.T) {
 	body(t, invoke("dataset", "define", "--dataset", "named", "--revision", "1", "--source", repo))
 	body(t, invoke("grant", "add", "--principal", principal, "--action", "inventory.read,dataset.resolve"))
 	readGrant := asMap(t, body(t, invoke("grant", "add", "--principal", principal, "--action", "file.read")))
-	body(t, invoke("grant", "add", "--principal", principal, "--repo", repo, "--action", "knowledge.read"))
+	body(t, invoke("grant", "add", "--principal", principal, "--repo", repo, "--action", "object.read"))
 	consumer := productClient(t, server.URL, principal)
 	ctx, options := context.Background(), client.RequestOptions{}
 	var inventory map[string]any
@@ -80,37 +80,37 @@ func TestConsumerUsesActualServerContract(t *testing.T) {
 			Repositories []string `json:"repositories"`
 		} `json:"datasets"`
 	}
-	if err := consumer.SnapshotService().KnowledgeSets(ctx, snapshotclient.RequestOptions{RequestID: options.RequestID}, &sets); err != nil {
+	if err := consumer.SnapshotService().Datasets(ctx, snapshotclient.RequestOptions{RequestID: options.RequestID}, &sets); err != nil {
 		t.Fatal(err)
 	}
 	if len(sets.Datasets) != 1 || sets.Datasets[0].ID != "named" || len(sets.Datasets[0].Repositories) != 1 || sets.Datasets[0].Repositories[0] != repo {
 		t.Fatalf("actual Server named Dataset inventory drifted: %#v", sets)
 	}
 	var detail struct {
-		Sources []dataset.KnowledgeSetSource `json:"sources"`
+		Sources []dataset.DatasetSource `json:"sources"`
 	}
-	if err := consumer.SnapshotService().KnowledgeSet(ctx, "named", snapshotclient.RequestOptions{RequestID: options.RequestID}, &detail); err != nil {
+	if err := consumer.SnapshotService().Dataset(ctx, "named", snapshotclient.RequestOptions{RequestID: options.RequestID}, &detail); err != nil {
 		t.Fatal(err)
 	}
 	if len(detail.Sources) != 1 || detail.Sources[0].Selector != snapshot.DefaultRef {
 		t.Fatalf("omitted source selector did not publish the default ref: %#v", detail)
 	}
-	var named dataset.ResolvedKnowledgeSet
-	if err := consumer.SnapshotService().ResolveKnowledgeSet(ctx, "named", snapshotclient.KnowledgeSetResolveRequest{}, snapshotclient.RequestOptions{RequestID: options.RequestID}, &named); err != nil {
+	var named dataset.ResolvedDataset
+	if err := consumer.SnapshotService().ResolveDataset(ctx, "named", snapshotclient.DatasetResolveRequest{}, snapshotclient.RequestOptions{RequestID: options.RequestID}, &named); err != nil {
 		t.Fatal(err)
 	}
 	if named.SetID != "named" || named.PinID == "" || len(named.Repositories) != 1 || named.Repositories[repo] == "" {
 		t.Fatalf("named resolve omitted its fixed coordinates: %#v", named)
 	}
-	definition := dataset.KnowledgeSet{Revision: 1, Sources: []dataset.KnowledgeSetSource{{Repository: repo, Selector: snapshot.DefaultRef}}}
-	var selected dataset.ResolvedKnowledgeSet
-	if err := consumer.SnapshotService().ResolveDefinition(ctx, snapshotclient.KnowledgeSetRequest{Revision: definition.Revision, Sources: definition.Sources}, snapshotclient.RequestOptions{RequestID: options.RequestID}, &selected); err != nil {
+	definition := dataset.Dataset{Revision: 1, Sources: []dataset.DatasetSource{{Repository: repo, Selector: snapshot.DefaultRef}}}
+	var selected dataset.ResolvedDataset
+	if err := consumer.SnapshotService().ResolveDefinition(ctx, snapshotclient.DatasetRequest{Revision: definition.Revision, Sources: definition.Sources}, snapshotclient.RequestOptions{RequestID: options.RequestID}, &selected); err != nil {
 		t.Fatal(err)
 	}
 	if selected.PinID == "" || len(selected.Repositories) != 1 || selected.Repositories[repo] == "" || selected.Repositories[repo] != named.Repositories[repo] {
 		t.Fatalf("selected definition resolve changed membership or basis: named=%#v selected=%#v", named, selected)
 	}
-	marshalPin := func(pin dataset.ResolvedKnowledgeSet) json.RawMessage {
+	marshalPin := func(pin dataset.ResolvedDataset) json.RawMessage {
 		t.Helper()
 		raw, err := json.Marshal(pin)
 		if err != nil {
@@ -118,12 +118,12 @@ func TestConsumerUsesActualServerContract(t *testing.T) {
 		}
 		return raw
 	}
-	fixed := client.KnowledgeReadRequest{KnowledgeDatasetIdentity: client.KnowledgeDatasetIdentity{Definition: &definition, Pin: marshalPin(selected)}, Reference: testObjectReference(t, repo, "note/one", "")}
+	fixed := client.ObjectReadRequest{ObjectDatasetIdentity: client.ObjectDatasetIdentity{Definition: &definition, Pin: marshalPin(selected)}, Reference: testObjectReference(t, repo, "note/one", "")}
 	body(t, invoke("writer", "put", testObjectReference(t, repo, "note/one", ""), "--command-id", "note-moved", "--schema-ref", "schema/note", "--value", `{"body":"new branch body after pin"}`))
-	assertRead := func(request client.KnowledgeReadRequest, commit kernel.CommitID, want string) {
+	assertRead := func(request client.ObjectReadRequest, commit kernel.CommitID, want string) {
 		t.Helper()
 		var value map[string]any
-		if err := consumer.KnowledgeService().Read(ctx, request, options, &value); err != nil {
+		if err := consumer.Objects().Read(ctx, request, options, &value); err != nil {
 			t.Fatal(err)
 		}
 		if value["reference"] != request.Reference || value["commit"] != string(commit) || asMap(t, value["value"])["body"] != want {
@@ -131,9 +131,9 @@ func TestConsumerUsesActualServerContract(t *testing.T) {
 		}
 	}
 	assertRead(fixed, selected.Repositories[repo], "consumed through the actual Server")
-	assertRead(client.KnowledgeReadRequest{KnowledgeDatasetIdentity: client.KnowledgeDatasetIdentity{Dataset: "named", Pin: marshalPin(named)}, Reference: testObjectReference(t, repo, "note/one", "")}, named.Repositories[repo], "consumed through the actual Server")
+	assertRead(client.ObjectReadRequest{ObjectDatasetIdentity: client.ObjectDatasetIdentity{Dataset: "named", Pin: marshalPin(named)}, Reference: testObjectReference(t, repo, "note/one", "")}, named.Repositories[repo], "consumed through the actual Server")
 	var latest map[string]any
-	if err := consumer.KnowledgeService().Read(ctx, client.KnowledgeReadRequest{Reference: testObjectReference(t, repo, "note/one", ""), Ref: snapshot.DefaultRef}, options, &latest); err != nil {
+	if err := consumer.Objects().Read(ctx, client.ObjectReadRequest{Reference: testObjectReference(t, repo, "note/one", ""), Ref: snapshot.DefaultRef}, options, &latest); err != nil {
 		t.Fatal(err)
 	}
 	if latest["commit"] == string(selected.Repositories[repo]) || asMap(t, latest["value"])["body"] != "new branch body after pin" {
@@ -141,11 +141,11 @@ func TestConsumerUsesActualServerContract(t *testing.T) {
 	}
 	var rejected any
 	stranger := productClient(t, server.URL, "stranger")
-	if err := stranger.KnowledgeService().Read(ctx, fixed, options, &rejected); kernel.CodeOf(err) != kernel.ErrForbidden {
+	if err := stranger.Objects().Read(ctx, fixed, options, &rejected); kernel.CodeOf(err) != kernel.ErrForbidden {
 		t.Fatalf("fixed pin authorized another principal: result=%#v err=%v", rejected, err)
 	}
 	body(t, invoke("grant", "remove", "--id", readGrant["id"].(string)))
-	if err := consumer.KnowledgeService().Read(ctx, fixed, options, &rejected); kernel.CodeOf(err) != kernel.ErrForbidden {
+	if err := consumer.Objects().Read(ctx, fixed, options, &rejected); kernel.CodeOf(err) != kernel.ErrForbidden {
 		t.Fatalf("fixed pin bypassed current file.read grant revocation: result=%#v err=%v", rejected, err)
 	}
 	t.Log("PASS actual Server inventory -> named resolve -> selected definition pin -> fixed structured read; current authorization, no FUSE")

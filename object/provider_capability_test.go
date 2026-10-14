@@ -12,12 +12,12 @@ import (
 )
 
 type nativeTreePoison struct {
-	*testkit.KnowledgeRepository
+	*testkit.ObjectRepository
 }
 
-func (*nativeTreePoison) NativeKnowledgeRepository() {}
+func (*nativeTreePoison) NativeObjectRepository() {}
 
-func TestBaseAuthorityWithoutKnowledgeCapabilitiesFailsClosed(t *testing.T) {
+func TestBaseAuthorityWithoutObjectCapabilitiesFailsClosed(t *testing.T) {
 	store := snapshot.NewRegistry()
 	poison := testkit.NewCapabilityPoisonStore("kr://poison/base-only")
 	if err := store.Add(poison); err != nil {
@@ -44,7 +44,7 @@ func TestBaseAuthorityWithoutKnowledgeCapabilitiesFailsClosed(t *testing.T) {
 }
 
 func TestNativeMarkerWithoutTypedChangeStoreCannotFallThroughToTreeEncoding(t *testing.T) {
-	native := &nativeTreePoison{KnowledgeRepository: testkit.MakeRepository(t, "kr://poison/native-tree")}
+	native := &nativeTreePoison{ObjectRepository: testkit.MakeRepository(t, "kr://poison/native-tree")}
 	base, err := native.Head(snapshot.DefaultRef)
 	if err != nil {
 		t.Fatal(err)

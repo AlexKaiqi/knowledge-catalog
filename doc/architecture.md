@@ -14,7 +14,7 @@
 
 | 层 | 负责 | 不负责 | 设计 |
 |---|---|---|---|
-| 存储层 | 保存文件和不可变版本，按仓划分权限，条件提交防并发覆盖，组合并交付 Dataset | 解释对象、Schema 或检索 | [Snapshot](design/snapshot.md)、[Dataset](design/dataset.md) |
+| 存储层 | 保存文件和不可变版本，按仓划分权限，条件提交防并发覆盖，组合并交付 Dataset| 解释对象、Schema 或检索 | [Snapshot](design/snapshot.md)、[Dataset](design/dataset.md) |
 | 对象层 | 按固定版本解释、校验和读取对象；Writer 是唯一发布入口 | 保存字节，外部状态 | [对象](design/object.md) |
 | 插件层 | 在固定的连接点上提供搜索、外部取值、能力处理 | 发权、改写内容；索引不替代内容本身 | [插件](design/plugins.md)、[发现](design/discovery.md)、[LiveAccess](design/liveaccess.md) |
 | 服务层 | 每次请求确定身份、范围和版本，检查授权，执行，留证；装配各层实例 | 定义对象模型或业务规则 | [服务](design/service.md)、[权限](design/permissions.md)、[治理](design/governance.md) |

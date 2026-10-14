@@ -21,7 +21,7 @@ type searchLookup struct{ repo objectmodel.Repository }
 
 func (l searchLookup) Require(id kernel.RepositoryID, _ kernel.ErrorCode) (objectmodel.Repository, error) {
 	if id != l.repo.ID() {
-		return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "missing repository")
+		return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "missing repository")
 	}
 	return l.repo, nil
 }
@@ -100,7 +100,7 @@ func TestDatasetSearchExecutorSemanticAuthorizesFirstThenFailsClosedWithoutProvi
 		t.Fatal("ineligible recall resolved data")
 		return nil, nil, nil
 	}
-	deliver := func(_ context.Context, v retrieval.KnowledgeHit) (retrieval.KnowledgeHit, error) {
+	deliver := func(_ context.Context, v retrieval.ObjectHit) (retrieval.ObjectHit, error) {
 		t.Fatal("ineligible recall delivered data")
 		return v, nil
 	}
@@ -149,7 +149,7 @@ type semanticProjection struct {
 func (p *semanticProjection) SemanticWindowAtContext(_ context.Context, _ objectmodel.Repository, _ kernel.CommitID, _ retrieval.SearchRequest, queryVector []float32) (retrieval.SearchResult, error) {
 	p.windowQueries++
 	p.vector = append([]float32(nil), queryVector...)
-	result := retrieval.SearchResult{Hits: []retrieval.KnowledgeHit{{}}}
+	result := retrieval.SearchResult{Hits: []retrieval.ObjectHit{{}}}
 	if p.overclaimed {
 		result.Completeness = retrieval.CompletenessComplete
 	}
@@ -259,7 +259,7 @@ func (r *headCommitRepository) SchemaObjectIDs(kernel.CommitID) ([]objectmodel.O
 
 type datasetSemanticProjection struct {
 	searchProjection
-	windows map[string][]retrieval.KnowledgeHit // "repo\x1fcommit" -> hits
+	windows map[string][]retrieval.ObjectHit // "repo\x1fcommit" -> hits
 	calls   []string
 }
 
@@ -268,14 +268,14 @@ func (p *datasetSemanticProjection) SemanticWindowAtContext(_ context.Context, r
 		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrUsageInvalid, "test expects a query vector")
 	}
 	p.calls = append(p.calls, string(repo.ID()))
-	return retrieval.SearchResult{Hits: append([]retrieval.KnowledgeHit(nil), p.windows[string(repo.ID())+"\x1f"+string(commit)]...)}, nil
+	return retrieval.SearchResult{Hits: append([]retrieval.ObjectHit(nil), p.windows[string(repo.ID())+"\x1f"+string(commit)]...)}, nil
 }
 
-func semanticHit(repo kernel.RepositoryID, commit kernel.CommitID, object string) retrieval.KnowledgeHit {
-	return retrieval.KnowledgeHit{Knowledge: objectmodel.KnowledgeValue{
+func semanticHit(repo kernel.RepositoryID, commit kernel.CommitID, object string) retrieval.ObjectHit {
+	return retrieval.ObjectHit{Object: objectmodel.ObjectValue{
 		Repository: repo, Commit: commit,
-		KnowledgeRef: objectmodel.KnowledgeRef{Repository: repo, Object: objectmodel.ObjectID(object)},
-		Address:      objectmodel.Address{ObjectID: objectmodel.ObjectID(object)},
+		ObjectRef: objectmodel.ObjectRef{Repository: repo, Object: objectmodel.ObjectID(object)},
+		Address:   objectmodel.Address{ObjectID: objectmodel.ObjectID(object)},
 	}}
 }
 
@@ -283,15 +283,15 @@ func TestDatasetSearchExecutorMergesSemanticMemberWindowsByRankInterleave(t *tes
 	headedA := &headCommitRepository{searchRepository: searchRepository{}, id: "kr://a/entities", head: "ca"}
 	headedB := &headCommitRepository{searchRepository: searchRepository{}, id: "kr://b/graph", head: "cb"}
 	repos := relationTestLookup{"kr://a/entities": headedA, "kr://b/graph": headedB}
-	pin := reader.KnowledgeSetPin{Repositories: map[kernel.RepositoryID]kernel.CommitID{
+	pin := reader.DatasetPin{Repositories: map[kernel.RepositoryID]kernel.CommitID{
 		"kr://a/entities": "ca", "kr://b/graph": "cb",
 	}, Items: reader.WholeRepositoryItems(map[kernel.RepositoryID]kernel.CommitID{
 		"kr://a/entities": "ca", "kr://b/graph": "cb",
 	})}
 	lookup := func(id kernel.RepositoryID) (objectmodel.Repository, error) {
-		return repos.Require(id, kernel.ErrKnowledgeRefUnresolved)
+		return repos.Require(id, kernel.ErrObjectRefUnresolved)
 	}
-	projection := &datasetSemanticProjection{windows: map[string][]retrieval.KnowledgeHit{
+	projection := &datasetSemanticProjection{windows: map[string][]retrieval.ObjectHit{
 		"kr://a/entities\x1fca": {semanticHit("kr://a/entities", "ca", "metric/gmv"), semanticHit("kr://a/entities", "ca", "metric/aov")},
 		"kr://b/graph\x1fcb":    {semanticHit("kr://b/graph", "cb", "rel/defines/gmv")},
 	}}
@@ -302,7 +302,7 @@ func TestDatasetSearchExecutorMergesSemanticMemberWindowsByRankInterleave(t *tes
 			return reader.Open(lookup, pin), nil, nil
 		},
 		Repositories: repos, Projection: projection, Embedder: &embeddingProvider{vectors: [][]float32{{0.5, 0.5}}},
-		Deliver: func(_ context.Context, hit retrieval.KnowledgeHit) (retrieval.KnowledgeHit, error) {
+		Deliver: func(_ context.Context, hit retrieval.ObjectHit) (retrieval.ObjectHit, error) {
 			delivered++
 			return hit, nil
 		},
@@ -319,8 +319,8 @@ func TestDatasetSearchExecutorMergesSemanticMemberWindowsByRankInterleave(t *tes
 	}
 	wantOrder := []string{"metric/gmv", "rel/defines/gmv", "metric/aov"}
 	for i, object := range wantOrder {
-		if string(result.Hits[i].Knowledge.Address.ObjectID) != object {
-			t.Fatalf("rank %d = %s, want %s (order: %v)", i+1, result.Hits[i].Knowledge.Address.ObjectID, object, result.Hits)
+		if string(result.Hits[i].Object.Address.ObjectID) != object {
+			t.Fatalf("rank %d = %s, want %s (order: %v)", i+1, result.Hits[i].Object.Address.ObjectID, object, result.Hits)
 		}
 	}
 	if result.Completeness != retrieval.CompletenessPartial {
@@ -337,10 +337,10 @@ func TestDatasetSearchExecutorMergesSemanticMemberWindowsByRankInterleave(t *tes
 
 func TestDatasetSearchExecutorSemanticFailsClosedOnStateMember(t *testing.T) {
 	repos := relationTestLookup{"kr://a/entities": &headCommitRepository{searchRepository: searchRepository{}, id: "kr://a/entities", head: "ca"}}
-	pin := reader.KnowledgeSetPin{Repositories: map[kernel.RepositoryID]kernel.CommitID{"kr://a/entities": "ca"},
+	pin := reader.DatasetPin{Repositories: map[kernel.RepositoryID]kernel.CommitID{"kr://a/entities": "ca"},
 		Items: reader.WholeRepositoryItems(map[kernel.RepositoryID]kernel.CommitID{"kr://a/entities": "ca"})}
 	lookup := func(id kernel.RepositoryID) (objectmodel.Repository, error) {
-		return repos.Require(id, kernel.ErrKnowledgeRefUnresolved)
+		return repos.Require(id, kernel.ErrObjectRefUnresolved)
 	}
 	projection := &datasetSemanticProjection{searchProjection: searchProjection{stateRequired: true, stateReady: true}}
 	executor := DatasetSearchExecutor{
@@ -349,7 +349,7 @@ func TestDatasetSearchExecutorSemanticFailsClosedOnStateMember(t *testing.T) {
 			return reader.Open(lookup, pin), nil, nil
 		},
 		Repositories: repos, Projection: projection, Embedder: &embeddingProvider{vectors: [][]float32{{0.5}}},
-		Deliver: func(_ context.Context, hit retrieval.KnowledgeHit) (retrieval.KnowledgeHit, error) { return hit, nil },
+		Deliver: func(_ context.Context, hit retrieval.ObjectHit) (retrieval.ObjectHit, error) { return hit, nil },
 	}
 	query := retrieval.SearchOf(retrieval.SearchMATCH("gmv"))
 	query.Recall = retrieval.RecallSemantic

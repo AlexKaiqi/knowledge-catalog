@@ -44,7 +44,7 @@ func TestSearchBudgetStopsResidualPagesAndCanResume(t *testing.T) {
 	}
 	request.Continuation = first.Continuation
 	second, err := idx.SearchAt(repo, head, request)
-	if err != nil || len(second.Hits) != 1 || second.Hits[0].Knowledge.Address.ObjectID != "item/c" || second.Completeness != retrieval.CompletenessComplete {
+	if err != nil || len(second.Hits) != 1 || second.Hits[0].Object.Address.ObjectID != "item/c" || second.Completeness != retrieval.CompletenessComplete {
 		t.Fatalf("resumed result: %#v %v", second, err)
 	}
 }

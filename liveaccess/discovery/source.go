@@ -17,7 +17,7 @@ type Source struct {
 	Request objectmodel.RequestContext
 }
 
-func (s Source) ObserveRepositoryValue(ctx context.Context, repo objectmodel.Repository, value objectmodel.KnowledgeValue) (objectmodel.ObservedValue, error) {
+func (s Source) ObserveRepositoryValue(ctx context.Context, repo objectmodel.Repository, value objectmodel.ObjectValue) (objectmodel.ObservedValue, error) {
 	if s.Lookup == nil {
 		return objectmodel.ObservedValue{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "dynamic State projection requires a Materialization Runtime")
 	}

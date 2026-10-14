@@ -48,7 +48,7 @@ func TestSupersetResidualEvaluatesNestedAllAnyExpression(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Completeness != retrieval.CompletenessComplete || len(result.Hits) != 1 || result.Hits[0].Knowledge.Address.ObjectID != "Table:a" {
+	if result.Completeness != retrieval.CompletenessComplete || len(result.Hits) != 1 || result.Hits[0].Object.Address.ObjectID != "Table:a" {
 		t.Fatalf("result = %#v", result)
 	}
 }
@@ -81,7 +81,7 @@ func TestSupersetResidualContainsKeepsSubstringHits(t *testing.T) {
 	}
 	seen := map[objectmodel.ObjectID]bool{}
 	for _, hit := range result.Hits {
-		seen[hit.Knowledge.Address.ObjectID] = true
+		seen[hit.Object.Address.ObjectID] = true
 	}
 	if !seen["Table:a"] || !seen["Table:c"] || seen["Table:b"] {
 		t.Fatalf("CONTAINS residual must keep substring hits only: %#v", result.Hits)
@@ -107,7 +107,7 @@ func TestSupersetResidualContainsTreatsWildcardMetaAsLiteral(t *testing.T) {
 		t.Fatal(err)
 	}
 	star, err := idx.SearchAt(repo, head, retrieval.SearchOf(retrieval.SearchCONTAINS("db", "prod*")))
-	if err != nil || len(star.Hits) != 1 || star.Hits[0].Knowledge.Address.ObjectID != "Table:star" {
+	if err != nil || len(star.Hits) != 1 || star.Hits[0].Object.Address.ObjectID != "Table:star" {
 		t.Fatalf("literal CONTAINS prod* must not GLOB: %#v %v", star, err)
 	}
 	both, err := idx.SearchAt(repo, head, retrieval.SearchOf(retrieval.SearchCONTAINS("db", "east")))

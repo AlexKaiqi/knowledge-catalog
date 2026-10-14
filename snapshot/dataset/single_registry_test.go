@@ -87,7 +87,7 @@ func TestRegistryCannotReinitializeMissingOrRetiredMetadata(t *testing.T) {
 		store := seedRegistryFiles(t, files)
 		before, _ := store.Head(snapshot.DefaultRef)
 		for _, open := range []func(snapshot.Store, string) (dataset.Registry, error){dataset.OpenSnapshotRegistry, dataset.CreateSnapshotRegistry} {
-			if _, err := open(store, ""); kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
+			if _, err := open(store, ""); kernel.CodeOf(err) != kernel.ErrDatasetInvalid {
 				t.Fatalf("invalid existing authority was treated as new: files=%v error=%v", files, err)
 			}
 			if after, _ := store.Head(snapshot.DefaultRef); after != before {

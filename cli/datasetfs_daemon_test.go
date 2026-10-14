@@ -13,14 +13,14 @@ import (
 	"kc/internal/testkit"
 )
 
-func TestKnowledgeSetFSPublicCommandAndUsageSurface(t *testing.T) {
+func TestDatasetFSPublicCommandAndUsageSurface(t *testing.T) {
 	for _, command := range []string{"", "help", "--help", "-h"} {
 		var stdout, stderr bytes.Buffer
 		argv := []string{}
 		if command != "" {
 			argv = []string{command}
 		}
-		if status := RunKnowledgeSetFS(argv, &stdout, &stderr); status != 0 {
+		if status := RunDatasetFS(argv, &stdout, &stderr); status != 0 {
 			t.Fatalf("kcfs %s status=%d stderr=%s", command, status, stderr.String())
 		}
 		if !strings.Contains(stdout.String(), "kcfs plan") || !strings.Contains(stdout.String(), "kcfs mount") {
@@ -41,7 +41,7 @@ func TestKnowledgeSetFSPublicCommandAndUsageSurface(t *testing.T) {
 		{[]string{"plan", "--workspace", "agent", "--root", "/tmp"}, "flag provided but not defined"},
 	} {
 		var stdout, stderr bytes.Buffer
-		if status := RunKnowledgeSetFS(test.argv, &stdout, &stderr); status == 0 {
+		if status := RunDatasetFS(test.argv, &stdout, &stderr); status == 0 {
 			t.Fatalf("kcfs %v unexpectedly succeeded: %s", test.argv, stdout.String())
 		}
 		if !strings.Contains(stderr.String(), test.want) {
@@ -50,17 +50,17 @@ func TestKnowledgeSetFSPublicCommandAndUsageSurface(t *testing.T) {
 	}
 }
 
-func TestKnowledgeSetFSRequiresServer(t *testing.T) {
+func TestDatasetFSRequiresServer(t *testing.T) {
 	isolateLoginConfig(t)
 	t.Setenv("KC_SERVER_URL", "")
 	var stdout, stderr bytes.Buffer
-	status := RunKnowledgeSetFS([]string{"plan", "--dataset", "agent", "--root", testkit.TempDir(t)}, &stdout, &stderr)
+	status := RunDatasetFS([]string{"plan", "--dataset", "agent", "--root", testkit.TempDir(t)}, &stdout, &stderr)
 	if status == 0 || !strings.Contains(stderr.String(), "requires KC Server") {
-		t.Fatalf("kcfs bypassed Knowledge Set File Gateway: status=%d stderr=%s", status, stderr.String())
+		t.Fatalf("kcfs bypassed Dataset File Gateway: status=%d stderr=%s", status, stderr.String())
 	}
 }
 
-func TestResolvedKnowledgeSetPinStripsClientCatalog(t *testing.T) {
+func TestResolvedDatasetPinStripsClientCatalog(t *testing.T) {
 	t.Setenv("KC_CONFIG_DIR", t.TempDir())
 	t.Setenv("KC_AUTH_TOKEN", "")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -78,7 +78,7 @@ func TestResolvedKnowledgeSetPinStripsClientCatalog(t *testing.T) {
 		_, _ = io.WriteString(w, `{"pin":{"setId":"agent","revision":1,"pinId":"pin-1","repositories":{"kr://acme/source":"c1"}},"mounts":[{"path":"docs","repository":"kr://acme/source","commit":"c1"}]}`)
 	}))
 	defer server.Close()
-	_, manifest, closeClient, err := prepareKnowledgeSetFS(datasetFSConfig{
+	_, manifest, closeClient, err := prepareDatasetFS(datasetFSConfig{
 		server: server.URL, dataset: "agent", root: t.TempDir(), principal: "agent:test",
 	})
 	if err != nil {
@@ -98,7 +98,7 @@ func TestResolvedKnowledgeSetPinStripsClientCatalog(t *testing.T) {
 	}
 }
 
-func TestDecodeKnowledgeSetFSReadyDoesNotWaitForEOF(t *testing.T) {
+func TestDecodeDatasetFSReadyDoesNotWaitForEOF(t *testing.T) {
 	reader, writer := io.Pipe()
 	release := make(chan struct{})
 	go func() {
@@ -117,7 +117,7 @@ func TestDecodeKnowledgeSetFSReadyDoesNotWaitForEOF(t *testing.T) {
 	result := make(chan datasetFSManifest, 1)
 	errors := make(chan error, 1)
 	go func() {
-		manifest, err := decodeKnowledgeSetFSReady(reader)
+		manifest, err := decodeDatasetFSReady(reader)
 		if err != nil {
 			errors <- err
 			return

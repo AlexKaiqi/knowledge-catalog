@@ -12,7 +12,7 @@ import (
 
 func TestPublishedDatasetPinListsFrozenFileItems(t *testing.T) {
 	s := setupFed(t)
-	defined, err := s.catalog.DefineKnowledgeSet("slice", 1, []catalog.KnowledgeSetSource{
+	defined, err := s.catalog.DefineDataset("slice", 1, []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("policies"), SubPath: "policies"},
 	})
 	if err != nil {
@@ -24,7 +24,7 @@ func TestPublishedDatasetPinListsFrozenFileItems(t *testing.T) {
 	if defined.Sources[0].Commit == "" {
 		t.Fatal("publish must freeze the source commit")
 	}
-	resolved, err := s.catalog.ResolveKnowledgeSet("slice")
+	resolved, err := s.catalog.ResolveDataset("slice")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,13 +54,13 @@ func TestDatasetPathAllowedRootAndPrefix(t *testing.T) {
 	}
 }
 
-func TestDefineKnowledgeSetRejectsDuplicateDatasetTargets(t *testing.T) {
+func TestDefineDatasetRejectsDuplicateDatasetTargets(t *testing.T) {
 	s := setupFed(t)
-	_, err := s.catalog.DefineKnowledgeSet("dup", 1, []catalog.KnowledgeSetSource{
+	_, err := s.catalog.DefineDataset("dup", 1, []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("notes")},
 		{Repository: "kr://acme/groups/payments", Selector: "refs/heads/main", Path: catalog.MountPath("notes")},
 	})
-	testkit.ExpectCode(t, err, kernel.ErrKnowledgeSetInvalid)
+	testkit.ExpectCode(t, err, kernel.ErrDatasetInvalid)
 }
 
 func TestDatasetPathAllowedEmptyItemsDeny(t *testing.T) {
@@ -69,7 +69,7 @@ func TestDatasetPathAllowedEmptyItemsDeny(t *testing.T) {
 	}
 }
 
-func TestDefineKnowledgeSetFailsClosedWithoutAttachedSnapshot(t *testing.T) {
+func TestDefineDatasetFailsClosedWithoutAttachedSnapshot(t *testing.T) {
 	_, registry := createCatalogRegistry(t, "kr://empty/catalog")
 	cat, err := catalog.NewService(snapshot.NewRegistry(), registry)
 	if err != nil {
@@ -78,20 +78,20 @@ func TestDefineKnowledgeSetFailsClosedWithoutAttachedSnapshot(t *testing.T) {
 	if err := cat.RegisterRepository("kr://empty/source"); err != nil {
 		t.Fatal(err)
 	}
-	_, err = cat.DefineKnowledgeSet("task", 1, []catalog.KnowledgeSetSource{
+	_, err = cat.DefineDataset("task", 1, []catalog.DatasetSource{
 		{Repository: "kr://empty/source", Selector: snapshot.DefaultRef},
 	})
-	testkit.ExpectCode(t, err, kernel.ErrKnowledgeSetInvalid)
+	testkit.ExpectCode(t, err, kernel.ErrDatasetInvalid)
 }
 
-func TestResolveKnowledgeSetExposesVersionRef(t *testing.T) {
+func TestResolveDatasetExposesVersionRef(t *testing.T) {
 	s := setupFed(t)
-	if _, err := s.catalog.DefineKnowledgeSet("named", 2, []catalog.KnowledgeSetSource{
+	if _, err := s.catalog.DefineDataset("named", 2, []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	resolved, err := s.catalog.ResolveKnowledgeSet("named")
+	resolved, err := s.catalog.ResolveDataset("named")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,14 +103,14 @@ func TestResolveKnowledgeSetExposesVersionRef(t *testing.T) {
 func TestPublishedPrefixDatasetDoesNotReadSiblingPaths(t *testing.T) {
 	s := setupFed(t)
 	head := testkit.MustHead(t, s.publicRepo, "refs/heads/main")
-	if _, err := s.publicRepo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	if _, err := s.publicRepo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: "kr://acme/public/core", TargetRef: "refs/heads/main",
 		BaseCommit: head, ExpectedTargetCommit: head,
 		Operations: testkit.PutEntity("note/outside", map[string]any{"body": "secret"}, ""),
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.catalog.DefineKnowledgeSet("docs", 1, []catalog.KnowledgeSetSource{
+	if _, err := s.catalog.DefineDataset("docs", 1, []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("policy"), SubPath: "policy"},
 	}); err != nil {
 		t.Fatal(err)

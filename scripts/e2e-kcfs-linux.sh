@@ -129,7 +129,7 @@ lakefs_put team docs/team/README.md 'team
 ' seed
 lakefs_put team docs/runbooks/incident.md 'incident
 ' seed
-lakefs_put policy knowledge/policy/rules.md 'policy
+lakefs_put policy object/policy/rules.md 'policy
 ' seed
 
 deployment_config="$(go -C "$repo_root" run ./scripts/fixture-deployment --root "$home_dir" --registry-id kr://test/registry --registry-dsn "${lakefs_url}/kc-catalog" --principal agent:test --lakefs-repo "kr://kc/system=${lakefs_url}/kc-system" --lakefs-repo "kr://test/team=${lakefs_url}/team" --lakefs-repo "kr://test/policy=${lakefs_url}/policy")"
@@ -189,7 +189,7 @@ define_dataset() {
   run_kc dataset define --dataset agent --revision "$revision" \
     --source 'kr://test/team=refs/heads/main@docs/team@team' \
     --source 'kr://test/team=refs/heads/main@docs/runbooks@runbooks' \
-    --source 'kr://test/policy=refs/heads/main@knowledge/policy'
+    --source 'kr://test/policy=refs/heads/main@object/policy'
 }
 
 define_dataset 1
@@ -200,7 +200,7 @@ import json, sys
 plan = json.load(open(sys.argv[1]))
 assert plan["setId"] == "agent"
 assert plan["pinId"]
-assert {m["path"] for m in plan["mounts"]} == {"docs/team", "docs/runbooks", "knowledge/policy"}
+assert {m["path"] for m in plan["mounts"]} == {"docs/team", "docs/runbooks", "object/policy"}
 assert len({m["commit"] for m in plan["mounts"] if m["repository"] == "kr://test/team"}) == 1
 PY
 
@@ -208,7 +208,7 @@ PY
 kc_pid=$!
 team_file="$project_dir/docs/team/README.md"
 runbook_file="$project_dir/docs/runbooks/incident.md"
-policy_file="$project_dir/knowledge/policy/rules.md"
+policy_file="$project_dir/object/policy/rules.md"
 mounted=0
 for _ in $(seq 1 200); do
   if [[ -f "$team_file" && -f "$runbook_file" && -f "$policy_file" ]]; then
@@ -244,7 +244,7 @@ assert_file_content "$team_file" team
 assert_file_content "$runbook_file" incident
 assert_file_content "$policy_file" policy
 rg -q team "$project_dir/docs/team"
-rg -q policy "$project_dir/knowledge/policy"
+rg -q policy "$project_dir/object/policy"
 [[ "$(cat "$project_dir/LOCAL.txt")" == "local" ]]
 advance_tree team docs/team/README.md 'advanced
 ' advance
@@ -259,7 +259,7 @@ wait "$kc_pid"
 kc_pid=""
 [[ ! -e "$project_dir/docs/team" ]]
 [[ ! -e "$project_dir/docs/runbooks" ]]
-[[ ! -e "$project_dir/knowledge/policy" ]]
+[[ ! -e "$project_dir/object/policy" ]]
 [[ "$(cat "$project_dir/LOCAL.txt")" == "local" ]]
 
 "$run_root/kcfs" plan --server "$server_url" --as agent:test --dataset agent --root "$project_dir" >"$run_root/plan-still-frozen.json"
@@ -290,10 +290,10 @@ assert manifest["setId"] == "agent"
 assert manifest["root"] == sys.argv[2]
 assert manifest["readOnly"] is True
 assert manifest["pinId"]
-assert {m["path"] for m in manifest["mounts"]} == {"docs/team", "docs/runbooks", "knowledge/policy"}
+assert {m["path"] for m in manifest["mounts"]} == {"docs/team", "docs/runbooks", "object/policy"}
 PY
 assert_file_content "$daemon_project/docs/team/README.md" advanced
-assert_file_content "$daemon_project/knowledge/policy/rules.md" policy
+assert_file_content "$daemon_project/object/policy/rules.md" policy
 [[ "$(cat "$daemon_project/LOCAL.txt")" == "daemon-local" ]]
 python3 - "$daemon_project/docs/team/README.md" <<'PY'
 import errno, sys
@@ -309,7 +309,7 @@ TMPDIR="$daemon_log_dir" "$run_root/kcfs" stop --pid "$daemon_pid"
 daemon_pid=""
 [[ ! -e "$daemon_project/docs/team" ]]
 [[ ! -e "$daemon_project/docs/runbooks" ]]
-[[ ! -e "$daemon_project/knowledge/policy" ]]
+[[ ! -e "$daemon_project/object/policy" ]]
 [[ "$(cat "$daemon_project/LOCAL.txt")" == "daemon-local" ]]
 if find "$daemon_log_dir" -maxdepth 1 -name 'kcfs-daemon-*.log' -print -quit | rg -q .; then
   echo "FAIL: kcfs stop left a daemon log behind" >&2

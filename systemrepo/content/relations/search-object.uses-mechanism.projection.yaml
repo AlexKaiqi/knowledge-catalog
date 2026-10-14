@@ -1,0 +1,18 @@
+---
+object_id: kc/relation/search-object.uses-mechanism.projection
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: relations/search-object.uses-mechanism.projection.yaml
+---
+relationId: kc/relation/search-object.uses-mechanism.projection
+relationType: uses_mechanism
+direction: DIRECTED
+endpoints:
+  - role: from
+    objectRef:
+      repository: kr://kc/system
+      object: kc/capability/search-object
+  - role: to
+    objectRef:
+      repository: kr://kc/system
+      object: kc/mechanism/projection

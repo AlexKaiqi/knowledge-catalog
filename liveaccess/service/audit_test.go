@@ -21,11 +21,11 @@ func auditFixture() (evidence.Record, observability.AccessEvent) {
 		Trace:     kernel.TraceContext{TraceID: "trace", SpanID: "span", ParentSpanID: "parent"},
 		RequestID: "request",
 	}
-	target := observability.KnowledgeAccess{KnowledgeRef: objectmodel.PinnedKnowledgeRef{
-		KnowledgeRef: objectmodel.KnowledgeRef{Repository: "kr://audit/source", Object: "sensor"}, Commit: "fixed"}}
+	target := observability.ObjectAccess{ObjectRef: objectmodel.PinnedObjectRef{
+		ObjectRef: objectmodel.ObjectRef{Repository: "kr://audit/source", Object: "sensor"}, Commit: "fixed"}}
 	for _, name := range []string{"good", "null", "failed"} {
 		address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "sensor", AspectName: name}
-		sample := evidence.Sample{Repository: target.KnowledgeRef.Repository, Commit: target.KnowledgeRef.Commit,
+		sample := evidence.Sample{Repository: target.ObjectRef.Repository, Commit: target.ObjectRef.Commit,
 			Address: address, Declaration: objectmodel.UnitDeclaration{Address: address, DeclarationDigest: kernel.Digest("declaration-" + name)}}
 		if name == "failed" {
 			sample.Outcome = evidence.FailureOutcome
@@ -44,7 +44,7 @@ func auditFixture() (evidence.Record, observability.AccessEvent) {
 		record.Units = append(record.Units, sample)
 	}
 	return record, observability.AccessEvent{Identity: record.Identity, Trace: record.Trace, RequestID: record.RequestID,
-		Action: "knowledge.read", Decision: "ALLOW", Result: "RESOLVED", Knowledge: []observability.KnowledgeAccess{target}}
+		Action: "object.read", Decision: "ALLOW", Result: "RESOLVED", Object: []observability.ObjectAccess{target}}
 }
 
 func retainAuditFixture(t *testing.T, home string, record evidence.Record, event observability.AccessEvent) (*evidence.FileStore, observability.AccessEvent) {
@@ -76,14 +76,14 @@ func retainAuditFixture(t *testing.T, home string, record evidence.Record, event
 
 func TestAuditEntriesRestoreOriginalMixedResultsAfterRestart(t *testing.T) {
 	record, event := auditFixture()
-	event.Knowledge[0].Address = &objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "sensor"}
+	event.Object[0].Address = &objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "sensor"}
 	store, persisted := retainAuditFixture(t, t.TempDir(), record, event)
 	rows := liveservice.AuditEntries(context.Background(), store, []observability.AccessEvent{persisted})
 	if len(rows) != 1 || rows[0].ResultFailure != nil || rows[0].Results == nil ||
 		kernel.CanonicalDigest(*rows[0].Results) != kernel.CanonicalDigest(record) {
 		t.Fatalf("audit did not restore the original value, null and failure: %#v", rows)
 	}
-	if rows[0].Knowledge[0].Locator != persisted.Knowledge[0].Locator || rows[0].RequestID != record.RequestID {
+	if rows[0].Object[0].Locator != persisted.Object[0].Locator || rows[0].RequestID != record.RequestID {
 		t.Fatalf("audit lost the process association: %#v", rows[0])
 	}
 }
@@ -92,7 +92,7 @@ func TestAuditEntriesMatchAdoptedUnitsInsideSelectedObjectPosition(t *testing.T)
 	for _, kind := range []string{"object", "aspect-collection", "member-leaf"} {
 		t.Run(kind, func(t *testing.T) {
 			record, event := auditMemberFixture()
-			target := &event.Knowledge[0]
+			target := &event.Object[0]
 			switch kind {
 			case "object":
 				target.Address = &objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "sensor"}
@@ -108,7 +108,7 @@ func TestAuditEntriesMatchAdoptedUnitsInsideSelectedObjectPosition(t *testing.T)
 			store, persisted := retainAuditFixture(t, t.TempDir(), record, event)
 			rows := liveservice.AuditEntries(context.Background(), store, []observability.AccessEvent{persisted})
 			if len(rows) != 1 || rows[0].ResultFailure != nil || rows[0].Results == nil ||
-				kernel.CanonicalDigest(*rows[0].Results) != kernel.CanonicalDigest(record) || rows[0].Knowledge[0].Locator != target.Locator {
+				kernel.CanonicalDigest(*rows[0].Results) != kernel.CanonicalDigest(record) || rows[0].Object[0].Locator != target.Locator {
 				t.Fatalf("selected position rejected its original complete adopted units: %#v", rows)
 			}
 		})
@@ -123,32 +123,32 @@ func auditMemberFixture() (evidence.Record, observability.AccessEvent) {
 		unit.Declaration.Address = unit.Address
 		if unit.Observation != nil {
 			unit.Observation.Address = unit.Address
-			event.Knowledge[0].Observations[i].Address = unit.Address
+			event.Object[0].Observations[i].Address = unit.Address
 		}
 	}
 	return record, event
 }
 
 func TestAuditEntriesRejectUnrelatedSelectedPositions(t *testing.T) {
-	for name, mutate := range map[string]func(*observability.KnowledgeAccess){
-		"other-object": func(target *observability.KnowledgeAccess) {
+	for name, mutate := range map[string]func(*observability.ObjectAccess){
+		"other-object": func(target *observability.ObjectAccess) {
 			target.Address = &objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "other"}
 		},
-		"other-aspect": func(target *observability.KnowledgeAccess) {
+		"other-aspect": func(target *observability.ObjectAccess) {
 			target.Address = &objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "sensor", AspectName: "other"}
 		},
-		"other-member": func(target *observability.KnowledgeAccess) {
+		"other-member": func(target *observability.ObjectAccess) {
 			target.Address = &objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: "sensor", AspectName: "readings", MemberKey: "other"}
 		},
-		"other-locator-aspect": func(target *observability.KnowledgeAccess) { target.Locator = "/other/good/reading" },
-		"other-locator-member": func(target *observability.KnowledgeAccess) { target.Locator = "/readings/other/reading" },
-		"invalid-locator":      func(target *observability.KnowledgeAccess) { target.Locator = "readings/good/reading" },
+		"other-locator-aspect": func(target *observability.ObjectAccess) { target.Locator = "/other/good/reading" },
+		"other-locator-member": func(target *observability.ObjectAccess) { target.Locator = "/readings/other/reading" },
+		"invalid-locator":      func(target *observability.ObjectAccess) { target.Locator = "readings/good/reading" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			record, event := auditMemberFixture()
 			record.Units = record.Units[:1]
-			event.Knowledge[0].Observations = event.Knowledge[0].Observations[:1]
-			mutate(&event.Knowledge[0])
+			event.Object[0].Observations = event.Object[0].Observations[:1]
+			mutate(&event.Object[0])
 			store, persisted := retainAuditFixture(t, t.TempDir(), record, event)
 			assertAuditUnavailable(t, liveservice.AuditEntries(context.Background(), store, []observability.AccessEvent{persisted}))
 		})
@@ -164,47 +164,47 @@ func TestAuditEntriesRejectMismatchedOriginalAccess(t *testing.T) {
 		"span":        func(r *evidence.Record, _ *observability.AccessEvent) { r.Trace.SpanID = "other-span" },
 		"parent-span": func(r *evidence.Record, _ *observability.AccessEvent) { r.Trace.ParentSpanID = "other-parent" },
 		"repository": func(_ *evidence.Record, e *observability.AccessEvent) {
-			e.Knowledge[0].KnowledgeRef.Repository = "kr://audit/other"
+			e.Object[0].ObjectRef.Repository = "kr://audit/other"
 		},
 		"fixed-commit": func(_ *evidence.Record, e *observability.AccessEvent) {
-			e.Knowledge[0].KnowledgeRef.Commit = "other-fixed"
-			for i := range e.Knowledge[0].Observations {
-				e.Knowledge[0].Observations[i].DeclarationCommit = "other-fixed"
+			e.Object[0].ObjectRef.Commit = "other-fixed"
+			for i := range e.Object[0].Observations {
+				e.Object[0].Observations[i].DeclarationCommit = "other-fixed"
 			}
 		},
 		"object": func(_ *evidence.Record, e *observability.AccessEvent) {
-			e.Knowledge[0].KnowledgeRef.Object = "other-object"
-			for i := range e.Knowledge[0].Observations {
-				e.Knowledge[0].Observations[i].Address.ObjectID = "other-object"
+			e.Object[0].ObjectRef.Object = "other-object"
+			for i := range e.Object[0].Observations {
+				e.Object[0].Observations[i].Address.ObjectID = "other-object"
 			}
 		},
 		"explicit-position": func(_ *evidence.Record, e *observability.AccessEvent) {
-			e.Knowledge[0].Address = &objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "sensor", AspectName: "unread"}
+			e.Object[0].Address = &objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "sensor", AspectName: "unread"}
 		},
 		"original-declaration": func(_ *evidence.Record, e *observability.AccessEvent) {
-			e.Knowledge[0].Observations[0].DeclarationDigest = "other-declaration"
+			e.Object[0].Observations[0].DeclarationDigest = "other-declaration"
 		},
 		"descriptor": func(_ *evidence.Record, e *observability.AccessEvent) {
-			e.Knowledge[0].Observations[0].DescriptorDigest = "other-descriptor"
+			e.Object[0].Observations[0].DescriptorDigest = "other-descriptor"
 		},
 		"generation": func(_ *evidence.Record, e *observability.AccessEvent) {
-			e.Knowledge[0].Observations[0].Basis.BindingGeneration = "other-generation"
+			e.Object[0].Observations[0].Basis.BindingGeneration = "other-generation"
 		},
 		"source-revision": func(_ *evidence.Record, e *observability.AccessEvent) {
-			e.Knowledge[0].Observations[0].Basis.SourceRevision = "other-revision"
+			e.Object[0].Observations[0].Basis.SourceRevision = "other-revision"
 		},
 		"watermark": func(_ *evidence.Record, e *observability.AccessEvent) {
-			e.Knowledge[0].Observations[0].Basis.Watermark = "other-watermark"
+			e.Object[0].Observations[0].Basis.Watermark = "other-watermark"
 		},
 		"observation-time": func(_ *evidence.Record, e *observability.AccessEvent) {
-			e.Knowledge[0].Observations[0].Basis.ObservedAt = "2026-10-14T00:00:01Z"
+			e.Object[0].Observations[0].Basis.ObservedAt = "2026-10-14T00:00:01Z"
 		},
 		"consistency": func(_ *evidence.Record, e *observability.AccessEvent) {
-			e.Knowledge[0].Observations[0].Basis.Consistency = objectmodel.ObservationRepeatable
+			e.Object[0].Observations[0].Basis.Consistency = objectmodel.ObservationRepeatable
 		},
 		"missing-success-sample": func(r *evidence.Record, _ *observability.AccessEvent) { r.Units = r.Units[1:] },
 		"missing-process-basis": func(_ *evidence.Record, e *observability.AccessEvent) {
-			e.Knowledge[0].Observations = e.Knowledge[0].Observations[1:]
+			e.Object[0].Observations = e.Object[0].Observations[1:]
 		},
 		"success-as-failure": func(r *evidence.Record, _ *observability.AccessEvent) {
 			r.Units[0].Outcome, r.Units[0].Value, r.Units[0].Observation = evidence.FailureOutcome, nil, nil

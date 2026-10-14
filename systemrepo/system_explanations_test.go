@@ -93,7 +93,7 @@ func assertSystemTopicBasis(t *testing.T, root string, basis systemTopicBasis) {
 	if !strings.Contains(section, basis.Term) {
 		t.Fatalf("%s section %q does not use %q", basis.Owner, basis.Topic, basis.Term)
 	}
-	if !ast.IsExported(basis.Symbol) || strings.HasSuffix(basis.Source, "_test.go") || strings.HasPrefix(basis.Source, "knowledge/system") {
+	if !ast.IsExported(basis.Symbol) || strings.HasSuffix(basis.Source, "_test.go") || strings.HasPrefix(basis.Source, "object/system") {
 		t.Fatal("explanation basis must refer to a public system declaration outside the publication")
 	}
 	source, err := parser.ParseFile(token.NewFileSet(), filepath.Join(root, basis.Source), nil, 0)

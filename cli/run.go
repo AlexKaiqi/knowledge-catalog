@@ -190,8 +190,8 @@ func rejectPublicSurfaceFlags(publicPath string, flags map[string]FlagValue) err
 	if err := validateSnapshotFlags(publicPath, flags); err != nil {
 		return err
 	}
-	if knowledgeCLIPath(publicPath) || strings.HasPrefix(publicPath, "writer ") || publicPath == "diff" {
-		if err := inv.RejectMixedKnowledgeBasis(flags); err != nil {
+	if objectCLIPath(publicPath) || strings.HasPrefix(publicPath, "writer ") || publicPath == "diff" {
+		if err := inv.RejectMixedObjectBasis(flags); err != nil {
 			return err
 		}
 		rejected := []string{"catalog", "source"}

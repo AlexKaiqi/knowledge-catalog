@@ -37,7 +37,7 @@ func composeDiscoveryCLICommands(entries []discoverycli.Command, host map[string
 }
 
 func discoveryCaller(flags map[string]FlagValue) discoverycli.Context {
-	return discoverycli.Context{Dataset: invoke.FlagString(flags, "dataset"), Pin: remotePin(flags), Definition: inv.SuppliedKnowledgeSet(flags)}
+	return discoverycli.Context{Dataset: invoke.FlagString(flags, "dataset"), Pin: remotePin(flags), Definition: inv.SuppliedDataset(flags)}
 }
 
 func discoveryFlags(flags map[string]FlagValue) map[string]any {
@@ -59,7 +59,7 @@ func executeDiscoveryCommand(ctx context.Context, remote *kcclient.Client, path 
 		return discoverycli.New(remote.DiscoveryService(), discoverycli.Context{}).Execute(ctx, path, snapshotFlags(flags), discoveryclient.RequestOptions{RequestID: options.RequestID})
 	}
 	inventory := inventorySearchRequested(path, flags)
-	if err := inv.PrepareKnowledgePinContext(flags); err != nil {
+	if err := inv.PrepareObjectPinContext(flags); err != nil {
 		return nil, err
 	}
 	if inventory {

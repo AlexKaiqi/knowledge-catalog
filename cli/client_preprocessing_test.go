@@ -12,7 +12,7 @@ import (
 	"kc/snapshot/dataset"
 )
 
-func TestKnowledgeSetOverlayProducesPortableRecipeOffline(t *testing.T) {
+func TestDatasetOverlayProducesPortableRecipeOffline(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Error("preprocessing reached KC Server") }))
 	defer server.Close()
 	t.Setenv("KC_SERVER_URL", server.URL)
@@ -22,7 +22,7 @@ func TestKnowledgeSetOverlayProducesPortableRecipeOffline(t *testing.T) {
 	base := filepath.Join(root, "base.yaml")
 	overlay := filepath.Join(root, "overlay.yaml")
 	out := filepath.Join(root, "merged.yaml")
-	baseBytes := []byte("name: incident\nmounts:\n  - repository: kr://acme/team\n    selector: refs/heads/main\n    path: knowledge\n")
+	baseBytes := []byte("name: incident\nmounts:\n  - repository: kr://acme/team\n    selector: refs/heads/main\n    path: object\n")
 	if err := os.WriteFile(base, baseBytes, 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestKnowledgeSetOverlayProducesPortableRecipeOffline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	recipe, err := dataset.ParseKnowledgeSetRecipe(raw)
+	recipe, err := dataset.ParseDatasetRecipe(raw)
 	if err != nil || recipe.Name != "incident" || len(recipe.Mounts) != 2 || recipe.Mounts[1].Selector != "refs/heads/release" {
 		t.Fatalf("portable recipe: %#v %v", recipe, err)
 	}

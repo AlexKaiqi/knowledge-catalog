@@ -7,8 +7,8 @@ import (
 	"kc/object/reader"
 )
 
-func TestWorkspaceRelationEndpointRequiresUnpinnedMemberKnowledgeRef(t *testing.T) {
-	pin := reader.KnowledgeSetPin{SetID: "w", Repositories: map[kernel.RepositoryID]kernel.CommitID{
+func TestWorkspaceRelationEndpointRequiresUnpinnedMemberObjectRef(t *testing.T) {
+	pin := reader.DatasetPin{SetID: "w", Repositories: map[kernel.RepositoryID]kernel.CommitID{
 		"kr://acme/public/core": "c1",
 	}}
 	ref, err := WorkspaceRelationEndpoint("kc://acme/public/core/Table:orders", pin)

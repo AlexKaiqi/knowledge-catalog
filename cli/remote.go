@@ -70,7 +70,7 @@ func bindRemoteEnvironment(path string, flags map[string]FlagValue) {
 			return
 		}
 	}
-	if !remoteCommandInheritsKnowledgeSet(path) {
+	if !remoteCommandInheritsDataset(path) {
 		return
 	}
 	if value := strings.TrimSpace(os.Getenv("KC_DATASET")); value != "" {
@@ -78,12 +78,12 @@ func bindRemoteEnvironment(path string, flags map[string]FlagValue) {
 	}
 }
 
-func remoteCommandInheritsKnowledgeSet(path string) bool {
+func remoteCommandInheritsDataset(path string) bool {
 	if path == "plugin" {
 		return false
 	}
 	switch {
-	case knowledgeCLIPath(path):
+	case objectCLIPath(path):
 		return true
 	case strings.HasPrefix(path, "dataset ") || strings.HasPrefix(path, "files "):
 		return true
@@ -207,10 +207,10 @@ func remotePin(flags map[string]FlagValue) json.RawMessage {
 			raw = string(content)
 		}
 	}
-	var saved inv.TaskKnowledgeSetPin
+	var saved inv.TaskDatasetPin
 	if dataset.DecodeJSON([]byte(raw), &saved) == nil && saved.Definition != nil {
 		flags[inv.WorkspaceDefinitionFlag] = saved.Definition
-		if pin, err := json.Marshal(saved.ResolvedKnowledgeSet); err == nil {
+		if pin, err := json.Marshal(saved.ResolvedDataset); err == nil {
 			return pin
 		}
 	}

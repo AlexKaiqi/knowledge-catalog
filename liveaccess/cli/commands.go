@@ -3,9 +3,9 @@ package cli
 import "strings"
 
 var commandEntries = []Command{
-	{Path: "binding show", Handler: "knowledge-binding-show", Action: "knowledge.binding.resolve", Flags: strings.Fields("repo dataset commit ref object aspect member"), Groups: []string{"knowledge"}},
-	{Path: "access", Handler: "knowledge-access", Action: "resource.access", Flags: strings.Fields("repo dataset commit ref object aspect member"), Groups: []string{"knowledge"}},
-	{Path: "invoke", Handler: "knowledge-invoke", Action: "resource.access", Flags: strings.Fields("repo dataset commit ref object implementation operation input"), Groups: []string{"knowledge"}},
+	{Path: "binding show", Handler: "object-binding-show", Action: "object.binding.resolve", Flags: strings.Fields("repo dataset commit ref object aspect member"), Groups: []string{"object"}},
+	{Path: "access", Handler: "object-access", Action: "resource.access", Flags: strings.Fields("repo dataset commit ref object aspect member"), Groups: []string{"object"}},
+	{Path: "invoke", Handler: "object-invoke", Action: "resource.access", Flags: strings.Fields("repo dataset commit ref object implementation operation input"), Groups: []string{"object"}},
 }
 
 func Commands() []Command {

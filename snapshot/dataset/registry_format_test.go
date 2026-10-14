@@ -128,8 +128,8 @@ func TestCatalogRegistryRejectsMalformedRecords(t *testing.T) {
 			files[tc.path] = tc.body
 			store := seedRegistryFiles(t, files)
 			before, _ := store.Head(snapshot.DefaultRef)
-			if _, err := catalog.OpenSnapshotRegistry(store, ""); kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
-				t.Fatalf("malformed registry must return KNOWLEDGE_SET_INVALID: %v", err)
+			if _, err := catalog.OpenSnapshotRegistry(store, ""); kernel.CodeOf(err) != kernel.ErrDatasetInvalid {
+				t.Fatalf("malformed registry must return DATASET_INVALID: %v", err)
 			}
 			if after, _ := store.Head(snapshot.DefaultRef); after != before {
 				t.Fatal("validation mutated authority")
@@ -190,7 +190,7 @@ func TestCatalogRegistryRejectsAmbiguousLayoutAndPublication(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			store := seedRegistryFiles(t, tc.files)
-			if _, err := catalog.OpenSnapshotRegistry(store, ""); kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
+			if _, err := catalog.OpenSnapshotRegistry(store, ""); kernel.CodeOf(err) != kernel.ErrDatasetInvalid {
 				t.Fatalf("malformed state accepted: %v", err)
 			}
 		})
@@ -216,8 +216,8 @@ func TestSnapshotRegistryReleaseLifecycleKeepsPublishedBytes(t *testing.T) {
 	if err := cat.RegisterRepository("table-meta"); err != nil {
 		t.Fatal(err)
 	}
-	sources := []catalog.KnowledgeSetSource{{Repository: "table-meta", Selector: snapshot.DefaultRef, Path: catalog.MountPath("tables")}}
-	if _, err := cat.DefineKnowledgeSet("orders", 1, sources); err != nil {
+	sources := []catalog.DatasetSource{{Repository: "table-meta", Selector: snapshot.DefaultRef, Path: catalog.MountPath("tables")}}
+	if _, err := cat.DefineDataset("orders", 1, sources); err != nil {
 		t.Fatal(err)
 	}
 	v1, _ := reg.Head()
@@ -230,10 +230,10 @@ func TestSnapshotRegistryReleaseLifecycleKeepsPublishedBytes(t *testing.T) {
 	if _, err := source.ApplyTreeCommit(snapshot.TreeChangeSet{TargetRepository: source.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: beforeSource, ExpectedTargetCommit: beforeSource, Changes: []snapshot.TreeChange{{Path: "table.txt", Content: []byte("new version")}}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := cat.DefineKnowledgeSet("orders", 2, sources); err != nil {
+	if _, err := cat.DefineDataset("orders", 2, sources); err != nil {
 		t.Fatal(err)
 	}
-	if err := cat.RetireKnowledgeSet("orders"); err != nil {
+	if err := cat.RetireDataset("orders"); err != nil {
 		t.Fatal(err)
 	}
 	if err := cat.UnregisterRepository("table-meta"); err != nil {
@@ -253,7 +253,7 @@ func TestSnapshotRegistryReleaseLifecycleKeepsPublishedBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 	state, err := reopened.Load()
-	if err != nil || len(state.Repositories) != 0 || len(state.DatasetVersions) != 2 || !state.KnowledgeSets[0].Retired {
+	if err != nil || len(state.Repositories) != 0 || len(state.DatasetVersions) != 2 || !state.Datasets[0].Retired {
 		t.Fatalf("lifecycle recovery: %#v %v", state, err)
 	}
 	if got, _ := reopened.Head(); got != head {
@@ -281,15 +281,15 @@ func TestSnapshotRegistryRejectsDatasetFilenameCollisionsWithoutCommit(t *testin
 	if err := cat.RegisterRepository("table-meta"); err != nil {
 		t.Fatal(err)
 	}
-	sources := []catalog.KnowledgeSetSource{{Repository: "table-meta", Selector: snapshot.DefaultRef}}
-	if _, err := cat.DefineKnowledgeSet("orders:a", 1, sources); err != nil {
+	sources := []catalog.DatasetSource{{Repository: "table-meta", Selector: snapshot.DefaultRef}}
+	if _, err := cat.DefineDataset("orders:a", 1, sources); err != nil {
 		t.Fatal(err)
 	}
 	head, _ := reg.Head()
-	if _, err := cat.DefineKnowledgeSet("orders/a", 1, sources); kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
+	if _, err := cat.DefineDataset("orders/a", 1, sources); kernel.CodeOf(err) != kernel.ErrDatasetInvalid {
 		t.Fatal("colliding identities accepted", err)
 	}
-	if got, _ := reg.Head(); got != head || len(cat.DumpState().KnowledgeSets) != 1 {
+	if got, _ := reg.Head(); got != head || len(cat.DumpState().Datasets) != 1 {
 		t.Fatal("rejected collision changed accepted state")
 	}
 }
@@ -316,7 +316,7 @@ func TestSnapshotRegistryPreservesIntegerRevisionExactly(t *testing.T) {
 	if int64(int(wideRevision)) == wideRevision {
 		revision = int(wideRevision)
 	}
-	if _, err := cat.DefineKnowledgeSet("orders", revision, []catalog.KnowledgeSetSource{{Repository: "table-meta", Selector: snapshot.DefaultRef}}); err != nil {
+	if _, err := cat.DefineDataset("orders", revision, []catalog.DatasetSource{{Repository: "table-meta", Selector: snapshot.DefaultRef}}); err != nil {
 		t.Fatal(err)
 	}
 	reopened, err := catalog.OpenSnapshotRegistry(authority, "")
@@ -324,7 +324,7 @@ func TestSnapshotRegistryPreservesIntegerRevisionExactly(t *testing.T) {
 		t.Fatal("accepted integer revision became unreadable", err)
 	}
 	state, err := reopened.Load()
-	if err != nil || state.KnowledgeSets[0].Revision != revision || state.DatasetVersions[0].Revision != revision {
+	if err != nil || state.Datasets[0].Revision != revision || state.DatasetVersions[0].Revision != revision {
 		t.Fatalf("integer revision lost precision: %#v %v", state, err)
 	}
 }

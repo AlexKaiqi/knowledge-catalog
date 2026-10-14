@@ -3,12 +3,12 @@ package cli
 import "strings"
 
 var commandEntries = []Command{
-	{Path: "read", Handler: "knowledge-read", Action: "knowledge.read", Flags: words("dataset commit ref"), Operands: []string{"reference"}, Groups: []string{"knowledge"}},
-	{Path: "resolve", Handler: "knowledge-resolve", Action: "knowledge.read", Flags: words("repo dataset commit ref object aspect member"), Groups: []string{"knowledge"}},
-	{Path: "log", Handler: "knowledge-log", Action: "knowledge.history.read", Flags: words("repo dataset commit ref object limit continuation"), Groups: []string{"knowledge"}},
-	{Path: "provenance", Handler: "knowledge-provenance", Action: "knowledge.provenance", Flags: words("repo dataset commit ref object"), Groups: []string{"knowledge"}},
-	{Path: "schema list", Handler: "knowledge-schema-list", Action: "knowledge.schema.read", Flags: words("repo commit ref limit continuation"), Groups: []string{"knowledge"}},
-	{Path: "schema describe", Handler: "knowledge-schema-describe", Action: "knowledge.schema.read", Flags: words("repo dataset commit ref object"), Groups: []string{"knowledge"}},
+	{Path: "read", Handler: "object-read", Action: "object.read", Flags: words("dataset commit ref"), Operands: []string{"reference"}, Groups: []string{"object"}},
+	{Path: "resolve", Handler: "object-resolve", Action: "object.read", Flags: words("repo dataset commit ref object aspect member"), Groups: []string{"object"}},
+	{Path: "log", Handler: "object-log", Action: "object.history.read", Flags: words("repo dataset commit ref object limit continuation"), Groups: []string{"object"}},
+	{Path: "provenance", Handler: "object-provenance", Action: "object.provenance", Flags: words("repo dataset commit ref object"), Groups: []string{"object"}},
+	{Path: "schema list", Handler: "object-schema-list", Action: "object.schema.read", Flags: words("repo commit ref limit continuation"), Groups: []string{"object"}},
+	{Path: "schema describe", Handler: "object-schema-describe", Action: "object.schema.read", Flags: words("repo dataset commit ref object"), Groups: []string{"object"}},
 	{Path: "writer put", Handler: "writer-put", Action: "writer.commit", Flags: writeFlags("value file value-source schema-ref path-hint"), Operands: []string{"reference"}, Groups: []string{"writer", "publishing"}},
 	{Path: "writer remove", Handler: "writer-remove", Action: "writer.commit", Flags: writeFlags(""), Operands: []string{"reference"}, Groups: []string{"writer", "publishing"}},
 }
@@ -49,10 +49,10 @@ func ModelHelp() string {
   Address 指定可独立维护的整个对象、Aspect 或 Member；Relation 是有独立身份、角色端点并引用对象的关系声明。
   对象 URN 编码来源仓与 object_id；# 后的 JSON Pointer 定位内容，版本由读取依据另行固定。
   例：订单对象的 /columns/order_id 是 Member，/columns/order_id/constraints/nullable 是其中的数据。
-  kc read 'urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:table%2Forders#/columns/order_id/constraints/nullable'
+  kc read 'urn:kc:object:kr%3A%2F%2Fscene%2Fobject:table%2Forders#/columns/order_id/constraints/nullable'
   read 读取正文或指定数据；writer put/remove 替换或删除完整维护单元；log/provenance 核对历史与来源。
-  Schema 可选，采用后约束对应知识；schema list/describe 查看其结构与约束，读取深字段不产生新的写粒度。
-  深入版本化模型定义见 kc help read 的系统知识示例；是否可读由实际服务出版与当前权限决定。
+  Schema 可选，采用后约束对应对象；schema list/describe 查看其结构与约束，读取深字段不产生新的写粒度。
+  深入版本化模型定义见 kc help read 的系统对象示例；是否可读由实际服务出版与当前权限决定。
   具体参数与恢复：kc help read | kc help writer put | kc help writer remove | kc help schema
 
 `

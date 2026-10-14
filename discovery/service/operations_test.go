@@ -8,7 +8,7 @@ import (
 
 	index "kc/discovery/projection"
 	"kc/kernel"
-	knowledgeserving "kc/liveaccess"
+	objectserving "kc/liveaccess"
 	objectmodel "kc/object"
 	"kc/object/reader"
 )
@@ -32,7 +32,7 @@ type operationsLookup struct{ repo objectmodel.Repository }
 
 func (l operationsLookup) Require(id kernel.RepositoryID, _ kernel.ErrorCode) (objectmodel.Repository, error) {
 	if l.repo == nil || id != l.repo.ID() {
-		return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "missing repository")
+		return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "missing repository")
 	}
 	return l.repo, nil
 }
@@ -66,7 +66,7 @@ func (p *projectionPort) StateView(kernel.RepositoryID, kernel.CommitID) (string
 
 type controllerPort struct {
 	calls   []string
-	state   knowledgeserving.StateLookup
+	state   objectserving.StateLookup
 	request objectmodel.RequestContext
 }
 
@@ -91,8 +91,8 @@ func (p *controllerPort) SetObservationSource(source index.ObservationSource) {
 
 type stateLookupPort struct{}
 
-func (stateLookupPort) LookupState(context.Context, knowledgeserving.StateLookupRequest) (knowledgeserving.StateObservation, error) {
-	return knowledgeserving.StateObservation{}, nil
+func (stateLookupPort) LookupState(context.Context, objectserving.StateLookupRequest) (objectserving.StateObservation, error) {
+	return objectserving.StateObservation{}, nil
 }
 
 func TestProjectionDescribeExecutorUsesPinnedRepository(t *testing.T) {
@@ -194,7 +194,7 @@ func TestAccessDescribeExecutorPlansPinnedMembers(t *testing.T) {
 			}
 			return repo, nil
 		},
-	}).Execute(context.Background(), AccessDescribeRequest{Pin: reader.KnowledgeSetPin{
+	}).Execute(context.Background(), AccessDescribeRequest{Pin: reader.DatasetPin{
 		SetID:    "workspace",
 		Revision: 3,
 		Repositories: map[kernel.RepositoryID]kernel.CommitID{

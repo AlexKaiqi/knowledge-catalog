@@ -12,23 +12,23 @@ import (
 
 const WorkspaceDefinitionFlag = "_workspace-definition"
 
-// TaskKnowledgeSetPin is a client-owned, portable task input. It keeps the
-// ResolvedKnowledgeSet fields intact and adds the unpublished recipe needed to
+// TaskDatasetPin is a client-owned, portable task input. It keeps the
+// ResolvedDataset fields intact and adds the unpublished recipe needed to
 // replay its membership and layout. It is never a Registry registry object.
-type TaskKnowledgeSetPin struct {
-	dataset.ResolvedKnowledgeSet
-	Definition *dataset.KnowledgeSet `json:"definition,omitempty"`
+type TaskDatasetPin struct {
+	dataset.ResolvedDataset
+	Definition *dataset.Dataset `json:"definition,omitempty"`
 }
 
-func SuppliedKnowledgeSet(flags map[string]invoke.FlagValue) *dataset.KnowledgeSet {
-	def, _ := flags[WorkspaceDefinitionFlag].(*dataset.KnowledgeSet)
+func SuppliedDataset(flags map[string]invoke.FlagValue) *dataset.Dataset {
+	def, _ := flags[WorkspaceDefinitionFlag].(*dataset.Dataset)
 	return def
 }
 
 // hoistTaskPinDefinition lifts an embedded temporary recipe out of --pin before
 // mixed-basis checks or authorization run. It is safe to call repeatedly.
 func HoistTaskPinDefinition(flags map[string]invoke.FlagValue) error {
-	if invoke.FlagString(flags, "repo") != "" || SuppliedKnowledgeSet(flags) != nil {
+	if invoke.FlagString(flags, "repo") != "" || SuppliedDataset(flags) != nil {
 		return nil
 	}
 	raw := strings.TrimSpace(invoke.FlagString(flags, "pin"))
@@ -38,7 +38,7 @@ func HoistTaskPinDefinition(flags map[string]invoke.FlagValue) error {
 	if !strings.HasPrefix(raw, "{") {
 		return nil
 	}
-	var saved TaskKnowledgeSetPin
+	var saved TaskDatasetPin
 	if err := dataset.DecodeJSON([]byte(raw), &saved); err != nil {
 		return nil
 	}
@@ -48,12 +48,12 @@ func HoistTaskPinDefinition(flags map[string]invoke.FlagValue) error {
 	if invoke.FlagString(flags, "dataset") != "" {
 		return kernel.Fail(kernel.ErrUsageInvalid, "choose a named --dataset or a temporary definition")
 	}
-	if err := dataset.ValidateKnowledgeSet(*saved.Definition); err != nil {
+	if err := dataset.ValidateDataset(*saved.Definition); err != nil {
 		return err
 	}
 	flags[WorkspaceDefinitionFlag] = saved.Definition
 	delete(flags, "dataset")
-	pin, err := json.Marshal(saved.ResolvedKnowledgeSet)
+	pin, err := json.Marshal(saved.ResolvedDataset)
 	if err != nil {
 		return err
 	}
@@ -61,18 +61,18 @@ func HoistTaskPinDefinition(flags map[string]invoke.FlagValue) error {
 	return nil
 }
 
-// PrepareKnowledgePinContext normalizes --pin and --dataset-file into the
+// PrepareObjectPinContext normalizes --pin and --dataset-file into the
 // internal coordinates openServing expects. Remote CLI and embedded application
-// paths both call this before knowledge verbs run.
-func PrepareKnowledgePinContext(flags map[string]invoke.FlagValue) error {
+// paths both call this before object verbs run.
+func PrepareObjectPinContext(flags map[string]invoke.FlagValue) error {
 	if invoke.FlagString(flags, "repo") != "" {
 		return nil
 	}
 	if err := HoistTaskPinDefinition(flags); err != nil {
 		return err
 	}
-	var definition *dataset.KnowledgeSet
-	if supplied := SuppliedKnowledgeSet(flags); supplied != nil {
+	var definition *dataset.Dataset
+	if supplied := SuppliedDataset(flags); supplied != nil {
 		definition = supplied
 	}
 	if path := invoke.FlagString(flags, "dataset-file"); path != "" {
@@ -80,11 +80,11 @@ func PrepareKnowledgePinContext(flags map[string]invoke.FlagValue) error {
 		if err != nil {
 			return err
 		}
-		recipe, err := dataset.ParseKnowledgeSetRecipe(raw)
+		recipe, err := dataset.ParseDatasetRecipe(raw)
 		if err != nil {
 			return err
 		}
-		definition = &dataset.KnowledgeSet{Revision: 1, Sources: recipe.Sources(), Metadata: recipe.Metadata}
+		definition = &dataset.Dataset{Revision: 1, Sources: recipe.Sources(), Metadata: recipe.Metadata}
 	}
 	if raw := strings.TrimSpace(invoke.FlagString(flags, "pin")); raw != "" && definition == nil {
 		if !strings.HasPrefix(raw, "{") {
@@ -94,7 +94,7 @@ func PrepareKnowledgePinContext(flags map[string]invoke.FlagValue) error {
 			}
 			raw = string(content)
 		}
-		var saved TaskKnowledgeSetPin
+		var saved TaskDatasetPin
 		if err := dataset.DecodeJSON([]byte(raw), &saved); err != nil {
 			return kernel.Fail(kernel.ErrUsageInvalid, "--pin is not a valid task pin: %v", err)
 		}
@@ -104,7 +104,7 @@ func PrepareKnowledgePinContext(flags map[string]invoke.FlagValue) error {
 			}
 			definition = saved.Definition
 		}
-		pin, err := json.Marshal(saved.ResolvedKnowledgeSet)
+		pin, err := json.Marshal(saved.ResolvedDataset)
 		if err != nil {
 			return err
 		}
@@ -116,13 +116,13 @@ func PrepareKnowledgePinContext(flags map[string]invoke.FlagValue) error {
 	if definition != nil {
 		if invoke.FlagString(flags, "dataset") != "" {
 			switch invoke.FlagString(flags, "_action") {
-			case "knowledge.search", "knowledge.rerank":
+			case "object.search", "object.rerank":
 				return kernel.Fail(kernel.ErrForbidden, "a caller label cannot select a published Workspace while supplying a temporary definition")
 			default:
 				return kernel.Fail(kernel.ErrUsageInvalid, "choose a named --dataset or a temporary definition")
 			}
 		}
-		if err := dataset.ValidateKnowledgeSet(*definition); err != nil {
+		if err := dataset.ValidateDataset(*definition); err != nil {
 			return err
 		}
 		flags[WorkspaceDefinitionFlag] = definition

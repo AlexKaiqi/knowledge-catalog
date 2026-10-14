@@ -5,7 +5,7 @@ import (
 	objectmodel "kc/object"
 )
 
-// nativeReadRepository retains only knowledge read capabilities. Embedding a private read contract prevents write methods and the original
+// nativeReadRepository retains only object read capabilities. Embedding a private read contract prevents write methods and the original
 // provider from escaping through an exported field. Optional ports delegate to the provider or fail closed;
 // they never reinterpret native values through the compatibility file tree.
 type readRepository interface {
@@ -16,7 +16,7 @@ type nativeReadRepository struct {
 	readRepository
 }
 
-func (r *nativeReadRepository) ReadReference(ref objectmodel.Reference, at kernel.CommitID) (objectmodel.KnowledgeValue, error) {
+func (r *nativeReadRepository) ReadReference(ref objectmodel.Reference, at kernel.CommitID) (objectmodel.ObjectValue, error) {
 	return readRepositoryReference(r.readRepository, ref, at)
 }
 
@@ -35,7 +35,7 @@ func (r *nativeReadRepository) StoreDigest() kernel.Digest {
 	return ""
 }
 
-func (r *nativeReadRepository) ReadMany(ids []objectmodel.ObjectID, at kernel.CommitID) (map[objectmodel.ObjectID]objectmodel.KnowledgeValue, error) {
+func (r *nativeReadRepository) ReadMany(ids []objectmodel.ObjectID, at kernel.CommitID) (map[objectmodel.ObjectID]objectmodel.ObjectValue, error) {
 	port, err := nativeReadPort[objectmodel.BatchReadStore](r.readRepository, "batch")
 	if err != nil {
 		return nil, err
@@ -99,7 +99,7 @@ func (r *nativeReadRepository) FastChangedObjects(from, to kernel.CommitID) ([]o
 	return port.FastChangedObjects(from, to)
 }
 
-func (r *nativeReadRepository) ReadManyAtPaths(ids []objectmodel.ObjectID, at kernel.CommitID, paths map[objectmodel.ObjectID][]string) (map[objectmodel.ObjectID]objectmodel.KnowledgeValue, error) {
+func (r *nativeReadRepository) ReadManyAtPaths(ids []objectmodel.ObjectID, at kernel.CommitID, paths map[objectmodel.ObjectID][]string) (map[objectmodel.ObjectID]objectmodel.ObjectValue, error) {
 	port, err := nativeReadPort[objectmodel.UnitPathsHydrator](r.readRepository, "unit path hydration")
 	if err != nil {
 		return nil, err
@@ -107,18 +107,18 @@ func (r *nativeReadRepository) ReadManyAtPaths(ids []objectmodel.ObjectID, at ke
 	return port.ReadManyAtPaths(ids, at, paths)
 }
 
-func (r *nativeReadRepository) ReadKnowledgeFile(path string, at kernel.CommitID) ([]byte, error) {
-	port, err := nativeReadPort[objectmodel.KnowledgeFileReader](r.readRepository, "knowledge file")
+func (r *nativeReadRepository) ReadObjectFile(path string, at kernel.CommitID) ([]byte, error) {
+	port, err := nativeReadPort[objectmodel.ObjectFileReader](r.readRepository, "object file")
 	if err != nil {
 		return nil, err
 	}
-	return port.ReadKnowledgeFile(path, at)
+	return port.ReadObjectFile(path, at)
 }
 
-func (r *nativeReadRepository) ReadAddressAtPaths(address objectmodel.Address, at kernel.CommitID, paths []string) (objectmodel.KnowledgeValue, error) {
+func (r *nativeReadRepository) ReadAddressAtPaths(address objectmodel.Address, at kernel.CommitID, paths []string) (objectmodel.ObjectValue, error) {
 	port, err := nativeReadPort[objectmodel.AddressPathsReader](r.readRepository, "scoped address")
 	if err != nil {
-		return objectmodel.KnowledgeValue{}, err
+		return objectmodel.ObjectValue{}, err
 	}
 	return port.ReadAddressAtPaths(address, at, paths)
 }

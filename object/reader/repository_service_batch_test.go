@@ -113,7 +113,7 @@ func TestReadManyLoadsOnlyRequestedObjectLocatorsAndUnits(t *testing.T) {
 		t.Fatal(err)
 	}
 	counting := &locatorCountingRepository{Store: s.Repo, TreeStore: s.Repo, reads: map[string]int{}}
-	repo, err := reader.NewReader(nil).Wrap(counting, kernel.ErrKnowledgeRefUnresolved)
+	repo, err := reader.NewReader(nil).Wrap(counting, kernel.ErrObjectRefUnresolved)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -23,21 +23,21 @@ import (
 // file entries outside every mount. Delivery-time content conflicts refuse
 // instead of picking a winner by source order.
 
-func fileDeliverySources(paths ...string) []dataset.KnowledgeSetSource {
+func fileDeliverySources(paths ...string) []dataset.DatasetSource {
 	sources := directoryDeliverySources(paths...)
 	return append(sources,
-		dataset.KnowledgeSetSource{
+		dataset.DatasetSource{
 			Repository: deliveryData, Selector: snapshot.DefaultRef,
 			File: "semantic/metrics/README.md", Target: "reference/policies/metric.md",
 		},
-		dataset.KnowledgeSetSource{
+		dataset.DatasetSource{
 			Repository: deliveryDocs, Selector: snapshot.DefaultRef,
 			File: "docs/guides/summary.md", Target: "data/exports/summary.txt",
 		},
 	)
 }
 
-func publishFileDelivery(t *testing.T, f *directoryDelivery, revision int, paths ...string) dataset.ResolvedKnowledgeSet {
+func publishFileDelivery(t *testing.T, f *directoryDelivery, revision int, paths ...string) dataset.ResolvedDataset {
 	t.Helper()
 	f.write(t, deliveryDocs, "docs-v"+string(rune('0'+revision)), []snapshot.TreeChange{
 		{Path: "docs/guides/summary.md", Content: []byte("guide v1 summary\n")},
@@ -114,7 +114,7 @@ func TestDatasetFileDeliveryServesRenamedAndMixedEntries(t *testing.T) {
 		// content. The serving version dropped the entry, and the mapped
 		// source file does not exist, so the miss answers exactly like a
 		// mount-relative read of the same path — no content, no leak.
-		if err == nil || kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved || len(out.Content) != 0 {
+		if err == nil || kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved || len(out.Content) != 0 {
 			t.Fatalf("the serving version dropped the per-file entry; reads must follow the version: %#v err=%v", out, err)
 		}
 	})
@@ -125,11 +125,11 @@ func TestDatasetFileDeliveryRejectsContentConflicts(t *testing.T) {
 	accepted := f.mounts(t, nil)
 	beforeHead, beforeState, beforeHistory := f.registryState(t)
 	sources := append(directoryDeliverySources("reference/policies", "reference/guides", "data/metrics"),
-		dataset.KnowledgeSetSource{
+		dataset.DatasetSource{
 			Repository: deliveryData, Selector: snapshot.DefaultRef,
 			File: "semantic/metrics/README.md", Target: "reference/policies/README.md",
 		})
-	if err := f.publish(2, sources); kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
+	if err := f.publish(2, sources); kernel.CodeOf(err) != kernel.ErrDatasetInvalid {
 		t.Fatalf("conflicting delivered content must be rejected before publication: %v", err)
 	}
 	afterHead, afterState, afterHistory := f.registryState(t)
@@ -162,7 +162,7 @@ func (f *directoryDelivery) registryState(t *testing.T) (string, dataset.State, 
 	return head, dataset.NormalizeState(opened.Datasets.DumpState()), history
 }
 
-func assertListing(t *testing.T, f *directoryDelivery, pin dataset.ResolvedKnowledgeSet, dir string, want ...string) {
+func assertListing(t *testing.T, f *directoryDelivery, pin dataset.ResolvedDataset, dir string, want ...string) {
 	t.Helper()
 	var out snapshotclient.WorkspaceFileDirectoryResponse
 	if err := f.reader.WorkspaceFilesService().Directory(context.Background(), snapshotclient.WorkspaceFileDirectoryRequest{
@@ -194,7 +194,7 @@ func assertListing(t *testing.T, f *directoryDelivery, pin dataset.ResolvedKnowl
 	}
 }
 
-func (f *directoryDelivery) assertDeliveredRead(t *testing.T, pin dataset.ResolvedKnowledgeSet, path, content string) {
+func (f *directoryDelivery) assertDeliveredRead(t *testing.T, pin dataset.ResolvedDataset, path, content string) {
 	t.Helper()
 	var out snapshotclient.WorkspaceFileReadResponse
 	if err := f.reader.WorkspaceFilesService().Read(context.Background(), snapshotclient.WorkspaceFileReadRequest{
@@ -325,8 +325,8 @@ func TestDatasetDeliveryRechecksFileReadAfterGrantUpdate(t *testing.T) {
 	}
 	updateDeliveryConsumerGrant(t, f, []string{"dataset.resolve"})
 
-	var resolved dataset.ResolvedKnowledgeSet
-	if err := f.reader.SnapshotService().ResolveKnowledgeSet(context.Background(), "delivery", snapshotclient.KnowledgeSetResolveRequest{}, snapshotclient.RequestOptions{}, &resolved); err != nil || !reflect.DeepEqual(resolved, opened.Pin) {
+	var resolved dataset.ResolvedDataset
+	if err := f.reader.SnapshotService().ResolveDataset(context.Background(), "delivery", snapshotclient.DatasetResolveRequest{}, snapshotclient.RequestOptions{}, &resolved); err != nil || !reflect.DeepEqual(resolved, opened.Pin) {
 		t.Fatalf("file-only revocation changed resolve or its fixed publication: %#v %v", resolved, err)
 	}
 	var mounts snapshotclient.WorkspaceFileMountsResponse
@@ -395,8 +395,8 @@ func updateDeliveryConsumerGrant(t *testing.T, f *directoryDelivery, actions []s
 func TestDatasetDeliveryFiltersUnauthorizedSourcesBeforeClone(t *testing.T) {
 	f := newDirectoryDelivery(t)
 	sources := append(directoryDeliverySources("reference/policies", "reference/guides", "data/metrics"),
-		dataset.KnowledgeSetSource{Repository: deliveryDocs, Selector: snapshot.DefaultRef, File: "docs/guides/README.md", Target: "data/exports/guide.txt"},
-		dataset.KnowledgeSetSource{Repository: deliveryData, Selector: snapshot.DefaultRef, File: "semantic/metrics/README.md", Target: "unreadable/metric.txt"},
+		dataset.DatasetSource{Repository: deliveryDocs, Selector: snapshot.DefaultRef, File: "docs/guides/README.md", Target: "data/exports/guide.txt"},
+		dataset.DatasetSource{Repository: deliveryData, Selector: snapshot.DefaultRef, File: "semantic/metrics/README.md", Target: "unreadable/metric.txt"},
 	)
 	if err := f.publish(2, sources); err != nil {
 		t.Fatal(err)

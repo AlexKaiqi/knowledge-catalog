@@ -16,7 +16,7 @@ var updateSystemEntrypoints = flag.Bool("update-system-entrypoints", false, "pub
 
 // This is both the explicit publication generator and a drift guard. Normal
 // test runs never write; go generate ./cli refreshes the authored tree without
-// exporting CLI internals or importing the CLI into the Knowledge protocol.
+// exporting CLI internals or importing the CLI into the Object protocol.
 func TestSystemCLIEntrypoints(t *testing.T) {
 	paths := make([]string, 0, len(cliSurface)+1)
 	for path := range cliSurface {
@@ -84,21 +84,21 @@ func systemCapabilityGroup(action string) string {
 		return "datasets"
 	case strings.HasPrefix(action, "admin.grants."):
 		return "permissions"
-	case strings.HasPrefix(action, "knowledge.schema."):
+	case strings.HasPrefix(action, "object.schema."):
 		return "schemas"
-	case action == "knowledge.read", strings.HasPrefix(action, "knowledge.history."), action == "knowledge.provenance":
-		return "read-knowledge"
-	case action == "knowledge.search":
-		return "search-knowledge"
-	case action == "knowledge.relations", action == "knowledge.traverse":
+	case action == "object.read", strings.HasPrefix(action, "object.history."), action == "object.provenance":
+		return "read-object"
+	case action == "object.search":
+		return "search-object"
+	case action == "object.relations", action == "object.traverse":
 		return "explore-relations"
-	case action == "resource.access", strings.HasPrefix(action, "knowledge.binding."):
+	case action == "resource.access", strings.HasPrefix(action, "object.binding."):
 		return "resource-access"
 	case strings.HasPrefix(action, "writer."):
-		return "publish-knowledge"
+		return "publish-object"
 	case strings.HasPrefix(action, "governance."):
 		return "governance"
-	case strings.HasPrefix(action, "projection."), action == "knowledge.access.describe":
+	case strings.HasPrefix(action, "projection."), action == "object.access.describe":
 		return "projections"
 	case strings.HasPrefix(action, "operations.hooks."), strings.HasPrefix(action, "operations.gates."):
 		return "extensions"

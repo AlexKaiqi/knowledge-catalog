@@ -8,7 +8,7 @@ import (
 
 // TestUserJourneyAttachExistingRepository proves authority attachment as a
 // user operation. The existing lakeFS authority is opened over its DSN and
-// registered in the Catalog; opening may bootstrap the Knowledge tables.
+// registered in the Catalog; opening may bootstrap the Object tables.
 func TestUserJourneyAttachExistingRepository(t *testing.T) {
 	h := testkit.TempDir(t)
 	sourceHome := testkit.TempDir(t)
@@ -74,10 +74,10 @@ func TestUserJourneyManageAgentAccess(t *testing.T) {
 	}
 }
 
-// TestUserJourneyKnowledgeGrantDoesNotAuthorizeAccess separates two things a
+// TestUserJourneyObjectGrantDoesNotAuthorizeAccess separates two things a
 // user can easily confuse: a permissions Aspect describes source-system
-// knowledge, while kc allow controls who may consume a Repository/Workspace.
-func TestUserJourneyKnowledgeGrantDoesNotAuthorizeAccess(t *testing.T) {
+// object, while kc allow controls who may consume a Repository/Workspace.
+func TestUserJourneyObjectGrantDoesNotAuthorizeAccess(t *testing.T) {
 	h := testkit.TempDir(t)
 
 	repoID := "kr://acme/public/warehouse"

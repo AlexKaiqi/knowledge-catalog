@@ -67,7 +67,7 @@ func newFakeLakeFS(t *testing.T) *fakeLakeFS {
 
 func (f *fakeLakeFS) open(t *testing.T, id string) lakeFSStore {
 	t.Helper()
-	repo, err := openLakeFSForTest(kernel.RepositoryID(id), f.server.URL+"/knowledge", "access:secret")
+	repo, err := openLakeFSForTest(kernel.RepositoryID(id), f.server.URL+"/object", "access:secret")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ func (f *fakeLakeFS) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		f.serveDirectRead(w, r)
 		return
 	}
-	const root = "/api/v1/repositories/knowledge"
+	const root = "/api/v1/repositories/object"
 	escapedPath := r.URL.EscapedPath()
 	if !strings.HasPrefix(escapedPath, root) {
 		http.NotFound(w, r)
@@ -189,7 +189,7 @@ func (f *fakeLakeFS) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	suffix := strings.TrimPrefix(escapedPath, root)
 	switch {
 	case suffix == "" && r.Method == http.MethodGet:
-		writeJSON(w, http.StatusOK, map[string]any{"id": "knowledge", "default_branch": "main", "storage_namespace": "s3://bucket/knowledge"})
+		writeJSON(w, http.StatusOK, map[string]any{"id": "object", "default_branch": "main", "storage_namespace": "s3://bucket/object"})
 	case suffix == "/branches" && r.Method == http.MethodPost:
 		f.createBranch(w, r)
 	case strings.HasPrefix(suffix, "/branches/"):

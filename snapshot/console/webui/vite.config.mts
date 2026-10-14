@@ -36,12 +36,12 @@ export default ({ command }: ConfigEnv) => {
     },
   };
   const proxy = {
-    ...Object.fromEntries(['/identity/v1', '/snapshot/v1', '/knowledge/v1', '/admin/v1']
+    ...Object.fromEntries(['/identity/v1', '/snapshot/v1', '/object/v1', '/admin/v1']
       .map((prefix) => [prefix, {target, changeOrigin: false}] as const)),
     '/api/v1': {target, changeOrigin: false},
     ...(authTarget ? {'/logout': nativeAuthProxy, '/oidc': nativeAuthProxy} : {}),
     // Every data request uses the product gateway; only original auth callbacks go native.
-    '^/(?!ui(?:/|$)|identity/v1|snapshot/v1|knowledge/v1|admin/v1|api/v1|logout|oidc)': {target, changeOrigin: false},
+    '^/(?!ui(?:/|$)|identity/v1|snapshot/v1|object/v1|admin/v1|api/v1|logout|oidc)': {target, changeOrigin: false},
   };
   const baseConfig = {
     base: '/ui/',

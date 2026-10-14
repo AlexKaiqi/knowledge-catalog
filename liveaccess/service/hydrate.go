@@ -25,34 +25,34 @@ func Open(declarations *reader.Serving, state liveaccess.StateLookup, identity k
 }
 
 // OpenRequest adds the correlation metadata that an out-of-process runtime
-// needs. The identity has already crossed the Knowledge Server's trusted
+// needs. The identity has already crossed the Object Server's trusted
 // authentication boundary; this package does not authenticate it again.
 func OpenRequest(declarations *reader.Serving, state liveaccess.StateLookup, request objectmodel.RequestContext) *Service {
 	return &Service{declarations: declarations, state: state, request: request}
 }
 
 // HydrateRepositoryValue applies the same logical READ semantics to one raw
-// KnowledgeValue at a fixed Repository commit. Projection control uses this
+// ObjectValue at a fixed Repository commit. Projection control uses this
 // entry point so exact READ and dynamic indexing cannot grow separate Binding
 // implementations.
-func HydrateRepositoryValue(ctx context.Context, repo objectmodel.Repository, value objectmodel.KnowledgeValue, state liveaccess.StateLookup, request objectmodel.RequestContext) (objectmodel.ObservedValue, error) {
+func HydrateRepositoryValue(ctx context.Context, repo objectmodel.Repository, value objectmodel.ObjectValue, state liveaccess.StateLookup, request objectmodel.RequestContext) (objectmodel.ObservedValue, error) {
 	return hydrateRepository(ctx, repo, value, state, request, nil, true)
 }
 
 // HydrateRepositoryRead composes an already read, fixed Repository result with
 // external units. Address and Pointer selections preserve the original shape;
 // one external failure is explained only at that unit's selected position.
-func HydrateRepositoryRead(ctx context.Context, repo objectmodel.Repository, value objectmodel.KnowledgeValue, state liveaccess.StateLookup, request objectmodel.RequestContext, selector *objectmodel.AspectSelector) (objectmodel.ObservedValue, error) {
+func HydrateRepositoryRead(ctx context.Context, repo objectmodel.Repository, value objectmodel.ObjectValue, state liveaccess.StateLookup, request objectmodel.RequestContext, selector *objectmodel.AspectSelector) (objectmodel.ObservedValue, error) {
 	return hydrateRepository(ctx, repo, value, state, request, selector, false)
 }
 
-func hydrateRepository(ctx context.Context, repo objectmodel.Repository, value objectmodel.KnowledgeValue, state liveaccess.StateLookup, request objectmodel.RequestContext, selector *objectmodel.AspectSelector, strict bool) (objectmodel.ObservedValue, error) {
+func hydrateRepository(ctx context.Context, repo objectmodel.Repository, value objectmodel.ObjectValue, state liveaccess.StateLookup, request objectmodel.RequestContext, selector *objectmodel.AspectSelector, strict bool) (objectmodel.ObservedValue, error) {
 	service, err := repositoryService(repo, value.Commit, state, request, strict)
 	if err != nil {
 		return objectmodel.ObservedValue{}, err
 	}
 	raw := objectmodel.FederatedValue{
-		KnowledgeRef: value.KnowledgeRef, Repository: repo.ID(), Commit: value.Commit,
+		ObjectRef: value.ObjectRef, Repository: repo.ID(), Commit: value.Commit,
 		ObjectID: value.Address.ObjectID, Address: value.Address, Value: value.Value,
 		Provenance: value.Provenance, Units: value.Units, Declarations: value.Declarations,
 		Reference: value.Reference, Locator: value.Locator, Digest: value.Digest,
@@ -65,14 +65,14 @@ func repositoryService(repo objectmodel.Repository, commit kernel.CommitID, stat
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "Repository read requires repository and fixed commit")
 	}
 	repos := map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit}
-	pin := reader.KnowledgeSetPin{
+	pin := reader.DatasetPin{
 		SetID:        "projection",
 		Repositories: repos,
 		Items:        reader.WholeRepositoryItems(repos),
 	}
 	declarations := reader.Open(func(id kernel.RepositoryID) (objectmodel.Repository, error) {
 		if id != repo.ID() {
-			return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "repository %s is not available", id)
+			return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "repository %s is not available", id)
 		}
 		return repo, nil
 	}, pin)
@@ -113,14 +113,14 @@ func (s *Service) Read(ctx context.Context, objectID objectmodel.ObjectID, selec
 // hits cannot disagree about State Binding content.
 func (s *Service) Hydrate(ctx context.Context, value objectmodel.FederatedValue, selector *objectmodel.AspectSelector) (objectmodel.ObservedValue, error) {
 	if s.declarations.Pin().Repositories[value.Repository] != value.Commit {
-		return objectmodel.ObservedValue{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "value is outside dataset release")
+		return objectmodel.ObservedValue{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "value is outside dataset release")
 	}
 	allowed, scopeErr := s.declarations.Contains(value.Repository, value.ObjectID)
 	if scopeErr != nil {
 		return objectmodel.ObservedValue{}, scopeErr
 	}
 	if !allowed {
-		return objectmodel.ObservedValue{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "value is outside dataset scope")
+		return objectmodel.ObservedValue{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "value is outside dataset scope")
 	}
 	result := objectmodel.ObservedValue{FederatedValue: value, Observations: []objectmodel.UnitObservation{}}
 	repo, err := s.interpretationRepository(value.Repository)
@@ -203,11 +203,11 @@ func (s *Service) boundAddressValue(address objectmodel.Address) ([]objectmodel.
 			Operations: binding.Operations, DescriptorRef: binding.DescriptorRef,
 		}}
 		out = append(out, objectmodel.FederatedValue{
-			KnowledgeRef: objectmodel.KnowledgeRef{Repository: binding.Repository, Object: address.ObjectID},
-			Repository:   binding.Repository,
-			Commit:       binding.DeclarationCommit,
-			ObjectID:     address.ObjectID,
-			Address:      address,
+			ObjectRef:  objectmodel.ObjectRef{Repository: binding.Repository, Object: address.ObjectID},
+			Repository: binding.Repository,
+			Commit:     binding.DeclarationCommit,
+			ObjectID:   address.ObjectID,
+			Address:    address,
 			Declarations: []objectmodel.UnitDeclaration{{
 				Address: address, SchemaRef: binding.SchemaRef, ValueSource: source,
 				DeclarationDigest: binding.DeclarationDigest,

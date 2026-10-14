@@ -67,7 +67,7 @@ func fixedFileReader(item DatasetItem, source func(kernel.RepositoryID) (snapsho
 	}
 	store, ok := source(item.Repository)
 	if !ok {
-		return nil, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "repository %s is not attached", item.Repository)
+		return nil, kernel.Fail(kernel.ErrDatasetInvalid, "repository %s is not attached", item.Repository)
 	}
 	if store.Archived() {
 		return nil, kernel.Fail(kernel.ErrRepositoryArchived, "repository %s is archived", item.Repository)
@@ -118,7 +118,7 @@ func checkPrefixFileConflict(prefix DatasetItem, file, target string, source fun
 		return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "repository %s requires directory paging to validate delivered path %s", prefix.Repository, target)
 	}
 	page, err := directory.ReadDirectory(snapshot.DirectoryRequest{Commit: prefix.Commit, Directory: file, Limit: 1})
-	if err != nil && kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+	if err != nil && kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		return err
 	}
 	if err != nil {
@@ -140,7 +140,7 @@ func checkFileAncestors(reader snapshot.TreeReader, file, prefix, target string,
 		}
 		if _, err := reader.ReadFile(probe, commit); err == nil {
 			return deliveredConflict(target)
-		} else if kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+		} else if kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 			return err
 		}
 		if probe == prefix {
@@ -151,7 +151,7 @@ func checkFileAncestors(reader snapshot.TreeReader, file, prefix, target string,
 }
 
 func deliveredConflict(target string) error {
-	return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "delivered path %s has conflicting sources", target)
+	return kernel.Fail(kernel.ErrDatasetInvalid, "delivered path %s has conflicting sources", target)
 }
 
 // The root prefix is fallback ownership. A declared non-root prefix excludes
@@ -201,5 +201,5 @@ func RouteDatasetFile(items []DatasetItem, deliveredPath string) (DatasetItem, e
 		prefix.File = file
 		return prefix, nil
 	}
-	return DatasetItem{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "delivered file path %s is not selected", deliveredPath)
+	return DatasetItem{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "delivered file path %s is not selected", deliveredPath)
 }

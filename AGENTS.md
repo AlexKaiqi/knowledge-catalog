@@ -32,12 +32,12 @@ go run ./cmd/kc -- help
 ## 红线
 
 - 不要在仓库根加 `collectors/`、`src/`、`tests/scenarios/`、源系统客户端或业务故事包。走查实体/Aspect/接入方 runtime 只放对应场景节点 `_materials/`；规模生成器与压测用例（场景树、环境配置模板、指标登记表）只放 `.data/scale/`。
-- 不要把 schema 写成项目源码。Schema 是知识对象，走 Writer；草稿只放 `.data/`。
+- 不要把 schema 写成项目源码。Schema 是对象，走 Writer；草稿只放 `.data/`。
 - 不要把协议字段、错误码、状态机写进 `AGENTS.md` 或设计 Markdown。已选定形状在公开 Go API、包 README、Conformance；它们必须符合设计，不能反向收窄设计。
 - 设计文档只在 `doc/` 维护，每篇都要能从 `doc/README.md` 经链接走到；不要给 `doc/` 下的 Markdown 加 frontmatter；根目录 Markdown 只有 README、AGENTS、TASK。
 - 不要删除或削弱契约/conformance/架构守卫断言，不要用 skip 让测试变绿。
 - 不要直写 git 绕过 Writer；不要新增 PATCH/跨 Repo 事务/APPEND Surface。
-- 不要把知识协议写进 `catalog/`；不要把 live 资源伪装成 `snapshot.Store`。
+- 不要把对象协议写进 `catalog/`；不要把 live 资源伪装成 `snapshot.Store`。
 - 不要安装未经批准的依赖；不要提交，除非用户明确要求。
 - 改协议旅程用例前读 `.data/scenes/README.md`。不要只写 `command succeeds`；不要把 `cli/testdata/scenes` 当成协议场景树。改压测用例前读 `.data/scale/scenes/README.md`，结构或指标改动后跑该目录 `perf_tree.py --check`。
 - 其它路径禁区、发权、hook/gate 与运行时约束见拥有该主题的文档和包 README。

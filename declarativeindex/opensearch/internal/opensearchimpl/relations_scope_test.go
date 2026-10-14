@@ -37,7 +37,7 @@ func TestRelationStorageRepositoryIsIndependentOfEndpoint(t *testing.T) {
 	engine := &openSearchEngine{base: server.URL, http: server.Client()}
 	page, err := engine.RetrieveRelations(retrieval.RelationRetrieveRequest{
 		Repository: "kr://source/graph", Basis: "graph-c1", Limit: 2,
-		Query: retrieval.RelationQuery{Endpoint: objectmodel.KnowledgeRef{Repository: "kr://source/entities", Object: "metric/gmv"}},
+		Query: retrieval.RelationQuery{Endpoint: objectmodel.ObjectRef{Repository: "kr://source/entities", Object: "metric/gmv"}},
 	})
 	if err != nil || len(page.Candidates) != 1 || !page.Exhausted {
 		t.Fatalf("cross-repository relation discovery: %#v %v", page, err)

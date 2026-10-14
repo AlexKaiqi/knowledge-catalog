@@ -2,7 +2,7 @@
 
 非 Canonical 的过程证据。身份与 trace 是横切上下文；access / retrieval / refine / feedback 是原始账；hitmap 与 training sample 是可重建派生视图。
 
-本包负责知识访问证据，不等于完整的运行监控。metric、诊断日志、distributed trace、健康检查与 SLO 的边界见 [服务边界](../doc/design/service.md)。写入与访问语义见 [服务边界](../doc/design/service.md)。
+本包负责对象访问证据，不等于完整的运行监控。metric、诊断日志、distributed trace、健康检查与 SLO 的边界见 [服务边界](../doc/design/service.md)。写入与访问语义见 [服务边界](../doc/design/service.md)。
 
 协议口：
 
@@ -15,7 +15,7 @@
 | `observability.go` | Recorder / AccessLog / Receipt |
 | `identity.go` / `trace.go` | 身份、代理关系与关联上下文校验 |
 | `access.go` / `retrieval.go` / `refine.go` / `feedback.go` | 版本化访问、候选检索、语义推理与监督反馈合同 |
-| `hitmap.go` | 派生访问聚合 `HitmapEntry`；不是 Retrieval `KnowledgeHit` |
+| `hitmap.go` | 派生访问聚合 `HitmapEntry`；不是 Retrieval `ObjectHit` |
 | `file_store.go` / `partition.go` | JSONL 记录入口与日分区/热窗删除（本机 adapter） |
 | `access_store.go` / `retrieval_store.go` / `refine_store.go` / `trace_store.go` / `hitmap_store.go` | 各查询视图 |
 | `training.go` | 从 discovery/refine + feedback 重建带标签强度的样本；不是原始账 |

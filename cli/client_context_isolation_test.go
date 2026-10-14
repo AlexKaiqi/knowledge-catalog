@@ -28,7 +28,7 @@ func TestClientCoordinatesIgnoreRetiredHostContext(t *testing.T) {
 				t.Cleanup(retired.Close)
 				seen := make(chan map[string]any, 1)
 				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if r.URL.Path != "/knowledge/v1/objects:read" || r.Header.Get("X-Kc-As") != "agent:consumer" {
+					if r.URL.Path != "/object/v1/objects:read" || r.Header.Get("X-Kc-As") != "agent:consumer" {
 						t.Errorf("client coordinates changed: %s as=%q", r.URL.Path, r.Header.Get("X-Kc-As"))
 						http.Error(w, "unexpected client coordinates", http.StatusBadRequest)
 						return
@@ -96,7 +96,7 @@ func TestClientCoordinatesIgnoreRetiredHostContext(t *testing.T) {
 						t.Fatal("client did not call the configured typed API")
 					}
 					if request["dataset"] != "current" || request["reference"] != "urn:kc:object:kr%3A%2F%2Facme%2Fsource:note%2Fcurrent" {
-						t.Fatalf("client knowledge coordinates changed: %#v", request)
+						t.Fatalf("client object coordinates changed: %#v", request)
 					}
 					for _, key := range []string{"catalog", "pin", "definition"} {
 						if _, ok := request[key]; ok {

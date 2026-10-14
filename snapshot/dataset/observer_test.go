@@ -20,10 +20,10 @@ func TestDatasetObserverPreservesAuthorityOutcome(t *testing.T) {
 				if err := service.RegisterRepository(source); err != nil {
 					t.Fatal(err)
 				}
-				if _, err := service.DefineKnowledgeSet("delivery", 1, []catalog.KnowledgeSetSource{{Repository: source, Selector: snapshot.DefaultRef}}); err != nil {
+				if _, err := service.DefineDataset("delivery", 1, []catalog.DatasetSource{{Repository: source, Selector: snapshot.DefaultRef}}); err != nil {
 					t.Fatal(err)
 				}
-				candidate, err := service.PrepareKnowledgeSet("delivery", 2, []catalog.KnowledgeSetSource{{Repository: source, Selector: snapshot.DefaultRef}})
+				candidate, err := service.PrepareDataset("delivery", 2, []catalog.DatasetSource{{Repository: source, Selector: snapshot.DefaultRef}})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -60,7 +60,7 @@ func TestDatasetObserverPreservesAuthorityOutcome(t *testing.T) {
 					if operation == "register" {
 						return service.RegisterRepository(other)
 					}
-					_, err := service.PublishKnowledgeSet(candidate)
+					_, err := service.PublishDataset(candidate)
 					return err
 				}
 				resultErr := mutate()

@@ -9,9 +9,9 @@ import (
 )
 
 func TestDatasetManagementViewConvertsHistoryFlags(t *testing.T) {
-	state := dataset.State{KnowledgeSets: []dataset.KnowledgeSet{{SetID: "files", Revision: 501}}}
+	state := dataset.State{Datasets: []dataset.Dataset{{SetID: "files", Revision: 501}}}
 	for revision := 1; revision <= 501; revision += 2 {
-		state.DatasetVersions = append(state.DatasetVersions, dataset.KnowledgeSet{SetID: "files", Revision: revision})
+		state.DatasetVersions = append(state.DatasetVersions, dataset.Dataset{SetID: "files", Revision: revision})
 	}
 	for _, limit := range []invoke.FlagValue{"", "0", 0} {
 		view, err := datasetManagementView(state, "files", 1, map[string]invoke.FlagValue{"limit": limit})

@@ -88,7 +88,7 @@ func TestServerLiveAccessInterleavedAuthenticationUsesVerifiedCurrentCaller(t *t
 		ctx := trace.ContextWithSpanContext(context.Background(), trace.NewSpanContext(trace.SpanContextConfig{TraceID: traceID, SpanID: spanID, TraceFlags: trace.FlagsSampled}))
 		var result objectmodel.ObservedValue
 		if err == nil {
-			err = client.KnowledgeService().Read(ctx, kcclient.KnowledgeReadRequest{Reference: acceptanceReference(t, acceptanceR1, ""), Commit: string(f.commits[acceptanceR1])}, kcclient.RequestOptions{RequestID: principal + "-request"}, &result)
+			err = client.Objects().Read(ctx, kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR1, ""), Commit: string(f.commits[acceptanceR1])}, kcclient.RequestOptions{RequestID: principal + "-request"}, &result)
 		}
 		if err == nil && (len(result.Observations) != 4 || fmt.Sprint(result.Value.(map[string]any)["good"].(map[string]any)["value"]) != "17") {
 			err = kernel.Fail(kernel.ErrCapabilityUnsatisfied, "actual authenticated value not adopted")

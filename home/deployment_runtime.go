@@ -149,7 +149,7 @@ func validateDeploymentState(c DeploymentConfig, allowIdentityUpgrade bool) erro
 }
 
 // InitializeDeployment is an explicit operator operation. The Snapshot
-// containers are declared explicitly; it publishes system knowledge and
+// containers are declared explicitly; it publishes system object and
 // initializes Registry registries. seedPolicies runs once, in staging.
 func InitializeDeployment(c DeploymentConfig, seedPolicies func(string, string) error) error {
 	if err := c.Validate(); err != nil {

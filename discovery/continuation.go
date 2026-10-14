@@ -19,7 +19,7 @@ type ContinuationState struct {
 
 // MemberContinuation freezes the position before the next unread hit for one
 // Workspace member. Refetching that head on the next page keeps the public
-// token compact without embedding knowledge values in it.
+// token compact without embedding object values in it.
 type MemberContinuation struct {
 	Repository kernel.RepositoryID `json:"repository"`
 	Position   string              `json:"position,omitempty"`

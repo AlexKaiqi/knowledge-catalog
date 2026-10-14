@@ -6,7 +6,7 @@ func hostGovernanceHelpEntries() map[string]helpEntry {
 			Description: "把变更写到 candidate 并打开 Proposal，不推进 target",
 			Usage: `kc governance proposal create --repo <id> --proposal-id <id> --candidate <ref> (--value <json> | --file <path> | --changeset <file>) [--object <id>] [--target <ref>] [--base <commit>] [--message <text>]
 用途：
-  把待评审的知识变更写到候选引用，保存可供 Preview 和合并使用的 Proposal。
+  把待评审的对象变更写到候选引用，保存可供 Preview 和合并使用的 Proposal。
 用法与参数：
   --repo 是目标仓；--proposal-id 是本次提案身份，--candidate 是候选引用；--target 默认 refs/heads/main。
   --object 指定本次候选变更的对象身份，--value 提供正文；--file 读取本机内容，--changeset 读取操作集合，两种输入不要混用。
@@ -25,7 +25,7 @@ func hostGovernanceHelpEntries() map[string]helpEntry {
   输入或来源错误先修正原因；响应丢失或治理保存失败时按原 proposal-id 和原输入核对 Writer 回执，再决定重试。
   不因提案失败而重建来源仓、覆盖别人的候选或回滚已接受提交。
 示例：
-  例：kc governance proposal create --repo kr://scene/knowledge --proposal-id PR-1 --candidate refs/heads/change --object note/hello --value '{"text":"proposed"}'
+  例：kc governance proposal create --repo kr://scene/object --proposal-id PR-1 --candidate refs/heads/change --object note/hello --value '{"text":"proposed"}'
   例：kc writer receipt --command-id proposal:PR-1`,
 		},
 		"governance proposal merge": {

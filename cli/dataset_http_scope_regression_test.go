@@ -31,7 +31,7 @@ func TestDatasetRegressionHTTPDatasetPinCannotBroadenScope(t *testing.T) {
 		t.Fatalf("setup resolve %d %#v", status, resolved)
 	}
 	pin := asMap(t, asMap(t, resolved)["pin"])
-	status, result, _ := httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:read", map[string]any{"dataset": "public-only", "pin": pin, "reference": testObjectReference(t, repo, "public", "")}, principal)
+	status, result, _ := httpSurfaceRequest(t, server, http.MethodPost, "/object/v1/objects:read", map[string]any{"dataset": "public-only", "pin": pin, "reference": testObjectReference(t, repo, "public", "")}, principal)
 	if status != http.StatusOK {
 		t.Fatalf("valid published object was not readable: HTTP %d %#v", status, result)
 	}
@@ -42,8 +42,8 @@ func TestDatasetRegressionHTTPDatasetPinCannotBroadenScope(t *testing.T) {
 	}
 	items := pin["items"].([]any)
 	asMap(t, items[0])["prefix"] = ""
-	status, result, _ = httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:read", map[string]any{"dataset": "public-only", "pin": pin, "reference": testObjectReference(t, repo, "secret", "")}, principal)
-	if status != http.StatusBadRequest || asMap(t, asMap(t, result)["error"])["code"] != string(kernel.ErrKnowledgeSetInvalid) {
+	status, result, _ = httpSurfaceRequest(t, server, http.MethodPost, "/object/v1/objects:read", map[string]any{"dataset": "public-only", "pin": pin, "reference": testObjectReference(t, repo, "secret", "")}, principal)
+	if status != http.StatusBadRequest || asMap(t, asMap(t, result)["error"])["code"] != string(kernel.ErrDatasetInvalid) {
 		t.Fatalf("forged Dataset pin did not fail its scope contract: HTTP %d %#v", status, result)
 	}
 }

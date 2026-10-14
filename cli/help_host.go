@@ -102,17 +102,17 @@ func hostEnvironmentHelpEntries() map[string]helpEntry {
 			Description: "初始化部署",
 			Usage: `kc deployment init --config <deployment.yaml>
   用途：
-    由部署运营者显式建立首次运行所需的耐久状态和系统知识出版物。
+    由部署运营者显式建立首次运行所需的耐久状态和系统对象出版物。
   用法与参数：
     --config 是部署文件路径，不是登记空间标识。
     配置声明登记权威、实际 system 仓、独立持久 stateDir、cacheDir、认证和 bootstrapPrincipal。
   条件：
     配置与部署凭证有效，目标权威可达，持久状态目录可写且未丢失已有部署的账本。
-    配置必须绑定实际 system 仓；初始化发布系统知识，启动只核对。
+    配置必须绑定实际 system 仓；初始化发布系统对象，启动只核对。
   结果：
     成功输出 initialized=true，表示初始化或既有初始化核对完成，不表示服务已监听。
   后果：
-    首次建立控制账、身份账、初始化回执和初始管理员规则，发布并登记系统知识。
+    首次建立控制账、身份账、初始化回执和初始管理员规则，发布并登记系统对象。
     再次执行保留既有状态、撤销和回执；不启动 Server、lakeFS 或索引服务。
   风险与成本：
     会写登记 Snapshot、system Snapshot 和持久卷，需要远端读写与出版物校验。
@@ -148,10 +148,10 @@ func hostEnvironmentHelpEntries() map[string]helpEntry {
     例：kc deployment status --config deployment.yaml`,
 		},
 		"deployment system publish": {
-			Description: "把系统知识出版物写入绑定仓",
+			Description: "把系统对象出版物写入绑定仓",
 			Usage: `kc deployment system publish --config <deployment.yaml>
   用途：
-    显式发布或核对当前二进制版本对应的完整系统知识出版物。
+    显式发布或核对当前二进制版本对应的完整系统对象出版物。
   用法与参数：
     --config 指向声明实际 kr://kc/system Snapshot 与登记权威的部署文件。
   条件：
@@ -194,7 +194,7 @@ func hostEnvironmentHelpEntries() map[string]helpEntry {
     Repository 自定义元数据由 lakeFS 原仓按字符串键值维护，不随 commit 冻结，KC 不复制到登记账；Dataset 不自动继承来源属性。
     创建/连接后需查看或设置属性时，打开本服务 /console → Repositories → 目标仓 → Settings → General 的“Repository 自定义元数据”。
     读取需 repository.metadata.read，新增/更新键或删除键需 repository.metadata.write；进入页面仍受原仓浏览权限检查。
-    Dataset 属性另用 dataset define --metadata 或输入配方随 revision 发布，历史属性用 dataset show --revision 回读。
+   Dataset 属性另用 dataset define --metadata 或输入配方随 revision 发布，历史属性用 dataset show --revision 回读。
   风险与成本：
     创建消耗远端仓和对象存储；连接将用户授权的 credential 保存在服务私有耐久账。
     供给、连接记录与授权分阶段完成，不提供跨介质全部回滚；初始 grant 不保证后续仍有权。

@@ -197,15 +197,15 @@ func assertInterfaceAccessEvidence(t *testing.T, homeDir, repository, object, me
 		t.Fatalf("public call has no exact access evidence: %#v %v", page, err)
 	}
 	event := page.Entries[0]
-	if len(event.Knowledge) != 3 || event.Knowledge[0].Address == nil || event.Knowledge[0].Address.MemberKey != member {
+	if len(event.Object) != 3 || event.Object[0].Address == nil || event.Object[0].Address.MemberKey != member {
 		t.Fatalf("public call dropped Member or dependency refs: %#v", event)
 	}
 	basis := asMap(t, result["basis"])
-	if string(event.Knowledge[0].KnowledgeRef.Commit) != basis["declarationCommit"] || string(event.Knowledge[1].KnowledgeRef.Object) != asMap(t, basis["contract"])["object"] || string(event.Knowledge[2].KnowledgeRef.Object) != asMap(t, basis["implementationSchema"])["object"] {
+	if string(event.Object[0].ObjectRef.Commit) != basis["declarationCommit"] || string(event.Object[1].ObjectRef.Object) != asMap(t, basis["contract"])["object"] || string(event.Object[2].ObjectRef.Object) != asMap(t, basis["implementationSchema"])["object"] {
 		t.Fatalf("public evidence differs from execution basis: %#v %#v", event, basis)
 	}
 	if observation, ok := result["observation"].(map[string]any); ok {
-		if len(event.Knowledge[0].Observations) != 1 || event.Knowledge[0].Observations[0].Basis.SourceRevision != observation["sourceRevision"] {
+		if len(event.Object[0].Observations) != 1 || event.Object[0].Observations[0].Basis.SourceRevision != observation["sourceRevision"] {
 			t.Fatalf("public read dropped actual observation: %#v", event)
 		}
 	}

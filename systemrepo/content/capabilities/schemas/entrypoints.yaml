@@ -8,13 +8,13 @@ schema_ref: schema/system/capability-entrypoints/v1
 {
   "commands": [
     {
-      "action": "knowledge.schema.read",
+      "action": "object.schema.read",
       "command": "kc schema describe",
       "description": "查看 Schema 的结构、约束与附加访问声明",
       "help": "kc help schema describe"
     },
     {
-      "action": "knowledge.schema.read",
+      "action": "object.schema.read",
       "command": "kc schema list",
       "description": "列出一个 Repository 已发布的对象类型，不是对象实例目录或合同正文",
       "help": "kc help schema list"

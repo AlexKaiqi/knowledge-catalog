@@ -47,12 +47,12 @@ func TestReaderKeepsSameObjectIDInDifferentRepositoriesIndependent(t *testing.T)
 	rd := reader.NewReader(registry)
 	assertRead := func(repository kernel.RepositoryID, commit kernel.CommitID, want map[string]any) {
 		t.Helper()
-		ref := objectmodel.KnowledgeRef{Repository: repository, Object: objectID}
+		ref := objectmodel.ObjectRef{Repository: repository, Object: objectID}
 		got, err := rd.Read(ref, commit, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got.Repository != repository || got.KnowledgeRef != ref || got.Commit != commit || got.Address.ObjectID != objectID {
+		if got.Repository != repository || got.ObjectRef != ref || got.Commit != commit || got.Address.ObjectID != objectID {
 			t.Fatalf("same-name object lost its source identity or fixed basis: %#v", got)
 		}
 		if !reflect.DeepEqual(got.Value, want) {

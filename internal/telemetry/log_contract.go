@@ -50,7 +50,7 @@ func (r *Runtime) RecordHTTPCompletion(ctx context.Context, requestID, method, r
 		otellog.String(logAttrPropagationOutcome, enumValue(propagationOutcome, "invalid", "accepted", "generated", "legacy", "invalid", "conflict")),
 		otellog.String(logAttrHTTPMethod, enumValue(method, "OTHER", "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "OTHER")),
 		otellog.String(logAttrHTTPRoute, enumValue(route, "unmatched", "/", "/health", "/livez", "/readyz", "/readyz/{surface}", "/metrics",
-			"/snapshot/v1/{operation}", "/knowledge/v1/{operation}", "/writer/v1/{operation}",
+			"/snapshot/v1/{operation}", "/object/v1/{operation}", "/writer/v1/{operation}",
 			"/governance/v1/{operation}", "/identity/v1/{operation}", "/admin/v1/{operation}", "/operations/v1/{operation}", "unmatched")),
 		otellog.Int(logAttrHTTPStatus, status),
 	)

@@ -25,8 +25,8 @@ type ProjectionCell struct {
 }
 
 type ProjectionRelationEndpoint struct {
-	Role      string                   `json:"role"`
-	ObjectRef objectmodel.KnowledgeRef `json:"objectRef"`
+	Role      string                `json:"role"`
+	ObjectRef objectmodel.ObjectRef `json:"objectRef"`
 }
 
 type ProjectionRelation struct {
@@ -35,7 +35,7 @@ type ProjectionRelation struct {
 	Endpoints []ProjectionRelationEndpoint  `json:"endpoints"`
 }
 
-// CompiledDoc is one complete knowledge object extracted from AccessHints.
+// CompiledDoc is one complete object extracted from AccessHints.
 // Schema objects never appear. Aspect/member operations invalidate this object;
 // they are deliberately not physical document boundaries.
 type CompiledDoc struct {
@@ -120,7 +120,7 @@ type RetrieveRequest struct {
 	Continuation string                  `json:"continuation,omitempty"`
 }
 
-// Retriever locates typed candidates. It never returns knowledge payload.
+// Retriever locates typed candidates. It never returns object payload.
 type Retriever interface {
 	Probe(retrieval.SearchClause, retrieval.AccessSpec) Capability
 	Retrieve(RetrieveRequest) (CandidatePage, error)

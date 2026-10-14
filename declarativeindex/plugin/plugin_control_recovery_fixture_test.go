@@ -106,13 +106,13 @@ func (f *controlRecoveryFixture) open(t *testing.T, repositories ...kernel.Repos
 	return runtime
 }
 
-func (f *controlRecoveryFixture) publish(t *testing.T, runtime *controlRecoveryRuntime, name string, id kernel.RepositoryID, at kernel.CommitID) dataset.KnowledgeSet {
+func (f *controlRecoveryFixture) publish(t *testing.T, runtime *controlRecoveryRuntime, name string, id kernel.RepositoryID, at kernel.CommitID) dataset.Dataset {
 	t.Helper()
 	prepare := discoverydatasets.Preparation{Enabled: true, Lookup: f.lookup, Provider: runtime.plugins}
 	def, err := (discoverydatasets.DatasetPublisher{Registry: f.base.cat,
 		Authorize: func(context.Context, discoverydatasets.DatasetPublication) error { return nil }, Prepare: prepare.Execute,
 	}).Execute(context.Background(), discoverydatasets.DatasetPublication{Dataset: name, Revision: 1,
-		Sources: []dataset.KnowledgeSetSource{{Repository: id, BaseRev: string(at), Selector: snapshot.DefaultRef, Path: dataset.MountPath("content")}},
+		Sources: []dataset.DatasetSource{{Repository: id, BaseRev: string(at), Selector: snapshot.DefaultRef, Path: dataset.MountPath("content")}},
 	})
 	if err != nil || len(def.Sources) != 1 || def.Sources[0].Commit != at {
 		t.Fatalf("actual fixed preparation/publication failed: %#v %v", def, err)
@@ -211,7 +211,7 @@ func (f *controlRecoveryFixture) assertSnapshot(t *testing.T, runtime *controlRe
 		return
 	}
 	canonical, err := repo.Read("article/one", at)
-	if err != nil || canonical.Value.(map[string]any)["body"] != body || !reflect.DeepEqual(result.Hits[0].Knowledge, canonical) || !reflect.DeepEqual(result.Hits[0].Version, retrieval.VersionOf(canonical)) {
+	if err != nil || canonical.Value.(map[string]any)["body"] != body || !reflect.DeepEqual(result.Hits[0].Object, canonical) || !reflect.DeepEqual(result.Hits[0].Version, retrieval.VersionOf(canonical)) {
 		t.Errorf("recovered candidate and complete canonical value used different bases: hit=%#v canonical=%#v error=%v", result.Hits[0], canonical, err)
 	}
 }

@@ -9,7 +9,7 @@ import (
 	"kc/snapshot"
 )
 
-// ConfigureFixtureIndexSource is an explicit input of knowledge fixtures that
+// ConfigureFixtureIndexSource is an explicit input of object fixtures that
 // already selected an index backend. Runtime assembly still reads native Repo
 // metadata through production code; this helper registers no test services.
 func ConfigureFixtureIndexSource(home string, id kernel.RepositoryID, dsn string) error {
@@ -32,7 +32,7 @@ func ConfigureFixtureIndexSource(home string, id kernel.RepositoryID, dsn string
 		WriteRepositoryMetadata(map[string]string) error
 	})
 	if !ok {
-		return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "indexed knowledge fixture requires native repository metadata")
+		return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "indexed object fixture requires native repository metadata")
 	}
 	properties, err := metadata.ReadRepositoryMetadata()
 	if err != nil {

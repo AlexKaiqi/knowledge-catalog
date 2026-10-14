@@ -66,8 +66,8 @@ func newPublishedObjectFixture(t *testing.T, indexed bool) *publishedObjectFixtu
 	t.Cleanup(server.Close)
 	f.server = server.URL
 	for _, role := range []struct{ principal, actions string }{
-		{"agent:object-publisher", "writer.commit,writer.preview,knowledge.read"},
-		{"agent:object-consumer", "knowledge.read,knowledge.search,knowledge.schema.read,resource.access"},
+		{"agent:object-publisher", "writer.commit,writer.preview,object.read"},
+		{"agent:object-consumer", "object.read,object.search,object.schema.read,resource.access"},
 	} {
 		body(t, f.govern(t, "grant", "add", "--principal", role.principal, "--repo", f.repository, "--action", role.actions))
 	}
@@ -82,7 +82,7 @@ func newPublishedObjectFixture(t *testing.T, indexed bool) *publishedObjectFixtu
 	return f
 }
 
-// These are pre-existing raw Snapshot resources, outside the knowledge Writer.
+// These are pre-existing raw Snapshot resources, outside the object Writer.
 func publishObjectResources(t *testing.T, home string, fake *testkit.LakeFSFake, repository string, paths []string) (snapshot.Store, string) {
 	t.Helper()
 	physical := fake.NewRepo()
@@ -201,7 +201,7 @@ func (f *publishedObjectFixture) verifyDiscovery(t *testing.T, kind, object, key
 		t.Fatalf("instance and its declared discovery fields do not share the publication basis: %#v", schema)
 	}
 	body(t, f.govern(t, "operations", "projection", "sync", "--repo", f.repository))
-	consumer := productClient(t, f.server, "agent:object-consumer").KnowledgeService()
+	consumer := productClient(t, f.server, "agent:object-consumer").Objects()
 	for _, query := range [][]string{{"--query", keyword}, {"--eq", "kind=" + kind}} {
 		args := append([]string{"search", "--repo", f.repository, "--commit", commit}, query...)
 		search := asMap(t, body(t, f.consume(t, args...)))
@@ -212,7 +212,7 @@ func (f *publishedObjectFixture) verifyDiscovery(t *testing.T, kind, object, key
 		if hit["repository"] != f.repository || hit["commit"] != commit || hit["objectId"] != object {
 			t.Fatalf("discovery lost object identity or fixed version: %#v", hit)
 		}
-		request := kcclient.KnowledgeSearchRequest{KnowledgeScope: kcclient.KnowledgeScope{Repository: f.repository, Commit: commit}}
+		request := kcclient.ObjectSearchRequest{ObjectScope: kcclient.ObjectScope{Repository: f.repository, Commit: commit}}
 		if query[0] == "--query" {
 			request.Query = keyword
 		} else {
@@ -226,12 +226,12 @@ func (f *publishedObjectFixture) verifyDiscovery(t *testing.T, kind, object, key
 			t.Fatalf("typed discovery did not identify exactly one object: %#v", result)
 		}
 		fixed := result.Hits[0]
-		if string(fixed.Knowledge.Repository) != f.repository || string(fixed.Knowledge.Commit) != commit ||
+		if string(fixed.Object.Repository) != f.repository || string(fixed.Object.Commit) != commit ||
 			string(fixed.Version.ObjectID) != object || string(fixed.Version.DeclarationCommit) != commit {
 			t.Fatalf("typed discovery lost object identity or fixed version: %#v", fixed)
 		}
 		read := asMap(t, body(t, f.consume(t, "read", testObjectReference(t, f.repository, object, ""), "--commit", commit)))
-		if !reflect.DeepEqual(read["value"], fixed.Knowledge.Value) || !reflect.DeepEqual(asMap(t, read["value"])["definition"], definition) {
+		if !reflect.DeepEqual(read["value"], fixed.Object.Value) || !reflect.DeepEqual(asMap(t, read["value"])["definition"], definition) {
 			t.Fatalf("hit and authoritative same-version read diverged: hit=%#v read=%#v", fixed, read)
 		}
 	}

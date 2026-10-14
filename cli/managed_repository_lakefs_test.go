@@ -16,7 +16,7 @@ func TestManagedRepositoryProviderOnLakeFS(t *testing.T) {
 	fake := testkit.NewLakeFSFake(t)
 	t.Setenv("KC_LAKEFS_CREDENTIAL", fake.Credential())
 	cfg, config := declaredDeployment(t, false)
-	cfg.ManagedRepositories = &apphome.ManagedRepositoryConfig{Driver: "lakefs", DSN: fake.Origin(), Root: "s3://kc-authority", PublicURL: "https://kc.example.test", CreatorActions: []string{"writer.preview", "writer.commit", "knowledge.read"}}
+	cfg.ManagedRepositories = &apphome.ManagedRepositoryConfig{Driver: "lakefs", DSN: fake.Origin(), Root: "s3://kc-authority", PublicURL: "https://kc.example.test", CreatorActions: []string{"writer.preview", "writer.commit", "object.read"}}
 	writeDeployment(t, config, cfg)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", config))
 	var server *httptest.Server
@@ -71,6 +71,6 @@ func TestManagedRepositoryProviderOnLakeFS(t *testing.T) {
 	}
 	row := asMap(t, body(t, call("read", testObjectReference(t, repo, "note/live", ""), "--commit", commit)))
 	if row["commit"] != commit || asMap(t, row["value"])["text"] != "hosted on lakeFS" {
-		t.Fatalf("hosted knowledge was lost: %#v", row)
+		t.Fatalf("hosted object was lost: %#v", row)
 	}
 }

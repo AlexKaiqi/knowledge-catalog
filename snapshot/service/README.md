@@ -8,12 +8,12 @@ Snapshot Store 的独立 HTTP 适配：文件 Dataset 的定义、固定来源�
 核心调用 `snapshot/dataset`、`snapshot/access` 和 `snapshot.Store` 的文件能力。
 一套服务只装配一份 Dataset authority，不接受 Catalog 选择或多空间 provider。
 来源坐标是 Repository、commit 与文件路径/目录前缀；文件内容始终是不解释的字节，
-不以 Knowledge `object_id` 定位来源。Dataset 的历史 KnowledgeSet DTO 名称仍保留。
+不以 Object `object_id` 定位来源。Dataset 的历史 Dataset DTO 名称仍保留。
 
 调用方通过 `Config.Acquire` 借出一次请求的 `Resources`，并负责释放租约、关闭顺序和
 授权账的原子持久化。`Resources.Datasets` 直接持有服务唯一的 Dataset 登记权威，`Sources` 提供已打开的文件仓，
 `access.RuleStore` 对授权检查与更新提供同一串行边界；不得以客户端断言代替已验证身份。
-服务不提供第二份 Dataset、授权或身份账，不要求 KC Home、Invocation、Knowledge 或索引。
+服务不提供第二份 Dataset、授权或身份账，不要求 KC Home、Invocation、Object 或索引。
 
 `IdentityOptions` 使用显式配置的验证器；未配置不会自动接受 local 身份。
 原 lakeFS 登录证明由 `NewLakeFSAuthenticator` 向固定的 native origin 校验。使用者先显式
@@ -43,13 +43,13 @@ func mountSnapshot(mux *http.ServeMux, config service.Config) {
 
 ## 外部扩展与依赖方向
 
-KC Server 通过窄回调提供既有默认政策、便携 recipe 准备、Knowledge 准入、语义投影及观察
+KC Server 通过窄回调提供既有默认政策、便携 recipe 准备、Object 准入、语义投影及观察
 证据。独立文件服务不需要这些回调。发布仍由 Dataset 核心执行，授权先于领域操作；
 `Around` 只可拒绝前置执行或观察真实结果，不能重复执行、伪造发布或覆盖领域错误。
 来源库存的外部描述不能更改登记身份。请求元数据只供诊断，不能用于发权。
 
 允许依赖 Snapshot 子包、通用 `identity` 与 `kernel`；禁止直接或传递依赖 `catalog`、
-`home`、`invocation`、`invoke`、`server`、`cli`、`client`、Knowledge、Index、Retrieval。
+`home`、`invocation`、`invoke`、`server`、`cli`、`client`、Object、Index、Retrieval。
 语义文件视图的解释和应用生命周期留在挂载方，原始文件算法只在本模块拥有。
 
 ## 验证
@@ -66,7 +66,7 @@ HTTP 路由借用资源。架构守卫
 `repositories: [{id, ...}]` 响应；不枚举全部已连接 Store，不读取来源字节。
 库存可见不产生来源消费或 Dataset 发布权。`Resources.DescribeRepository` 可为一个
 已选定来源添加应用拥有的可选元数据（KC 沿用既有 schema count）；该扩展不能修改仓 ID，
-默认模块只返回 `{id}`，库存与文件发布均不要求 Knowledge 或索引实现。
+默认模块只返回 `{id}`，库存与文件发布均不要求 Object 或索引实现。
 
 服务已登记来源的 inventory 可由 `Resources.DescribeRepository` 提供
 `consoleRepository`（可选原 lakeFS 仓名），用于进入完整控制台的固定提交比较。
@@ -81,7 +81,7 @@ RepositoryID 对应的原仓名，不得返回凭据。它只是导航元数据�
 模块接受登记或隐式发权。`DELETE /snapshot/v1/repositories/{repository}` 只移除登记，
 保留来源文件和已接受 Dataset 历史，之后旧 pin 同样受当前成员准入约束。两项变更都需
 该 Repository 范围的 `repositories.manage`，并在前置 Hook 后重新核对当前权限。
-KC 的供给、归档与保留 System Repository 的政策仍由宿主装配，文件模块不解释知识身份。
+KC 的供给、归档与保留 System Repository 的政策仍由宿主装配，文件模块不解释对象身份。
 
 `GET /snapshot/v1/audit` 需独立的 `registry.audit.read`，返回原 `source`、`authorityId` 和
 `entries` 形状。`limit` 默认 50、最大 200，0 采用默认；不提供续页游标，非空

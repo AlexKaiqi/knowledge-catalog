@@ -189,15 +189,15 @@ func TestTraverseNeighborhoodClosureAcrossChannels(t *testing.T) {
 	}
 
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--dataset", "agent"))
-	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "knowledge.traverse", "--repo", repository))
-	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "knowledge.read", "--repo", repository))
+	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "object.traverse", "--repo", repository))
+	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "object.read", "--repo", repository))
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })
 	}
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
-	httpResult := postAny(t, server.URL, "/knowledge/v1/traverse:query", map[string]any{
+	httpResult := postAny(t, server.URL, "/object/v1/traverse:query", map[string]any{
 		"dataset": "agent", "endpoint": "kc://acme/public/core/Table:orders",
 		"maxHops": 2, "relationType": "owned-by", "direction": "DIRECTED",
 	})
@@ -206,7 +206,7 @@ func TestTraverseNeighborhoodClosureAcrossChannels(t *testing.T) {
 		t.Fatalf("HTTP closure nodes: %#v", httpNodes)
 	}
 	page, err := observability.NewFileStore(home).Access(context.Background(), observability.AccessQuery{
-		Action: "knowledge.traverse", Limit: 10,
+		Action: "object.traverse", Limit: 10,
 	})
 	if err != nil || len(page.Entries) == 0 {
 		t.Fatalf("traverse access evidence: %d entries err=%v", len(page.Entries), err)

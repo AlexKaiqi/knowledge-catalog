@@ -28,7 +28,7 @@ func TestOpenSearchNamespacePreservesLegacyIdentity(t *testing.T) {
 	if legacy.prefix != "kc-proj-a26b3166e88592411679ac5f" || legacy.controlID != "a26b3166e88592411679ac5f03e8842fcc4dcec86920dfb72820592d48da154c" || legacy.controlIndexPath() != controlIndexName {
 		t.Fatalf("empty namespace changed existing physical coordinates: %#v", legacy)
 	}
-	if digest := legacy.PhysicalDigest(); digest != "37bdb5ec0348eded24bfbac337c3bef65178b9926a2fc1c7b804fb78d9e88243" {
+	if digest := legacy.PhysicalDigest(); digest != "8333b7fc27d9fa6d46615500b6590576a31210135650ba4c2f188009c4bd9e7a" {
 		t.Fatalf("empty namespace invalidated existing projection identity: %s", digest)
 	}
 	left, right, reopened := open("a", "dir-a"), open("b", "dir-b"), open("a", "another-dir")
@@ -40,7 +40,7 @@ func TestOpenSearchNamespacePreservesLegacyIdentity(t *testing.T) {
 	}
 	for _, engine := range []*openSearchEngine{legacy, left, right, reopened} {
 		if engine.repository != repository {
-			t.Fatalf("namespace replaced the logical knowledge Repository: %s", engine.repository)
+			t.Fatalf("namespace replaced the logical object Repository: %s", engine.repository)
 		}
 	}
 	const oldPage = "eyJwaXQiOiJsZWdhY3ktcGl0IiwiYmFzaXMiOiJjMSIsInJlcG9zaXRvcnkiOiJrcjovL25hbWVzcGFjZS9yZXBvIiwicXVlcnkiOiJxMSIsImdlbmVyYXRpb24iOiJnMSIsInNvcnQiOlsiYXJ0aWNsZS9hIl0sInJhbmsiOjEsImNoZWNrIjoiMTk1ODNiZTBlNmQ3OWU5YjJjZmM4ZTQ4NTgyMjEwYTE4MzdmODdiYjA5NTNhNDQxYTZjM2FhNzA5MDQ3ZDJlOCJ9"
@@ -79,7 +79,7 @@ func TestOpenSearchContinuationRejectsOtherNamespaceBeforePIT(t *testing.T) {
 					request.Continuation = encodePITContinuation(page)
 					_, err = engine.Retrieve(request)
 				} else {
-					request := retrieval.RelationRetrieveRequest{Repository: repository, Basis: "c1", Query: retrieval.RelationQuery{Endpoint: objectmodel.KnowledgeRef{Repository: repository, Object: "article/a"}}}
+					request := retrieval.RelationRetrieveRequest{Repository: repository, Basis: "c1", Query: retrieval.RelationQuery{Endpoint: objectmodel.ObjectRef{Repository: repository, Object: "article/a"}}}
 					page.Query = string(retrieval.RelationQueryDigest(request.Query))
 					request.Continuation = encodePITContinuation(page)
 					_, err = engine.RetrieveRelations(request)

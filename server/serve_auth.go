@@ -10,7 +10,7 @@ import (
 
 	retrieval "kc/discovery"
 	"kc/kernel"
-	knowledgeserving "kc/liveaccess"
+	objectserving "kc/liveaccess"
 	liveservice "kc/liveaccess/service"
 )
 
@@ -32,7 +32,7 @@ type HTTPServerOptions struct {
 	// kc serve installs a generic HTTP adapter; each request uses the origin
 	// declared on that Binding's Domain Schema. Nil fails bound READs instead
 	// of returning a misleading null value.
-	StateLookup knowledgeserving.StateLookup
+	StateLookup objectserving.StateLookup
 	// LiveAccessPlugins supplies compiled entries; Repo metadata remains the
 	// adoption authority. The standard entry may use StateLookup as its adapter.
 	LiveAccessPlugins map[string]liveservice.PluginEntry

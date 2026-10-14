@@ -73,7 +73,7 @@ func (resources Resources) OpenFiles(ctx context.Context, caller identity.HTTPId
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "workspace is required")
 	}
 	if requirePin && len(coordinate.Pin) == 0 {
-		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "a fixed ResolvedKnowledgeSet pin is required")
+		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "a fixed ResolvedDataset pin is required")
 	}
 	// Check the requested scope before opening its authority: an unauthorized
 	// caller must not distinguish a hidden Dataset from a missing Dataset.
@@ -94,7 +94,7 @@ func (resources Resources) OpenFiles(ctx context.Context, caller identity.HTTPId
 	if err != nil {
 		return nil, err
 	}
-	var pin dataset.ResolvedKnowledgeSet
+	var pin dataset.ResolvedDataset
 	if len(coordinate.Pin) > 0 {
 		if err := kernel.UnmarshalJSON(coordinate.Pin, &pin); err != nil {
 			return nil, kernel.Fail(kernel.ErrUsageInvalid, "invalid fixed Dataset pin: %v", err)
@@ -108,7 +108,7 @@ func (resources Resources) OpenFiles(ctx context.Context, caller identity.HTTPId
 			definition, err = cat.DatasetVersion(coordinate.Dataset, pin.Revision)
 		}
 	} else {
-		pin, err = cat.ResolveKnowledgeSet(coordinate.Dataset)
+		pin, err = cat.ResolveDataset(coordinate.Dataset)
 	}
 	if err != nil {
 		return nil, err

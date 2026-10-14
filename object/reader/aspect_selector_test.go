@@ -10,7 +10,7 @@ import (
 func TestReaderAspectSelectorOnlyShapesCanonicalRead(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	root := testkit.MustHead(t, s.Repo, "")
-	commit, err := s.Repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	commit, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: "HEAD",
 		BaseCommit: root, ExpectedTargetCommit: root,
 		Operations: []objectmodel.Operation{
@@ -25,7 +25,7 @@ func TestReaderAspectSelectorOnlyShapesCanonicalRead(t *testing.T) {
 	if err != nil || unit.Value.(map[string]any)["pk"].([]any)[0] != "id" {
 		t.Fatalf("%#v %v", unit, err)
 	}
-	assembled, err := s.Reader.Read(objectmodel.KnowledgeRef{Repository: s.RepositoryID, Object: "t"}, commit, &objectmodel.AspectSelector{Exclude: []string{"ownership"}})
+	assembled, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: "t"}, commit, &objectmodel.AspectSelector{Exclude: []string{"ownership"}})
 	if err != nil {
 		t.Fatal(err)
 	}

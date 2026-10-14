@@ -10,8 +10,8 @@ import (
 	"kc/snapshot"
 )
 
-const LocatorSchemaReferrersDirectory = ".kc/knowledge-locators/schema-referrers"
-const LocatorReferrersCompletePath = ".kc/knowledge-locators/schema-referrers.complete"
+const LocatorSchemaReferrersDirectory = ".kc/object-locators/schema-referrers"
+const LocatorReferrersCompletePath = ".kc/object-locators/schema-referrers.complete"
 const LocatorReferrersCompleteBody = "v1\n"
 
 type schemaReferrersEntry struct {
@@ -45,7 +45,7 @@ func ReadSchemaReferrers(tree snapshot.TreeReader, schema objectmodel.ObjectID, 
 	if err == nil {
 		return decodeSchemaReferrers(raw, schema)
 	}
-	if kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+	if kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		return nil, err
 	}
 	return readMissingSchemaReferrers(tree, schema, commit)
@@ -73,7 +73,7 @@ func readMissingSchemaReferrers(tree snapshot.TreeReader, schema objectmodel.Obj
 		}
 		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "invalid Schema referrer completeness marker at %s", commit)
 	}
-	if err != nil && kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+	if err != nil && kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		return nil, err
 	}
 	raw, err = tree.ReadFile(LocatorManifestPath, commit)
@@ -90,11 +90,11 @@ func readMissingSchemaReferrers(tree snapshot.TreeReader, schema objectmodel.Obj
 			}
 			return decodeSchemaReferrers(encoded, schema)
 		}
-	} else if kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+	} else if kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		return nil, err
 	}
 	return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-		"knowledge locator lacks complete Schema referrers at %s; explicitly rebuild locators", commit)
+		"object locator lacks complete Schema referrers at %s; explicitly rebuild locators", commit)
 }
 
 func validateSchemaReferrers(entry schemaReferrersEntry, expected objectmodel.ObjectID) error {

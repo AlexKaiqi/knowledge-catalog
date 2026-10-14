@@ -20,7 +20,7 @@ func IsSchemaObject(id ObjectID) bool {
 }
 
 // ParseSchemaRef accepts schema/foo, schema/foo@commit and pinned or unpinned
-// kc:// references. The reference must name a schema/* knowledge object.
+// kc:// references. The reference must name a schema/* object.
 func ParseSchemaRef(ref string) (ParsedSchemaRef, bool) {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {

@@ -12,10 +12,10 @@ import (
 // MemberLookup mounts a Snapshot by id. dataset.Service.Require is the usual implementation.
 type MemberLookup func(kernel.RepositoryID) (objectmodel.Repository, error)
 
-// KnowledgeSetPin is a consumer read basis: one ResolveKnowledgeSet result, frozen for the command.
+// DatasetPin is a consumer read basis: one ResolveDataset result, frozen for the command.
 // Dataset service produces the coordinates; this package reads object_id at those commits.
 
-type KnowledgeSetPin struct {
+type DatasetPin struct {
 	SetID        string                                  `json:"setId"`
 	Revision     int                                     `json:"revision"`
 	Repositories map[kernel.RepositoryID]kernel.CommitID `json:"repositories"`
@@ -33,17 +33,17 @@ type DatasetItem struct {
 	File       string              `json:"file,omitempty"`
 }
 
-// Serving is the consumer read face on one KnowledgeSetPin.
+// Serving is the consumer read face on one DatasetPin.
 // Callers name a Workspace (CLI --dataset). They do not pass repository, ref, or commit.
 
 type Serving struct {
 	lookup   MemberLookup
-	pin      KnowledgeSetPin
+	pin      DatasetPin
 	hydrator objectmodel.Hydrator
 }
 
 // objectmodel.FederatedValue is one member hit of a consumer read.
-// Same field set as objectmodel.KnowledgeValue so read --dataset and search --dataset
+// Same field set as objectmodel.ObjectValue so read --dataset and search --dataset
 // share one envelope. objectId is kept for checkout / older callers.
 
 type FederatedPage struct {
@@ -52,7 +52,7 @@ type FederatedPage struct {
 	Exhausted    bool                         `json:"exhausted"`
 }
 
-func federatedOf(repositoryID kernel.RepositoryID, commit kernel.CommitID, objectID objectmodel.ObjectID, src objectmodel.KnowledgeValue, assembled any) objectmodel.FederatedValue {
+func federatedOf(repositoryID kernel.RepositoryID, commit kernel.CommitID, objectID objectmodel.ObjectID, src objectmodel.ObjectValue, assembled any) objectmodel.FederatedValue {
 	addr := src.Address
 	if addr.ObjectID == "" {
 		addr = objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: objectID}
@@ -65,7 +65,7 @@ func federatedOf(repositoryID kernel.RepositoryID, commit kernel.CommitID, objec
 		Reference:    src.Reference,
 		Locator:      src.Locator,
 		Digest:       digest,
-		KnowledgeRef: objectmodel.KnowledgeRef{Repository: repositoryID, Object: objectID},
+		ObjectRef:    objectmodel.ObjectRef{Repository: repositoryID, Object: objectID},
 		Repository:   repositoryID,
 		Commit:       commit,
 		ObjectID:     objectID,
@@ -86,7 +86,7 @@ type ObjectLog struct {
 	Revisions  []objectmodel.ObjectRevision `json:"revisions"`
 }
 
-func Open(lookup MemberLookup, pin KnowledgeSetPin) *Serving {
+func Open(lookup MemberLookup, pin DatasetPin) *Serving {
 	pin.Repositories = maps.Clone(pin.Repositories)
 	pin.Items = slices.Clone(pin.Items)
 	pin.Items = slices.DeleteFunc(pin.Items, func(item DatasetItem) bool {
@@ -112,11 +112,11 @@ func WholeRepositoryItems(repos map[kernel.RepositoryID]kernel.CommitID) []Datas
 	return items
 }
 
-func FederatedRead(lookup MemberLookup, pin KnowledgeSetPin, objectID objectmodel.ObjectID) ([]objectmodel.FederatedValue, error) {
+func FederatedRead(lookup MemberLookup, pin DatasetPin, objectID objectmodel.ObjectID) ([]objectmodel.FederatedValue, error) {
 	return Open(lookup, pin).Read(objectID, nil)
 }
 
-func (s *Serving) Pin() KnowledgeSetPin {
+func (s *Serving) Pin() DatasetPin {
 	pin := s.pin
 	pin.Repositories = maps.Clone(pin.Repositories)
 	pin.Items = slices.Clone(pin.Items)
@@ -138,7 +138,7 @@ func (s *Serving) Contains(repositoryID kernel.RepositoryID, objectID objectmode
 func (s *Serving) Member(id kernel.RepositoryID) (objectmodel.Repository, error) {
 	commit, ok := s.pin.Repositories[id]
 	if !ok {
-		return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "repository is outside dataset")
+		return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "repository is outside dataset")
 	}
 	repo, err := s.lookup(id)
 	if err != nil {
@@ -152,7 +152,7 @@ func (s *Serving) Read(objectID objectmodel.ObjectID, selector *objectmodel.Aspe
 	err := s.eachObject(objectID, func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo objectmodel.Repository) error {
 		value, err := readHydrated(s.hydrator, repo, objectID, commit)
 		if err != nil {
-			if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+			if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 				return nil
 			}
 			return err
@@ -174,7 +174,7 @@ func (s *Serving) ReadAddress(address objectmodel.Address) ([]objectmodel.Federa
 		if err != nil {
 			return err
 		}
-		var value objectmodel.KnowledgeValue
+		var value objectmodel.ObjectValue
 		if whole {
 			value, err = readAddressHydrated(s.hydrator, repo, address, commit)
 		} else {
@@ -182,7 +182,7 @@ func (s *Serving) ReadAddress(address objectmodel.Address) ([]objectmodel.Federa
 			value, err = repo.ReadAddress(address, commit)
 		}
 		if err != nil {
-			if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+			if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 				return nil
 			}
 			return err
@@ -220,7 +220,7 @@ func (s *Serving) ResolveAddress(address objectmodel.Address) ([]objectmodel.Res
 	err := s.eachRepository(func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo objectmodel.Repository) error {
 		resolution, err := repo.ResolveAddress(address, commit)
 		if err != nil {
-			if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+			if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 				return nil
 			}
 			return err
@@ -239,7 +239,7 @@ func (s *Serving) GetProvenance(objectID objectmodel.ObjectID) ([]objectmodel.Pr
 	err := s.eachObject(objectID, func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo objectmodel.Repository) error {
 		trace, err := repo.GetProvenance(objectID, commit)
 		if err != nil {
-			if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+			if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 				return nil
 			}
 			return err
@@ -255,7 +255,7 @@ func (s *Serving) Log(objectID objectmodel.ObjectID, limit int) ([]ObjectLog, er
 	err := s.eachObject(objectID, func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo objectmodel.Repository) error {
 		revs, err := repo.Log(objectID, commit, objectmodel.ObjectLogQuery{Limit: limit})
 		if err != nil {
-			if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+			if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 				return nil
 			}
 			return err
@@ -342,7 +342,7 @@ func (s *Serving) objectInDataset(repositoryID kernel.RepositoryID, commit kerne
 	}
 	paths, err := locator.ObjectUnitPaths(objectID, commit)
 	if err != nil {
-		if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+		if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 			return false, nil
 		}
 		return false, err

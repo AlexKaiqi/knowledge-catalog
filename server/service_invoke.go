@@ -7,7 +7,7 @@ package server
 import (
 	inv "kc/invocation"
 	"kc/invoke"
-	knowledgeserving "kc/liveaccess"
+	objectserving "kc/liveaccess"
 
 	"bytes"
 	"compress/gzip"
@@ -33,18 +33,18 @@ func (f *httpFacade) executeTyped(w http.ResponseWriter, r *http.Request, name, 
 	if !ok {
 		return
 	}
-	if strings.HasPrefix(action, "knowledge.") || action == "resource.access" || action == "dataset.resolve" {
+	if strings.HasPrefix(action, "object.") || action == "resource.access" || action == "dataset.resolve" {
 		if err := inv.HoistTaskPinDefinition(flags); err != nil {
 			invoke.WriteInvoke(w, inv.ErrorResult(err))
 			return
 		}
 	}
-	if strings.HasPrefix(action, "knowledge.") || action == "resource.access" {
+	if strings.HasPrefix(action, "object.") || action == "resource.access" {
 		if err := inv.NormalizeReferenceFlags(flags); err != nil {
 			invoke.WriteInvoke(w, inv.ErrorResult(err))
 			return
 		}
-		if err := inv.RejectMixedKnowledgeBasis(flags); err != nil {
+		if err := inv.RejectMixedObjectBasis(flags); err != nil {
 			invoke.WriteInvoke(w, inv.ErrorResult(err))
 			return
 		}
@@ -65,9 +65,9 @@ func (f *httpFacade) executeTyped(w http.ResponseWriter, r *http.Request, name, 
 	}
 	ctx := r.Context()
 	if !f.options.localAssertion() {
-		ctx = knowledgeserving.ContextWithCallerCredentials(ctx, knowledgeserving.CallerCredentialsFromHeader(r.Header))
+		ctx = objectserving.ContextWithCallerCredentials(ctx, objectserving.CallerCredentialsFromHeader(r.Header))
 	}
-	var access knowledgeserving.StateLookup
+	var access objectserving.StateLookup
 	if opened.LiveAccess != nil && opened.LiveAccess.Configured() {
 		access = opened.LiveAccess
 	}
@@ -170,7 +170,7 @@ func requestHasDatasetDefinition(target any) bool {
 		return false
 	}
 	field, exists := shape.FieldByName("Definition")
-	return exists && field.Type == reflect.TypeOf((*dataset.KnowledgeSet)(nil))
+	return exists && field.Type == reflect.TypeOf((*dataset.Dataset)(nil))
 }
 
 func decodeServiceRequest(w http.ResponseWriter, r *http.Request, target any) bool {

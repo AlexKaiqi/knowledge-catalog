@@ -69,7 +69,7 @@ func (e *openSearchEngine) ProviderRevision() string {
 func (e *openSearchEngine) PhysicalDigest() kernel.Digest {
 	identity := map[string]any{
 		"provider": e.ProviderID(), "revision": e.ProviderRevision(),
-		"mapping": "typed-cells-v4-access-faces", "compiler": "knowledge-units-v3-schema-adoption",
+		"mapping": "typed-cells-v4-access-faces", "compiler": "object-units-v3-schema-adoption",
 		"primaryShards": e.primaryShards, "replicas": e.replicas, "refreshInterval": e.refreshInterval,
 	}
 	if e.namespace != "" {

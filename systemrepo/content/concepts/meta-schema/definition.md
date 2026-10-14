@@ -10,4 +10,4 @@ path_hint: concepts/meta-schema/definition.md
 
 二进制内置同版本校验器、标识与规范摘要，系统仓发布相同内容。它不向实例继承字段，也不让所有对象自动拥有 lastModified 等属性。
 
-相关说明：[Schema](../schema/definition.md)、[系统知识仓](../system-repository/definition.md)。
+相关说明：[Schema](../schema/definition.md)、[系统仓](../system-repository/definition.md)。

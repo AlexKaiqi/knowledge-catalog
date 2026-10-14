@@ -8,11 +8,11 @@ import (
 	objectmodel "kc/object"
 )
 
-var knowledgeFile = regexp.MustCompile(`(?i)\.(json|md|okf|ya?ml|txt)$`)
+var objectFile = regexp.MustCompile(`(?i)\.(json|md|okf|ya?ml|txt)$`)
 
-// KnowledgePath is true when a tree path may hold a knowledge unit.
-func KnowledgePath(rel string) bool {
-	return knowledgeFile.MatchString(rel)
+// ObjectPath is true when a tree path may hold an object unit.
+func ObjectPath(rel string) bool {
+	return objectFile.MatchString(rel)
 }
 
 func DefaultPath(address objectmodel.Address, schemaRef string) string {

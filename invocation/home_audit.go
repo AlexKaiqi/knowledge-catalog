@@ -142,8 +142,8 @@ func auditArgs(flags map[string]invoke.FlagValue) map[string]any {
 
 func auditOmitResult(command string) bool {
 	switch command {
-	case "knowledge-read", "list", "local-status", "knowledge-provenance", "knowledge-log", "admin-grant-list", "whoami",
-		"writer-receipt", "pin", "knowledge-resolve", "knowledge-binding-show",
+	case "object-read", "list", "local-status", "object-provenance", "object-log", "admin-grant-list", "whoami",
+		"writer-receipt", "pin", "object-resolve", "object-binding-show",
 		"diff",
 		"operations-audit-access", "operations-audit-trace", "operations-audit-hitmap":
 		return true

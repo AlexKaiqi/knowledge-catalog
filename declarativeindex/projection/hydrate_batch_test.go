@@ -30,18 +30,18 @@ func (r *headPoisonRepository) Head(string) (kernel.CommitID, error) {
 	return "", kernel.Fail(kernel.ErrPreconditionFailed, "consumer attempted to follow HEAD")
 }
 
-func (r *batchCountingRepository) Read(objectID objectmodel.ObjectID, commit kernel.CommitID) (objectmodel.KnowledgeValue, error) {
+func (r *batchCountingRepository) Read(objectID objectmodel.ObjectID, commit kernel.CommitID) (objectmodel.ObjectValue, error) {
 	r.readCalls++
 	return r.Repository.Read(objectID, commit)
 }
 
-func (r *batchCountingRepository) ReadMany(objectIDs []objectmodel.ObjectID, commit kernel.CommitID) (map[objectmodel.ObjectID]objectmodel.KnowledgeValue, error) {
+func (r *batchCountingRepository) ReadMany(objectIDs []objectmodel.ObjectID, commit kernel.CommitID) (map[objectmodel.ObjectID]objectmodel.ObjectValue, error) {
 	r.batchCalls++
 	r.batches = append(r.batches, append([]objectmodel.ObjectID(nil), objectIDs...))
-	out := map[objectmodel.ObjectID]objectmodel.KnowledgeValue{}
+	out := map[objectmodel.ObjectID]objectmodel.ObjectValue{}
 	for _, objectID := range objectIDs {
 		value, err := r.Repository.Read(objectID, commit)
-		if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+		if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 			continue
 		}
 		if err != nil {
@@ -56,13 +56,13 @@ func (r *batchCountingRepository) SchemaObjectIDs(commit kernel.CommitID) ([]obj
 	return r.Repository.(objectmodel.SchemaStore).SchemaObjectIDs(commit)
 }
 
-func TestSearchHydratesCandidatePageThroughKnowledgeBatchReader(t *testing.T) {
+func TestSearchHydratesCandidatePageThroughObjectBatchReader(t *testing.T) {
 	repo := testfixture.MakeIndexRepository(t, "kr://acme/public/core")
 	root, err := repo.Head(snapshot.DefaultRef)
 	if err != nil {
 		t.Fatal(err)
 	}
-	commit, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	commit, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef,
 		BaseCommit: root, ExpectedTargetCommit: root,
 		Operations: []objectmodel.Operation{
@@ -104,7 +104,7 @@ func TestSearchHydratesCandidatePageThroughKnowledgeBatchReader(t *testing.T) {
 func TestSearchRejectsWrongCandidateCoordinatesBeforeAuthorityHydrate(t *testing.T) {
 	repo := testfixture.MakeIndexRepository(t, "kr://acme/public/poison-search")
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
-	commit, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	commit, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef,
 		BaseCommit: root, ExpectedTargetCommit: root,
 		Operations: []objectmodel.Operation{
@@ -155,7 +155,7 @@ func TestSearchRequiresExplicitFixedCommit(t *testing.T) {
 func TestSearchAtNeverFollowsHeadAfterBasisIsFixed(t *testing.T) {
 	repo := testfixture.MakeIndexRepository(t, "kr://acme/public/frozen-search")
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
-	commit, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	commit, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef,
 		BaseCommit: root, ExpectedTargetCommit: root,
 		Operations: []objectmodel.Operation{

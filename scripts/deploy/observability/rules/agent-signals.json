@@ -11,7 +11,7 @@
     {"id": "evidenceId", "use": "durable access ack", "in": ["Recorder receipt", "GetAccess"]}
   ],
   "selectors": {
-    "canonicalReadOperation": "knowledge-read"
+    "canonicalReadOperation": "object-read"
   },
   "evidence": {
     "access": "kc operations audit access",
@@ -24,7 +24,7 @@
     {"id": "server-scrape", "goal": "status", "query": "up{job=\"knowledge-catalog\"}"},
     {"id": "readyz", "goal": "status", "http": "GET /readyz"},
     {"id": "writer-eligible", "goal": "status", "journey": "writer", "query": "sum(increase(kc_writer_commands_total[$__range]))"},
-    {"id": "read-eligible", "goal": "status", "journey": "read", "query": "sum(increase(kc_operation_executions_total{kc_face=\"knowledge\",kc_operation=\"knowledge-read\"}[$__range]))"},
+    {"id": "read-eligible", "goal": "status", "journey": "read", "query": "sum(increase(kc_operation_executions_total{kc_face=\"object\",kc_operation=\"object-read\"}[$__range]))"},
     {"id": "search-eligible", "goal": "status", "journey": "search", "query": "sum(increase(kc_search_requests_total[$__range]))"},
     {"id": "writer-availability", "goal": "status", "journey": "writer", "recording": "kc:sli:writer_availability:ratio"},
     {"id": "read-availability", "goal": "status", "journey": "read", "recording": "kc:sli:read_availability:ratio"},
@@ -66,10 +66,10 @@
       "symptom": "read-failed",
       "firstSplit": "ok+unresolved vs denied vs invalid vs error",
       "queries": [
-        "sum by (kc_outcome) (kc_operation_executions_total{kc_face=\"knowledge\",kc_operation=\"knowledge-read\"})",
+        "sum by (kc_outcome) (kc_operation_executions_total{kc_face=\"object\",kc_operation=\"object-read\"})",
         "kc:sli:read_availability:ratio"
       ],
-      "then": ["Tempo span kc.knowledge-read", "access evidence by requestId"]
+      "then": ["Tempo span kc.object-read", "access evidence by requestId"]
     },
     {
       "symptom": "search-slow-or-partial",
@@ -105,8 +105,8 @@
     {"name": "KCOtelCollectorExportFailure", "journey": "pipeline", "severity": "warning", "nextQuery": "sum by (exporter) (increase(otelcol_exporter_send_failed_spans[15m]))"},
     {"name": "KCOtelCollectorReceiverRefused", "journey": "pipeline", "severity": "warning", "nextQuery": "sum by (receiver) (increase(otelcol_receiver_refused_spans[15m]))"},
     {"name": "KCOtelCollectorQueueSaturated", "journey": "pipeline", "severity": "warning", "nextQuery": "otelcol_exporter_queue_size"},
-    {"name": "KCReadAvailabilityFastBurn", "journey": "read", "severity": "critical", "nextQuery": "sum by (kc_outcome) (increase(kc_operation_executions_total{kc_face=\"knowledge\",kc_operation=\"knowledge-read\"}[1h]))"},
-    {"name": "KCReadAvailabilitySlowBurn", "journey": "read", "severity": "warning", "nextQuery": "sum by (kc_outcome) (increase(kc_operation_executions_total{kc_face=\"knowledge\",kc_operation=\"knowledge-read\"}[6h]))"},
+    {"name": "KCReadAvailabilityFastBurn", "journey": "read", "severity": "critical", "nextQuery": "sum by (kc_outcome) (increase(kc_operation_executions_total{kc_face=\"object\",kc_operation=\"object-read\"}[1h]))"},
+    {"name": "KCReadAvailabilitySlowBurn", "journey": "read", "severity": "warning", "nextQuery": "sum by (kc_outcome) (increase(kc_operation_executions_total{kc_face=\"object\",kc_operation=\"object-read\"}[6h]))"},
     {"name": "KCWriterAvailabilityFastBurn", "journey": "writer", "severity": "critical", "nextQuery": "sum by (kc_writer_surface,kc_outcome) (increase(kc_writer_commands_total[1h]))"},
     {"name": "KCWriterAvailabilitySlowBurn", "journey": "writer", "severity": "warning", "nextQuery": "sum by (kc_writer_surface,kc_outcome) (increase(kc_writer_commands_total[6h]))"},
     {"name": "KCReadP95AboveSharedObjective", "journey": "read", "severity": "warning", "nextQuery": "kc:sli:read_latency_seconds:p95"},

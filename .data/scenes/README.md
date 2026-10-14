@@ -8,7 +8,7 @@
 
 状态节点必须是**已经被多个独立用例实际复用的构建前态**，包括经后续构建间接复用。`fixture` 写明本步实际交付的条件；目录和 feature 生成消费者关系，不另写消费者清单。独立 Go 测试使用自己的 setup，不能充当场景状态的消费者。没有真实构建的测试分组、读操作结果、只被紧接一个用例使用的临时后态，都归入已有状态的 probe 或 Go evidence。
 
-验证用例声明从前态出发的操作、预期和独立失败风险。用例可以写入、授权、撤权或恢复；只有后态形成真实共享前置才提取节点。投影就绪、服务启动等也可以形成有效前态，不以是否改变权威知识数据判断。检查多个文件不足以证明复用：要确认各用例确实消费了新增条件，不能把参数解析用例挂上来凑数。
+验证用例声明从前态出发的操作、预期和独立失败风险。用例可以写入、授权、撤权或恢复；只有后态形成真实共享前置才提取节点。投影就绪、服务启动等也可以形成有效前态，不以是否改变权威对象数据判断。检查多个文件不足以证明复用：要确认各用例确实消费了新增条件，不能把参数解析用例挂上来凑数。
 
 从父状态冻结的 home 副本上只跑本节点 construct。打开一个节点目录就能读懂当前状态、怎么进来、夹具在哪、从这里验证什么。状态名描述交付的前置条件，用例名描述动作与预期；避免含义不明确的 `ready` 或把 `visible`、`browsed` 一律当成状态。执行器不把 `_results/` 当 Oracle。
 
@@ -39,7 +39,7 @@
 | 视图 | 关注内容 |
 |---|---|
 | `access-control` | 接入、身份与独立授权边界 |
-| `publication` | 从 `repository-attached` 出发的知识发布与投影 |
+| `publication` | 从 `repository-attached` 出发的对象发布与投影 |
 | `consumption` | 发现、固定版本组合、检索读取与清河茶铺走查 |
 | `lifecycle` | 治理维护、撤权、退役、归档和恢复 |
 
@@ -98,11 +98,11 @@ python3 .data/scenes/tree.py --check-product
 
 具名 bundle 写在入口节点的 `_bundles.yaml`：声明从该既有状态开始的任务。执行器复用祖先夹具，用户步骤无需从初始化重复。
 
-登记空间 固定 `kr://scene/catalog`。业务知识仓 `kr://scene/knowledge`、关系仓 `kr://scene/graph` 只给后续 `attach` 和「已配置、尚未登记」的探用，**不**在 `service-initialized` 进入登记表。`Given deployment fixture` 不创建业务 Snapshot。知识集 `scene-set` 发布时只纳入指定实体/关系路径，不是整仓别名。树自包含，不读数仓目录。
+登记空间 固定 `kr://scene/catalog`。业务仓 `kr://scene/object`、关系仓 `kr://scene/graph` 只给后续 `attach` 和「已配置、尚未登记」的探用，**不**在 `service-initialized` 进入登记表。`Given deployment fixture` 不创建业务 Snapshot。 Dataset `scene-set` 发布时只纳入指定实体/关系路径，不是整仓别名。树自包含，不读数仓目录。
 
-**树脊（接入方）**：`service-initialized` → `source-repositories-configured` → `repository-attached`（服务验证既有 authority 并原子登记）→ `domain-schema-published` → `semantic-knowledge-published` →（声明式索引）`projection-synced`。`repository-attached` 是接入完成；后续 commit、put 是知识发布。此脊验证外部既有 Snapshot 接入；部署启动和 attach 不隐式创建它。初始化前态挂载的托管建仓 Go 旅程使用正式配置，验证已授权接入方显式 create 平台仓、立即发布以及重部署后继续操作，目标仓无需静态配置。
+**树脊（接入方）**：`service-initialized` → `source-repositories-configured` → `repository-attached`（服务验证既有 authority 并原子登记）→ `domain-schema-published` → `semantic-object-published` →（声明式索引）`projection-synced`。`repository-attached` 是接入完成；后续 commit、put 是对象发布。此脊验证外部既有 Snapshot 接入；部署启动和 attach 不隐式创建它。初始化前态挂载的托管建仓 Go 旅程使用正式配置，验证已授权接入方显式 create 平台仓、立即发布以及重部署后继续操作，目标仓无需静态配置。
 
-树父是**构建前置**，不是权限蕴含：`knowledge-search-granted` 下的读授权用例复用已有检索条件，再验证额外授予 READ 后的变化；SEARCH 本身不授予 READ。
+树父是**构建前置**，不是权限蕴含：`object-search-granted` 下的读授权用例复用已有检索条件，再验证额外授予 READ 后的变化；SEARCH 本身不授予 READ。
 
 ## 2. 维护
 
@@ -111,7 +111,7 @@ python3 .data/scenes/tree.py --check-product
 1. 目录嵌套就是前态（只有一个父）。每个状态目录要有 `_meta.yaml`。公开命令必须落在某个 construct/probe 或点名的 go-test 里（测试钉闭集，不另抄清单）。
 2. 每个目录都必须有 `fixture` 和 `_build/construct.feature`，`surface` 为 `feature` 或 `both`。construct 只做进入共享前态所需的步骤，再观测后态。独立 Go 证据写在相关状态的 `evidence` 中。
 3. 夹具放在**构建或 probe 写入它的宿主节点**的 `_materials/`，不进 登记空间 登记表，不在场景根放 `materials:` 清单。
-4. Domain Schema 草稿放在 `domain-schema-published/_materials/` 下按目标仓分目录：`drafts/` 属知识仓，`graph-drafts/` 属关系仓。construct 分别经 `kc writer commit --repo --dir` 发布并回读；引用 Schema 的实例必须在自己的目标仓找到该 Schema。实例与 note 用 `kc writer put --file $materials/…`，再 READ/browse 回读。不要用 `Given material` 代替这些公开命令。Gherkin 不出现 ChangeSet 文件。提交前对照用 `kc diff --repo --dir`，不是 construct 必经步骤。
+4. Domain Schema 草稿放在 `domain-schema-published/_materials/` 下按目标仓分目录：`drafts/` 属仓，`graph-drafts/` 属关系仓。construct 分别经 `kc writer commit --repo --dir` 发布并回读；引用 Schema 的实例必须在自己的目标仓找到该 Schema。实例与 note 用 `kc writer put --file $materials/…`，再 READ/browse 回读。不要用 `Given material` 代替这些公开命令。Gherkin 不出现 ChangeSet 文件。提交前对照用 `kc diff --repo --dir`，不是 construct 必经步骤。
 5. System Schema：跟踪源在 `systemrepo/content/_schemas/`、`object/trusted/` 与 `liveaccess/contract/trusted/`（各能力的 `go:embed` 可信数据）。`service-initialized/_materials/system/` 是旅程可见副本，**禁止** Writer PUT 到 `kr://kc/system`。改协议 Schema 先改跟踪源，再让副本与 `TestSceneSystemSchemaMaterialsMatchEmbed` 对齐。
 6. 不要引用已删除的数仓黑盒套件。清河茶铺表/作业/语义/SQL 只写在走查叶 `_materials/`。接入方 Resource Access / Collector / Observer 的 Docker 与代码放在写入 origin 的节点 `_materials/accessor/`。
 7. 不要在仓库根加 `tests/scenarios/` 或把协议场景拷进 `cli/testdata/scenes`。
@@ -125,7 +125,7 @@ python3 .data/scenes/tree.py --check-product
 
 `Given existing repository` 由执行器接到 lakeFS Snapshot adapter。Gherkin 不写介质名。默认 `make test` 运行 `TestProductScenes` 与 `TestMetricPermissionScenes`，使用进程内协议忠实假服务，不需要整套 lakeFS 部署：冻结和复制都必须隔离 lakeFS 物理仓，不能只拷指向同一远端的 home。HTTP 服务与客户端登录目录也按环境重新准备，不复用另一用例的 handler 或会话。OpenSearch 原生按逻辑仓标识投影，拷贝 home 不能隔离外部索引。测试执行器为每个环境提供独立物理索引与控制记录空间，仍由真实 OpenSearch 执行；复制环境重新绑定测试端点，关闭时只清理该环境自己的派生索引。需要已有投影时，在每条 probe 前重放构建链恢复基线；未构建投影的前态也不会继承其它用例的索引。场景仍顺序执行。独立 `make deploy-local-scenes` 在第一阶段部署拓扑运行同一棵树的 `TestLiveLakeFSSceneDFS`：真 Graveler + MinIO + PostgreSQL + OpenSearch，需先显式准备 local 测试栈。真 Graveler 不能按 commit id 分叉，所以 live DFS 的节点及各 probe 分别从祖先 construct 链重放，不克隆父 home。登记空间 组件夹具仍是 gitdir，不是生产 OpenSnapshotRegistry。
 
-两条写入脊不要并成一条：`knowledge-published` 挂在 `repository-attached` 上（普通 Canonical）；`semantic-knowledge-published` 挂在 Domain Schema 发表之后（语义实例）。调整前置时改目录嵌套；`depends_on` 由工具从目录生成。
+两条写入脊不要并成一条：`object-published` 挂在 `repository-attached` 上（普通 Canonical）；`semantic-object-published` 挂在 Domain Schema 发表之后（语义实例）。调整前置时改目录嵌套；`depends_on` 由工具从目录生成。
 
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"
@@ -135,8 +135,8 @@ KC_TEST_OPENSEARCH_URL=http://127.0.0.1:19200 \
   go test ./cli -run 'TestMetricPermissionScenes'                        # 祖先含 projection-synced，或 construct 含 projection sync
 go test ./cli -run 'TestProductScenes/source-repositories-configured$'           # 单节点
 make deploy-local-scenes                                                 # 同一棵树，真 Graveler + OpenSearch
-python3 .data/scenes/goto.py qinghe-knowledge-published --probe probe-publish-dataset-with-scoped-members.feature
-make deploy-local-goto NODE=qinghe-knowledge-published PROBE=probe-publish-dataset-with-scoped-members.feature
+python3 .data/scenes/goto.py qinghe-object-published --probe probe-publish-dataset-with-scoped-members.feature
+make deploy-local-goto NODE=qinghe-object-published PROBE=probe-publish-dataset-with-scoped-members.feature
 ```
 
 - `TestProductScenes` 跳过需要索引或动态 State 的节点。
@@ -193,7 +193,7 @@ Then the output has:
 | `Then the output has` / `includes` | JSON 路径等于 / 数组包含；`$grantId` 引用最近一次成功 `grant add` 的回执 ID，构建冻结后仍供隔离 probe 使用，也可用于后续 argv |
 | `Then error CODE` | 协议错误码 |
 | `Then 1 hit <object>` | CLI SEARCH 按 `objectId` 定位；HTTP SEARCH 命中 |
-| `Then 1 hit <object> with body stripped` / `with full canonical` | HTTP SEARCH 投递链（无 `knowledge.read` 时屏蔽正文） |
+| `Then 1 hit <object> with body stripped` / `with full canonical` | HTTP SEARCH 投递链（无 `object.read` 时屏蔽正文） |
 | `Then 0 hits` | 无命中 |
 | `Then READ body is full canonical` | READ 正文 |
 | `Then whoami is <principal>` | 身份绑定 |
@@ -229,7 +229,7 @@ Then the output has:
 协议不变量不在本 README 复述。本树的旅程必须能作为下列证据的可读过程，但不能改写它们：
 
 - `AUTH-01` 搜宽读严、无读权屏蔽正文、不标 `partial`
-- `AUTH-02` Dataset `file.read` 不放行仓 `knowledge.*`
+- `AUTH-02` Dataset`file.read` 不放行仓 `object.*`
 - `AUTH-03` 交付链不改 ID/Address
 - System Repository 可读、对业务 Writer 不可写（U1）
 - Domain Schema 在目标仓版本化（U2）；实例符合 Schema（U3）
@@ -252,6 +252,6 @@ Then the output has:
 
 分开记录命令触达、协议后态、完整任务、正式 Server 传输和真实依赖证据。命令出现一次、某行有 Then、目录是叶子，都不能代替任务覆盖。
 
-时间局部任务至少声明既有状态和本次目的，并证明同一主体可以依次取得所需材料、固定版本、完成操作和验证结果。部署接入、首次发布、既有知识修改、固定 pin 后的上游变化、治理失败恢复、撤权后的下一请求分别评估；不能把 operator 的 setup 插到消费者任务中替他取得权限。`dataset-cli-discovers-searches-reads.feature` 守卫要求所有消费命令带同一主体及 Server。
+时间局部任务至少声明既有状态和本次目的，并证明同一主体可以依次取得所需材料、固定版本、完成操作和验证结果。部署接入、首次发布、既有对象修改、固定 pin 后的上游变化、治理失败恢复、撤权后的下一请求分别评估；不能把 operator 的 setup 插到消费者任务中替他取得权限。`dataset-cli-discovers-searches-reads.feature` 守卫要求所有消费命令带同一主体及 Server。
 
-重部署验收必须保存 登记空间 Snapshot 权威、知识 Snapshot、授权/Gate、Writer receipt、ControlState 和原始证据，只替换进程工作缓存。缺耐久状态应失败关闭；清空派生投影可以触发重建。初始化前态上的部署恢复证据引用正式 Run/Server 测试，不把重新 init 的成功当作恢复。
+重部署验收必须保存 登记空间 Snapshot 权威、对象 Snapshot、授权/Gate、Writer receipt、ControlState 和原始证据，只替换进程工作缓存。缺耐久状态应失败关闭；清空派生投影可以触发重建。初始化前态上的部署恢复证据引用正式 Run/Server 测试，不把重新 init 的成功当作恢复。

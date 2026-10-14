@@ -1,6 +1,6 @@
 package invocation
 
-// The dataset access layer: registry selection, workspace recipes, knowledge-set
+// The dataset access layer: registry selection, workspace recipes, dataset
 // resolution and replay pins, semantic views, and the file-read authorization
 // that both the argv consume path and the HTTP file service run through.
 // (CAP-ORG-01 B6: shared execution moves into the seam.)
@@ -20,7 +20,7 @@ import (
 	"kc/invoke"
 	"kc/kernel"
 	objectmodel "kc/object"
-	knowledgemaintenance "kc/object/maintenance"
+	objectmaintenance "kc/object/maintenance"
 	reader "kc/object/reader"
 	"kc/object/semanticview"
 	"kc/snapshot"
@@ -85,7 +85,7 @@ func PickDatasets(ws *kchome.Home, _ map[string]invoke.FlagValue) (dataset.Servi
 // .kc-dataset.yaml from an attached member (or a local unanchored copy) when
 // this machine has never defined it. Registry remains the operational store;
 // the yaml is how the recipe travels with git (doc/design/dataset.md).
-func EnsureWorkspace(ws *kchome.Home, home string, cat dataset.Service, setID string) (dataset.KnowledgeSet, error) {
+func EnsureWorkspace(ws *kchome.Home, home string, cat dataset.Service, setID string) (dataset.Dataset, error) {
 	def, orig := cat.Set(setID)
 	if ws.Deployment != nil {
 		return def, orig
@@ -93,32 +93,32 @@ func EnsureWorkspace(ws *kchome.Home, home string, cat dataset.Service, setID st
 	if orig == nil {
 		return def, nil
 	}
-	rec, err := FindKnowledgeSetRecipe(ws, home, setID)
+	rec, err := FindDatasetRecipe(ws, home, setID)
 	if err != nil {
-		return dataset.KnowledgeSet{}, err
+		return dataset.Dataset{}, err
 	}
 	if rec.Name == "" {
-		return dataset.KnowledgeSet{}, orig
+		return dataset.Dataset{}, orig
 	}
-	prepared, err := cat.PrepareKnowledgeSet(setID, 1, rec.Sources())
+	prepared, err := cat.PrepareDataset(setID, 1, rec.Sources())
 	if err != nil {
-		return dataset.KnowledgeSet{}, err
+		return dataset.Dataset{}, err
 	}
 	prepared.Metadata = rec.Metadata
-	return cat.PublishKnowledgeSet(prepared)
+	return cat.PublishDataset(prepared)
 }
 
-func FindKnowledgeSetRecipe(ws *kchome.Home, home, setID string) (dataset.KnowledgeSetRecipe, error) {
+func FindDatasetRecipe(ws *kchome.Home, home, setID string) (dataset.DatasetRecipe, error) {
 	if raw, err := os.ReadFile(LocalWorkspaceFile(home, setID)); err == nil {
-		rec, err := dataset.ParseKnowledgeSetRecipe(raw)
+		rec, err := dataset.ParseDatasetRecipe(raw)
 		if err != nil {
-			return dataset.KnowledgeSetRecipe{}, err
+			return dataset.DatasetRecipe{}, err
 		}
 		if rec.Name == setID {
 			return rec, nil
 		}
 	}
-	var hits []dataset.KnowledgeSetRecipe
+	var hits []dataset.DatasetRecipe
 	var from []kernel.RepositoryID
 	for _, id := range ws.Store.IDs() {
 		rec, ok := ReadRecipeAtHead(ws, id)
@@ -129,13 +129,13 @@ func FindKnowledgeSetRecipe(ws *kchome.Home, home, setID string) (dataset.Knowle
 		from = append(from, id)
 	}
 	if len(hits) == 0 {
-		return dataset.KnowledgeSetRecipe{}, nil
+		return dataset.DatasetRecipe{}, nil
 	}
 	for i := 1; i < len(hits); i++ {
-		a, _ := dataset.FormatKnowledgeSetRecipe(hits[0])
-		b, _ := dataset.FormatKnowledgeSetRecipe(hits[i])
+		a, _ := dataset.FormatDatasetRecipe(hits[0])
+		b, _ := dataset.FormatDatasetRecipe(hits[i])
 		if !bytes.Equal(a, b) {
-			return dataset.KnowledgeSetRecipe{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid,
+			return dataset.DatasetRecipe{}, kernel.Fail(kernel.ErrDatasetInvalid,
 				"workspace %s is declared differently in %s and %s", setID, from[0], from[i])
 		}
 	}
@@ -152,62 +152,62 @@ func LocalWorkspaceFile(home, name string) string {
 	return filepath.Join(home, "datasets", safe+".yaml")
 }
 
-func ReadRecipeAtHead(ws *kchome.Home, id kernel.RepositoryID) (dataset.KnowledgeSetRecipe, bool) {
+func ReadRecipeAtHead(ws *kchome.Home, id kernel.RepositoryID) (dataset.DatasetRecipe, bool) {
 	snap, ok := ws.Store.Get(id)
 	if !ok {
-		return dataset.KnowledgeSetRecipe{}, false
+		return dataset.DatasetRecipe{}, false
 	}
 	files, ok := snapshot.TreeStoreOf(snap)
 	if !ok {
-		return dataset.KnowledgeSetRecipe{}, false
+		return dataset.DatasetRecipe{}, false
 	}
 	commit, err := snap.Head(snapshot.DefaultRef)
 	if err != nil {
-		return dataset.KnowledgeSetRecipe{}, false
+		return dataset.DatasetRecipe{}, false
 	}
-	raw, err := files.ReadFile(dataset.KnowledgeSetFileName, commit)
+	raw, err := files.ReadFile(dataset.DatasetFileName, commit)
 	if err != nil {
-		return dataset.KnowledgeSetRecipe{}, false
+		return dataset.DatasetRecipe{}, false
 	}
-	rec, err := dataset.ParseKnowledgeSetRecipe(raw)
+	rec, err := dataset.ParseDatasetRecipe(raw)
 	if err != nil {
-		return dataset.KnowledgeSetRecipe{}, false
+		return dataset.DatasetRecipe{}, false
 	}
 	return rec, true
 }
 
-func ApplyOverlay(home, as string, def dataset.KnowledgeSet) (dataset.KnowledgeSet, error) {
+func ApplyOverlay(home, as string, def dataset.Dataset) (dataset.Dataset, error) {
 	raw, err := os.ReadFile(dataset.OverlayFile(home, as, def.SetID))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return def, nil
 		}
-		return dataset.KnowledgeSet{}, err
+		return dataset.Dataset{}, err
 	}
-	over, err := dataset.ParseKnowledgeSetOverlay(raw)
+	over, err := dataset.ParseDatasetOverlay(raw)
 	if err != nil {
-		return dataset.KnowledgeSet{}, err
+		return dataset.Dataset{}, err
 	}
 	return dataset.MergeOverlay(def, over)
 }
 
-func ResolveOrReplay(ws *kchome.Home, home string, cat dataset.Service, setID string, flags map[string]invoke.FlagValue) (dataset.ResolvedKnowledgeSet, error) {
-	return ResolveKnowledgeSet(ws, home, cat, setID, flags)
+func ResolveOrReplay(ws *kchome.Home, home string, cat dataset.Service, setID string, flags map[string]invoke.FlagValue) (dataset.ResolvedDataset, error) {
+	return ResolveDataset(ws, home, cat, setID, flags)
 }
 
-func ResolveKnowledgeSet(ws *kchome.Home, home string, cat dataset.Service, setID string, flags map[string]invoke.FlagValue) (dataset.ResolvedKnowledgeSet, error) {
-	var def dataset.KnowledgeSet
-	if supplied := SuppliedKnowledgeSet(flags); supplied != nil {
+func ResolveDataset(ws *kchome.Home, home string, cat dataset.Service, setID string, flags map[string]invoke.FlagValue) (dataset.ResolvedDataset, error) {
+	var def dataset.Dataset
+	if supplied := SuppliedDataset(flags); supplied != nil {
 		// Temporary definitions replay through the pin; a caller label must not
 		// borrow a published Workspace grant when an explicit recipe is present.
 		setID = ""
 		def = *supplied
-		if err := dataset.ValidateKnowledgeSet(def); err != nil {
-			return dataset.ResolvedKnowledgeSet{}, err
+		if err := dataset.ValidateDataset(def); err != nil {
+			return dataset.ResolvedDataset{}, err
 		}
 		for _, source := range def.Sources {
 			if !cat.HasRepository(source.Repository) {
-				return dataset.ResolvedKnowledgeSet{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "repository %s is not registered in this registry", source.Repository)
+				return dataset.ResolvedDataset{}, kernel.Fail(kernel.ErrDatasetInvalid, "repository %s is not registered in this registry", source.Repository)
 			}
 		}
 	} else {
@@ -219,16 +219,16 @@ func ResolveKnowledgeSet(ws *kchome.Home, home string, cat dataset.Service, setI
 			def, err = ApplyOverlay(home, "", def)
 		}
 		if err != nil {
-			return dataset.ResolvedKnowledgeSet{}, err
+			return dataset.ResolvedDataset{}, err
 		}
 	}
 	if pinPath := invoke.FlagString(flags, "pin"); pinPath != "" {
-		var resolved dataset.ResolvedKnowledgeSet
+		var resolved dataset.ResolvedDataset
 		pin, replayErr := ParseReplayPin(pinPath)
 		if replayErr == nil {
-			if SuppliedKnowledgeSet(flags) == nil {
+			if SuppliedDataset(flags) == nil {
 				if pin.SetID != "" && pin.SetID != setID {
-					return dataset.ResolvedKnowledgeSet{}, kernel.Fail(kernel.ErrUsageInvalid, "pin names a different dataset")
+					return dataset.ResolvedDataset{}, kernel.Fail(kernel.ErrUsageInvalid, "pin names a different dataset")
 				}
 				pin.SetID = setID
 				resolved, replayErr = cat.ReplayPublished(pin)
@@ -248,42 +248,42 @@ func ResolveKnowledgeSet(ws *kchome.Home, home string, cat dataset.Service, setI
 	return resolved, resolveErr
 }
 
-func ParseReplayPin(pinPath string) (dataset.ResolvedKnowledgeSet, error) {
+func ParseReplayPin(pinPath string) (dataset.ResolvedDataset, error) {
 	raw := []byte(pinPath)
 	if !strings.HasPrefix(strings.TrimSpace(pinPath), "{") {
 		var err error
 		raw, err = os.ReadFile(pinPath)
 		if err != nil {
-			return dataset.ResolvedKnowledgeSet{}, err
+			return dataset.ResolvedDataset{}, err
 		}
 	}
-	var pin dataset.ResolvedKnowledgeSet
+	var pin dataset.ResolvedDataset
 	if err := dataset.DecodeJSON(raw, &pin); err != nil {
-		return dataset.ResolvedKnowledgeSet{}, kernel.Fail(kernel.ErrUsageInvalid, "--pin is not a ResolvedKnowledgeSet JSON file")
+		return dataset.ResolvedDataset{}, kernel.Fail(kernel.ErrUsageInvalid, "--pin is not a ResolvedDataset JSON file")
 	}
 	return pin, nil
 }
 
-func ReplayPin(cat dataset.Service, def dataset.KnowledgeSet, pinPath string) (dataset.ResolvedKnowledgeSet, error) {
+func ReplayPin(cat dataset.Service, def dataset.Dataset, pinPath string) (dataset.ResolvedDataset, error) {
 	pin, err := DecodeReplayPin(def, pinPath)
 	if err != nil {
-		return dataset.ResolvedKnowledgeSet{}, err
+		return dataset.ResolvedDataset{}, err
 	}
 	if check := cat.CheckResolved(pin); check.Outcome != "PASSED" {
-		return dataset.ResolvedKnowledgeSet{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "replayed pin failed CheckResolved")
+		return dataset.ResolvedDataset{}, kernel.Fail(kernel.ErrDatasetInvalid, "replayed pin failed CheckResolved")
 	}
 	return pin, nil
 }
 
-func DecodeReplayPin(def dataset.KnowledgeSet, pinPath string) (dataset.ResolvedKnowledgeSet, error) {
+func DecodeReplayPin(def dataset.Dataset, pinPath string) (dataset.ResolvedDataset, error) {
 	pin, err := ParseReplayPin(pinPath)
 	if err != nil {
-		return dataset.ResolvedKnowledgeSet{}, err
+		return dataset.ResolvedDataset{}, err
 	}
 	return dataset.ReplayDefinition(def, pin)
 }
 
-func KnowledgeSetPin(resolved dataset.ResolvedKnowledgeSet) reader.KnowledgeSetPin {
+func DatasetPin(resolved dataset.ResolvedDataset) reader.DatasetPin {
 	items := make([]reader.DatasetItem, 0, len(resolved.Items))
 	for _, item := range resolved.Items {
 		items = append(items, reader.DatasetItem{
@@ -291,7 +291,7 @@ func KnowledgeSetPin(resolved dataset.ResolvedKnowledgeSet) reader.KnowledgeSetP
 			Kind: item.Kind, Prefix: item.Prefix, File: item.File,
 		})
 	}
-	return reader.KnowledgeSetPin{SetID: resolved.SetID, Revision: resolved.Revision, Repositories: resolved.Repositories, Items: items}
+	return reader.DatasetPin{SetID: resolved.SetID, Revision: resolved.Revision, Repositories: resolved.Repositories, Items: items}
 }
 
 func AllowedDatasetFileRead(home string, flags map[string]invoke.FlagValue) bool {
@@ -317,7 +317,7 @@ func allowedDatasetFileRead(home string, flags map[string]invoke.FlagValue, repo
 	return ok
 }
 
-func SemanticMounts(def dataset.KnowledgeSet, pin dataset.ResolvedKnowledgeSet) []dataset.VirtualMount {
+func SemanticMounts(def dataset.Dataset, pin dataset.ResolvedDataset) []dataset.VirtualMount {
 	selectors := map[kernel.RepositoryID]string{}
 	for _, source := range def.Sources {
 		if _, exists := selectors[source.Repository]; !exists {
@@ -336,7 +336,7 @@ func SemanticMounts(def dataset.KnowledgeSet, pin dataset.ResolvedKnowledgeSet) 
 		if label == "" {
 			label = "repository"
 		}
-		mountPath := "knowledge/" + label
+		mountPath := "object/" + label
 		if used[mountPath] {
 			digest := string(kernel.CanonicalDigest(string(repository)))
 			mountPath += "-" + digest[:8]
@@ -350,7 +350,7 @@ func SemanticMounts(def dataset.KnowledgeSet, pin dataset.ResolvedKnowledgeSet) 
 	return mounts
 }
 
-func SemanticProjectionFor(store snapshot.Store, repo objectmodel.Repository, pin dataset.ResolvedKnowledgeSet) (*SemanticProjection, error) {
+func SemanticProjectionFor(store snapshot.Store, repo objectmodel.Repository, pin dataset.ResolvedDataset) (*SemanticProjection, error) {
 	commit := pin.Repositories[repo.ID()]
 	key := semanticProjectionKey{repository: repo.ID(), commit: commit, scope: kernel.CanonicalDigest(pin.Items)}
 	semanticProjections.Lock()
@@ -372,10 +372,10 @@ func SemanticProjectionFor(store snapshot.Store, repo objectmodel.Repository, pi
 	return projection, nil
 }
 
-func BuildSemanticProjection(store snapshot.Store, repo objectmodel.Repository, pin dataset.ResolvedKnowledgeSet) (*SemanticProjection, error) {
+func BuildSemanticProjection(store snapshot.Store, repo objectmodel.Repository, pin dataset.ResolvedDataset) (*SemanticProjection, error) {
 	commit := pin.Repositories[repo.ID()]
-	scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return repo, nil }, KnowledgeSetPin(pin))
-	values := []objectmodel.KnowledgeValue{}
+	scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return repo, nil }, DatasetPin(pin))
+	values := []objectmodel.ObjectValue{}
 	var prefixes, files []string
 	for _, item := range pin.Items {
 		if item.Repository != repo.ID() || item.Commit != commit {
@@ -388,7 +388,7 @@ func BuildSemanticProjection(store snapshot.Store, repo objectmodel.Repository, 
 			files = append(files, item.File)
 		}
 	}
-	if err := knowledgemaintenance.WalkScope(store, repo, commit, prefixes, files, func(id objectmodel.ObjectID) error {
+	if err := objectmaintenance.WalkScope(store, repo, commit, prefixes, files, func(id objectmodel.ObjectID) error {
 		allowed, err := scope.Contains(repo.ID(), id)
 		if err != nil || !allowed {
 			return err
@@ -436,7 +436,7 @@ func BuildSemanticProjection(store snapshot.Store, repo objectmodel.Repository, 
 	return projection, nil
 }
 
-func SemanticEntity(value objectmodel.KnowledgeValue, schemas map[objectmodel.ObjectID]objectmodel.SchemaDefinition) string {
+func SemanticEntity(value objectmodel.ObjectValue, schemas map[objectmodel.ObjectID]objectmodel.SchemaDefinition) string {
 	for _, declaration := range value.Declarations {
 		parsed, ok := objectmodel.ParseSchemaRef(declaration.SchemaRef)
 		if !ok {
@@ -489,7 +489,7 @@ func (p *SemanticProjection) Read(file string) ([]byte, error) {
 	file = strings.Trim(path.Clean("/"+file), "/")
 	content, ok := p.files[file]
 	if !ok {
-		return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "semantic file %s does not exist", file)
+		return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "semantic file %s does not exist", file)
 	}
 	return bytes.Clone(content), nil
 }
@@ -497,10 +497,10 @@ func (p *SemanticProjection) Read(file string) ([]byte, error) {
 func DatasetFSRepositoryPath(subPath, relative string) (string, error) {
 	return fileservice.RepositoryPath(subPath, relative)
 }
-func ValidKnowledgeSetFSRelative(value string) bool { return fileservice.ValidRelativePath(value) }
+func ValidDatasetFSRelative(value string) bool { return fileservice.ValidRelativePath(value) }
 
-func RejectMixedKnowledgeBasis(flags map[string]invoke.FlagValue) error {
-	if invoke.FlagString(flags, "dataset") == "" && SuppliedKnowledgeSet(flags) == nil && invoke.FlagString(flags, "pin") == "" && invoke.FlagString(flags, "dataset-file") == "" {
+func RejectMixedObjectBasis(flags map[string]invoke.FlagValue) error {
+	if invoke.FlagString(flags, "dataset") == "" && SuppliedDataset(flags) == nil && invoke.FlagString(flags, "pin") == "" && invoke.FlagString(flags, "dataset-file") == "" {
 		return nil
 	}
 	if invoke.FlagString(flags, "repo") != "" || invoke.FlagString(flags, "commit") != "" || invoke.FlagString(flags, "ref") != "" {

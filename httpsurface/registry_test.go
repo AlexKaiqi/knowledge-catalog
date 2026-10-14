@@ -27,8 +27,8 @@ func TestRegistryIsTheReviewedPublicHTTPSurface(t *testing.T) {
 	// keeping the exact patterns guards against accidental replacement as well
 	// as an unreviewed change in the total surface.
 	for _, pattern := range []string{
-		"GET /knowledge/v1/plugins/{name}",
-		"POST /knowledge/v1/objects:put", "POST /knowledge/v1/objects:remove",
+		"GET /object/v1/plugins/{name}",
+		"POST /object/v1/objects:put", "POST /object/v1/objects:remove",
 		"GET /repositories/{repository}", "GET /assets/repository.js",
 		"GET /console", "GET /assets/console.js",
 		"GET /ui/",

@@ -16,7 +16,7 @@ func TestRepositoryConnectionOnLakeFS(t *testing.T) {
 	fake := testkit.NewLakeFSFake(t)
 	base, token, name := fake.Origin(), fake.Credential(), fake.NewRepo()
 	cfg, config := declaredDeployment(t, false)
-	cfg.Connections = &apphome.ConnectionPolicy{AllowedOrigins: []string{base}, CreatorActions: []string{"repository.connections.manage", "writer.preview", "writer.commit", "knowledge.read"}}
+	cfg.Connections = &apphome.ConnectionPolicy{AllowedOrigins: []string{base}, CreatorActions: []string{"repository.connections.manage", "writer.preview", "writer.commit", "object.read"}}
 	writeDeployment(t, config, cfg)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", config))
 	start := func() (*httptest.Server, http.Handler) {

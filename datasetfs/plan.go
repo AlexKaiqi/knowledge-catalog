@@ -1,6 +1,6 @@
-// Package datasetfs projects one resolved Dataset service knowledge set into host
+// Package datasetfs projects one resolved Dataset service dataset into host
 // filesystem mountpoints. It is an application adapter above Dataset service and
-// Snapshot: the package owns no repository, knowledge, or write semantics.
+// Snapshot: the package owns no repository, object, or write semantics.
 package datasetfs
 
 import (
@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-// File is one immutable file in a resolved knowledge set mount. Path is relative
+// File is one immutable file in a resolved dataset mount. Path is relative
 // to the mount root and Read must keep reading the same resolved commit for the
 // lifetime of the mount process.
 type File struct {

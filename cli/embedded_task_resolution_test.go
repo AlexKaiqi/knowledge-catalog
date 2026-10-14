@@ -20,27 +20,27 @@ func runRemoteTaskResolution(ctx context.Context, remote *kcclient.Client, path 
 	id := invoke.FlagString(flags, "dataset")
 	if path == "pin check" {
 		var output any
-		err := service.CheckKnowledgeSet(ctx, id, snapshotclient.KnowledgeSetResolveRequest{Pin: remotePin(flags)}, requestOptions, &output)
+		err := service.CheckDataset(ctx, id, snapshotclient.DatasetResolveRequest{Pin: remotePin(flags)}, requestOptions, &output)
 		return output, err
 	}
-	var resolved dataset.ResolvedKnowledgeSet
-	var definition *dataset.KnowledgeSet
+	var resolved dataset.ResolvedDataset
+	var definition *dataset.Dataset
 	var err error
 	if id != "" {
-		err = service.ResolveKnowledgeSet(ctx, id, snapshotclient.KnowledgeSetResolveRequest{Pin: remotePin(flags)}, requestOptions, &resolved)
+		err = service.ResolveDataset(ctx, id, snapshotclient.DatasetResolveRequest{Pin: remotePin(flags)}, requestOptions, &resolved)
 	} else {
 		definition, err = taskResolutionDefinition(flags)
 		if err == nil {
-			err = service.ResolveDefinition(ctx, snapshotclient.KnowledgeSetRequest{Revision: definition.Revision, Sources: definition.Sources, Metadata: definition.Metadata}, requestOptions, &resolved)
+			err = service.ResolveDefinition(ctx, snapshotclient.DatasetRequest{Revision: definition.Revision, Sources: definition.Sources, Metadata: definition.Metadata}, requestOptions, &resolved)
 		}
 	}
 	if err != nil {
 		return nil, err
 	}
-	return inv.ShapePinOutput(flags, inv.TaskKnowledgeSetPin{ResolvedKnowledgeSet: resolved, Definition: definition})
+	return inv.ShapePinOutput(flags, inv.TaskDatasetPin{ResolvedDataset: resolved, Definition: definition})
 }
 
-func taskResolutionDefinition(flags map[string]FlagValue) (*dataset.KnowledgeSet, error) {
+func taskResolutionDefinition(flags map[string]FlagValue) (*dataset.Dataset, error) {
 	if invoke.FlagString(flags, "from-repo") != "" {
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "remote Workspace definition does not read a server repository recipe; submit explicit sources")
 	}
@@ -63,7 +63,7 @@ func taskResolutionDefinition(flags map[string]FlagValue) (*dataset.KnowledgeSet
 			return nil, kernel.Fail(kernel.ErrUsageInvalid, "--revision must be an integer")
 		}
 	}
-	return &dataset.KnowledgeSet{Revision: revision, Sources: sources, Metadata: metadata}, nil
+	return &dataset.Dataset{Revision: revision, Sources: sources, Metadata: metadata}, nil
 }
 
 // Retired task adapters are used only by the application contract harness.

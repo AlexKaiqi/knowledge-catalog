@@ -1,5 +1,5 @@
 // Package gitdir provides git plumbing for a directory with a working tree.
-// It knows commits, refs and file bytes, but not knowledge or Workspace types.
+// It knows commits, refs and file bytes, but not object or Workspace types.
 package gitdir
 
 import (

@@ -3,7 +3,7 @@ title: 多仓组合读曲线
 question: "第二个成员仓与组合定义加入后，resolve、跨成员 read/search 与组合分页的额外成本是多少？"
 views: [read]
 operation:
-  surface: knowledge
+  surface: object
   action: dataset-combine-mix
   shape: "创建第二 scratch 仓并导入小档数据，定义组合定义后循环：组合 resolve、跨成员 read、组合 search 与分页；与单仓基线对照"
   isolation: per-point-scratch-repository

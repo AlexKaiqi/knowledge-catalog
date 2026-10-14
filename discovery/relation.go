@@ -8,7 +8,7 @@ import (
 
 // RelationQuery is the layer ③ one-hop discovery request.
 type RelationQuery struct {
-	Endpoint     objectmodel.KnowledgeRef      `json:"endpoint"`
+	Endpoint     objectmodel.ObjectRef         `json:"endpoint"`
 	RelationType string                        `json:"relationType,omitempty"`
 	Role         string                        `json:"role,omitempty"`
 	Direction    objectmodel.RelationDirection `json:"direction,omitempty"`
@@ -16,7 +16,7 @@ type RelationQuery struct {
 
 type RelationRetrieveRequest struct {
 	// Repository/Basis locate the stored relations, independently of the
-	// endpoint KnowledgeRef in Query. Cross-repository references do not
+	// endpoint ObjectRef in Query. Cross-repository references do not
 	// change the authority used for candidate hydration.
 	Repository   kernel.RepositoryID `json:"repository"`
 	Basis        kernel.CommitID     `json:"basis"`
@@ -39,7 +39,7 @@ type RelationCandidatePage struct {
 }
 
 // RelationRetriever locates candidates only. Complete bodies come from the
-// pinned Knowledge authority.
+// pinned Object authority.
 type RelationRetriever interface {
 	RetrieveRelations(RelationRetrieveRequest) (RelationCandidatePage, error)
 }
@@ -56,7 +56,7 @@ type RelationPageRequest struct {
 }
 
 type RelationHit struct {
-	KnowledgeRef objectmodel.KnowledgeRef      `json:"knowledgeRef"`
+	ObjectRef    objectmodel.ObjectRef         `json:"objectRef"`
 	Repository   kernel.RepositoryID           `json:"repository"`
 	Commit       kernel.CommitID               `json:"commit"`
 	ObjectID     objectmodel.ObjectID          `json:"objectId"`

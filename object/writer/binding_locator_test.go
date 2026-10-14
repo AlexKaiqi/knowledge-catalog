@@ -56,7 +56,7 @@ func TestTreeWriterMaintainsBindingSchemaCoordinates(t *testing.T) {
 	}
 	assertBindingCoordinates(t, tree, third.Result.NewCommit, []objectmodel.ObjectID{"schema/static"})
 	assertBindingCoordinates(t, tree, first.Result.NewCommit, []objectmodel.ObjectID{"schema/a", "schema/b"})
-	if _, err := tree.ReadFile(repofile.LocatorManifestPath, third.Result.NewCommit); kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+	if _, err := tree.ReadFile(repofile.LocatorManifestPath, third.Result.NewCommit); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		t.Fatalf("incremental Schema write introduced a whole-repository manifest: %v", err)
 	}
 	rebuilt, err := w.RebuildTreeLocators("rebuild-bindings", raw.ID(), snapshot.DefaultRef, third.Result.NewCommit)

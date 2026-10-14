@@ -30,7 +30,7 @@ func InvokeObjectInterface(cx *Invocation, operation string) (any, error) {
 			return nil, err
 		}
 		if len(values) != 1 {
-			return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "interface implementation resolved to %d values; choose one fixed repository", len(values))
+			return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "interface implementation resolved to %d values; choose one fixed repository", len(values))
 		}
 		return invokeObjectInterfaceAt(cx, declarations, values[0].Repository, operation, input)
 	}, func(repository kernel.RepositoryID, commit kernel.CommitID) (any, error) {

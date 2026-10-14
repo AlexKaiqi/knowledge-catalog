@@ -17,10 +17,10 @@ func TestSnapshotCatalogLifecycleNoOpChecksAuthority(t *testing.T) {
 			if err := cat.RegisterRepository("kr://no-op/source"); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := cat.DefineKnowledgeSet("task", 1, []catalog.KnowledgeSetSource{{Repository: "kr://no-op/source", Selector: snapshot.DefaultRef}}); err != nil {
+			if _, err := cat.DefineDataset("task", 1, []catalog.DatasetSource{{Repository: "kr://no-op/source", Selector: snapshot.DefaultRef}}); err != nil {
 				t.Fatal(err)
 			}
-			if err := cat.RetireKnowledgeSet("task"); err != nil {
+			if err := cat.RetireDataset("task"); err != nil {
 				t.Fatal(err)
 			}
 			noOp := func(target catalog.Service) error {
@@ -28,9 +28,9 @@ func TestSnapshotCatalogLifecycleNoOpChecksAuthority(t *testing.T) {
 				case "register":
 					return target.RegisterRepository("kr://no-op/source")
 				case "retire":
-					return target.RetireKnowledgeSet("task")
+					return target.RetireDataset("task")
 				default:
-					return target.RetireKnowledgeSet("task")
+					return target.RetireDataset("task")
 				}
 			}
 			authorityHead := func() string {

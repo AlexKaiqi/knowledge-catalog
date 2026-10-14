@@ -18,19 +18,19 @@
     READY: "当前发布版本已可检索。",
     BUILDING: "当前发布版本的检索索引构建中。",
     UPDATING: "当前发布版本的检索索引更新中。",
-    FAILED: "检索索引构建失败；已发布的知识版本仍可读取。",
-    RETIRED: "检索索引已停用；已发布的知识版本仍可读取。",
+    FAILED: "检索索引构建失败；已发布的对象版本仍可读取。",
+    RETIRED: "检索索引已停用；已发布的对象版本仍可读取。",
     NOT_READY: "当前发布版本尚无可用的检索索引。",
     UNAVAILABLE: "检索状态暂时无法确认，可继续查询发布版本。",
     NOT_CONFIGURED: "此部署尚未配置检索服务。",
     NOT_AUTHORIZED: "当前账号没有查询检索准备状态的权限。",
   };
   const objectVerbs = {
-    read: {path: "/knowledge/v1/objects:read", body: (repo, object) => ({repository: repo, object})},
-    resolve: {path: "/knowledge/v1/objects:resolve", body: (repo, object) => ({repository: repo, object})},
-    relations: {path: "/knowledge/v1/relations:query", body: (repo, object) => ({repository: repo, endpoint: object, limit: 20})},
-    provenance: {path: "/knowledge/v1/provenance:describe", body: (repo, object) => ({repository: repo, object})},
-    log: {path: "/knowledge/v1/log:query", body: (repo, object) => ({repository: repo, object, limit: 20})},
+    read: {path: "/object/v1/objects:read", body: (repo, object) => ({repository: repo, object})},
+    resolve: {path: "/object/v1/objects:resolve", body: (repo, object) => ({repository: repo, object})},
+    relations: {path: "/object/v1/relations:query", body: (repo, object) => ({repository: repo, endpoint: object, limit: 20})},
+    provenance: {path: "/object/v1/provenance:describe", body: (repo, object) => ({repository: repo, object})},
+    log: {path: "/object/v1/log:query", body: (repo, object) => ({repository: repo, object, limit: 20})},
   };
   let session = null, discovery = null, requestVersion = 0, loginVersion = 0, lastRoute = {page: "", id: "", face: ""};
   let repos = [], datasets = [], described = [], currentRepo = "";
@@ -174,7 +174,7 @@
     $("dataset-section").hidden = rows.length === 0;
     $("dataset-cards").textContent = "";
     $("dataset-empty").hidden = rows.length > 0;
-    $("dataset-empty").textContent = rows.length ? "" : "没有已发布 Dataset。仓仍可按 Repository 做 knowledge.read；按文件清单消费需要先 define，空清单不放行整仓。";
+    $("dataset-empty").textContent = rows.length ? "" : "没有已发布 Dataset。仓仍可按 Repository 做 object.read；按文件清单消费需要先 define，空清单不放行整仓。";
     for (const item of rows) {
       const card = document.createElement("article");
       card.className = "card pick";
@@ -213,7 +213,7 @@
     indexTitle.textContent = "检索投影";
     index.appendChild(indexTitle);
     if (stores && stores.error) addLine(index, stores.error.code === "FORBIDDEN" ? "当前身份看不到检索绑定。" : ("无法观察检索面："+stores.error.message));
-    else if ((retrieval.driver || "none") === "none") addLine(index, "未配置 OpenSearch。SEARCH 失败关闭，已发布知识仍可精确读。");
+    else if ((retrieval.driver || "none") === "none") addLine(index, "未配置 OpenSearch。SEARCH 失败关闭，已发布对象仍可精确读。");
     else {
       addLine(index, "OpenSearch" + (retrieval.origin ? " · "+retrieval.origin : ""));
       addLine(index, searchReady.status === "ready" ? "检索分面 ready。" : (reasonText(searchReady.reasonCode) || "检索分面未就绪。"));
@@ -307,7 +307,7 @@
   }
   async function runSchemaList() {
     if (!currentRepo) throw new Error("先打开一座仓。");
-    const listed = await api("/knowledge/v1/schemas:list", {repository: currentRepo, limit: 50});
+    const listed = await api("/object/v1/schemas:list", {repository: currentRepo, limit: 50});
     renderSchemaList(Array.isArray(listed.schemas) ? listed.schemas : []);
     $("schema-out-meta").textContent = "";
     showJSON($("schema-out"), null, "schema-out-wrap");
@@ -315,7 +315,7 @@
   async function runSchemaDescribe(objectId) {
     if (!currentRepo) throw new Error("先打开一座仓。");
     if (!objectId) throw new Error("schema list 里选一行。");
-    const report = await api("/knowledge/v1/schemas:describe", {repository: currentRepo, object: objectId});
+    const report = await api("/object/v1/schemas:describe", {repository: currentRepo, object: objectId});
     const match = (report.schemas || []).find((item) => item.objectId === objectId);
     $("schema-out-meta").textContent = "schema describe · " + objectId;
     showJSON($("schema-out"), match || report, "schema-out-wrap");
@@ -429,7 +429,7 @@
     }
     const rows = [];
     for (const schema of schemaRows) {
-      const report = await api("/knowledge/v1/schemas:describe", {repository: currentRepo, object: schema.objectId});
+      const report = await api("/object/v1/schemas:describe", {repository: currentRepo, object: schema.objectId});
       const match = (report.schemas || []).find((item) => item.objectId === schema.objectId) || {};
       for (const field of match.fields || []) {
         if (!field.path || (!isTextField(field) && !isFilterField(field))) continue;
@@ -486,9 +486,9 @@
     $("search-hits").hidden = rows.length === 0;
     $("search-hits").textContent = "";
     for (const hit of rows) {
-      const knowledge = hit.knowledge || {};
+      const object = hit.object || {};
       const version = hit.version || {};
-      const objectId = knowledge.address?.objectId || version.objectId || "";
+      const objectId = object.address?.objectId || version.objectId || "";
       const article = document.createElement("article");
       article.className = "hit";
       const title = document.createElement("h3");
@@ -496,7 +496,7 @@
       article.appendChild(title);
       const meta = document.createElement("p");
       meta.className = "muted";
-      meta.textContent = [knowledge.repository || version.repository || "", shortCommit(knowledge.commit || version.declarationCommit || ""), "点开 read"].filter(Boolean).join(" · ");
+      meta.textContent = [object.repository || version.repository || "", shortCommit(object.commit || version.declarationCommit || ""), "点开 read"].filter(Boolean).join(" · ");
       article.appendChild(meta);
       article.addEventListener("click", () => {
         $("object-id").value = objectId;
@@ -652,7 +652,7 @@
   }
   async function runSearch() {
     const request = parseSearchQuery();
-    renderSearch(await api("/knowledge/v1/search", request), request);
+    renderSearch(await api("/object/v1/search", request), request);
   }
   async function runObject(verb) {
     if (!currentRepo) throw new Error("先打开一座仓。");

@@ -12,14 +12,14 @@ type Config = objectclient.Config
 type RequestOptions = objectclient.RequestOptions
 
 type BindingRequest struct {
-	objectclient.KnowledgeScope
+	objectclient.ObjectScope
 	Object string `json:"object"`
 	Aspect string `json:"aspect"`
 	Member string `json:"member,omitempty"`
 }
 
 type AccessRequest struct {
-	objectclient.KnowledgeScope
+	objectclient.ObjectScope
 	Object         string          `json:"object"`
 	Aspect         string          `json:"aspect,omitempty"`
 	Member         string          `json:"member,omitempty"`

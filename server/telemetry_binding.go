@@ -8,15 +8,15 @@ import (
 
 	"kc/internal/telemetry"
 	"kc/kernel"
-	knowledgeserving "kc/liveaccess"
+	objectserving "kc/liveaccess"
 )
 
 type observedStateLookup struct {
-	base    knowledgeserving.StateLookup
+	base    objectserving.StateLookup
 	runtime *telemetry.Runtime
 }
 
-func observeStateLookup(base knowledgeserving.StateLookup, runtime *telemetry.Runtime) knowledgeserving.StateLookup {
+func observeStateLookup(base objectserving.StateLookup, runtime *telemetry.Runtime) objectserving.StateLookup {
 	if base == nil || runtime == nil {
 		return base
 	}
@@ -26,7 +26,7 @@ func observeStateLookup(base knowledgeserving.StateLookup, runtime *telemetry.Ru
 	return &observedStateLookup{base: base, runtime: runtime}
 }
 
-func (s *observedStateLookup) LookupState(ctx context.Context, request knowledgeserving.StateLookupRequest) (knowledgeserving.StateObservation, error) {
+func (s *observedStateLookup) LookupState(ctx context.Context, request objectserving.StateLookupRequest) (objectserving.StateObservation, error) {
 	mode := strings.ToLower(string(request.Binding.Mode))
 	ctx, span, started := s.runtime.StartBindingLookup(ctx, mode)
 	observation, err := s.base.LookupState(ctx, request)

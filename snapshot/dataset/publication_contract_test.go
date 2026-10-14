@@ -42,7 +42,7 @@ func TestDatasetCatalogsSharePublicationAuthority(t *testing.T) {
 	if err := publisher.RegisterRepository(source.ID()); err != nil {
 		t.Fatal(err)
 	}
-	definition, err := publisher.DefineKnowledgeSet("delivery", 1, []catalog.KnowledgeSetSource{{
+	definition, err := publisher.DefineDataset("delivery", 1, []catalog.DatasetSource{{
 		Repository: source.ID(), Selector: snapshot.DefaultRef,
 		File: "source/original.txt", Target: "bundle/readme.txt",
 	}})
@@ -68,7 +68,7 @@ func TestDatasetCatalogsSharePublicationAuthority(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pin, err := consumer.ResolveKnowledgeSet("delivery")
+	pin, err := consumer.ResolveDataset("delivery")
 	if err != nil || len(pin.Items) != 1 {
 		t.Fatalf("resolve published file: %#v, %v", pin, err)
 	}
@@ -80,10 +80,10 @@ func TestDatasetCatalogsSharePublicationAuthority(t *testing.T) {
 	if err != nil || !bytes.Equal(read, body) {
 		t.Fatalf("opaque file bytes changed: %q, %v", read, err)
 	}
-	if _, err := consumer.DefineKnowledgeSet("delivery", 2, accepted.Sources); err != nil {
+	if _, err := consumer.DefineDataset("delivery", 2, accepted.Sources); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := publisher.DefineKnowledgeSet("delivery", 3, accepted.Sources); kernel.CodeOf(err) != kernel.ErrNonFastForward {
+	if _, err := publisher.DefineDataset("delivery", 3, accepted.Sources); kernel.CodeOf(err) != kernel.ErrNonFastForward {
 		t.Fatalf("a stale Service bypassed the shared authority CAS: %v", err)
 	}
 	reopened, err := catalog.NewService(store, registry)
@@ -98,7 +98,7 @@ func TestDatasetCatalogsSharePublicationAuthority(t *testing.T) {
 
 func TestDatasetPreservesFileJSON(t *testing.T) {
 	const raw = `{"setId":"files","revision":1,"sources":[{"repository":"kr://files/source","selector":"refs/heads/main","commit":"fixed","file":"a.txt","target":"docs/a.txt"}],"items":[{"target":"docs/a.txt","repository":"kr://files/source","commit":"fixed","kind":"file","file":"a.txt"}]}`
-	var definition catalog.KnowledgeSet
+	var definition catalog.Dataset
 	if err := catalog.DecodeJSON([]byte(raw), &definition); err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestDatasetPreservesFileJSON(t *testing.T) {
 		`{"setId":"files","sources":[{"repository":"kr://files/source","aspect":"canonical"}]}`,
 	} {
 		if err := catalog.DecodeJSON([]byte(invalid), &definition); err == nil {
-			t.Fatalf("Dataset accepted a knowledge selector: %s", invalid)
+			t.Fatalf("Dataset accepted an object selector: %s", invalid)
 		}
 	}
 }

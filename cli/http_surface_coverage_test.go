@@ -109,13 +109,13 @@ func TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses(t *testing.T) {
 	body(t, kc(home, "attach", "--repo", repositoryID, "--dsn", repositoryDSN))
 	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "Policy:http-only", ""), "--command-id", "http-only-seed", "--value", `{"body":"http-only"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1",
-		"--source", repositoryID+"=refs/heads/main@knowledge"))
+		"--source", repositoryID+"=refs/heads/main@object"))
 	body(t, kc(home, "grant", "add", "--principal", principal,
 		"--action", "inventory.read,dataset.resolve"))
 	body(t, kc(home, "grant", "add", "--principal", principal,
 		"--action", "file.read", "--dataset", "agent"))
 	body(t, kc(home, "grant", "add", "--principal", principal,
-		"--action", "knowledge.read,governance.proposal.create", "--repo", repositoryID))
+		"--action", "object.read,governance.proposal.create", "--repo", repositoryID))
 
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
@@ -294,7 +294,7 @@ func allowedHTTPPath(path string) bool {
 		}
 	}
 	for _, namespace := range []string{
-		"/api/v1/", "/identity/v1/", "/snapshot/v1/", "/knowledge/v1/", "/snapshot/v1/files/",
+		"/api/v1/", "/identity/v1/", "/snapshot/v1/", "/object/v1/", "/snapshot/v1/files/",
 		"/writer/v1/", "/governance/v1/", "/admin/v1/", "/operations/v1/",
 	} {
 		if strings.HasPrefix(path, namespace) {
@@ -316,11 +316,11 @@ func TestRetiredHTTPRoutesAreNotFound(t *testing.T) {
 		method string
 		path   string
 	}{
-		{http.MethodPost, "/knowledge/v1/addresses:read"},
-		{http.MethodPost, "/knowledge/v1/schemas:page"},
-		{http.MethodPost, "/knowledge/v1/schemas:get"},
-		{http.MethodPost, "/knowledge/v1/log:get"},
-		{http.MethodPost, "/knowledge/v1/provenance:get"},
+		{http.MethodPost, "/object/v1/addresses:read"},
+		{http.MethodPost, "/object/v1/schemas:page"},
+		{http.MethodPost, "/object/v1/schemas:get"},
+		{http.MethodPost, "/object/v1/log:get"},
+		{http.MethodPost, "/object/v1/provenance:get"},
 		{http.MethodPost, "/operations/v1/projections:notify"},
 		{http.MethodPost, "/operations/v1/traces:get"},
 		{http.MethodPost, "/writer/v1/repositories/" + url.PathEscape("kr://acme/repository") + "/proposals"},

@@ -1,6 +1,6 @@
 # hook/
 
-**Hook 是出站调用**：在应用动作的 `pre` / `post` 去调用户脚本或 HTTP。不拥有知识，不替代 `allow`，也不是 gate。
+**Hook 是出站调用**：在应用动作的 `pre` / `post` 去调用户脚本或 HTTP。不拥有对象，不替代 `allow`，也不是 gate。
 
 配置在服务持久 `stateDir` 下的 `hooks.json`。`pre` 必须 `--run`、超时 fail closed、失败则命令不落盘。`post` 只发指针；HTTP 失败进 `hook-outbox.jsonl`，不撤销已成功命令。`REPLAYED` 不打 hook。读路径不挂 hook。
 

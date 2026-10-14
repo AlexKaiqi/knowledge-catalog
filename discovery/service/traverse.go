@@ -55,7 +55,7 @@ func (c TraverseCore) Run(ctx context.Context, request retrieval.TraverseRequest
 	if err != nil {
 		return retrieval.TraversePage{}, err
 	}
-	visited := make(map[objectmodel.KnowledgeRef]struct{}, len(position.Visited))
+	visited := make(map[objectmodel.ObjectRef]struct{}, len(position.Visited))
 	for _, ref := range position.Visited {
 		visited[ref] = struct{}{}
 	}
@@ -84,7 +84,7 @@ func (c TraverseCore) Run(ctx context.Context, request retrieval.TraverseRequest
 			return retrieval.TraversePage{}, err
 		}
 		if !allowed {
-			return retrieval.TraversePage{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "traverse start is outside the fixed scope")
+			return retrieval.TraversePage{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "traverse start is outside the fixed scope")
 		}
 		visited[start] = struct{}{}
 		frontier = []retrieval.TraverseFrontierEntry{{Repository: start.Repository, Object: start.Object, Depth: 0}}
@@ -145,7 +145,7 @@ func (c TraverseCore) Run(ctx context.Context, request retrieval.TraverseRequest
 		if err != nil {
 			return retrieval.TraversePage{}, err
 		}
-		nodeRef := objectmodel.KnowledgeRef{Repository: entry.Repository, Object: entry.Object}
+		nodeRef := objectmodel.ObjectRef{Repository: entry.Repository, Object: entry.Object}
 		key := retrieval.TraversePositionKey(entry.Repository, entry.Object)
 		laneContinuation := positions[key]
 		pageRequest := retrieval.RelationPageRequest{
@@ -277,8 +277,8 @@ func (c TraverseCore) Run(ctx context.Context, request retrieval.TraverseRequest
 	return out, nil
 }
 
-func refsOf(visited map[objectmodel.KnowledgeRef]struct{}) []objectmodel.KnowledgeRef {
-	refs := make([]objectmodel.KnowledgeRef, 0, len(visited))
+func refsOf(visited map[objectmodel.ObjectRef]struct{}) []objectmodel.ObjectRef {
+	refs := make([]objectmodel.ObjectRef, 0, len(visited))
 	for ref := range visited {
 		refs = append(refs, ref)
 	}
@@ -371,7 +371,7 @@ func (e DatasetTraverseExecutor) Execute(ctx context.Context, request retrieval.
 		return retrieval.TraversePage{}, err
 	}
 	if !allowed {
-		return retrieval.TraversePage{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "traverse start is outside dataset")
+		return retrieval.TraversePage{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "traverse start is outside dataset")
 	}
 	ctx, cancel := index.WithSearchBudget(ctx, index.SearchBudget{})
 	defer cancel()

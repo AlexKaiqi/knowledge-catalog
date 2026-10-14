@@ -66,7 +66,7 @@ func TestEveryPublicHelpExplainsUseEffectsAndRecoveryWithoutExecuting(t *testing
 
 func TestHelpPreservesDistinctWriteAndEvidenceBoundaries(t *testing.T) {
 	for path, claims := range map[string][]string{
-		"provenance":                   {"单仓需 knowledge.provenance", "命名 Dataset", "file.read", "完整读取检查"},
+		"provenance":                   {"单仓需 object.provenance", "命名 Dataset", "file.read", "完整读取检查"},
 		"access":                       {"resource.access", "file.read 不蕴含此访问权"},
 		"writer commit":                {"目录外已有对象保留", "不自动拆批", "只轮询原回执"},
 		"writer remove":                {"全部存储单元", "不擦除历史版本"},

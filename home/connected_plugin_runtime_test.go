@@ -14,7 +14,7 @@ import (
 func TestConnectedPluginRuntimeVerifiesBeforePreparingAndReading(t *testing.T) {
 	f := newConnectedPluginFixture(t)
 	ws := f.openCold(t)
-	repo, err := ws.Reader.Require(f.id, kernel.ErrKnowledgeRefUnresolved)
+	repo, err := ws.Reader.Require(f.id, kernel.ErrObjectRefUnresolved)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestConnectedPluginConfigurationFailurePreservesManagementRecovery(t *testi
 			if f.metadataReads.Load() != before+1 || !ws.Plugins.ConfiguredFor(f.id) {
 				t.Fatal("failed native metadata became an unconfigured source")
 			}
-			repo, err := ws.Reader.Require(f.id, kernel.ErrKnowledgeRefUnresolved)
+			repo, err := ws.Reader.Require(f.id, kernel.ErrObjectRefUnresolved)
 			if err != nil {
 				t.Fatal(err)
 			}

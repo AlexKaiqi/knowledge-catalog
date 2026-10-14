@@ -74,7 +74,7 @@ func TestVirtualAspectUsesHistoricalAdoptedSchemaWithoutSiblingReads(t *testing.
 	if err := readRegistry.Add(guard); err != nil {
 		t.Fatal(err)
 	}
-	repo, err := reader.NewReader(readRegistry).Require(raw.ID(), kernel.ErrKnowledgeRefUnresolved)
+	repo, err := reader.NewReader(readRegistry).Require(raw.ID(), kernel.ErrObjectRefUnresolved)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestVirtualAspectUsesHistoricalAdoptedSchemaWithoutSiblingReads(t *testing.
 		t.Fatalf("virtual Aspect followed current Schema instead of the actual historical adoption: %#v %#v sibling=%d schema=%v %v", result, lookup.requests, guard.siblingReads, guard.schemaReads, err)
 	}
 	commits := map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit}
-	scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return repo, nil }, reader.KnowledgeSetPin{
+	scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return repo, nil }, reader.DatasetPin{
 		Repositories: commits, Items: reader.WholeRepositoryItems(commits),
 	})
 	member, err := scope.Member(repo.ID())
@@ -102,7 +102,7 @@ func TestVirtualAspectUsesHistoricalAdoptedSchemaWithoutSiblingReads(t *testing.
 	rejected, err := liveservice.ReadRepository(context.Background(), member, liveservice.ReadRequest{Commit: commit,
 		Reference: &objectmodel.Reference{Repository: repo.ID(), Object: id, Locator: "/metric/value"}}, lookup,
 		objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "consumer"}})
-	if kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved || rejected.Value != nil || len(lookup.requests) != 1 ||
+	if kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved || rejected.Value != nil || len(lookup.requests) != 1 ||
 		guard.schemaReads[schemaBasis] != oldReads || guard.siblingReads != 0 {
 		t.Fatalf("Repository interpretation bypassed its supplied Dataset version boundary: %#v lookups=%d sibling=%d schema=%v %v", rejected, len(lookup.requests), guard.siblingReads, guard.schemaReads, err)
 	}

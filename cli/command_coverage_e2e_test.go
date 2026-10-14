@@ -12,7 +12,7 @@ import (
 // This journey owns the public commands that do not naturally occur in the
 // provider/consumer/governance journeys. Each assertion protects observable
 // protocol behavior; it is not a call-only coverage fixture.
-func TestCatalogViewsChecksAndKnowledgeResolve(t *testing.T) {
+func TestCatalogViewsChecksAndObjectResolve(t *testing.T) {
 	home := testkit.TempDir(t)
 
 	repositoryID := "kr://acme/public/core"
@@ -29,9 +29,9 @@ func TestCatalogViewsChecksAndKnowledgeResolve(t *testing.T) {
 		t.Fatalf("writer head must expose a fixed Connector/preview base: %#v", head)
 	}
 	body(t, kc(home, "dataset", "define", "--dataset", "coverage", "--revision", "1",
-		"--source", repositoryID+"=refs/heads/main@knowledge"))
+		"--source", repositoryID+"=refs/heads/main@object"))
 	body(t, kc(home, "dataset", "define", "coverage-pos", "--revision", "1",
-		"--source", repositoryID+"=refs/heads/main@knowledge"))
+		"--source", repositoryID+"=refs/heads/main@object"))
 
 	expectCode(t, kc(home, "catalog", "list"), "USAGE_INVALID")
 
@@ -42,7 +42,7 @@ func TestCatalogViewsChecksAndKnowledgeResolve(t *testing.T) {
 	}
 	workspaces := catalogView["datasets"].([]any)
 	if len(workspaces) != 2 {
-		t.Fatalf("show must list named knowledge sets: %#v", workspaces)
+		t.Fatalf("show must list named datasets: %#v", workspaces)
 	}
 	var workspace map[string]any
 	for _, raw := range workspaces {
@@ -59,7 +59,7 @@ func TestCatalogViewsChecksAndKnowledgeResolve(t *testing.T) {
 		t.Fatalf("show must not expose selectors: %#v", workspace)
 	}
 	if repos, _ := workspace["repositories"].([]any); len(repos) != 1 || repos[0] != repositoryID {
-		t.Fatalf("show must list member knowledge sources: %#v", workspace)
+		t.Fatalf("show must list member object sources: %#v", workspace)
 	}
 	expectCode(t, kc(home, "workspace", "show", "--dataset", "missing"), "USAGE_INVALID")
 
@@ -69,7 +69,7 @@ func TestCatalogViewsChecksAndKnowledgeResolve(t *testing.T) {
 	}
 
 	// Schema discovery is bounded and pinned to one Repository basis, so a
-	// consumer can browse it without first choosing a knowledge set.
+	// consumer can browse it without first choosing a dataset.
 	browsed := asMap(t, body(t, kc(home, "schema", "list", "--repo", repositoryID)))
 	if browsed["repository"] != repositoryID || browsed["commit"] == "" || browsed["exhausted"] != nil || browsed["coverage"] != nil {
 		t.Fatalf("schema browse must report one fixed basis without invented totals: %#v", browsed)

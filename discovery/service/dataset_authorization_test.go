@@ -16,7 +16,7 @@ func TestDatasetSearchAuthorizesBeforeResolution(t *testing.T) {
 			t.Fatal("denied search resolved data")
 			return nil, nil, nil
 		},
-		Deliver: func(_ context.Context, v retrieval.KnowledgeHit) (retrieval.KnowledgeHit, error) {
+		Deliver: func(_ context.Context, v retrieval.ObjectHit) (retrieval.ObjectHit, error) {
 			t.Fatal("denied search delivered data")
 			return v, nil
 		},

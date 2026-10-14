@@ -21,8 +21,8 @@ func TestSurfaceCheckerUsesBothProductionHTTPRouteOwners(t *testing.T) {
 		{"moduleUntypedInvocation", "snapshot/service/http.go", "client.Invoke()\n", "untyped client invocation"},
 		{"moduleLegacyHTTP", "snapshot/service/http.go", "mux.Handle(\"POST /v1/old\", handler)\n", "legacy verb HTTP implementation"},
 		{"serverCLIRegistry", "server/service_routes.go", "ParseArgs\n", "typed HTTP routes depend on CLI registries/parser"},
-		{"retiredAgentTool", "cli/tools.go", "knowledge_read\n", "retired model tools"},
-		{"retiredSnapshotAgentTool", "snapshot/cli/tools.go", "knowledge_read\n", "retired model tools"},
+		{"retiredAgentTool", "cli/tools.go", "object_read\n", "retired model tools"},
+		{"retiredSnapshotAgentTool", "snapshot/cli/tools.go", "object_read\n", "retired model tools"},
 		{"untypedSnapshotSDK", "snapshot/client/client.go", "client.Invoke()\n", "untyped client invocation"},
 		{"staleSnapshotEntryExample", "snapshot/cli/README.md", "kc define-workspace old\n", "stale flat CLI examples"},
 		{"staleSnapshotCLIExample", "snapshot/dataset/README.md", "kc define-workspace old\n", "stale flat CLI examples"},
@@ -77,7 +77,7 @@ func surfaceFixture(t *testing.T) string {
 		"snapshot/service/README.md": "",
 		"snapshot/console/README.md": "",
 		"server/service_routes.go": "mux.HandleFunc(\"GET /snapshot/v1/inventory\", handler)\n" +
-			"mux.HandleFunc(\"POST /knowledge/v1/read\", handler)\n" +
+			"mux.HandleFunc(\"POST /object/v1/read\", handler)\n" +
 			"mux.HandleFunc(\"POST /writer/v1/commits\", handler)\n" +
 			"mux.HandleFunc(\"POST /governance/v1/proposals\", handler)\n" +
 			"mux.HandleFunc(\"POST /identity/v1/token\", handler)\n" +

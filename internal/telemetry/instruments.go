@@ -19,7 +19,7 @@ import (
 func (r *Runtime) registerInstruments(meter metric.Meter) error {
 	for _, register := range []func(*Runtime, metric.Meter) error{
 		(*Runtime).registerRequestInstruments,
-		(*Runtime).registerKnowledgeInstruments,
+		(*Runtime).registerObjectInstruments,
 		(*Runtime).registerSearchInstruments,
 		(*Runtime).registerProjectionInstruments,
 		(*Runtime).registerBindingEvidenceInstruments,
@@ -64,7 +64,7 @@ func (r *Runtime) registerRequestInstruments(meter metric.Meter) error {
 	return nil
 }
 
-func (r *Runtime) registerKnowledgeInstruments(meter metric.Meter) error {
+func (r *Runtime) registerObjectInstruments(meter metric.Meter) error {
 	var err error
 	if r.workspaceDuration, err = meter.Float64Histogram("kc.workspace.resolve.duration", metric.WithUnit("s"), metric.WithExplicitBucketBoundaries(requestDurationSecondsBuckets...)); err != nil {
 		return err

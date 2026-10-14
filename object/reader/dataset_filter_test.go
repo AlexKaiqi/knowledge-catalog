@@ -12,7 +12,7 @@ import (
 
 func TestEmptyDatasetItemsDoNotAdmitWholeRepository(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	commit, err := s.Repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	commit, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: testkit.PutEntity("policy/A", map[string]any{"body": "secret"}, "docs/a.yaml"),
@@ -22,7 +22,7 @@ func TestEmptyDatasetItemsDoNotAdmitWholeRepository(t *testing.T) {
 	}
 	serving := reader.Open(func(id kernel.RepositoryID) (objectmodel.Repository, error) {
 		return s.Repo, nil
-	}, reader.KnowledgeSetPin{SetID: "empty", Repositories: map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit}})
+	}, reader.DatasetPin{SetID: "empty", Repositories: map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit}})
 	values, err := serving.Read("policy/A", nil)
 	if err != nil || len(values) != 0 {
 		t.Fatalf("empty Items must not admit the whole repository: %#v %v", values, err)
@@ -31,7 +31,7 @@ func TestEmptyDatasetItemsDoNotAdmitWholeRepository(t *testing.T) {
 
 func TestPrefixDatasetItemsExcludeSiblingPaths(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	commit, err := s.Repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	commit, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: append(
@@ -42,7 +42,7 @@ func TestPrefixDatasetItemsExcludeSiblingPaths(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pin := reader.KnowledgeSetPin{
+	pin := reader.DatasetPin{
 		SetID:        "docs",
 		Repositories: map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit},
 		Items: []reader.DatasetItem{{

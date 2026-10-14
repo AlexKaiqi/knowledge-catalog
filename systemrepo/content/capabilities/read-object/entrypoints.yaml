@@ -1,0 +1,35 @@
+---
+object_id: kc/capability/read-object
+aspect_name: entrypoints
+kind: Aspect
+path_hint: capabilities/read-object/entrypoints.yaml
+schema_ref: schema/system/capability-entrypoints/v1
+---
+{
+  "commands": [
+    {
+      "action": "object.history.read",
+      "command": "kc log",
+      "description": "分页读取对象修订历史",
+      "help": "kc help log"
+    },
+    {
+      "action": "object.provenance",
+      "command": "kc provenance",
+      "description": "读取对象来源信封",
+      "help": "kc help provenance"
+    },
+    {
+      "action": "object.read",
+      "command": "kc read",
+      "description": "按固定声明依据读取对象或 URN 指定的数据",
+      "help": "kc help read"
+    },
+    {
+      "action": "object.read",
+      "command": "kc resolve",
+      "description": "检查对象是否存在并给出解析到的 commit，不打开正文",
+      "help": "kc help resolve"
+    }
+  ]
+}

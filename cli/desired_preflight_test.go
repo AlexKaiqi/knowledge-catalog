@@ -32,7 +32,7 @@ func TestRemoteCurrentDigestsRunsConcurrently(t *testing.T) {
 			}
 		}
 		time.Sleep(30 * time.Millisecond) // widen the overlap window
-		var request kcclient.KnowledgeResolveRequest
+		var request kcclient.ObjectResolveRequest
 		_ = json.NewDecoder(r.Body).Decode(&request)
 		atomic.AddInt32(&inFlight, -1)
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -79,7 +79,7 @@ func TestRemoteCurrentDigestsRunsConcurrently(t *testing.T) {
 // unresolved address contributes no entry, and empty digests are ignored.
 func TestRemoteCurrentDigestsSkipsUnresolved(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var request kcclient.KnowledgeResolveRequest
+		var request kcclient.ObjectResolveRequest
 		_ = json.NewDecoder(r.Body).Decode(&request)
 		if strings.HasSuffix(request.Object, "missing") {
 			_ = json.NewEncoder(w).Encode(map[string]any{"status": "UNRESOLVED"})

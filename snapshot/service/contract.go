@@ -20,13 +20,13 @@ type Authorization struct {
 	NativeRepository   bool
 	Caller             identity.HTTPIdentity
 	Query              access.Query
-	Definition         *dataset.KnowledgeSet
-	Pin                *dataset.ResolvedKnowledgeSet
+	Definition         *dataset.Dataset
+	Pin                *dataset.ResolvedDataset
 	InventoryDiscovery bool
 }
 
 type FileReadEvidence struct {
-	Pin        dataset.ResolvedKnowledgeSet
+	Pin        dataset.ResolvedDataset
 	Repository kernel.RepositoryID
 	Commit     kernel.CommitID
 	Path       string
@@ -57,8 +57,8 @@ type Resources struct {
 	// BeforeAttach verifies optional host-owned durable connection bindings.
 	// It must not register a source; membership is accepted by Datasets alone.
 	BeforeAttach       func(context.Context, identity.HTTPIdentity, kernel.RepositoryID) error
-	BeforePublish      func(context.Context, identity.HTTPIdentity, dataset.Service, dataset.KnowledgeSet) (dataset.KnowledgeSet, map[string]any, error)
-	PreparePublication func(context.Context, identity.HTTPIdentity, dataset.KnowledgeSet) error
+	BeforePublish      func(context.Context, identity.HTTPIdentity, dataset.Service, dataset.Dataset) (dataset.Dataset, map[string]any, error)
+	PreparePublication func(context.Context, identity.HTTPIdentity, dataset.Dataset) error
 	// EnsureDataset is optional host coordination before named consumption.
 	// KC only confirms an accepted definition. A host that adopts a recipe must
 	// enforce target management and source publication permission before that
@@ -66,7 +66,7 @@ type Resources struct {
 	EnsureDataset func(context.Context, identity.HTTPIdentity, dataset.Service, string) error
 	RecordRead    func(context.Context, identity.HTTPIdentity, FileReadEvidence) error
 	RequestURL    string
-	OpenView      func(context.Context, identity.HTTPIdentity, FileCoordinate, dataset.Service, dataset.KnowledgeSet, dataset.ResolvedKnowledgeSet) (FileView, error)
+	OpenView      func(context.Context, identity.HTTPIdentity, FileCoordinate, dataset.Service, dataset.Dataset, dataset.ResolvedDataset) (FileView, error)
 	around        func(context.Context, identity.HTTPIdentity, string, func() (any, error)) (any, error)
 }
 
@@ -110,7 +110,7 @@ type Handler interface {
 
 // FileView reads an already authorized immutable file scope.
 type FileView interface {
-	FixedPin() dataset.ResolvedKnowledgeSet
+	FixedPin() dataset.ResolvedDataset
 	VisibleMounts() []dataset.VirtualMount
 	List(request FileDirectoryRequest) (FileDirectoryResponse, error)
 	Read(request FileReadRequest) (FileReadResponse, error)

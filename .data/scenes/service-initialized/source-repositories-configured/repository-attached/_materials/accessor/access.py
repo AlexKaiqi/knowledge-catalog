@@ -57,7 +57,7 @@ def lookup(request: dict[str, Any], principal: str) -> dict[str, Any]:
         if table is not None:
             try:
                 if not shop.table_exists(table):
-                    raise AccessError("KNOWLEDGE_REF_UNRESOLVED", f"table {object_id} is not in the live shop catalog")
+                    raise AccessError("OBJECT_REF_UNRESOLVED", f"table {object_id} is not in the live shop catalog")
                 return {
                     "value": shop.stats_value(table),
                     "basis": {
@@ -92,7 +92,7 @@ def execute_query(request: dict[str, Any], principal: str) -> dict[str, Any]:
         raise AccessError("CAPABILITY_UNSATISFIED", "unexpected runtime call")
     descriptor = request.get("descriptor")
     if not isinstance(descriptor, dict) or descriptor.get("objectId") != DESCRIPTOR_ID:
-        raise AccessError("KNOWLEDGE_REF_UNRESOLVED", "the pinned SQL ResourceDescriptor is required")
+        raise AccessError("OBJECT_REF_UNRESOLVED", "the pinned SQL ResourceDescriptor is required")
     operation_input = request.get("input")
     if not isinstance(operation_input, dict):
         raise AccessError("USAGE_INVALID", "query input must be an object")

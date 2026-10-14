@@ -8,10 +8,10 @@ import (
 	"testing"
 )
 
-func TestKnowledgeEnvelopeRejectsInvalidDatasetMetadata(t *testing.T) {
+func TestObjectEnvelopeRejectsInvalidDatasetMetadata(t *testing.T) {
 	for _, metadata := range []string{`null`, `{"x":null}`, `{"x":1}`, `{"x":[]}`, `{"x":"a","x":"b"}`} {
-		var request knowledgeReadRequest
-		r := httptest.NewRequest(http.MethodPost, "/knowledge/v1/read", strings.NewReader(`{"reference":"urn:kc:object:kr%3A%2F%2Fsource%2Fa:object","definition":{"revision":1,"sources":[],"metadata":`+metadata+`}}`))
+		var request objectReadRequest
+		r := httptest.NewRequest(http.MethodPost, "/object/v1/read", strings.NewReader(`{"reference":"urn:kc:object:kr%3A%2F%2Fsource%2Fa:object","definition":{"revision":1,"sources":[],"metadata":`+metadata+`}}`))
 		response := httptest.NewRecorder()
 		if decodeServiceRequest(response, r, &request) || response.Code != http.StatusBadRequest {
 			t.Fatalf("invalid inline metadata was accepted: %s HTTP %d", metadata, response.Code)
@@ -19,13 +19,13 @@ func TestKnowledgeEnvelopeRejectsInvalidDatasetMetadata(t *testing.T) {
 	}
 }
 
-func TestKnowledgeEnvelopeKeepsResourceMetadataSeparateFromQueryValues(t *testing.T) {
+func TestObjectEnvelopeKeepsResourceMetadataSeparateFromQueryValues(t *testing.T) {
 	var request struct {
-		knowledgeScope
+		objectScope
 		Value any `json:"value"`
 	}
 	body := `{"definition":{"revision":1,"sources":[],"metadata":{"custom":"yes"}},"value":{"metadata":{"number":9007199254740993,"nullable":null}}}`
-	r := httptest.NewRequest(http.MethodPost, "/knowledge/v1/read", strings.NewReader(body))
+	r := httptest.NewRequest(http.MethodPost, "/object/v1/read", strings.NewReader(body))
 	if !decodeServiceRequest(httptest.NewRecorder(), r, &request) || request.Definition.Metadata["custom"] != "yes" {
 		t.Fatalf("valid resource metadata rejected: %#v", request)
 	}

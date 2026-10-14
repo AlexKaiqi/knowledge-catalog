@@ -21,7 +21,7 @@ func WalkScope(store snapshot.Store, repo objectmodel.Repository, commit kernel.
 		if prefix == "" {
 			// Whole-repository publication explicitly permits full export,
 			// including native authorities with no literal file representation.
-			return WalkRepository(repo, commit, func(value objectmodel.KnowledgeValue) error { return visit(value.Address.ObjectID) })
+			return WalkRepository(repo, commit, func(value objectmodel.ObjectValue) error { return visit(value.Address.ObjectID) })
 		}
 	}
 	if pager, ok := repo.(FileScopePager); ok {

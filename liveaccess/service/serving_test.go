@@ -31,7 +31,7 @@ func setupServing(t *testing.T) (*reader.Serving, kernel.RepositoryID, kernel.Co
 	t.Helper()
 	s := testkit.NewSetup(t, "")
 	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Job:orders", AspectName: "runtime"}
-	commit, err := s.Repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	commit, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: []objectmodel.Operation{
@@ -50,14 +50,14 @@ func setupServing(t *testing.T) (*reader.Serving, kernel.RepositoryID, kernel.Co
 			return nil, errors.New("unexpected repository")
 		}
 		return s.Repo.Repository, nil
-	}, reader.KnowledgeSetPin{SetID: "agent", Repositories: map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit}, Items: reader.WholeRepositoryItems(map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit})})
+	}, reader.DatasetPin{SetID: "agent", Repositories: map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit}, Items: reader.WholeRepositoryItems(map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit})})
 	return base, s.RepositoryID, commit, address
 }
 
 func TestBoundStateHydratesFromSchemaOriginWithoutInstanceFile(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/orders", AspectName: "stats"}
-	commit, err := s.Repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	commit, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: []objectmodel.Operation{
@@ -76,7 +76,7 @@ func TestBoundStateHydratesFromSchemaOriginWithoutInstanceFile(t *testing.T) {
 			return nil, errors.New("unexpected repository")
 		}
 		return s.Repo.Repository, nil
-	}, reader.KnowledgeSetPin{SetID: "agent", Repositories: map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit}, Items: reader.WholeRepositoryItems(map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit})})
+	}, reader.DatasetPin{SetID: "agent", Repositories: map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit}, Items: reader.WholeRepositoryItems(map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit})})
 	lookup := &stateLookup{result: serving.StateObservation{
 		Value: map[string]any{"rowCount": float64(12)},
 		Basis: objectmodel.ObservationBasis{
@@ -181,8 +181,8 @@ func TestOrdinaryReadRejectsStreamBinding(t *testing.T) {
 	lookup := &stateLookup{}
 	service := liveservice.Open(base, lookup, observability.IdentityContext{Principal: "agent"})
 	raw := objectmodel.FederatedValue{
-		KnowledgeRef: objectmodel.KnowledgeRef{Repository: repositoryID, Object: address.ObjectID},
-		Repository:   repositoryID, Commit: commit, ObjectID: address.ObjectID, Address: address,
+		ObjectRef:  objectmodel.ObjectRef{Repository: repositoryID, Object: address.ObjectID},
+		Repository: repositoryID, Commit: commit, ObjectID: address.ObjectID, Address: address,
 		Declarations: []objectmodel.UnitDeclaration{{
 			Address: address,
 			ValueSource: &objectmodel.ValueSource{Kind: objectmodel.ValueSourceBinding, Binding: &objectmodel.BindingDeclaration{

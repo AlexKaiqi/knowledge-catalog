@@ -14,18 +14,18 @@ type ValidationReport struct {
 
 type StructureReport struct {
 	ValidationReport
-	Check dataset.KnowledgeSetCheck `json:"check"`
+	Check dataset.DatasetCheck `json:"check"`
 }
 
 func (cp *ControlPlane) ValidateStructure(preview Preview) (StructureReport, error) {
-	check := cp.datasets.CheckResolved(dataset.ResolvedKnowledgeSet{
+	check := cp.datasets.CheckResolved(dataset.ResolvedDataset{
 		SetID:        preview.SetID,
 		Repositories: preview.Repositories,
 	})
-	issues := append([]dataset.KnowledgeSetIssue{}, check.Issues...)
+	issues := append([]dataset.DatasetIssue{}, check.Issues...)
 	repo, ok := cp.store.Get(preview.Candidate.RepositoryID)
 	if !ok || !repo.HasCommit(preview.Candidate.CommitID) {
-		issues = append(issues, dataset.KnowledgeSetIssue{
+		issues = append(issues, dataset.DatasetIssue{
 			Repository: preview.Candidate.RepositoryID,
 			Code:       kernel.ErrVersionUnresolved,
 			Message:    "candidate commit " + string(preview.Candidate.CommitID) + " does not exist",

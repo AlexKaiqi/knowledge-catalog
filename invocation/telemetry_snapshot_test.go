@@ -84,7 +84,7 @@ func TestTelemetryFaceMapsCreateAndGrants(t *testing.T) {
 		"dataset-define":          "snapshot",
 		"admin-grant-list":        "control",
 		"grant-add":               "control",
-		"knowledge-read":          "knowledge",
+		"object-read":             "object",
 		"writer-commit":           "writer",
 	}
 	for command, want := range cases {

@@ -41,14 +41,14 @@ func controlVerbs() map[string]inv.Command {
 func datasetVerbs() map[string]inv.Command {
 	return map[string]inv.Command{
 		"show":           {Stage: invoke.StageGoverned, Run: inv.ReadInventoryState},
-		"dataset-define": {Stage: invoke.StageGoverned, Run: inv.VerbDefineKnowledgeSet},
+		"dataset-define": {Stage: invoke.StageGoverned, Run: inv.VerbDefineDataset},
 		"dataset-clone":  {Stage: invoke.StageGoverned, Run: inv.VerbDatasetCloneRequiresServer},
 		"dataset-show":   {Stage: invoke.StageHome, Run: snapshotServerRequired},
 		"files-list":     {Stage: invoke.StageHome, Run: snapshotServerRequired},
 		"files-read":     {Stage: invoke.StageHome, Run: snapshotServerRequired},
 		"attach":         {Stage: invoke.StageGoverned, Run: inv.VerbRegister},
 		"create":         {Stage: invoke.StageGoverned, Run: inv.VerbCreateManagedRepository},
-		"dataset-retire": {Stage: invoke.StageGoverned, Run: inv.VerbRetireKnowledgeSet},
+		"dataset-retire": {Stage: invoke.StageGoverned, Run: inv.VerbRetireDataset},
 		"detach":         {Stage: invoke.StageGoverned, Run: inv.VerbDetach},
 	}
 }
@@ -71,7 +71,7 @@ func verbHelp(cx *inv.Invocation) (any, error) {
 
 func indexVerbs() map[string]inv.Command {
 	return map[string]inv.Command{
-		"knowledge-search":                {Stage: invoke.StageGoverned, Run: inv.VerbSearch},
+		"object-search":                   {Stage: invoke.StageGoverned, Run: inv.VerbSearch},
 		"operations-projection-describe":  {Stage: invoke.StageGoverned, Run: inv.VerbDescribeIndex},
 		"operations-projection-sync":      {Stage: invoke.StageGoverned, Run: inv.VerbIndexSync},
 		"operations-projection-notice":    {Stage: invoke.StageGoverned, Run: inv.VerbIndexNotify},
@@ -81,7 +81,7 @@ func indexVerbs() map[string]inv.Command {
 
 func maintenanceVerbs() map[string]inv.Command {
 	return map[string]inv.Command{
-		"pin-check": {Stage: invoke.StageGoverned, Run: inv.VerbCheckKnowledgeSet},
+		"pin-check": {Stage: invoke.StageGoverned, Run: inv.VerbCheckDataset},
 	}
 }
 
@@ -107,33 +107,33 @@ func policyVerbs() map[string]inv.Command {
 
 func readVerbs() map[string]inv.Command {
 	return map[string]inv.Command{
-		"knowledge-plugin-help":     {Stage: invoke.StageHome, Run: inv.VerbPluginHelp},
-		"pin":                       {Stage: invoke.StageGoverned, Run: inv.VerbResolve},
-		"knowledge-resolve":         {Stage: invoke.StageGoverned, Run: inv.VerbResolveObject},
-		"knowledge-binding-show":    {Stage: invoke.StageGoverned, Run: inv.VerbResolveBinding},
-		"knowledge-read":            {Stage: invoke.StageGoverned, Run: inv.VerbRead},
-		"knowledge-provenance":      {Stage: invoke.StageGoverned, Run: inv.VerbProvenance},
-		"knowledge-relations":       {Stage: invoke.StageGoverned, Run: inv.VerbRelations},
-		"knowledge-traverse":        {Stage: invoke.StageGoverned, Run: inv.VerbTraverse},
-		"knowledge-schema-describe": {Stage: invoke.StageGoverned, Run: inv.VerbDescribeSchema},
-		"knowledge-schema-list":     {Stage: invoke.StageGoverned, Run: inv.VerbBrowseSchemas},
-		"knowledge-log":             {Stage: invoke.StageGoverned, Run: inv.VerbLog},
+		"object-plugin-help":     {Stage: invoke.StageHome, Run: inv.VerbPluginHelp},
+		"pin":                    {Stage: invoke.StageGoverned, Run: inv.VerbResolve},
+		"object-resolve":         {Stage: invoke.StageGoverned, Run: inv.VerbResolveObject},
+		"object-binding-show":    {Stage: invoke.StageGoverned, Run: inv.VerbResolveBinding},
+		"object-read":            {Stage: invoke.StageGoverned, Run: inv.VerbRead},
+		"object-provenance":      {Stage: invoke.StageGoverned, Run: inv.VerbProvenance},
+		"object-relations":       {Stage: invoke.StageGoverned, Run: inv.VerbRelations},
+		"object-traverse":        {Stage: invoke.StageGoverned, Run: inv.VerbTraverse},
+		"object-schema-describe": {Stage: invoke.StageGoverned, Run: inv.VerbDescribeSchema},
+		"object-schema-list":     {Stage: invoke.StageGoverned, Run: inv.VerbBrowseSchemas},
+		"object-log":             {Stage: invoke.StageGoverned, Run: inv.VerbLog},
 	}
 }
 
 func resourceVerbs() map[string]inv.Command {
 	return map[string]inv.Command{
-		"knowledge-access": {Stage: invoke.StageGoverned, Run: inv.VerbResourceAccess},
-		"knowledge-invoke": {Stage: invoke.StageGoverned, Run: inv.VerbResourceInvoke},
+		"object-access": {Stage: invoke.StageGoverned, Run: inv.VerbResourceAccess},
+		"object-invoke": {Stage: invoke.StageGoverned, Run: inv.VerbResourceInvoke},
 	}
 }
 
 // effectiveWorkspace is the recipe this command actually uses: registration state (or a
 // hitchhiking yaml) plus the local overlay for this --as, if any.
-func effectiveWorkspace(ws *apphome.Home, home string, cat dataset.Service, setID string, flags map[string]FlagValue) (dataset.KnowledgeSet, error) {
+func effectiveWorkspace(ws *apphome.Home, home string, cat dataset.Service, setID string, flags map[string]FlagValue) (dataset.Dataset, error) {
 	def, err := inv.EnsureWorkspace(ws, home, cat, setID)
 	if err != nil {
-		return dataset.KnowledgeSet{}, err
+		return dataset.Dataset{}, err
 	}
 	if ws.Deployment != nil {
 		return def, nil

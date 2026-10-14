@@ -71,7 +71,7 @@ func TestShapeCLIProductHostCommands(t *testing.T) {
 		"version":       2,
 		"initialGrants": map[string]any{"kr://x": "digest"},
 		"rules": []any{
-			map[string]any{"id": "alw_1", "principal": "bot", "repo": "kr://x", "actions": []any{"knowledge.read"}},
+			map[string]any{"id": "alw_1", "principal": "bot", "repo": "kr://x", "actions": []any{"object.read"}},
 			map[string]any{"id": "alw_2", "principal": "bot", "actions": []any{"inventory.read"}},
 		},
 	}

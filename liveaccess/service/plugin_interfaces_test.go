@@ -22,7 +22,7 @@ func (f pluginInterfaceFunc) Execute(ctx context.Context, call interfaces.Interf
 }
 
 func pluginImplementation(repository kernel.RepositoryID) interfaces.ResolvedInterface {
-	return interfaces.ResolvedInterface{Repository: repository, Contract: objectmodel.PinnedKnowledgeRef{KnowledgeRef: objectmodel.KnowledgeRef{Repository: "contract-repo", Object: "interface/custom"}, Commit: "release"}, ContractDigest: "contract-digest", ImplementationSchemaStructureDigest: "schema-structure"}
+	return interfaces.ResolvedInterface{Repository: repository, Contract: objectmodel.PinnedObjectRef{ObjectRef: objectmodel.ObjectRef{Repository: "contract-repo", Object: "interface/custom"}, Commit: "release"}, ContractDigest: "contract-digest", ImplementationSchemaStructureDigest: "schema-structure"}
 }
 
 func pluginInterfaceRegistry(t *testing.T, handler interfaces.InterfaceHandler) *interfaces.InterfaceRegistry {

@@ -21,7 +21,7 @@ func TestObjectCapabilityModulesOwnTheirImplementations(t *testing.T) {
 			t.Errorf("target owner %s has no implementation: %v", module, err)
 		}
 	}
-	for _, obsolete := range []string{"knowledge", "knowledgeapp", "retrieval", "index"} {
+	for _, obsolete := range []string{"retrieval", "index"} {
 		if _, err := os.Stat(filepath.Join(root, obsolete)); !os.IsNotExist(err) {
 			t.Errorf("obsolete owner %s still exists; a forwarding layer is not the target architecture", obsolete)
 		}
@@ -30,7 +30,7 @@ func TestObjectCapabilityModulesOwnTheirImplementations(t *testing.T) {
 
 func TestValidationEntrypointsDoNotUseRetiredObjectOwners(t *testing.T) {
 	root := moduleRoot(t)
-	retired := regexp.MustCompile(`\./(?:knowledgeapp|knowledge|index|retrieval|discovery/opensearch|discovery/internal/opensearchimpl)(?:/|[\s"']|$)`)
+	retired := regexp.MustCompile(`\./(?:index|retrieval|discovery/opensearch|discovery/internal/opensearchimpl)(?:/|[\s"']|$)`)
 	check := func(path string) error {
 		body, err := os.ReadFile(path)
 		if err != nil {

@@ -1,6 +1,6 @@
 # Object 文件格式
 
-② 知识单元的磁盘 codec，不是 Snapshot Store。`tree` 管内存索引，`codec` 管 frontmatter，`layout` 管路径，`assemble` 调用根 Object 的唯一组装代数，`digest` 管声明摘要。`ApplyOperations` 整批调用 `object.ApplyUnits`，校验最终表示后只转换文件位置、序列化和字面树变化；`Apply` 是相同语义的单操作入口。
+② 对象单元的磁盘 codec，不是 Snapshot Store。`tree` 管内存索引，`codec` 管 frontmatter，`layout` 管路径，`assemble` 调用根 Object 的唯一组装代数，`digest` 管声明摘要。`ApplyOperations` 整批调用 `object.ApplyUnits`，校验最终表示后只转换文件位置、序列化和字面树变化；`Apply` 是相同语义的单操作入口。
 
 `ToObjectUnits` 是文件单元到逻辑维护单元的唯一字段转换，供格式层、Reader 的完整或所选单位读取及 Writer 的 Schema 规划共用。它保留声明、来源、内容与摘要，实际 `Path` 留在格式层；转换不添加另一份校验或组装规则。
 
@@ -12,4 +12,4 @@
 
 `ReadSchemaReferrers` 从每 Schema 的派生条目返回固定版本引用者 Address；完整性标记使不存在条目可明确表示零引用。它不扫描仓、不读取 Schema 或实例正文来发现引用；旧完整 reverse metadata 可读，缺少证明须显式 `RebuildTreeLocators`。`ReadAddressUnit` 沿单元坐标只读一个维护单元，供 Schema 校验精确取得引用实例。
 
-实例草稿用 `*.yaml`；`*.aspect.yaml` 适合 Schema 草稿。YAML/JSON 使用 frontmatter `object_id`、可选的 `aspect_name` / `member_key`、`kind`、`schema_ref`，正文可写 JSON 或结构化 YAML。Markdown 知识单元（仓根 `README.md`）用 `entity` / `aspect` 承载 Address，正文是 markdown，不是 JSON 信封。`kc ingest --dir` 将它们机械编译为 ChangeSet，不引入领域转换。已入库的 `*.okf` 仍可读取。
+实例草稿用 `*.yaml`；`*.aspect.yaml` 适合 Schema 草稿。YAML/JSON 使用 frontmatter `object_id`、可选的 `aspect_name` / `member_key`、`kind`、`schema_ref`，正文可写 JSON 或结构化 YAML。Markdown 对象单元（仓根 `README.md`）用 `entity` / `aspect` 承载 Address，正文是 markdown，不是 JSON 信封。`kc ingest --dir` 将它们机械编译为 ChangeSet，不引入领域转换。已入库的 `*.okf` 仍可读取。

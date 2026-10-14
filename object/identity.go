@@ -2,24 +2,24 @@ package object
 
 import "kc/kernel"
 
-// ObjectID is stable within one knowledge repository and independent of its
+// ObjectID is stable within one object repository and independent of its
 // on-disk path. It belongs to layer ②; Snapshot and Dataset service coordinates do not
 // carry it.
 type ObjectID string
 
-// KnowledgeRef is a long-lived, path-independent reference to objectmodel.
-type KnowledgeRef struct {
+// ObjectRef is a long-lived, path-independent reference to objectmodel.
+type ObjectRef struct {
 	Repository kernel.RepositoryID `json:"repository"`
 	Object     ObjectID            `json:"object"`
 }
 
-// PinnedKnowledgeRef fixes a KnowledgeRef to one immutable Snapshot commit.
-type PinnedKnowledgeRef struct {
-	KnowledgeRef
+// PinnedObjectRef fixes an ObjectRef to one immutable Snapshot commit.
+type PinnedObjectRef struct {
+	ObjectRef
 	Commit kernel.CommitID `json:"commit"`
 }
 
-func FormatKnowledgeRef(repository kernel.RepositoryID, object ObjectID) string {
+func FormatObjectRef(repository kernel.RepositoryID, object ObjectID) string {
 	return "kc://" + shortRepository(repository) + "/" + string(object)
 }
 

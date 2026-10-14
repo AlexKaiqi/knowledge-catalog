@@ -47,7 +47,7 @@ func TestLiveOpenSearchNamespacesIsolateSameRepositoryAndContinuations(t *testin
 			},
 		}})
 	}
-	a, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: root, ExpectedTargetCommit: root, Operations: ops})
+	a, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: root, ExpectedTargetCommit: root, Operations: ops})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestLiveOpenSearchNamespacesIsolateSameRepositoryAndContinuations(t *testin
 		t.Errorf("another namespace accepted this instance's continuation: %v", err)
 	}
 	relationQuery := retrieval.RelationPageRequest{Limit: 1, Query: retrieval.RelationQuery{
-		Endpoint: objectmodel.KnowledgeRef{Repository: repo.ID(), Object: "article/a"}, RelationType: "related", Role: "subject",
+		Endpoint: objectmodel.ObjectRef{Repository: repo.ID(), Object: "article/a"}, RelationType: "related", Role: "subject",
 	}}
 	firstRelation, err := left.RelationsAt(repo, a, relationQuery)
 	if err != nil || len(firstRelation.Hits) != 1 || firstRelation.Continuation == "" {
@@ -107,7 +107,7 @@ func TestLiveOpenSearchNamespacesIsolateSameRepositoryAndContinuations(t *testin
 	// when the private directory changes. Its own continuation remains valid.
 	reopened := openIndex(name + "-a")
 	page, err := reopened.SearchAt(repo, a, continued)
-	if err != nil || len(page.Hits) != 1 || page.Hits[0].Knowledge.Address.ObjectID == first.Hits[0].Knowledge.Address.ObjectID {
+	if err != nil || len(page.Hits) != 1 || page.Hits[0].Object.Address.ObjectID == first.Hits[0].Object.Address.ObjectID {
 		t.Fatalf("stable namespace failed to resume its own page: result=%#v error=%v", page, err)
 	}
 	firstRight, err := right.SearchAt(repo, a, query)
@@ -118,7 +118,7 @@ func TestLiveOpenSearchNamespacesIsolateSameRepositoryAndContinuations(t *testin
 	if err != nil || len(relationPage.Hits) != 1 || relationPage.Hits[0].ObjectID == firstRelation.Hits[0].ObjectID {
 		t.Fatalf("stable namespace failed to resume its own relation page: result=%#v error=%v", relationPage, err)
 	}
-	b, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: a, ExpectedTargetCommit: a, Operations: []objectmodel.Operation{{
+	b, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: a, ExpectedTargetCommit: a, Operations: []objectmodel.Operation{{
 		Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "article/d"}, SchemaRef: "schema/article", Value: map[string]any{"body": "runbook"},
 	}}})
 	if err != nil {
@@ -142,7 +142,7 @@ func TestLiveOpenSearchNamespacesIsolateSameRepositoryAndContinuations(t *testin
 	}
 	continued.Continuation = firstRight.Continuation
 	rightPage, err := right.SearchAt(repo, a, continued)
-	if err != nil || len(rightPage.Hits) != 1 || rightPage.Hits[0].Knowledge.Address.ObjectID == firstRight.Hits[0].Knowledge.Address.ObjectID {
+	if err != nil || len(rightPage.Hits) != 1 || rightPage.Hits[0].Object.Address.ObjectID == firstRight.Hits[0].Object.Address.ObjectID {
 		t.Fatalf("other instance advancement invalidated this namespace's own continuation: result=%#v error=%v", rightPage, err)
 	}
 	query.Limit = 100
@@ -152,10 +152,10 @@ func TestLiveOpenSearchNamespacesIsolateSameRepositoryAndContinuations(t *testin
 	}
 	ids := make([]objectmodel.ObjectID, 0, len(result.Hits))
 	for _, hit := range result.Hits {
-		if hit.Knowledge.Repository != repo.ID() || hit.Knowledge.Commit != a {
-			t.Errorf("namespace changed logical knowledge coordinates: %#v", hit)
+		if hit.Object.Repository != repo.ID() || hit.Object.Commit != a {
+			t.Errorf("namespace changed logical object coordinates: %#v", hit)
 		}
-		ids = append(ids, hit.Knowledge.Address.ObjectID)
+		ids = append(ids, hit.Object.Address.ObjectID)
 	}
 	if result.Completeness != retrieval.CompletenessComplete || !reflect.DeepEqual(ids, []objectmodel.ObjectID{"article/a", "article/b", "article/c"}) {
 		t.Fatalf("independent namespace returned wrong contents: %#v", result)

@@ -24,7 +24,7 @@ func readmeSchemaJSON(t *testing.T) string {
 	return ""
 }
 
-func TestCatalogShowRepositoriesStayIdentityAndReadmeIsKnowledge(t *testing.T) {
+func TestCatalogShowRepositoriesStayIdentityAndReadmeIsObject(t *testing.T) {
 	home := testkit.TempDir(t)
 	repo := "kr://acme/payments"
 	body(t, kc(home, "init"))
@@ -59,11 +59,11 @@ func TestCatalogShowRepositoriesStayIdentityAndReadmeIsKnowledge(t *testing.T) {
 	}
 	readme := asMap(t, body(t, kc(home, "read", testObjectReference(t, repo, "payments", testObjectLocator(objectmodel.ReadmeAspect)))))
 	if asMap(t, readme["value"])["body"] != "# Payments warehouse\n\nPublished metrics and tables for payments." {
-		t.Fatalf("README is a knowledge object: %#v", readme)
+		t.Fatalf("README is an object: %#v", readme)
 	}
 
 	body(t, kc(home, "dataset", "define", "--dataset", "payments", "--revision", "1",
-		"--source", repo+"=refs/heads/main@knowledge"))
+		"--source", repo+"=refs/heads/main@object"))
 	workspaceView := asMap(t, body(t, kc(home, "show")))
 	workspaces := workspaceView["datasets"].([]any)
 	if len(workspaces) != 1 || asMap(t, workspaces[0])["id"] != "payments" {
@@ -72,7 +72,7 @@ func TestCatalogShowRepositoriesStayIdentityAndReadmeIsKnowledge(t *testing.T) {
 	workspace := asMap(t, workspaces[0])
 	members, _ := workspace["repositories"].([]any)
 	if len(members) != 1 || members[0] != repo {
-		t.Fatalf("knowledge set members must remain source ids: %#v", workspace)
+		t.Fatalf("dataset members must remain source ids: %#v", workspace)
 	}
 }
 

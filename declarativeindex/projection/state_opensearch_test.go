@@ -9,7 +9,7 @@ import (
 	retrieval "kc/discovery"
 	"kc/internal/testkit"
 	"kc/kernel"
-	knowledgeserving "kc/liveaccess"
+	objectserving "kc/liveaccess"
 	objectmodel "kc/object"
 	"kc/snapshot"
 )
@@ -19,8 +19,8 @@ type liveStateLookup struct {
 	revision string
 }
 
-func (s *liveStateLookup) LookupState(context.Context, knowledgeserving.StateLookupRequest) (knowledgeserving.StateObservation, error) {
-	return knowledgeserving.StateObservation{
+func (s *liveStateLookup) LookupState(context.Context, objectserving.StateLookupRequest) (objectserving.StateObservation, error) {
+	return objectserving.StateObservation{
 		Value: map[string]any{"status": s.status, "attempts": float64(3)},
 		Basis: objectmodel.ObservationBasis{
 			BindingGeneration: "scheduler-v1", Consistency: objectmodel.ObservationRepeatable,

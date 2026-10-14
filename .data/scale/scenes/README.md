@@ -17,8 +17,8 @@
    指向一个**已部署、已就绪**的 KC 环境；不启动、不编排、不等待任何容器或服务。
    测试阶段由人用现有本地栈起好服务，把 endpoint 填进环境配置；同一棵树最终对生产
    环境出结论，只是换一份环境配置与凭证引用。
-2. **只经公开 surface 施压**：Writer、Knowledge（read/search/resolve/relations/log）、
-   Dataset 交付、Operations 只读观测。不直连快照介质、不直写 OpenSearch、
+2. **只经公开 surface 施压**：Writer、Object（read/search/resolve/relations/log）、
+  Dataset 交付、Operations 只读观测。不直连快照介质、不直写 OpenSearch、
    不新增测试专用 Write Surface。
 3. **状态是共享前态，探针是独立测量**。construct 建立可复用的测量前态并记录构建
    证据；每条 probe 从该前态独立执行，自己创建的 scratch 仓/分支在 `cleanup` 里声明

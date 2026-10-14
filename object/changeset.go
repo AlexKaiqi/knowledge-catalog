@@ -31,7 +31,7 @@ type Operation struct {
 	ValueSource  *ValueSource  `json:"valueSource,omitempty"`
 	Precondition *Precondition `json:"precondition,omitempty"`
 	Reason       string        `json:"reason,omitempty"`
-	Replacement  *KnowledgeRef `json:"replacement,omitempty"`
+	Replacement  *ObjectRef    `json:"replacement,omitempty"`
 }
 
 type ChangeSet struct {

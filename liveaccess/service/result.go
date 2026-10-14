@@ -59,7 +59,7 @@ func (s *Service) adoptUnit(ctx context.Context, result *objectmodel.ObservedVal
 }
 
 // A Member's actual adopted Schema is the access declaration. Writer keeps its
-// fixed knowledge value, while logical consumption adopts the external value.
+// fixed object value, while logical consumption adopts the external value.
 func (s *Service) prepareMemberDeclaration(repository kernel.RepositoryID, declaration objectmodel.UnitDeclaration) (objectmodel.UnitDeclaration, error) {
 	if declaration.Address.Kind != objectmodel.KindMember || declaration.SchemaRef == "" ||
 		declaration.ValueSource == nil || declaration.ValueSource.Kind != objectmodel.ValueSourceBinding {

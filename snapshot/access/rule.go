@@ -10,13 +10,12 @@ import (
 )
 
 // Rule retains the established grant wire shape. Object and Aspect are opaque
-// application qualifiers: neither is a file path or a knowledge identifier
+// application qualifiers: neither is a file path or an object identifier
 // interpreted by this package. File selection belongs to Dataset definitions.
 type Rule struct {
 	ID        string   `json:"id"`
 	Principal string   `json:"principal"`
 	Actions   []string `json:"actions,omitempty"`
-	Cmds      []string `json:"cmds,omitempty"` // application-owned legacy migration only
 	Repo      string   `json:"repo,omitempty"`
 	Ref       string   `json:"ref,omitempty"`
 	Object    string   `json:"object,omitempty"`
@@ -46,8 +45,10 @@ func (r *Rule) UnmarshalJSON(data []byte) error {
 			return fmt.Errorf("retired field catalog")
 		}
 	}
-	if _, ok := keys["kset"]; ok {
-		return fmt.Errorf("retired field kset")
+	for _, retired := range []string{"kset", "cmds"} {
+		if _, ok := keys[retired]; ok {
+			return fmt.Errorf("retired field %s", retired)
+		}
 	}
 	type wire Rule
 	var parsed wire
@@ -56,33 +57,15 @@ func (r *Rule) UnmarshalJSON(data []byte) error {
 	}
 	*r = Rule(parsed)
 	for _, action := range r.Actions {
-		if strings.HasPrefix(action, "kset.") || strings.HasPrefix(action, "catalog.") {
+		if retiredAction(action) {
 			return fmt.Errorf("retired action %s", action)
 		}
 	}
-	r.Actions = NormalizeActions(r.Actions)
 	return nil
 }
 
-// NormalizeActions retains the existing on-read dataset.consume migration.
-// Command-to-action mappings remain the caller application's responsibility.
-func NormalizeActions(actions []string) []string {
-	out := make([]string, 0, len(actions))
-	seen := map[string]struct{}{}
-	for _, action := range actions {
-		if action == "dataset.consume" {
-			action = "file.read"
-		}
-		if _, ok := seen[action]; ok {
-			continue
-		}
-		seen[action] = struct{}{}
-		out = append(out, action)
-	}
-	if len(out) == 0 {
-		return actions
-	}
-	return out
+func retiredAction(action string) bool {
+	return strings.HasPrefix(action, "kset.") || strings.HasPrefix(action, "catalog.") || action == "dataset.consume"
 }
 
 func ValidateActions(actions []string) error {
@@ -93,7 +76,7 @@ func ValidateActions(actions []string) error {
 		if !strings.Contains(action, ".") || strings.ContainsAny(action, " /?#") {
 			return fmt.Errorf("invalid semantic action %s", action)
 		}
-		if strings.HasPrefix(action, "kset.") || strings.HasPrefix(action, "catalog.") || action == "dataset.consume" {
+		if retiredAction(action) {
 			return fmt.Errorf("invalid semantic action %s", action)
 		}
 	}

@@ -140,7 +140,7 @@ func (p *Plugins) Help(name string) (common.PluginAffordance, error) {
 
 // Overview reports only selection facts for the already authorized pin; it
 // does not call a plugin, read Repo metadata, or expand the source scope.
-func (p *Plugins) Overview(pin reader.KnowledgeSetPin) ([]common.SourcePlugin, error) {
+func (p *Plugins) Overview(pin reader.DatasetPin) ([]common.SourcePlugin, error) {
 	if p == nil {
 		return nil, nil
 	}

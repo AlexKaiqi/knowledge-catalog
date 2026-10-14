@@ -30,7 +30,7 @@ func TestReadVirtualFileRoutesAndReadsRawBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = commit
-	if _, err := cat.DefineKnowledgeSet("notes", 1, []catalog.KnowledgeSetSource{
+	if _, err := cat.DefineDataset("notes", 1, []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("")},
 		{Repository: "kr://acme/public/core2", Selector: "refs/heads/main", Path: catalog.MountPath("refs/semantic")},
 	}); err != nil {
@@ -50,7 +50,7 @@ func TestReadVirtualFileRoutesAndReadsRawBytes(t *testing.T) {
 // directly — ReadVirtualFile does not invent a fallback.
 func TestReadVirtualFileRejectsUnownedPath(t *testing.T) {
 	cat := mountFed(t)
-	if _, err := cat.DefineKnowledgeSet("notes", 1, []catalog.KnowledgeSetSource{
+	if _, err := cat.DefineDataset("notes", 1, []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("refs/semantic")},
 	}); err != nil {
 		t.Fatal(err)
@@ -76,13 +76,13 @@ func TestCheckResolvedRepositoryDoesNotProbeOtherMembers(t *testing.T) {
 		t.Fatal(err)
 	}
 	cat := testkit.OpenDatasets(t, registry)
-	if _, err := cat.DefineKnowledgeSet("agent", 1, []catalog.KnowledgeSetSource{
+	if _, err := cat.DefineDataset("agent", 1, []catalog.DatasetSource{
 		{Repository: target.ID(), Selector: snapshot.DefaultRef, Path: catalog.MountPath("")},
 		{Repository: other.ID(), Selector: snapshot.DefaultRef, Path: catalog.MountPath("other")},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	resolved, err := cat.ResolveKnowledgeSet("agent")
+	resolved, err := cat.ResolveDataset("agent")
 	if err != nil {
 		t.Fatal(err)
 	}

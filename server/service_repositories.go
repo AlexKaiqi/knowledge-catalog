@@ -76,7 +76,7 @@ func VerbCreateNamedRepository(cx *inv.Invocation) (any, error) {
 
 // Inventory is scoped to the verified principal and then filtered by current
 // metadata permissions. Finding one's allocations grants no Registry discovery,
-// Knowledge read, write or share rights.
+// Object read, write or share rights.
 func (f *httpFacade) myRepositories(w http.ResponseWriter, r *http.Request) {
 	f.executeTyped(w, r, "managed-repository-list", "identity.read", command{Stage: invoke.StageGoverned, Run: func(cx *inv.Invocation) (any, error) {
 		items, err := cx.WS.ListManagedRepositories(cx.Flag("as"))

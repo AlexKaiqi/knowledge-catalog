@@ -20,13 +20,13 @@ var leafHelp = map[string]helpEntry{
   直接来源仓可选 --commit 或 --ref，省略固定读取 refs/heads/main（published）的当前 commit。
   来源仓与对象身份只由 URN 指定，内容只由 locator 选择；所有选择仍受授权与内容完整性限制。
 条件：
-  已认证；单仓需 knowledge.read，命名 Dataset 按 file.read 解释发布版清单内材料。
-  Dataset 须通过对象与选择范围的完整读取检查，不能越过已获准的范围读取源仓。
-  Dataset 选中 Bound State 时，沿既有 logical READ 通路，还需相应 Runtime 可用并允许实际源访问。
+  已认证；单仓需 object.read，命名 Dataset 按 file.read 解释发布版清单内材料。
+ Dataset 须通过对象与选择范围的完整读取检查，不能越过已获准的范围读取源仓。
+ Dataset 选中 Bound State 时，沿既有 logical READ 通路，还需相应 Runtime 可用并允许实际源访问。
 结果：
   统一引用的 JSON 保留 reference/locator/repository/objectId/commit/value、维护 Address/digest 和逐单元 declarations/provenance。
   适用的 digest 属于已保存的完整维护单元，可作写入条件；叶值为 null 与定位不存在分别处理。
-  Dataset 的动态值另保留 observations：commit 固定声明依据，源观察及其版本不能当作该 commit 的固定正文。
+ Dataset 的动态值另保留 observations：commit 固定声明依据，源观察及其版本不能当作该 commit 的固定正文。
 后果：
   直接仓读取固定正文与声明；Dataset 选中的 Bound State 会沿既有通路实际访问源。
   此读取不发布或更新对象；来源专属解释与真实执行归已装配能力。
@@ -38,11 +38,11 @@ var leafHelp = map[string]helpEntry{
   核对 URN 的来源仓与 object_id、Pointer 转义、固定版本及获准范围；拒绝或缺失不能当作空值。
   若准备修订，保存返回 Address/digest，并提交完整维护单元；读出深字段不能直接局部 PATCH。
 示例：
-  例：kc read 'urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:table%2Forders#/columns/order_id/constraints/nullable'
-  例：kc read 'urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:table%2Forders#/columns/order_id' --dataset scene-set
+  例：kc read 'urn:kc:object:kr%3A%2F%2Fscene%2Fobject:table%2Forders#/columns/order_id/constraints/nullable'
+  例：kc read 'urn:kc:object:kr%3A%2F%2Fscene%2Fobject:table%2Forders#/columns/order_id' --dataset scene-set
   例：kc read 'urn:kc:object:kr%3A%2F%2Fkc%2Fsystem:kc%2Fsystem#/readme'
   例：kc read 'urn:kc:object:kr%3A%2F%2Fkc%2Fsystem:kc%2Fconcept%2Fobject#/definition'
-  系统知识示例仅在该服务已出版相应知识且当前主体有读取权时可用；理解本地 kc help 不需要这个前提。
+  系统对象示例仅在该服务已出版相应对象且当前主体有读取权时可用；理解本地 kc help 不需要这个前提。
 `,
 	},
 	"resolve": {
@@ -55,8 +55,8 @@ var leafHelp = map[string]helpEntry{
   --object 同 read；可指定 --aspect <name>，--member <key> 必须同时指定 aspect。
   单仓可用 --commit 或 --ref；省略按 refs/heads/main（published）解析，Dataset 按本次解析的选择范围查找。
 条件：
-  已认证；单仓需 knowledge.read，命名 Dataset 以其 file.read 准入，不另要求来源仓 knowledge.read。
-  Dataset 须通过所需对象与选择范围的完整读取检查；另行解析 pin 需 dataset.resolve，不能探测未获准的来源。
+  已认证；单仓需 object.read，命名 Dataset 以其 file.read 准入，不另要求来源仓 object.read。
+ Dataset 须通过所需对象与选择范围的完整读取检查；另行解析 pin 需 dataset.resolve，不能探测未获准的来源。
 结果：
   JSON 给出 repository/objectId/commit/status 和适用的 digest/切面坐标，不返回正文。
   缺对象是 status=UNRESOLVED（单仓）或空名单（Dataset）；Dataset 中相同 id 的多个来源不会合并为一个对象。
@@ -69,7 +69,7 @@ var leafHelp = map[string]helpEntry{
   UNRESOLVED 时核对对象 id、切面、成员和版本；不要把拒绝访问解释为对象不存在。
   需读正文时使用 read，并在单仓复用已返回的 commit；临时错误可重试，重新解析可能得到新依据。
 示例：
-  例：kc resolve --repo kr://scene/knowledge --object metric/gmv
+  例：kc resolve --repo kr://scene/object --object metric/gmv
   例：kc resolve --dataset scene-set --object metric/gmv`,
 	},
 	"provenance": {
@@ -77,13 +77,13 @@ var leafHelp = map[string]helpEntry{
 		Usage: `kc provenance (--repo <id> | --dataset <id>) --object <object-id>
 
 用途：
-  查看对象各知识单元随固定版本保存的来源声明，帮助核对其产生依据。
+  查看对象各对象单元随固定版本保存的来源声明，帮助核对其产生依据。
 用法与参数：
   --object 是对象 id；这是对象级命令，不接受 --aspect 或 --member。
   单仓可用 --commit 或 --ref；Dataset 在本次解析的合法选择范围内返回来源结果。
 条件：
-  已认证；单仓需 knowledge.provenance，命名 Dataset 按其 file.read 解释清单内材料，不另要求来源仓知识动作。
-  Dataset 须通过所需对象与选择范围的完整读取检查；另行解析 pin 需 dataset.resolve，不由此扩大可读来源。
+  已认证；单仓需 object.provenance，命名 Dataset 按其 file.read 解释清单内材料，不另要求来源仓对象动作。
+ Dataset 须通过所需对象与选择范围的完整读取检查；另行解析 pin 需 dataset.resolve，不由此扩大可读来源。
 结果：
   JSON 返回对象来源轨迹及其 repository/objectId/commit；多个来源分别保留身份。
   这是已保存的来源信封，不是 Git 作者历史，也不是实时验证过的外部业务事实。
@@ -96,7 +96,7 @@ var leafHelp = map[string]helpEntry{
   未解析时先 resolve 核对对象及固定版本；无权时按单仓 provenance 或 Dataset file.read 通路申请相应范围。
   需要核实某个来源对象时按其坐标另行 read，并接受该来源自己的权限和版本检查。
 示例：
-  例：kc provenance --repo kr://scene/knowledge --object metric/gmv
+  例：kc provenance --repo kr://scene/object --object metric/gmv
   例：kc provenance --dataset scene-set --object metric/gmv`,
 	},
 	"log": {
@@ -109,8 +109,8 @@ var leafHelp = map[string]helpEntry{
   --object 是对象 id，不接受 --aspect 或 --member；--limit 默认 50、最大 200。
   单仓可用 --commit 或 --ref 指定历史起点；--continuation 续页时保持对象和来源依据。
 条件：
-  已认证；单仓需 knowledge.history.read，命名 Dataset 以其 file.read 准入，不另要求来源仓 history/read 动作。
-  Dataset 须通过所需对象与选择范围的完整读取检查，不能借历史越过交付切片；另行解析 pin 需 dataset.resolve。
+  已认证；单仓需 object.history.read，命名 Dataset 以其 file.read 准入，不另要求来源仓 history/read 动作。
+ Dataset 须通过所需对象与选择范围的完整读取检查，不能借历史越过交付切片；另行解析 pin 需 dataset.resolve。
   来源须支持修订历史读取。
 结果：
   JSON logs 按来源给出对象修订和 commit，并返回适用的续页游标。
@@ -124,7 +124,7 @@ var leafHelp = map[string]helpEntry{
   历史能力或授权缺失时请相应维护者处理，不以当前正文替代历史结果。
   游标与当前依据不符时重新查询；单仓保存并显式复用起点 commit，避免 published 推进后混页。
 示例：
-  例：kc log --repo kr://scene/knowledge --object metric/gmv
+  例：kc log --repo kr://scene/object --object metric/gmv
   例：kc log --dataset scene-set --object metric/gmv`,
 	},
 	"schema list": {
@@ -137,7 +137,7 @@ var leafHelp = map[string]helpEntry{
   必须指定 --repo；可用 --commit 或 --ref，省略固定读取 refs/heads/main（published）的当前 commit。
   --limit 默认 50、最大 200；--continuation 续页须保持同仓、同版本。
 条件：
-  已认证并有目标仓的 knowledge.schema.read；本叶仅接受单仓，Dataset file.read 不放行这条 --repo 通路。
+  已认证并有目标仓的 object.schema.read；本叶仅接受单仓，Dataset file.read 不放行这条 --repo 通路。
   来源须提供 Schema 名单读取能力，不依赖检索投影。
 结果：
   JSON 返回 repository/commit 与 schemas 的类型名称、objectId 和适用的描述，以及后续页游标。
@@ -151,7 +151,7 @@ var leafHelp = map[string]helpEntry{
   来源不支持名单时不能用全对象扫描补偿；请来源维护者提供相应能力或明确已知 Schema id。
   游标失效时核对版本，显式使用回执 commit 重查；获取字段继续 schema describe。
 示例：
-  例：kc schema list --repo kr://scene/knowledge --limit 50
+  例：kc schema list --repo kr://scene/object --limit 50
   例：kc schema list --repo kr://kc/system`,
 	},
 	"schema describe": {
@@ -164,8 +164,8 @@ var leafHelp = map[string]helpEntry{
   --object 是 schema/* 合同 id，来自 schema list 的 objectId，不是业务对象 id 或文件路径。
   单仓可用 --commit 或 --ref 指定版本；Dataset 可用 --dataset 代替 --repo，但仅描述已选入范围。
 条件：
-  已认证；单仓需 knowledge.schema.read，命名 Dataset 以其 file.read 准入，不另要求来源仓 knowledge.schema.read。
-  Dataset 须通过所需对象与选择范围的完整读取检查；合同及必要依据须在清单内，另行解析 pin 需 dataset.resolve。
+  已认证；单仓需 object.schema.read，命名 Dataset 以其 file.read 准入，不另要求来源仓 object.schema.read。
+ Dataset 须通过所需对象与选择范围的完整读取检查；合同及必要依据须在清单内，另行解析 pin 需 dataset.resolve。
 结果：
   JSON 给出 repository/commit、Schema objectId、完整 definition、字段 path/type/access 与可选 origin。
   access 表示 filter/text/sort 等逻辑声明，不是引擎映射或运行状态；definition 保留结构与约束，access 是附加查询声明。
@@ -177,7 +177,7 @@ var leafHelp = map[string]helpEntry{
   commit 固定声明版本；origin 描述访问原点，不把该原点的当前值变为固定内容。
 失败恢复：
   id 未解析时先 schema list；字段未声明所需能力时调整查询，或经 Writer 正式发布合同变更。
-  检索就绪问题另查 operations projection describe；完整合同可另行 read，单仓需 knowledge.read，Dataset 仍按 file.read 清单解释。
+  检索就绪问题另查 operations projection describe；完整合同可另行 read，单仓需 object.read，Dataset 仍按 file.read 清单解释。
 示例：
   例：kc schema describe --repo kr://kc/system --object schema/meta/schema-definition/v1`,
 	},
@@ -195,7 +195,7 @@ var leafHelp = map[string]helpEntry{
     --ref 默认 refs/heads/main；--base/--expected 约束仓基点，--if-absent 或 --if-digest 约束单元，二者互斥。
     --command-id 由你提供，--message 与来源参数可记录提交说明；此入口不接受 --bulk。
   条件：
-    一个可写知识 Repository，当前主体有 writer.commit；正文、Schema、来源和并发条件通过校验。
+    一个可写对象 Repository，当前主体有 writer.commit；正文、Schema、来源和并发条件通过校验。
     系统仓与登记权威不能作为普通 Writer 目标，Dataset 不能作为写入目标。
   结果：
     返回耐久 Writer 回执和 oldCommit/newCommit；首次为 APPLIED，同命令同请求重放为 REPLAYED。
@@ -210,7 +210,7 @@ var leafHelp = map[string]helpEntry{
     NON_FAST_FORWARD 要重新核对基点并构造新请求；Schema/权限拒绝先修正原因。
     PENDING 或查询不到最终回执时保留原请求并请运营者对账，不能以换 id 推断安全重写。
   示例：
-    例：kc writer put 'urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:metric%2Fgmv' --command-id put-1 --value '{"name":"GMV"}'
+    例：kc writer put 'urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv' --command-id put-1 --value '{"name":"GMV"}'
     例：kc writer receipt --command-id put-1`,
 	},
 	"writer remove": {
@@ -224,7 +224,7 @@ var leafHelp = map[string]helpEntry{
     /description 选择完整 Aspect，/columns/order_id 选择 Member；实际范围按对象维护模型确认。
     --ref 默认 refs/heads/main；可给 --base/--expected、--if-digest 和 --message 约束或说明这次删除。
   条件：
-    目标是一个可写知识 Repository，当前主体有 writer.commit；维护范围和并发条件通过校验。
+    目标是一个可写对象 Repository，当前主体有 writer.commit；维护范围和并发条件通过校验。
     仍被引用的 Schema 不能移除；系统仓、登记权威与 Dataset 不能作为普通写入目标。
   结果：
     返回 Writer 回执及目标 ref 的 oldCommit/newCommit；同命令同请求返回原回执。
@@ -239,8 +239,8 @@ var leafHelp = map[string]helpEntry{
     用原 command-id 查 writer receipt；同 id 换内容会冲突，结果未明先对账。
     并发冲突先重新读取，Schema 仍被引用先处理依赖；恢复内容需要一次新的明确 PUT，不倒退历史。
   示例：
-    例：kc writer remove 'urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:metric%2Fgmv' --command-id rm-1
-    例：kc writer remove 'urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:metric%2Fgmv#/description' --command-id rm-description
+    例：kc writer remove 'urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv' --command-id rm-1
+    例：kc writer remove 'urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv#/description' --command-id rm-description
     例：kc writer receipt --command-id rm-1`,
 	},
 }

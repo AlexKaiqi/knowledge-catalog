@@ -6,4 +6,4 @@ Handler 只获得固定范围的 `DeclarationReader`，没有 Store 写口、动
 
 `DiscoverObjectInterfaces` 只发现给定对象的实现 Members；合同引用使用同仓对象身份或已在本次 Workspace 明确固定的跨仓引用，不挂载新仓或读取 HEAD。`standardImplementationSchemas` 只推荐实现形式，实际支持由处理器注册摘要及实现检查决定。
 
-`ResolvedInterface.ImplementationSchemaDigest` 保留完整 Schema 知识摘要；`ImplementationSchemaStructureDigest` 排除字段 `access`，用于处理器匹配。两者来自同一次固定读取，查询声明与执行结构分别核验。
+`ResolvedInterface.ImplementationSchemaDigest` 保留完整 Schema 对象摘要；`ImplementationSchemaStructureDigest` 排除字段 `access`，用于处理器匹配。两者来自同一次固定读取，查询声明与执行结构分别核验。

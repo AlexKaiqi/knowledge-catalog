@@ -39,18 +39,18 @@ type datasetFSMount struct {
 }
 
 type datasetFSManifest struct {
-	SetID    string                       `json:"setId"`
-	PinID    string                       `json:"pinId"`
-	Pin      dataset.ResolvedKnowledgeSet `json:"pin"`
-	Root     string                       `json:"root"`
-	ReadOnly bool                         `json:"readOnly"`
-	Mounts   []datasetFSMount             `json:"mounts"`
+	SetID    string                  `json:"setId"`
+	PinID    string                  `json:"pinId"`
+	Pin      dataset.ResolvedDataset `json:"pin"`
+	Root     string                  `json:"root"`
+	ReadOnly bool                    `json:"readOnly"`
+	Mounts   []datasetFSMount        `json:"mounts"`
 }
 
-// RunKnowledgeSetFS is the entrypoint used by cmd/kcfs. Host mounting is kept
+// RunDatasetFS is the entrypoint used by cmd/kcfs. Host mounting is kept
 // outside the kc verb table because it must execute on the user's Linux host;
 // unlike protocol commands it must never be mirrored as a domain HTTP route.
-func RunKnowledgeSetFS(argv []string, stdout, stderr io.Writer) int {
+func RunDatasetFS(argv []string, stdout, stderr io.Writer) int {
 	if len(argv) > 0 && argv[0] == "--" {
 		argv = argv[1:]
 	}
@@ -64,36 +64,36 @@ func RunKnowledgeSetFS(argv []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 	if mode == "stop" {
-		return stopKnowledgeSetFS(argv, stderr)
+		return stopDatasetFS(argv, stderr)
 	}
 	if mode == "daemon-mount" {
-		return daemonMountKnowledgeSetFS(argv, stdout, stderr)
+		return daemonMountDatasetFS(argv, stdout, stderr)
 	}
 	if mode != "mount" && mode != "plan" {
-		writeKnowledgeSetFSError(stderr, fmt.Errorf("unknown kcfs command %s", mode))
+		writeDatasetFSError(stderr, fmt.Errorf("unknown kcfs command %s", mode))
 		return 2
 	}
-	config, err := parseKnowledgeSetFSConfig(mode, argv, stderr)
+	config, err := parseDatasetFSConfig(mode, argv, stderr)
 	if err != nil {
-		writeKnowledgeSetFSError(stderr, err)
+		writeDatasetFSError(stderr, err)
 		return 2
 	}
-	plan, manifest, closeHome, err := prepareKnowledgeSetFS(config)
+	plan, manifest, closeHome, err := prepareDatasetFS(config)
 	if err != nil {
-		writeKnowledgeSetFSError(stderr, err)
+		writeDatasetFSError(stderr, err)
 		return 1
 	}
 	defer closeHome()
 	if mode == "plan" {
-		writeKnowledgeSetFSJSON(stdout, manifest)
+		writeDatasetFSJSON(stdout, manifest)
 		return 0
 	}
 	handle, err := datasetfs.MountAll(plan, datasetfs.Options{Debug: config.debug})
 	if err != nil {
-		writeKnowledgeSetFSError(stderr, err)
+		writeDatasetFSError(stderr, err)
 		return 1
 	}
-	writeKnowledgeSetFSJSON(stdout, manifest)
+	writeDatasetFSJSON(stdout, manifest)
 	done := make(chan struct{})
 	go func() {
 		handle.Wait()
@@ -105,7 +105,7 @@ func RunKnowledgeSetFS(argv []string, stdout, stderr io.Writer) int {
 	select {
 	case <-signals:
 		if err := handle.Unmount(); err != nil {
-			writeKnowledgeSetFSError(stderr, err)
+			writeDatasetFSError(stderr, err)
 			return 1
 		}
 		<-done
@@ -114,16 +114,16 @@ func RunKnowledgeSetFS(argv []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-func parseKnowledgeSetFSConfig(mode string, argv []string, stderr io.Writer) (datasetFSConfig, error) {
+func parseDatasetFSConfig(mode string, argv []string, stderr io.Writer) (datasetFSConfig, error) {
 	set := flag.NewFlagSet("kcfs "+mode, flag.ContinueOnError)
 	set.SetOutput(stderr)
 	config := datasetFSConfig{}
 	var pin string
 	set.StringVar(&config.server, "server", inv.RemoteServerURL(nil), "KC service URL for remote lazy reads")
-	set.StringVar(&config.dataset, "dataset", "", "knowledge set id")
+	set.StringVar(&config.dataset, "dataset", "", "dataset id")
 	set.StringVar(&config.root, "root", "", "existing user project root")
 	set.StringVar(&config.principal, "as", "", "principal used for Workspace and repository read grants")
-	set.StringVar(&pin, "pin", "", "ResolvedKnowledgeSet JSON or file to replay")
+	set.StringVar(&pin, "pin", "", "ResolvedDataset JSON or file to replay")
 	set.BoolVar(&config.debug, "debug", false, "enable go-fuse protocol logging")
 	set.StringVar(&config.view, "view", "repository", "file view: repository or semantic")
 	if err := set.Parse(argv); err != nil {
@@ -149,7 +149,7 @@ func parseKnowledgeSetFSConfig(mode string, argv []string, stderr io.Writer) (da
 	return config, nil
 }
 
-func prepareKnowledgeSetFS(config datasetFSConfig) (datasetfs.Plan, datasetFSManifest, func(), error) {
+func prepareDatasetFS(config datasetFSConfig) (datasetfs.Plan, datasetFSManifest, func(), error) {
 	root, err := filepath.Abs(config.root)
 	if err != nil {
 		return datasetfs.Plan{}, datasetFSManifest{}, func() {}, err
@@ -162,10 +162,10 @@ func prepareKnowledgeSetFS(config datasetFSConfig) (datasetfs.Plan, datasetFSMan
 		return datasetfs.Plan{}, datasetFSManifest{}, func() {}, kernel.Fail(kernel.ErrUsageInvalid,
 			"kcfs requires KC Server; set --server or KC_SERVER_URL")
 	}
-	return prepareRemoteKnowledgeSetFS(config, root)
+	return prepareRemoteDatasetFS(config, root)
 }
 
-func prepareRemoteKnowledgeSetFS(config datasetFSConfig, root string) (datasetfs.Plan, datasetFSManifest, func(), error) {
+func prepareRemoteDatasetFS(config datasetFSConfig, root string) (datasetfs.Plan, datasetFSManifest, func(), error) {
 	ctx := context.Background()
 	flags := map[string]FlagValue{}
 	if config.principal != "" {
@@ -181,7 +181,7 @@ func prepareRemoteKnowledgeSetFS(config datasetFSConfig, root string) (datasetfs
 		return datasetfs.Plan{}, datasetFSManifest{}, func() {}, err
 	}
 	if response.Pin.PinID == "" || response.Pin.SetID != config.dataset {
-		return datasetfs.Plan{}, datasetFSManifest{}, func() {}, kernel.Fail(kernel.ErrPreconditionFailed, "Knowledge Set File Gateway returned an invalid pin")
+		return datasetfs.Plan{}, datasetFSManifest{}, func() {}, kernel.Fail(kernel.ErrPreconditionFailed, "Dataset File Gateway returned an invalid pin")
 	}
 	// Per-file entries are not projected into the host filesystem yet; fail
 	// loudly instead of silently shrinking the delivered tree.
@@ -234,7 +234,7 @@ func readRemoteDirectory(ctx context.Context, client *kcclient.Client, coordinat
 			return nil, err
 		}
 		if response.Pin.PinID != pinID || response.Mount.Path != mount.Path || response.Mount.Repository != mount.Repository || response.Mount.Commit != mount.Commit {
-			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "Knowledge Set File Gateway moved from the fixed mount pin")
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "Dataset File Gateway moved from the fixed mount pin")
 		}
 		for _, entry := range response.Entries {
 			entries = append(entries, datasetfs.DirectoryEntry{Name: entry.Name, Directory: entry.Kind == "directory"})
@@ -243,7 +243,7 @@ func readRemoteDirectory(ctx context.Context, client *kcclient.Client, coordinat
 			return entries, nil
 		}
 		if response.Continuation == "" || response.Continuation == continuation {
-			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "Knowledge Set File Gateway returned a non-advancing directory continuation")
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "Dataset File Gateway returned a non-advancing directory continuation")
 		}
 		continuation = response.Continuation
 	}
@@ -261,28 +261,28 @@ func readRemoteFile(ctx context.Context, client *kcclient.Client, coordinate sna
 			return nil, err
 		}
 		if response.Pin.PinID != pinID || response.Mount.Path != mount.Path || response.Mount.Repository != mount.Repository || response.Mount.Commit != mount.Commit || response.Offset != offset {
-			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "Knowledge Set File Gateway moved from the fixed file pin")
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "Dataset File Gateway moved from the fixed file pin")
 		}
 		content = append(content, response.Content...)
 		offset += int64(len(response.Content))
 		if response.EOF {
 			if response.TotalBytes != offset {
-				return nil, kernel.Fail(kernel.ErrPreconditionFailed, "Knowledge Set File Gateway returned an inconsistent file length")
+				return nil, kernel.Fail(kernel.ErrPreconditionFailed, "Dataset File Gateway returned an inconsistent file length")
 			}
 			return content, nil
 		}
 		if len(response.Content) == 0 {
-			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "Knowledge Set File Gateway returned a non-advancing file range")
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "Dataset File Gateway returned a non-advancing file range")
 		}
 	}
 }
 
-func writeKnowledgeSetFSJSON(w io.Writer, value any) {
+func writeDatasetFSJSON(w io.Writer, value any) {
 	encoder := json.NewEncoder(w)
 	encoder.SetIndent("", "  ")
 	_ = encoder.Encode(value)
 }
 
-func writeKnowledgeSetFSError(w io.Writer, err error) {
-	writeKnowledgeSetFSJSON(w, kernel.FaultJSON(err))
+func writeDatasetFSError(w io.Writer, err error) {
+	writeDatasetFSJSON(w, kernel.FaultJSON(err))
 }

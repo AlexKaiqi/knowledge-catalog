@@ -54,7 +54,7 @@ func (e *httpSearchCancellationEngine) Close() error        { return nil }
 func TestHTTPSearchCancellationReachesProvider(t *testing.T) {
 	repo := testkit.MakeRepository(t, "kr://acme/public/cancel")
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
-	commit, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: root, ExpectedTargetCommit: root, Operations: []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/item"}, Value: map[string]any{"entity": "Item", "fields": map[string]any{"body": map[string]any{"type": "string", "access": []any{"text"}}}}}}})
+	commit, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: root, ExpectedTargetCommit: root, Operations: []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/item"}, Value: map[string]any{"entity": "Item", "fields": map[string]any{"body": map[string]any{"type": "string", "access": []any{"text"}}}}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestHTTPSearchCancellationReachesProvider(t *testing.T) {
 	}
 	dir := t.TempDir()
 	ws := &Home{Dir: dir, Store: registry, Reader: reader.NewReader(registry), Index: idx, File: apphome.HomeFile{Registry: apphome.HomeRegistry{ID: "kr://acme/catalog"}}}
-	if err := inv.WriteAllow(dir, inv.AllowFile{Version: inv.AllowVersion, Rules: []inv.AllowRule{{ID: "search", Principal: "reader", Repo: string(repo.ID()), Actions: []string{"knowledge.search"}}}}); err != nil {
+	if err := inv.WriteAllow(dir, inv.AllowFile{Version: inv.AllowVersion, Rules: []inv.AllowRule{{ID: "search", Principal: "reader", Repo: string(repo.ID()), Actions: []string{"object.search"}}}}); err != nil {
 		t.Fatal(err)
 	}
 	facade := &httpFacade{home: dir, readHome: ws, options: HTTPServerOptions{AuthMode: "local"}}
@@ -79,7 +79,7 @@ func TestHTTPSearchCancellationReachesProvider(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{"repository": repo.ID(), "commit": commit, "query": "runbook"})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	request := httptest.NewRequest(http.MethodPost, "/knowledge/v1/search", strings.NewReader(string(body))).WithContext(ctx)
+	request := httptest.NewRequest(http.MethodPost, "/object/v1/search", strings.NewReader(string(body))).WithContext(ctx)
 	request.Header.Set("X-Kc-As", "reader")
 	response := httptest.NewRecorder()
 	done := make(chan struct{})

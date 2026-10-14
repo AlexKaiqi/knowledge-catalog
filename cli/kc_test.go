@@ -130,7 +130,7 @@ func TestHelperRejectsRetiredCatalogShow(t *testing.T) {
 	expectCode(t, kc(home, "catalog-show"), "USAGE_INVALID")
 }
 
-// seedRepo prepares the fixture's selected index capability on a knowledge
+// seedRepo prepares the fixture's selected index capability on an object
 // source, then attaches and registers its Snapshot. With no index backend the
 // source stays unconfigured. Credentials remain in the process environment.
 func seedRepo(t *testing.T, home, repo string, extra ...string) {
@@ -340,9 +340,9 @@ func groupedTestArgs(args []string) []string {
 func legacyTestActions(raw string) string {
 	legacy := map[string]string{
 		"put": "writer.commit", "remove": "writer.commit", "commit": "writer.commit",
-		"read": "knowledge.read", "read-workspace": "file.read", "read-catalog": "inventory.read", "search": "knowledge.search",
-		"relations": "knowledge.relations", "resolve": "dataset.resolve",
-		"describe-access": "knowledge.access.describe",
+		"read": "object.read", "read-workspace": "file.read", "read-catalog": "inventory.read", "search": "object.search",
+		"relations": "object.relations", "resolve": "dataset.resolve",
+		"describe-access": "object.access.describe",
 		"propose":         "governance.proposal.create", "preview": "governance.preview.create",
 		"validate": "governance.validate", "record-validation": "governance.validation.record", "merge": "governance.merge",
 		"register": "repositories.manage", "archive-repo": "repositories.manage", "archive-catalog": "catalog.manage",
@@ -512,7 +512,7 @@ func TestShortHelpIsNotAPositional(t *testing.T) {
 	if result.Status != 0 || !strings.Contains(result.Stdout, "kc search (") {
 		t.Fatalf("kc search -h must print search usage: %#v", result)
 	}
-	if strings.Contains(result.Stdout, "KNOWLEDGE_SET_INVALID") {
+	if strings.Contains(result.Stdout, "DATASET_INVALID") {
 		t.Fatalf("kc search -h must not treat -h as a dataset id: %#v", result)
 	}
 }
@@ -582,7 +582,7 @@ func TestProtocolErrorJSON(t *testing.T) {
 	h := testkit.TempDir(t)
 	kc(h, "init")
 	seedRepo(t, h, "kr://acme/public/core")
-	expectCode(t, kc(h, "read", testObjectReference(t, "kr://acme/public/core", "missing", ""), "--ref", "refs/heads/main"), "KNOWLEDGE_REF_UNRESOLVED")
+	expectCode(t, kc(h, "read", testObjectReference(t, "kr://acme/public/core", "missing", ""), "--ref", "refs/heads/main"), "OBJECT_REF_UNRESOLVED")
 }
 
 func TestProposeMergeIsVisibleOnView(t *testing.T) {
@@ -654,7 +654,7 @@ func TestWorkspaceAndCatalogLifecycle(t *testing.T) {
 		t.Fatal(got)
 	}
 	body(t, kc(h, "dataset", "retire", "--dataset", "ops"))
-	expectCode(t, kc(h, "read", testObjectReference(t, "kr://acme/public/core", "policy/P-1", ""), "--dataset", "ops"), "KNOWLEDGE_SET_INVALID")
+	expectCode(t, kc(h, "read", testObjectReference(t, "kr://acme/public/core", "policy/P-1", ""), "--dataset", "ops"), "DATASET_INVALID")
 	expectMsg(t, kc(h, "pin-workspace", "--dataset", "ops"), "unknown command pin-workspace")
 	expectCode(t, kc(h, "pin-workspace", "--dataset", "ops"), "USAGE_INVALID")
 	expectCode(t, kc(h, "receipt", "--command-id", "missing"), "USAGE_INVALID")
@@ -729,7 +729,7 @@ func TestForkPublishDoesNotCopyPersonal(t *testing.T) {
 	if asMap(t, personal["value"])["text"] != "alice draft" {
 		t.Fatal(personal)
 	}
-	expectCode(t, kc(h, "read", testObjectReference(t, pub, "drafts/metric-x", ""), "--ref", "refs/heads/main"), "KNOWLEDGE_REF_UNRESOLVED")
+	expectCode(t, kc(h, "read", testObjectReference(t, pub, "drafts/metric-x", ""), "--ref", "refs/heads/main"), "OBJECT_REF_UNRESOLVED")
 	prov := asMap(t, body(t, kc(h, "provenance", "--repo", pub, "--object", "metrics/x", "--ref", "refs/heads/main")))
 	chain := prov["chain"].([]any)
 	refs := asMap(t, chain[0])["sourceRefs"].([]any)
@@ -741,7 +741,7 @@ func TestForkPublishDoesNotCopyPersonal(t *testing.T) {
 		t.Fatal("merged fork must be visible on next read --dataset", servingNew)
 	}
 	servingDraft := kc(h, "read", testObjectReference(t, alice, "drafts/metric-x", ""), "--dataset", "semantic")
-	expectCode(t, servingDraft, "KNOWLEDGE_REF_UNRESOLVED")
+	expectCode(t, servingDraft, "OBJECT_REF_UNRESOLVED")
 	if strings.Contains(servingDraft.Stdout, "alice draft") {
 		t.Fatal("personal draft leaked into public workspace", servingDraft.Stdout)
 	}

@@ -25,7 +25,7 @@ func (c *Controller) repository(id kernel.RepositoryID) (objectmodel.Repository,
 		return nil, err
 	}
 	if repo == nil {
-		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "projection controller has no knowledge repository")
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "projection controller has no object repository")
 	}
 	if repo.ID() != id {
 		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "projection repository lookup changed source identity")

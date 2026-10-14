@@ -16,11 +16,11 @@ import (
 func TestSchemaFieldAccessIsTheOnlyIndexDeclarationSource(t *testing.T) {
 	repo := testkit.MakeRepository(t, "kr://test/schema-field-access")
 	base := testkit.MustHead(t, repo, snapshot.DefaultRef)
-	first, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: base, ExpectedTargetCommit: base, Operations: []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/item"}, Value: map[string]any{"entity": "Item", "fields": map[string]any{"name": map[string]any{"type": "string", "access": []any{"text"}}, "secret": map[string]any{"type": "string", "access": []any{"filter"}}}}}}})
+	first, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: base, ExpectedTargetCommit: base, Operations: []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/item"}, Value: map[string]any{"entity": "Item", "fields": map[string]any{"name": map[string]any{"type": "string", "access": []any{"text"}}, "secret": map[string]any{"type": "string", "access": []any{"filter"}}}}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	ordinary, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: first, ExpectedTargetCommit: first, Operations: []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "index/items"}, Value: map[string]any{"targets": []any{map[string]any{"schemaRef": "schema/item", "fields": map[string]any{"name": []any{"filter"}}}}}}}})
+	ordinary, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: first, ExpectedTargetCommit: first, Operations: []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "index/items"}, Value: map[string]any{"targets": []any{map[string]any{"schemaRef": "schema/item", "fields": map[string]any{"name": []any{"filter"}}}}}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestSchemaFieldAccessIsTheOnlyIndexDeclarationSource(t *testing.T) {
 	if len(spec.Fields) != 2 || spec.AccessDigest != old.AccessDigest {
 		t.Fatalf("ordinary index/* objects must not supply query declarations: old=%#v new=%#v", old, spec)
 	}
-	current, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	current, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef,
 		BaseCommit: ordinary, ExpectedTargetCommit: ordinary,
 		Operations: []objectmodel.Operation{{
@@ -69,7 +69,7 @@ func TestSchemaFieldAccessChangeRebuildsProjectionAndContentRemainsIncremental(t
 	repo := testkit.MakeRepository(t, "kr://test/index-rebuild")
 	commit := func(base kernel.CommitID, ops ...objectmodel.Operation) kernel.CommitID {
 		t.Helper()
-		next, err := repo.ApplyKnowledgeCommit(objectmodel.ChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: base, ExpectedTargetCommit: base, Operations: ops})
+		next, err := repo.ApplyObjectCommit(objectmodel.ChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: base, ExpectedTargetCommit: base, Operations: ops})
 		if err != nil {
 			t.Fatal(err)
 		}

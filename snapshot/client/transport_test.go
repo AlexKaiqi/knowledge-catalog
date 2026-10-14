@@ -26,7 +26,7 @@ func TestStandaloneDatasetRequestCompressionAndExactJSON(t *testing.T) {
 			return
 		}
 		defer reader.Close()
-		var body snapshotclient.KnowledgeSetRequest
+		var body snapshotclient.DatasetRequest
 		if json.NewDecoder(reader).Decode(&body) != nil || body.Metadata["large"] != value {
 			t.Error("compressed Dataset definition lost metadata")
 		}
@@ -35,7 +35,7 @@ func TestStandaloneDatasetRequestCompressionAndExactJSON(t *testing.T) {
 	defer server.Close()
 	sdk := metadataClient(t, server)
 	var result map[string]any
-	err := sdk.SnapshotService().DefineKnowledgeSet(context.Background(), snapshotclient.KnowledgeSetRequest{Dataset: "delivery", Revision: 1, Metadata: map[string]string{"large": value}}, snapshotclient.RequestOptions{RequestID: "dataset-publication"}, &result)
+	err := sdk.SnapshotService().DefineDataset(context.Background(), snapshotclient.DatasetRequest{Dataset: "delivery", Revision: 1, Metadata: map[string]string{"large": value}}, snapshotclient.RequestOptions{RequestID: "dataset-publication"}, &result)
 	if err != nil {
 		t.Fatal(err)
 	}

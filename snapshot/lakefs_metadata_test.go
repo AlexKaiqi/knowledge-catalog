@@ -49,7 +49,7 @@ func TestLakeFSCommitMetadataPreservesAuthorAcrossReopen(t *testing.T) {
 	}
 	// Reopen through the public factory so provenance cannot come from the
 	// original handle's memory. The native committer remains the service user.
-	reopened, err := snapshot.OpenLakeFS(id, fake.server.URL+"/knowledge", "access:secret")
+	reopened, err := snapshot.OpenLakeFS(id, fake.server.URL+"/object", "access:secret")
 	if err != nil {
 		t.Fatal(err)
 	}

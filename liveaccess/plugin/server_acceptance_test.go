@@ -73,7 +73,7 @@ func TestServerLiveAccessRepoSelectionMixedValuesAndDataset(t *testing.T) {
 	}{{"source", kernel.ErrTemporaryUnavailable}, {"basis", kernel.ErrCapabilityUnsatisfied}, {"schema", kernel.ErrSchemaInstanceInvalid}} {
 		t.Run(test.mode, func(t *testing.T) {
 			one.mode.Store(test.mode)
-			row, err := f.read(t, "reader", "mixed-"+test.mode, kcclient.KnowledgeReadRequest{Reference: acceptanceReference(t, acceptanceR1, ""), Commit: string(f.commits[acceptanceR1])})
+			row, err := f.read(t, "reader", "mixed-"+test.mode, kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR1, ""), Commit: string(f.commits[acceptanceR1])})
 			if err != nil {
 				t.Fatalf("one value failed the entire public object read: %#v %v", row, err)
 			}
@@ -82,7 +82,7 @@ func TestServerLiveAccessRepoSelectionMixedValuesAndDataset(t *testing.T) {
 	}
 	one.mode.Store("source")
 	var published any
-	err := f.client(t, "operator").SnapshotService().DefineKnowledgeSet(context.Background(), snapshotclient.KnowledgeSetRequest{Dataset: "both", Revision: 1, Sources: []dataset.KnowledgeSetSource{{Repository: acceptanceR1, Selector: snapshot.DefaultRef}, {Repository: acceptanceR2, Selector: snapshot.DefaultRef}}}, snapshotclient.RequestOptions{}, &published)
+	err := f.client(t, "operator").SnapshotService().DefineDataset(context.Background(), snapshotclient.DatasetRequest{Dataset: "both", Revision: 1, Sources: []dataset.DatasetSource{{Repository: acceptanceR1, Selector: snapshot.DefaultRef}, {Repository: acceptanceR2, Selector: snapshot.DefaultRef}}}, snapshotclient.RequestOptions{}, &published)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestServerLiveAccessRepoSelectionMixedValuesAndDataset(t *testing.T) {
 	}{{"source", kernel.ErrTemporaryUnavailable}, {"basis", kernel.ErrCapabilityUnsatisfied}, {"schema", kernel.ErrSchemaInstanceInvalid}} {
 		one.mode.Store(test.mode)
 		for i, repo := range []kernel.RepositoryID{acceptanceR1, acceptanceR2} {
-			request := kcclient.KnowledgeReadRequest{KnowledgeDatasetIdentity: kcclient.KnowledgeDatasetIdentity{Dataset: "both"}, Reference: acceptanceReference(t, repo, "")}
+			request := kcclient.ObjectReadRequest{ObjectDatasetIdentity: kcclient.ObjectDatasetIdentity{Dataset: "both"}, Reference: acceptanceReference(t, repo, "")}
 			row, err := f.read(t, "reader", fmt.Sprintf("mixed-dataset-%s-%d", test.mode, i+1), request)
 			if err != nil || row.Repository != repo || row.Commit != f.commits[repo] {
 				t.Fatalf("combination Dataset changed explicit source or fixed version: source=%s row=%#v %v", repo, row, err)
@@ -107,8 +107,8 @@ func TestServerLiveAccessRepoSelectionMixedValuesAndDataset(t *testing.T) {
 		}
 	}
 	one.mode.Store("source")
-	request := accessclient.BindingRequest{KnowledgeScope: kcclient.KnowledgeScope{Repository: string(acceptanceR1), Commit: string(f.commits[acceptanceR1])}, Object: string(acceptanceObject), Aspect: "good"}
-	readRequest := kcclient.KnowledgeReadRequest{Reference: acceptanceReference(t, acceptanceR1, ""), Commit: string(f.commits[acceptanceR1])}
+	request := accessclient.BindingRequest{ObjectScope: kcclient.ObjectScope{Repository: string(acceptanceR1), Commit: string(f.commits[acceptanceR1])}, Object: string(acceptanceObject), Aspect: "good"}
+	readRequest := kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR1, ""), Commit: string(f.commits[acceptanceR1])}
 	var before, after liveaccess.ResolvedBinding
 	if err := f.client(t, "reader").LiveAccessService().ResolveBinding(context.Background(), request, accessclient.RequestOptions{}, &before); kernel.CodeOf(err) != kernel.ErrForbidden {
 		t.Fatalf("read permission silently included binding resolve: %v", err)
@@ -145,7 +145,7 @@ func TestServerLiveAccessRepoSelectionMixedValuesAndDataset(t *testing.T) {
 			t.Fatalf("missing plugin erased static siblings or invented observations: %#v %v", row, err)
 		}
 		assertAcceptanceUnavailable(t, *row)
-		row, err = f.read(t, "reader", "independent-"+selection.name+"-"+selection.instance, kcclient.KnowledgeReadRequest{Reference: acceptanceReference(t, acceptanceR2, ""), Commit: string(f.commits[acceptanceR2])})
+		row, err = f.read(t, "reader", "independent-"+selection.name+"-"+selection.instance, kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR2, ""), Commit: string(f.commits[acceptanceR2])})
 		if err != nil {
 			t.Fatalf("missing R1 plugin blocked R2: %#v %v", row, err)
 		}

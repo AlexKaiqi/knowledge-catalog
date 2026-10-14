@@ -9,7 +9,7 @@ import (
 
 // Overview uses the already authorized fixed source map; it does not query a
 // plugin, refresh metadata, call an external source or claim current readiness.
-func (p *IndexPlugins) Overview(pin reader.KnowledgeSetPin) ([]SourcePlugin, error) {
+func (p *IndexPlugins) Overview(pin reader.DatasetPin) ([]SourcePlugin, error) {
 	out := []SourcePlugin{}
 	if p == nil {
 		return out, nil

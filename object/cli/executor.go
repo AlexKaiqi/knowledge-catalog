@@ -35,8 +35,8 @@ func (e *executor) Execute(ctx context.Context, path string, flags map[string]an
 	return e.read(ctx, path, flags, options)
 }
 
-func (e *executor) scope(flags map[string]any) client.KnowledgeScope {
-	scope := client.KnowledgeScope{Repository: flagString(flags, "repo"), Commit: flagString(flags, "commit"), Ref: flagString(flags, "ref")}
+func (e *executor) scope(flags map[string]any) client.ObjectScope {
+	scope := client.ObjectScope{Repository: flagString(flags, "repo"), Commit: flagString(flags, "commit"), Ref: flagString(flags, "ref")}
 	if scope.Repository == "" && flagString(flags, "reference") == "" {
 		scope.Dataset = flagString(flags, "dataset")
 		if scope.Dataset == "" {
@@ -54,19 +54,19 @@ func (e *executor) read(ctx context.Context, path string, flags map[string]any, 
 	scope := e.scope(flags)
 	switch path {
 	case "read":
-		err = e.client.Read(ctx, client.ReadRequest{KnowledgeDatasetIdentity: client.KnowledgeDatasetIdentity{Dataset: flagString(flags, "dataset")}, Reference: flagString(flags, "reference"), Commit: flagString(flags, "commit"), Ref: flagString(flags, "ref")}, options, &output)
+		err = e.client.Read(ctx, client.ReadRequest{ObjectDatasetIdentity: client.ObjectDatasetIdentity{Dataset: flagString(flags, "dataset")}, Reference: flagString(flags, "reference"), Commit: flagString(flags, "commit"), Ref: flagString(flags, "ref")}, options, &output)
 	case "resolve":
-		err = e.client.Resolve(ctx, client.ResolveRequest{KnowledgeScope: scope, Object: flagString(flags, "object"), Aspect: flagString(flags, "aspect"), Member: flagString(flags, "member")}, options, &output)
+		err = e.client.Resolve(ctx, client.ResolveRequest{ObjectScope: scope, Object: flagString(flags, "object"), Aspect: flagString(flags, "aspect"), Member: flagString(flags, "member")}, options, &output)
 	case "provenance":
-		err = e.client.Provenance(ctx, client.ObjectRequest{KnowledgeScope: scope, Object: flagString(flags, "object")}, options, &output)
+		err = e.client.Provenance(ctx, client.ObjectRequest{ObjectScope: scope, Object: flagString(flags, "object")}, options, &output)
 	case "log":
 		limit, _ := limitFrom(flags)
-		err = e.client.Log(ctx, client.ObjectRequest{KnowledgeScope: scope, Object: flagString(flags, "object"), Limit: limit, Continuation: flagString(flags, "continuation")}, options, &output)
+		err = e.client.Log(ctx, client.ObjectRequest{ObjectScope: scope, Object: flagString(flags, "object"), Limit: limit, Continuation: flagString(flags, "continuation")}, options, &output)
 	case "schema describe":
-		err = e.client.Schema(ctx, client.SchemaRequest{KnowledgeScope: scope, Object: flagString(flags, "object")}, options, &output)
+		err = e.client.Schema(ctx, client.SchemaRequest{ObjectScope: scope, Object: flagString(flags, "object")}, options, &output)
 	case "schema list":
 		limit, _ := limitFrom(flags)
-		err = e.client.BrowseSchemas(ctx, client.SchemaPageRequest{KnowledgeRepoPin: client.KnowledgeRepoPin{Repository: scope.Repository, Commit: scope.Commit, Ref: scope.Ref}, Limit: limit, Continuation: flagString(flags, "continuation")}, options, &output)
+		err = e.client.BrowseSchemas(ctx, client.SchemaPageRequest{ObjectRepoPin: client.ObjectRepoPin{Repository: scope.Repository, Commit: scope.Commit, Ref: scope.Ref}, Limit: limit, Continuation: flagString(flags, "continuation")}, options, &output)
 	}
 	return output, err
 }

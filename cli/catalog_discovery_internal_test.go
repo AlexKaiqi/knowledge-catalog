@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestKnowledgeSearchRejectsInventoryDiscoveryOperand(t *testing.T) {
+func TestObjectSearchRejectsInventoryDiscoveryOperand(t *testing.T) {
 	t.Setenv("KC_CONFIG_DIR", t.TempDir())
 	t.Setenv("KC_AUTH_TOKEN", "")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -40,7 +40,7 @@ func TestConsolePageLoadsWithoutExposingAuthority(t *testing.T) {
 	if asset.Code != http.StatusOK || asset.Header().Get("Content-Type") != "text/javascript; charset=utf-8" || script != serv.ConsolePageJS {
 		t.Fatalf("console script unavailable or changed in transport: status=%d type=%s", asset.Code, asset.Header().Get("Content-Type"))
 	}
-	if !strings.Contains(script, "/knowledge/v1/schemas:describe") || !strings.Contains(script, "/knowledge/v1/objects:read") || !strings.Contains(script, "/knowledge/v1/search") {
+	if !strings.Contains(script, "/object/v1/schemas:describe") || !strings.Contains(script, "/object/v1/objects:read") || !strings.Contains(script, "/object/v1/search") {
 		t.Fatal("console script must exercise schema describe, READ and SEARCH")
 	}
 	if !strings.Contains(script, "runSchemaDescribe") {

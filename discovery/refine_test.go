@@ -18,13 +18,13 @@ func (f rerankerFunc) Rerank(ctx context.Context, request retrieval.RerankReques
 
 func candidates() []retrieval.Candidate {
 	return []retrieval.Candidate{
-		{Ref: objectmodel.KnowledgeRef{Repository: "kr://acme/public/core", Object: "p1"}, Value: map[string]any{"body": "refund timeout diagnosis"}},
-		{Ref: objectmodel.KnowledgeRef{Repository: "kr://acme/public/core", Object: "p2"}, Value: map[string]any{"body": "deployment checklist"}},
-		{Ref: objectmodel.KnowledgeRef{Repository: "kr://acme/public/core", Object: "p3"}, Value: map[string]any{"body": "refund SLA and timeout policy"}},
+		{Ref: objectmodel.ObjectRef{Repository: "kr://acme/public/core", Object: "p1"}, Value: map[string]any{"body": "refund timeout diagnosis"}},
+		{Ref: objectmodel.ObjectRef{Repository: "kr://acme/public/core", Object: "p2"}, Value: map[string]any{"body": "deployment checklist"}},
+		{Ref: objectmodel.ObjectRef{Repository: "kr://acme/public/core", Object: "p3"}, Value: map[string]any{"body": "refund SLA and timeout policy"}},
 	}
 }
 
-func objects(refs []objectmodel.KnowledgeRef) []string {
+func objects(refs []objectmodel.ObjectRef) []string {
 	out := make([]string, len(refs))
 	for i, r := range refs {
 		out[i] = string(r.Object)
@@ -156,9 +156,9 @@ func TestExecuteRerankProjectsFieldsPreservesRefsAndKeepsBoundaryTies(t *testing
 			OutputContract: retrieval.OutputContract{TopK: &topK, AllowTies: true},
 		},
 		Candidates: []retrieval.Candidate{
-			{Ref: objectmodel.KnowledgeRef{Repository: "kr://acme/public/core", Object: "p1"}, Value: map[string]any{"body": "refund", "secret": "hidden"}, OriginalRank: 1, RetrievalEvidence: []retrieval.LaneEvidence{{Provider: "opensearch", Lane: "lexical", LocalRank: 1}}},
-			{Ref: objectmodel.KnowledgeRef{Repository: "kr://acme/public/core", Object: "p2"}, Value: map[string]any{"body": "refund timeout", "secret": "hidden"}},
-			{Ref: objectmodel.KnowledgeRef{Repository: "kr://acme/public/core", Object: "p3"}, Value: map[string]any{"body": "deploy", "secret": "hidden"}},
+			{Ref: objectmodel.ObjectRef{Repository: "kr://acme/public/core", Object: "p1"}, Value: map[string]any{"body": "refund", "secret": "hidden"}, OriginalRank: 1, RetrievalEvidence: []retrieval.LaneEvidence{{Provider: "opensearch", Lane: "lexical", LocalRank: 1}}},
+			{Ref: objectmodel.ObjectRef{Repository: "kr://acme/public/core", Object: "p2"}, Value: map[string]any{"body": "refund timeout", "secret": "hidden"}},
+			{Ref: objectmodel.ObjectRef{Repository: "kr://acme/public/core", Object: "p3"}, Value: map[string]any{"body": "deploy", "secret": "hidden"}},
 		},
 	}
 	provider := rerankerFunc(func(_ context.Context, got retrieval.RerankRequest) (retrieval.RerankProviderResult, error) {
@@ -170,8 +170,8 @@ func TestExecuteRerankProjectsFieldsPreservesRefsAndKeepsBoundaryTies(t *testing
 		}
 		return retrieval.RerankProviderResult{
 			Groups: []retrieval.RankGroup{
-				{Rank: 1, Refs: []objectmodel.KnowledgeRef{got.Candidates[1].Ref, got.Candidates[0].Ref}},
-				{Rank: 2, Refs: []objectmodel.KnowledgeRef{got.Candidates[2].Ref}},
+				{Rank: 1, Refs: []objectmodel.ObjectRef{got.Candidates[1].Ref, got.Candidates[0].Ref}},
+				{Rank: 2, Refs: []objectmodel.ObjectRef{got.Candidates[2].Ref}},
 			},
 			Provider: "llm-runtime", Model: "judge", ModelRevision: "v3",
 		}, nil
@@ -203,7 +203,7 @@ func TestExecuteRerankRejectsOversizedModelVisibleInputBeforeProvider(t *testing
 			Criterion: "relevance", OutputContract: retrieval.OutputContract{},
 		},
 		Candidates: []retrieval.Candidate{{
-			Ref:   objectmodel.KnowledgeRef{Repository: "kr://acme/public/core", Object: "oversized"},
+			Ref:   objectmodel.ObjectRef{Repository: "kr://acme/public/core", Object: "oversized"},
 			Value: map[string]any{"body": strings.Repeat("x", retrieval.MaxRerankCandidateBytes+1)},
 		}},
 	}
@@ -229,7 +229,7 @@ func TestExecuteRerankRejectsOversizedAggregateWindowBeforeProvider(t *testing.T
 	}
 	for i := 0; i < 5; i++ {
 		request.Candidates = append(request.Candidates, retrieval.Candidate{
-			Ref:   objectmodel.KnowledgeRef{Repository: "kr://acme/public/core", Object: objectmodel.ObjectID("large-" + string(rune('a'+i)))},
+			Ref:   objectmodel.ObjectRef{Repository: "kr://acme/public/core", Object: objectmodel.ObjectID("large-" + string(rune('a'+i)))},
 			Value: map[string]any{"body": strings.Repeat("x", 30<<10)},
 		})
 	}
@@ -251,9 +251,9 @@ func TestExecuteRerankRejectsDishonestOrIncompleteProviderOutput(t *testing.T) {
 		Candidates: candidates(),
 	}
 	for name, groups := range map[string][]retrieval.RankGroup{
-		"unknown":   {{Rank: 1, Refs: []objectmodel.KnowledgeRef{{Repository: "kr://acme/public/core", Object: "other"}}}},
-		"omitted":   {{Rank: 1, Refs: []objectmodel.KnowledgeRef{request.Candidates[0].Ref, request.Candidates[1].Ref}}},
-		"duplicate": {{Rank: 1, Refs: []objectmodel.KnowledgeRef{request.Candidates[0].Ref, request.Candidates[0].Ref, request.Candidates[1].Ref, request.Candidates[2].Ref}}},
+		"unknown":   {{Rank: 1, Refs: []objectmodel.ObjectRef{{Repository: "kr://acme/public/core", Object: "other"}}}},
+		"omitted":   {{Rank: 1, Refs: []objectmodel.ObjectRef{request.Candidates[0].Ref, request.Candidates[1].Ref}}},
+		"duplicate": {{Rank: 1, Refs: []objectmodel.ObjectRef{request.Candidates[0].Ref, request.Candidates[0].Ref, request.Candidates[1].Ref, request.Candidates[2].Ref}}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			provider := rerankerFunc(func(context.Context, retrieval.RerankRequest) (retrieval.RerankProviderResult, error) {
@@ -277,8 +277,8 @@ func TestExecuteRerankFailsClosedForUnjudgedWhenContractForbidsIt(t *testing.T) 
 	}
 	provider := rerankerFunc(func(_ context.Context, got retrieval.RerankRequest) (retrieval.RerankProviderResult, error) {
 		return retrieval.RerankProviderResult{
-			Groups:   []retrieval.RankGroup{{Rank: 1, Refs: []objectmodel.KnowledgeRef{got.Candidates[0].Ref, got.Candidates[1].Ref}}},
-			Unjudged: []objectmodel.KnowledgeRef{got.Candidates[2].Ref}, Provider: "test", Model: "test",
+			Groups:   []retrieval.RankGroup{{Rank: 1, Refs: []objectmodel.ObjectRef{got.Candidates[0].Ref, got.Candidates[1].Ref}}},
+			Unjudged: []objectmodel.ObjectRef{got.Candidates[2].Ref}, Provider: "test", Model: "test",
 		}, nil
 	})
 	if _, err := retrieval.ExecuteRerank(context.Background(), provider, request); kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
@@ -312,7 +312,7 @@ func TestExecuteRerankExplicitEmptyProjectionExposesNoValueOrObservationFields(t
 	}
 	request.Candidates[0].Observations = []objectmodel.UnitObservation{{Address: objectmodel.Address{ObjectID: "p1"}}}
 	provider := rerankerFunc(func(_ context.Context, got retrieval.RerankRequest) (retrieval.RerankProviderResult, error) {
-		refs := make([]objectmodel.KnowledgeRef, len(got.Candidates))
+		refs := make([]objectmodel.ObjectRef, len(got.Candidates))
 		for i, candidate := range got.Candidates {
 			if value := candidate.Value.(map[string]any); len(value) != 0 || len(candidate.Observations) != 0 {
 				t.Fatalf("empty projection/provider metadata leak: %#v", candidate)

@@ -9,7 +9,7 @@ import (
 )
 
 func TestRenderUsesActualAssembledYAMLAndPreservesCoordinates(t *testing.T) {
-	value := objectmodel.KnowledgeValue{
+	value := objectmodel.ObjectValue{
 		Repository: "kr://acme/semantic", Commit: "c1",
 		Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "metric/gmv"},
 		Value: map[string]any{

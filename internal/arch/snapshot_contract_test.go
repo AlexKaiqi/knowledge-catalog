@@ -16,14 +16,14 @@ import (
 // public type requires an explicit ownership decision here.
 var snapshotPublicDTOs = map[string]map[string]bool{
 	"kc/snapshot":         names("Advanced CommandEntry CommandRequest DirectoryCursor FileRef LakeFSEndpoint Receipt ReceiptResult"),
-	"kc/snapshot/dataset": names("Commit History LogQuery State DatasetItem KnowledgeSet KnowledgeSetCheck KnowledgeSetFileMount KnowledgeSetIssue KnowledgeSetMount KnowledgeSetOverlay KnowledgeSetRecipe KnowledgeSetSource ManagementOptions MountRoute ResolvedKnowledgeSet Snapshot VirtualFile VirtualMount"),
+	"kc/snapshot/dataset": names("Commit History LogQuery State DatasetItem Dataset DatasetCheck DatasetFileMount DatasetIssue DatasetMount DatasetOverlay DatasetRecipe DatasetSource ManagementOptions MountRoute ResolvedDataset Snapshot VirtualFile VirtualMount"),
 	"kc/snapshot/access":  names("GrantList Query Rule"),
 	"kc/snapshot/service": names("Authorization Config FileCoordinate FileDirectoryRequest FileDirectoryResponse FileMountsRequest FileMountsResponse FileReadEvidence FileReadRequest FileReadResponse IdentityOptions RequestMetadata Resources ViewOptions"),
-	"kc/snapshot/client":  names("Config RequestOptions KnowledgeSetRequest KnowledgeSetResolveRequest DatasetShowOptions RepositoryAttachRequest WorkspaceFileCoordinate WorkspaceFileMountsRequest WorkspaceFileDirectoryRequest WorkspaceFileReadRequest WorkspaceFileMountsResponse WorkspaceFileDirectoryResponse WorkspaceFileReadResponse GrantRequest GrantExpected GrantUpdateRequest AdmissionResult AdmissionGrant AdmissionRequest"),
+	"kc/snapshot/client":  names("Config RequestOptions DatasetRequest DatasetResolveRequest DatasetShowOptions RepositoryAttachRequest WorkspaceFileCoordinate WorkspaceFileMountsRequest WorkspaceFileDirectoryRequest WorkspaceFileReadRequest WorkspaceFileMountsResponse WorkspaceFileDirectoryResponse WorkspaceFileReadResponse GrantRequest GrantExpected GrantUpdateRequest AdmissionResult AdmissionGrant AdmissionRequest"),
 	"kc/snapshot/cli":     names("Command Context"),
 }
 
-var snapshotDTOMethods = names("kc/snapshot/dataset.State.IsEmpty kc/snapshot/dataset.KnowledgeSetSource.IsFileEntry kc/snapshot/dataset.KnowledgeSetRecipe.Sources kc/snapshot/access.Rule.UnmarshalJSON kc/snapshot/service.Resources.OpenFiles")
+var snapshotDTOMethods = names("kc/snapshot/dataset.State.IsEmpty kc/snapshot/dataset.DatasetSource.IsFileEntry kc/snapshot/dataset.DatasetRecipe.Sources kc/snapshot/access.Rule.UnmarshalJSON kc/snapshot/service.Resources.OpenFiles")
 var snapshotPureDTOAliases = names("DirectoryRequest DirectoryEntry DirectoryPage TreeChange TreeChangeSet CommitMetadata")
 
 // Factory results must preserve the selected interface, including factories
@@ -455,7 +455,7 @@ func TestSnapshotPublicSurfaceGuardDetectsIndirectLeaks(t *testing.T) {
 		{"dto-pointer-authority-method", "type FileRef struct{}; func (f *FileRef) Save() {}", "adds behavior"},
 		{"concrete-interface-alias", "type Registry string; func NewRegistry() Registry { return \"\" }", "must be a declared interface"},
 		{"external-concrete-alias", `import "net/http"; type Client = http.Client`, "concrete public type shape"},
-		{"upper-layer-signature", `import objectmodel "kc/object"; type FileRef struct{ Value knowledge.Object }`, "unselected signature dependency"},
+		{"upper-layer-signature", `import objectmodel "kc/object"; type FileRef struct{ Value object.Object }`, "unselected signature dependency"},
 		{"selected-data-and-ports", `import contracts "kc/snapshot/internal/storecontract"; type FileRef struct{Path string}; type TreeChange = contracts.TreeChange; type WriteObserver func(string) error; type TreeReader interface {ReadFile(string) ([]byte,error)}; const Driver = contracts.DefaultRef`, ""},
 		{"capability-interface-discovery", `type TreeReader interface { ReadFile(string) ([]byte,error) }; func TreeReaderOf(store any) (TreeReader,bool) { reader,ok := store.(TreeReader); return reader,ok }`, ""},
 	} {

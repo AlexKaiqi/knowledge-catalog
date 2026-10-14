@@ -22,11 +22,11 @@ type decodingRepository struct {
 }
 
 func (r *decodingRepository) ID() kernel.RepositoryID { return r.id }
-func (r *decodingRepository) ReadMany(ids []objectmodel.ObjectID, commit kernel.CommitID) (map[objectmodel.ObjectID]objectmodel.KnowledgeValue, error) {
+func (r *decodingRepository) ReadMany(ids []objectmodel.ObjectID, commit kernel.CommitID) (map[objectmodel.ObjectID]objectmodel.ObjectValue, error) {
 	r.reads++
-	out := make(map[objectmodel.ObjectID]objectmodel.KnowledgeValue, len(ids))
+	out := make(map[objectmodel.ObjectID]objectmodel.ObjectValue, len(ids))
 	for _, id := range ids {
-		var decoded objectmodel.KnowledgeValue
+		var decoded objectmodel.ObjectValue
 		if err := json.Unmarshal(r.body, &decoded); err != nil {
 			return nil, err
 		}
@@ -65,7 +65,7 @@ func BenchmarkSnapshotBodyRead(b *testing.B) {
 			b.SetBytes(int64(len(body)))
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				var values map[objectmodel.ObjectID]objectmodel.KnowledgeValue
+				var values map[objectmodel.ObjectID]objectmodel.ObjectValue
 				var err error
 				switch mode {
 				case "direct_authority":

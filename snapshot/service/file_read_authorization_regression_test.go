@@ -11,7 +11,7 @@ import (
 
 func TestSnapshotFileMetadataReplayNeverReadsBodiesBeforeCurrentAuthorization(t *testing.T) {
 	fixture, source := newFileHTTPFixture(t)
-	if _, err := fixture.catalog.DefineKnowledgeSet("files", 1, []dataset.KnowledgeSetSource{
+	if _, err := fixture.catalog.DefineDataset("files", 1, []dataset.DatasetSource{
 		{Repository: source.id, Selector: snapshot.DefaultRef, Path: dataset.MountPath("docs"), SubPath: "reference"},
 		{Repository: source.id, Selector: snapshot.DefaultRef, File: "reference/a.json", Target: "outside.json"},
 	}); err != nil {

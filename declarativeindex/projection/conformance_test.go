@@ -31,7 +31,7 @@ func TestT8ProjectionLocateHydrateBasisLagAndRebuild(t *testing.T) {
 		t.Fatalf("hits=%#v err=%v", hits, err)
 	}
 	for _, hit := range hits.Hits {
-		if hit.Knowledge.Commit != c1 || hit.Knowledge.Repository != repo.ID() {
+		if hit.Object.Commit != c1 || hit.Object.Repository != repo.ID() {
 			t.Fatalf("hit was not hydrated at projection basis: %#v", hit)
 		}
 	}

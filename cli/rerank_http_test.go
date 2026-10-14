@@ -36,14 +36,14 @@ func (r *recordingReranker) Rerank(_ context.Context, request retrieval.RerankRe
 	if r.result != nil {
 		return *r.result, nil
 	}
-	refs := make([]objectmodel.KnowledgeRef, len(request.Candidates))
+	refs := make([]objectmodel.ObjectRef, len(request.Candidates))
 	for i, candidate := range request.Candidates {
 		refs[i] = candidate.Ref
 	}
 	return retrieval.RerankProviderResult{
 		Groups: []retrieval.RankGroup{
-			{Rank: 1, Refs: []objectmodel.KnowledgeRef{refs[1]}},
-			{Rank: 2, Refs: []objectmodel.KnowledgeRef{refs[0]}},
+			{Rank: 1, Refs: []objectmodel.ObjectRef{refs[1]}},
+			{Rank: 2, Refs: []objectmodel.ObjectRef{refs[0]}},
 		},
 		Provider: "llm-runtime", Model: "listwise-judge", ModelRevision: "2026-08-31",
 	}, nil
@@ -54,7 +54,7 @@ func rerankHTTP(t *testing.T, server *httptest.Server, body map[string]any) (int
 }
 
 func rerankHTTPAs(t *testing.T, server *httptest.Server, principal string, body map[string]any) (int, map[string]any) {
-	return semanticHTTPAs(t, server, "/knowledge/v1/rerank", principal, body)
+	return semanticHTTPAs(t, server, "/object/v1/rerank", principal, body)
 }
 
 func semanticHTTPAs(t *testing.T, server *httptest.Server, path, principal string, body map[string]any) (int, map[string]any) {
@@ -103,7 +103,7 @@ func TestRerankEvidenceFeedbackAndTrainingSampleJourney(t *testing.T) {
 	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "1", "--source", repository+"=refs/heads/main@"))
 	for _, principal := range []string{agent, user} {
 		body(t, kc(home, "allow", "--principal", principal, "--cmd", "read-workspace", "--dataset", workspace))
-		body(t, kc(home, "allow", "--principal", principal, "--action", "knowledge.read,knowledge.rerank", "--repo", repository))
+		body(t, kc(home, "allow", "--principal", principal, "--action", "object.read,object.rerank", "--repo", repository))
 		body(t, kc(home, "allow", "--principal", principal, "--action", "feedback.write", "--dataset", workspace))
 		body(t, kc(home, "allow", "--principal", principal, "--action", "audit.read"))
 	}
@@ -115,7 +115,7 @@ func TestRerankEvidenceFeedbackAndTrainingSampleJourney(t *testing.T) {
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	traceID := "trace-training"
-	status, response := semanticHTTPWithTrace(t, server, "/knowledge/v1/rerank", agent, traceID, map[string]any{
+	status, response := semanticHTTPWithTrace(t, server, "/object/v1/rerank", agent, traceID, map[string]any{
 		"dataset": workspace,
 		"candidates": []any{
 			map[string]any{"repository": repository, "object": "runbook/deploy"},
@@ -170,7 +170,7 @@ func TestRerankEvidenceFeedbackAndTrainingSampleJourney(t *testing.T) {
 		t.Fatalf("feedback target/submission trace separation = %#v", firstFeedback)
 	}
 	provider.err = kernel.Fail(kernel.ErrTemporaryUnavailable, "synthetic model timeout")
-	status, failed := semanticHTTPWithTrace(t, server, "/knowledge/v1/rerank", agent, traceID, map[string]any{
+	status, failed := semanticHTTPWithTrace(t, server, "/object/v1/rerank", agent, traceID, map[string]any{
 		"dataset": workspace,
 		"candidates": []any{
 			map[string]any{"repository": repository, "object": "runbook/deploy"},
@@ -193,9 +193,9 @@ func TestRerankEvidenceFeedbackAndTrainingSampleJourney(t *testing.T) {
 	provider.err = nil
 	provider.result = &retrieval.RerankProviderResult{
 		Provider: "llm-runtime", Model: "listwise-judge",
-		Groups: []retrieval.RankGroup{{Rank: 1, Refs: []objectmodel.KnowledgeRef{{Repository: kernel.RepositoryID(repository), Object: "runbook/not-a-candidate"}}}},
+		Groups: []retrieval.RankGroup{{Rank: 1, Refs: []objectmodel.ObjectRef{{Repository: kernel.RepositoryID(repository), Object: "runbook/not-a-candidate"}}}},
 	}
-	status, invalid := semanticHTTPWithTrace(t, server, "/knowledge/v1/rerank", agent, traceID, map[string]any{
+	status, invalid := semanticHTTPWithTrace(t, server, "/object/v1/rerank", agent, traceID, map[string]any{
 		"dataset": workspace,
 		"candidates": []any{
 			map[string]any{"repository": repository, "object": "runbook/deploy"},
@@ -240,7 +240,7 @@ func TestHTTPSearchRerankPreservesRetrievalEvidenceAndUsesOneFixedView(t *testin
 	body(t, kc(home, "put", testObjectReference(t, repository, "runbook/timeout", ""), "--command-id", "search-rerank-p2", "--schema-ref", "schema/runbook.search-rerank", "--value", `{"body":"refund timeout diagnosis","secret":"two"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "1", "--source", repository+"=refs/heads/main@"))
 	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--cmd", "read-workspace", "--dataset", workspace))
-	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--action", "knowledge.read,knowledge.search,knowledge.rerank", "--repo", repository))
+	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--action", "object.read,object.search,object.rerank", "--repo", repository))
 	syncIndexes(t, home, repository)
 
 	provider := &recordingReranker{}
@@ -250,7 +250,7 @@ func TestHTTPSearchRerankPreservesRetrievalEvidenceAndUsesOneFixedView(t *testin
 	}
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
-	status, response := semanticHTTPAs(t, server, "/knowledge/v1/search:rerank", "agent:rerank-test", map[string]any{
+	status, response := semanticHTTPAs(t, server, "/object/v1/search:rerank", "agent:rerank-test", map[string]any{
 		"dataset": workspace, "query": "refund", "limit": 2,
 		"spec": map[string]any{
 			"specRef": "urn:semantic-spec:search-rerank", "revision": 1, "operator": "SEMANTIC_RERANK",
@@ -330,7 +330,7 @@ func TestLiveHTTPSearchRerankWithLuna(t *testing.T) {
 	}
 	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "1", "--source", repository+"=refs/heads/main@"))
 	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--cmd", "read-workspace", "--dataset", workspace))
-	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--action", "knowledge.read,knowledge.search,knowledge.rerank", "--repo", repository))
+	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--action", "object.read,object.search,object.rerank", "--repo", repository))
 	syncIndexes(t, home, repository)
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{Reranker: provider})
 	if closer, ok := handler.(interface{ Close() error }); ok {
@@ -338,7 +338,7 @@ func TestLiveHTTPSearchRerankWithLuna(t *testing.T) {
 	}
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
-	status, response := semanticHTTPAs(t, server, "/knowledge/v1/search:rerank", "agent:rerank-test", map[string]any{
+	status, response := semanticHTTPAs(t, server, "/object/v1/search:rerank", "agent:rerank-test", map[string]any{
 		"dataset": workspace, "query": "support procedure", "limit": 3,
 		"spec": map[string]any{
 			"specRef": "urn:semantic-spec:live-http", "revision": 1, "operator": "SEMANTIC_RERANK",
@@ -382,8 +382,8 @@ func TestHTTPRerankReadsAuthorizedCanonicalCandidatesAndProjectsModelFields(t *t
 	body(t, kc(home, "put", testObjectReference(t, repository, "runbook/p2", ""), "--command-id", "rerank-p2", "--value", `{"body":"refund timeout diagnosis","secret":"two"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "1", "--source", repository+"=refs/heads/main@"))
 	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--cmd", "read-workspace", "--dataset", workspace))
-	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--action", "knowledge.read,knowledge.rerank", "--repo", repository))
-	body(t, kc(home, "allow", "--principal", "agent:partial-rerank", "--action", "knowledge.read", "--repo", repository, "--object", "runbook/p1"))
+	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--action", "object.read,object.rerank", "--repo", repository))
+	body(t, kc(home, "allow", "--principal", "agent:partial-rerank", "--action", "object.read", "--repo", repository, "--object", "runbook/p1"))
 
 	provider := &recordingReranker{}
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{Reranker: provider})
@@ -451,7 +451,7 @@ func TestHTTPRerankFailsClosedWithoutProviderBeforeCandidateRead(t *testing.T) {
 	home := testkit.TempDir(t)
 	body(t, kc(home, "init"))
 	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--cmd", "read-workspace", "--dataset", "agent"))
-	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--action", "knowledge.rerank", "--dataset", "agent"))
+	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--action", "object.rerank", "--dataset", "agent"))
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })

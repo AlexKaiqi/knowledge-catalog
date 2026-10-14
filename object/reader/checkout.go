@@ -23,7 +23,7 @@ var checkoutDirRe = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 var GrepLimitations = []string{"no-tokenization", "no-synonyms", "no-cross-repo-ranking"}
 
 // CheckoutPin is the on-disk pin for one Workspace checkout. Same coordinates as
-// KnowledgeSetPin; provider states this tree is grep, not FTS or vector.
+// DatasetPin; provider states this tree is grep, not FTS or vector.
 type CheckoutPin struct {
 	SetID        string                                  `json:"setId"`
 	Revision     int                                     `json:"revision"`
@@ -47,7 +47,7 @@ func EncodeCheckoutDir(id string) string {
 	return checkoutDirRe.ReplaceAllString(id, "_")
 }
 
-func PinFromWorkspace(pin KnowledgeSetPin) CheckoutPin {
+func PinFromWorkspace(pin DatasetPin) CheckoutPin {
 	return CheckoutPin{
 		SetID:        pin.SetID,
 		Revision:     pin.Revision,
@@ -79,10 +79,10 @@ func ObjectCheckoutRel(objectID objectmodel.ObjectID) (string, error) {
 	return clean, nil
 }
 
-// WriteCheckout materializes one ResolveKnowledgeSet as a read-only tree.
+// WriteCheckout materializes one ResolveDataset as a read-only tree.
 // Path = <encoded Repository> / <object_id>.json (assembled READ value, not Git blob).
 // Same object_id in two repositories is two files. Replace the whole tree on each call.
-func WriteCheckout(root string, pin KnowledgeSetPin, values []objectmodel.FederatedValue) (CheckoutReport, error) {
+func WriteCheckout(root string, pin DatasetPin, values []objectmodel.FederatedValue) (CheckoutReport, error) {
 	builder, err := BeginCheckout(root, pin)
 	if err != nil {
 		return CheckoutReport{}, err
@@ -99,13 +99,13 @@ func WriteCheckout(root string, pin KnowledgeSetPin, values []objectmodel.Federa
 type CheckoutBuilder struct {
 	root      string
 	tmp       string
-	pin       KnowledgeSetPin
+	pin       DatasetPin
 	written   CheckoutPin
 	objects   int
 	committed bool
 }
 
-func BeginCheckout(root string, pin KnowledgeSetPin) (*CheckoutBuilder, error) {
+func BeginCheckout(root string, pin DatasetPin) (*CheckoutBuilder, error) {
 	if strings.TrimSpace(root) == "" {
 		return nil, fmt.Errorf("checkout root is required")
 	}

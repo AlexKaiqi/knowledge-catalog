@@ -10,7 +10,7 @@ import (
 )
 
 // mountFed mounts two plain members under fixed ids so mount tests can
-// declare Path without caring about knowledge content.
+// declare Path without caring about object content.
 func mountFed(t *testing.T) catalog.Service {
 	t.Helper()
 	store := snapshot.NewRegistry()
@@ -24,9 +24,9 @@ func mountFed(t *testing.T) catalog.Service {
 
 // A recipe where no source declares Path is untouched: it is the pre-Loom
 // federated-read shape and must keep working without any mount validation.
-func TestDefineKnowledgeSetWithoutPathIsUnaffected(t *testing.T) {
+func TestDefineDatasetWithoutPathIsUnaffected(t *testing.T) {
 	cat := mountFed(t)
-	if _, err := cat.DefineKnowledgeSet("v", 1, []catalog.KnowledgeSetSource{
+	if _, err := cat.DefineDataset("v", 1, []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
@@ -39,39 +39,39 @@ func TestDefineKnowledgeSetWithoutPathIsUnaffected(t *testing.T) {
 
 // Invariant 1: once any source declares Path, every source must (root is an
 // explicit Path of "", not an absent one).
-func TestDefineKnowledgeSetRejectsPartialMountDeclaration(t *testing.T) {
+func TestDefineDatasetRejectsPartialMountDeclaration(t *testing.T) {
 	cat := mountFed(t)
-	_, err := cat.DefineKnowledgeSet("mixed", 1, []catalog.KnowledgeSetSource{
+	_, err := cat.DefineDataset("mixed", 1, []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("")},
 		{Repository: "kr://acme/public/core2", Selector: "refs/heads/main"},
 	})
-	testkit.ExpectCode(t, err, kernel.ErrKnowledgeSetInvalid)
+	testkit.ExpectCode(t, err, kernel.ErrDatasetInvalid)
 }
 
 // Invariant 2: two mounts cannot claim the same path, and one cannot nest
 // inside another — path ownership must stay unique in both directions.
-func TestDefineKnowledgeSetRejectsCollidingPaths(t *testing.T) {
+func TestDefineDatasetRejectsCollidingPaths(t *testing.T) {
 	cat := mountFed(t)
-	_, err := cat.DefineKnowledgeSet("dup-path", 1, []catalog.KnowledgeSetSource{
+	_, err := cat.DefineDataset("dup-path", 1, []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("refs/semantic")},
 		{Repository: "kr://acme/public/core2", Selector: "refs/heads/main", Path: catalog.MountPath("refs/semantic")},
 	})
-	testkit.ExpectCode(t, err, kernel.ErrKnowledgeSetInvalid)
+	testkit.ExpectCode(t, err, kernel.ErrDatasetInvalid)
 }
 
-func TestDefineKnowledgeSetRejectsNestedPaths(t *testing.T) {
+func TestDefineDatasetRejectsNestedPaths(t *testing.T) {
 	cat := mountFed(t)
-	_, err := cat.DefineKnowledgeSet("nested", 1, []catalog.KnowledgeSetSource{
+	_, err := cat.DefineDataset("nested", 1, []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("refs")},
 		{Repository: "kr://acme/public/core2", Selector: "refs/heads/main", Path: catalog.MountPath("refs/semantic")},
 	})
-	testkit.ExpectCode(t, err, kernel.ErrKnowledgeSetInvalid)
+	testkit.ExpectCode(t, err, kernel.ErrDatasetInvalid)
 }
 
 // Root does not conflict with anything: it is the fallback, not a prefix.
-func TestDefineKnowledgeSetAcceptsRootAlongsideNestedMount(t *testing.T) {
+func TestDefineDatasetAcceptsRootAlongsideNestedMount(t *testing.T) {
 	cat := mountFed(t)
-	if _, err := cat.DefineKnowledgeSet("alice-notes", 1, []catalog.KnowledgeSetSource{
+	if _, err := cat.DefineDataset("alice-notes", 1, []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("")},
 		{Repository: "kr://acme/public/core2", Selector: "refs/heads/main", Path: catalog.MountPath("refs/semantic")},
 	}); err != nil {
@@ -97,12 +97,12 @@ func TestDefineKnowledgeSetAcceptsRootAlongsideNestedMount(t *testing.T) {
 }
 
 // SubPath adds back a prefix inside the member repository: mounting only
-// docs/knowledge/ from a monorepo, the in-repo path must carry that prefix.
+// docs/object/ from a monorepo, the in-repo path must carry that prefix.
 func TestRouteMountAppliesSubPath(t *testing.T) {
 	cat := mountFed(t)
-	if _, err := cat.DefineKnowledgeSet("sub", 1, []catalog.KnowledgeSetSource{
+	if _, err := cat.DefineDataset("sub", 1, []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main",
-			Path: catalog.MountPath("kb"), SubPath: "docs/knowledge"},
+			Path: catalog.MountPath("kb"), SubPath: "docs/object"},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestRouteMountAppliesSubPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if route.Path != "docs/knowledge/metrics/dau.md" {
+	if route.Path != "docs/object/metrics/dau.md" {
 		t.Fatalf("subPath must be reattached: %#v", route)
 	}
 }
@@ -120,7 +120,7 @@ func TestRouteMountAppliesSubPath(t *testing.T) {
 // silently routing it somewhere would violate unique path ownership.
 func TestRouteMountRejectsUnownedPath(t *testing.T) {
 	cat := mountFed(t)
-	if _, err := cat.DefineKnowledgeSet("no-root", 1, []catalog.KnowledgeSetSource{
+	if _, err := cat.DefineDataset("no-root", 1, []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("refs/semantic")},
 	}); err != nil {
 		t.Fatal(err)
@@ -134,7 +134,7 @@ func TestRouteMountRejectsUnownedPath(t *testing.T) {
 // gets N groups to COMMIT independently, never one write spanning repos.
 func TestRouteMountsSplitsByRepository(t *testing.T) {
 	cat := mountFed(t)
-	if _, err := cat.DefineKnowledgeSet("split", 1, []catalog.KnowledgeSetSource{
+	if _, err := cat.DefineDataset("split", 1, []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("")},
 		{Repository: "kr://acme/public/core2", Selector: "refs/heads/main", Path: catalog.MountPath("refs/semantic")},
 	}); err != nil {
@@ -157,7 +157,7 @@ func TestRouteMountsSplitsByRepository(t *testing.T) {
 	}
 }
 
-func mustWorkspace(t *testing.T, cat catalog.Service, setID string) catalog.KnowledgeSet {
+func mustWorkspace(t *testing.T, cat catalog.Service, setID string) catalog.Dataset {
 	t.Helper()
 	def, err := cat.Set(setID)
 	if err != nil {

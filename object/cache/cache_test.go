@@ -20,7 +20,7 @@ type repository struct {
 	objectmodel.Repository
 	id        kernel.RepositoryID
 	mu        sync.Mutex
-	values    map[kernel.CommitID]map[objectmodel.ObjectID]objectmodel.KnowledgeValue
+	values    map[kernel.CommitID]map[objectmodel.ObjectID]objectmodel.ObjectValue
 	batches   [][]objectmodel.ObjectID
 	addresses []objectmodel.Address
 	err       error
@@ -29,14 +29,14 @@ type repository struct {
 }
 
 func (r *repository) ID() kernel.RepositoryID { return r.id }
-func (r *repository) ReadMany(ids []objectmodel.ObjectID, commit kernel.CommitID) (map[objectmodel.ObjectID]objectmodel.KnowledgeValue, error) {
+func (r *repository) ReadMany(ids []objectmodel.ObjectID, commit kernel.CommitID) (map[objectmodel.ObjectID]objectmodel.ObjectValue, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.batches = append(r.batches, append([]objectmodel.ObjectID(nil), ids...))
 	if r.err != nil {
 		return nil, r.err
 	}
-	out := map[objectmodel.ObjectID]objectmodel.KnowledgeValue{}
+	out := map[objectmodel.ObjectID]objectmodel.ObjectValue{}
 	for _, id := range ids {
 		if v, ok := r.values[commit][id]; ok {
 			out[id] = v
@@ -44,16 +44,16 @@ func (r *repository) ReadMany(ids []objectmodel.ObjectID, commit kernel.CommitID
 	}
 	return out, nil
 }
-func (r *repository) ReadAddress(a objectmodel.Address, commit kernel.CommitID) (objectmodel.KnowledgeValue, error) {
+func (r *repository) ReadAddress(a objectmodel.Address, commit kernel.CommitID) (objectmodel.ObjectValue, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.addresses = append(r.addresses, a)
 	if r.err != nil {
-		return objectmodel.KnowledgeValue{}, r.err
+		return objectmodel.ObjectValue{}, r.err
 	}
 	v, ok := r.values[commit][a.ObjectID]
 	if !ok {
-		return objectmodel.KnowledgeValue{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "missing")
+		return objectmodel.ObjectValue{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "missing")
 	}
 	v.Address = a
 	v.Value = string(a.Kind) + "/" + a.AspectName + "/" + a.MemberKey
@@ -73,13 +73,13 @@ func (r *repository) ObjectIDsPage(commit kernel.CommitID, limit int, continuati
 	}
 	return objectmodel.ObjectIDPage{ObjectIDs: ids, Continuation: "more", Exhausted: false}, nil
 }
-func value(repo kernel.RepositoryID, commit kernel.CommitID, id objectmodel.ObjectID, content any) objectmodel.KnowledgeValue {
-	return objectmodel.KnowledgeValue{Repository: repo, Commit: commit, KnowledgeRef: objectmodel.KnowledgeRef{Repository: repo, Object: id}, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: id}, Value: content}
+func value(repo kernel.RepositoryID, commit kernel.CommitID, id objectmodel.ObjectID, content any) objectmodel.ObjectValue {
+	return objectmodel.ObjectValue{Repository: repo, Commit: commit, ObjectRef: objectmodel.ObjectRef{Repository: repo, Object: id}, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: id}, Value: content}
 }
 func repo(id kernel.RepositoryID) *repository {
-	r := &repository{id: id, values: map[kernel.CommitID]map[objectmodel.ObjectID]objectmodel.KnowledgeValue{}}
+	r := &repository{id: id, values: map[kernel.CommitID]map[objectmodel.ObjectID]objectmodel.ObjectValue{}}
 	for _, commit := range []kernel.CommitID{"c1", "c2"} {
-		r.values[commit] = map[objectmodel.ObjectID]objectmodel.KnowledgeValue{}
+		r.values[commit] = map[objectmodel.ObjectID]objectmodel.ObjectValue{}
 		for _, id := range []objectmodel.ObjectID{"a", "b", "c"} {
 			r.values[commit][id] = value(r.id, commit, id, string(commit)+string(id))
 		}
@@ -94,7 +94,7 @@ func newCache(t *testing.T, cfg cache.Config) *cache.Cache {
 	}
 	return c
 }
-func read(t *testing.T, c *cache.Cache, r objectmodel.Repository, commit kernel.CommitID, ids ...objectmodel.ObjectID) map[objectmodel.ObjectID]objectmodel.KnowledgeValue {
+func read(t *testing.T, c *cache.Cache, r objectmodel.Repository, commit kernel.CommitID, ids ...objectmodel.ObjectID) map[objectmodel.ObjectID]objectmodel.ObjectValue {
 	t.Helper()
 	out, err := c.ReadMany(r, commit, ids)
 	if err != nil {
@@ -187,11 +187,11 @@ func TestCacheFailsOnSourceErrorsAndWrongBasis(t *testing.T) {
 			case "repository":
 				v.Repository = "other"
 			case "ref-repository":
-				v.KnowledgeRef.Repository = "other"
+				v.ObjectRef.Repository = "other"
 			case "commit":
 				v.Commit = "c2"
 			case "object":
-				v.KnowledgeRef.Object = "b"
+				v.ObjectRef.Object = "b"
 			case "address":
 				v.Address.ObjectID = "b"
 			}
@@ -359,7 +359,7 @@ type blockedRepository struct {
 	release chan struct{}
 }
 
-func (r *blockedRepository) ReadMany(ids []objectmodel.ObjectID, commit kernel.CommitID) (map[objectmodel.ObjectID]objectmodel.KnowledgeValue, error) {
+func (r *blockedRepository) ReadMany(ids []objectmodel.ObjectID, commit kernel.CommitID) (map[objectmodel.ObjectID]objectmodel.ObjectValue, error) {
 	close(r.started)
 	<-r.release
 	return r.repository.ReadMany(ids, commit)
@@ -416,7 +416,7 @@ func TestWarmMissingObjectNeverFallsBackToPreviousCommit(t *testing.T) {
 
 type extraResultRepository struct{ *repository }
 
-func (r *extraResultRepository) ReadMany(ids []objectmodel.ObjectID, commit kernel.CommitID) (map[objectmodel.ObjectID]objectmodel.KnowledgeValue, error) {
+func (r *extraResultRepository) ReadMany(ids []objectmodel.ObjectID, commit kernel.CommitID) (map[objectmodel.ObjectID]objectmodel.ObjectValue, error) {
 	out, err := r.repository.ReadMany(ids, commit)
 	if err == nil {
 		out["unexpected"] = value(r.id, commit, "unexpected", "unexpected")
@@ -459,7 +459,7 @@ func TestCacheAddressErrorsAndVersionIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.err = nil
-	if _, err := c.ReadAddress(r, "c3", a); kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+	if _, err := c.ReadAddress(r, "c3", a); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		t.Fatal(err)
 	}
 	wrong := r.values["c2"]["b"]
@@ -578,15 +578,15 @@ type singleReadRepository struct {
 	failure error
 }
 
-func (r *singleReadRepository) Read(id objectmodel.ObjectID, commit kernel.CommitID) (objectmodel.KnowledgeValue, error) {
+func (r *singleReadRepository) Read(id objectmodel.ObjectID, commit kernel.CommitID) (objectmodel.ObjectValue, error) {
 	r.calls = append(r.calls, id)
 	if id == r.failID {
-		return objectmodel.KnowledgeValue{}, r.failure
+		return objectmodel.ObjectValue{}, r.failure
 	}
 	if v, ok := r.base.values[commit][id]; ok {
 		return v, nil
 	}
-	return objectmodel.KnowledgeValue{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "missing")
+	return objectmodel.ObjectValue{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "missing")
 }
 
 func TestSourceReadsCountsEveryNonBatchAuthorityCallIncludingFailure(t *testing.T) {

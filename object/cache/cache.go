@@ -41,7 +41,7 @@ type key struct {
 
 type entry struct {
 	key   key
-	value objectmodel.KnowledgeValue
+	value objectmodel.ObjectValue
 	bytes int64
 }
 
@@ -101,7 +101,7 @@ func validateRequest(repo objectmodel.Repository, commit kernel.CommitID) error 
 	return nil
 }
 
-func validateValue(v objectmodel.KnowledgeValue, k key) error {
+func validateValue(v objectmodel.ObjectValue, k key) error {
 	if k.object {
 		return objectmodel.ValidateHydratedObject(k.repository, k.commit, k.address.ObjectID, v)
 	}
@@ -114,7 +114,7 @@ func objectKey(repo kernel.RepositoryID, commit kernel.CommitID, id objectmodel.
 
 // ReadMany performs one batch authority read for unique misses when the
 // repository supports BatchReadStore. It never follows HEAD or caches absence.
-func (c *Cache) ReadMany(repo objectmodel.Repository, commit kernel.CommitID, ids []objectmodel.ObjectID) (map[objectmodel.ObjectID]objectmodel.KnowledgeValue, error) {
+func (c *Cache) ReadMany(repo objectmodel.Repository, commit kernel.CommitID, ids []objectmodel.ObjectID) (map[objectmodel.ObjectID]objectmodel.ObjectValue, error) {
 	c.mu.Lock()
 	epoch := c.epoch
 	c.mu.Unlock()
@@ -123,12 +123,12 @@ func (c *Cache) ReadMany(repo objectmodel.Repository, commit kernel.CommitID, id
 
 // The caller owns the refill epoch for the entire operation. In particular,
 // Warm must preserve its original epoch across every batch and address read.
-func (c *Cache) readMany(repo objectmodel.Repository, commit kernel.CommitID, ids []objectmodel.ObjectID, epoch uint64) (map[objectmodel.ObjectID]objectmodel.KnowledgeValue, error) {
+func (c *Cache) readMany(repo objectmodel.Repository, commit kernel.CommitID, ids []objectmodel.ObjectID, epoch uint64) (map[objectmodel.ObjectID]objectmodel.ObjectValue, error) {
 	if err := validateRequest(repo, commit); err != nil {
 		return nil, err
 	}
 	repository := repo.ID()
-	out := make(map[objectmodel.ObjectID]objectmodel.KnowledgeValue, len(ids))
+	out := make(map[objectmodel.ObjectID]objectmodel.ObjectValue, len(ids))
 	misses := make([]objectmodel.ObjectID, 0, len(ids))
 	seen := make(map[objectmodel.ObjectID]struct{}, len(ids))
 	for _, id := range ids {
@@ -174,20 +174,20 @@ func (c *Cache) readMany(repo objectmodel.Repository, commit kernel.CommitID, id
 	return out, nil
 }
 
-func (c *Cache) readSource(repo objectmodel.Repository, commit kernel.CommitID, ids []objectmodel.ObjectID) (map[objectmodel.ObjectID]objectmodel.KnowledgeValue, error) {
+func (c *Cache) readSource(repo objectmodel.Repository, commit kernel.CommitID, ids []objectmodel.ObjectID) (map[objectmodel.ObjectID]objectmodel.ObjectValue, error) {
 	if batch, ok := repo.(objectmodel.BatchReadStore); ok {
 		c.mu.Lock()
 		c.stats.SourceReads++
 		c.mu.Unlock()
 		return batch.ReadMany(ids, commit)
 	}
-	out := make(map[objectmodel.ObjectID]objectmodel.KnowledgeValue, len(ids))
+	out := make(map[objectmodel.ObjectID]objectmodel.ObjectValue, len(ids))
 	for _, id := range ids {
 		c.mu.Lock()
 		c.stats.SourceReads++
 		c.mu.Unlock()
 		v, err := repo.Read(id, commit)
-		if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+		if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 			continue
 		}
 		if err != nil {
@@ -198,22 +198,22 @@ func (c *Cache) readSource(repo objectmodel.Repository, commit kernel.CommitID, 
 	return out, nil
 }
 
-func (c *Cache) ReadAddress(repo objectmodel.Repository, commit kernel.CommitID, address objectmodel.Address) (objectmodel.KnowledgeValue, error) {
+func (c *Cache) ReadAddress(repo objectmodel.Repository, commit kernel.CommitID, address objectmodel.Address) (objectmodel.ObjectValue, error) {
 	c.mu.Lock()
 	epoch := c.epoch
 	c.mu.Unlock()
 	return c.readAddress(repo, commit, address, epoch)
 }
 
-func (c *Cache) readAddress(repo objectmodel.Repository, commit kernel.CommitID, address objectmodel.Address, epoch uint64) (objectmodel.KnowledgeValue, error) {
+func (c *Cache) readAddress(repo objectmodel.Repository, commit kernel.CommitID, address objectmodel.Address, epoch uint64) (objectmodel.ObjectValue, error) {
 	if err := validateRequest(repo, commit); err != nil {
-		return objectmodel.KnowledgeValue{}, err
+		return objectmodel.ObjectValue{}, err
 	}
 	if address.ObjectID == "" {
-		return objectmodel.KnowledgeValue{}, kernel.Fail(kernel.ErrUsageInvalid, "cache address requires object identity")
+		return objectmodel.ObjectValue{}, kernel.Fail(kernel.ErrUsageInvalid, "cache address requires object identity")
 	}
 	if err := objectmodel.AssertWritable(address); err != nil {
-		return objectmodel.KnowledgeValue{}, err
+		return objectmodel.ObjectValue{}, err
 	}
 	k := key{repository: repo.ID(), commit: commit, address: address}
 	if v, ok := c.get(k); ok {
@@ -224,16 +224,16 @@ func (c *Cache) readAddress(repo objectmodel.Repository, commit kernel.CommitID,
 	c.mu.Unlock()
 	v, err := repo.ReadAddress(address, commit)
 	if err != nil {
-		return objectmodel.KnowledgeValue{}, err
+		return objectmodel.ObjectValue{}, err
 	}
 	if err := validateValue(v, k); err != nil {
-		return objectmodel.KnowledgeValue{}, err
+		return objectmodel.ObjectValue{}, err
 	}
 	c.put(k, v, epoch)
 	return clone(v), nil
 }
 
-func (c *Cache) get(k key) (objectmodel.KnowledgeValue, bool) {
+func (c *Cache) get(k key) (objectmodel.ObjectValue, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if e, ok := c.entries[k]; ok && !c.stats.Closed {
@@ -242,10 +242,10 @@ func (c *Cache) get(k key) (objectmodel.KnowledgeValue, bool) {
 		return e.Value.(entry).value, true
 	}
 	c.stats.Misses++
-	return objectmodel.KnowledgeValue{}, false
+	return objectmodel.ObjectValue{}, false
 }
 
-func (c *Cache) put(k key, v objectmodel.KnowledgeValue, epoch uint64) {
+func (c *Cache) put(k key, v objectmodel.ObjectValue, epoch uint64) {
 	c.mu.Lock()
 	disabled := c.stats.Closed || c.epoch != epoch
 	c.mu.Unlock()
@@ -325,8 +325,8 @@ func (c *Cache) Close() error {
 // visited pointers also make shared or cyclic source containers safe to copy.
 // This includes each UnitDeclaration provenance envelope, source/evidence slices
 // and algorithm identity; no returned envelope aliases the retained authority.
-func clone(v objectmodel.KnowledgeValue) objectmodel.KnowledgeValue {
-	return cloneReflect(reflect.ValueOf(v), map[visit]reflect.Value{}).Interface().(objectmodel.KnowledgeValue)
+func clone(v objectmodel.ObjectValue) objectmodel.ObjectValue {
+	return cloneReflect(reflect.ValueOf(v), map[visit]reflect.Value{}).Interface().(objectmodel.ObjectValue)
 }
 
 type visit struct {

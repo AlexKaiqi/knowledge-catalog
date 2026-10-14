@@ -1,6 +1,6 @@
 # controlplane/
 
-上层维护闭环：`PROPOSAL → Preview → validate → Merge`。它编排 Dataset 服务 pin、Writer candidate ref 和 gate 证据，不定义新的知识写面。
+上层维护闭环：`PROPOSAL → Preview → validate → Merge`。它编排 Dataset 服务 pin、Writer candidate ref 和 gate 证据，不定义新的对象写面。
 
 | 文件 | 负责 |
 |---|---|

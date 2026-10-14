@@ -10,12 +10,12 @@ import (
 	"kc/snapshot"
 )
 
-type KnowledgeAccess struct {
-	Reference    string                         `json:"reference,omitempty"`
-	Locator      string                         `json:"locator,omitempty"`
-	KnowledgeRef objectmodel.PinnedKnowledgeRef `json:"knowledgeRef"`
-	Address      *objectmodel.Address           `json:"address,omitempty"`
-	Observations []objectmodel.UnitObservation  `json:"observations,omitempty"`
+type ObjectAccess struct {
+	Reference    string                        `json:"reference,omitempty"`
+	Locator      string                        `json:"locator,omitempty"`
+	ObjectRef    objectmodel.PinnedObjectRef   `json:"objectRef"`
+	Address      *objectmodel.Address          `json:"address,omitempty"`
+	Observations []objectmodel.UnitObservation `json:"observations,omitempty"`
 }
 
 type FileAccess struct {
@@ -40,7 +40,7 @@ type AccessEvent struct {
 	Decision   string                  `json:"decision"`
 	RuleID     string                  `json:"ruleId,omitempty"`
 	Result     string                  `json:"result"`
-	Knowledge  []KnowledgeAccess       `json:"knowledge,omitempty"`
+	Object     []ObjectAccess          `json:"object,omitempty"`
 	Files      []FileAccess            `json:"files,omitempty"`
 	Snapshots  []SnapshotAccess        `json:"snapshots,omitempty"`
 	Stream     string                  `json:"stream,omitempty"`
@@ -65,17 +65,17 @@ func (e AccessEvent) Validate() error {
 	if e.Result != "RESOLVED" && e.Result != "ERROR" {
 		return fmt.Errorf("result must be RESOLVED or ERROR")
 	}
-	for _, target := range e.Knowledge {
-		ref := target.KnowledgeRef
+	for _, target := range e.Object {
+		ref := target.ObjectRef
 		if ref.Repository == "" || ref.Commit == "" || ref.Object == "" {
-			return fmt.Errorf("knowledge access requires repository, commit, and object")
+			return fmt.Errorf("object access requires repository, commit, and object")
 		}
 		for _, observation := range target.Observations {
 			if observation.Address.ObjectID == "" || observation.DeclarationCommit == "" || observation.DeclarationDigest == "" {
-				return fmt.Errorf("knowledge observation requires Address and declaration commit/digest")
+				return fmt.Errorf("object observation requires Address and declaration commit/digest")
 			}
 			if observation.Address.ObjectID != ref.Object || observation.DeclarationCommit != ref.Commit {
-				return fmt.Errorf("knowledge observation must match the accessed object and declaration commit")
+				return fmt.Errorf("object observation must match the accessed object and declaration commit")
 			}
 			if err := objectmodel.ValidateObservationBasis(observation.Basis); err != nil {
 				return err

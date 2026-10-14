@@ -15,7 +15,7 @@ import (
 func TestWriteCheckoutPinsAssembledObjects(t *testing.T) {
 	dir := testkit.TempDir(t)
 	root := filepath.Join(dir, "agent")
-	pin := reader.KnowledgeSetPin{
+	pin := reader.DatasetPin{
 		SetID:    "agent",
 		Revision: 1,
 		Repositories: map[kernel.RepositoryID]kernel.CommitID{
@@ -101,7 +101,7 @@ func TestObjectCheckoutRelRejectsEscape(t *testing.T) {
 
 func TestWriteCheckoutRejectsEscapingObject(t *testing.T) {
 	dir := testkit.TempDir(t)
-	_, err := reader.WriteCheckout(filepath.Join(dir, "v"), reader.KnowledgeSetPin{SetID: "v"}, []objectmodel.FederatedValue{
+	_, err := reader.WriteCheckout(filepath.Join(dir, "v"), reader.DatasetPin{SetID: "v"}, []objectmodel.FederatedValue{
 		{Repository: "kr://acme/public/core", ObjectID: "../x", Value: map[string]any{"a": 1}},
 	})
 	if err == nil {

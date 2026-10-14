@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// callerCredentials is the inbound proof that already crossed the Knowledge
+// callerCredentials is the inbound proof that already crossed the Object
 // Server authentication boundary. It is forwarded to resource-access/v1 so the
 // trusted applicable origin can enforce source-side authorization. Tokens
 // never enter Schema, flags, evidence, or the JSON body.

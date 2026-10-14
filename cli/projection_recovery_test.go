@@ -59,7 +59,7 @@ func TestServeProjectionWorkerCatchesCommitWithoutSync(t *testing.T) {
 	}
 
 	body(t, governor("grant", "add", "--principal", provider,
-		"--action", "writer.commit,writer.preview,knowledge.read",
+		"--action", "writer.commit,writer.preview,object.read",
 		"--repo", repositoryID))
 	drafts := writeProviderDrafts(t)
 	published := asMap(t, body(t, asProvider("writer", "commit", "--command-id", "source-1", "--repo", repositoryID, "--dir", drafts)))
@@ -68,7 +68,7 @@ func TestServeProjectionWorkerCatchesCommitWithoutSync(t *testing.T) {
 	body(t, governor("grant", "add", "--principal", consumer,
 		"--action", "inventory.read,dataset.resolve,file.read"))
 	body(t, governor("grant", "add", "--principal", consumer,
-		"--action", "knowledge.read,knowledge.search,knowledge.schema.read",
+		"--action", "object.read,object.search,object.schema.read",
 		"--repo", repositoryID))
 	body(t, governor("dataset", "define", "--dataset", setID, "--revision", "1",
 		"--source", repositoryID))

@@ -31,7 +31,7 @@ func inventorySearchRequested(path string, flags map[string]FlagValue) bool {
 			return false
 		}
 	}
-	return inv.SuppliedKnowledgeSet(flags) == nil
+	return inv.SuppliedDataset(flags) == nil
 }
 
 func prepareRemoteInventoryDiscovery(ctx context.Context, client *kcclient.Client, flags map[string]FlagValue, options kcclient.RequestOptions) error {
@@ -44,8 +44,8 @@ func prepareRemoteInventoryDiscovery(ctx context.Context, client *kcclient.Clien
 	if view.DiscoverySetID == "" {
 		return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "service has no configured discoveryWorkspaceId")
 	}
-	var pin dataset.ResolvedKnowledgeSet
-	if err := client.SnapshotService().ResolveKnowledgeSet(ctx, view.DiscoverySetID, snapshotclient.KnowledgeSetResolveRequest{InventoryDiscovery: true}, snapshotRequestOptions(options), &pin); err != nil {
+	var pin dataset.ResolvedDataset
+	if err := client.SnapshotService().ResolveDataset(ctx, view.DiscoverySetID, snapshotclient.DatasetResolveRequest{InventoryDiscovery: true}, snapshotRequestOptions(options), &pin); err != nil {
 		return err
 	}
 	raw, err := json.Marshal(pin)

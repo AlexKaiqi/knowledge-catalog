@@ -3,11 +3,11 @@ package cli
 import "strings"
 
 var commandEntries = []Command{
-	{Path: "search", Handler: "knowledge-search", Action: "knowledge.search", Flags: words("repo dataset commit ref query match match-mode eq neq in exists missing prefix contains gt gte lt lte sort limit continuation recall"), Groups: []string{"knowledge"}},
-	{Path: "relations", Handler: "knowledge-relations", Action: "knowledge.relations", Flags: words("repo dataset commit ref object relation-type role direction limit continuation"), Groups: []string{"knowledge"}},
-	{Path: "traverse", Handler: "knowledge-traverse", Action: "knowledge.traverse", Flags: words("repo dataset commit ref object relation-type role direction max-hops min-hops limit continuation"), Groups: []string{"knowledge"}},
-	{Path: "operations access-spec describe", Handler: "operations-access-spec-describe", Action: "knowledge.access.describe", Flags: words("repo dataset"), Groups: []string{"knowledge", "operations"}},
-	{Path: "plugin", Handler: "knowledge-plugin-help", Action: "inventory.read", Flags: words("name task"), Operands: words("name task"), Groups: []string{"knowledge"}},
+	{Path: "search", Handler: "object-search", Action: "object.search", Flags: words("repo dataset commit ref query match match-mode eq neq in exists missing prefix contains gt gte lt lte sort limit continuation recall"), Groups: []string{"object"}},
+	{Path: "relations", Handler: "object-relations", Action: "object.relations", Flags: words("repo dataset commit ref object relation-type role direction limit continuation"), Groups: []string{"object"}},
+	{Path: "traverse", Handler: "object-traverse", Action: "object.traverse", Flags: words("repo dataset commit ref object relation-type role direction max-hops min-hops limit continuation"), Groups: []string{"object"}},
+	{Path: "operations access-spec describe", Handler: "operations-access-spec-describe", Action: "object.access.describe", Flags: words("repo dataset"), Groups: []string{"object", "operations"}},
+	{Path: "plugin", Handler: "object-plugin-help", Action: "inventory.read", Flags: words("name task"), Operands: words("name task"), Groups: []string{"object"}},
 }
 
 func words(raw string) []string { return strings.Fields(raw) }

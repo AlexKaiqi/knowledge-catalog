@@ -11,9 +11,9 @@ type namedSchemaRepo struct{ objectmodel.Repository }
 
 func (namedSchemaRepo) ID() kernel.RepositoryID { return "kr://tables-only" }
 
-func (namedSchemaRepo) Read(objectID objectmodel.ObjectID, commit kernel.CommitID) (objectmodel.KnowledgeValue, error) {
-	return objectmodel.KnowledgeValue{
-		KnowledgeRef: objectmodel.KnowledgeRef{Object: objectID},
+func (namedSchemaRepo) Read(objectID objectmodel.ObjectID, commit kernel.CommitID) (objectmodel.ObjectValue, error) {
+	return objectmodel.ObjectValue{
+		ObjectRef: objectmodel.ObjectRef{Object: objectID},
 		Value: map[string]any{
 			"entity": "Note", "description": "A short note.", "pattern": "record",
 			"fields": map[string]any{"body": map[string]any{"type": "string", "access": []any{"text"}}},

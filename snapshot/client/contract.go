@@ -37,14 +37,14 @@ type Service interface {
 	Repositories(context.Context, RequestOptions, any) error
 	AttachRepository(context.Context, RepositoryAttachRequest, RequestOptions, any) error
 	DetachRepository(context.Context, string, RequestOptions, any) error
-	KnowledgeSets(context.Context, RequestOptions, any) error
-	DefineKnowledgeSet(context.Context, KnowledgeSetRequest, RequestOptions, any) error
-	ResolveDefinition(context.Context, KnowledgeSetRequest, RequestOptions, any) error
-	KnowledgeSet(context.Context, string, RequestOptions, any) error
+	Datasets(context.Context, RequestOptions, any) error
+	DefineDataset(context.Context, DatasetRequest, RequestOptions, any) error
+	ResolveDefinition(context.Context, DatasetRequest, RequestOptions, any) error
+	Dataset(context.Context, string, RequestOptions, any) error
 	ShowDataset(context.Context, string, DatasetShowOptions, RequestOptions, any) error
-	RetireKnowledgeSet(context.Context, string, RequestOptions, any) error
-	ResolveKnowledgeSet(context.Context, string, KnowledgeSetResolveRequest, RequestOptions, any) error
-	CheckKnowledgeSet(context.Context, string, KnowledgeSetResolveRequest, RequestOptions, any) error
+	RetireDataset(context.Context, string, RequestOptions, any) error
+	ResolveDataset(context.Context, string, DatasetResolveRequest, RequestOptions, any) error
+	CheckDataset(context.Context, string, DatasetResolveRequest, RequestOptions, any) error
 	RepositoryMetadata(context.Context, string, RequestOptions) (map[string]string, error)
 	SetRepositoryMetadata(context.Context, string, map[string]string, RequestOptions) error
 	DeleteRepositoryMetadata(context.Context, string, []string, RequestOptions) error

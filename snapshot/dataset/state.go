@@ -8,31 +8,31 @@ import (
 // State is the durable file-composition registry state. Repository contents and
 // resolved Workspace pins are deliberately absent.
 type State struct {
-	KnowledgeSets   []KnowledgeSet `json:"datasets"`
-	DatasetVersions []KnowledgeSet `json:"datasetVersions,omitempty"`
-	Repositories    []string       `json:"repositories"`
-	AuthorityID     string         `json:"authorityId,omitempty"`
+	Datasets        []Dataset `json:"datasets"`
+	DatasetVersions []Dataset `json:"datasetVersions,omitempty"`
+	Repositories    []string  `json:"repositories"`
+	AuthorityID     string    `json:"authorityId,omitempty"`
 }
 
 var EmptyState = State{
-	KnowledgeSets: []KnowledgeSet{},
-	Repositories:  []string{},
+	Datasets:     []Dataset{},
+	Repositories: []string{},
 }
 
 func (s State) IsEmpty() bool {
-	return len(s.KnowledgeSets) == 0 && len(s.Repositories) == 0
+	return len(s.Datasets) == 0 && len(s.Repositories) == 0
 }
 
 func NormalizeState(state State) State {
-	workspaces := slices.Clone(state.KnowledgeSets)
+	workspaces := slices.Clone(state.Datasets)
 	for i := range workspaces {
-		workspaces[i] = cloneKnowledgeSet(workspaces[i])
+		workspaces[i] = cloneDataset(workspaces[i])
 	}
-	slices.SortFunc(workspaces, func(a, b KnowledgeSet) int {
+	slices.SortFunc(workspaces, func(a, b Dataset) int {
 		return strings.Compare(a.SetID, b.SetID)
 	})
 	if workspaces == nil {
-		workspaces = []KnowledgeSet{}
+		workspaces = []Dataset{}
 	}
 	ids := slices.Clone(state.Repositories)
 	slices.Sort(ids)
@@ -41,18 +41,18 @@ func NormalizeState(state State) State {
 		ids = []string{}
 	}
 	return State{
-		KnowledgeSets: workspaces, Repositories: ids,
+		Datasets: workspaces, Repositories: ids,
 		DatasetVersions: normalizeDatasetVersions(state.DatasetVersions),
 		AuthorityID:     state.AuthorityID,
 	}
 }
 
-func normalizeDatasetVersions(versions []KnowledgeSet) []KnowledgeSet {
+func normalizeDatasetVersions(versions []Dataset) []Dataset {
 	out := slices.Clone(versions)
 	for i := range out {
-		out[i] = cloneKnowledgeSet(out[i])
+		out[i] = cloneDataset(out[i])
 	}
-	slices.SortFunc(out, func(a, b KnowledgeSet) int {
+	slices.SortFunc(out, func(a, b Dataset) int {
 		if n := strings.Compare(a.SetID, b.SetID); n != 0 {
 			return n
 		}

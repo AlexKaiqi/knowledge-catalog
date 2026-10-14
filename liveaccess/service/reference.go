@@ -80,7 +80,7 @@ func (s *Service) selectedReferenceValue(ref objectmodel.Reference) (objectmodel
 	units, err := port.ReadReferenceUnits(ref, commit)
 	var bound []objectmodel.UnitDeclaration
 	if err != nil {
-		if kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+		if kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 			return objectmodel.FederatedValue{}, err
 		}
 		// A missing leaf is not a maintenance coordinate. Only declarations
@@ -111,7 +111,7 @@ func (s *Service) selectedReferenceValue(ref objectmodel.Reference) (objectmodel
 	if len(bound) > 0 {
 		assembled.Declarations = bound
 	}
-	value := objectmodel.FederatedValue{KnowledgeRef: assembled.KnowledgeRef, Repository: assembled.Repository, Commit: assembled.Commit, ObjectID: ref.Object, Address: assembled.Address, Value: assembled.Value, Provenance: assembled.Provenance, Units: assembled.Units, Declarations: assembled.Declarations}
+	value := objectmodel.FederatedValue{ObjectRef: assembled.ObjectRef, Repository: assembled.Repository, Commit: assembled.Commit, ObjectID: ref.Object, Address: assembled.Address, Value: assembled.Value, Provenance: assembled.Provenance, Units: assembled.Units, Declarations: assembled.Declarations}
 	if len(units) == 1 && referenceWithinUnit(ref, units[0].Address) {
 		value.Address, value.Digest = units[0].Address, units[0].Digest
 	}

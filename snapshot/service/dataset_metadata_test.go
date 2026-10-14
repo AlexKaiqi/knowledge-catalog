@@ -17,14 +17,14 @@ func TestDatasetHTTPMetadataPublicationAndHistoricalRead(t *testing.T) {
 	f := newDatasetHTTPFixture(t)
 	want := map[string]string{"description": "plain delivery", "team/custom": "茶铺", "owner": "untrusted attribute", "empty": ""}
 	preparations := 0
-	f.resources.PreparePublication = func(_ context.Context, _ identity.HTTPIdentity, definition dataset.KnowledgeSet) error {
+	f.resources.PreparePublication = func(_ context.Context, _ identity.HTTPIdentity, definition dataset.Dataset) error {
 		preparations++
 		if definition.Revision == 1 && !reflect.DeepEqual(definition.Metadata, want) {
 			t.Fatalf("publication preparation lost metadata: %#v", definition)
 		}
 		return nil
 	}
-	f.resources.BeforePublish = func(_ context.Context, _ identity.HTTPIdentity, _ dataset.Service, definition dataset.KnowledgeSet) (dataset.KnowledgeSet, map[string]any, error) {
+	f.resources.BeforePublish = func(_ context.Context, _ identity.HTTPIdentity, _ dataset.Service, definition dataset.Dataset) (dataset.Dataset, map[string]any, error) {
 		if definition.Revision == 1 && !reflect.DeepEqual(definition.Metadata, want) {
 			t.Fatalf("portable recipe preparation lost metadata: %#v", definition)
 		}
@@ -62,7 +62,7 @@ func TestDatasetHTTPMetadataDoesNotGrantManagementOrFileAccess(t *testing.T) {
 	h := f.handler()
 	request := map[string]any{
 		"dataset": "files", "revision": 1,
-		"sources":  []dataset.KnowledgeSetSource{{Repository: source.id, Selector: "refs/heads/main", File: "reference/a.json", Target: "public.json"}},
+		"sources":  []dataset.DatasetSource{{Repository: source.id, Selector: "refs/heads/main", File: "reference/a.json", Target: "public.json"}},
 		"metadata": map[string]string{"owner": "alice", "actions": "*", "path": "private/hidden.txt"},
 	}
 	datasetHTTPCall(t, h, http.MethodPost, "/snapshot/v1/datasets", request, http.StatusOK)
@@ -110,7 +110,7 @@ func TestDatasetHTTPInvalidMetadataCannotPublish(t *testing.T) {
 			r.Header.Set("X-Kc-As", "alice")
 			w := httptest.NewRecorder()
 			h.ServeHTTP(w, r)
-			if w.Code != http.StatusBadRequest || len(f.catalog.DumpState().KnowledgeSets) != 0 {
+			if w.Code != http.StatusBadRequest || len(f.catalog.DumpState().Datasets) != 0 {
 				t.Fatalf("invalid metadata accepted or publication changed: %d %s", w.Code, w.Body.String())
 			}
 		})

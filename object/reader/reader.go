@@ -9,7 +9,7 @@ import (
 )
 
 // Reader is the read face on a pinned Repository commit. It does not write.
-// Consumer federation is Serving on a KnowledgeSetPin (coordinates from ResolveKnowledgeSet).
+// Consumer federation is Serving on a DatasetPin (coordinates from ResolveDataset).
 // Dataset service does not read object_id.
 //
 // Tasks, by what they answer (design ch.7):
@@ -42,10 +42,10 @@ func (r *Reader) note(cmd string, refs map[string]any, err error) error {
 }
 
 func (r *Reader) repoByID(repositoryID kernel.RepositoryID) (objectmodel.Repository, error) {
-	return r.Require(repositoryID, kernel.ErrKnowledgeRefUnresolved)
+	return r.Require(repositoryID, kernel.ErrObjectRefUnresolved)
 }
 
-func (r *Reader) Resolve(ref objectmodel.KnowledgeRef, commitID kernel.CommitID) (resolution objectmodel.Resolution, err error) {
+func (r *Reader) Resolve(ref objectmodel.ObjectRef, commitID kernel.CommitID) (resolution objectmodel.Resolution, err error) {
 	defer func() {
 		err = r.note("resolve", map[string]any{"repositoryId": string(ref.Repository), "object": string(ref.Object), "commit": string(commitID)}, err)
 	}()
@@ -56,17 +56,17 @@ func (r *Reader) Resolve(ref objectmodel.KnowledgeRef, commitID kernel.CommitID)
 	return repo.Resolve(ref.Object, commitID)
 }
 
-func (r *Reader) Read(ref objectmodel.KnowledgeRef, commitID kernel.CommitID, selector *objectmodel.AspectSelector) (value objectmodel.KnowledgeValue, err error) {
+func (r *Reader) Read(ref objectmodel.ObjectRef, commitID kernel.CommitID, selector *objectmodel.AspectSelector) (value objectmodel.ObjectValue, err error) {
 	defer func() {
 		err = r.note("read", map[string]any{"repositoryId": string(ref.Repository), "object": string(ref.Object), "commit": string(commitID)}, err)
 	}()
 	repo, err := r.repoByID(ref.Repository)
 	if err != nil {
-		return objectmodel.KnowledgeValue{}, err
+		return objectmodel.ObjectValue{}, err
 	}
 	value, err = readHydrated(r.hydration(), repo, ref.Object, commitID)
 	if err != nil {
-		return objectmodel.KnowledgeValue{}, err
+		return objectmodel.ObjectValue{}, err
 	}
 	value.Digest = kernel.CanonicalDigest(value.Value)
 	if selector == nil {
@@ -87,13 +87,13 @@ func (r *Reader) ResolveAddress(repositoryID kernel.RepositoryID, address object
 	return repo.ResolveAddress(address, commitID)
 }
 
-func (r *Reader) ReadAddress(repositoryID kernel.RepositoryID, address objectmodel.Address, commitID kernel.CommitID) (value objectmodel.KnowledgeValue, err error) {
+func (r *Reader) ReadAddress(repositoryID kernel.RepositoryID, address objectmodel.Address, commitID kernel.CommitID) (value objectmodel.ObjectValue, err error) {
 	defer func() {
 		err = r.note("read-address", map[string]any{"repositoryId": string(repositoryID), "object": string(address.ObjectID), "commit": string(commitID)}, err)
 	}()
 	repo, err := r.repoByID(repositoryID)
 	if err != nil {
-		return objectmodel.KnowledgeValue{}, err
+		return objectmodel.ObjectValue{}, err
 	}
 	value, err = readAddressHydrated(r.hydration(), repo, address, commitID)
 	if err == nil {

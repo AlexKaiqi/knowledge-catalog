@@ -14,8 +14,8 @@ import (
 
 // commandSurface is the public CLI contract. Handler is the application
 // operation name, usually the public path with spaces replaced by hyphens.
-// Knowledge-plane argv dropped the `knowledge` prefix; those handlers keep
-// `knowledge-` so HTTP and telemetry stay on the knowledge plane. Handler is
+// Object-plane argv dropped the `object` prefix; those handlers keep
+// `object-` so HTTP and telemetry stay on the object plane. Handler is
 // deliberately not an HTTP route. Action is the stable authorization and
 // observability vocabulary.
 type commandSurface struct {
@@ -86,12 +86,12 @@ func incompletePublicFamily(parts []string) (string, bool) {
 	return "", false
 }
 
-// knowledgeCLIPath reports a knowledge-plane product command. Argv dropped the
-// `knowledge` prefix; the application operation, HTTP route, and semantic
-// action keep the knowledge plane.
-func knowledgeCLIPath(path string) bool {
+// objectCLIPath reports an object-plane product command. Argv dropped the
+// `object` prefix; the application operation, HTTP route, and semantic
+// action keep the object plane.
+func objectCLIPath(path string) bool {
 	surface, ok := cliSurface[path]
-	return ok && strings.HasPrefix(surface.Handler, "knowledge-")
+	return ok && strings.HasPrefix(surface.Handler, "object-")
 }
 
 func composeCLICommands(entries []snapshotcli.Command, host map[string]commandSurface) map[string]commandSurface {

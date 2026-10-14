@@ -34,7 +34,7 @@ func (h *handler) inventoryShow(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return nil, err
 			}
-			view := map[string]any{"repositories": repositories, "datasets": dataset.PublicKnowledgeSets(state.KnowledgeSets)}
+			view := map[string]any{"repositories": repositories, "datasets": dataset.PublicDatasets(state.Datasets)}
 			if resources.DiscoveryWorkspaceID != "" {
 				view["discoveryWorkspaceId"] = resources.DiscoveryWorkspaceID
 			}

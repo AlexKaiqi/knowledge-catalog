@@ -34,14 +34,14 @@ type InterfaceResult struct {
 }
 
 type InterfaceExecutionBasis struct {
-	DeclarationCommit                   kernel.CommitID                `json:"declarationCommit"`
-	DeclarationDigest                   kernel.Digest                  `json:"declarationDigest"`
-	Contract                            objectmodel.PinnedKnowledgeRef `json:"contract"`
-	ContractDigest                      kernel.Digest                  `json:"contractDigest"`
-	ImplementationSchema                objectmodel.PinnedKnowledgeRef `json:"implementationSchema"`
-	ImplementationSchemaDigest          kernel.Digest                  `json:"implementationSchemaDigest"`
-	ImplementationSchemaStructureDigest kernel.Digest                  `json:"implementationSchemaStructureDigest"`
-	HandlerRevision                     string                         `json:"handlerRevision"`
+	DeclarationCommit                   kernel.CommitID             `json:"declarationCommit"`
+	DeclarationDigest                   kernel.Digest               `json:"declarationDigest"`
+	Contract                            objectmodel.PinnedObjectRef `json:"contract"`
+	ContractDigest                      kernel.Digest               `json:"contractDigest"`
+	ImplementationSchema                objectmodel.PinnedObjectRef `json:"implementationSchema"`
+	ImplementationSchemaDigest          kernel.Digest               `json:"implementationSchemaDigest"`
+	ImplementationSchemaStructureDigest kernel.Digest               `json:"implementationSchemaStructureDigest"`
+	HandlerRevision                     string                      `json:"handlerRevision"`
 }
 
 type InterfaceCallResult struct {

@@ -31,7 +31,7 @@ func ManagementView(state State, id string, revision int, options ManagementOpti
 	if err != nil {
 		return nil, err
 	}
-	view := PublicKnowledgeSet(selected)
+	view := PublicDataset(selected)
 	view["servingRevision"] = current.Revision
 	view["versions"] = page
 	if continuation != "" {
@@ -41,29 +41,29 @@ func ManagementView(state State, id string, revision int, options ManagementOpti
 	if current.Retired {
 		view["retired"] = true
 	}
-	selected = cloneKnowledgeSet(selected)
+	selected = cloneDataset(selected)
 	items := selected.Items
 	if items == nil {
 		items = []DatasetItem{}
 	}
 	sources := selected.Sources
 	if sources == nil {
-		sources = []KnowledgeSetSource{}
+		sources = []DatasetSource{}
 	}
 	view["items"], view["sources"] = items, sources
 	return view, nil
 }
 
-func datasetManagementRecords(state State, id string, revision int) (KnowledgeSet, KnowledgeSet, []int, error) {
-	var current *KnowledgeSet
-	for i := range state.KnowledgeSets {
-		if state.KnowledgeSets[i].SetID == id {
-			current = &state.KnowledgeSets[i]
+func datasetManagementRecords(state State, id string, revision int) (Dataset, Dataset, []int, error) {
+	var current *Dataset
+	for i := range state.Datasets {
+		if state.Datasets[i].SetID == id {
+			current = &state.Datasets[i]
 			break
 		}
 	}
 	if current == nil {
-		return KnowledgeSet{}, KnowledgeSet{}, nil, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "dataset %s is not visible", id)
+		return Dataset{}, Dataset{}, nil, kernel.Fail(kernel.ErrDatasetInvalid, "dataset %s is not visible", id)
 	}
 	selected := *current
 	versions := []int{current.Revision}
@@ -79,7 +79,7 @@ func datasetManagementRecords(state State, id string, revision int) (KnowledgeSe
 		}
 	}
 	if !found {
-		return KnowledgeSet{}, KnowledgeSet{}, nil, kernel.Fail(kernel.ErrVersionUnresolved, "dataset %s v%d was not published", id, revision)
+		return Dataset{}, Dataset{}, nil, kernel.Fail(kernel.ErrVersionUnresolved, "dataset %s v%d was not published", id, revision)
 	}
 	slices.Sort(versions)
 	return *current, selected, slices.Compact(versions), nil

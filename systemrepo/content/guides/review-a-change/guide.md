@@ -12,4 +12,4 @@ path_hint: guides/review-a-change/guide.md
 4. 证据有效且目标未改变时请求合入；失效时重建预览与证据。
 5. 成功证据：接受回执固定合入版本，可据此读回目标内容。
 
-所需能力：[评审与合入变更](../../capabilities/governance/definition.md)、[发布与修订知识](../../capabilities/publish-knowledge/definition.md)、[精确读取与复核](../../capabilities/read-knowledge/definition.md)。
+所需能力：[评审与合入变更](../../capabilities/governance/definition.md)、[发布与修订对象](../../capabilities/publish-object/definition.md)、[精确读取与复核](../../capabilities/read-object/definition.md)。

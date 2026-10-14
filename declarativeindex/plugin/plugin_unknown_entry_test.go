@@ -24,7 +24,7 @@ func TestIndexPluginsMissingEntryDoesNotBlockIndependentSourceOrFixedReads(t *te
 	t.Cleanup(func() { _ = plugins.Close() })
 	query := retrieval.SearchOf(retrieval.SearchMATCH("runbook"))
 	atA := testkit.MustHead(t, a.Repo, snapshot.DefaultRef)
-	value, err := f.reader.Read(objectmodel.KnowledgeRef{Repository: a.RepositoryID, Object: "article/one"}, atA, nil)
+	value, err := f.reader.Read(objectmodel.ObjectRef{Repository: a.RepositoryID, Object: "article/one"}, atA, nil)
 	if err != nil || value.Value.(map[string]any)["body"] != "runbook source 1 at a" {
 		t.Fatalf("fixed read depended on unavailable implementation: %#v %v", value, err)
 	}

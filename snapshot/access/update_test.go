@@ -39,7 +39,7 @@ func TestGrantUpdatePreservesPolicyOnFailureAndRejectsSharedOrAmbiguousTargets(t
 			case "other-scope":
 				requested.Repo = "B"
 			case "stale":
-				old.Actions = []string{"knowledge.read"}
+				old.Actions = []string{"object.read"}
 			case "shared":
 				store.rules[len(store.rules)-1].ShareID = "share"
 				old.ShareID = "share"

@@ -82,13 +82,13 @@ func isSceneReadScalarCoordinate(field string) bool {
 }
 
 func TestSceneReadAssertionShapeGuardPreservesArrayContracts(t *testing.T) {
-	const read = "When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:note%2Fhello --dataset scene-notes`\n"
+	const read = "When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:note%2Fhello --dataset scene-notes`\n"
 	for _, tc := range []struct {
 		name, steps string
 		reject      bool
 	}{
 		{"scalar identity", read + "Then the output includes:\n  | objectId | note/hello |\n", true},
-		{"scalar source", read + "Then the output includes:\n  | repository | kr://scene/knowledge |\n", true},
+		{"scalar source", read + "Then the output includes:\n  | repository | kr://scene/object |\n", true},
 		{"scalar version", read + "Then the output includes:\n  | commit | nonempty |\n", true},
 		{"former root array", read + "Then the output includes:\n  | [].objectId | note/hello |\n", true},
 		{"selected object equality", read + "Then the output has:\n  | objectId | note/hello |\n  | commit | nonempty |\n", false},
@@ -98,7 +98,7 @@ func TestSceneReadAssertionShapeGuardPreservesArrayContracts(t *testing.T) {
 		{"search array", "When I run `kc search --dataset scene-notes --query tea`\nThen the output includes:\n  | hits[].objectId | note/hello |\n", false},
 		{"resolve array", "When I run `kc resolve --dataset scene-notes --object note/hello`\nThen the output includes:\n  | [].status | RESOLVED |\n", false},
 		{"next command owns output", read + "Then the output has:\n  | objectId | note/hello |\nWhen I run `kc resolve --dataset scene-notes --object note/hello`\nThen the output includes:\n  | [].status | RESOLVED |\n", false},
-		{"HTTP owns next output", read + "Then the output has:\n  | objectId | note/hello |\nWhen HTTP POST /knowledge/v1/search\nThen the output includes:\n  | hits[].objectId | note/hello |\n", false},
+		{"HTTP owns next output", read + "Then the output has:\n  | objectId | note/hello |\nWhen HTTP POST /object/v1/search\nThen the output includes:\n  | hits[].objectId | note/hello |\n", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			feature, err := parseSceneFeature("Feature: read shape\nScenario: shape\n" + tc.steps)

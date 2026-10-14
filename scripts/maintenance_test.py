@@ -115,9 +115,9 @@ with open(fixture["log"], "a") as log:
     log.write(json.dumps(args) + "\\n")
 project = pathlib.Path(__file__).parent / "daemon-project"
 log_file = pathlib.Path(os.environ["TMPDIR"]) / "kcfs-daemon-424242.log"
-mounts = ("docs/team", "docs/runbooks", "knowledge/policy")
+mounts = ("docs/team", "docs/runbooks", "object/policy")
 if args[0] == "daemon-mount":
-    for name, value in (("docs/team/README.md", "advanced\\n"), ("knowledge/policy/rules.md", "policy\\n"), ("docs/runbooks/incident.md", "incident\\n")):
+    for name, value in (("docs/team/README.md", "advanced\\n"), ("object/policy/rules.md", "policy\\n"), ("docs/runbooks/incident.md", "incident\\n")):
         path = project / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(value)
@@ -269,7 +269,7 @@ exec(sys.stdin.read(), {"__name__": "__main__"})
             (root / "snapshot/service/file_http.go").write_text('mux.HandleFunc("POST /snapshot/v1/files/file:read", handler)\n')
             routes = root / "server/service_routes.go"
             routes.write_text("\n".join(f'"/{namespace}/v1/resources"'
-                                        for namespace in ("snapshot", "knowledge",
+                                        for namespace in ("snapshot", "object",
                                                           "writer", "governance", "identity",
                                                           "admin", "operations")) + "\n")
             script = root / "scripts/check-surface.sh"
@@ -284,7 +284,7 @@ exec(sys.stdin.read(), {"__name__": "__main__"})
             readme = root / "README.md"
             readme.write_text(current_examples)
             (root / "cli/HTTP_REFACTOR.md").write_text(
-                "Historical dsh-plugin bridge: knowledge_read / registerTool\n")
+                "Historical dsh-plugin bridge: object_read / registerTool\n")
             baseline = subprocess.run(command, capture_output=True, text=True)
             self.assertEqual(baseline.returncode, 0, baseline.stdout + baseline.stderr)
 
@@ -292,7 +292,7 @@ exec(sys.stdin.read(), {"__name__": "__main__"})
                                 ("Makefile", "test-plugin:\n\tnpm --prefix dsh-plugin run build\n", "retired DSH plugin"),
                                 ("cli/plugin_contract_test.go", "//go:build dsh_contract\n\npackage cli_test\n", "retired DSH plugin"),
                                 ("cli/context.go", "package cli\nfunc inheritTaskContext() {}\n", "retired private task context"),
-                                ("client/model.go", 'package client\nvar tool = "knowledge_read"\n', "retired model tools"),
+                                ("client/model.go", 'package client\nvar tool = "object_read"\n', "retired model tools"),
                                 ("server/agent.go", 'package server\nfunc agent() { registerTool("read") }\n', "model tool registration"))
             for name, content, label in restored_sources:
                 with self.subTest(restored=name):

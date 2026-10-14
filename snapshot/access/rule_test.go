@@ -10,14 +10,14 @@ import (
 
 func TestRulesPreserveWireQualifiersWithoutInterpretingFiles(t *testing.T) {
 	var rule access.Rule
-	raw := `{"id":"old","principal":"alice","actions":["dataset.consume","file.read","knowledge.read"],"repo":"source","dataset":"published","ref":"main","object":"concept/*","aspect":"canonical","shareId":"share","sharedBy":"owner"}`
+	raw := `{"id":"old","principal":"alice","actions":["file.read","object.read"],"repo":"source","dataset":"published","ref":"main","object":"concept/*","aspect":"canonical","shareId":"share","sharedBy":"owner"}`
 	if err := json.Unmarshal([]byte(raw), &rule); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(rule.Actions, []string{"file.read", "knowledge.read"}) || rule.ShareID != "share" || rule.SharedBy != "owner" {
+	if !reflect.DeepEqual(rule.Actions, []string{"file.read", "object.read"}) || rule.ShareID != "share" || rule.SharedBy != "owner" {
 		t.Fatalf("legacy decode changed rule: %#v", rule)
 	}
-	query := access.Query{Principal: "alice", Action: "knowledge.read", Repo: "source", Dataset: "published", Ref: "main", Object: "concept/table", Aspect: "canonical"}
+	query := access.Query{Principal: "alice", Action: "object.read", Repo: "source", Dataset: "published", Ref: "main", Object: "concept/table", Aspect: "canonical"}
 	if matched, ok := access.Match([]access.Rule{rule}, query); !ok || matched.ID != "old" {
 		t.Fatalf("application qualifiers stopped matching: %#v %v", matched, ok)
 	}
@@ -25,7 +25,7 @@ func TestRulesPreserveWireQualifiersWithoutInterpretingFiles(t *testing.T) {
 	if _, ok := access.Match([]access.Rule{rule}, query); ok {
 		t.Fatal("a source file path replaced the application qualifier")
 	}
-	for _, invalid := range []string{`{"kset":"old"}`, `{"actions":["kset.read"]}`} {
+	for _, invalid := range []string{`{"kset":"old"}`, `{"cmds":["read"]}`, `{"actions":["kset.read"]}`, `{"actions":["dataset.consume"]}`} {
 		if err := json.Unmarshal([]byte(invalid), &rule); err == nil {
 			t.Fatalf("retired wire representation was accepted: %s", invalid)
 		}
@@ -34,16 +34,16 @@ func TestRulesPreserveWireQualifiersWithoutInterpretingFiles(t *testing.T) {
 
 func TestInventoryIsExactAndCannotMutateTheAuthority(t *testing.T) {
 	rules := []access.Rule{
-		{ID: "exact", Principal: "alice", Actions: []string{"writer.*"}, Cmds: []string{"commit"}, Dataset: "published", Ref: "main", Object: "concept/*", Aspect: "canonical"},
+		{ID: "exact", Principal: "alice", Actions: []string{"writer.*"}, Dataset: "published", Ref: "main", Object: "concept/*", Aspect: "canonical"},
 		{ID: "other", Principal: "bob", Actions: []string{"writer.commit"}, Dataset: "published"},
 	}
 	filter := access.Query{Principal: "alice", Action: "writer.commit", Dataset: "published", Ref: "main", Object: "concept/*", Aspect: "canonical"}
 	view := access.Inventory(rules, filter)
-	if len(view.Rules) != 1 || view.Rules[0].ID != "exact" || view.Rules[0].Cmds != nil {
+	if len(view.Rules) != 1 || view.Rules[0].ID != "exact" {
 		t.Fatalf("inventory changed: %#v", view)
 	}
 	view.Rules[0].Actions[0] = "*"
-	if rules[0].Actions[0] != "writer.*" || len(rules[0].Cmds) != 1 {
+	if rules[0].Actions[0] != "writer.*" {
 		t.Fatal("inventory mutated the durable rule")
 	}
 	filter.Object = "concept/table"
@@ -55,7 +55,7 @@ func TestInventoryIsExactAndCannotMutateTheAuthority(t *testing.T) {
 func TestExplicitMatchDoesNotInferNamespacesOrNativeRoles(t *testing.T) {
 	rules := []access.Rule{{Principal: "alice", Actions: []string{"file.read"}, Dataset: "published"}}
 	for _, query := range []access.Query{
-		{Principal: "alice", Action: "knowledge.search", Dataset: "published"},
+		{Principal: "alice", Action: "object.search", Dataset: "published"},
 		{Principal: "alice", Action: "file.read", Repo: "source"},
 		{Principal: "native-admin", Action: "admin.grants.manage"},
 		{Principal: "alice", Action: "file.read", Dataset: "other"},

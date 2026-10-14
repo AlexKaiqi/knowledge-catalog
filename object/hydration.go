@@ -9,6 +9,6 @@ import "kc/kernel"
 // Missing IDs are omitted exactly as in BatchReadStore. Every returned value
 // must preserve the requested repository, object identity and immutable commit.
 type Hydrator interface {
-	ReadMany(repo Repository, commit kernel.CommitID, ids []ObjectID) (map[ObjectID]KnowledgeValue, error)
-	ReadAddress(repo Repository, commit kernel.CommitID, address Address) (KnowledgeValue, error)
+	ReadMany(repo Repository, commit kernel.CommitID, ids []ObjectID) (map[ObjectID]ObjectValue, error)
+	ReadAddress(repo Repository, commit kernel.CommitID, address Address) (ObjectValue, error)
 }

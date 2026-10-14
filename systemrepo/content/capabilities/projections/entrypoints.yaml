@@ -8,7 +8,7 @@ schema_ref: schema/system/capability-entrypoints/v1
 {
   "commands": [
     {
-      "action": "knowledge.access.describe",
+      "action": "object.access.describe",
       "command": "kc operations access-spec describe",
       "description": "查看 AccessSpec",
       "help": "kc help operations access-spec describe"

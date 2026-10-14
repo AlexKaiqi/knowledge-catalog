@@ -189,9 +189,9 @@ func TestMetricPermissionAgentBriefsStayOnSceneMaterials(t *testing.T) {
 		nodes[node.ID] = node
 	}
 	schemaNode, schemaOK := nodes["domain-schema-published"]
-	instanceNode, instanceOK := nodes["semantic-knowledge-published"]
+	instanceNode, instanceOK := nodes["semantic-object-published"]
 	if !schemaOK || !instanceOK {
-		t.Fatal("metric briefs require the schema and semantic knowledge scene states")
+		t.Fatal("metric briefs require the schema and semantic object scene states")
 	}
 	read := func(path string) string {
 		t.Helper()
@@ -209,8 +209,8 @@ func TestMetricPermissionAgentBriefsStayOnSceneMaterials(t *testing.T) {
 	schema := read(filepath.Join(schemaNode.Dir, "_materials", "drafts", "schema.metric.definition.yaml"))
 	instance := read(filepath.Join(instanceNode.Dir, "_materials", "metric.gmv.json"))
 	construct := read(instanceNode.Construct)
-	if !strings.Contains(schema, "kr://scene/knowledge") || !strings.Contains(construct, "kr://scene/knowledge") {
-		t.Fatal("metric schema and construct must target the scene knowledge repository")
+	if !strings.Contains(schema, "kr://scene/object") || !strings.Contains(construct, "kr://scene/object") {
+		t.Fatal("metric schema and construct must target the scene object repository")
 	}
 	if !strings.Contains(schema, "access: [text, filter]") {
 		t.Fatal("metric schema lost the scene AccessHints witness")
@@ -342,16 +342,16 @@ func TestSceneExistingRepositoryFixtureUsesLakeFS(t *testing.T) {
 	cache.mu.Unlock()
 	stamps := sceneRemoteStamps(t, frozen.dir)
 	if len(stamps) != 3 {
-		t.Fatalf("frozen existing-repository stamps=%d want system, knowledge and graph: %#v", len(stamps), stamps)
+		t.Fatalf("frozen existing-repository stamps=%d want system, object and graph: %#v", len(stamps), stamps)
 	}
-	wantRepositories := map[string]bool{string(objectmodel.SystemRepositoryID): true, "kr://scene/knowledge": true, "kr://scene/graph": true}
+	wantRepositories := map[string]bool{string(objectmodel.SystemRepositoryID): true, "kr://scene/object": true, "kr://scene/graph": true}
 	for _, stamp := range stamps {
 		if !wantRepositories[stamp.id] || stamp.driver != "lakefs" || !cache.lakefs.OwnsDSN(stamp.dsn) {
 			t.Fatalf("unexpected existing repository stamp: %#v", stamp)
 		}
 		delete(wantRepositories, stamp.id)
 	}
-	assertSceneRepositoryAccessSelection(t, cache, frozen.dir, "kr://scene/knowledge", "main")
+	assertSceneRepositoryAccessSelection(t, cache, frozen.dir, "kr://scene/object", "main")
 	assertSceneRepositoryAccessSelection(t, cache, frozen.dir, "kr://scene/graph", "")
 	homeA, _ := cache.cloneParent(t, attached)
 	homeB, _ := cache.cloneParent(t, attached)
@@ -360,8 +360,8 @@ func TestSceneExistingRepositoryFixtureUsesLakeFS(t *testing.T) {
 	if len(stampsA) != 3 || len(stampsB) != 3 {
 		t.Fatalf("cloned stamps A=%#v B=%#v", stampsA, stampsB)
 	}
-	assertSceneRepositoryAccessSelection(t, cache, homeA, "kr://scene/knowledge", "main")
-	assertSceneRepositoryAccessSelection(t, cache, homeB, "kr://scene/knowledge", "main")
+	assertSceneRepositoryAccessSelection(t, cache, homeA, "kr://scene/object", "main")
+	assertSceneRepositoryAccessSelection(t, cache, homeB, "kr://scene/object", "main")
 	// Catalog authority pointers must fork too; copying a consumer home must
 	// never allow its registry writes to advance another clone or the parent.
 	openedA, err := kchome.Open(homeA)
@@ -369,7 +369,7 @@ func TestSceneExistingRepositoryFixtureUsesLakeFS(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer openedA.Close()
-	if err := openedA.Datasets.RegisterRepository("kr://scene/knowledge"); err != nil {
+	if err := openedA.Datasets.RegisterRepository("kr://scene/object"); err != nil {
 		t.Fatal(err)
 	}
 	openedB, err := kchome.Open(homeB)
@@ -377,7 +377,7 @@ func TestSceneExistingRepositoryFixtureUsesLakeFS(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer openedB.Close()
-	if openedB.Datasets.HasRepository("kr://scene/knowledge") {
+	if openedB.Datasets.HasRepository("kr://scene/object") {
 		t.Fatal("cloned Catalog authorities share a mutable registry")
 	}
 	seenDSNs := map[string]bool{}
@@ -886,7 +886,7 @@ func TestSceneJSONExpect(t *testing.T) {
 		"system":      map[string]any{"repositoryId": "kr://kc/system", "commit": "abc"},
 		"repositories": []any{
 			map[string]any{"id": "kr://kc/system"},
-			"kr://scene/knowledge",
+			"kr://scene/object",
 		},
 	}
 	if err := matchJSONExpect(root, "authorityId", "kr://scene/registry"); err != nil {
@@ -913,7 +913,7 @@ func TestSceneJSONExpect(t *testing.T) {
 	if err := matchJSONIncludes([]any{map[string]any{"commit": ""}}, "[].commit", "nonempty"); err == nil {
 		t.Fatal("empty values must not satisfy an includes nonempty assertion")
 	}
-	if err := matchJSONIncludes(root, "repositories", "kr://scene/knowledge"); err != nil {
+	if err := matchJSONIncludes(root, "repositories", "kr://scene/object"); err != nil {
 		t.Fatal(err)
 	}
 	if err := matchJSONExpect(root, "repos", "nonempty"); err == nil {
@@ -1528,11 +1528,11 @@ func (w *sceneWorld) thenHit(objectID string, full bool) {
 		requireMetricSearchHit(w.t, w.cli, objectID)
 		return
 	case "http":
-		knowledge := requireHTTPSearchHit(w.t, w.httpCode, w.httpBody, objectID)
-		value := asMap(w.t, knowledge)["value"]
+		object := requireHTTPSearchHit(w.t, w.httpCode, w.httpBody, objectID)
+		value := asMap(w.t, object)["value"]
 		if !full {
 			if value != nil {
-				w.t.Fatalf("missing knowledge.read must strip Canonical: repository=%v knowledgeRef=%v value=%#v", knowledge["repository"], knowledge["knowledgeRef"], value)
+				w.t.Fatalf("missing object.read must strip Canonical: repository=%v objectRef=%v value=%#v", object["repository"], object["objectRef"], value)
 			}
 			return
 		}
@@ -2156,11 +2156,11 @@ func requireHTTPSearchHit(t *testing.T, status int, payload any, objectID string
 	if len(hits) != 1 {
 		t.Fatalf("want one hit for %s: %#v", objectID, hits)
 	}
-	knowledge := asMap(t, asMap(t, hits[0])["knowledge"])
-	if asMap(t, knowledge["knowledgeRef"])["object"] != objectID {
-		t.Fatalf("hit object = %#v, want %s", knowledge["knowledgeRef"], objectID)
+	object := asMap(t, asMap(t, hits[0])["object"])
+	if asMap(t, object["objectRef"])["object"] != objectID {
+		t.Fatalf("hit object = %#v, want %s", object["objectRef"], objectID)
 	}
-	return knowledge
+	return object
 }
 
 func searchHits(t *testing.T, result any) []any {

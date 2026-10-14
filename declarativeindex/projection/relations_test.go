@@ -62,12 +62,12 @@ type poisonAuthority struct {
 	missing map[objectmodel.ObjectID]bool
 }
 
-func (r *poisonAuthority) Read(objectmodel.ObjectID, kernel.CommitID) (objectmodel.KnowledgeValue, error) {
+func (r *poisonAuthority) Read(objectmodel.ObjectID, kernel.CommitID) (objectmodel.ObjectValue, error) {
 	*r.calls = append(*r.calls, "forbidden-read")
-	return objectmodel.KnowledgeValue{}, fmt.Errorf("poison authority: point Read is forbidden")
+	return objectmodel.ObjectValue{}, fmt.Errorf("poison authority: point Read is forbidden")
 }
 
-func (r *poisonAuthority) ReadMany(ids []objectmodel.ObjectID, commit kernel.CommitID) (map[objectmodel.ObjectID]objectmodel.KnowledgeValue, error) {
+func (r *poisonAuthority) ReadMany(ids []objectmodel.ObjectID, commit kernel.CommitID) (map[objectmodel.ObjectID]objectmodel.ObjectValue, error) {
 	*r.calls = append(*r.calls, "read-many")
 	for _, id := range ids {
 		if !r.allowed[id] {
@@ -86,11 +86,11 @@ func (r *poisonAuthority) ReadMany(ids []objectmodel.ObjectID, commit kernel.Com
 
 func relationRequest(repository kernel.RepositoryID) retrieval.RelationPageRequest {
 	return retrieval.RelationPageRequest{Query: retrieval.RelationQuery{
-		Endpoint: objectmodel.KnowledgeRef{Repository: repository, Object: "Table:a"}, RelationType: "owned-by", Role: "subject",
+		Endpoint: objectmodel.ObjectRef{Repository: repository, Object: "Table:a"}, RelationType: "owned-by", Role: "subject",
 	}}
 }
 
-func relationBatch(t *testing.T, repo *testkit.KnowledgeRepository) objectmodel.BatchReadStore {
+func relationBatch(t *testing.T, repo *testkit.ObjectRepository) objectmodel.BatchReadStore {
 	t.Helper()
 	batch, ok := repo.Repository.(objectmodel.BatchReadStore)
 	if !ok {
@@ -209,7 +209,7 @@ func TestRelationsContinuationBindsQueryBasisAndGeneration(t *testing.T) {
 	if root != commit {
 		t.Fatalf("fixture head mismatch: %s != %s", root, commit)
 	}
-	next, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	next, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef,
 		BaseCommit: commit, ExpectedTargetCommit: commit,
 		Operations: []objectmodel.Operation{{

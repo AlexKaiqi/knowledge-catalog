@@ -30,7 +30,7 @@ ONLINE_SERVE_PID="${ONLINE_HOME}/kc-serve.pid"
 
 REGISTRY_ID="${KC_REGISTRY_ID:-kr://acme/registry}"
 PRINCIPAL="${KC_AS:-admin}"
-KNOWLEDGE="${KC_KNOWLEDGE_REPO:-kr://acme/knowledge}"
+OBJECT="${KC_OBJECT_REPO:-kr://acme/object}"
 
 mkdir -p "$CONFIG_DIR"
 
@@ -329,7 +329,7 @@ EOF
   ns="$(printf '%s' "$COS_STORAGE_NAMESPACE" | sed 's:/*$::')"
   ensure_online_repo kc-catalog "${ns}/kc-catalog"
   ensure_online_repo kc-system "${ns}/kc-system"
-  ensure_online_repo kc-knowledge "${ns}/kc-knowledge"
+  ensure_online_repo kc-object "${ns}/kc-object"
   write_online_env
   export KC_LAKEFS_CREDENTIAL="${LAKEFS_ACCESS}:${LAKEFS_SECRET}"
   if [[ ! -f "${ONLINE_HOME}/deployment.json" ]]; then
@@ -340,7 +340,7 @@ EOF
       --registry-dsn "$(lakefs_base)/kc-catalog" \
       --principal "$PRINCIPAL" \
       --lakefs-repo "kr://kc/system=$(lakefs_base)/kc-system" \
-      --lakefs-repo "${KNOWLEDGE}=$(lakefs_base)/kc-knowledge" >/dev/null
+      --lakefs-repo "${OBJECT}=$(lakefs_base)/kc-object" >/dev/null
   fi
   "$GO" run ./cmd/kc -- deployment init --config "${ONLINE_HOME}/deployment.json" >/dev/null
   "$GO" run ./cmd/kc -- deployment system publish --config "${ONLINE_HOME}/deployment.json"

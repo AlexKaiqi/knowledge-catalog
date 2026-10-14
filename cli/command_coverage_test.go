@@ -41,7 +41,7 @@ func TestRequiredAssertedBoundariesFollowSemanticRisk(t *testing.T) {
 		action string
 		want   int
 	}{
-		{"knowledge.read", 1},
+		{"object.read", 1},
 		{"registry.audit.read", 1},
 		{"catalog.manage", 2},
 		{"operations.hooks.manage", 2},
@@ -259,7 +259,7 @@ func TestMutatingCommandsRejectInvalidStateTargetsAndAuthorization(t *testing.T)
 	body(t, kc(home, "local", "init"))
 	seedRepo(t, home, repositoryID)
 	body(t, kc(home, "dataset", "define", "--dataset", "coverage", "--revision", "1",
-		"--source", repositoryID+"=refs/heads/main@knowledge"))
+		"--source", repositoryID+"=refs/heads/main@object"))
 
 	for _, tc := range []struct {
 		name string
@@ -269,8 +269,8 @@ func TestMutatingCommandsRejectInvalidStateTargetsAndAuthorization(t *testing.T)
 		{"grant add rejects a non-semantic action", []string{"grant", "add", "--principal", "agent:x", "--action", "invalid", "--repo", repositoryID}, "USAGE_INVALID"},
 		{"grant remove rejects an unknown rule", []string{"grant", "remove", "--id", "alw_missing"}, "USAGE_INVALID"},
 		{"retired Catalog archive is rejected", []string{"catalog", "archive", "--as", "untrusted"}, "USAGE_INVALID"},
-		{"repository archive rejects an unknown target", []string{"detach", "--repo", "kr://missing/repository"}, "KNOWLEDGE_SET_INVALID"},
-		{"dataset retire rejects an unknown target", []string{"dataset", "retire", "--dataset", "missing"}, "KNOWLEDGE_SET_INVALID"},
+		{"repository archive rejects an unknown target", []string{"detach", "--repo", "kr://missing/repository"}, "DATASET_INVALID"},
+		{"dataset retire rejects an unknown target", []string{"dataset", "retire", "--dataset", "missing"}, "DATASET_INVALID"},
 		{"preview create rejects an unknown proposal", []string{"governance", "preview", "create", "--proposal", "PR-missing", "--dataset", "coverage"}, "USAGE_INVALID"},
 		{"preview validate rejects an unknown preview", []string{"governance", "preview", "validate", "--preview", "PV-missing"}, "USAGE_INVALID"},
 		{"validation record rejects an invalid outcome", []string{"governance", "validation", "record", "--outcome", "UNKNOWN"}, "USAGE_INVALID"},

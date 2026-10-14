@@ -11,7 +11,7 @@ import (
 	"kc/kernel"
 )
 
-// Two durable trails, both pointers-only (not knowledge bodies):
+// Two durable trails, both pointers-only (not object bodies):
 //
 //	layer=system  Writer / Dataset service / ControlPlane / Reader
 //	layer=kc      CLI facade (init, allow, argv, --as)

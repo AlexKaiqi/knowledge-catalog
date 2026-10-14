@@ -52,10 +52,10 @@ func TestSnapshotRegistryRequiresExplicitCreationAndRecoversNewHandle(t *testing
 	if err := cat.RegisterRepository("kr://remote/source"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := cat.DefineKnowledgeSet("task", 1, []catalog.KnowledgeSetSource{{Repository: "kr://remote/source", Selector: snapshot.DefaultRef}}); err != nil {
+	if _, err := cat.DefineDataset("task", 1, []catalog.DatasetSource{{Repository: "kr://remote/source", Selector: snapshot.DefaultRef}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := cat.RetireKnowledgeSet("task"); err != nil {
+	if err := cat.RetireDataset("task"); err != nil {
 		t.Fatal(err)
 	}
 	head, err := registry.Head()

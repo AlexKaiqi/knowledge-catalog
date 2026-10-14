@@ -25,12 +25,12 @@ type RetrievalLaneEvidence struct {
 }
 
 type RetrievalCandidate struct {
-	KnowledgeRef objectmodel.PinnedKnowledgeRef `json:"knowledgeRef"`
-	Rank         int                            `json:"rank"`
-	ValueDigest  kernel.Digest                  `json:"valueDigest,omitempty"`
-	Evidence     []RetrievalLaneEvidence        `json:"evidence,omitempty"`
-	Observations []objectmodel.UnitObservation  `json:"observations,omitempty"`
-	MatchedRoles []string                       `json:"matchedRoles,omitempty"`
+	ObjectRef    objectmodel.PinnedObjectRef   `json:"objectRef"`
+	Rank         int                           `json:"rank"`
+	ValueDigest  kernel.Digest                 `json:"valueDigest,omitempty"`
+	Evidence     []RetrievalLaneEvidence       `json:"evidence,omitempty"`
+	Observations []objectmodel.UnitObservation `json:"observations,omitempty"`
+	MatchedRoles []string                      `json:"matchedRoles,omitempty"`
 }
 
 type RetrievalExecution struct {
@@ -95,17 +95,17 @@ func (e RetrievalEvent) Validate() error {
 	if _, err := json.Marshal(e.LogicalRequest); err != nil || e.RequestDigest != kernel.CanonicalDigest(e.LogicalRequest) {
 		return fmt.Errorf("retrieval evidence requires canonical request digest")
 	}
-	seen := map[objectmodel.KnowledgeRef]struct{}{}
+	seen := map[objectmodel.ObjectRef]struct{}{}
 	for i, candidate := range e.Candidates {
-		if candidate.Rank != i+1 || candidate.KnowledgeRef.Repository == "" || candidate.KnowledgeRef.Commit == "" || candidate.KnowledgeRef.Object == "" {
-			return fmt.Errorf("retrieval candidate requires rank and pinned KnowledgeRef")
+		if candidate.Rank != i+1 || candidate.ObjectRef.Repository == "" || candidate.ObjectRef.Commit == "" || candidate.ObjectRef.Object == "" {
+			return fmt.Errorf("retrieval candidate requires rank and pinned ObjectRef")
 		}
-		if _, duplicate := seen[candidate.KnowledgeRef.KnowledgeRef]; duplicate {
+		if _, duplicate := seen[candidate.ObjectRef.ObjectRef]; duplicate {
 			return fmt.Errorf("retrieval candidate ref is duplicated")
 		}
-		seen[candidate.KnowledgeRef.KnowledgeRef] = struct{}{}
-		basis, member := e.SearchView.Snapshots[candidate.KnowledgeRef.Repository]
-		if !member || basis != candidate.KnowledgeRef.Commit {
+		seen[candidate.ObjectRef.ObjectRef] = struct{}{}
+		basis, member := e.SearchView.Snapshots[candidate.ObjectRef.Repository]
+		if !member || basis != candidate.ObjectRef.Commit {
 			return fmt.Errorf("retrieval candidate is outside SearchView")
 		}
 		if candidate.ValueDigest == "" {

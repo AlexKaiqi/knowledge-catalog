@@ -73,11 +73,11 @@ func validateAuditRecord(entry observability.AccessEvent, record evidence.Record
 		return auditAssociationFailure()
 	}
 	for _, sample := range record.Units {
-		if !auditSampleMatches(entry.Knowledge, sample) {
+		if !auditSampleMatches(entry.Object, sample) {
 			return auditAssociationFailure()
 		}
 	}
-	for _, target := range entry.Knowledge {
+	for _, target := range entry.Object {
 		if !auditObservationsMatch(target, record.Units) {
 			return auditAssociationFailure()
 		}
@@ -85,7 +85,7 @@ func validateAuditRecord(entry observability.AccessEvent, record evidence.Record
 	return nil
 }
 
-func auditSampleMatches(targets []observability.KnowledgeAccess, sample evidence.Sample) bool {
+func auditSampleMatches(targets []observability.ObjectAccess, sample evidence.Sample) bool {
 	for _, target := range targets {
 		if !auditTargetMatches(target, sample) {
 			continue
@@ -102,8 +102,8 @@ func auditSampleMatches(targets []observability.KnowledgeAccess, sample evidence
 	return false
 }
 
-func auditTargetMatches(target observability.KnowledgeAccess, sample evidence.Sample) bool {
-	ref := target.KnowledgeRef
+func auditTargetMatches(target observability.ObjectAccess, sample evidence.Sample) bool {
+	ref := target.ObjectRef
 	return ref.Repository == sample.Repository && ref.Commit == sample.Commit && ref.Object == sample.Address.ObjectID &&
 		auditAddressContains(target.Address, sample.Address) && auditLocatorContains(target.Locator, sample.Address)
 }
@@ -133,7 +133,7 @@ func auditLocatorContains(locator string, address objectmodel.Address) bool {
 	return tokenPrefix(unit, selected) || tokenPrefix(selected, unit)
 }
 
-func auditObservationsMatch(target observability.KnowledgeAccess, samples []evidence.Sample) bool {
+func auditObservationsMatch(target observability.ObjectAccess, samples []evidence.Sample) bool {
 	for _, observation := range target.Observations {
 		if !auditObservationMatches(target, observation, samples) {
 			return false
@@ -142,7 +142,7 @@ func auditObservationsMatch(target observability.KnowledgeAccess, samples []evid
 	return true
 }
 
-func auditObservationMatches(target observability.KnowledgeAccess, observation objectmodel.UnitObservation, samples []evidence.Sample) bool {
+func auditObservationMatches(target observability.ObjectAccess, observation objectmodel.UnitObservation, samples []evidence.Sample) bool {
 	for _, sample := range samples {
 		if auditTargetMatches(target, sample) && sample.Outcome == evidence.ValueOutcome &&
 			sample.Observation != nil && *sample.Observation == observation {

@@ -51,7 +51,7 @@ func runRemoteDatasetClone(ctx context.Context, client kcclient.Client, flags ma
 		return nil, err
 	}
 	if len(mounts) == 0 && fileEntries == 0 {
-		return nil, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "dataset %s publishes no delivered content", setID)
+		return nil, kernel.Fail(kernel.ErrDatasetInvalid, "dataset %s publishes no delivered content", setID)
 	}
 	files, bytes, err := cloneWalk(ctx, client, coordinate, pin.PinID, dir, "", 0, options)
 	if err != nil {
@@ -74,14 +74,14 @@ func runRemoteDatasetClone(ctx context.Context, client kcclient.Client, flags ma
 // as the pin every subsequent gateway call replays. Product argv does not
 // carry --pin (doc/design/affordance.md): clone consumes the current serving version, and
 // historical review goes through the server-side task pin, not this verb.
-func cloneCoordinate(ctx context.Context, client kcclient.Client, setID string, options kcclient.RequestOptions) (kcclient.WorkspaceFileCoordinate, dataset.ResolvedKnowledgeSet, error) {
-	var pin dataset.ResolvedKnowledgeSet
-	if err := client.SnapshotService().ResolveKnowledgeSet(ctx, setID, kcclient.KnowledgeSetResolveRequest{}, options, &pin); err != nil {
-		return kcclient.WorkspaceFileCoordinate{}, dataset.ResolvedKnowledgeSet{}, err
+func cloneCoordinate(ctx context.Context, client kcclient.Client, setID string, options kcclient.RequestOptions) (kcclient.WorkspaceFileCoordinate, dataset.ResolvedDataset, error) {
+	var pin dataset.ResolvedDataset
+	if err := client.SnapshotService().ResolveDataset(ctx, setID, kcclient.DatasetResolveRequest{}, options, &pin); err != nil {
+		return kcclient.WorkspaceFileCoordinate{}, dataset.ResolvedDataset{}, err
 	}
 	marshaled, err := json.Marshal(pin)
 	if err != nil {
-		return kcclient.WorkspaceFileCoordinate{}, dataset.ResolvedKnowledgeSet{}, err
+		return kcclient.WorkspaceFileCoordinate{}, dataset.ResolvedDataset{}, err
 	}
 	coordinate := kcclient.WorkspaceFileCoordinate{Dataset: setID, View: "repository", Pin: marshaled}
 	return coordinate, pin, nil

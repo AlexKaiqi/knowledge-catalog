@@ -40,7 +40,7 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 		"--source", repoID+"=refs/heads/main"))
 	body(t, kc(home, "allow", "--principal", agent, "--cmd", "read-workspace", "--dataset", setID))
 	body(t, kc(home, "allow", "--principal", agent, "--cmd", "read", "--repo", repoID))
-	body(t, kc(home, "allow", "--principal", agent, "--action", "knowledge.search", "--dataset", setID))
+	body(t, kc(home, "allow", "--principal", agent, "--action", "object.search", "--dataset", setID))
 	body(t, kc(home, "allow", "--principal", agent, "--cmd", "feedback.write", "--dataset", setID))
 	identity := []string{"--as", agent, "--on-behalf-of", user, "--request-id", "req-42",
 		"--trace-id", "trace-42"}
@@ -51,7 +51,7 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 	}
 	returnedCommit, _ := readValues["commit"].(string)
 	if returnedCommit == "" {
-		t.Fatal("read response must identify the knowledge version", readValues)
+		t.Fatal("read response must identify the object version", readValues)
 	}
 	syncIndexes(t, home, repoID)
 	searchArgs := append([]string{"search", "--dataset", setID, "--query", "merchandise", "--span-id", "span-search", "--parent-span-id", "span-read"}, identity...)
@@ -87,16 +87,16 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 			t.Fatalf("identity/time/pin missing: %#v", event)
 		}
 		evidenceByAction[event["action"].(string)] = event["evidenceId"].(string)
-		knowledge := event["knowledge"].([]any)
-		if len(knowledge) != 1 {
+		object := event["object"].([]any)
+		if len(object) != 1 {
 			t.Fatalf("versioned target missing: %#v", event)
 		}
-		ref := asMap(t, asMap(t, knowledge[0])["knowledgeRef"])
+		ref := asMap(t, asMap(t, object[0])["objectRef"])
 		if ref["repository"] != repoID || ref["object"] != "Metric:gmv" || ref["commit"] != returnedCommit {
-			t.Fatalf("wrong pinned knowledge ref: %#v", ref)
+			t.Fatalf("wrong pinned object ref: %#v", ref)
 		}
 	}
-	for _, action := range []string{"knowledge.read", "knowledge.search"} {
+	for _, action := range []string{"object.read", "object.search"} {
 		audit := asMap(t, body(t, kc(home, "audit", "--layer", "kc", "--cmd", action)))
 		auditEntries := audit["entries"].([]any)
 		if len(auditEntries) != 1 || asMap(t, auditEntries[0])["evidenceId"] != evidenceByAction[action] {
@@ -135,7 +135,7 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 		"--trace-id", "trace-missing", "--as", agent, "--outcome", "helpful"), "PRECONDITION_FAILED")
 }
 
-func TestKnowledgeReadFailsClosedWhenAccessEvidenceCannotPersist(t *testing.T) {
+func TestObjectReadFailsClosedWhenAccessEvidenceCannotPersist(t *testing.T) {
 	home := testkit.TempDir(t)
 	repoID := "kr://acme/public/audited"
 	body(t, kc(home, "init"))
@@ -151,7 +151,7 @@ func TestKnowledgeReadFailsClosedWhenAccessEvidenceCannotPersist(t *testing.T) {
 	}
 }
 
-func TestKnowledgeSearchFailsClosedWhenRetrievalEvidenceCannotPersist(t *testing.T) {
+func TestObjectSearchFailsClosedWhenRetrievalEvidenceCannotPersist(t *testing.T) {
 	home := testkit.TempDir(t)
 	repoID := "kr://acme/public/retrieval-audited"
 	body(t, kc(home, "init"))
@@ -186,7 +186,7 @@ func TestHTTPPassesAbstractDelegationAndTraceContext(t *testing.T) {
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	payload, _ := json.Marshal(map[string]any{"dataset": setID, "reference": testObjectReference(t, repoID, "Policy:http", "")})
-	req, err := http.NewRequest(http.MethodPost, server.URL+"/knowledge/v1/objects:read", bytes.NewReader(payload))
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/object/v1/objects:read", bytes.NewReader(payload))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +220,7 @@ func TestHTTPPassesAbstractDelegationAndTraceContext(t *testing.T) {
 
 	const w3cTraceID = "4bf92f3577b34da6a3ce929d0e0e4736"
 	const w3cParentSpanID = "00f067aa0ba902b7"
-	w3cReq, err := http.NewRequest(http.MethodPost, server.URL+"/knowledge/v1/objects:read", bytes.NewReader(payload))
+	w3cReq, err := http.NewRequest(http.MethodPost, server.URL+"/object/v1/objects:read", bytes.NewReader(payload))
 	if err != nil {
 		t.Fatal(err)
 	}

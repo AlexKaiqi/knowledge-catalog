@@ -45,8 +45,8 @@ func TestNonDeploymentSnapshotConsumptionCannotAdoptPortableRecipe(t *testing.T)
 			if err := cat.RegisterRepository(source.ID()); err != nil {
 				t.Fatal(err)
 			}
-			recipe := dataset.KnowledgeSetRecipe{Name: "files", Files: []dataset.KnowledgeSetFileMount{{Repository: string(source.ID()), Selector: snapshot.DefaultRef, File: "private.txt", Target: "docs/private.txt"}}}
-			raw, err := dataset.FormatKnowledgeSetRecipe(recipe)
+			recipe := dataset.DatasetRecipe{Name: "files", Files: []dataset.DatasetFileMount{{Repository: string(source.ID()), Selector: snapshot.DefaultRef, File: "private.txt", Target: "docs/private.txt"}}}
+			raw, err := dataset.FormatDatasetRecipe(recipe)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -69,7 +69,7 @@ func TestNonDeploymentSnapshotConsumptionCannotAdoptPortableRecipe(t *testing.T)
 			handler := facade.snapshotStoreService()
 			before := dataset.NormalizeState(cat.DumpState())
 			head := testkit.MustHead(t, authority, snapshot.DefaultRef)
-			pin := dataset.ResolvedKnowledgeSet{SetID: "files", Revision: 1, Repositories: map[kernel.RepositoryID]kernel.CommitID{source.ID(): commit}}
+			pin := dataset.ResolvedDataset{SetID: "files", Revision: 1, Repositories: map[kernel.RepositoryID]kernel.CommitID{source.ID(): commit}}
 			target, payload := "/snapshot/v1/datasets/files/resolve", any(map[string]any{})
 			if operation == "file-read" {
 				target, payload = "/snapshot/v1/files/file:read", map[string]any{"dataset": "files", "pin": pin, "path": "docs/private.txt"}
@@ -79,7 +79,7 @@ func TestNonDeploymentSnapshotConsumptionCannotAdoptPortableRecipe(t *testing.T)
 				t.Fatal(err)
 			}
 			failure := grantRequestForTest(t, handler, "consumer", http.MethodPost, target, string(body), http.StatusBadRequest)
-			if failure["error"].(map[string]any)["code"] != string(kernel.ErrKnowledgeSetInvalid) {
+			if failure["error"].(map[string]any)["code"] != string(kernel.ErrDatasetInvalid) {
 				t.Fatalf("missing accepted Dataset changed error: %+v", failure)
 			}
 			if !reflect.DeepEqual(dataset.NormalizeState(cat.DumpState()), before) || testkit.MustHead(t, authority, snapshot.DefaultRef) != head {

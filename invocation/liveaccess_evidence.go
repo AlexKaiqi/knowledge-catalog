@@ -8,7 +8,7 @@ import (
 )
 
 func captureReadRequest(ctx context.Context, command string, flags map[string]invoke.FlagValue) (context.Context, error) {
-	if command != "knowledge-read" && command != "knowledge-access" {
+	if command != "object-read" && command != "object-access" {
 		return ctx, nil
 	}
 	ctx, requestID, err := liveservice.BeginReadEvidence(ctx, invoke.FlagString(flags, "request-id"))
@@ -19,10 +19,10 @@ func captureReadRequest(ctx context.Context, command string, flags map[string]in
 }
 
 func retainReadResults(ctx context.Context, home string, flags map[string]invoke.FlagValue, result any) (any, error) {
-	accesses := KnowledgeAccesses(result)
-	delivered := make([]objectmodel.PinnedKnowledgeRef, len(accesses))
+	accesses := ObjectAccesses(result)
+	delivered := make([]objectmodel.PinnedObjectRef, len(accesses))
 	for i, access := range accesses {
-		delivered[i] = access.KnowledgeRef
+		delivered[i] = access.ObjectRef
 	}
 	identity, err := IdentityContextFrom(flags)
 	if err != nil {
@@ -45,7 +45,7 @@ func retainReadResults(ctx context.Context, home string, flags map[string]invoke
 	}
 	observed, ok := result.(ObservedAccessResult)
 	if !ok {
-		observed = ObservedAccessResult{Output: result, Knowledge: accesses}
+		observed = ObservedAccessResult{Output: result, Object: accesses}
 	}
 	observed.LiveAccess = reference
 	return observed, nil

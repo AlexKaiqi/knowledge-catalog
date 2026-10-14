@@ -3,7 +3,7 @@
 `Entry(Options)` 登记静态说明和真实取值构造。默认使用 `HTTPStateLookup`，请求的固定
 Schema/Binding 决定来源地址。嵌入方可用 `OpenLookup(PluginScope)` 构造兼容 adapter；
 每取得资源便通过 `scope.Own` 登记释放责任，实例与 Repo 范围来自已有仓配置。默认
-adapter 的凭证适用目标由 `CredentialOrigins` 指定，知识声明不能自行扩充可信目标。
+adapter 的凭证适用目标由 `CredentialOrigins` 指定，对象声明不能自行扩充可信目标。
 
 取值是必需贡献；源操作及已有 InterfaceRegistry 为可选贡献，不要求只读插件实现写入。
 消费登记及逐仓选择归 `liveaccess/service`。其 `Close` 拒绝新调用、等待已接受调用后

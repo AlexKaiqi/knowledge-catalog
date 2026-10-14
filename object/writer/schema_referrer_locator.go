@@ -21,7 +21,7 @@ func updateSchemaReferrerLocators(tree snapshot.TreeReader, commit kernel.Commit
 		changed[id] = true
 	}
 	_, markerErr := tree.ReadFile(repofile.LocatorReferrersCompletePath, commit)
-	if markerErr != nil && kernel.CodeOf(markerErr) != kernel.ErrKnowledgeRefUnresolved {
+	if markerErr != nil && kernel.CodeOf(markerErr) != kernel.ErrObjectRefUnresolved {
 		return markerErr
 	}
 	for id := range affected {

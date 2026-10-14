@@ -11,7 +11,7 @@ import (
 )
 
 type CanonicalReader interface {
-	ReadReference(objectmodel.Reference, kernel.CommitID) (objectmodel.KnowledgeValue, error)
+	ReadReference(objectmodel.Reference, kernel.CommitID) (objectmodel.ObjectValue, error)
 }
 
 type ReadRequest struct {
@@ -23,17 +23,17 @@ type ReadExecutor struct {
 	Reader CanonicalReader
 }
 
-func (e ReadExecutor) Execute(_ context.Context, request ReadRequest) (objectmodel.KnowledgeValue, error) {
+func (e ReadExecutor) Execute(_ context.Context, request ReadRequest) (objectmodel.ObjectValue, error) {
 	if e.Reader == nil {
-		return objectmodel.KnowledgeValue{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-			"knowledge read service is unavailable")
+		return objectmodel.ObjectValue{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+			"object read service is unavailable")
 	}
 	if request.Commit == "" {
-		return objectmodel.KnowledgeValue{}, kernel.Fail(kernel.ErrUsageInvalid,
+		return objectmodel.ObjectValue{}, kernel.Fail(kernel.ErrUsageInvalid,
 			"reference read requires a fixed commit")
 	}
 	if _, err := objectmodel.FormatReference(request.Reference); err != nil {
-		return objectmodel.KnowledgeValue{}, err
+		return objectmodel.ObjectValue{}, err
 	}
 	return e.Reader.ReadReference(request.Reference, request.Commit)
 }

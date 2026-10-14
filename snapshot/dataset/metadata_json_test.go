@@ -20,20 +20,20 @@ func TestNestedDatasetMetadataJSONCannotBypassTypesOrVocabulary(t *testing.T) {
 		`{"sources":[{"repository":"source","unknownField":true}]}`,
 	} {
 		var wrapper struct {
-			Definition *catalog.KnowledgeSet `json:"definition"`
+			Definition *catalog.Dataset `json:"definition"`
 		}
 		if err := catalog.DecodeJSON([]byte(`{"definition":`+body+`}`), &wrapper); err == nil {
 			t.Fatalf("nested Dataset bypassed its JSON contract: %s", body)
 		}
 		var recipe struct {
-			Definition *catalog.KnowledgeSetRecipe `json:"definition"`
+			Definition *catalog.DatasetRecipe `json:"definition"`
 		}
 		if err := catalog.DecodeJSON([]byte(`{"definition":`+body+`}`), &recipe); err == nil {
 			t.Fatalf("nested recipe bypassed its JSON contract: %s", body)
 		}
 	}
 	var wrapper struct {
-		Definition catalog.KnowledgeSet `json:"definition"`
+		Definition catalog.Dataset `json:"definition"`
 	}
 	if err := catalog.DecodeJSON([]byte(`{"definition":{"setId":"delivery","revision":1,"metadata":{"custom":"value","empty":""}}}`), &wrapper); err != nil {
 		t.Fatalf("valid nested metadata rejected: %v", err)
@@ -45,15 +45,15 @@ func TestNestedDatasetMetadataJSONCannotBypassTypesOrVocabulary(t *testing.T) {
 
 func TestDatasetMetadataJSONFollowsNestedTypesAndSkipsOpaqueBodies(t *testing.T) {
 	type scope struct {
-		Definition *catalog.KnowledgeSet `json:"definition"`
+		Definition *catalog.Dataset `json:"definition"`
 	}
 	type request struct {
 		scope
-		Definitions []*catalog.KnowledgeSet          `json:"definitions"`
-		ByName      map[string]*catalog.KnowledgeSet `json:"byName"`
-		Metadata    any                              `json:"metadata"`
-		Body        map[string]any                   `json:"body"`
-		Raw         json.RawMessage                  `json:"raw"`
+		Definitions []*catalog.Dataset          `json:"definitions"`
+		ByName      map[string]*catalog.Dataset `json:"byName"`
+		Metadata    any                         `json:"metadata"`
+		Body        map[string]any              `json:"body"`
+		Raw         json.RawMessage             `json:"raw"`
 	}
 	for _, body := range []string{
 		`{"definition":{"metadata":{"key":null}}}`,
@@ -84,8 +84,8 @@ func TestDatasetMetadataJSONFollowsNestedTypesAndSkipsOpaqueBodies(t *testing.T)
 }
 
 func TestEmptyDatasetOverlayDoesNotShareMetadata(t *testing.T) {
-	base := catalog.KnowledgeSet{Metadata: map[string]string{"custom": "base"}}
-	merged, err := catalog.MergeOverlay(base, catalog.KnowledgeSetOverlay{})
+	base := catalog.Dataset{Metadata: map[string]string{"custom": "base"}}
+	merged, err := catalog.MergeOverlay(base, catalog.DatasetOverlay{})
 	if err != nil || !reflect.DeepEqual(base, merged) {
 		t.Fatalf("empty overlay changed definition: %#v %v", merged, err)
 	}

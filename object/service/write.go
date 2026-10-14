@@ -24,7 +24,7 @@ type CommitExecutor struct {
 func (e CommitExecutor) Execute(_ context.Context, request CommitRequest) (writer.CommitReceipt, error) {
 	if e.Writer == nil {
 		return writer.CommitReceipt{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-			"knowledge writer service is unavailable")
+			"object writer service is unavailable")
 	}
 	if strings.TrimSpace(request.CommandID) == "" {
 		return writer.CommitReceipt{}, kernel.Fail(kernel.ErrUsageInvalid,

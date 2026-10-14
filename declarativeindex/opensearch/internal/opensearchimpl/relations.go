@@ -21,7 +21,7 @@ func (e *openSearchEngine) RetrieveRelationsContext(ctx context.Context, req ret
 	}
 	defer e.mu.RUnlock()
 	if req.Repository == "" || req.Basis == "" || req.Query.Endpoint.Repository == "" || req.Query.Endpoint.Object == "" {
-		return retrieval.RelationCandidatePage{}, kernel.Fail(kernel.ErrUsageInvalid, "relation lookup requires repository, basis, and endpoint KnowledgeRef")
+		return retrieval.RelationCandidatePage{}, kernel.Fail(kernel.ErrUsageInvalid, "relation lookup requires repository, basis, and endpoint ObjectRef")
 	}
 	size := req.Limit
 	if size <= 0 {

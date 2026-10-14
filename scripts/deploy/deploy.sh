@@ -242,7 +242,7 @@ lakeFS
   Access Key ID           ${lakefs_key}
   Secret Access Key       ${lakefs_secret}
   物理仓                  kc-catalog  kc-system
-  业务知识仓              启动不建；接入方 attach / create 之后才有
+  业务仓              启动不建；接入方 attach / create 之后才有
 
 MinIO（本地 COS，不是生产）
   Console                 http://${url_host}:${KC_DEPLOY_MINIO_CONSOLE_PORT}/

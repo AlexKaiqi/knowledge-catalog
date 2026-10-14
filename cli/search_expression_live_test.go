@@ -19,7 +19,7 @@ func expressionSearchRequest(t *testing.T, server *httptest.Server, body map[str
 	if err != nil {
 		t.Fatal(err)
 	}
-	request, err := http.NewRequest(http.MethodPost, server.URL+"/knowledge/v1/search", bytes.NewReader(raw))
+	request, err := http.NewRequest(http.MethodPost, server.URL+"/object/v1/search", bytes.NewReader(raw))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,8 +51,8 @@ func expressionHitObject(t *testing.T, response map[string]any) string {
 	if !ok || len(hits) != 1 {
 		t.Fatalf("expected one hit: %#v", response)
 	}
-	knowledge := asMap(t, asMap(t, hits[0])["knowledge"])
-	return asMap(t, knowledge["knowledgeRef"])["object"].(string)
+	object := asMap(t, asMap(t, hits[0])["object"])
+	return asMap(t, object["objectRef"])["object"].(string)
 }
 
 func TestHTTPExpressionSearchAllAnySortContinuationAndValidation(t *testing.T) {
@@ -84,7 +84,7 @@ func TestHTTPExpressionSearchAllAnySortContinuationAndValidation(t *testing.T) {
 	}
 	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "1", "--source", repository+"=refs/heads/main@"))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--dataset", workspace))
-	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "knowledge.read,knowledge.search", "--repo", repository))
+	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "object.read,object.search", "--repo", repository))
 	syncIndexes(t, home, repository)
 
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})

@@ -75,12 +75,12 @@ class GotoProbeTest(unittest.TestCase):
                     feature.write_text(original)
 
     def test_explicit_source_adoption_is_not_silently_skipped(self):
-        given = "Given existing repository kr://scene/knowledge with LiveAccess instance main\n"
+        given = "Given existing repository kr://scene/object with LiveAccess instance main\n"
         step = goto.parse_feature(given)[0]
-        self.assertEqual(step, {"kind": "repository-adoption", "repository": "kr://scene/knowledge",
+        self.assertEqual(step, {"kind": "repository-adoption", "repository": "kr://scene/object",
                                "instance": "main"})
         feature = self.root / "published/_build/construct.feature"
-        feature.write_text(given + "When I run `kc attach --repo kr://scene/knowledge`\n")
+        feature.write_text(given + "When I run `kc attach --repo kr://scene/object`\n")
         with patch.object(goto, "ROOT", self.root), \
                 patch.object(goto, "walk_states", return_value=[self.node]), \
                 patch.object(goto, "start_runtime") as runtime, \

@@ -8,10 +8,10 @@ import (
 
 type fixedDeclarations struct{ scope *reader.Serving }
 
-func (r fixedDeclarations) ReadObject(repository kernel.RepositoryID, id objectmodel.ObjectID) (objectmodel.KnowledgeValue, error) {
+func (r fixedDeclarations) ReadObject(repository kernel.RepositoryID, id objectmodel.ObjectID) (objectmodel.ObjectValue, error) {
 	repo, err := r.scope.Member(repository)
 	if err != nil {
-		return objectmodel.KnowledgeValue{}, err
+		return objectmodel.ObjectValue{}, err
 	}
 	at := r.scope.Pin().Repositories[repository]
 	value, err := repo.Read(id, at)
@@ -21,10 +21,10 @@ func (r fixedDeclarations) ReadObject(repository kernel.RepositoryID, id objectm
 	return value, err
 }
 
-func (r fixedDeclarations) ReadAddress(repository kernel.RepositoryID, address objectmodel.Address) (objectmodel.KnowledgeValue, error) {
+func (r fixedDeclarations) ReadAddress(repository kernel.RepositoryID, address objectmodel.Address) (objectmodel.ObjectValue, error) {
 	repo, err := r.scope.Member(repository)
 	if err != nil {
-		return objectmodel.KnowledgeValue{}, err
+		return objectmodel.ObjectValue{}, err
 	}
 	at := r.scope.Pin().Repositories[repository]
 	value, err := repo.ReadAddress(address, at)

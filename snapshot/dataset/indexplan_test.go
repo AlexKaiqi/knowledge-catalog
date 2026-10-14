@@ -16,7 +16,7 @@ func schemaDoc(entity, aspect string, fields map[string]any) map[string]any {
 	}
 }
 
-func commitSchema(t *testing.T, repo *testkit.KnowledgeRepository, objects map[string]any) kernel.CommitID {
+func commitSchema(t *testing.T, repo *testkit.ObjectRepository, objects map[string]any) kernel.CommitID {
 	t.Helper()
 	head := testkit.MustHead(t, repo, "refs/heads/main")
 	var ops []objectmodel.Operation
@@ -27,7 +27,7 @@ func commitSchema(t *testing.T, repo *testkit.KnowledgeRepository, objects map[s
 			Value:   value,
 		})
 	}
-	head, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	head, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: repo.ID(), TargetRef: "refs/heads/main",
 		BaseCommit: head, ExpectedTargetCommit: head, Operations: ops,
 	})
@@ -53,7 +53,7 @@ func TestPlanAccessFromWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	cat := testkit.OpenDatasets(t, store)
-	if _, err := cat.DefineKnowledgeSet("physical", 1, []catalog.KnowledgeSetSource{
+	if _, err := cat.DefineDataset("physical", 1, []catalog.DatasetSource{
 		{Repository: public.ID(), Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
@@ -69,7 +69,7 @@ func TestPlanAccessFromWorkspace(t *testing.T) {
 		t.Fatal("access plan must copy the published file list")
 	}
 	spec := plan.Specs[0]
-	resolved, err := cat.ResolveKnowledgeSet("physical")
+	resolved, err := cat.ResolveDataset("physical")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestPlanAccessIncludesHintedPermissions(t *testing.T) {
 		t.Fatal(err)
 	}
 	cat := testkit.OpenDatasets(t, store)
-	if _, err := cat.DefineKnowledgeSet("physical", 1, []catalog.KnowledgeSetSource{
+	if _, err := cat.DefineDataset("physical", 1, []catalog.DatasetSource{
 		{Repository: public.ID(), Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
@@ -143,13 +143,13 @@ func TestPlanAccessTwoRepositories(t *testing.T) {
 		}),
 	})
 	store := snapshot.NewRegistry()
-	for _, repo := range []*testkit.KnowledgeRepository{physical, semantic} {
+	for _, repo := range []*testkit.ObjectRepository{physical, semantic} {
 		if err := store.Add(repo); err != nil {
 			t.Fatal(err)
 		}
 	}
 	cat := testkit.OpenDatasets(t, store)
-	if _, err := cat.DefineKnowledgeSet("both", 1, []catalog.KnowledgeSetSource{
+	if _, err := cat.DefineDataset("both", 1, []catalog.DatasetSource{
 		{Repository: physical.ID(), Selector: "refs/heads/main"},
 		{Repository: semantic.ID(), Selector: "refs/heads/main"},
 	}); err != nil {
@@ -182,7 +182,7 @@ func TestPlanAccessDigestChangesWithHints(t *testing.T) {
 		t.Fatal(err)
 	}
 	cat := testkit.OpenDatasets(t, store)
-	if _, err := cat.DefineKnowledgeSet("v", 1, []catalog.KnowledgeSetSource{
+	if _, err := cat.DefineDataset("v", 1, []catalog.DatasetSource{
 		{Repository: repo.ID(), Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
@@ -198,7 +198,7 @@ func TestPlanAccessDigestChangesWithHints(t *testing.T) {
 			"body": map[string]any{"access": []any{"text"}},
 		}),
 	})
-	if _, err := cat.DefineKnowledgeSet("v", 2, []catalog.KnowledgeSetSource{
+	if _, err := cat.DefineDataset("v", 2, []catalog.DatasetSource{
 		{Repository: repo.ID(), Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
@@ -218,5 +218,5 @@ func TestPlanAccessDigestChangesWithHints(t *testing.T) {
 func TestPlanAccessUnknownWorkspace(t *testing.T) {
 	s := setupFed(t)
 	_, err := testkit.PlanAccess(s.catalog, "missing")
-	testkit.ExpectCode(t, err, kernel.ErrKnowledgeSetInvalid)
+	testkit.ExpectCode(t, err, kernel.ErrDatasetInvalid)
 }

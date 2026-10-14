@@ -14,8 +14,8 @@ type executor struct {
 func New(remote client.Client, caller Context) Executor {
 	return &executor{client: remote, context: caller}
 }
-func (e *executor) scope(flags map[string]any) client.KnowledgeScope {
-	scope := client.KnowledgeScope{Repository: flagString(flags, "repo"), Commit: flagString(flags, "commit"), Ref: flagString(flags, "ref")}
+func (e *executor) scope(flags map[string]any) client.ObjectScope {
+	scope := client.ObjectScope{Repository: flagString(flags, "repo"), Commit: flagString(flags, "commit"), Ref: flagString(flags, "ref")}
 	if scope.Repository != "" {
 		return scope
 	}
@@ -54,7 +54,7 @@ func (e *executor) Execute(ctx context.Context, path string, flags map[string]an
 	switch path {
 	case "search":
 		request := client.SearchRequest{
-			KnowledgeScope: scope, InventoryDiscovery: e.context.InventoryDiscovery && scope.Repository == "",
+			ObjectScope: scope, InventoryDiscovery: e.context.InventoryDiscovery && scope.Repository == "",
 			Query: flagString(flags, "query"), Match: flagStrings(flags, "match"), MatchMode: flagString(flags, "match-mode"),
 			Equal: flagStrings(flags, "eq"), NotEqual: flagStrings(flags, "neq"), In: flagStrings(flags, "in"),
 			Exists: flagStrings(flags, "exists"), Missing: flagStrings(flags, "missing"), Prefix: flagStrings(flags, "prefix"), Contains: flagStrings(flags, "contains"),
@@ -63,11 +63,11 @@ func (e *executor) Execute(ctx context.Context, path string, flags map[string]an
 		}
 		err = e.client.Search(ctx, request, options, &output)
 	case "relations":
-		err = e.client.Relations(ctx, client.RelationsRequest{KnowledgeScope: scope, Endpoint: flagString(flags, "object"), RelationType: flagString(flags, "relation-type"), Role: flagString(flags, "role"), Direction: flagString(flags, "direction"), Limit: limit, Continuation: flagString(flags, "continuation")}, options, &output)
+		err = e.client.Relations(ctx, client.RelationsRequest{ObjectScope: scope, Endpoint: flagString(flags, "object"), RelationType: flagString(flags, "relation-type"), Role: flagString(flags, "role"), Direction: flagString(flags, "direction"), Limit: limit, Continuation: flagString(flags, "continuation")}, options, &output)
 	case "traverse":
 		max, _ := integer(flags, "max-hops", false)
 		min, _ := integer(flags, "min-hops", true)
-		err = e.client.Traverse(ctx, client.TraverseRequest{KnowledgeScope: scope, Endpoint: flagString(flags, "object"), RelationType: flagString(flags, "relation-type"), Role: flagString(flags, "role"), Direction: flagString(flags, "direction"), MinHops: min, MaxHops: max, Limit: limit, Continuation: flagString(flags, "continuation")}, options, &output)
+		err = e.client.Traverse(ctx, client.TraverseRequest{ObjectScope: scope, Endpoint: flagString(flags, "object"), RelationType: flagString(flags, "relation-type"), Role: flagString(flags, "role"), Direction: flagString(flags, "direction"), MinHops: min, MaxHops: max, Limit: limit, Continuation: flagString(flags, "continuation")}, options, &output)
 	case "operations access-spec describe":
 		err = e.client.DescribeAccessSpec(ctx, client.AccessSpecDescribeRequest{Dataset: scope.Dataset, Repository: scope.Repository, Pin: scope.Pin}, options, &output)
 	}

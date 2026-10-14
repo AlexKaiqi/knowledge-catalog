@@ -34,7 +34,7 @@ func TestProductPluginHelpUsesActualServerWithoutRuntimeConstruction(t *testing.
 	var requests atomic.Int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests.Add(1)
-		if r.Method != http.MethodGet || r.URL.EscapedPath() != "/knowledge/v1/plugins/declarative-index" || r.URL.RawQuery != "" || r.ContentLength != 0 || r.Header.Get("X-Kc-As") != "agent:help-reader" {
+		if r.Method != http.MethodGet || r.URL.EscapedPath() != "/object/v1/plugins/declarative-index" || r.URL.RawQuery != "" || r.ContentLength != 0 || r.Header.Get("X-Kc-As") != "agent:help-reader" {
 			t.Errorf("module SDK changed the authorized targetless request: method=%s path=%s query=%s length=%d principal=%s", r.Method, r.URL.EscapedPath(), r.URL.RawQuery, r.ContentLength, r.Header.Get("X-Kc-As"))
 		}
 		actual.ServeHTTP(w, r)

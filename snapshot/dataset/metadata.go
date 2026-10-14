@@ -10,8 +10,8 @@ import (
 )
 
 var (
-	knowledgeSetType   = reflect.TypeOf(KnowledgeSet{})
-	metadataRecipeType = reflect.TypeOf(KnowledgeSetRecipe{})
+	datasetType        = reflect.TypeOf(Dataset{})
+	metadataRecipeType = reflect.TypeOf(DatasetRecipe{})
 	rawJSONType        = reflect.TypeOf(json.RawMessage{})
 )
 
@@ -26,7 +26,7 @@ func containsMetadataType(typ reflect.Type, seen map[reflect.Type]bool) bool {
 	if typ == nil || typ == rawJSONType || seen[typ] {
 		return false
 	}
-	if typ == knowledgeSetType || typ == metadataRecipeType {
+	if typ == datasetType || typ == metadataRecipeType {
 		return true
 	}
 	seen[typ] = true
@@ -51,7 +51,7 @@ func validateMetadataType(body []byte, typ reflect.Type) error {
 	if typ.Kind() == reflect.Pointer {
 		return validateMetadataType(body, typ.Elem())
 	}
-	if typ == knowledgeSetType || typ == metadataRecipeType {
+	if typ == datasetType || typ == metadataRecipeType {
 		return validateMetadataObject(body)
 	}
 	switch typ.Kind() {

@@ -15,7 +15,7 @@ func TestProductPluginHelpUsesRegisteredNameAndAuthenticatedTransport(t *testing
 	requests := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests++
-		if r.Method != http.MethodGet || r.URL.EscapedPath() != "/knowledge/v1/plugins/declarative-index" || r.Header.Get("X-Kc-As") != "agent:reader" || r.ContentLength != 0 || r.URL.RawQuery != "" {
+		if r.Method != http.MethodGet || r.URL.EscapedPath() != "/object/v1/plugins/declarative-index" || r.Header.Get("X-Kc-As") != "agent:reader" || r.ContentLength != 0 || r.URL.RawQuery != "" {
 			t.Errorf("plugin explanation did not use sole authenticated targetless task: %#v", r)
 		}
 		w.Header().Set("Content-Type", "application/json")

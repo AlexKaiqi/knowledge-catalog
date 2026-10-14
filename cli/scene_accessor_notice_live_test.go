@@ -63,7 +63,7 @@ func TestSceneAccessorNoticeUpdatesSearchIndex(t *testing.T) {
 	if first["revision"] == "" || first["basisCommit"] != before {
 		t.Fatalf("first notice did not publish State at HEAD: %#v want %v", first, before)
 	}
-	healthy := asMap(t, postAny(t, server.URL, "/knowledge/v1/search", map[string]any{
+	healthy := asMap(t, postAny(t, server.URL, "/object/v1/search", map[string]any{
 		"dataset": "agent", "query": "healthy",
 	}))
 	if hits := healthy["hits"].([]any); len(hits) != 1 {
@@ -93,13 +93,13 @@ func TestSceneAccessorNoticeUpdatesSearchIndex(t *testing.T) {
 		t.Fatalf("observer notice must publish a new index revision on the same commit: first=%#v second=%#v", first, second)
 	}
 
-	degraded := asMap(t, postAny(t, server.URL, "/knowledge/v1/search", map[string]any{
+	degraded := asMap(t, postAny(t, server.URL, "/object/v1/search", map[string]any{
 		"dataset": "agent", "query": "degraded",
 	}))
 	if hits := degraded["hits"].([]any); len(hits) != 1 {
 		t.Fatalf("index did not pick up degraded after notice: %#v", degraded)
 	}
-	stale := asMap(t, postAny(t, server.URL, "/knowledge/v1/search", map[string]any{
+	stale := asMap(t, postAny(t, server.URL, "/object/v1/search", map[string]any{
 		"dataset": "agent", "query": "healthy",
 	}))
 	if hits := stale["hits"].([]any); len(hits) != 0 {

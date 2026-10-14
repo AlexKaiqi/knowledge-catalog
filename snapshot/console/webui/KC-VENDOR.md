@@ -5,7 +5,7 @@
 Repositories、对象浏览、提交、分支、标签、比较、PR、Actions、Settings、Administration、
 原登录、Setup 和插件扩展继续由原 `LakeFSApp` / `IndexPage` / `Layout` 提供。
 前端、嵌入资产与静态 HTTP handler 归属 `snapshot/console/`；组合入口复用未修改的私网 lakeFS 后端与现有认证系统。
-Dataset 与文件授权由 Snapshot Store 的应用面提供，上层 KC 负责装配和调用，不在控制台建立知识对象模型。
+Dataset 与文件授权由 Snapshot Store 的应用面提供，上层 KC 负责装配和调用，不在控制台建立对象模型。
 
 ## Pin 与修改范围
 
@@ -31,7 +31,7 @@ Dataset 与文件授权由 Snapshot Store 的应用面提供，上层 KC 负责�
   传入两版实际固定 commit，复用原 lakeFS diff API 和文件 renderer；不创建 Git checkout。
   `consoleRepository` 是注册来源的可选导航元数据，由宿主验证它属于已认证的原仓实例后
   提供；来源必须绑定在配置的 native origin，没有坐标则明确显示未接入，不能从 kr:// 身份猜仓名。此链接不发权，不自动用
-  Dataset 授权读取整仓；跨仓组合和目标路径变化在发布定义中展示。
+ Dataset 授权读取整仓；跨仓组合和目标路径变化在发布定义中展示。
 - `vite.config.mts` 的 `base: '/ui/'`、输出 `../webapp` 和构建后 `.gitkeep`
   与 Snapshot Store console embed 对齐。缺失静态资源返回 404，已声明页面支持深链接。
 
@@ -83,7 +83,7 @@ DSN；不同认证系统的 issuer 不会被误当成存储地址。
 | 请求 | 路径与身份 |
 |---|---|
 | `/ui/` 与深链接 | `snapshot/console.Handler()`；先构建前端再构建服务 |
-| `/identity/v1`、`/snapshot/v1`、`/knowledge/v1`、`/admin/v1` | 现有认证验证主体，当前产品规则授权 |
+| `/identity/v1`、`/snapshot/v1`、`/object/v1`、`/admin/v1` | 现有认证验证主体，当前产品规则授权 |
 | `/api/v1` | Snapshot 入口验证与授权后调用私网 lakeFS；未知操作拒绝 |
 | native 账号、凭据、组、策略、初始化 | 外部认证模式拒绝转发私有存储账号；保留导航并链接真实认证系统 |
 | 已有认证网关的退出／回调 | 部署显式配置；浏览器会话由原认证系统管理 |

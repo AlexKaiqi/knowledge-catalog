@@ -16,9 +16,9 @@ import (
 
 type loop struct {
 	testkit.Setup
-	SupportRepo *testkit.KnowledgeRepository
+	SupportRepo *testkit.ObjectRepository
 	Datasets    dataset.Service
-	Definition  dataset.KnowledgeSet
+	Definition  dataset.Dataset
 	CP          *controlplane.ControlPlane
 }
 
@@ -30,7 +30,7 @@ func setupLoop(t *testing.T) loop {
 		t.Fatal(err)
 	}
 	cat := testkit.OpenDatasets(t, base.Store)
-	def, err := cat.DefineKnowledgeSet("maintenance", 1, []dataset.KnowledgeSetSource{
+	def, err := cat.DefineDataset("maintenance", 1, []dataset.DatasetSource{
 		{Repository: base.RepositoryID, Selector: "refs/heads/main"},
 		{Repository: support.ID(), Selector: "refs/heads/main"},
 	})
@@ -100,7 +100,7 @@ func TestT9ValidationBasisAndMovedCandidate(t *testing.T) {
 	if len(preview1.Repositories) != 2 {
 		t.Fatal(preview1.Repositories)
 	}
-	live, err := s.Datasets.ResolveKnowledgeSet("maintenance")
+	live, err := s.Datasets.ResolveDataset("maintenance")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +202,7 @@ func TestT9MergeDoesNotNeedPromote(t *testing.T) {
 	if testkit.MustHead(t, s.Repo, "refs/heads/main") != merged {
 		t.Fatal("main not merged")
 	}
-	if _, err := s.Datasets.DefineKnowledgeSet("maintenance", 2, []dataset.KnowledgeSetSource{
+	if _, err := s.Datasets.DefineDataset("maintenance", 2, []dataset.DatasetSource{
 		{Repository: s.RepositoryID, Selector: "refs/heads/main"},
 		{Repository: s.SupportRepo.ID(), Selector: "refs/heads/main"},
 	}); err != nil {

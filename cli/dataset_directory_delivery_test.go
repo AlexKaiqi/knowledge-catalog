@@ -116,7 +116,7 @@ func TestDatasetDirectoryDeliveryRepublishKeepsOldLayoutAndBytes(t *testing.T) {
 	f.assertRead(t, old.Pin, "reference/policies", "policy v1\n")
 	f.assertRead(t, old.Pin, "reference/guides", "guide v1\n")
 	for _, tc := range []struct {
-		pin   dataset.ResolvedKnowledgeSet
+		pin   dataset.ResolvedDataset
 		mount string
 	}{{old.Pin, "handbook/rules"}, {current.Pin, "reference/policies"}} {
 		var out snapshotclient.WorkspaceFileReadResponse
@@ -171,7 +171,7 @@ func TestDatasetDirectoryDeliveryRejectsConflictsWithoutReplacingRelease(t *test
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := f.publish(2, directoryDeliverySources(tc.paths...))
-			if kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
+			if kernel.CodeOf(err) != kernel.ErrDatasetInvalid {
 				t.Fatalf("conflicting delivery paths were not rejected: %v", err)
 			}
 			if current := f.mounts(t, nil); !reflect.DeepEqual(current, accepted) {
@@ -287,8 +287,8 @@ func newDirectoryDelivery(t *testing.T) *directoryDelivery {
 	return f
 }
 
-func directoryDeliverySources(paths ...string) []dataset.KnowledgeSetSource {
-	return []dataset.KnowledgeSetSource{
+func directoryDeliverySources(paths ...string) []dataset.DatasetSource {
+	return []dataset.DatasetSource{
 		{Repository: deliveryDocs, Selector: snapshot.DefaultRef, Path: &paths[0], SubPath: "handbook/policies"},
 		{Repository: deliveryDocs, Selector: snapshot.DefaultRef, Path: &paths[1], SubPath: "docs/guides"},
 		{Repository: deliveryData, Selector: snapshot.DefaultRef, Path: &paths[2], SubPath: "semantic/metrics"},
@@ -318,12 +318,12 @@ func (f *directoryDelivery) write(t *testing.T, repository, commandID string, ch
 	}
 }
 
-func (f *directoryDelivery) publish(revision int, sources []dataset.KnowledgeSetSource) error {
-	return f.operator.SnapshotService().DefineKnowledgeSet(context.Background(),
-		snapshotclient.KnowledgeSetRequest{Dataset: "delivery", Revision: revision, Sources: sources}, snapshotclient.RequestOptions{}, nil)
+func (f *directoryDelivery) publish(revision int, sources []dataset.DatasetSource) error {
+	return f.operator.SnapshotService().DefineDataset(context.Background(),
+		snapshotclient.DatasetRequest{Dataset: "delivery", Revision: revision, Sources: sources}, snapshotclient.RequestOptions{}, nil)
 }
 
-func (f *directoryDelivery) coordinate(t *testing.T, pin *dataset.ResolvedKnowledgeSet) snapshotclient.WorkspaceFileCoordinate {
+func (f *directoryDelivery) coordinate(t *testing.T, pin *dataset.ResolvedDataset) snapshotclient.WorkspaceFileCoordinate {
 	t.Helper()
 	coordinate := snapshotclient.WorkspaceFileCoordinate{Dataset: "delivery", View: "repository"}
 	if pin != nil {
@@ -336,7 +336,7 @@ func (f *directoryDelivery) coordinate(t *testing.T, pin *dataset.ResolvedKnowle
 	return coordinate
 }
 
-func (f *directoryDelivery) mounts(t *testing.T, pin *dataset.ResolvedKnowledgeSet) snapshotclient.WorkspaceFileMountsResponse {
+func (f *directoryDelivery) mounts(t *testing.T, pin *dataset.ResolvedDataset) snapshotclient.WorkspaceFileMountsResponse {
 	t.Helper()
 	var out snapshotclient.WorkspaceFileMountsResponse
 	if err := f.reader.WorkspaceFilesService().Mounts(context.Background(), snapshotclient.WorkspaceFileMountsRequest{
@@ -347,7 +347,7 @@ func (f *directoryDelivery) mounts(t *testing.T, pin *dataset.ResolvedKnowledgeS
 	return out
 }
 
-func (f *directoryDelivery) assertRead(t *testing.T, pin dataset.ResolvedKnowledgeSet, mount, content string) {
+func (f *directoryDelivery) assertRead(t *testing.T, pin dataset.ResolvedDataset, mount, content string) {
 	t.Helper()
 	var out snapshotclient.WorkspaceFileReadResponse
 	if err := f.reader.WorkspaceFilesService().Read(context.Background(), snapshotclient.WorkspaceFileReadRequest{

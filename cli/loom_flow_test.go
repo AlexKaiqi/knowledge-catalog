@@ -43,7 +43,7 @@ func TestLoomPublishedDatasetFreezesUntilRepublish(t *testing.T) {
 	}
 }
 
-func TestCatalogInventoryDoesNotHideReposWithoutKnowledgeRead(t *testing.T) {
+func TestCatalogInventoryDoesNotHideReposWithoutObjectRead(t *testing.T) {
 	h := testkit.TempDir(t)
 	pub := "kr://acme/public/core"
 	secret := "kr://acme/restricted/classif"
@@ -69,7 +69,7 @@ func TestCatalogInventoryDoesNotHideReposWithoutKnowledgeRead(t *testing.T) {
 		setIDs[asMap(t, raw)["id"].(string)] = true
 	}
 	if !setIDs["company"] || !setIDs["classif"] {
-		t.Fatalf("inventory.read must list named knowledge sets: %#v", state)
+		t.Fatalf("inventory.read must list named datasets: %#v", state)
 	}
 	expectCode(t, kc(h, "read", testObjectReference(t, secret, "policy/secret", ""), "--as", "bot"), "FORBIDDEN")
 }
@@ -141,7 +141,7 @@ func TestLoomRecipeTravelsWithAuthoritySnapshot(t *testing.T) {
 	}
 }
 
-func TestLoomDefineKnowledgeSetFromFile(t *testing.T) {
+func TestLoomDefineDatasetFromFile(t *testing.T) {
 	h := testkit.TempDir(t)
 	alice := "kr://acme/personals/alice"
 	body(t, kc(h, "init"))
@@ -229,7 +229,7 @@ mounts:
 
 	body(t, kc(h, "overlay", "--dataset", "notes", "--clear"))
 	cleared := kc(h, "read", testObjectReference(t, scratch, "note/scratch", ""), "--dataset", "notes")
-	expectCode(t, cleared, "KNOWLEDGE_REF_UNRESOLVED")
+	expectCode(t, cleared, "OBJECT_REF_UNRESOLVED")
 	if strings.Contains(cleared.Stdout, `"value"`) {
 		t.Fatal("cleared overlay still delivered scratch content", cleared.Stdout)
 	}

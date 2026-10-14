@@ -19,7 +19,7 @@ func Lookup(base func(kernel.RepositoryID) (snapshot.Store, error)) MemberLookup
 }
 
 // Require resolves a mounted Snapshot and exposes its layer ② capability
-// through the shared Knowledge service. Dataset service remains Snapshot-only.
+// through the shared Object service. Dataset service remains Snapshot-only.
 func (r *Reader) Require(repositoryID kernel.RepositoryID, code kernel.ErrorCode) (objectmodel.Repository, error) {
 	store, err := r.store.Require(repositoryID, code)
 	if err != nil {
@@ -28,7 +28,7 @@ func (r *Reader) Require(repositoryID kernel.RepositoryID, code kernel.ErrorCode
 	return r.Wrap(store, code)
 }
 
-// Wrap converts one Dataset service/Snapshot member into the process-wide Knowledge
+// Wrap converts one Dataset service/Snapshot member into the process-wide Object
 // read service wrapper. Interpretation remains here;
 // the underlying adapter exposes only immutable tree bytes.
 func (r *Reader) Wrap(store snapshot.Store, code kernel.ErrorCode) (objectmodel.Repository, error) {
@@ -41,7 +41,7 @@ func (r *Reader) Wrap(store snapshot.Store, code kernel.ErrorCode) (objectmodel.
 	}
 	tree, ok := snapshot.TreeReaderOf(store)
 	if !ok {
-		return nil, kernel.Fail(code, "repository %s has no immutable tree access for knowledge interpretation", store.ID())
+		return nil, kernel.Fail(code, "repository %s has no immutable tree access for object interpretation", store.ID())
 	}
 	locator, ok := store.(objectmodel.UnitLocator)
 	if !ok {
@@ -58,7 +58,7 @@ func (r *Reader) Wrap(store snapshot.Store, code kernel.ErrorCode) (objectmodel.
 	return wrapped, nil
 }
 
-// Lookup preserves Dataset service membership checks while moving knowledge
+// Lookup preserves Dataset service membership checks while moving object
 // interpretation to this service boundary.
 func (r *Reader) Lookup(base func(kernel.RepositoryID) (snapshot.Store, error)) MemberLookup {
 	return func(id kernel.RepositoryID) (objectmodel.Repository, error) {
@@ -83,13 +83,13 @@ var (
 	_ objectmodel.FastObjectChanges   = (*treeRepository)(nil)
 	_ objectmodel.SnapshotObjectPager = (*treeRepository)(nil)
 	_ objectmodel.UnitPathsHydrator   = (*treeRepository)(nil)
-	_ objectmodel.KnowledgeFileReader = (*treeRepository)(nil)
+	_ objectmodel.ObjectFileReader    = (*treeRepository)(nil)
 	_ objectmodel.UnitLocator         = (*treeRepository)(nil)
 )
 
 func (r *treeRepository) ID() kernel.RepositoryID { return r.base.ID() }
 
-// StoreDigest binds this knowledge view to its concrete authority instance:
+// StoreDigest binds this object view to its concrete authority instance:
 // two deployments of one logical repository id (two lakeFS endpoints serving
 // "the same" repository) produce different digests, so per-repository state
 // such as retrieval projections can never be shared between them.
@@ -153,7 +153,7 @@ type treeManifestLocator struct {
 func (l *treeManifestLocator) load(commit kernel.CommitID) (repofile.LocatorManifest, error) {
 	raw, err := l.tree.ReadFile(repofile.LocatorManifestPath, commit)
 	if err != nil {
-		if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+		if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 			return repofile.LocatorManifest{Objects: map[objectmodel.ObjectID][]string{}}, nil
 		}
 		return repofile.LocatorManifest{}, err
@@ -161,7 +161,7 @@ func (l *treeManifestLocator) load(commit kernel.CommitID) (repofile.LocatorMani
 	manifest, err := repofile.DecodeLocatorManifest(raw)
 	if err != nil {
 		return repofile.LocatorManifest{}, kernel.Fail(kernel.ErrPreconditionFailed,
-			"invalid exact knowledge unit manifest at %s: %v", commit, err)
+			"invalid exact object unit manifest at %s: %v", commit, err)
 	}
 	return manifest, nil
 }
@@ -173,7 +173,7 @@ func (l *treeManifestLocator) ObjectUnitPaths(objectID objectmodel.ObjectID, com
 func (l *treeManifestLocator) SchemaObjectIDs(commit kernel.CommitID) ([]objectmodel.ObjectID, error) {
 	if locatorLayoutComplete(l.tree, commit) {
 		raw, err := l.tree.ReadFile(repofile.LocatorSchemaIndexPath, commit)
-		if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+		if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 			return []objectmodel.ObjectID{}, nil
 		}
 		if err != nil {
@@ -196,12 +196,12 @@ func (l *treeManifestLocator) SchemaObjectIDs(commit kernel.CommitID) ([]objectm
 func (l *treeManifestLocator) BindingSchemaObjectIDs(commit kernel.CommitID) ([]objectmodel.ObjectID, error) {
 	if locatorLayoutComplete(l.tree, commit) {
 		raw, err := l.tree.ReadFile(repofile.LocatorBindingIndexPath, commit)
-		if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+		if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 			ids, schemaErr := l.SchemaObjectIDs(commit)
 			if schemaErr != nil || len(ids) == 0 {
 				return ids, schemaErr
 			}
-			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "knowledge layout has no binding namespace coordinates; explicitly rebuild locators")
+			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "object layout has no binding namespace coordinates; explicitly rebuild locators")
 		}
 		if err != nil {
 			return nil, err
@@ -226,8 +226,8 @@ func (l *treeManifestLocator) SchemaReferrerAddresses(schema objectmodel.ObjectI
 func readObjectUnitsAtPaths(store snapshot.TreeReader, repository kernel.RepositoryID, paths []string, objectID objectmodel.ObjectID, commit kernel.CommitID) ([]repofile.Unit, error) {
 	tree := repofile.NewTree()
 	for _, unitPath := range paths {
-		if !repofile.KnowledgePath(unitPath) {
-			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "unit locator returned non-knowledge path %s", unitPath)
+		if !repofile.ObjectPath(unitPath) {
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "unit locator returned non-object path %s", unitPath)
 		}
 		content, err := store.ReadFile(unitPath, commit)
 		if err != nil {
@@ -252,12 +252,12 @@ func (r *treeRepository) objectUnits(objectID objectmodel.ObjectID, commit kerne
 	return readObjectUnitsAtPaths(r.tree, r.ID(), paths[objectID], objectID, commit)
 }
 
-func assembleKnowledgeValue(repository kernel.RepositoryID, objectID objectmodel.ObjectID, commit kernel.CommitID, units []repofile.Unit) (objectmodel.KnowledgeValue, error) {
+func assembleObjectValue(repository kernel.RepositoryID, objectID objectmodel.ObjectID, commit kernel.CommitID, units []repofile.Unit) (objectmodel.ObjectValue, error) {
 	return objectmodel.AssembleObjectValue(repository, objectID, commit, repofile.ToObjectUnits(units))
 }
 
-func (r *treeRepository) ReadMany(objectIDs []objectmodel.ObjectID, commit kernel.CommitID) (map[objectmodel.ObjectID]objectmodel.KnowledgeValue, error) {
-	out := map[objectmodel.ObjectID]objectmodel.KnowledgeValue{}
+func (r *treeRepository) ReadMany(objectIDs []objectmodel.ObjectID, commit kernel.CommitID) (map[objectmodel.ObjectID]objectmodel.ObjectValue, error) {
+	out := map[objectmodel.ObjectID]objectmodel.ObjectValue{}
 	seen := map[objectmodel.ObjectID]struct{}{}
 	ids := make([]objectmodel.ObjectID, 0, len(objectIDs))
 	for _, objectID := range objectIDs {
@@ -282,7 +282,7 @@ func (r *treeRepository) ReadMany(objectIDs []objectmodel.ObjectID, commit kerne
 		if len(units) == 0 {
 			continue
 		}
-		value, err := assembleKnowledgeValue(r.ID(), objectID, commit, units)
+		value, err := assembleObjectValue(r.ID(), objectID, commit, units)
 		if err != nil {
 			return nil, err
 		}
@@ -311,7 +311,7 @@ func (r *treeRepository) objectUnitPathsMany(objectIDs []objectmodel.ObjectID, c
 				}
 			}
 		}
-	} else if kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+	} else if kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		return nil, err
 	}
 	return paths, nil
@@ -326,15 +326,15 @@ func containsPath(paths []string, want string) bool {
 	return false
 }
 
-func (r *treeRepository) Read(objectID objectmodel.ObjectID, commit kernel.CommitID) (objectmodel.KnowledgeValue, error) {
+func (r *treeRepository) Read(objectID objectmodel.ObjectID, commit kernel.CommitID) (objectmodel.ObjectValue, error) {
 	values, err := r.ReadMany([]objectmodel.ObjectID{objectID}, commit)
 	if err != nil {
-		return objectmodel.KnowledgeValue{}, err
+		return objectmodel.ObjectValue{}, err
 	}
 	if value, ok := values[objectID]; ok {
 		return value, nil
 	}
-	return objectmodel.KnowledgeValue{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "object %s is missing at commit %s", objectID, commit)
+	return objectmodel.ObjectValue{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "object %s is missing at commit %s", objectID, commit)
 }
 
 func (r *treeRepository) ObjectIDsPage(commit kernel.CommitID, limit int, continuation string) (objectmodel.ObjectIDPage, error) {
@@ -357,7 +357,7 @@ func (r *treeRepository) ObjectIDsPage(commit kernel.CommitID, limit int, contin
 			// complete-layout marker exists, a missing object-locator directory
 			// therefore represents an empty live object set, not a corrupt
 			// locator layout. Other provider failures still fail closed.
-			if continuation == "" && kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+			if continuation == "" && kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 				return r.mergeReadmeObjectID(objectmodel.ObjectIDPage{Exhausted: true}, commit)
 			}
 			return objectmodel.ObjectIDPage{}, err
@@ -409,7 +409,7 @@ func (r *treeRepository) ObjectIDsPage(commit kernel.CommitID, limit int, contin
 func (r *treeRepository) readmeObjectID(commit kernel.CommitID) (objectmodel.ObjectID, bool, error) {
 	raw, err := r.tree.ReadFile(objectmodel.RepositoryReadmePath, commit)
 	if err != nil {
-		if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+		if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 			return "", false, nil
 		}
 		return "", false, err
@@ -463,7 +463,7 @@ func (r *treeRepository) Resolve(objectID objectmodel.ObjectID, commit kernel.Co
 		return objectmodel.Resolution{Repository: r.ID(), Commit: commit, ObjectID: objectID,
 			Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: objectID}, Status: status}, nil
 	}
-	value, err := assembleKnowledgeValue(r.ID(), objectID, commit, units)
+	value, err := assembleObjectValue(r.ID(), objectID, commit, units)
 	if err != nil {
 		return objectmodel.Resolution{}, err
 	}
@@ -476,7 +476,7 @@ func (r *treeRepository) Resolve(objectID objectmodel.ObjectID, commit kernel.Co
 	}
 	if len(units) == 1 && units[0].Address.Kind == objectmodel.KindRelation {
 		// A Relation is an independent N-ary object, not an Entity-shaped
-		// container. The composed KnowledgeValue keeps its object-root address,
+		// container. The composed ObjectValue keeps its object-root address,
 		// while resolution must preserve the unit's public relation identity.
 		resolution.Address = units[0].Address
 	}
@@ -507,17 +507,17 @@ func (r *treeRepository) ResolveAddress(address objectmodel.Address, commit kern
 	}, nil
 }
 
-func (r *treeRepository) ReadAddress(address objectmodel.Address, commit kernel.CommitID) (objectmodel.KnowledgeValue, error) {
+func (r *treeRepository) ReadAddress(address objectmodel.Address, commit kernel.CommitID) (objectmodel.ObjectValue, error) {
 	unit, ok, err := r.addressUnit(address, commit, nil)
 	if err != nil {
-		return objectmodel.KnowledgeValue{}, err
+		return objectmodel.ObjectValue{}, err
 	}
 	if !ok {
-		return objectmodel.KnowledgeValue{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "address %s is missing at commit %s", objectmodel.AddressKey(address), commit)
+		return objectmodel.ObjectValue{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "address %s is missing at commit %s", objectmodel.AddressKey(address), commit)
 	}
-	return objectmodel.KnowledgeValue{
-		KnowledgeRef: objectmodel.KnowledgeRef{Repository: r.ID(), Object: address.ObjectID},
-		Repository:   r.ID(), Commit: commit, Address: unit.Address,
+	return objectmodel.ObjectValue{
+		ObjectRef:  objectmodel.ObjectRef{Repository: r.ID(), Object: address.ObjectID},
+		Repository: r.ID(), Commit: commit, Address: unit.Address,
 		Value: unit.Value, Provenance: unit.Provenance,
 		Declarations: []objectmodel.UnitDeclaration{repofile.DeclarationOf(unit)},
 	}, nil
@@ -530,7 +530,7 @@ func (r *treeRepository) GetProvenance(objectID objectmodel.ObjectID, commit ker
 	}
 	units = append([]repofile.Unit{}, units...)
 	if len(units) == 0 {
-		return objectmodel.ProvenanceTrace{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "object %s is missing at commit %s", objectID, commit)
+		return objectmodel.ProvenanceTrace{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "object %s is missing at commit %s", objectID, commit)
 	}
 	sort.Slice(units, func(i, j int) bool {
 		return objectmodel.AddressKey(units[i].Address) < objectmodel.AddressKey(units[j].Address)

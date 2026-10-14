@@ -39,7 +39,7 @@ func EncodeObjectUnitLocations(objectID objectmodel.ObjectID, locations []Object
 // selection requires coordinates produced by Writer or explicit locator rebuild.
 func ReadObjectUnitLocations(tree snapshot.TreeReader, objectID objectmodel.ObjectID, commit kernel.CommitID) ([]ObjectUnitLocation, error) {
 	raw, err := tree.ReadFile(ObjectLocatorPath(objectID), commit)
-	if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+	if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 		paths, err := ReadObjectLocator(tree, objectID, commit)
 		if err != nil || len(paths) == 0 {
 			return nil, err
@@ -77,7 +77,7 @@ func validateObjectUnitLocations(entry ObjectLocatorEntry) error {
 		}
 		key := objectmodel.AddressKey(location.Address)
 		clean, err := SafeRelativePath(location.Path)
-		if err != nil || clean != location.Path || !KnowledgePath(clean) || !paths[clean] {
+		if err != nil || clean != location.Path || !ObjectPath(clean) || !paths[clean] {
 			return kernel.Fail(kernel.ErrPreconditionFailed, "object locator has invalid unit path %s", location.Path)
 		}
 		if location.Address.ObjectID != entry.ObjectID || objectmodel.AssertWritable(location.Address) != nil || addresses[key] {

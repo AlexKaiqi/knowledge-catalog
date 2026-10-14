@@ -129,15 +129,15 @@ func accessMatches(event AccessEvent, query AccessQuery) (bool, error) {
 	if !inRange {
 		return false, nil
 	}
-	if (query.Repository != "" || query.Object != "") && !matchesKnowledge(event, query) {
+	if (query.Repository != "" || query.Object != "") && !matchesObject(event, query) {
 		return false, nil
 	}
 	return true, nil
 }
 
-func matchesKnowledge(event AccessEvent, query AccessQuery) bool {
-	for _, target := range event.Knowledge {
-		ref := target.KnowledgeRef
+func matchesObject(event AccessEvent, query AccessQuery) bool {
+	for _, target := range event.Object {
+		ref := target.ObjectRef
 		if query.Repository != "" && ref.Repository != query.Repository {
 			continue
 		}

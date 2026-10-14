@@ -137,7 +137,7 @@ func newTestController(t *testing.T, idx *query.Index, repo objectmodel.Reposito
 	controller, err := control.NewController(idx, control.NewTargetStore(filepath.Join(t.TempDir(), "controller.db")),
 		func(id kernel.RepositoryID) (objectmodel.Repository, error) {
 			if id != repo.ID() {
-				return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "not a knowledge repository")
+				return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "not an object repository")
 			}
 			return repo, nil
 		})

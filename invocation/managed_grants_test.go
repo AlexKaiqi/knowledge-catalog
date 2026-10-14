@@ -15,7 +15,7 @@ func TestManagedInitialGrantIsScopedAndNeverRestoredByRetry(t *testing.T) {
 	if err := WriteAllow(dir, AllowFile{}); err != nil {
 		t.Fatal(err)
 	}
-	g := apphome.ManagedRepositoryGrant{AllocationID: "allocation-a", Principal: "provider", RepositoryID: "kr://provider/new", Actions: []string{"writer.preview", "writer.commit", "knowledge.read"}}
+	g := apphome.ManagedRepositoryGrant{AllocationID: "allocation-a", Principal: "provider", RepositoryID: "kr://provider/new", Actions: []string{"writer.preview", "writer.commit", "object.read"}}
 	if err := EnsureManagedRepositoryGrant(dir, g); err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestManagedInitialGrantIsScopedAndNeverRestoredByRetry(t *testing.T) {
 
 func TestManagedInitialGrantRequiresDurablePolicy(t *testing.T) {
 	dir := t.TempDir()
-	g := apphome.ManagedRepositoryGrant{AllocationID: "allocation-a", Principal: "provider", RepositoryID: "kr://provider/new", Actions: []string{"knowledge.read"}}
+	g := apphome.ManagedRepositoryGrant{AllocationID: "allocation-a", Principal: "provider", RepositoryID: "kr://provider/new", Actions: []string{"object.read"}}
 	if err := EnsureManagedRepositoryGrant(dir, g); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
 		t.Fatalf("missing policy accepted as empty: %v", err)
 	}

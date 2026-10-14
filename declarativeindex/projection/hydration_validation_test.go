@@ -14,11 +14,11 @@ import (
 )
 
 type malformedSearchHydrator struct {
-	mutate func(*objectmodel.KnowledgeValue)
+	mutate func(*objectmodel.ObjectValue)
 }
 
-func (h malformedSearchHydrator) ReadMany(repo objectmodel.Repository, commit kernel.CommitID, ids []objectmodel.ObjectID) (map[objectmodel.ObjectID]objectmodel.KnowledgeValue, error) {
-	values := make(map[objectmodel.ObjectID]objectmodel.KnowledgeValue, len(ids))
+func (h malformedSearchHydrator) ReadMany(repo objectmodel.Repository, commit kernel.CommitID, ids []objectmodel.ObjectID) (map[objectmodel.ObjectID]objectmodel.ObjectValue, error) {
+	values := make(map[objectmodel.ObjectID]objectmodel.ObjectValue, len(ids))
 	for _, id := range ids {
 		value, err := repo.Read(id, commit)
 		if err != nil {
@@ -30,7 +30,7 @@ func (h malformedSearchHydrator) ReadMany(repo objectmodel.Repository, commit ke
 	return values, nil
 }
 
-func (h malformedSearchHydrator) ReadAddress(repo objectmodel.Repository, commit kernel.CommitID, address objectmodel.Address) (objectmodel.KnowledgeValue, error) {
+func (h malformedSearchHydrator) ReadAddress(repo objectmodel.Repository, commit kernel.CommitID, address objectmodel.Address) (objectmodel.ObjectValue, error) {
 	return repo.ReadAddress(address, commit)
 }
 
@@ -46,19 +46,19 @@ func TestSearchRejectsMalformedInjectedHydration(t *testing.T) {
 	if _, err := idx.Rebuild(repo, commit); err != nil {
 		t.Fatal(err)
 	}
-	mutations := map[string]func(*objectmodel.KnowledgeValue){
-		"repository":     func(v *objectmodel.KnowledgeValue) { v.Repository = "kr://other" },
-		"ref-repository": func(v *objectmodel.KnowledgeValue) { v.KnowledgeRef.Repository = "kr://other" },
-		"ref-object":     func(v *objectmodel.KnowledgeValue) { v.KnowledgeRef.Object = "policy/other" },
-		"commit":         func(v *objectmodel.KnowledgeValue) { v.Commit = "other-commit" },
-		"object":         func(v *objectmodel.KnowledgeValue) { v.Address.ObjectID = "policy/other" },
-		"aspect-as-object": func(v *objectmodel.KnowledgeValue) {
+	mutations := map[string]func(*objectmodel.ObjectValue){
+		"repository":     func(v *objectmodel.ObjectValue) { v.Repository = "kr://other" },
+		"ref-repository": func(v *objectmodel.ObjectValue) { v.ObjectRef.Repository = "kr://other" },
+		"ref-object":     func(v *objectmodel.ObjectValue) { v.ObjectRef.Object = "policy/other" },
+		"commit":         func(v *objectmodel.ObjectValue) { v.Commit = "other-commit" },
+		"object":         func(v *objectmodel.ObjectValue) { v.Address.ObjectID = "policy/other" },
+		"aspect-as-object": func(v *objectmodel.ObjectValue) {
 			v.Address.Kind, v.Address.AspectName = objectmodel.KindAspect, "body"
 		},
-		"foreign-unit": func(v *objectmodel.KnowledgeValue) {
+		"foreign-unit": func(v *objectmodel.ObjectValue) {
 			v.Units = []objectmodel.Address{{Kind: objectmodel.KindAspect, ObjectID: "policy/other", AspectName: "body"}}
 		},
-		"foreign-declaration": func(v *objectmodel.KnowledgeValue) {
+		"foreign-declaration": func(v *objectmodel.ObjectValue) {
 			v.Declarations = []objectmodel.UnitDeclaration{{Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "policy/other", AspectName: "body"}}}
 		},
 	}

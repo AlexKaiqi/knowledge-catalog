@@ -9,7 +9,7 @@ import (
 
 // registry persists service metadata/membership, current Dataset definitions,
 // and immutable releases as flat registry.yaml, dataset-*.yaml, release-*.yaml.
-// The independent Snapshot authority is not a Knowledge Repository.
+// The independent Snapshot authority is not an Object Repository.
 type registry struct {
 	authority snapshot.Store
 	tree      snapshot.TreeStore

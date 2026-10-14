@@ -20,7 +20,7 @@ import (
 
 const (
 	// SystemRepositoryID is the deployment-managed protocol Repository.
-	// Dataset service only sees it as another Repository ID; its knowledge meaning is
+	// Dataset service only sees it as another Repository ID; its object meaning is
 	// owned at layer ② and wired by the application root. Read authorization
 	// uses the same authenticated default as any other declared Repository.
 	SystemRepositoryID kernel.RepositoryID = "kr://kc/system"

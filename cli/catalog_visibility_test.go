@@ -87,7 +87,7 @@ func TestAuthenticatedPrincipalReadsDeclaredRepositoryWithoutGrant(t *testing.T)
 	}
 	cfg.RepositoryAccess = []apphome.RepositoryAccess{{
 		ID:                   source.ID,
-		AuthenticatedActions: []string{"knowledge.read", "knowledge.schema.read"},
+		AuthenticatedActions: []string{"object.read", "object.schema.read"},
 	}}
 	writeDeployment(t, path, cfg)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", path))
@@ -106,7 +106,7 @@ func TestAuthenticatedPrincipalReadsDeclaredRepositoryWithoutGrant(t *testing.T)
 	if listed["repository"] != source.ID {
 		t.Fatalf("declared authenticated read must admit schema browse: %#v", listed)
 	}
-	expectCode(t, kcRemote(t, server.URL, "agent:viewer", "read", testObjectReference(t, source.ID, "note/one", "")), "KNOWLEDGE_REF_UNRESOLVED")
+	expectCode(t, kcRemote(t, server.URL, "agent:viewer", "read", testObjectReference(t, source.ID, "note/one", "")), "OBJECT_REF_UNRESOLVED")
 	expectCode(t, kcRemote(t, server.URL, "agent:viewer", "schema", "list", "--repo", string(objectmodel.SystemRepositoryID)), "FORBIDDEN")
 	expectCode(t, kcRemote(t, server.URL, "agent:viewer", "writer", "put", testObjectReference(t, source.ID, "note/one", ""), "--command-id", "mutate-declared", "--value", `{"v":1}`), "FORBIDDEN")
 }

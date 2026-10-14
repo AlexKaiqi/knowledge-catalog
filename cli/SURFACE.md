@@ -9,7 +9,7 @@
 - Server 入口来自 `--server`、`KC_SERVER_URL` 或 `client.json`；日常命令不重复填写。
 - 一套 Server 对应一个登记空间；没有 Catalog 对象、当前选择或切换。
 - 基本对象读写由对象 URN 指定来源仓和身份；范围操作用 `--repo`，已定义 Dataset 用 `--dataset`。回执带 `commit`；对象历史读取使用原 URN 加 `--commit`。
-- 知识命令拒绝 `--catalog`、`--source`、`--pin`。Writer、`diff` 与 `schema list` 拒绝 `--dataset`。
+- 对象命令拒绝 `--catalog`、`--source`、`--pin`。Writer、`diff` 与 `schema list` 拒绝 `--dataset`。
 - Object `read`、`writer put/remove` 只接受位置参数中的完整对象 URN＋locator，拒绝 `--reference` 别名及 `--repo/--object/--aspect/--member/--include/--exclude`，即使与引用内容相同也拒绝。Writer 提交由用户提供 `--command-id`。
 - 默认 Snapshot ref 是 `snapshot.DefaultRef`；历史复核才显式给 `--commit` 或 `--ref`。
 
@@ -29,7 +29,7 @@ KC 不托管申请/审批队列；没有 `admission request`。部署可选
 
 | 操作 | 语义 |
 |---|---|
-| `show` | 显示服务登记空间 已 attach 的 Repository 与命名知识集；不是对象目录 |
+| `show` | 显示服务登记空间 已 attach 的 Repository 与命名 Dataset；不是对象目录 |
 | `create --name [--store]` | 供给一个 KC 可打开的托管 Repository；不 attach |
 | `create --url --credential-file` | 连接批准来源上的自有 Repository；不 attach |
 | `attach --repo` | 将已连接 Repository 登记进服务登记空间；不要求已发布，不发读权 |
@@ -39,7 +39,7 @@ KC 不托管申请/审批队列；没有 `admission request`。部署可选
 `registry audit` 是登记历史入口；没有整个登记空间的归档操作。HTTP 保留资源分层的集合读取；
 产品 argv 不镜像每条集合 GET。
 
-## 知识集
+## Dataset
 
 Dataset 按消费任务选择一个或多个 Repository 的确定版本中的文件，并组织交付布局。
 单仓文件选择同样成立；配方是输入形式，接受的 Dataset 发布才是服务交付范围。
@@ -59,9 +59,9 @@ kcfs mount --dataset <id> --root <project>
 目录映射中，一旦任一目录来源声明交付路径，其余目录来源也须声明；逐文件条目使用自己的来源与交付路径。
 `overlay` 是本机 `--file` 底稿加 `--overlay` 补丁，不发表；stdout 交付合成定义，`--out` 写便携配方。
 `clone` 物化当前服务版到空目录或不存在的目录，不覆盖已有内容。解析与文件消费分别需要相应 Dataset 权限。
-`kcfs plan|mount` 在调用时内部冻结本次 ResolvedKnowledgeSet，产品 argv 不出现 pin 文件；当前宿主投影不支持逐文件条目，改用 clone 或文件网关。
+`kcfs plan|mount` 在调用时内部冻结本次 ResolvedDataset，产品 argv 不出现 pin 文件；当前宿主投影不支持逐文件条目，改用 clone 或文件网关。
 
-## Knowledge
+## Object
 
 主路径：
 

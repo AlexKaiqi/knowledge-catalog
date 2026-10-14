@@ -22,12 +22,12 @@ func yamlFiles(state State, authorityID string) (map[string][]byte, error) {
 			return nil, err
 		}
 	}
-	for _, workspace := range state.KnowledgeSets {
+	for _, workspace := range state.Datasets {
 		b, err := encodeYAML(workspace)
 		if err != nil {
 			return nil, err
 		}
-		if err := addRegistryDefinition(out, KnowledgeSetYAML(workspace.SetID), workspace, b); err != nil {
+		if err := addRegistryDefinition(out, DatasetYAML(workspace.SetID), workspace, b); err != nil {
 			return nil, err
 		}
 	}
@@ -40,9 +40,9 @@ func yamlFiles(state State, authorityID string) (map[string][]byte, error) {
 	return out, nil
 }
 
-func addRegistryDefinition(files map[string][]byte, path string, def KnowledgeSet, body []byte) error {
+func addRegistryDefinition(files map[string][]byte, path string, def Dataset, body []byte) error {
 	if _, exists := files[path]; exists {
-		return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "registry identities collide at %s", path)
+		return kernel.Fail(kernel.ErrDatasetInvalid, "registry identities collide at %s", path)
 	}
 	if err := validateRegistryDefinition(path, def); err != nil {
 		return err
@@ -51,8 +51,8 @@ func addRegistryDefinition(files map[string][]byte, path string, def KnowledgeSe
 	return nil
 }
 
-func asKnowledgeSetYAML(body []byte) (KnowledgeSet, error) {
-	var def KnowledgeSet
+func asDatasetYAML(body []byte) (Dataset, error) {
+	var def Dataset
 	err := decodeYAML(body, &def)
 	return def, err
 }
@@ -71,11 +71,11 @@ func preserveDefinitionBytes(existing, desired map[string][]byte) error {
 			}
 			continue
 		}
-		before, err := asKnowledgeSetYAML(body)
+		before, err := asDatasetYAML(body)
 		if err != nil {
 			return registryFormatError(path, err)
 		}
-		after, err := asKnowledgeSetYAML(next)
+		after, err := asDatasetYAML(next)
 		if err != nil {
 			return registryFormatError(path, err)
 		}

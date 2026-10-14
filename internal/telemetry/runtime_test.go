@@ -21,16 +21,16 @@ func TestRuntimeExportsOTelInstrumentsThroughPrometheus(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
 
-	ctx, span, started := runtime.StartOperation(context.Background(), "knowledge", "knowledge-read")
+	ctx, span, started := runtime.StartOperation(context.Background(), "object", "object-read")
 	if !span.SpanContext().IsValid() {
 		t.Fatal("SDK-backed runtime must generate a valid span context")
 	}
-	runtime.EndOperation(ctx, span, started, "knowledge", "knowledge-read", "ok", "")
+	runtime.EndOperation(ctx, span, started, "object", "object-read", "ok", "")
 	runtime.RecordEvidence(ctx, "access", "ok", 2*time.Millisecond, 128)
 	runtime.RecordEvidence(ctx, "retrieval", "ok", 2*time.Millisecond, 64)
 	runtime.RecordEvidence(ctx, "refine", "ok", 2*time.Millisecond, 32)
 	runtime.RecordWorkspaceResolve(ctx, "ok", 3*time.Millisecond, 2)
-	runtime.RecordKnowledgeReadFanout(ctx, 2, 5)
+	runtime.RecordObjectReadFanout(ctx, 2, 5)
 	snapCtx, snapSpan, snapStarted := runtime.StartSnapshot(ctx, "lakefs", "read")
 	runtime.EndSnapshot(snapCtx, snapSpan, snapStarted, "lakefs", "read", "ok", "", 4096)
 	runtime.SetEvidenceStoreUsedRatio(0.41)
@@ -51,7 +51,7 @@ func TestRuntimeExportsOTelInstrumentsThroughPrometheus(t *testing.T) {
 	runtime.SetProjectionBacklog("opensearch", 2, time.Now().Add(-time.Second))
 	ctx, otherSpan, otherStarted := runtime.StartOperation(context.Background(), "repo:high-cardinality", "read")
 	runtime.EndOperation(ctx, otherSpan, otherStarted, "repo:high-cardinality", "read", "ok", "")
-	if spans := exporter.GetSpans(); len(spans) != 7 || spans[0].Name != "kc.knowledge-read" || spans[1].Name != "kc.snapshot.read" || spans[2].Name != "kc.hook.dispatch" || spans[3].Name != "kc.gate.check" || spans[4].Name != "kc.binding.lookup" || spans[5].Name != "kc.authenticate" {
+	if spans := exporter.GetSpans(); len(spans) != 7 || spans[0].Name != "kc.object-read" || spans[1].Name != "kc.snapshot.read" || spans[2].Name != "kc.hook.dispatch" || spans[3].Name != "kc.gate.check" || spans[4].Name != "kc.binding.lookup" || spans[5].Name != "kc.authenticate" {
 		t.Fatalf("exported spans %#v", spans)
 	}
 
@@ -96,8 +96,8 @@ func TestRuntimeExportsOTelInstrumentsThroughPrometheus(t *testing.T) {
 		"kc_projection_change_count",
 		"kc_projection_lagging_count",
 		"kc_projection_oldest_pending_age_seconds",
-		`kc_operation="knowledge-read"`,
-		`kc_face="knowledge"`,
+		`kc_operation="object-read"`,
+		`kc_face="object"`,
 		`kc_face="other"`,
 		`kc_evidence_kind="retrieval"`,
 		`kc_evidence_kind="refine"`,
@@ -161,11 +161,11 @@ func TestExplicitZeroTraceRatioIsHonored(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
-	ctx, span, started := runtime.StartOperation(context.Background(), "knowledge", "read")
+	ctx, span, started := runtime.StartOperation(context.Background(), "object", "read")
 	if !span.SpanContext().IsValid() || span.SpanContext().IsSampled() {
 		t.Fatalf("explicit zero ratio produced unexpected span context %#v", span.SpanContext())
 	}
-	runtime.EndOperation(ctx, span, started, "knowledge", "read", "ok", "")
+	runtime.EndOperation(ctx, span, started, "object", "read", "ok", "")
 	if spans := exporter.GetSpans(); len(spans) != 0 {
 		t.Fatalf("zero sampling ratio exported spans %#v", spans)
 	}

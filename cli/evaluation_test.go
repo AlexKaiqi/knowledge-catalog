@@ -16,7 +16,7 @@ func TestCLIEvaluationDailyJourneyProductStdout(t *testing.T) {
 	body(t, kc(home, "put", testObjectReference(t, repo, "schema/runbook.body", ""), "--command-id", "schema-1", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
 	body(t, kc(home, "put", testObjectReference(t, repo, "runbook/payment", ""), "--command-id", "source-1", "--schema-ref", "schema/runbook.body", "--value", `{"body":"切换支付流量前先检查冻结窗口"}`))
 	body(t, kc(home, "grant", "add", "--principal", "bot", "--action", "inventory.read"))
-	body(t, kc(home, "grant", "add", "--principal", "bot", "--action", "knowledge.read", "--repo", repo))
+	body(t, kc(home, "grant", "add", "--principal", "bot", "--action", "object.read", "--repo", repo))
 
 	read := asMap(t, body(t, kc(home, "read", testObjectReference(t, repo, "runbook/payment", ""))))
 	if read["objectId"] != "runbook/payment" || read["repository"] != repo {
@@ -25,7 +25,7 @@ func TestCLIEvaluationDailyJourneyProductStdout(t *testing.T) {
 	if asMap(t, read["value"])["body"] != "切换支付流量前先检查冻结窗口" {
 		t.Fatalf("read body: %#v", read)
 	}
-	if _, ok := read["knowledgeRef"]; ok {
+	if _, ok := read["objectRef"]; ok {
 		t.Fatalf("read kept protocol envelope: %#v", read)
 	}
 	if read["reference"] != testObjectReference(t, repo, "runbook/payment", "") || asMap(t, read["address"])["objectId"] != "runbook/payment" || read["digest"] == "" || len(read["declarations"].([]any)) != 1 {

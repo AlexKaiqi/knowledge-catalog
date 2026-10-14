@@ -7,7 +7,7 @@ steps:
       name: "env repositoryPrefix + run-id"
       mode: "env setupAllowCreate=true 时经公开 create；false 时使用部署方预建的既有空仓并核验为空"
   verify:
-    surface: knowledge
+    surface: object
     action: empty-read-back
     params:
       expect: "browse/schema list 为空数组；writer head 可读"

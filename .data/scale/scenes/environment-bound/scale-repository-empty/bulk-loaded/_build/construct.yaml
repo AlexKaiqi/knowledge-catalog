@@ -14,7 +14,7 @@ steps:
       singleActiveWriter: true
       resume: "checkpoint-resume 可续跑"
   verify:
-    surface: knowledge
+    surface: object
     action: counts-and-digest
     params:
       counts: "实际对象/单元数与 manifest 一致"

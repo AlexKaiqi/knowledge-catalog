@@ -5,7 +5,7 @@ import (
 	retrieval "kc/discovery"
 	"kc/internal/testkit"
 	"kc/kernel"
-	knowledgeserving "kc/liveaccess"
+	objectserving "kc/liveaccess"
 	liveservice "kc/liveaccess/service"
 	objectmodel "kc/object"
 	"kc/object/reader"
@@ -16,8 +16,8 @@ import (
 
 type searchStateLookup struct{}
 
-func (searchStateLookup) LookupState(_ context.Context, _ knowledgeserving.StateLookupRequest) (knowledgeserving.StateObservation, error) {
-	return knowledgeserving.StateObservation{
+func (searchStateLookup) LookupState(_ context.Context, _ objectserving.StateLookupRequest) (objectserving.StateObservation, error) {
+	return objectserving.StateObservation{
 		Value: map[string]any{"status": "healthy"},
 		Basis: objectmodel.ObservationBasis{
 			BindingGeneration: "runtime-v1", Consistency: objectmodel.ObservationRepeatable,
@@ -29,7 +29,7 @@ func (searchStateLookup) LookupState(_ context.Context, _ knowledgeserving.State
 func TestWorkspaceSearchHitUsesLogicalStateHydration(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	objectID := objectmodel.ObjectID("Service:orders")
-	commit, err := s.Repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	commit, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: []objectmodel.Operation{
@@ -48,16 +48,16 @@ func TestWorkspaceSearchHitUsesLogicalStateHydration(t *testing.T) {
 		t.Fatal(err)
 	}
 	declarations := reader.Open(func(repositoryID kernel.RepositoryID) (objectmodel.Repository, error) {
-		return s.Reader.Require(repositoryID, kernel.ErrKnowledgeRefUnresolved)
-	}, reader.KnowledgeSetPin{SetID: "agent", Repositories: map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit}, Items: reader.WholeRepositoryItems(map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit})})
+		return s.Reader.Require(repositoryID, kernel.ErrObjectRefUnresolved)
+	}, reader.DatasetPin{SetID: "agent", Repositories: map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit}, Items: reader.WholeRepositoryItems(map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit})})
 	logical := liveservice.Open(declarations, searchStateLookup{}, observability.IdentityContext{Principal: "agent"})
-	hit, err := HydrateSearchHit(context.Background(), logical, retrieval.KnowledgeHit{
-		Knowledge: raw, Version: retrieval.VersionOf(raw),
+	hit, err := HydrateSearchHit(context.Background(), logical, retrieval.ObjectHit{
+		Object: raw, Version: retrieval.VersionOf(raw),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	value := hit.Knowledge.Value.(map[string]any)
+	value := hit.Object.Value.(map[string]any)
 	if value["health"].(map[string]any)["status"] != "healthy" {
 		t.Fatalf("search returned raw Binding placeholder: %#v", value)
 	}

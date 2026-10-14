@@ -12,7 +12,7 @@ import (
 
 func TestNativeSchemaBatchMigrationAndRootRemovalUseFinalUnits(t *testing.T) {
 	base := testkit.MakeRepository(t, "kr://writer/native-schema-final")
-	native := &nativeSchemaRepository{KnowledgeRepository: base}
+	native := &nativeSchemaRepository{ObjectRepository: base}
 	registry := snapshot.NewRegistry()
 	if err := registry.Add(native); err != nil {
 		t.Fatal(err)

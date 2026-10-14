@@ -65,14 +65,14 @@ type datasetRaceHydrator struct {
 	reads int
 }
 
-func (h *datasetRaceHydrator) ReadMany(repo objectmodel.Repository, at kernel.CommitID, ids []objectmodel.ObjectID) (map[objectmodel.ObjectID]objectmodel.KnowledgeValue, error) {
+func (h *datasetRaceHydrator) ReadMany(repo objectmodel.Repository, at kernel.CommitID, ids []objectmodel.ObjectID) (map[objectmodel.ObjectID]objectmodel.ObjectValue, error) {
 	if at != h.basis || (len(ids) != 0 && !reflect.DeepEqual(ids, h.ids)) {
 		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "read escaped frozen Dataset basis or scope: %s %v", at, ids)
 	}
 	if len(ids) != 0 {
 		h.reads++
 	}
-	values := make(map[objectmodel.ObjectID]objectmodel.KnowledgeValue, len(ids))
+	values := make(map[objectmodel.ObjectID]objectmodel.ObjectValue, len(ids))
 	for _, id := range ids {
 		value, err := repo.Read(id, at)
 		if err != nil {
@@ -82,7 +82,7 @@ func (h *datasetRaceHydrator) ReadMany(repo objectmodel.Repository, at kernel.Co
 	}
 	return values, nil
 }
-func (h *datasetRaceHydrator) ReadAddress(repo objectmodel.Repository, at kernel.CommitID, addr objectmodel.Address) (objectmodel.KnowledgeValue, error) {
+func (h *datasetRaceHydrator) ReadAddress(repo objectmodel.Repository, at kernel.CommitID, addr objectmodel.Address) (objectmodel.ObjectValue, error) {
 	return repo.ReadAddress(addr, at)
 }
 
@@ -118,20 +118,20 @@ func TestDatasetSearchKeepsReleaseWhenPublicationAdvancesBeforeObjectRead(t *tes
 	// come from the real Reader, not the fixture's body-classifying facade.
 	sourceReader := reader.NewReader(store)
 	cat := testkit.OpenDatasets(t, store)
-	if _, err := cat.DefineKnowledgeSet("articles", 1, []dataset.KnowledgeSetSource{{Repository: s.RepositoryID, Selector: snapshot.DefaultRef, BaseRev: string(a), Path: dataset.MountPath(""), SubPath: "public"}}); err != nil {
+	if _, err := cat.DefineDataset("articles", 1, []dataset.DatasetSource{{Repository: s.RepositoryID, Selector: snapshot.DefaultRef, BaseRev: string(a), Path: dataset.MountPath(""), SubPath: "public"}}); err != nil {
 		t.Fatal(err)
 	}
 	openServing := func() (*reader.Serving, error) {
-		resolved, err := cat.ResolveKnowledgeSet("articles")
+		resolved, err := cat.ResolveDataset("articles")
 		if err != nil {
 			return nil, err
 		}
-		pin := reader.KnowledgeSetPin{SetID: resolved.SetID, Revision: resolved.Revision, Repositories: resolved.Repositories}
+		pin := reader.DatasetPin{SetID: resolved.SetID, Revision: resolved.Revision, Repositories: resolved.Repositories}
 		for _, item := range resolved.Items {
 			pin.Items = append(pin.Items, reader.DatasetItem{Target: item.Target, Repository: item.Repository, Commit: item.Commit, Kind: item.Kind, Prefix: item.Prefix, File: item.File})
 		}
 		return reader.Open(func(id kernel.RepositoryID) (objectmodel.Repository, error) {
-			return sourceReader.Require(id, kernel.ErrKnowledgeRefUnresolved)
+			return sourceReader.Require(id, kernel.ErrObjectRefUnresolved)
 		}, pin), nil
 	}
 	engine := &datasetRaceEngine{candidates: []index.CandidateRef{
@@ -165,7 +165,7 @@ func TestDatasetSearchKeepsReleaseWhenPublicationAdvancesBeforeObjectRead(t *tes
 			return err
 		}
 		b = receipt.Result.CommitID
-		_, err = cat.DefineKnowledgeSet("articles", 2, []dataset.KnowledgeSetSource{{Repository: s.RepositoryID, Selector: snapshot.DefaultRef, BaseRev: string(b), Path: dataset.MountPath(""), SubPath: "private"}})
+		_, err = cat.DefineDataset("articles", 2, []dataset.DatasetSource{{Repository: s.RepositoryID, Selector: snapshot.DefaultRef, BaseRev: string(b), Path: dataset.MountPath(""), SubPath: "private"}})
 		return err
 	}
 	resolves := 0
@@ -179,7 +179,7 @@ func TestDatasetSearchKeepsReleaseWhenPublicationAdvancesBeforeObjectRead(t *tes
 			}
 			return serving, liveservice.Open(serving, nil, observability.IdentityContext{}), nil
 		},
-		Deliver: func(_ context.Context, hit retrieval.KnowledgeHit) (retrieval.KnowledgeHit, error) { return hit, nil },
+		Deliver: func(_ context.Context, hit retrieval.ObjectHit) (retrieval.ObjectHit, error) { return hit, nil },
 	}
 	result, err := executor.Execute(context.Background(), retrieval.SearchOf(retrieval.SearchMATCH("runbook")))
 	if err != nil {
@@ -191,7 +191,7 @@ func TestDatasetSearchKeepsReleaseWhenPublicationAdvancesBeforeObjectRead(t *tes
 		t.Fatalf("query crossed publication or scope: resolves=%d reads=%d a=%s b=%s result=%#v", resolves, reads.reads, a, b, result)
 	}
 	hit := result.Hits[0]
-	if hit.Knowledge.Address.ObjectID != articleID || hit.Knowledge.Commit != a || hit.Version.DeclarationCommit != a || !reflect.DeepEqual(hit.Knowledge.Value, original) {
+	if hit.Object.Address.ObjectID != articleID || hit.Object.Commit != a || hit.Version.DeclarationCommit != a || !reflect.DeepEqual(hit.Object.Value, original) {
 		t.Fatalf("Dataset candidate at a was combined with b: %#v", hit)
 	}
 	latest, err := openServing()

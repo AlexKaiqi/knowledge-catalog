@@ -41,22 +41,22 @@ type WorkspaceFileReadRequest struct {
 }
 
 type WorkspaceFileMountsResponse struct {
-	Pin    dataset.ResolvedKnowledgeSet `json:"pin"`
-	Mounts []dataset.VirtualMount       `json:"mounts"`
+	Pin    dataset.ResolvedDataset `json:"pin"`
+	Mounts []dataset.VirtualMount  `json:"mounts"`
 }
 
 type WorkspaceFileDirectoryResponse struct {
-	Pin          dataset.ResolvedKnowledgeSet `json:"pin"`
-	Mount        dataset.VirtualMount         `json:"mount"`
-	Entries      []snapshot.DirectoryEntry    `json:"entries"`
-	Continuation string                       `json:"continuation,omitempty"`
-	Exhausted    bool                         `json:"exhausted"`
+	Pin          dataset.ResolvedDataset   `json:"pin"`
+	Mount        dataset.VirtualMount      `json:"mount"`
+	Entries      []snapshot.DirectoryEntry `json:"entries"`
+	Continuation string                    `json:"continuation,omitempty"`
+	Exhausted    bool                      `json:"exhausted"`
 }
 
 type WorkspaceFileReadResponse struct {
-	Pin   dataset.ResolvedKnowledgeSet `json:"pin"`
-	Mount dataset.VirtualMount         `json:"mount"`
-	File  string                       `json:"file"`
+	Pin   dataset.ResolvedDataset `json:"pin"`
+	Mount dataset.VirtualMount    `json:"mount"`
+	File  string                  `json:"file"`
 	// Path echoes the delivered path when the request addressed the composed
 	// tree; Item carries the per-file entry that served the bytes.
 	Path       string               `json:"path,omitempty"`

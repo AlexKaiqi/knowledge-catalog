@@ -24,7 +24,7 @@ func WriteInvoke(w http.ResponseWriter, result RunResult) {
 					code = http.StatusUnauthorized
 				case kernel.ErrForbidden:
 					code = http.StatusForbidden
-				case kernel.ErrKnowledgeRefUnresolved, kernel.ErrVersionUnresolved:
+				case kernel.ErrObjectRefUnresolved, kernel.ErrVersionUnresolved:
 					code = http.StatusNotFound
 				case kernel.ErrTemporaryUnavailable:
 					code = http.StatusServiceUnavailable

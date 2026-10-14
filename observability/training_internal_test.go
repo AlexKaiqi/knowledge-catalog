@@ -11,7 +11,7 @@ func TestRerankTrainingDoesNotPromoteSelfAcceptedOrAmbiguousAgentAnswers(t *test
 	answer := func(object objectmodel.ObjectID) FeedbackEvent {
 		return FeedbackEvent{
 			Outcome: "answered", LabelSource: "agent",
-			SelectedRefs: []objectmodel.KnowledgeRef{{Repository: "kr://acme/runbooks", Object: object}},
+			SelectedRefs: []objectmodel.ObjectRef{{Repository: "kr://acme/runbooks", Object: object}},
 		}
 	}
 	for _, tc := range []struct {
@@ -42,15 +42,15 @@ func TestRerankTrainingDoesNotPromoteSelfAcceptedOrAmbiguousAgentAnswers(t *test
 
 func TestRerankTrainingOnlyPromotesHumanCorrections(t *testing.T) {
 	refine := RefineEvent{Outcome: "COMPLETED"}
-	ref := objectmodel.KnowledgeRef{Repository: "kr://acme/runbooks", Object: "runbook/one"}
+	ref := objectmodel.ObjectRef{Repository: "kr://acme/runbooks", Object: "runbook/one"}
 	for _, tc := range []struct {
 		name     string
 		label    FeedbackEvent
 		strength string
 		eligible bool
 	}{
-		{name: "human correction", label: FeedbackEvent{Outcome: "corrected", LabelSource: "user", SelectedRefs: []objectmodel.KnowledgeRef{ref}}, strength: "corrected", eligible: true},
-		{name: "agent correction", label: FeedbackEvent{Outcome: "corrected", LabelSource: "agent", SelectedRefs: []objectmodel.KnowledgeRef{ref}}, strength: "none", eligible: false},
+		{name: "human correction", label: FeedbackEvent{Outcome: "corrected", LabelSource: "user", SelectedRefs: []objectmodel.ObjectRef{ref}}, strength: "corrected", eligible: true},
+		{name: "agent correction", label: FeedbackEvent{Outcome: "corrected", LabelSource: "agent", SelectedRefs: []objectmodel.ObjectRef{ref}}, strength: "none", eligible: false},
 		{name: "human rejection", label: FeedbackEvent{Outcome: "rejected", LabelSource: "user"}, strength: "none", eligible: false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

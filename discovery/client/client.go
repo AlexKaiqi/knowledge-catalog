@@ -28,17 +28,17 @@ func (c *client) request(ctx context.Context, method, path string, input any, op
 	return httpjson.Do(ctx, c.transport, c.baseURL, method, path, input, options.RequestID, output)
 }
 func (c *client) Search(ctx context.Context, r SearchRequest, o RequestOptions, out any) error {
-	return c.request(ctx, "POST", "/knowledge/v1/search", r, o, out)
+	return c.request(ctx, "POST", "/object/v1/search", r, o, out)
 }
 func (c *client) Relations(ctx context.Context, r RelationsRequest, o RequestOptions, out any) error {
-	return c.request(ctx, "POST", "/knowledge/v1/relations:query", r, o, out)
+	return c.request(ctx, "POST", "/object/v1/relations:query", r, o, out)
 }
 func (c *client) Traverse(ctx context.Context, r TraverseRequest, o RequestOptions, out any) error {
-	return c.request(ctx, "POST", "/knowledge/v1/traverse:query", r, o, out)
+	return c.request(ctx, "POST", "/object/v1/traverse:query", r, o, out)
 }
 func (c *client) DescribeAccessSpec(ctx context.Context, r AccessSpecDescribeRequest, o RequestOptions, out any) error {
 	return c.request(ctx, "POST", "/operations/v1/access-specs:describe", r, o, out)
 }
 func (c *client) PluginHelp(ctx context.Context, name string, o RequestOptions, out any) error {
-	return c.request(ctx, "GET", "/knowledge/v1/plugins/"+url.PathEscape(name), nil, o, out)
+	return c.request(ctx, "GET", "/object/v1/plugins/"+url.PathEscape(name), nil, o, out)
 }

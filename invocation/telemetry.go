@@ -50,7 +50,7 @@ func TelemetryResult(err error) (outcome, errorType string) {
 	switch code {
 	case kernel.ErrForbidden, kernel.ErrUnauthenticated:
 		outcome = "denied"
-	case kernel.ErrKnowledgeRefUnresolved, kernel.ErrVersionUnresolved, kernel.ErrKnowledgeSetInvalid:
+	case kernel.ErrObjectRefUnresolved, kernel.ErrVersionUnresolved, kernel.ErrDatasetInvalid:
 		outcome = "unresolved"
 	case kernel.ErrNonFastForward, kernel.ErrIdempotencyConflict, kernel.ErrObjectIDConflict,
 		kernel.ErrEventIDConflict, kernel.ErrCandidateMoved, kernel.ErrSchemaIncompatible:
@@ -73,7 +73,7 @@ func TelemetryResultFor(command string, result any, err error) (outcome, errorTy
 	if ResultOutcome(result) == "partial" {
 		return "partial", ""
 	}
-	if command != "knowledge-search" {
+	if command != "object-search" {
 		return outcome, errorType
 	}
 	if row, ok := JSONValue(accessOutput(result)).(map[string]any); ok && StringValue(row["completeness"]) == "partial" {
@@ -86,10 +86,10 @@ func TelemetryFace(command string) string {
 	switch {
 	case strings.HasPrefix(command, "writer-") || command == "diff":
 		return "writer"
-	case command == "knowledge-search" || strings.HasPrefix(command, "operations-projection-") || command == "operations-access-spec-describe":
+	case command == "object-search" || strings.HasPrefix(command, "operations-projection-") || command == "operations-access-spec-describe":
 		return "projection"
-	case strings.HasPrefix(command, "knowledge-") || command == "rerank" || command == "search-rerank":
-		return "knowledge"
+	case strings.HasPrefix(command, "object-") || command == "rerank" || command == "search-rerank":
+		return "object"
 	case strings.HasPrefix(command, "workspace-") || strings.HasPrefix(command, "registry-") || strings.HasPrefix(command, "inventory-") ||
 		strings.HasPrefix(command, "dataset-") || command == "pin" || command == "pin-check" ||
 		command == "pin-source" || command == "local-repository-attach" ||
@@ -119,10 +119,10 @@ func RecordDomainTelemetry(ctx context.Context, runtime *telemetry.Runtime, comm
 			}
 		}
 		runtime.RecordWorkspaceResolve(ctx, outcome, elapsed, members)
-	case "knowledge-read":
-		objects, units := knowledgeReadFanout(visible)
-		runtime.RecordKnowledgeReadFanout(ctx, objects, units)
-	case "knowledge-search":
+	case "object-read":
+		objects, units := objectReadFanout(visible)
+		runtime.RecordObjectReadFanout(ctx, objects, units)
+	case "object-search":
 		root := JSONValue(visible)
 		completeness, partialReason, candidates, hydrated, dropped, authorizationDropped := "unknown", "none", 0, 0, 0, 0
 		phases := telemetry.SearchPhases{}
@@ -212,7 +212,7 @@ func TelemetryProvider(flags map[string]invoke.FlagValue) string {
 	return boundedTelemetryValue(stores.Index, "other", "none", "opensearch")
 }
 
-func knowledgeReadFanout(visible any) (objects, units int) {
+func objectReadFanout(visible any) (objects, units int) {
 	objects, units = -1, -1
 	switch typed := visible.(type) {
 	case []objectmodel.ObservedValue:
@@ -234,18 +234,18 @@ func knowledgeReadFanout(visible any) (objects, units int) {
 		} else {
 			units = 1
 		}
-	case objectmodel.KnowledgeValue:
+	case objectmodel.ObjectValue:
 		objects = 1
 		if n := len(typed.Units); n > 0 {
 			units = n
 		} else {
 			units = 1
 		}
-	case []objectmodel.KnowledgeValue:
+	case []objectmodel.ObjectValue:
 		seen := map[string]struct{}{}
 		units = 0
 		for _, item := range typed {
-			seen[string(item.Repository)+"\x00"+string(item.KnowledgeRef.Object)] = struct{}{}
+			seen[string(item.Repository)+"\x00"+string(item.ObjectRef.Object)] = struct{}{}
 			if n := len(item.Units); n > 0 {
 				units += n
 			} else {

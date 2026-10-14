@@ -5,7 +5,7 @@ import (
 	apphome "kc/home"
 
 	"kc/kernel"
-	knowledgeserving "kc/liveaccess"
+	objectserving "kc/liveaccess"
 )
 
 import (
@@ -54,7 +54,7 @@ func operation(name string) bool {
 // dispatchWithStateAtHome lets embedded component tests reuse an already-opened
 // Home across requests. Embedded CLI fixtures pass nil for a command-scoped
 // lifecycle.
-func dispatchWithStateAtHome(ctx context.Context, name string, flags map[string]FlagValue, state knowledgeserving.StateLookup, opened *apphome.Home, observation *invoke.ObservationTelemetry) (any, error) {
+func dispatchWithStateAtHome(ctx context.Context, name string, flags map[string]FlagValue, state objectserving.StateLookup, opened *apphome.Home, observation *invoke.ObservationTelemetry) (any, error) {
 	home, err := resolveHome(flags)
 	if err != nil {
 		return nil, err

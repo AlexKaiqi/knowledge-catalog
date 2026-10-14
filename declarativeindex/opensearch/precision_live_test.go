@@ -49,7 +49,7 @@ func TestOpenSearchExactTemporalAndIntegerPagination(t *testing.T) {
 						t.Fatal(err)
 					}
 					for _, hit := range result.Hits {
-						got = append(got, string(hit.Knowledge.Address.ObjectID))
+						got = append(got, string(hit.Object.Address.ObjectID))
 					}
 					if result.Continuation == "" {
 						break

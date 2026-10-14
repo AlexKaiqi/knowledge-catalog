@@ -19,7 +19,7 @@ func TestBindingDeclarationChangeIsVersionedWhenValueIsUnchanged(t *testing.T) {
 			"fields": map[string]any{"status": map[string]any{"type": "string"}},
 		}
 	}
-	c1, err := s.Repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	c1, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: []objectmodel.Operation{
@@ -34,7 +34,7 @@ func TestBindingDeclarationChangeIsVersionedWhenValueIsUnchanged(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c2, err := s.Repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	c2, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: c1, ExpectedTargetCommit: c1,
 		Operations: []objectmodel.Operation{{Op: objectmodel.OpPut, Address: schema, Value: schemaValue("https://stats.example/v2")}},

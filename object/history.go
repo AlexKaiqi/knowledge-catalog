@@ -29,6 +29,6 @@ type ObjectDiff struct {
 	ObjectID   ObjectID        `json:"objectId"`
 	FromCommit kernel.CommitID `json:"fromCommit"`
 	ToCommit   kernel.CommitID `json:"toCommit"`
-	From       *KnowledgeValue `json:"from,omitempty"`
-	To         *KnowledgeValue `json:"to,omitempty"`
+	From       *ObjectValue    `json:"from,omitempty"`
+	To         *ObjectValue    `json:"to,omitempty"`
 }

@@ -14,11 +14,11 @@ func TestGrantLegacyCLIQuestionRequiresGlobalReadAndRetainsEvaluation(t *testing
 	if err := WriteAllow(dir, AllowFile{Rules: []AllowRule{
 		{ID: "global-read", Principal: "operator", Actions: []string{"admin.grants.read"}},
 		{ID: "scoped-read", Principal: "scoped", Repo: "repo-A", Actions: []string{"admin.grants.read"}},
-		{ID: "wildcard", Principal: "reader", Repo: "repo-A", Object: "data/*", Actions: []string{"knowledge.read"}},
+		{ID: "wildcard", Principal: "reader", Repo: "repo-A", Object: "data/*", Actions: []string{"object.read"}},
 	}}); err != nil {
 		t.Fatal(err)
 	}
-	flags := map[string]invoke.FlagValue{"as": "operator", "principal": "reader", "action": "knowledge.read", "repo": "repo-A", "object": "data/file"}
+	flags := map[string]invoke.FlagValue{"as": "operator", "principal": "reader", "action": "object.read", "repo": "repo-A", "object": "data/file"}
 	operation := Command{Stage: invoke.StageHome, Run: VerbAllowed}
 	value, err := ExecuteApplicationOperation(context.Background(), "grant-list", "admin.grants.read", operation, flags, nil, nil, dir, nil)
 	if err != nil || !reflect.DeepEqual(value, map[string]any{"allow": true, "ruleId": "wildcard"}) {
@@ -40,7 +40,7 @@ func TestGrantIDsRemainDistinctAfterRevocationAndStaleIDCannotRevokeReplacement(
 	dir := t.TempDir()
 	add := func(principal string) AllowRule {
 		t.Helper()
-		value, err := VerbAllow(&Invocation{Home: dir, Flags: map[string]invoke.FlagValue{"principal": principal, "repo": "repo-A", "action": "knowledge.read"}})
+		value, err := VerbAllow(&Invocation{Home: dir, Flags: map[string]invoke.FlagValue{"principal": principal, "repo": "repo-A", "action": "object.read"}})
 		if err != nil {
 			t.Fatal(err)
 		}

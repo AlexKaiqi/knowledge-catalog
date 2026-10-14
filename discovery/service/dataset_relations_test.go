@@ -24,7 +24,7 @@ func (l relationTestLookup) Require(id kernel.RepositoryID, _ kernel.ErrorCode) 
 	if repo, ok := l[id]; ok {
 		return repo, nil
 	}
-	return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "repository not selected")
+	return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "repository not selected")
 }
 
 type relationTestProjection struct {
@@ -46,18 +46,18 @@ func (p *relationTestProjection) RelationsAtContext(_ context.Context, repo obje
 
 func TestDatasetRelationsQueryAllMembersAndBindContinuationToScope(t *testing.T) {
 	repos := relationTestLookup{}
-	pin := reader.KnowledgeSetPin{Repositories: map[kernel.RepositoryID]kernel.CommitID{}}
+	pin := reader.DatasetPin{Repositories: map[kernel.RepositoryID]kernel.CommitID{}}
 	for _, id := range []kernel.RepositoryID{"kr://a/entities", "kr://b/graph", "kr://z/graph"} {
 		repos[id] = relationTestRepository{id: id}
 		pin.Repositories[id] = kernel.CommitID(string(id) + "-fixed")
 	}
 	pin.Items = reader.WholeRepositoryItems(pin.Repositories)
 	lookup := func(id kernel.RepositoryID) (objectmodel.Repository, error) {
-		return repos.Require(id, kernel.ErrKnowledgeRefUnresolved)
+		return repos.Require(id, kernel.ErrObjectRefUnresolved)
 	}
 	projection := &relationTestProjection{t: t}
 	executor := DatasetRelationsExecutor{Serving: reader.Open(lookup, pin), Repositories: repos, Projection: projection}
-	req := retrieval.RelationPageRequest{Query: retrieval.RelationQuery{Endpoint: objectmodel.KnowledgeRef{Repository: "kr://a/entities", Object: "object/a"}}, Limit: 1}
+	req := retrieval.RelationPageRequest{Query: retrieval.RelationQuery{Endpoint: objectmodel.ObjectRef{Repository: "kr://a/entities", Object: "object/a"}}, Limit: 1}
 	first, err := executor.Execute(context.Background(), req)
 	if err != nil || len(first.Hits) != 1 || first.Hits[0].Repository != "kr://b/graph" || first.Continuation == "" || first.Exhausted {
 		t.Fatalf("first cross-repository page: %#v %v", first, err)

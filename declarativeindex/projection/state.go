@@ -8,12 +8,12 @@ import (
 	retrieval "kc/discovery"
 	"kc/kernel"
 	objectmodel "kc/object"
-	knowledgemaintenance "kc/object/maintenance"
+	objectmaintenance "kc/object/maintenance"
 	"kc/object/reader"
 )
 
 // stateProjection is Serving State for one published provider revision. It is
-// immutable after publication and is never a Knowledge Repository.
+// immutable after publication and is never an Object Repository.
 type stateProjection struct {
 	revision          string
 	accessDigest      kernel.Digest
@@ -142,7 +142,7 @@ func (idx *Index) refreshState(ctx context.Context, repo objectmodel.Repository,
 		clear(records)
 		return nil
 	}
-	hydrate := func(raw objectmodel.KnowledgeValue) error {
+	hydrate := func(raw objectmodel.ObjectValue) error {
 		if objectmodel.IsSchemaObject(raw.Address.ObjectID) {
 			return nil
 		}
@@ -150,8 +150,8 @@ func (idx *Index) refreshState(ctx context.Context, repo objectmodel.Repository,
 		if err != nil {
 			return err
 		}
-		value := objectmodel.KnowledgeValue{
-			KnowledgeRef: hydrated.KnowledgeRef, Repository: hydrated.Repository, Commit: hydrated.Commit,
+		value := objectmodel.ObjectValue{
+			ObjectRef: hydrated.ObjectRef, Repository: hydrated.Repository, Commit: hydrated.Commit,
 			Address: hydrated.Address, Value: hydrated.Value, Provenance: hydrated.Provenance,
 			Units: hydrated.Units, Declarations: hydrated.Declarations,
 		}
@@ -203,7 +203,7 @@ func (idx *Index) refreshState(ctx context.Context, repo objectmodel.Repository,
 			}
 		}
 	} else {
-		err = knowledgemaintenance.WalkRepository(repo, commit, hydrate)
+		err = objectmaintenance.WalkRepository(repo, commit, hydrate)
 	}
 	if err == nil {
 		err = flushRecords()

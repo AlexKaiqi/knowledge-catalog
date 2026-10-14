@@ -15,7 +15,7 @@ transport 无关的调用词汇表与调用观察——flag 读取读法、规�
 不拥有：工作区载体 `Invocation` / `Command` / `Handler`（由 `invocation/` 持有，见
 `invocation/invocation.go`；它携带 transport 打开的 `*home.Home`，不负责打开或关闭）、
 argv 闭集与帮助文案（`cli/surface.go`）、HTTP route
-注册与授权强制（拆分后 `server`）、业务规则与授权判定（`knowledgeapp` / `controlplane`）、wire 协议
+注册与授权强制（拆分后 `server`）、业务规则与授权判定（`objectapp` / `controlplane`）、wire 协议
 语义（`client`）。本包读 flag 值、不解析 argv；写 JSON 信封、不注册 route、不打开 Home。
 
 ## 最小用法

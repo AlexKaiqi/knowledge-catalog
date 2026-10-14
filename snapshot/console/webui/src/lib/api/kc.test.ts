@@ -51,7 +51,7 @@ test('development uses the same UI base and closed KC API paths', () => {
     const dev = config({ command: 'serve', mode: 'development' });
     expect(dev.base).toBe('/ui/');
     if (!('server' in dev)) throw new Error('Development must configure the KC proxy');
-    expect(Object.keys(dev.server.proxy)).toEqual(['/identity/v1', '/snapshot/v1', '/knowledge/v1', '/admin/v1', '/api/v1', '^/(?!ui(?:/|$)|identity/v1|snapshot/v1|knowledge/v1|admin/v1|api/v1|logout|oidc)']);
+    expect(Object.keys(dev.server.proxy)).toEqual(['/identity/v1', '/snapshot/v1', '/object/v1', '/admin/v1', '/api/v1', '^/(?!ui(?:/|$)|identity/v1|snapshot/v1|object/v1|admin/v1|api/v1|logout|oidc)']);
     for (const proxy of Object.values(dev.server.proxy)) expect(proxy.target).toBe(process.env.KC_UI_SERVER || 'http://127.0.0.1:7380');
     expect(dev.preview.proxy).toEqual(dev.server.proxy);
 });

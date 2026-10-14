@@ -21,7 +21,7 @@ type ReadRequest struct {
 }
 
 // ReadRepository reads complete selected units before adopting external values
-// and projecting a dynamic leaf. A leaf absent from the fixed knowledge value
+// and projecting a dynamic leaf. A leaf absent from the fixed object value
 // does not prevent a declared unit's source lookup.
 func ReadRepository(ctx context.Context, repo objectmodel.Repository, selection ReadRequest, state liveaccess.StateLookup, request objectmodel.RequestContext) (objectmodel.ObservedValue, error) {
 	service, err := repositoryService(repo, selection.Commit, state, request, false)
@@ -45,7 +45,7 @@ func ReadRepository(ctx context.Context, repo objectmodel.Repository, selection 
 		return objectmodel.ObservedValue{}, err
 	}
 	if len(values) != 1 {
-		return objectmodel.ObservedValue{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "Repository read did not select one published value")
+		return objectmodel.ObservedValue{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "Repository read did not select one published value")
 	}
 	return values[0], nil
 }

@@ -62,7 +62,7 @@ func TestLiveHTTPRuntimeBuildsOpenSearchStateProjection(t *testing.T) {
 	lookup := serving.NewHTTPStateLookup(nil)
 	setup := testkit.NewSetup(t, "")
 	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Service:orders", AspectName: "health"}
-	commit, err := setup.Repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	commit, err := setup.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: setup.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: setup.RootCommitID, ExpectedTargetCommit: setup.RootCommitID,
 		Operations: []objectmodel.Operation{
@@ -99,7 +99,7 @@ func TestLiveHTTPRuntimeBuildsOpenSearchStateProjection(t *testing.T) {
 	if body, _ := raw.Value.(map[string]any); body["health"] != nil {
 		t.Fatalf("runtime observation leaked into Snapshot: %#v", raw)
 	}
-	if _, err := setup.Repo.ReadAddress(address, commit); kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+	if _, err := setup.Repo.ReadAddress(address, commit); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		t.Fatalf("Bound State must not occupy a Snapshot unit: %#v %v", address, err)
 	}
 	if head, err := setup.Repo.Head(snapshot.DefaultRef); err != nil || head != commit {

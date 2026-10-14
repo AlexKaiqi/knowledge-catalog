@@ -15,7 +15,7 @@ func readRepositoryObserved(cx *Invocation, request objectservice.ReadRequest) (
 	defer func() {
 		err = journal.Finish(cx.WS.Journal, journal.LayerSystem, "reader", "read-reference", refs, err)
 	}()
-	repo, err := cx.WS.Reader.Require(request.Reference.Repository, kernel.ErrKnowledgeRefUnresolved)
+	repo, err := cx.WS.Reader.Require(request.Reference.Repository, kernel.ErrObjectRefUnresolved)
 	if err != nil {
 		return objectmodel.ObservedValue{}, err
 	}

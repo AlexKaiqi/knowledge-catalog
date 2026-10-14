@@ -13,7 +13,7 @@ func (idx *Index) SetHydrator(h objectmodel.Hydrator) {
 	idx.hydrator = h
 }
 
-func (idx *Index) hydrateMany(repo objectmodel.Repository, commit kernel.CommitID, ids []objectmodel.ObjectID) (map[objectmodel.ObjectID]objectmodel.KnowledgeValue, error) {
+func (idx *Index) hydrateMany(repo objectmodel.Repository, commit kernel.CommitID, ids []objectmodel.ObjectID) (map[objectmodel.ObjectID]objectmodel.ObjectValue, error) {
 	idx.mu.Lock()
 	h := idx.hydrator
 	idx.mu.Unlock()

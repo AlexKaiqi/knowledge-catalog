@@ -30,7 +30,7 @@ func (r *Reader) Diff(repositoryID kernel.RepositoryID, objectID objectmodel.Obj
 	return repo.Diff(objectID, from, to)
 }
 
-func (r *Reader) GetProvenance(ref objectmodel.KnowledgeRef, commitID kernel.CommitID) (trace objectmodel.ProvenanceTrace, err error) {
+func (r *Reader) GetProvenance(ref objectmodel.ObjectRef, commitID kernel.CommitID) (trace objectmodel.ProvenanceTrace, err error) {
 	defer func() {
 		err = r.note("provenance", map[string]any{"repositoryId": string(ref.Repository), "object": string(ref.Object), "commit": string(commitID)}, err)
 	}()

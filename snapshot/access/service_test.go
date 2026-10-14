@@ -23,7 +23,6 @@ func cloneRules(rules []access.Rule) []access.Rule {
 	cloned := slices.Clone(rules)
 	for i := range cloned {
 		cloned[i].Actions = slices.Clone(rules[i].Actions)
-		cloned[i].Cmds = slices.Clone(rules[i].Cmds)
 	}
 	return cloned
 }

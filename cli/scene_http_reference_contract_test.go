@@ -16,7 +16,7 @@ func sceneHTTPReferenceInputProblems(t *testing.T, scenario sceneScenario) []err
 	return sceneHTTPInputProblemsWithValidation(t, scenario, func(path string, payload any) error {
 		var request any
 		var reference *string
-		if path == "/knowledge/v1/objects:read" {
+		if path == "/object/v1/objects:read" {
 			read := &objectclient.ReadRequest{}
 			request, reference = read, &read.Reference
 		} else {
@@ -38,7 +38,7 @@ func sceneHTTPInputProblemsWithValidation(t *testing.T, scenario sceneScenario, 
 			continue
 		}
 		switch step.path {
-		case "/knowledge/v1/objects:read", "/knowledge/v1/objects:put", "/knowledge/v1/objects:remove":
+		case "/object/v1/objects:read", "/object/v1/objects:put", "/object/v1/objects:remove":
 		default:
 			continue
 		}
@@ -66,10 +66,10 @@ func TestSceneHTTPReferenceInputGuardKeepsScenarioOwnership(t *testing.T) {
 		name, path, then string
 		validate         bool
 	}{
-		{"authorization needs valid input", "/knowledge/v1/objects:read", "Then error FORBIDDEN", true},
-		{"explicit invalid input probe", "/knowledge/v1/objects:read", "Then error USAGE_INVALID", false},
-		{"search keeps its own input", "/knowledge/v1/search", "Then 1 hit metric/gmv with full canonical", false},
-		{"resolve keeps its own input", "/knowledge/v1/objects:resolve", "Then the command succeeds", false},
+		{"authorization needs valid input", "/object/v1/objects:read", "Then error FORBIDDEN", true},
+		{"explicit invalid input probe", "/object/v1/objects:read", "Then error USAGE_INVALID", false},
+		{"search keeps its own input", "/object/v1/search", "Then 1 hit metric/gmv with full canonical", false},
+		{"resolve keeps its own input", "/object/v1/objects:resolve", "Then the command succeeds", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			feature, err := parseSceneFeature("Feature: HTTP reference\nScenario: input\nWhen HTTP POST " + tc.path + " as taihu:alice:\n| object | metric/gmv |\n" + tc.then + "\n")

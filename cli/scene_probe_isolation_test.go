@@ -21,7 +21,7 @@ func TestSceneReplayFailureReportIdentifiesCurrentStep(t *testing.T) {
 	if mode := os.Getenv(modeEnv); mode != "" {
 		probe := "When I run `kc show`\nThen the output has:\n  | catalogId | absent |\n"
 		root, child, doc, cache := sceneIsolationFixture(t,
-			"Given deployment fixture\nGiven existing repository kr://scene/knowledge\n"+probe,
+			"Given deployment fixture\nGiven existing repository kr://scene/object\n"+probe,
 			map[string]string{"first": probe, "second": probe}, []string{"first", "second"}, probe)
 		const repositoriesPerConstruct = 3     // independent Catalog, actual System, then business authority
 		failAt := 3 * repositoriesPerConstruct // second probe's business replay fails
@@ -60,7 +60,7 @@ func TestSceneReplayFailureReportIdentifiesCurrentStep(t *testing.T) {
 			if mode == "ancestor" {
 				wantState = "isolation-child"
 			}
-			if report["ok"] != false || report["state"] != wantState || report["last_step_state"] != "isolation-ready" || report["last_step"] != "existing repository kr://scene/knowledge" {
+			if report["ok"] != false || report["state"] != wantState || report["last_step_state"] != "isolation-ready" || report["last_step"] != "existing repository kr://scene/object" {
 				t.Fatalf("failure report does not identify the actual failed prerequisite: %s\n%s", raw, output)
 			}
 		})
@@ -112,11 +112,11 @@ func sceneProbeAuthorityOrders(t *testing.T, replay bool) {
 		t.Run(order.name, func(t *testing.T) {
 			root, child, doc, cache := sceneIsolationFixture(t, `
 Given deployment fixture
-Given existing repository kr://scene/knowledge
-When I run `+"`kc attach --repo kr://scene/knowledge`"+`
+Given existing repository kr://scene/object
+When I run `+"`kc attach --repo kr://scene/object`"+`
 Then the output has:
-  | repositoryId | kr://scene/knowledge |
-When I run `+"`kc writer put urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:note%2Fhello --command-id baseline --file $materials/baseline.json`"+`
+  | repositoryId | kr://scene/object |
+When I run `+"`kc writer put urn:kc:object:kr%3A%2F%2Fscene%2Fobject:note%2Fhello --command-id baseline --file $materials/baseline.json`"+`
 Then the output has:
   | disposition | APPLIED |
 When I run `+"`kc grant add --principal reader --action inventory.read`"+`
@@ -124,10 +124,10 @@ Then the output has:
   | principal | reader |
 `, map[string]string{
 				"mutate": `
-When I run ` + "`kc writer put urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:note%2Fhello --command-id change --file $materials/changed.json`" + `
+When I run ` + "`kc writer put urn:kc:object:kr%3A%2F%2Fscene%2Fobject:note%2Fhello --command-id change --file $materials/changed.json`" + `
 Then the output has:
   | disposition | APPLIED |
-When I run ` + "`kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:note%2Fhello`" + `
+When I run ` + "`kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:note%2Fhello`" + `
 Then the output has:
   | value.text | changed |
 When I run ` + "`kc grant list`" + `
@@ -161,7 +161,7 @@ Then error FORBIDDEN
 }
 
 const sceneIsolationObserve = `
-When I run ` + "`kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:note%2Fhello`" + `
+When I run ` + "`kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:note%2Fhello`" + `
 Then the output has:
   | value.text | baseline |
 When I run ` + "`kc show --as reader`" + `
@@ -250,25 +250,25 @@ func TestSceneProjectionProbesRestoreSharedBaseline(t *testing.T) {
 			node.Dir = t.TempDir()
 			node.Probes = nil
 			observe := `
-When I run ` + "`kc search --repo kr://scene/knowledge --query merchandise`" + `
+When I run ` + "`kc search --repo kr://scene/object --query merchandise`" + `
 Then 1 hit metric/gmv
-When I run ` + "`kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:metric%2Fgmv#/definition`" + `
+When I run ` + "`kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv#/definition`" + `
 Then the output has:
   | value.name | Gross merchandise value |
 `
 			probes := map[string]string{
 				"observe": observe,
 				"mutate": `
-When I run ` + "`kc writer put urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:metric%2Fgmv#/definition --command-id changed-projection --schema-ref schema/metric.definition --file $materials/changed.json`" + `
+When I run ` + "`kc writer put urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv#/definition --command-id changed-projection --schema-ref schema/metric.definition --file $materials/changed.json`" + `
 Then the output has:
   | disposition | APPLIED |
-When I run ` + "`kc operations projection sync --repo kr://scene/knowledge`" + `
+When I run ` + "`kc operations projection sync --repo kr://scene/object`" + `
 Then the output has:
-  | repository | kr://scene/knowledge |
+  | repository | kr://scene/object |
   | basisCommit | nonempty |
-When I run ` + "`kc search --repo kr://scene/knowledge --query merchandise`" + `
+When I run ` + "`kc search --repo kr://scene/object --query merchandise`" + `
 Then 0 hits
-When I run ` + "`kc read urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:metric%2Fgmv#/definition`" + `
+When I run ` + "`kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv#/definition`" + `
 Then the output has:
   | value.name | Changed total |
 `,
@@ -307,21 +307,21 @@ func TestSceneProbesRestoreAbsentProjection(t *testing.T) {
 		{"absent-only", []string{"absent"}},
 	} {
 		t.Run(order.name, func(t *testing.T) {
-			absent := "When I run `kc relations --repo kr://scene/knowledge --object note/hello`\nThen error CAPABILITY_UNSATISFIED\n"
+			absent := "When I run `kc relations --repo kr://scene/object --object note/hello`\nThen error CAPABILITY_UNSATISFIED\n"
 			root, child, doc, cache := sceneIsolationFixture(t, `
 Given deployment fixture
-Given existing repository kr://scene/knowledge
-When I run `+"`kc attach --repo kr://scene/knowledge`"+`
+Given existing repository kr://scene/object
+When I run `+"`kc attach --repo kr://scene/object`"+`
 Then the output has:
-  | repositoryId | kr://scene/knowledge |
+  | repositoryId | kr://scene/object |
 `, map[string]string{
 				"absent": absent,
 				"build": `
-When I run ` + "`kc operations projection sync --repo kr://scene/knowledge`" + `
+When I run ` + "`kc operations projection sync --repo kr://scene/object`" + `
 Then the output has:
-  | repository | kr://scene/knowledge |
+  | repository | kr://scene/object |
   | basisCommit | nonempty |
-When I run ` + "`kc relations --repo kr://scene/knowledge --object note/hello`" + `
+When I run ` + "`kc relations --repo kr://scene/object --object note/hello`" + `
 Then the output has:
   | hits | [] |
 `,
@@ -342,7 +342,7 @@ func TestSceneIndexedWorldDoesNotLeakIntoUnindexedWorld(t *testing.T) {
 	// This separate cache repeats logical Repository IDs and fake commit IDs,
 	// just as TestProductScenes does after TestMetricPermissionScenes.
 	unindexed := newSceneHomeCache(t)
-	runSceneNode(t, doc, unindexed.nodes["knowledge-published"], unindexed)
+	runSceneNode(t, doc, unindexed.nodes["object-published"], unindexed)
 }
 
 func sceneIsolationFixture(t *testing.T, construct string, probes map[string]string, order []string, childConstruct string) (sceneTreeNode, sceneTreeNode, sceneCatalogFile, *sceneHomeCache) {

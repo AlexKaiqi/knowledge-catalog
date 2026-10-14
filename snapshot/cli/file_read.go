@@ -68,7 +68,7 @@ func fileReadControls(flags map[string]any) (int64, int64, string, error) {
 	return offset, length, target, nil
 }
 
-func readDeliveredChunk(ctx context.Context, service kcclient.FilesService, request kcclient.WorkspaceFileReadRequest, pin dataset.ResolvedKnowledgeSet, options kcclient.RequestOptions) (kcclient.WorkspaceFileReadResponse, error) {
+func readDeliveredChunk(ctx context.Context, service kcclient.FilesService, request kcclient.WorkspaceFileReadRequest, pin dataset.ResolvedDataset, options kcclient.RequestOptions) (kcclient.WorkspaceFileReadResponse, error) {
 	var read kcclient.WorkspaceFileReadResponse
 	if err := service.Read(ctx, request, options, &read); err != nil {
 		return read, err
@@ -92,7 +92,7 @@ func fileTargetAbsent(target string) error {
 	return nil
 }
 
-func downloadDeliveredFile(ctx context.Context, service kcclient.FilesService, request kcclient.WorkspaceFileReadRequest, pin dataset.ResolvedKnowledgeSet, target string, options kcclient.RequestOptions) (any, error) {
+func downloadDeliveredFile(ctx context.Context, service kcclient.FilesService, request kcclient.WorkspaceFileReadRequest, pin dataset.ResolvedDataset, target string, options kcclient.RequestOptions) (any, error) {
 	temporary, err := os.CreateTemp(filepath.Dir(target), ".kc-file-*")
 	if err != nil {
 		return nil, err

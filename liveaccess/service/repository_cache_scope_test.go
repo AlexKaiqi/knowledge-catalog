@@ -76,14 +76,14 @@ func TestRepositoryReadHotCachePreservesNestedDatasetScope(t *testing.T) {
 	}
 	guard.blocked["public/selected.yaml"] = false
 	commits := map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit}
-	scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return repo, nil }, reader.KnowledgeSetPin{
+	scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return repo, nil }, reader.DatasetPin{
 		Repositories: commits, Items: []reader.DatasetItem{{Repository: repo.ID(), Commit: commit, Kind: "prefix", Prefix: "public"}},
 	})
 	member, err := scope.Member(repo.ID())
 	if err != nil {
 		t.Fatal(err)
 	}
-	nested := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return member, nil }, reader.KnowledgeSetPin{
+	nested := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return member, nil }, reader.DatasetPin{
 		Repositories: commits, Items: reader.WholeRepositoryItems(commits),
 	})
 	nestedMember, err := nested.Member(repo.ID())
@@ -96,7 +96,7 @@ func TestRepositoryReadHotCachePreservesNestedDatasetScope(t *testing.T) {
 			hits := cache.Stats().Hits
 			for _, selection := range []liveservice.ReadRequest{{Commit: commit, Object: id, Hydrator: cache}, {Commit: commit, Address: &private, Hydrator: cache}} {
 				result, err := liveservice.ReadRepository(context.Background(), selected, selection, nil, request)
-				if kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved || result.Value != nil {
+				if kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved || result.Value != nil {
 					t.Errorf("hot cache widened the supplied Dataset scope for Address %v: value=%#v %v", selection.Address, result.Value, err)
 				}
 			}

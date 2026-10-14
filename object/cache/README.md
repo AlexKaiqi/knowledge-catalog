@@ -21,7 +21,7 @@ key 包含 Repository、显式非空 Commit、ObjectID，以及地址读取的 K
 确定，但 object/aspect/member 必须一致。
 
 缓存只接受 Repository 返回的 Snapshot 声明值；`liveaccess` 的动态 hydrate 和交付权限
-处理均在它之后。完整 `KnowledgeValue`（正文、Units、Declarations、Binding 声明、Provenance）
+处理均在它之后。完整 `ObjectValue`（正文、Units、Declarations、Binding 声明、Provenance）
 含每个 Address 的来源信封、来源/证据切片及 Algorithm，在填充与交付时深拷贝，保留原生整数与 byte slice 类型，防止 caller 的裁剪或 State 替换污染
 共享副本。无法按 JSON 计量的非标准正文直接绕过留存，读取语义不变。
 

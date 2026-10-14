@@ -10,7 +10,7 @@ import (
 
 // matchesResidual evaluates the logical predicate against hydrated Canonical
 // values when a provider only guarantees a candidate superset.
-func MatchesResidual(repo objectmodel.Repository, value objectmodel.KnowledgeValue, observations []objectmodel.UnitObservation, req SearchRequest, spec AccessSpec, verifier ...ResidualMatchVerifier) (bool, error) {
+func MatchesResidual(repo objectmodel.Repository, value objectmodel.ObjectValue, observations []objectmodel.UnitObservation, req SearchRequest, spec AccessSpec, verifier ...ResidualMatchVerifier) (bool, error) {
 	doc, err := ExtractFields(repo, value, observations, spec)
 	if err != nil {
 		return false, err

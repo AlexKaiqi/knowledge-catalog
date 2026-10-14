@@ -9,8 +9,8 @@ Dataset 的本机只读消费视图——把固定 Dataset 消费计划挂载成
 `MountHandle` 的 `Unmount` / `Wait`）、只读视图类型（`Directory` / `DirectoryEntry` / `File`）、
 平台面（Linux FUSE 实装；非 Linux 编译通过，`MountAll` 返回显式不支持错误；`Options.Debug`）。
 
-不拥有：写路径（Writer 归 `knowledge`）、Dataset 声明与组合语义（`catalog`）、消费授权与范围
-（`knowledgeapp`）、协议坐标解释（`kernel`）。挂载语义为固定 commit：目标在计划中固定，运行期不切换版本。
+不拥有：写路径（Writer 归 `object`）、Dataset 声明与组合语义（`catalog`）、消费授权与范围
+（`objectapp`）、协议坐标解释（`kernel`）。挂载语义为固定 commit：目标在计划中固定，运行期不切换版本。
 
 ## 最小用法
 

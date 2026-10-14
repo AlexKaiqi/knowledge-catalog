@@ -34,7 +34,7 @@ func TestReaderReturnsActualReadOnlyRepositoryViews(t *testing.T) {
 				repo := testkit.MakeRepository(t, "kr://regression/readonly")
 				base := testkit.MustHead(t, repo, snapshot.DefaultRef)
 				const objectID objectmodel.ObjectID = "readonly/probe"
-				_, err := repo.ApplyKnowledgeCommit(objectmodel.ChangeSet{
+				_, err := repo.ApplyObjectCommit(objectmodel.ChangeSet{
 					TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef,
 					BaseCommit: base, ExpectedTargetCommit: base,
 					Operations: testkit.PutEntity(string(objectID), map[string]any{"value": "fixed"}, "probe.json"),
@@ -81,7 +81,7 @@ func TestReaderReturnsActualReadOnlyRepositoryViews(t *testing.T) {
 				}
 				if entrypoint == "Member" {
 					baseView := view
-					serving := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return baseView, nil }, reader.KnowledgeSetPin{
+					serving := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return baseView, nil }, reader.DatasetPin{
 						Repositories: map[kernel.RepositoryID]kernel.CommitID{raw.ID(): commit},
 						Items:        reader.WholeRepositoryItems(map[kernel.RepositoryID]kernel.CommitID{raw.ID(): commit}),
 					})
@@ -99,7 +99,7 @@ func TestReaderReturnsActualReadOnlyRepositoryViews(t *testing.T) {
 				value, err := view.Read(objectID, commit)
 				if err != nil {
 					t.Errorf("read-only view lost fixed read capability: %v", err)
-				} else if value.Repository != raw.ID() || value.Commit != commit || value.KnowledgeRef.Repository != raw.ID() || value.KnowledgeRef.Object != objectID || value.Address.ObjectID != objectID {
+				} else if value.Repository != raw.ID() || value.Commit != commit || value.ObjectRef.Repository != raw.ID() || value.ObjectRef.Object != objectID || value.Address.ObjectID != objectID {
 					t.Errorf("read-only view changed fixed read coordinates: %#v", value)
 				}
 				if err == nil && !reflect.DeepEqual(value.Value, wantValue) {

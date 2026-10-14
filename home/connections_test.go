@@ -42,7 +42,7 @@ func TestConnectionReadOnlyRotationRecoveryAndAuthorityBinding(t *testing.T) {
 	})
 	name := provider.NewRepo()
 	cfg := deploymentFixture(t)
-	cfg.Connections = &ConnectionPolicy{AllowedOrigins: []string{provider.Origin()}, CreatorActions: []string{"repository.connections.manage", "repository.metadata.read", "knowledge.read"}}
+	cfg.Connections = &ConnectionPolicy{AllowedOrigins: []string{provider.Origin()}, CreatorActions: []string{"repository.connections.manage", "repository.metadata.read", "object.read"}}
 	if err := InitializeDeployment(cfg, func(dir, _ string) error {
 		return os.WriteFile(filepath.Join(dir, "allow.json"), []byte(`{"version":2,"rules":[]}`), 0600)
 	}); err != nil {

@@ -40,8 +40,8 @@ func (p *traverseTestProjection) RelationsAtContext(_ context.Context, repo obje
 	return retrieval.RelationPage{Hits: hits, Exhausted: true}, nil
 }
 
-func traverseEndpoint(repo kernel.RepositoryID, object string) objectmodel.KnowledgeRef {
-	return objectmodel.KnowledgeRef{Repository: repo, Object: objectmodel.ObjectID(object)}
+func traverseEndpoint(repo kernel.RepositoryID, object string) objectmodel.ObjectRef {
+	return objectmodel.ObjectRef{Repository: repo, Object: objectmodel.ObjectID(object)}
 }
 
 func traverseRelation(t *testing.T, repo kernel.RepositoryID, commit kernel.CommitID, id, relationType string, direction objectmodel.RelationDirection, endpoints ...[2]string) retrieval.RelationHit {
@@ -57,19 +57,19 @@ func traverseRelation(t *testing.T, repo kernel.RepositoryID, commit kernel.Comm
 }
 
 // traverseRef decodes "repo|object" coordinates used by the fixture graph.
-func traverseRef(encoded string) objectmodel.KnowledgeRef {
+func traverseRef(encoded string) objectmodel.ObjectRef {
 	for i := 0; i < len(encoded); i++ {
 		if encoded[i] == '|' {
-			return objectmodel.KnowledgeRef{Repository: kernel.RepositoryID(encoded[:i]), Object: objectmodel.ObjectID(encoded[i+1:])}
+			return objectmodel.ObjectRef{Repository: kernel.RepositoryID(encoded[:i]), Object: objectmodel.ObjectID(encoded[i+1:])}
 		}
 	}
 	panic("bad fixture reference " + encoded)
 }
 
-func traverseFixture(t *testing.T) (relationTestLookup, reader.KnowledgeSetPin, *traverseTestProjection) {
+func traverseFixture(t *testing.T) (relationTestLookup, reader.DatasetPin, *traverseTestProjection) {
 	t.Helper()
 	repos := relationTestLookup{}
-	pin := reader.KnowledgeSetPin{Repositories: map[kernel.RepositoryID]kernel.CommitID{}}
+	pin := reader.DatasetPin{Repositories: map[kernel.RepositoryID]kernel.CommitID{}}
 	for _, id := range []kernel.RepositoryID{"kr://a/entities", "kr://b/graph", "kr://z/graph"} {
 		repos[id] = relationTestRepository{id: id}
 		pin.Repositories[id] = kernel.CommitID(string(id) + "-fixed")
@@ -101,17 +101,17 @@ func traverseFixture(t *testing.T) (relationTestLookup, reader.KnowledgeSetPin, 
 	return repos, pin, projection
 }
 
-func traverseExecutor(t *testing.T) (DatasetTraverseExecutor, reader.KnowledgeSetPin) {
+func traverseExecutor(t *testing.T) (DatasetTraverseExecutor, reader.DatasetPin) {
 	t.Helper()
 	repos, pin, projection := traverseFixture(t)
 	lookup := func(id kernel.RepositoryID) (objectmodel.Repository, error) {
-		return repos.Require(id, kernel.ErrKnowledgeRefUnresolved)
+		return repos.Require(id, kernel.ErrObjectRefUnresolved)
 	}
 	executor := DatasetTraverseExecutor{Serving: reader.Open(lookup, pin), Repositories: repos, Projection: projection}
 	return executor, pin
 }
 
-func traverseRequest(start objectmodel.KnowledgeRef, maxHops int) retrieval.TraverseRequest {
+func traverseRequest(start objectmodel.ObjectRef, maxHops int) retrieval.TraverseRequest {
 	return retrieval.TraverseRequest{Query: retrieval.TraverseQuery{Start: start, MaxHops: maxHops}}
 }
 
@@ -199,7 +199,7 @@ func TestTraverseHopCeilingAndMinHopsFilter(t *testing.T) {
 func TestTraverseStartOutsideScopeFailsClosed(t *testing.T) {
 	executor, _ := traverseExecutor(t)
 	_, err := executor.Execute(context.Background(), traverseRequest(traverseEndpoint("kr://out/repo", "object/out"), 2))
-	if kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+	if kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		t.Fatalf("start outside dataset: %v", err)
 	}
 }
@@ -207,7 +207,7 @@ func TestTraverseStartOutsideScopeFailsClosed(t *testing.T) {
 func TestTraverseContinuationBoundToDatasetScope(t *testing.T) {
 	repos, pin, projection := traverseFixture(t)
 	lookup := func(id kernel.RepositoryID) (objectmodel.Repository, error) {
-		return repos.Require(id, kernel.ErrKnowledgeRefUnresolved)
+		return repos.Require(id, kernel.ErrObjectRefUnresolved)
 	}
 	executor := DatasetTraverseExecutor{Serving: reader.Open(lookup, pin), Repositories: repos, Projection: projection}
 	request := traverseRequest(traverseEndpoint("kr://a/entities", "object/a"), 3)
@@ -243,7 +243,7 @@ func TestTraverseValidationRejectsUnboundedShapes(t *testing.T) {
 func TestRepoTraverseStopsAtRepositoryBoundary(t *testing.T) {
 	repos, pin, projection := traverseFixture(t)
 	executor := RepoTraverseExecutor{Repositories: repos, Projection: projection}
-	request := traverseRequest(objectmodel.KnowledgeRef{Repository: "kr://a/entities", Object: "object/a"}, 3)
+	request := traverseRequest(objectmodel.ObjectRef{Repository: "kr://a/entities", Object: "object/a"}, 3)
 	page, err := executor.Execute(context.Background(), request, "kr://a/entities", pin.Repositories["kr://a/entities"])
 	if err != nil {
 		t.Fatal(err)

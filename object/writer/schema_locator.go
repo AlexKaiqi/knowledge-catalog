@@ -29,7 +29,7 @@ func updateSchemaLocator(tree snapshot.TreeStore, commit kernel.CommitID, idx *r
 	}
 	if !found && len(schemas) != 0 {
 		return kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-			"knowledge locator has schemas but lacks Binding coordinates; explicit locator rebuild is required")
+			"object locator has schemas but lacks Binding coordinates; explicit locator rebuild is required")
 	}
 	final := repofile.BuildLocatorManifest(idx)
 	finalBindings := map[objectmodel.ObjectID]struct{}{}
@@ -66,7 +66,7 @@ func updateSchemaLocator(tree snapshot.TreeStore, commit kernel.CommitID, idx *r
 func readSchemaCoordinates(tree snapshot.TreeReader, file string, commit kernel.CommitID) (map[objectmodel.ObjectID]struct{}, bool, error) {
 	present := map[objectmodel.ObjectID]struct{}{}
 	raw, err := tree.ReadFile(file, commit)
-	if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+	if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 		return present, false, nil
 	}
 	if err != nil {

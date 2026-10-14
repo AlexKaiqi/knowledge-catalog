@@ -46,8 +46,8 @@ func admissionTestFacade(dir string, policy *apphome.AdmissionConfig) http.Handl
 func TestAdmissionReportsOnlyCallerGrantsAndCurrentAdministrators(t *testing.T) {
 	dir := t.TempDir()
 	if err := inv.WriteAllow(dir, inv.AllowFile{Version: inv.AllowVersion, Rules: []inv.AllowRule{
-		{ID: "mine", Principal: "kaiqidong", Repo: "kr://platform/one", Actions: []string{"knowledge.read"}},
-		{ID: "other", Principal: "alice", Repo: "kr://platform/one", Actions: []string{"knowledge.read"}},
+		{ID: "mine", Principal: "kaiqidong", Repo: "kr://platform/one", Actions: []string{"object.read"}},
+		{ID: "other", Principal: "alice", Repo: "kr://platform/one", Actions: []string{"object.read"}},
 		{ID: "admin", Principal: "agent:operator", Actions: []string{"admin.grants.manage"}},
 	}}); err != nil {
 		t.Fatal(err)
@@ -110,29 +110,29 @@ func TestRepositoryShareCannotWidenConsumptionAndRevokeIsScoped(t *testing.T) {
 	dir := t.TempDir()
 	repo, other := "kr://kaiqidong/one", "kr://someone/two"
 	cx := &inv.Invocation{Home: dir, Flags: map[string]FlagValue{"as": "kaiqidong", "repo": repo}}
-	policy := []string{"knowledge.read", "knowledge.search"}
+	policy := []string{"object.read", "object.search"}
 	file := inv.AllowFile{Version: inv.AllowVersion, Rules: []inv.AllowRule{
-		{ID: "owner", Principal: "kaiqidong", Repo: repo, Actions: []string{"repository.shares.manage", "knowledge.read"}},
-		{ID: "limited", Principal: "kaiqidong", Repo: repo, Object: "public/*", Actions: []string{"knowledge.search"}},
+		{ID: "owner", Principal: "kaiqidong", Repo: repo, Actions: []string{"repository.shares.manage", "object.read"}},
+		{ID: "limited", Principal: "kaiqidong", Repo: repo, Object: "public/*", Actions: []string{"object.search"}},
 		{ID: "someone-admin", Principal: "someone", Actions: []string{"*"}},
 	}}
 	if err := inv.WriteAllow(dir, file); err != nil {
 		t.Fatal(err)
 	}
-	for _, action := range []string{"knowledge.search", "repository.shares.manage", "admin.grants.manage", "resource.access", "*"} {
+	for _, action := range []string{"object.search", "repository.shares.manage", "admin.grants.manage", "resource.access", "*"} {
 		if _, err := createRepositoryShareWithPolicy(cx, kcclient.RepositoryShareRequest{Principal: "bob", Actions: []string{action}}, policy); kernel.CodeOf(err) != kernel.ErrForbidden {
 			t.Fatalf("widened or unmanaged action %s: %v", action, err)
 		}
 	}
-	shared, err := createRepositoryShareWithPolicy(cx, kcclient.RepositoryShareRequest{Principal: "bob", Actions: []string{"knowledge.read"}}, policy)
+	shared, err := createRepositoryShareWithPolicy(cx, kcclient.RepositoryShareRequest{Principal: "bob", Actions: []string{"object.read"}}, policy)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !inv.PrincipalAllowed(dir, "bob", "knowledge.read", repo) || inv.PrincipalAllowed(dir, "bob", "knowledge.read", other) || inv.PrincipalAllowed(dir, "bob", "repository.shares.manage", repo) {
+	if !inv.PrincipalAllowed(dir, "bob", "object.read", repo) || inv.PrincipalAllowed(dir, "bob", "object.read", other) || inv.PrincipalAllowed(dir, "bob", "repository.shares.manage", repo) {
 		t.Fatal("recipient rights are not limited to shared repo/action")
 	}
 	file, _ = inv.ReadAllow(dir)
-	file.Rules = append(file.Rules, inv.AllowRule{ID: "other-share", ShareID: "other-share", SharedBy: "someone", Principal: "bob", Repo: other, Actions: []string{"knowledge.read"}})
+	file.Rules = append(file.Rules, inv.AllowRule{ID: "other-share", ShareID: "other-share", SharedBy: "someone", Principal: "bob", Repo: other, Actions: []string{"object.read"}})
 	if err := inv.WriteAllow(dir, file); err != nil {
 		t.Fatal(err)
 	}
@@ -146,15 +146,15 @@ func TestRepositoryShareCannotWidenConsumptionAndRevokeIsScoped(t *testing.T) {
 	if _, err := removeRepositoryShare(cx); err != nil {
 		t.Fatal(err)
 	}
-	if inv.PrincipalAllowed(dir, "bob", "knowledge.read", repo) || !inv.PrincipalAllowed(dir, "bob", "knowledge.read", other) || !inv.PrincipalAllowed(dir, "someone", "admin.grants.manage", "") {
+	if inv.PrincipalAllowed(dir, "bob", "object.read", repo) || !inv.PrincipalAllowed(dir, "bob", "object.read", other) || !inv.PrincipalAllowed(dir, "someone", "admin.grants.manage", "") {
 		t.Fatal("share revocation touched unrelated rights or retained share")
 	}
 	file, _ = inv.ReadAllow(dir)
-	file.Rules = []inv.AllowRule{{ID: "ref-limited", Principal: "kaiqidong", Repo: repo, Ref: "refs/heads/main", Actions: []string{"knowledge.read"}}}
+	file.Rules = []inv.AllowRule{{ID: "ref-limited", Principal: "kaiqidong", Repo: repo, Ref: "refs/heads/main", Actions: []string{"object.read"}}}
 	if err := inv.WriteAllow(dir, file); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := createRepositoryShareWithPolicy(cx, kcclient.RepositoryShareRequest{Principal: "bob", Actions: []string{"knowledge.read"}}, policy); kernel.CodeOf(err) != kernel.ErrForbidden {
+	if _, err := createRepositoryShareWithPolicy(cx, kcclient.RepositoryShareRequest{Principal: "bob", Actions: []string{"object.read"}}, policy); kernel.CodeOf(err) != kernel.ErrForbidden {
 		t.Fatalf("share widened ref-restricted rights: %v", err)
 	}
 }

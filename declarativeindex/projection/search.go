@@ -111,7 +111,7 @@ func (idx *Index) SemanticWindowAtContext(ctx context.Context, repo objectmodel.
 	result := retrieval.SearchResult{
 		SearchView:   retrieval.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit}},
 		Completeness: retrieval.CompletenessPartial,
-		Hits:         []retrieval.KnowledgeHit{},
+		Hits:         []retrieval.ObjectHit{},
 	}
 	result.Stats.Candidates += len(page.Candidates)
 	unscopedCount := len(page.Candidates)
@@ -191,7 +191,7 @@ func (idx *Index) searchEngineAtContext(ctx context.Context, repo objectmodel.Re
 	result := retrieval.SearchResult{
 		SearchView:   view,
 		Completeness: retrieval.CompletenessComplete,
-		Hits:         []retrieval.KnowledgeHit{},
+		Hits:         []retrieval.ObjectHit{},
 	}
 	planStarted := time.Now()
 	meta, err := loadMetaContext(ctx, eng)
@@ -384,7 +384,7 @@ func (idx *Index) appendCandidatePage(repo objectmodel.Repository, commit kernel
 		}
 		candidateIDs = append(candidateIDs, candidate.ObjectID)
 	}
-	hydrated := map[objectmodel.ObjectID]objectmodel.KnowledgeValue{}
+	hydrated := map[objectmodel.ObjectID]objectmodel.ObjectValue{}
 	versions := map[objectmodel.ObjectID][]objectmodel.UnitObservation{}
 	if state != nil {
 		for _, id := range candidateIDs {
@@ -424,7 +424,7 @@ func (idx *Index) appendCandidatePage(repo objectmodel.Repository, commit kernel
 		}
 		version := retrieval.VersionOf(value)
 		version.Observations = append([]objectmodel.UnitObservation(nil), versions[candidate.ObjectID]...)
-		result.Hits = append(result.Hits, retrieval.KnowledgeHit{Knowledge: value, Version: version, Evidence: candidate.Evidence})
+		result.Hits = append(result.Hits, retrieval.ObjectHit{Object: value, Version: version, Evidence: candidate.Evidence})
 		if resolved.Limit > 0 && len(result.Hits) >= resolved.Limit {
 			break
 		}
@@ -432,17 +432,17 @@ func (idx *Index) appendCandidatePage(repo objectmodel.Repository, commit kernel
 	return nil
 }
 
-func hydrateMany(repo objectmodel.Repository, commit kernel.CommitID, objectIDs []objectmodel.ObjectID) (map[objectmodel.ObjectID]objectmodel.KnowledgeValue, error) {
+func hydrateMany(repo objectmodel.Repository, commit kernel.CommitID, objectIDs []objectmodel.ObjectID) (map[objectmodel.ObjectID]objectmodel.ObjectValue, error) {
 	if batch, ok := repo.(objectmodel.BatchReadStore); ok {
 		return batch.ReadMany(objectIDs, commit)
 	}
-	out := map[objectmodel.ObjectID]objectmodel.KnowledgeValue{}
+	out := map[objectmodel.ObjectID]objectmodel.ObjectValue{}
 	for _, objectID := range objectIDs {
 		if _, duplicate := out[objectID]; duplicate {
 			continue
 		}
 		value, err := repo.Read(objectID, commit)
-		if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+		if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 			continue
 		}
 		if err != nil {

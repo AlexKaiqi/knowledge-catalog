@@ -4,7 +4,7 @@ question: "经公开 argv 物化 Dataset 交付目录树的墙钟、字节吞吐
 views: [read]
 ladder: deliveredObjectCount
 operation:
-  surface: knowledge
+  surface: object
   action: dataset-clone
   shape: "每档在独立空目标目录执行 dataset clone（经 Server、只随当前服务版），统计墙钟、物化文件数、交付字节与分页请求数；clone 后与发布清单核对文件数与字节"
   isolation: per-run

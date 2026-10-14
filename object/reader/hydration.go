@@ -22,34 +22,34 @@ func (r *Reader) hydration() objectmodel.Hydrator {
 // SetHydrator configures this request's Serving before it is used.
 func (s *Serving) SetHydrator(h objectmodel.Hydrator) { s.hydrator = h }
 
-func readHydrated(h objectmodel.Hydrator, repo objectmodel.Repository, id objectmodel.ObjectID, commit kernel.CommitID) (objectmodel.KnowledgeValue, error) {
+func readHydrated(h objectmodel.Hydrator, repo objectmodel.Repository, id objectmodel.ObjectID, commit kernel.CommitID) (objectmodel.ObjectValue, error) {
 	if h == nil {
 		return repo.Read(id, commit)
 	}
 	if err := checkHydrationScope(repo, id, commit); err != nil {
-		return objectmodel.KnowledgeValue{}, err
+		return objectmodel.ObjectValue{}, err
 	}
 	values, err := h.ReadMany(repo, commit, []objectmodel.ObjectID{id})
 	if err != nil {
-		return objectmodel.KnowledgeValue{}, err
+		return objectmodel.ObjectValue{}, err
 	}
 	value, ok := values[id]
 	if !ok {
-		return objectmodel.KnowledgeValue{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "object %s is missing at commit %s", id, commit)
+		return objectmodel.ObjectValue{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "object %s is missing at commit %s", id, commit)
 	}
 	if err := objectmodel.ValidateHydratedObject(repo.ID(), commit, id, value); err != nil {
-		return objectmodel.KnowledgeValue{}, err
+		return objectmodel.ObjectValue{}, err
 	}
 	return value, nil
 }
 
-func readAddressHydrated(h objectmodel.Hydrator, repo objectmodel.Repository, address objectmodel.Address, commit kernel.CommitID) (objectmodel.KnowledgeValue, error) {
+func readAddressHydrated(h objectmodel.Hydrator, repo objectmodel.Repository, address objectmodel.Address, commit kernel.CommitID) (objectmodel.ObjectValue, error) {
 	if h == nil {
 		return repo.ReadAddress(address, commit)
 	}
 	if err := checkHydrationScope(repo, address.ObjectID, commit); err != nil {
-		if kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
-			return objectmodel.KnowledgeValue{}, err
+		if kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
+			return objectmodel.ObjectValue{}, err
 		}
 		// A partial object cannot consume an entry retained for a whole Repo.
 		// The existing scoped Address path may still admit exactly this unit.
@@ -57,10 +57,10 @@ func readAddressHydrated(h objectmodel.Hydrator, repo objectmodel.Repository, ad
 	}
 	value, err := h.ReadAddress(repo, commit, address)
 	if err != nil {
-		return objectmodel.KnowledgeValue{}, err
+		return objectmodel.ObjectValue{}, err
 	}
 	if err := objectmodel.ValidateHydratedAddress(repo.ID(), commit, address, value); err != nil {
-		return objectmodel.KnowledgeValue{}, err
+		return objectmodel.ObjectValue{}, err
 	}
 	return value, nil
 }

@@ -7,7 +7,7 @@ steps:
       rate: "env load.steadyEventsPerDay 折算速率；单事件单 commit；duplicate 5%、乱序 2% 按模型注入"
       window: "env load.measure（资格口径 ≥24h；冒烟窗口单独标注，不外推）"
   mix:
-    surface: knowledge
+    surface: object
     action: read-search-mix
     params:
       shape: "与稳态写入并行的读/检索混合（冷热分布沿用读探针口径）"

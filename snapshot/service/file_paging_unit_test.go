@@ -14,7 +14,7 @@ func TestSnapshotDeliveredDerivedCursorAndDefaultLimit(t *testing.T) {
 	for i := range items {
 		items[i] = dataset.DatasetItem{Kind: dataset.DatasetItemFile, Target: fmt.Sprintf("docs/file-%03d", i), Repository: "repo", Commit: "c1", File: "source"}
 	}
-	pin := dataset.ResolvedKnowledgeSet{SetID: "files", Revision: 1, PinID: "fixed"}
+	pin := dataset.ResolvedDataset{SetID: "files", Revision: 1, PinID: "fixed"}
 	view := NewFileView(ViewOptions{Delivered: true, Pin: pin, Items: items})
 	first, err := view.List(FileDirectoryRequest{Path: "docs"})
 	if err != nil || len(first.Entries) != 500 || first.Exhausted || first.Continuation == "" {
@@ -26,12 +26,12 @@ func TestSnapshotDeliveredDerivedCursorAndDefaultLimit(t *testing.T) {
 	}
 	for _, test := range []struct {
 		name string
-		pin  dataset.ResolvedKnowledgeSet
+		pin  dataset.ResolvedDataset
 		path string
 	}{
-		{"dataset", dataset.ResolvedKnowledgeSet{SetID: "other", Revision: 1, PinID: "fixed"}, "docs"},
-		{"revision", dataset.ResolvedKnowledgeSet{SetID: "files", Revision: 2, PinID: "fixed"}, "docs"},
-		{"pin", dataset.ResolvedKnowledgeSet{SetID: "files", Revision: 1, PinID: "other"}, "docs"},
+		{"dataset", dataset.ResolvedDataset{SetID: "other", Revision: 1, PinID: "fixed"}, "docs"},
+		{"revision", dataset.ResolvedDataset{SetID: "files", Revision: 2, PinID: "fixed"}, "docs"},
+		{"pin", dataset.ResolvedDataset{SetID: "files", Revision: 1, PinID: "other"}, "docs"},
 		{"directory", pin, "other"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -60,7 +60,7 @@ func TestSnapshotDeliveredPagingChecksProviderProgress(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			calls := 0
-			view := NewFileView(ViewOptions{Delivered: true, Pin: dataset.ResolvedKnowledgeSet{SetID: "files", Revision: 1, PinID: "fixed"}, Mounts: []dataset.VirtualMount{{Path: "docs", Repository: "repo", Commit: "c1"}}, Directory: func(_ dataset.VirtualMount, _ string, limit int, continuation string) (snapshot.DirectoryPage, error) {
+			view := NewFileView(ViewOptions{Delivered: true, Pin: dataset.ResolvedDataset{SetID: "files", Revision: 1, PinID: "fixed"}, Mounts: []dataset.VirtualMount{{Path: "docs", Repository: "repo", Commit: "c1"}}, Directory: func(_ dataset.VirtualMount, _ string, limit int, continuation string) (snapshot.DirectoryPage, error) {
 				calls++
 				if limit != 1 {
 					t.Fatalf("provider received an unbounded limit %d", limit)
@@ -88,7 +88,7 @@ func TestSnapshotDeliveredPagingChecksProviderProgress(t *testing.T) {
 }
 
 func TestSnapshotDeliveredPagingRejectsRepeatedProviderPosition(t *testing.T) {
-	view := NewFileView(ViewOptions{Delivered: true, Pin: dataset.ResolvedKnowledgeSet{SetID: "files", Revision: 1, PinID: "fixed"}, Mounts: []dataset.VirtualMount{{Path: "docs", Repository: "repo", Commit: "c1"}}, Directory: func(dataset.VirtualMount, string, int, string) (snapshot.DirectoryPage, error) {
+	view := NewFileView(ViewOptions{Delivered: true, Pin: dataset.ResolvedDataset{SetID: "files", Revision: 1, PinID: "fixed"}, Mounts: []dataset.VirtualMount{{Path: "docs", Repository: "repo", Commit: "c1"}}, Directory: func(dataset.VirtualMount, string, int, string) (snapshot.DirectoryPage, error) {
 		return snapshot.DirectoryPage{Entries: []snapshot.DirectoryEntry{{Name: "a", Kind: "file"}}, Continuation: "stuck", Generation: "c1"}, nil
 	}})
 	first, err := view.List(FileDirectoryRequest{Path: "docs", Limit: 1})

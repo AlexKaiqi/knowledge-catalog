@@ -29,10 +29,10 @@ func TestApplicationRequestsUseOwnedIdentifierTypes(t *testing.T) {
 	}
 }
 
-func (r *readRecorder) ReadReference(ref objectmodel.Reference, commit kernel.CommitID) (objectmodel.KnowledgeValue, error) {
+func (r *readRecorder) ReadReference(ref objectmodel.Reference, commit kernel.CommitID) (objectmodel.ObjectValue, error) {
 	r.ref, r.commit = ref, commit
 	r.calls++
-	return objectmodel.KnowledgeValue{KnowledgeRef: objectmodel.KnowledgeRef{Repository: ref.Repository, Object: ref.Object}, Commit: commit, Locator: ref.Locator}, nil
+	return objectmodel.ObjectValue{ObjectRef: objectmodel.ObjectRef{Repository: ref.Repository, Object: ref.Object}, Commit: commit, Locator: ref.Locator}, nil
 }
 
 func TestReadExecutorUsesTypedRepositoryObjectAndBasis(t *testing.T) {

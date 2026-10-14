@@ -60,7 +60,7 @@ func TestReferenceFragmentTravelsAsJSONAndNullIsExplicit(t *testing.T) {
 	if err := remote.Put(context.Background(), MaintenanceRequest{Reference: reference, CommandID: "put", Value: nil}, options, &output); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(paths, ",") != "/api/knowledge/v1/objects:read,/api/knowledge/v1/objects:put" {
+	if strings.Join(paths, ",") != "/api/object/v1/objects:read,/api/object/v1/objects:put" {
 		t.Fatal(paths)
 	}
 }

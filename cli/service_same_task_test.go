@@ -36,7 +36,7 @@ func TestSameTaskViaCLIAndHTTPYieldsSameDomainResult(t *testing.T) {
 		return readSingleHit(t, body(t, kcRemote(t, server.URL, principal, "read", testObjectReference(t, repository, "Policy:one", ""), "--dataset", workspace)))
 	}
 	httpRead := func(as string) (int, any) {
-		status, payload, _ := httpSurfaceRequest(t, server, http.MethodPost, "/knowledge/v1/objects:read",
+		status, payload, _ := httpSurfaceRequest(t, server, http.MethodPost, "/object/v1/objects:read",
 			map[string]any{"dataset": workspace, "reference": testObjectReference(t, repository, "Policy:one", "")}, as)
 		return status, payload
 	}

@@ -28,7 +28,7 @@ schema_ref: schema/system/capability-entrypoints/v1
     {
       "action": "deployment.system.publish",
       "command": "kc deployment system publish",
-      "description": "把系统知识出版物写入绑定仓",
+      "description": "把系统对象出版物写入绑定仓",
       "help": "kc help deployment system publish"
     },
     {

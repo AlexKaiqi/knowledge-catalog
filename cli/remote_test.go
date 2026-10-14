@@ -9,10 +9,10 @@ import (
 	"testing"
 )
 
-func TestRemoteGroupedCLIUsesTypedKnowledgeClient(t *testing.T) {
+func TestRemoteGroupedCLIUsesTypedObjectClient(t *testing.T) {
 	seen := make(chan map[string]any, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/knowledge/v1/objects:read" {
+		if r.URL.Path != "/object/v1/objects:read" {
 			http.NotFound(w, r)
 			return
 		}
@@ -40,10 +40,10 @@ func TestRemoteGroupedCLIUsesTypedKnowledgeClient(t *testing.T) {
 	}
 }
 
-func TestRemoteKnowledgeReadUsesRepositoryBasisWithoutWorkspace(t *testing.T) {
+func TestRemoteObjectReadUsesRepositoryBasisWithoutWorkspace(t *testing.T) {
 	seen := make(chan map[string]any, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/knowledge/v1/objects:read" {
+		if r.URL.Path != "/object/v1/objects:read" {
 			http.NotFound(w, r)
 			return
 		}
@@ -109,7 +109,7 @@ func TestRemoteCLIUsesRepositoryWithoutCatalogContext(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{"catalogs": []map[string]string{{"id": "kr://acme/catalog"}}})
 			return
 		}
-		if r.URL.Path != "/knowledge/v1/objects:read" {
+		if r.URL.Path != "/object/v1/objects:read" {
 			http.NotFound(w, r)
 			return
 		}
@@ -206,7 +206,7 @@ func TestRemoteAccessDescribeSendsThePinnedWorkspace(t *testing.T) {
 func TestRemoteSearchPreservesEveryPublicOperator(t *testing.T) {
 	seen := make(chan map[string]any, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/knowledge/v1/search" {
+		if r.URL.Path != "/object/v1/search" {
 			http.NotFound(w, r)
 			return
 		}

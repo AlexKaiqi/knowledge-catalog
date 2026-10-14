@@ -5,8 +5,8 @@ const guideSnapshot = `Snapshot 提供确定版本的文件保存、组合和交
 先分清三个资源/版本关系：
   Repository 是来源仓，拥有自己的文件和提交历史。一个 commit 标识该仓的一份固定文件版本。
   ref 是指向 commit 的引用，可随来源提交移动；选择分支是取得版本的办法，分支名本身不是固定版本。
-  Dataset 是独立命名、版本化的交付范围，保存来源 commit 的引用、所选文件和交付路径，不是新的可写 Repository。
-  Dataset revision 是这一份组合的发布版号；多个来源各有自己的 commit，revision 不等于其中任一仓的 commit。
+ Dataset 是独立命名、版本化的交付范围，保存来源 commit 的引用、所选文件和交付路径，不是新的可写 Repository。
+ Dataset revision 是这一份组合的发布版号；多个来源各有自己的 commit，revision 不等于其中任一仓的 commit。
 
 例如：docs 仓某个 commit 的 handbook/ → delivery 第 1 版的 reference/。
 来源仓后来提交，不改变 delivery 第 1 版；要采用更新，维护者显式发布更大的 revision。
@@ -20,7 +20,7 @@ Dataset 不复制来源整仓、不拼接文件字节，也不自动发权。固
   要选定版本或理解 pin：kc help versions / kc help pin
   要写配方或自定义属性：kc help recipe / kc help metadata
 
-文件交付不要求 Schema 或检索索引。要按知识对象查询时另看 kc help knowledge；原始文件路径用 files list/read。`
+文件交付不要求 Schema 或检索索引。要按对象查询时另看 kc help object；原始文件路径用 files list/read。`
 
 const guideRepository = `Repository 是保存来源文件、独立提交历史和写入边界的仓。
 来源文件路径相对于原仓根目录；发布 Dataset 时，可以选择子目录或单文件，再映射到新的交付位置。
@@ -35,7 +35,7 @@ create 不自动 attach，attach 不把整仓加入任何 Dataset；两步也不
 来源准备：
   由来源管理者提供 Repository 身份、原仓相对路径、可用分支和完整 commit；查看原 lakeFS 的分支、提交历史与对象浏览器。
   KC 当前没有列举原仓分支/提交历史/原始目录树的业务命令。files list 只浏览已发布 Dataset 的交付树。
-  普通文件仓可由原生来源工具维护；符合知识发布合同的仓才沿 KC Writer 发布知识，见 kc help write。
+  普通文件仓可由原生来源工具维护；符合对象发布合同的仓才沿 KC Writer 发布对象，见 kc help write。
 
 Repository 自定义属性由原仓原生元数据管理，使用路径和权限见 kc help metadata。
 选源版本见 kc help versions；Dataset 与原仓的关系见 kc help snapshot。`
@@ -44,7 +44,7 @@ const guideVersions = `区分可移动来源引用与固定交付版本：
   commit：一个 Repository 的完整文件版本标识，从来源提交历史取得。
   ref：可指向另一 commit 的引用。当前 lakeFS 来源选择支持 HEAD、refs/heads/main 和 refs/heads/<分支名>。
   refs/heads/main 与 HEAD 在这里指向已连接原仓的默认分支；显式其它分支写 refs/heads/release 这样的形式。
-  Dataset revision：同名 Dataset 递增的发布版号；发布时解析各来源引用，冻结实际 commit 与文件范围。
+ Dataset revision：同名 Dataset 递增的发布版号；发布时解析各来源引用，冻结实际 commit 与文件范围。
 
 选源输入：
   kc dataset define delivery --revision 1 --source 'docs=refs/heads/release@reference@handbook'

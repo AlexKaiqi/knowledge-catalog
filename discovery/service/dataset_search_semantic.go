@@ -48,7 +48,7 @@ func (e DatasetSearchExecutor) executeSemantic(ctx context.Context, req retrieva
 		return serving.Contains(id, object)
 	})
 	plan, err := retrieval.PlanAccess(func(id kernel.RepositoryID) (objectmodel.Repository, error) {
-		return e.Repositories.Require(id, kernel.ErrKnowledgeRefUnresolved)
+		return e.Repositories.Require(id, kernel.ErrObjectRefUnresolved)
 	}, pin, projectedAccessContracts(e.Projection))
 	if err != nil {
 		return retrieval.SearchResult{}, err
@@ -60,9 +60,9 @@ func (e DatasetSearchExecutor) executeSemantic(ctx context.Context, req retrieva
 	memberReq := req
 	memberReq.Limit = limit
 	memberReq.Continuation = ""
-	windows := make([][]retrieval.KnowledgeHit, 0, len(plan.Specs))
+	windows := make([][]retrieval.ObjectHit, 0, len(plan.Specs))
 	for _, spec := range plan.Specs {
-		repo, err := e.Repositories.Require(spec.Repository, kernel.ErrKnowledgeRefUnresolved)
+		repo, err := e.Repositories.Require(spec.Repository, kernel.ErrObjectRefUnresolved)
 		if err != nil {
 			return retrieval.SearchResult{}, err
 		}
@@ -111,8 +111,8 @@ func cloneCommitMap(source map[kernel.RepositoryID]kernel.CommitID) map[kernel.R
 // mergeMemberWindows interleaves member windows by index: round one takes
 // each member's first hit in member order, round two the second, and so on,
 // until the page limit is reached. Ties stay in member order.
-func mergeMemberWindows(windows [][]retrieval.KnowledgeHit, limit int) []retrieval.KnowledgeHit {
-	merged := make([]retrieval.KnowledgeHit, 0, limit)
+func mergeMemberWindows(windows [][]retrieval.ObjectHit, limit int) []retrieval.ObjectHit {
+	merged := make([]retrieval.ObjectHit, 0, limit)
 	seen := map[string]bool{}
 	for round := 0; len(merged) < limit; round++ {
 		advanced := false
@@ -122,7 +122,7 @@ func mergeMemberWindows(windows [][]retrieval.KnowledgeHit, limit int) []retriev
 			}
 			advanced = true
 			hit := window[round]
-			key := string(hit.Knowledge.Repository) + "\x00" + string(hit.Knowledge.Address.ObjectID)
+			key := string(hit.Object.Repository) + "\x00" + string(hit.Object.Address.ObjectID)
 			if seen[key] {
 				continue
 			}

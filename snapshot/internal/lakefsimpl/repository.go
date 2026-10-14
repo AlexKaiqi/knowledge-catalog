@@ -56,7 +56,7 @@ type Repository struct {
 	// Positive commit-existence cache. lakeFS commits are immutable and never
 	// deleted, so a known commit never needs re-probing; negative results are
 	// never cached because a commit may be created concurrently. This holds
-	// coordinate identity only — a transport cache, not knowledge semantics.
+	// coordinate identity only — a transport cache, not object semantics.
 	verifiedMu   sync.Mutex
 	verified     map[kernel.CommitID]struct{}
 	verifiedFIFO []kernel.CommitID
@@ -418,7 +418,7 @@ func (r *Repository) ReadFile(filePath string, commit kernel.CommitID) ([]byte, 
 	}
 	content, err := r.client.getObject(string(commit), clean)
 	if statusOf(err) == http.StatusNotFound {
-		return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved,
+		return nil, kernel.Fail(kernel.ErrObjectRefUnresolved,
 			"path %s is missing at commit %s", clean, commit)
 	}
 	return content, err

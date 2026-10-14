@@ -5,7 +5,7 @@
 
 本包还拥有既有 `binding show`、`access`、`invoke` 的 `Commands()`、帮助、用法校验和
 `Shape()`，不更名业务任务。`New(Client, Context)` 采用宿主注入的已认证 typed transport；
-请求复用已有 `KnowledgeScope` 与 JSON 字段，宿主提供已经处理的 Dataset 固定依据，
+请求复用已有 `ObjectScope` 与 JSON 字段，宿主提供已经处理的 Dataset 固定依据，
 本包不重做身份解析、pin 文件解析或路由。`read` 和独立审计入口的说明只链接已有任务。
 
 统一 `kc plugin liveaccess help` 使用现有插件说明任务读取已编译说明。实际访问及审计

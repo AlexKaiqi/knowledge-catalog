@@ -11,7 +11,7 @@ func TestPlanAllowsMultipleIndependentMounts(t *testing.T) {
 		SetID: "agent",
 		Root:  t.TempDir(),
 		Mounts: []Mount{
-			{Path: "knowledge/team", Repository: "team", Files: []File{{Path: "README.md", Read: bytesReader("team")}}},
+			{Path: "object/team", Repository: "team", Files: []File{{Path: "README.md", Read: bytesReader("team")}}},
 			{Path: "vendor/policy", Repository: "policy", Files: []File{{Path: "docs/rules.md", Read: bytesReader("rules")}}},
 		},
 	}
@@ -26,7 +26,7 @@ func TestPlanAllowsMultipleIndependentMounts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := targets[0].Mountpoint; got != filepath.Join(realRoot, "knowledge", "team") {
+	if got := targets[0].Mountpoint; got != filepath.Join(realRoot, "object", "team") {
 		t.Fatalf("mountpoint = %s", got)
 	}
 }
@@ -35,8 +35,8 @@ func TestPlanRejectsRootAndOverlappingMounts(t *testing.T) {
 	for name, mounts := range map[string][]Mount{
 		"root": {{Path: "", Repository: "root"}},
 		"nested": {
-			{Path: "knowledge", Repository: "one"},
-			{Path: "knowledge/team", Repository: "two"},
+			{Path: "object", Repository: "one"},
+			{Path: "object/team", Repository: "two"},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -52,7 +52,7 @@ func TestPlanRejectsFileDirectoryCollision(t *testing.T) {
 	_, err := (Plan{
 		SetID: "agent",
 		Root:  t.TempDir(),
-		Mounts: []Mount{{Path: "knowledge", Repository: "one", Files: []File{
+		Mounts: []Mount{{Path: "object", Repository: "one", Files: []File{
 			{Path: "a", Read: bytesReader("a")},
 			{Path: "a/b", Read: bytesReader("b")},
 		}}},
@@ -70,8 +70,8 @@ func TestPlanRejectsAbsoluteTraversalAndSymlinkMounts(t *testing.T) {
 	}
 	for name, mountPath := range map[string]string{
 		"absolute":  "/outside",
-		"traversal": "knowledge/../outside",
-		"symlink":   "linked/knowledge",
+		"traversal": "object/../outside",
+		"symlink":   "linked/object",
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := (Plan{SetID: "agent", Root: root, Mounts: []Mount{{Path: mountPath, Repository: "one"}}}).Validate()

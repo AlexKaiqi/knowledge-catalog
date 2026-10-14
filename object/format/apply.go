@@ -75,8 +75,8 @@ func encodeChangedUnit(unit objectmodel.Unit, previous Unit, keepPosition bool) 
 	if err != nil {
 		return Unit{}, "", err
 	}
-	if !KnowledgePath(path) {
-		return Unit{}, "", kernel.Fail(kernel.ErrUsageInvalid, "path must use a readable knowledge file extension (.json, .md, .okf, .yaml, .yml, .txt): %s", path)
+	if !ObjectPath(path) {
+		return Unit{}, "", kernel.Fail(kernel.ErrUsageInvalid, "path must use a readable object file extension (.json, .md, .okf, .yaml, .yml, .txt): %s", path)
 	}
 	file := Unit{
 		ObjectID: unit.ObjectID, Address: unit.Address, PathHint: unit.PathHint,

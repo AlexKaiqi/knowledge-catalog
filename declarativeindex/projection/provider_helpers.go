@@ -21,7 +21,7 @@ func loadMetaContext(ctx context.Context, engine ports.Engine) (ports.Meta, erro
 	return meta, err
 }
 
-func compileValue(repo objectmodel.Repository, value objectmodel.KnowledgeValue, spec retrieval.AccessSpec) (ports.CompiledDoc, bool, error) {
+func compileValue(repo objectmodel.Repository, value objectmodel.ObjectValue, spec retrieval.AccessSpec) (ports.CompiledDoc, bool, error) {
 	if objectmodel.IsSchemaObject(value.Address.ObjectID) {
 		return ports.CompiledDoc{}, false, nil
 	}

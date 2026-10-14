@@ -43,7 +43,7 @@ func TestCatalogAuditReadsSnapshotHistory(t *testing.T) {
 	body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--command-id", "seed", "--value", `{"v":1}`))
 	afterPut := asMap(t, body(t, kc(h, "audit")))
 	if catalogLogHas(t, afterPut, "put") || catalogLogHas(t, afterPut, "COMMIT") {
-		t.Fatal("knowledge writes must not land in Catalog Snapshot history", afterPut["entries"])
+		t.Fatal("object writes must not land in Catalog Snapshot history", afterPut["entries"])
 	}
 	if !catalogLogHas(t, afterPut, "register") {
 		t.Fatal(afterPut["entries"])

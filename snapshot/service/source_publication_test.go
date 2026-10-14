@@ -40,18 +40,18 @@ func TestDatasetPublicationRequiresSourcePermissionBeforeInspection(t *testing.T
 			case "other-ref":
 				grant.Ref = "refs/heads/private"
 			case "fixed-commit-with-main-label":
-				sources := body["sources"].([]dataset.KnowledgeSetSource)
+				sources := body["sources"].([]dataset.DatasetSource)
 				sources[0].Commit = "c2"
 			}
 			if scope != "manage-and-file-read" && scope != "dataset-wildcard" {
 				f.rules.rules = append(f.rules.rules, grant)
 			}
 			portable, ready := 0, 0
-			f.resources.BeforePublish = func(_ context.Context, _ identity.HTTPIdentity, _ dataset.Service, definition dataset.KnowledgeSet) (dataset.KnowledgeSet, map[string]any, error) {
+			f.resources.BeforePublish = func(_ context.Context, _ identity.HTTPIdentity, _ dataset.Service, definition dataset.Dataset) (dataset.Dataset, map[string]any, error) {
 				portable++
 				return definition, nil, nil
 			}
-			f.resources.PreparePublication = func(context.Context, identity.HTTPIdentity, dataset.KnowledgeSet) error { ready++; return nil }
+			f.resources.PreparePublication = func(context.Context, identity.HTTPIdentity, dataset.Dataset) error { ready++; return nil }
 			before := dataset.NormalizeState(f.catalog.DumpState())
 			head := testkit.MustHead(t, f.authority, snapshot.DefaultRef)
 			f.source.inspections = 0
@@ -80,7 +80,7 @@ func TestDatasetPublicationExplicitSourceGrantAcceptsSelectedRefOrCommit(t *test
 			wantCommit := "c1"
 			if fixed {
 				grant.Ref, wantCommit = "c2", "c2"
-				body["sources"].([]dataset.KnowledgeSetSource)[0].Commit = "c2"
+				body["sources"].([]dataset.DatasetSource)[0].Commit = "c2"
 			}
 			f.rules.rules = []access.Rule{{ID: "target-management", Principal: "alice", Dataset: "files", Actions: []string{"dataset.manage"}}, grant}
 			response := datasetHTTPCall(t, f.handler(), http.MethodPost, "/snapshot/v1/datasets", body, http.StatusOK)
@@ -103,7 +103,7 @@ func TestDatasetPublicationRechecksSourcePermissionAfterPreparation(t *testing.T
 		t.Run(phase, func(t *testing.T) {
 			f := newDatasetHTTPFixture(t)
 			f.rules.rules = []access.Rule{{ID: "target-management", Principal: "alice", Dataset: "files", Actions: []string{"dataset.manage"}}, sourcePublicationGrant(f)}
-			if _, err := f.catalog.DefineKnowledgeSet("files", 1, datasetHTTPDefinition(1, f.source.ID())["sources"].([]dataset.KnowledgeSetSource)); err != nil {
+			if _, err := f.catalog.DefineDataset("files", 1, datasetHTTPDefinition(1, f.source.ID())["sources"].([]dataset.DatasetSource)); err != nil {
 				t.Fatal(err)
 			}
 			before := dataset.NormalizeState(f.catalog.DumpState())
@@ -122,7 +122,7 @@ func TestDatasetPublicationRechecksSourcePermissionAfterPreparation(t *testing.T
 					},
 				})
 			} else if phase == "before-publish" || phase == "portable-commit-change" {
-				f.resources.BeforePublish = func(_ context.Context, _ identity.HTTPIdentity, _ dataset.Service, definition dataset.KnowledgeSet) (dataset.KnowledgeSet, map[string]any, error) {
+				f.resources.BeforePublish = func(_ context.Context, _ identity.HTTPIdentity, _ dataset.Service, definition dataset.Dataset) (dataset.Dataset, map[string]any, error) {
 					if phase == "portable-commit-change" {
 						definition.Sources[0].Commit = "c2"
 					} else {
@@ -132,7 +132,7 @@ func TestDatasetPublicationRechecksSourcePermissionAfterPreparation(t *testing.T
 					return definition, nil, nil
 				}
 			} else {
-				f.resources.PreparePublication = func(_ context.Context, _ identity.HTTPIdentity, definition dataset.KnowledgeSet) error {
+				f.resources.PreparePublication = func(_ context.Context, _ identity.HTTPIdentity, definition dataset.Dataset) error {
 					if phase == "prepared-source-replacement" {
 						definition.Sources[0].Commit = "c2"
 					} else {
@@ -175,7 +175,7 @@ func TestDatasetPublicationRequiresEverySourceBeforeAnyInspection(t *testing.T) 
 		t.Fatal(err)
 	}
 	body := datasetHTTPDefinition(1, f.source.ID())
-	body["sources"] = append(body["sources"].([]dataset.KnowledgeSetSource), dataset.KnowledgeSetSource{Repository: second.ID(), Selector: snapshot.DefaultRef, File: "other.txt", Target: "docs/other.txt"})
+	body["sources"] = append(body["sources"].([]dataset.DatasetSource), dataset.DatasetSource{Repository: second.ID(), Selector: snapshot.DefaultRef, File: "other.txt", Target: "docs/other.txt"})
 	f.rules.rules = []access.Rule{{ID: "target-management", Principal: "alice", Dataset: "files", Actions: []string{"dataset.manage"}}, sourcePublicationGrant(f)}
 	before := dataset.NormalizeState(f.catalog.DumpState())
 	head := testkit.MustHead(t, f.authority, snapshot.DefaultRef)

@@ -34,7 +34,7 @@ func TestPluginHelpIsAuthorizedAndDoesNotMountOrExecuteSources(t *testing.T) {
 		{"unexpected-target", "reader", "declarative-index?repo=private", 400},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			request, err := http.NewRequest(http.MethodGet, server.URL+"/knowledge/v1/plugins/"+test.suffix, nil)
+			request, err := http.NewRequest(http.MethodGet, server.URL+"/object/v1/plugins/"+test.suffix, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

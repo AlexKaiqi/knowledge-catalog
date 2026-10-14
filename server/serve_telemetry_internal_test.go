@@ -21,7 +21,7 @@ import (
 	"kc/internal/telemetry"
 	"kc/internal/testkit"
 	inv "kc/invocation"
-	knowledgeserving "kc/liveaccess"
+	objectserving "kc/liveaccess"
 	objectmodel "kc/object"
 	"kc/observability"
 	"kc/server/internal/readiness"
@@ -41,8 +41,8 @@ func (telemetryAuthenticator) Authenticate(context.Context, http.Header) (inv.HT
 
 type telemetryStateLookup struct{}
 
-func (telemetryStateLookup) LookupState(_ context.Context, _ knowledgeserving.StateLookupRequest) (knowledgeserving.StateObservation, error) {
-	return knowledgeserving.StateObservation{Value: "ready", Basis: objectmodel.ObservationBasis{
+func (telemetryStateLookup) LookupState(_ context.Context, _ objectserving.StateLookupRequest) (objectserving.StateObservation, error) {
+	return objectserving.StateObservation{Value: "ready", Basis: objectmodel.ObservationBasis{
 		BindingGeneration: "generation-1", Consistency: objectmodel.ObservationRepeatable,
 		SourceRevision: "revision-1", ObservedAt: time.Now().Add(-2 * time.Second).UTC().Format(time.RFC3339Nano),
 	}}, nil
@@ -60,7 +60,7 @@ func TestAuthenticationAndBindingBoundariesExportMetricsAndChildSpans(t *testing
 	}
 	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
 
-	ctx, root, started := runtime.StartOperation(context.Background(), "knowledge", "knowledge-read")
+	ctx, root, started := runtime.StartOperation(context.Background(), "object", "object-read")
 	authenticator := observeHTTPAuthenticator(telemetryAuthenticator{}, runtime)
 	identity, err := authenticator.Authenticate(ctx, http.Header{"Authorization": []string{"Bearer redacted"}})
 	if err != nil || identity.Principal != "gitea:42" {
@@ -68,7 +68,7 @@ func TestAuthenticationAndBindingBoundariesExportMetricsAndChildSpans(t *testing
 	}
 	runtime.RecordIdentity(ctx, identity.Provider, inv.PrincipalKind(identity.Principal), false)
 	lookup := observeStateLookup(telemetryStateLookup{}, runtime)
-	_, err = lookup.LookupState(ctx, knowledgeserving.StateLookupRequest{Binding: knowledgeserving.ResolvedBinding{Mode: objectmodel.BindingState}})
+	_, err = lookup.LookupState(ctx, objectserving.StateLookupRequest{Binding: objectserving.ResolvedBinding{Mode: objectmodel.BindingState}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,10 +79,10 @@ func TestAuthenticationAndBindingBoundariesExportMetricsAndChildSpans(t *testing
 	if _, err := accessor.AccessResource(ctx, inv.ResourceOperationRequest{}); err != nil {
 		t.Fatal(err)
 	}
-	runtime.EndOperation(ctx, root, started, "knowledge", "knowledge-read", "ok", "")
+	runtime.EndOperation(ctx, root, started, "object", "object-read", "ok", "")
 
 	spans := exporter.GetSpans()
-	if len(spans) != 3 || spans[0].Name != "kc.authenticate" || spans[1].Name != "kc.binding.lookup" || spans[2].Name != "kc.knowledge-read" {
+	if len(spans) != 3 || spans[0].Name != "kc.authenticate" || spans[1].Name != "kc.binding.lookup" || spans[2].Name != "kc.object-read" {
 		t.Fatalf("boundary spans %#v", spans)
 	}
 	if spans[0].Parent.SpanID() != spans[2].SpanContext.SpanID() || spans[1].Parent.SpanID() != spans[2].SpanContext.SpanID() {
@@ -169,7 +169,7 @@ func TestObservedHTTPHandlerCorrelatesCompletionLogAndSuppressesManagementNoise(
 
 	management := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 	handler.ServeHTTP(httptest.NewRecorder(), management)
-	request := httptest.NewRequest(http.MethodPost, "/knowledge/v1/search", nil)
+	request := httptest.NewRequest(http.MethodPost, "/object/v1/search", nil)
 	request.Header.Set("X-Kc-Request-Id", "obs-log-correlation")
 	handler.ServeHTTP(httptest.NewRecorder(), request)
 
@@ -188,7 +188,7 @@ func TestObservedHTTPHandlerCorrelatesCompletionLogAndSuppressesManagementNoise(
 		}
 		return true
 	})
-	if attributes["kc.request.id"] != "obs-log-correlation" || attributes["http.route"] != "/knowledge/v1/{operation}" {
+	if attributes["kc.request.id"] != "obs-log-correlation" || attributes["http.route"] != "/object/v1/{operation}" {
 		t.Fatalf("completion log attributes %#v", attributes)
 	}
 }
@@ -215,13 +215,13 @@ func TestSearchTelemetryExportsPhaseAndVolumeFactsForAggregation(t *testing.T) {
 	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
 	result := retrieval.SearchResult{
 		Completeness: retrieval.CompletenessComplete,
-		Hits:         []retrieval.KnowledgeHit{},
+		Hits:         []retrieval.ObjectHit{},
 		Stats: retrieval.SearchExecutionStats{
 			Candidates: 7, Hydrated: 5, Dropped: 2,
 			PlanDuration: 2 * time.Millisecond, ProbeDuration: 3 * time.Millisecond, HydrateDuration: 4 * time.Millisecond,
 		},
 	}
-	inv.RecordDomainTelemetry(context.Background(), runtime, "knowledge-search", map[string]invoke.FlagValue{"home": t.TempDir()}, &invoke.ObservationTelemetry{}, result, nil, 12*time.Millisecond)
+	inv.RecordDomainTelemetry(context.Background(), runtime, "object-search", map[string]invoke.FlagValue{"home": t.TempDir()}, &invoke.ObservationTelemetry{}, result, nil, 12*time.Millisecond)
 
 	recorder := httptest.NewRecorder()
 	runtime.MetricsHandler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/metrics", nil))
@@ -272,7 +272,7 @@ func TestTypedHTTPCollectsApplicationMetricsAndChildSpan(t *testing.T) {
 	handler := observedHTTPHandler(runtime, mux)
 	t.Cleanup(func() { _ = facade.closeReadHome() })
 
-	request := httptest.NewRequest(http.MethodPost, "/knowledge/v1/objects:read",
+	request := httptest.NewRequest(http.MethodPost, "/object/v1/objects:read",
 		bytes.NewBufferString(`{"dataset":"missing","reference":"urn:kc:object:kr%3A%2F%2Facme%2Ftelemetry:Policy%3Amissing"}`))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("X-Kc-As", "agent:telemetry-test")
@@ -289,9 +289,9 @@ func TestTypedHTTPCollectsApplicationMetricsAndChildSpan(t *testing.T) {
 	var serverSpan, operationSpan tracetest.SpanStub
 	for _, span := range spans {
 		switch span.Name {
-		case "POST /knowledge/v1/{operation}":
+		case "POST /object/v1/{operation}":
 			serverSpan = span
-		case "kc.knowledge-read":
+		case "kc.object-read":
 			operationSpan = span
 		}
 	}
@@ -316,7 +316,7 @@ func TestTypedHTTPCollectsApplicationMetricsAndChildSpan(t *testing.T) {
 	for _, want := range []string{
 		"http_server_request_duration_seconds",
 		"kc_operation_executions_total",
-		`kc_operation="knowledge-read"`,
+		`kc_operation="object-read"`,
 		`kc_outcome="denied"`,
 		"kc_authorization_decisions_total",
 		`kc_authorization_decision="deny"`,

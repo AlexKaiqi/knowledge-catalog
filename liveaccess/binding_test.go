@@ -13,7 +13,7 @@ import (
 func TestResolveBindingReadsSchemaOrigin(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Service:orders", AspectName: "health"}
-	head, err := s.Repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	head, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: []objectmodel.Operation{
@@ -36,7 +36,7 @@ func TestResolveBindingReadsSchemaOrigin(t *testing.T) {
 func TestResolveBindingFromSchemaWithoutInstanceFile(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/orders", AspectName: "stats"}
-	head, err := s.Repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	head, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: []objectmodel.Operation{
@@ -56,7 +56,7 @@ func TestResolveBindingFromSchemaWithoutInstanceFile(t *testing.T) {
 	}
 	resolution, err := s.Repo.ResolveAddress(address, head)
 	if err != nil {
-		if kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+		if kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 			t.Fatal(err)
 		}
 		return
@@ -66,10 +66,10 @@ func TestResolveBindingFromSchemaWithoutInstanceFile(t *testing.T) {
 	}
 }
 
-func TestApplyKnowledgeCommitRejectsInstanceBinding(t *testing.T) {
+func TestApplyObjectCommitRejectsInstanceBinding(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Service:orders", AspectName: "health"}
-	_, err := s.Repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	_, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: []objectmodel.Operation{{Op: objectmodel.OpPut, Address: address, Value: nil, ValueSource: &objectmodel.ValueSource{
@@ -87,7 +87,7 @@ func TestApplyKnowledgeCommitRejectsInstanceBinding(t *testing.T) {
 func TestResolveBindingWithoutBoundSchemaIsUnsatisfied(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Service:orders", AspectName: "health"}
-	head, err := s.Repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	head, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: address.ObjectID, AspectName: "properties"}, Value: map[string]any{"name": "orders"}}},

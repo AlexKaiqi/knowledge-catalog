@@ -23,7 +23,7 @@ func TestDeploymentRepositoryReadJournalFailureSuppressesDelivery(t *testing.T) 
 		t.Cleanup(func() { _ = closer.Close() })
 	}
 	read := func() *httptest.ResponseRecorder {
-		request := httptest.NewRequest(http.MethodPost, "/knowledge/v1/objects:read", strings.NewReader(`{"reference":"urn:kc:object:kr%3A%2F%2Fkc%2Fsystem:schema%2Fmeta%2Fschema-definition%2Fv1"}`))
+		request := httptest.NewRequest(http.MethodPost, "/object/v1/objects:read", strings.NewReader(`{"reference":"urn:kc:object:kr%3A%2F%2Fkc%2Fsystem:schema%2Fmeta%2Fschema-definition%2Fv1"}`))
 		request.Header.Set("Content-Type", "application/json")
 		request.Header.Set("X-Kc-As", "agent:operator")
 		request.Header.Set("X-Kc-Request-Id", "mandatory-reader-journal")

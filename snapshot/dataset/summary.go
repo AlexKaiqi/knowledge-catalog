@@ -2,15 +2,15 @@ package dataset
 
 import "maps"
 
-func PublicKnowledgeSets(workspaces []KnowledgeSet) []map[string]any {
+func PublicDatasets(workspaces []Dataset) []map[string]any {
 	out := make([]map[string]any, 0, len(workspaces))
 	for _, workspace := range workspaces {
-		out = append(out, PublicKnowledgeSet(workspace))
+		out = append(out, PublicDataset(workspace))
 	}
 	return out
 }
 
-func PublicKnowledgeSet(workspace KnowledgeSet) map[string]any {
+func PublicDataset(workspace Dataset) map[string]any {
 	repos := make([]string, 0, len(workspace.Sources))
 	seen := map[string]bool{}
 	for _, src := range workspace.Sources {

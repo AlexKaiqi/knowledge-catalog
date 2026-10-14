@@ -43,8 +43,8 @@ func writeStoreFiles(t *testing.T, s fed, repoID kernel.RepositoryID, files map[
 	return commit
 }
 
-func fileEntrySources() []catalog.KnowledgeSetSource {
-	return []catalog.KnowledgeSetSource{
+func fileEntrySources() []catalog.DatasetSource {
+	return []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("reference/policies"), SubPath: "handbook/policies"},
 		{Repository: "kr://acme/groups/payments", Selector: "refs/heads/main", File: "reports/gmv.csv", Target: "reference/policies/gmv.csv"},
 		{Repository: "kr://acme/groups/payments", Selector: "refs/heads/main", File: "reports/notes.txt", Target: "reference/renamed.txt"},
@@ -67,7 +67,7 @@ func setupFileEntries(t *testing.T) (fed, kernel.CommitID) {
 
 func TestPublishedDatasetCarriesFileEntriesAsItems(t *testing.T) {
 	s, publicCommit := setupFileEntries(t)
-	defined, err := s.catalog.DefineKnowledgeSet("mixed", 1, fileEntrySources())
+	defined, err := s.catalog.DefineDataset("mixed", 1, fileEntrySources())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestPublishedDatasetCarriesFileEntriesAsItems(t *testing.T) {
 	if fileItems[1].Target != "reference/renamed.txt" || fileItems[1].File != "reports/notes.txt" {
 		t.Fatalf("file item lost its delivered location: %#v", fileItems[1])
 	}
-	resolved, err := s.catalog.ResolveKnowledgeSet("mixed")
+	resolved, err := s.catalog.ResolveDataset("mixed")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,63 +108,63 @@ func TestDatasetFileEntryTargetConflictsAreRejectedAtPublish(t *testing.T) {
 	writeStoreFiles(t, s, "kr://acme/groups/payments", map[string]string{"reports/gmv.csv": "gmv\n"})
 	for i, tc := range []struct {
 		name    string
-		sources []catalog.KnowledgeSetSource
+		sources []catalog.DatasetSource
 	}{
 		{
 			name: "duplicate file target",
-			sources: []catalog.KnowledgeSetSource{
+			sources: []catalog.DatasetSource{
 				{Repository: "kr://acme/public/core", Selector: "refs/heads/main", File: "a.txt", Target: "same.txt"},
 				{Repository: "kr://acme/groups/payments", Selector: "refs/heads/main", File: "b.txt", Target: "same.txt"},
 			},
 		},
 		{
 			name: "file target takes a delivered directory",
-			sources: []catalog.KnowledgeSetSource{
+			sources: []catalog.DatasetSource{
 				{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("reference/policies"), SubPath: "handbook/policies"},
 				{Repository: "kr://acme/groups/payments", Selector: "refs/heads/main", File: "reports/gmv.csv", Target: "reference/policies"},
 			},
 		},
 		{
 			name: "delivered directory nests under a file target",
-			sources: []catalog.KnowledgeSetSource{
+			sources: []catalog.DatasetSource{
 				{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("reference/policies/metrics"), SubPath: "handbook/policies"},
 				{Repository: "kr://acme/groups/payments", Selector: "refs/heads/main", File: "reports/gmv.csv", Target: "reference/policies"},
 			},
 		},
 		{
 			name: "file target is the ancestor of another file target",
-			sources: []catalog.KnowledgeSetSource{
+			sources: []catalog.DatasetSource{
 				{Repository: "kr://acme/public/core", Selector: "refs/heads/main", File: "a.txt", Target: "data"},
 				{Repository: "kr://acme/groups/payments", Selector: "refs/heads/main", File: "b.txt", Target: "data/gmv.csv"},
 			},
 		},
 		{
 			name: "traversal in delivered target",
-			sources: []catalog.KnowledgeSetSource{
+			sources: []catalog.DatasetSource{
 				{Repository: "kr://acme/public/core", Selector: "refs/heads/main", File: "a.txt", Target: "../escape.txt"},
 			},
 		},
 		{
 			name: "traversal in source file",
-			sources: []catalog.KnowledgeSetSource{
+			sources: []catalog.DatasetSource{
 				{Repository: "kr://acme/public/core", Selector: "refs/heads/main", File: "../../etc/passwd", Target: "out.txt"},
 			},
 		},
 		{
 			name: "file entry declares a mount path",
-			sources: []catalog.KnowledgeSetSource{
+			sources: []catalog.DatasetSource{
 				{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("docs"), File: "a.txt", Target: "out.txt"},
 			},
 		},
 		{
 			name: "mount entry declares a delivered target",
-			sources: []catalog.KnowledgeSetSource{
+			sources: []catalog.DatasetSource{
 				{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("docs"), Target: "out.txt"},
 			},
 		},
 		{
 			name: "file entry splits repository coordinates",
-			sources: []catalog.KnowledgeSetSource{
+			sources: []catalog.DatasetSource{
 				{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("docs"), SubPath: "handbook"},
 				{Repository: "kr://acme/public/core", Selector: "refs/heads/other", File: "a.txt", Target: "out.txt"},
 			},
@@ -174,8 +174,8 @@ func TestDatasetFileEntryTargetConflictsAreRejectedAtPublish(t *testing.T) {
 			// A unique dataset per case: one case's rejected define must not
 			// poison the next case with a stale v1 (NON_FAST_FORWARD noise).
 			name := fmt.Sprintf("conflict-%d", i)
-			_, err := s.catalog.DefineKnowledgeSet(name, 1, tc.sources)
-			testkit.ExpectCode(t, err, kernel.ErrKnowledgeSetInvalid)
+			_, err := s.catalog.DefineDataset(name, 1, tc.sources)
+			testkit.ExpectCode(t, err, kernel.ErrDatasetInvalid)
 			if _, getErr := s.catalog.Set(name); getErr == nil {
 				t.Fatalf("rejected candidate must not define the dataset: %v", getErr)
 			}
@@ -185,19 +185,19 @@ func TestDatasetFileEntryTargetConflictsAreRejectedAtPublish(t *testing.T) {
 
 func TestDatasetRecipeRoundTripsFileEntries(t *testing.T) {
 	s, _ := setupFileEntries(t)
-	defined, err := s.catalog.DefineKnowledgeSet("portable", 1, fileEntrySources())
+	defined, err := s.catalog.DefineDataset("portable", 1, fileEntrySources())
 	if err != nil {
 		t.Fatal(err)
 	}
-	rec, ok := catalog.RecipeFromKnowledgeSet(defined)
+	rec, ok := catalog.RecipeFromDataset(defined)
 	if !ok || len(rec.Files) != 2 || len(rec.Mounts) != 1 {
 		t.Fatalf("recipe must carry mounts and file entries: %#v ok=%v", rec, ok)
 	}
-	raw, err := catalog.FormatKnowledgeSetRecipe(rec)
+	raw, err := catalog.FormatDatasetRecipe(rec)
 	if err != nil {
 		t.Fatal(err)
 	}
-	parsed, err := catalog.ParseKnowledgeSetRecipe(raw)
+	parsed, err := catalog.ParseDatasetRecipe(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,11 +221,11 @@ func TestDatasetRecipeRoundTripsFileEntries(t *testing.T) {
 
 func TestDatasetOverlayMergesFileEntries(t *testing.T) {
 	s, _ := setupFileEntries(t)
-	defined, err := s.catalog.DefineKnowledgeSet("overlay-files", 1, fileEntrySources())
+	defined, err := s.catalog.DefineDataset("overlay-files", 1, fileEntrySources())
 	if err != nil {
 		t.Fatal(err)
 	}
-	over, err := catalog.ParseKnowledgeSetOverlay([]byte(`name: overlay-files
+	over, err := catalog.ParseDatasetOverlay([]byte(`name: overlay-files
 files:
   - repository: kr://acme/groups/payments
     selector: refs/heads/main
@@ -263,18 +263,18 @@ files:
 }
 
 func TestDatasetFileEntriesChangeThePin(t *testing.T) {
-	mounts := []catalog.KnowledgeSetSource{
+	mounts := []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("docs"), SubPath: "handbook"},
 	}
 	commits := map[kernel.RepositoryID]kernel.CommitID{"kr://acme/public/core": "c1"}
 	base := catalog.HashResolved("pinned", mounts, commits)
-	withFile := catalog.HashResolved("pinned", append(mounts, catalog.KnowledgeSetSource{
+	withFile := catalog.HashResolved("pinned", append(mounts, catalog.DatasetSource{
 		Repository: "kr://acme/public/core", Selector: "refs/heads/main", File: "a.txt", Target: "out.txt",
 	}), commits)
 	if base == withFile {
 		t.Fatal("a per-file entry changes what a consumer reads; it must change the pin")
 	}
-	same := catalog.HashResolved("pinned", []catalog.KnowledgeSetSource{
+	same := catalog.HashResolved("pinned", []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main", Path: catalog.MountPath("docs"), SubPath: "handbook"},
 		{Repository: "kr://acme/public/core", Selector: "refs/heads/main", File: "a.txt", Target: "out.txt"},
 	}, commits)

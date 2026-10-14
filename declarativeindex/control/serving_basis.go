@@ -22,8 +22,8 @@ func (c *Controller) PrepareServingBasis(ctx context.Context, repo objectmodel.R
 		return err
 	}
 	if len(report.Schemas) == 0 {
-		// Built-in Relation knowledge does not require a custom schema. Only
-		// an explicitly empty knowledge namespace proves there is no projection
+		// Built-in Relation object does not require a custom schema. Only
+		// an explicitly empty object namespace proves there is no projection
 		// to prepare; absence of schema/* alone is not that proof.
 		if pager, ok := repo.(objectmodel.SnapshotObjectPager); ok {
 			page, err := pager.ObjectIDsPage(commit, 1, "")

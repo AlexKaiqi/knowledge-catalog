@@ -12,7 +12,7 @@ import (
 
 func TestRegistryWritesFlatYAML(t *testing.T) {
 	s := setupFed(t)
-	if _, err := s.catalog.DefineKnowledgeSet("duty", 1, []catalog.KnowledgeSetSource{
+	if _, err := s.catalog.DefineDataset("duty", 1, []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: snapshot.DefaultRef},
 	}); err != nil {
 		t.Fatal(err)
@@ -53,7 +53,7 @@ func TestRegistryWritesFlatYAML(t *testing.T) {
 	}
 	text := string(body)
 	if strings.HasPrefix(text, "---") || strings.Contains(text, "object_id:") {
-		t.Fatalf("must be plain yaml, not a knowledge file:\n%s", text)
+		t.Fatalf("must be plain yaml, not an object file:\n%s", text)
 	}
 	if !strings.Contains(text, "setId: duty") {
 		t.Fatal(text)
@@ -69,7 +69,7 @@ func TestRegistryWritesFlatYAML(t *testing.T) {
 
 func TestRegistryIgnoresRetiredKsetPrefix(t *testing.T) {
 	s := setupFed(t)
-	if _, err := s.catalog.DefineKnowledgeSet("duty", 1, []catalog.KnowledgeSetSource{
+	if _, err := s.catalog.DefineDataset("duty", 1, []catalog.DatasetSource{
 		{Repository: "kr://acme/public/core", Selector: snapshot.DefaultRef},
 	}); err != nil {
 		t.Fatal(err)
@@ -98,9 +98,9 @@ func TestRegistryIgnoresRetiredKsetPrefix(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, set := range state.KnowledgeSets {
+	for _, set := range state.Datasets {
 		if set.SetID == "duty" {
-			t.Fatalf("retired kset- registry files must not load: %#v", state.KnowledgeSets)
+			t.Fatalf("retired kset- registry files must not load: %#v", state.Datasets)
 		}
 	}
 }

@@ -200,7 +200,7 @@ func TestSceneProjectionNamespaceRewritesOnlyPhysicalCoordinates(t *testing.T) {
 			t.Fatalf("namespace changed the provider response: %d %s", response.StatusCode, raw)
 		}
 	}
-	control := `{"repository":"kr://scene/knowledge","active_index":"kc-proj-note-g-1","_index":"user-value"}`
+	control := `{"repository":"kr://scene/object","active_index":"kc-proj-note-g-1","_index":"user-value"}`
 	document := `{"all_text":"kc-proj-note-g-1","_index":"user-value","index":{"_index":"source-data"}}`
 	bulk := "{\"index\":{\"_index\":\"kc-proj-note-g-1\",\"_id\":\"one\"}}\n" + document + "\n{\"delete\":{\"_index\":\"kc-proj-note-g-1\",\"_id\":\"two\"}}\n"
 	query := `{"pit":{"id":"opaque-pit"},"query":{"term":{"all_text":"kc-proj-note-g-1"}}}`

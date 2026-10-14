@@ -25,7 +25,7 @@ func tableStructureSchema() map[string]any {
 
 func TestDescribeSchemaListsAccessHints(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	head, err := s.Repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	head, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: "HEAD",
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: testkit.PutEntity("schema/dw.table.structure", tableStructureSchema(), ""),
@@ -53,7 +53,7 @@ func TestDescribeSchemaRejectsLegacyAndPhysicalAccessTokens(t *testing.T) {
 	for _, token := range []string{"key", "summary", "stored", "gin", "hnsw"} {
 		t.Run(token, func(t *testing.T) {
 			s := testkit.NewSetup(t, "")
-			_, err := s.Repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+			_, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 				TargetRepository: s.RepositoryID, TargetRef: "HEAD",
 				BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 				Operations: testkit.PutEntity("schema/bad", map[string]any{
@@ -68,7 +68,7 @@ func TestDescribeSchemaRejectsLegacyAndPhysicalAccessTokens(t *testing.T) {
 
 func TestDescribeSchemaIgnoresNonSchemaObjects(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	head, err := s.Repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	head, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: "HEAD",
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: append(
@@ -89,7 +89,7 @@ func TestWorkspaceDescribeSchemaSkipsMembersWithoutObject(t *testing.T) {
 	physical := testkit.NewSetup(t, "kr://dw/physical")
 	semantic := testkit.NewSetup(t, "kr://dw/semantic")
 	objectID := objectmodel.ObjectID("Table:tpch.lineitem")
-	head, err := physical.Repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	head, err := physical.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: physical.RepositoryID, TargetRef: "HEAD",
 		BaseCommit: physical.RootCommitID, ExpectedTargetCommit: physical.RootCommitID,
 		Operations: []objectmodel.Operation{
@@ -105,7 +105,7 @@ func TestWorkspaceDescribeSchemaSkipsMembersWithoutObject(t *testing.T) {
 			return physical.Repo, nil
 		}
 		return semantic.Repo, nil
-	}, reader.KnowledgeSetPin{SetID: "warehouse", Repositories: map[kernel.RepositoryID]kernel.CommitID{
+	}, reader.DatasetPin{SetID: "warehouse", Repositories: map[kernel.RepositoryID]kernel.CommitID{
 		physical.RepositoryID: head,
 		semantic.RepositoryID: semantic.RootCommitID,
 	}, Items: reader.WholeRepositoryItems(map[kernel.RepositoryID]kernel.CommitID{
@@ -120,7 +120,7 @@ func TestWorkspaceDescribeSchemaSkipsMembersWithoutObject(t *testing.T) {
 
 func TestDescribeSchemaFollowsSchemaRef(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	head, err := s.Repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	head, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: "HEAD",
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: []objectmodel.Operation{
@@ -166,7 +166,7 @@ func TestDescribeSchemaUnresolvedRef(t *testing.T) {
 
 func TestDescribeSchemaOneObject(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	head, err := s.Repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	head, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: "HEAD",
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: append(

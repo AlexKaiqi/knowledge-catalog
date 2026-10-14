@@ -46,7 +46,7 @@ func TestLiveOpenSearchControllerRecoversGenerationLossWithReadyControl(t *testi
 			idx := query.NewIndexEngine(t.TempDir(), opensearch.Open(opensearch.Config{URL: endpoint, Namespace: namespace, PrimaryShards: 1}))
 			controller, err := control.NewController(idx, control.NewTargetStore(filepath.Join(t.TempDir(), "controller.db")), func(id kernel.RepositoryID) (objectmodel.Repository, error) {
 				if id != repo.ID() {
-					return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "unknown test source")
+					return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "unknown test source")
 				}
 				return repo, nil
 			})
@@ -121,7 +121,7 @@ func TestLiveOpenSearchControllerRecoversGenerationLossWithReadyControl(t *testi
 			assertReady()
 			before.Stats, recovered.Stats = retrieval.SearchExecutionStats{}, retrieval.SearchExecutionStats{}
 			if !reflect.DeepEqual(recovered, before) {
-				t.Fatalf("recovery changed knowledge, evidence, or fixed view: before=%#v after=%#v", before, recovered)
+				t.Fatalf("recovery changed object, evidence, or fixed view: before=%#v after=%#v", before, recovered)
 			}
 			if lane == "state" {
 				_, err = idx.RefreshState(context.Background(), repo, commit, source)

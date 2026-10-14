@@ -21,7 +21,7 @@ func TestProjectionCompilerOnlyBuildsDeclaredSlots(t *testing.T) {
 		{reader.HintText, reader.HintFilter}, {reader.HintText, reader.HintSort},
 	} {
 		field := retrieval.AccessField{FieldRef: retrieval.FieldRef{Schema: "schema/article", Path: "body"}, Type: "string", Access: hints}
-		body := strings.Repeat("规范知识与中文正文 ", 5000)
+		body := strings.Repeat("规范对象与中文正文 ", 5000)
 		cell, err := projectionCell(retrieval.FieldValue{Field: field, Value: body})
 		if err != nil {
 			t.Fatal(err)
@@ -38,7 +38,7 @@ func TestProjectionCompilerOnlyBuildsDeclaredSlots(t *testing.T) {
 
 func TestProjectionDigestIncludesSearchableTextOrder(t *testing.T) {
 	field := retrieval.AccessField{FieldRef: retrieval.FieldRef{Schema: "schema/tags", Aspect: "tags", Path: "label"}, Type: "string", Access: []reader.AccessHint{reader.HintText}}
-	value := objectmodel.KnowledgeValue{
+	value := objectmodel.ObjectValue{
 		Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "article/one"},
 		Value:   map[string]any{"tags": map[string]any{"a": map[string]any{"label": "alpha"}, "b": map[string]any{"label": "beta"}}},
 		Declarations: []objectmodel.UnitDeclaration{
@@ -72,26 +72,26 @@ func (e *projectionDeltaEngine) Apply(upserts []ports.CompiledDoc, deletes []obj
 }
 
 type projectionBatchRepository struct {
-	*testkit.KnowledgeRepository
+	*testkit.ObjectRepository
 	reads   int
 	batches []int
 }
 
-func (r *projectionBatchRepository) Read(id objectmodel.ObjectID, commit kernel.CommitID) (objectmodel.KnowledgeValue, error) {
+func (r *projectionBatchRepository) Read(id objectmodel.ObjectID, commit kernel.CommitID) (objectmodel.ObjectValue, error) {
 	r.reads++
-	return r.KnowledgeRepository.Read(id, commit)
+	return r.ObjectRepository.Read(id, commit)
 }
 
-func (r *projectionBatchRepository) ReadMany(ids []objectmodel.ObjectID, commit kernel.CommitID) (map[objectmodel.ObjectID]objectmodel.KnowledgeValue, error) {
+func (r *projectionBatchRepository) ReadMany(ids []objectmodel.ObjectID, commit kernel.CommitID) (map[objectmodel.ObjectID]objectmodel.ObjectValue, error) {
 	r.batches = append(r.batches, len(ids))
-	return r.KnowledgeRepository.ReadMany(ids, commit)
+	return r.ObjectRepository.ReadMany(ids, commit)
 }
 
 func TestIncrementalProjectionSkipsUnchangedDocumentsAndMatchesRebuild(t *testing.T) {
 	repo := testkit.MakeRepository(t, "kr://projection/reliability")
 	commit := func(base kernel.CommitID, ops ...objectmodel.Operation) kernel.CommitID {
 		t.Helper()
-		result, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: base, ExpectedTargetCommit: base, Operations: ops})
+		result, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: base, ExpectedTargetCommit: base, Operations: ops})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -124,7 +124,7 @@ func TestIncrementalProjectionSkipsUnchangedDocumentsAndMatchesRebuild(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	counted := &projectionBatchRepository{KnowledgeRepository: repo}
+	counted := &projectionBatchRepository{ObjectRepository: repo}
 	result, err = idx.apply(engine, counted, second, third, spec, []objectmodel.ObjectID{"article/a", "article/b", "article/a"}, ports.IndexCauseContent)
 	if err != nil {
 		t.Fatal(err)

@@ -17,7 +17,7 @@ type Command struct {
 type Context struct {
 	Dataset            string
 	Pin                json.RawMessage
-	Definition         *dataset.KnowledgeSet
+	Definition         *dataset.Dataset
 	InventoryDiscovery bool
 }
 type Executor interface {

@@ -15,7 +15,7 @@ import (
 
 func TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent(t *testing.T) {
 	home := t.TempDir()
-	mustKnowledgeSetFSRun(t, home, "init")
+	mustDatasetFSRun(t, home, "init")
 	server := httptest.NewServer(serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{}))
 	defer server.Close()
 
@@ -25,7 +25,7 @@ func TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		httpRequest, err := http.NewRequest(http.MethodPost, server.URL+"/knowledge/v1/schemas:list", bytes.NewReader(raw))
+		httpRequest, err := http.NewRequest(http.MethodPost, server.URL+"/object/v1/schemas:list", bytes.NewReader(raw))
 		if err != nil {
 			t.Fatal(err)
 		}

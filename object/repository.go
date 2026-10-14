@@ -6,22 +6,22 @@ import (
 	"kc/kernel"
 )
 
-// ReadStore interprets knowledge units at a fixed Snapshot commit.
+// ReadStore interprets object units at a fixed Snapshot commit.
 type ReadStore interface {
 	Resolve(objectID ObjectID, commitID kernel.CommitID) (Resolution, error)
-	Read(objectID ObjectID, commitID kernel.CommitID) (KnowledgeValue, error)
+	Read(objectID ObjectID, commitID kernel.CommitID) (ObjectValue, error)
 	ResolveAddress(address Address, commitID kernel.CommitID) (Resolution, error)
-	ReadAddress(address Address, commitID kernel.CommitID) (KnowledgeValue, error)
+	ReadAddress(address Address, commitID kernel.CommitID) (ObjectValue, error)
 	GetProvenance(objectID ObjectID, commitID kernel.CommitID) (ProvenanceTrace, error)
 	Log(objectID ObjectID, commitID kernel.CommitID, query ObjectLogQuery) ([]ObjectRevision, error)
 	Diff(objectID ObjectID, from, to kernel.CommitID) (ObjectDiff, error)
 }
 
-// BatchReadStore is the optional knowledge-layer hydration capability used by
+// BatchReadStore is the optional object-layer hydration capability used by
 // retrieval executors. Missing object IDs are omitted; every returned value is
 // assembled from the requested immutable commit.
 type BatchReadStore interface {
-	ReadMany(objectIDs []ObjectID, commitID kernel.CommitID) (map[ObjectID]KnowledgeValue, error)
+	ReadMany(objectIDs []ObjectID, commitID kernel.CommitID) (map[ObjectID]ObjectValue, error)
 }
 
 // ObjectIDPage is identity-only maintenance input. It contains no object body,
@@ -39,7 +39,7 @@ type SnapshotObjectPager interface {
 	ObjectIDsPage(commitID kernel.CommitID, limit int, continuation string) (ObjectIDPage, error)
 }
 
-// UnitLocator maps one knowledge identity to its bounded unit paths at an
+// UnitLocator maps one object identity to its bounded unit paths at an
 // immutable commit. It is the exact-read seam for tree-backed authorities;
 // implementations must not satisfy a point lookup by listing the whole tree.
 type UnitLocator interface {
@@ -50,7 +50,7 @@ type UnitLocator interface {
 // implement it apply a bounded ChangeSet without reconstructing a Snapshot
 // tree. File-backed repositories continue through the tree codec.
 type ChangeStore interface {
-	ApplyKnowledgeChange(commandID string, changeSet ChangeSet) (kernel.CommitID, error)
+	ApplyObjectChange(commandID string, changeSet ChangeSet) (kernel.CommitID, error)
 }
 
 // SchemaStore is an optional native locator for the small schema/* namespace.
@@ -108,7 +108,7 @@ type StoreIdentified interface {
 // shared batch/cache interpreter.
 type NativeRepository interface {
 	Repository
-	NativeKnowledgeRepository()
+	NativeObjectRepository()
 }
 
 type Surface string

@@ -312,7 +312,7 @@ def already_applied(args: list[str], text: str) -> bool:
         "already attached",
     )
     if args[:2] == ["writer", "remove"] and (
-        "knowledge_ref_unresolved" in blob or "does not exist" in blob
+        "object_ref_unresolved" in blob or "does not exist" in blob
     ):
         return True
     return any(marker in blob for marker in markers)

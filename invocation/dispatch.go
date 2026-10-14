@@ -16,13 +16,13 @@ import (
 	"kc/internal/telemetry"
 	"kc/invoke"
 	"kc/kernel"
-	knowledgeserving "kc/liveaccess"
+	objectserving "kc/liveaccess"
 )
 
 // executeApplicationOperation is the shared application-service boundary.
 // CLI resolves a grouped command before calling it; typed HTTP handlers pass
 // an explicit command value and never consult either CLI registry.
-func ExecuteApplicationOperation(ctx context.Context, name, action string, cmd Command, flags map[string]invoke.FlagValue, state knowledgeserving.StateLookup, opened *kchome.Home, home string, observation *invoke.ObservationTelemetry, interfaces ...*interfaces.InterfaceRegistry) (any, error) {
+func ExecuteApplicationOperation(ctx context.Context, name, action string, cmd Command, flags map[string]invoke.FlagValue, state objectserving.StateLookup, opened *kchome.Home, home string, observation *invoke.ObservationTelemetry, interfaces ...*interfaces.InterfaceRegistry) (any, error) {
 	if _, supplied := flags["catalog"]; supplied {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "Catalog selection is not supported; this service has one registry")
 	}
@@ -80,7 +80,7 @@ func ExecuteApplicationOperation(ctx context.Context, name, action string, cmd C
 		}
 		cx.WS = ws.ReadView(requestJournal)
 		if invoke.FlagString(flags, "repo") == "" {
-			if err := PrepareKnowledgePinContext(flags); err != nil {
+			if err := PrepareObjectPinContext(flags); err != nil {
 				return nil, err
 			}
 		}
@@ -100,7 +100,7 @@ func ExecuteApplicationOperation(ctx context.Context, name, action string, cmd C
 	// as merge can derive their real repository/ref scope from the immutable
 	// proposal instead of making callers repeat (and potentially spoof) it.
 	if invoke.FlagString(flags, "repo") == "" {
-		if err := PrepareKnowledgePinContext(flags); err != nil {
+		if err := PrepareObjectPinContext(flags); err != nil {
 			return nil, err
 		}
 	}
@@ -121,7 +121,7 @@ func observesInventory(name string) bool {
 // invokeApplicationWithTelemetryAtHome is the typed-service application
 // boundary. Unlike the CLI dispatcher it receives an explicit operation and
 // therefore never consults the CLI command registry.
-func InvokeApplicationWithTelemetryAtHome(ctx context.Context, runtime *telemetry.Runtime, name, action string, op Command, flags map[string]invoke.FlagValue, state knowledgeserving.StateLookup, opened *kchome.Home, interfaces ...*interfaces.InterfaceRegistry) invoke.RunResult {
+func InvokeApplicationWithTelemetryAtHome(ctx context.Context, runtime *telemetry.Runtime, name, action string, op Command, flags map[string]invoke.FlagValue, state objectserving.StateLookup, opened *kchome.Home, interfaces ...*interfaces.InterfaceRegistry) invoke.RunResult {
 	if flags == nil {
 		flags = map[string]invoke.FlagValue{}
 	}
@@ -211,8 +211,8 @@ func TypedInvocationReadOnly(action string) bool {
 		return true
 	}
 	switch action {
-	case "knowledge.search", "knowledge.rerank", "knowledge.relations", "knowledge.provenance",
-		"knowledge.binding.resolve", "knowledge.access.describe", "resource.access", "dataset.resolve":
+	case "object.search", "object.rerank", "object.relations", "object.provenance",
+		"object.binding.resolve", "object.access.describe", "resource.access", "dataset.resolve":
 		return true
 	default:
 		return false

@@ -9,7 +9,7 @@ import (
 )
 
 // OpenSnapshotRegistry recovers service state from an independent Snapshot
-// authority. The store is layer ⓪ tree+CAS, not a Knowledge Repository.
+// authority. The store is layer ⓪ tree+CAS, not an Object Repository.
 func OpenSnapshotRegistry(store snapshot.Store, ref string) (Registry, error) {
 	reg, err := snapshotRegistry(store, ref)
 	if err != nil {
@@ -37,7 +37,7 @@ func OpenSnapshotRegistry(store snapshot.Store, ref string) (Registry, error) {
 }
 
 // CreateSnapshotRegistry writes the initial service registry into an already
-// provisioned Snapshot authority. It never creates a Knowledge Repository.
+// provisioned Snapshot authority. It never creates an Object Repository.
 func CreateSnapshotRegistry(store snapshot.Store, ref string) (Registry, error) {
 	if _, err := OpenSnapshotRegistry(store, ref); err == nil {
 		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "registry authority ref already exists; open it instead")
@@ -86,7 +86,7 @@ func (g *registry) requireVirginAuthority() error {
 		return err
 	}
 	if len(paths) != 0 {
-		return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "registry metadata is missing from a nonempty authority")
+		return kernel.Fail(kernel.ErrDatasetInvalid, "registry metadata is missing from a nonempty authority")
 	}
 	history, ok := snapshot.HistoryStoreOf(g.authority)
 	if !ok {
@@ -97,7 +97,7 @@ func (g *registry) requireVirginAuthority() error {
 		return err
 	}
 	if len(commits) != 1 || commits[0] != commit {
-		return kernel.Fail(kernel.ErrKnowledgeSetInvalid, "registry metadata is missing from an existing authority")
+		return kernel.Fail(kernel.ErrDatasetInvalid, "registry metadata is missing from an existing authority")
 	}
 	return nil
 }

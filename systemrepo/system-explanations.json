@@ -38,7 +38,7 @@
         "topic": "目标",
         "term": "Dataset",
         "source": "snapshot/dataset/definition.go",
-        "symbol": "KnowledgeSet"
+        "symbol": "Dataset"
       }
     ]
   },
@@ -117,7 +117,7 @@
         "topic": "目标",
         "term": "固定",
         "source": "snapshot/dataset/resolve.go",
-        "symbol": "ResolvedKnowledgeSet"
+        "symbol": "ResolvedDataset"
       }
     ]
   },

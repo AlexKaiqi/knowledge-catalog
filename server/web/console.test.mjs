@@ -83,10 +83,10 @@ async function fixture({ hash = "#/", search = "NOT_CONFIGURED" } = {}) {
       if (path === "/operations/v1/projections:describe") {
         return response({ state: "", basisCommit: "", lagBehindHead: false });
       }
-      if (path === "/knowledge/v1/schemas:list") {
+      if (path === "/object/v1/schemas:list") {
         return response({ schemas: [{ objectId: "schema/metric", entity: "Metric", description: "指标" }] });
       }
-      if (path === "/knowledge/v1/schemas:describe") {
+      if (path === "/object/v1/schemas:describe") {
         return response({
           schemas: [{
             objectId: "schema/metric", entity: "Metric", aspect: "definition",
@@ -97,7 +97,7 @@ async function fixture({ hash = "#/", search = "NOT_CONFIGURED" } = {}) {
           }],
         });
       }
-      if (path === "/knowledge/v1/search") {
+      if (path === "/object/v1/search") {
         const body = JSON.parse(options.body || "{}");
         if (body.repository !== "kr://acme/core") {
           throw new Error("unexpected search " + options.body);
@@ -105,7 +105,7 @@ async function fixture({ hash = "#/", search = "NOT_CONFIGURED" } = {}) {
         if (body.query === "merchandise" || (Array.isArray(body.equal) && body.equal[0] === "unit=CNY")) {
           return response({
             completeness: "complete",
-            hits: [{ knowledge: { address: { objectId: "metric/gmv" }, repository: "kr://acme/core", commit: "c1" } }],
+            hits: [{ object: { address: { objectId: "metric/gmv" }, repository: "kr://acme/core", commit: "c1" } }],
           });
         }
         throw new Error("unexpected search " + options.body);

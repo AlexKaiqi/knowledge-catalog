@@ -63,7 +63,7 @@ func exerciseHTTPPluginShutdown(t *testing.T, beginThenDrain bool) {
 		t.Fatal(err)
 	}
 	rd := reader.NewReader(store)
-	repo, err := rd.Require(source.RepositoryID, kernel.ErrKnowledgeRefUnresolved)
+	repo, err := rd.Require(source.RepositoryID, kernel.ErrObjectRefUnresolved)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func exerciseHTTPPluginShutdown(t *testing.T, beginThenDrain bool) {
 	entry := declarative.Entry(declarative.Options{Directory: filepath.Join(t.TempDir(), "projection"),
 		Engine: func(string) index.EngineOpener { return pool.open }, Datasets: testkit.OpenDatasets(t, store),
 		Lookup: func(id kernel.RepositoryID) (objectmodel.Repository, error) {
-			return rd.Require(id, kernel.ErrKnowledgeRefUnresolved)
+			return rd.Require(id, kernel.ErrObjectRefUnresolved)
 		},
 	})
 	open := entry.Open
@@ -251,7 +251,7 @@ func exerciseHTTPPluginShutdown(t *testing.T, beginThenDrain bool) {
 		t.Fatal("accepted HTTP sync did not publish its actual State view")
 	}
 	result, err := plugins.SearchStateAtRevisionContext(context.Background(), repo, commit.Result.NewCommit, revision, query)
-	if err != nil || len(result.Hits) != 1 || result.Hits[0].Knowledge.Commit != commit.Result.NewCommit || result.Hits[0].Knowledge.Address.ObjectID != "Job:shutdown" || len(result.Hits[0].Version.Observations) != 1 || result.Hits[0].Knowledge.Value.(map[string]any)["runtime"].(map[string]any)["status"] != "running" {
+	if err != nil || len(result.Hits) != 1 || result.Hits[0].Object.Commit != commit.Result.NewCommit || result.Hits[0].Object.Address.ObjectID != "Job:shutdown" || len(result.Hits[0].Version.Observations) != 1 || result.Hits[0].Object.Value.(map[string]any)["runtime"].(map[string]any)["status"] != "running" {
 		t.Fatalf("draining HTTP work lost its fixed canonical State query: %#v %v", result, err)
 	}
 	foreground.releaseOnce.Do(func() { close(foreground.release) })

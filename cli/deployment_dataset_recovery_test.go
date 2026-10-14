@@ -60,7 +60,7 @@ func TestDatasetPublishingRecoveryKeepsAcceptedVersion(t *testing.T) {
 		}
 		return c
 	}
-	coordinate := func(pin *dataset.ResolvedKnowledgeSet) snapshotclient.WorkspaceFileCoordinate {
+	coordinate := func(pin *dataset.ResolvedDataset) snapshotclient.WorkspaceFileCoordinate {
 		c := snapshotclient.WorkspaceFileCoordinate{Dataset: "incident", View: "repository"}
 		if pin != nil {
 			raw, err := json.Marshal(pin)
@@ -71,12 +71,12 @@ func TestDatasetPublishingRecoveryKeepsAcceptedVersion(t *testing.T) {
 		}
 		return c
 	}
-	// Writer commits wrap plain files with knowledge frontmatter (provenance
+	// Writer commits wrap plain files with object frontmatter (provenance
 	// embeds the source path), so the serving assertion is byte-stability: the
 	// accepted version must return IDENTICAL bytes across a failed prepare,
 	// instance replacement and a later version advance.
 	baseline := map[string]string{}
-	assertDelivered := func(c *kcclient.Client, pin *dataset.ResolvedKnowledgeSet, file, marker string) {
+	assertDelivered := func(c *kcclient.Client, pin *dataset.ResolvedDataset, file, marker string) {
 		t.Helper()
 		var out snapshotclient.WorkspaceFileReadResponse
 		if err := c.WorkspaceFilesService().Read(context.Background(), snapshotclient.WorkspaceFileReadRequest{
@@ -105,7 +105,7 @@ func TestDatasetPublishingRecoveryKeepsAcceptedVersion(t *testing.T) {
 	body(t, call("grant", "add", "--principal", "agent:reader", "--action", "dataset.resolve", "--dataset", "incident"))
 	body(t, call("grant", "add", "--principal", "agent:reader", "--action", "file.read", "--dataset", "incident"))
 	reader := readerClient()
-	accepted := &dataset.ResolvedKnowledgeSet{}
+	accepted := &dataset.ResolvedDataset{}
 	{
 		var mounts snapshotclient.WorkspaceFileMountsResponse
 		if err := reader.WorkspaceFilesService().Mounts(context.Background(), snapshotclient.WorkspaceFileMountsRequest{
@@ -121,7 +121,7 @@ func TestDatasetPublishingRecoveryKeepsAcceptedVersion(t *testing.T) {
 	assertDelivered(reader, accepted, "notes/recover.md", "durable")
 
 	// 准备阶段失败：来源未在 Catalog 登记 → 冻结失败拒绝，已接受版本继续服务。
-	expectCode(t, call("dataset", "define", "incident", "--revision", "2", "--source", "kr://recover/unconfigured@notes@note"), "KNOWLEDGE_SET_INVALID")
+	expectCode(t, call("dataset", "define", "incident", "--revision", "2", "--source", "kr://recover/unconfigured@notes@note"), "DATASET_INVALID")
 	{
 		var mounts snapshotclient.WorkspaceFileMountsResponse
 		if err := reader.WorkspaceFilesService().Mounts(context.Background(), snapshotclient.WorkspaceFileMountsRequest{
@@ -162,7 +162,7 @@ func TestDatasetPublishingRecoveryKeepsAcceptedVersion(t *testing.T) {
 		}
 	}
 	if got := body(t, call("writer", "head", "--repo", "kr://recover/source")); !reflect.DeepEqual(got, oldHead) {
-		t.Fatal("recovery changed knowledge HEAD")
+		t.Fatal("recovery changed object HEAD")
 	}
 	if got := body(t, call("show")); !reflect.DeepEqual(got, catalogState) {
 		t.Fatal("Catalog/dataset state lost on replacement")

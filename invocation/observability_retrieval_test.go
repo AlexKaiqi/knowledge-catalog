@@ -17,7 +17,7 @@ func TestSearchRerankRecordsCompletedRetrievalWhenOnlyRefineFails(t *testing.T) 
 	}
 	search := retrieval.SearchResult{
 		SearchView:   retrieval.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{"kr://acme/runbooks": "c1"}},
-		Completeness: retrieval.CompletenessComplete, Hits: []retrieval.KnowledgeHit{},
+		Completeness: retrieval.CompletenessComplete, Hits: []retrieval.ObjectHit{},
 	}
 	event, err := RetrievalEventFrom("search-rerank", flags, ObservedAccessResult{RetrievalSource: search}, "ev_1",
 		kernel.Fail(kernel.ErrTemporaryUnavailable, "refine timeout"))
@@ -31,23 +31,23 @@ func TestSearchRerankRecordsCompletedRetrievalWhenOnlyRefineFails(t *testing.T) 
 
 func TestTraverseRecordsRetrievalEvidenceWithPinnedNodes(t *testing.T) {
 	flags := map[string]invoke.FlagValue{
-		"as": "agent:test", "trace-id": "trace-traverse", "dataset": "agent", "object": "kc://scene/knowledge/metric/gmv",
+		"as": "agent:test", "trace-id": "trace-traverse", "dataset": "agent", "object": "kc://scene/object/metric/gmv",
 		"max-hops": "2", "min-hops": "1", "relation-type": "defines", "direction": "DIRECTED",
 	}
 	page := retrieval.TraversePage{
 		SearchView: retrieval.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{
-			"kr://scene/knowledge": "c1", "kr://scene/graph": "c2",
+			"kr://scene/object": "c1", "kr://scene/graph": "c2",
 		}},
 		Nodes: []retrieval.TraverseNode{
-			{Repository: "kr://scene/knowledge", ObjectID: "schema/metric.definition", Depth: 1},
-			{Repository: "kr://scene/knowledge", ObjectID: "metric/gmv", Depth: 0},
+			{Repository: "kr://scene/object", ObjectID: "schema/metric.definition", Depth: 1},
+			{Repository: "kr://scene/object", ObjectID: "metric/gmv", Depth: 0},
 		},
 		Edges: []retrieval.TraverseEdge{{
 			Repository: "kr://scene/graph", Commit: "c2", ObjectID: "rel/defines/gmv",
 		}},
 		Exhausted: true,
 	}
-	event, err := RetrievalEventFrom("knowledge-traverse", flags, page, "ev_2", nil)
+	event, err := RetrievalEventFrom("object-traverse", flags, page, "ev_2", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,10 +55,10 @@ func TestTraverseRecordsRetrievalEvidenceWithPinnedNodes(t *testing.T) {
 		t.Fatalf("traverse event = operator %s completeness %s", event.Operator, event.Completeness)
 	}
 	// Window = nodes (identity digests) then edges (relation body digests).
-	if len(event.Candidates) != 3 || event.Candidates[0].KnowledgeRef.Commit != "c1" || event.Candidates[0].Rank != 1 {
+	if len(event.Candidates) != 3 || event.Candidates[0].ObjectRef.Commit != "c1" || event.Candidates[0].Rank != 1 {
 		t.Fatalf("candidates must be pinned at snapshot basis: %#v", event.Candidates)
 	}
-	if event.Candidates[2].KnowledgeRef.Object != "rel/defines/gmv" || event.Candidates[2].ValueDigest == "" {
+	if event.Candidates[2].ObjectRef.Object != "rel/defines/gmv" || event.Candidates[2].ValueDigest == "" {
 		t.Fatalf("edge candidate must carry its own commit and relation digest: %#v", event.Candidates[2])
 	}
 	// The recorder stamps identity and schema version at persist time.
@@ -79,7 +79,7 @@ func TestSearchEventRecordsRecallStrategyInLogicalRequest(t *testing.T) {
 		SearchView: retrieval.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{"kr://acme/runbooks": "c1"}},
 		Claims:     []string{"recall=semantic: approximate k-NN ranking window"},
 	}
-	event, err := RetrievalEventFrom("knowledge-search", flags, search, "ev_3", nil)
+	event, err := RetrievalEventFrom("object-search", flags, search, "ev_3", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

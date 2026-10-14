@@ -1,6 +1,6 @@
 // Package snapshot defines layer ⓪: path/blob/tree/commit/ref/CAS authority.
 //
-// It intentionally has no knowledge identity, Aspect, Schema, Binding, or
+// It intentionally has no object identity, Aspect, Schema, Binding, or
 // retrieval concepts. Upper layers may discover optional capabilities by
 // asserting their own interfaces against a Store value.
 package snapshot
@@ -11,7 +11,7 @@ import (
 )
 
 // Store is the layer ⓪ authority contract. It exposes version coordinates and
-// ref mutation only; knowledge PUT/REMOVE is compiled by layer ② before it
+// ref mutation only; object PUT/REMOVE is compiled by layer ② before it
 // reaches a concrete Snapshot adapter.
 type Store interface {
 	ID() kernel.RepositoryID
@@ -37,7 +37,7 @@ type StoreOrigin interface {
 }
 
 // TreeReader is immutable literal path/blob access. It is intentionally
-// separate from TreeStore so a native Knowledge authority can support VFS
+// separate from TreeStore so a native Object authority can support VFS
 // reads without exposing a raw path mutation bypass.
 type TreeReader interface {
 	ReadFile(path string, commit kernel.CommitID) ([]byte, error)
@@ -70,7 +70,7 @@ type HistoryStore interface {
 }
 
 // CommitMetadataReader exposes immutable commit provenance independently of
-// file contents, host Git checkouts, and knowledge interpretation.
+// file contents, host Git checkouts, and object interpretation.
 type CommitMetadataReader interface {
 	ReadCommitMetadata(kernel.CommitID) (CommitMetadata, error)
 }

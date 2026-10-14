@@ -6,7 +6,7 @@
 |---|---|
 | `layers_test.go` | 生产包 import DAG、`home`/`httpsurface`/`client` 边界、`liveaccess` 的 provider 隔离与已移除包守卫 |
 | `provider_boundary_test.go` | Snapshot adapters 与 Retrieval providers 的物理边界 |
-| `semantic_test.go` | 类型声明所有权；阻止 Knowledge 类型回流 kernel、Projection 回流 `object/reader` |
+| `semantic_test.go` | 类型声明所有权；阻止 Object 类型回流 kernel、Projection 回流 `object/reader` |
 | `single_registry_test.go` | 单服务唯一登记权威；禁止多空间公开类型、选择字段、wire tag、容器与归档生命周期回潮 |
 | `snapshot_contract_test.go` | Snapshot 公开包闭集、含测试与嵌套模块的深层 import 禁止、退役路径、公开签名与具体实现隐藏 |
 | `snapshot_cli_ownership_test.go` | 从模块声明派生叶集合；禁止中央重复登记叶帮助、操作数/分派分支、产品输出特例和纯模块导航名单 |

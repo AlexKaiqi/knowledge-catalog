@@ -31,7 +31,7 @@ func (g *referenceReadGuard) ReadFile(path string, at kernel.CommitID) ([]byte, 
 		g.beforeRead(path, at)
 	}
 	if g.blocked[path] {
-		return nil, fmt.Errorf("unselected knowledge body read: %s", path)
+		return nil, fmt.Errorf("unselected object body read: %s", path)
 	}
 	if g.locatorOverride != nil && path == repofile.ObjectLocatorPath("table/orders") {
 		return g.locatorOverride, nil
@@ -139,7 +139,7 @@ func TestReferenceCollectionHasNoSingleMaintenanceDigest(t *testing.T) {
 func TestDatasetReferenceReadKeepsSourceAndPublishedUnitScope(t *testing.T) {
 	rd, guard, _, at := newReferenceReadFixture(t)
 	guard.blocked["private/description.yaml"], guard.blocked["private/status.yaml"] = true, true
-	scope := reader.Open(rd.Lookup(func(kernel.RepositoryID) (snapshot.Store, error) { return guard, nil }), reader.KnowledgeSetPin{
+	scope := reader.Open(rd.Lookup(func(kernel.RepositoryID) (snapshot.Store, error) { return guard, nil }), reader.DatasetPin{
 		Repositories: map[kernel.RepositoryID]kernel.CommitID{guard.ID(): at},
 		Items:        []reader.DatasetItem{{Repository: guard.ID(), Commit: at, Kind: "file", File: "public/id.yaml"}},
 	})
@@ -150,12 +150,12 @@ func TestDatasetReferenceReadKeepsSourceAndPublishedUnitScope(t *testing.T) {
 	}
 	for _, locator := range []string{"", "/description", "/columns", "/columns/status"} {
 		ref.Locator = locator
-		if _, err := scope.ReadReference(ref); kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+		if _, err := scope.ReadReference(ref); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 			t.Fatalf("unpublished selection %q escaped scope: %v", locator, err)
 		}
 	}
 	ref.Repository = "kr://reader/other-source"
-	if _, err := scope.ReadReference(ref); kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+	if _, err := scope.ReadReference(ref); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		t.Fatalf("Dataset guessed another source for a same-name object: %v", err)
 	}
 	if guard.reads["private/description.yaml"] != 0 || guard.reads["private/status.yaml"] != 0 {
@@ -214,7 +214,7 @@ func TestReferenceReadKeepsRootAndCompleteMaintenanceBasis(t *testing.T) {
 	if oldLeaf.Value != false || newLeaf.Value != false || oldLeaf.Digest == newLeaf.Digest || oldLeaf.Address != newLeaf.Address || newLeaf.Commit != updated.Result.NewCommit {
 		t.Fatalf("unchanged leaf hid another field's maintenance change: old=%#v new=%#v", oldLeaf, newLeaf)
 	}
-	trimmed, err := rd.Read(objectmodel.KnowledgeRef{Repository: guard.ID(), Object: "table/orders"}, before, &objectmodel.AspectSelector{Include: []string{"description"}})
+	trimmed, err := rd.Read(objectmodel.ObjectRef{Repository: guard.ID(), Object: "table/orders"}, before, &objectmodel.AspectSelector{Include: []string{"description"}})
 	if err != nil || trimmed.Digest != kernel.CanonicalDigest(wantRoot) || !reflect.DeepEqual(trimmed.Value, map[string]any{"description": "订单表"}) {
 		t.Fatalf("legacy selected READ lost the complete object precondition: %#v %v", trimmed, err)
 	}
@@ -291,7 +291,7 @@ func TestReferenceAuthorizationPlanUsesFixedCoordinatesWithoutBodies(t *testing.
 	}
 	for path := range guard.blocked {
 		if guard.reads[path] != 0 {
-			t.Fatalf("authorization plan read knowledge content: %#v", guard.reads)
+			t.Fatalf("authorization plan read object content: %#v", guard.reads)
 		}
 	}
 	for _, commit := range guard.commits {

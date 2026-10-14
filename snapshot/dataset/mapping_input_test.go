@@ -23,11 +23,11 @@ func TestSourceMappingsDefaultSelectorAndMountCoordinates(t *testing.T) {
 		t.Fatalf("empty selector must default: %#v", emptyEquals)
 	}
 
-	mounted, err := dataset.ParseSourceMappings([]string{"kr://acme/public/core@knowledge"})
+	mounted, err := dataset.ParseSourceMappings([]string{"kr://acme/public/core@object"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if mounted[0].Selector != snapshot.DefaultRef || mounted[0].Path == nil || *mounted[0].Path != "knowledge" {
+	if mounted[0].Selector != snapshot.DefaultRef || mounted[0].Path == nil || *mounted[0].Path != "object" {
 		t.Fatalf("id@path must keep the mount without naming a ref: %#v", mounted)
 	}
 

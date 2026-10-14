@@ -17,7 +17,7 @@ transport 腿汇总。粒度 caveat：Prometheus 抓取间隔（默认 5s）内�
 
 边界（与 CASES.md §3 一致，但 L1 只覆盖其中可 client-timer 的子集）：
 - 只绑定 env 配置指向的已部署 KC Server，不启动、不编排任何容器；
-- 只经公开 HTTP surface（/snapshot/v1 /writer/v1 /knowledge/v1）与只读
+- 只经公开 HTTP surface（/snapshot/v1 /writer/v1 /object/v1）与只读
   Prometheus query API（可选）；
 - closed-loop 串行（concurrency=1），到达模型扩展属于 L3（arrival-models）；
 - 发压端 CPU 采样只覆盖 runner 进程自身（os.times，含子进程），机器级
@@ -442,7 +442,7 @@ class LadderRun:
         if ok:
             for i in range(n):
                 _, r_status, _ = self.client.call(
-                    "POST", "/knowledge/v1/objects:read",
+                    "POST", "/object/v1/objects:read",
                     {"repository": self.repo, "object": f"bench/doc-{i:08d}"})
                 if r_status == 200:
                     read_ok += 1

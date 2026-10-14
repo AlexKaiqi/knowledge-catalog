@@ -30,7 +30,7 @@ func shapeCLISearch(value any) any {
 			continue
 		}
 		src := hit
-		if nested, ok := asObjectMap(hit["knowledge"]); ok {
+		if nested, ok := asObjectMap(hit["object"]); ok {
 			src = nested
 		}
 		item := map[string]any{}
@@ -128,7 +128,7 @@ func productObjectID(obj map[string]any) string {
 			return v
 		}
 	}
-	if ref, ok := asObjectMap(obj["knowledgeRef"]); ok {
+	if ref, ok := asObjectMap(obj["objectRef"]); ok {
 		if v := stringField(ref, "object"); v != "" {
 			return v
 		}

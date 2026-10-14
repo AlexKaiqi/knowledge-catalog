@@ -12,7 +12,7 @@ import (
 // opaque; only a typed state observation becomes a Member UnitObservation.
 func ObserveObjectInterfaceCall(result interfaces.InterfaceCallResult, request interfaces.InterfaceRequest) ObservedAccessResult {
 	address := objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: request.Object, AspectName: interfaces.ObjectInterfacesAspect, MemberKey: request.Implementation}
-	implementation := observability.KnowledgeAccess{KnowledgeRef: objectmodel.PinnedKnowledgeRef{KnowledgeRef: objectmodel.KnowledgeRef{Repository: request.Repository, Object: request.Object}, Commit: result.Basis.DeclarationCommit}, Address: &address}
+	implementation := observability.ObjectAccess{ObjectRef: objectmodel.PinnedObjectRef{ObjectRef: objectmodel.ObjectRef{Repository: request.Repository, Object: request.Object}, Commit: result.Basis.DeclarationCommit}, Address: &address}
 	var observation *objectmodel.ObservationBasis
 	switch basis := result.Observation.(type) {
 	case objectmodel.ObservationBasis:
@@ -23,7 +23,7 @@ func ObserveObjectInterfaceCall(result interfaces.InterfaceCallResult, request i
 	if observation != nil {
 		implementation.Observations = []objectmodel.UnitObservation{{Address: address, DeclarationCommit: result.Basis.DeclarationCommit, DeclarationDigest: result.Basis.DeclarationDigest, Basis: *observation}}
 	}
-	return ObservedAccessResult{Output: result, Knowledge: []observability.KnowledgeAccess{implementation, {KnowledgeRef: result.Basis.Contract}, {KnowledgeRef: result.Basis.ImplementationSchema}}}
+	return ObservedAccessResult{Output: result, Object: []observability.ObjectAccess{implementation, {ObjectRef: result.Basis.Contract}, {ObjectRef: result.Basis.ImplementationSchema}}}
 }
 
 func objectInterfaceAuditRefs(result any) map[string]any {

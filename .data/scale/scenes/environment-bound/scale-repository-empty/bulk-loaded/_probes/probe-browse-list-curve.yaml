@@ -3,7 +3,7 @@ title: 浏览分页随文件数量曲线
 question: "browse、schema list、relations 分页与 log 的时延如何随仓内文件数量与翻页深度增长？"
 views: [read]
 operation:
-  surface: knowledge
+  surface: object
   action: browse-pages
   shape: "从固定 cursor 连续翻页（page 100/500 两档），覆盖 browse、schema list、relations、log；记录每页时延与 cursor 深度"
   isolation: read-only

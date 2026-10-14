@@ -20,13 +20,13 @@ import (
 // the user's target repository; every provider operation crosses Run -> HTTP.
 func TestManagedRepositoryProviderCreatesPublishesAndResumes(t *testing.T) {
 	cfg, configPath := declaredDeployment(t, false)
-	catalogID, repositoryID := cfg.Registry.ID, "kr://scene/managed-knowledge"
+	catalogID, repositoryID := cfg.Registry.ID, "kr://scene/managed-object"
 	provider, ungranted := "provider", "ungranted"
 	lakefsFake := testkit.NewLakeFSFake(t)
 	t.Setenv("KC_LAKEFS_CREDENTIAL", testkit.LakeFSFakeCredential)
 	cfg.ManagedRepositories = &apphome.ManagedRepositoryConfig{
 		Driver: "lakefs", DSN: lakefsFake.Origin(), Root: "s3://kc-authority",
-		CreatorActions: []string{"writer.preview", "writer.commit", "knowledge.read", "knowledge.provenance"},
+		CreatorActions: []string{"writer.preview", "writer.commit", "object.read", "object.provenance"},
 	}
 	writeDeployment(t, configPath, cfg)
 	body(t, deploymentCommand(t, "deployment", "init", "--config", configPath))

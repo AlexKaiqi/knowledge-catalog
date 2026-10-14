@@ -13,12 +13,12 @@ import (
 
 func publishPagedFiles(t *testing.T, fixture *datasetHTTPFixture, source *fileHTTPSource, id string, revision int, mount bool, targets ...string) map[string]any {
 	t.Helper()
-	sources := []dataset.KnowledgeSetSource{}
+	sources := []dataset.DatasetSource{}
 	if mount {
-		sources = append(sources, dataset.KnowledgeSetSource{Repository: source.id, Selector: snapshot.DefaultRef, Path: dataset.MountPath("docs"), SubPath: "reference"})
+		sources = append(sources, dataset.DatasetSource{Repository: source.id, Selector: snapshot.DefaultRef, Path: dataset.MountPath("docs"), SubPath: "reference"})
 	}
 	for _, target := range targets {
-		sources = append(sources, dataset.KnowledgeSetSource{Repository: source.id, Selector: snapshot.DefaultRef, File: "reference/a.json", Target: target})
+		sources = append(sources, dataset.DatasetSource{Repository: source.id, Selector: snapshot.DefaultRef, File: "reference/a.json", Target: target})
 	}
 	datasetHTTPCall(t, fixture.handler(), http.MethodPost, "/snapshot/v1/datasets", map[string]any{"dataset": id, "revision": revision, "sources": sources}, http.StatusOK)
 	// Publication validates selected files; the following counters observe only
@@ -120,7 +120,7 @@ func TestSnapshotDeliveredPagingRejectsLateSourceConflict(t *testing.T) {
 		cursor = page["continuation"]
 	}
 	failed := datasetHTTPCall(t, fixture.handler(), http.MethodPost, "/snapshot/v1/files/tree:list", map[string]any{"dataset": "files", "pin": pin, "path": "docs", "limit": 1, "continuation": cursor}, http.StatusBadRequest)
-	if failed["error"].(map[string]any)["code"] != string(kernel.ErrKnowledgeSetInvalid) {
+	if failed["error"].(map[string]any)["code"] != string(kernel.ErrDatasetInvalid) {
 		t.Fatalf("late conflict was treated as a second child: %#v", failed)
 	}
 }

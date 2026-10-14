@@ -24,7 +24,7 @@ type History struct {
 func (c *service) Log(query LogQuery) (History, error) {
 	path := ""
 	if query.Dataset != "" {
-		path = KnowledgeSetYAML(query.Dataset)
+		path = DatasetYAML(query.Dataset)
 	}
 	history := History{RepositoryID: c.registry.AuthorityID(), Commits: []Commit{}}
 	limit := query.Limit

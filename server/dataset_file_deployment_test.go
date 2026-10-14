@@ -49,7 +49,7 @@ func declaredFileGateway(t *testing.T) (apphome.DeploymentConfig, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := cat.DefineKnowledgeSet("protocol", 1, []dataset.KnowledgeSetSource{{Repository: objectmodel.SystemRepositoryID, Selector: snapshot.DefaultRef}}); err != nil {
+	if _, err := cat.DefineDataset("protocol", 1, []dataset.DatasetSource{{Repository: objectmodel.SystemRepositoryID, Selector: snapshot.DefaultRef}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := opened.Close(); err != nil {
@@ -91,7 +91,7 @@ func TestWorkspaceFileGatewayRestoresDeclaredDeployment(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer handler.(interface{ Close() error }).Close()
-	var fixedPin dataset.ResolvedKnowledgeSet
+	var fixedPin dataset.ResolvedDataset
 	for _, explicit := range []bool{false, true} {
 		name := "service Dataset"
 		if explicit {
@@ -154,7 +154,7 @@ func TestWorkspaceFileGatewayRestoresDeclaredDeployment(t *testing.T) {
 		t.Fatalf("revoke: %d %s", revoked.Code, revoked.Body.String())
 	}
 	denied := fileGatewayRequest(t, handler, "agent:reader", "/snapshot/v1/files/file:read", map[string]any{
-		"dataset": "protocol", "view": "semantic", "pin": fixedPin, "mountPath": "knowledge/system", "file": "_meta/repository.yaml",
+		"dataset": "protocol", "view": "semantic", "pin": fixedPin, "mountPath": "object/system", "file": "_meta/repository.yaml",
 	})
 	if denied.Code != http.StatusForbidden {
 		t.Fatalf("old pin bypassed revoked grant: %d %s", denied.Code, denied.Body.String())
@@ -166,7 +166,7 @@ func TestWorkspaceFileGatewayRestoresDeclaredDeployment(t *testing.T) {
 	}
 }
 
-func TestWorkspaceFileGatewayDeliversSystemKnowledgeTree(t *testing.T) {
+func TestWorkspaceFileGatewayDeliversSystemObjectTree(t *testing.T) {
 	cfg, configPath := declaredFileGateway(t)
 	opened, err := apphome.OpenDeployment(cfg)
 	if err != nil {
@@ -176,7 +176,7 @@ func TestWorkspaceFileGatewayDeliversSystemKnowledgeTree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = cat.DefineKnowledgeSet("protocol", 2, []dataset.KnowledgeSetSource{{Repository: objectmodel.SystemRepositoryID, Selector: snapshot.DefaultRef, Path: dataset.MountPath("knowledge/system")}})
+	_, err = cat.DefineDataset("protocol", 2, []dataset.DatasetSource{{Repository: objectmodel.SystemRepositoryID, Selector: snapshot.DefaultRef, Path: dataset.MountPath("object/system")}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +230,7 @@ func TestWorkspaceFileGatewayDeliversSystemKnowledgeTree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, file := range []string{"README.md", "concepts/object/definition.md", "interfaces/writer/definition.md", "mechanisms/governance/definition.md", "mechanisms/hook/definition.md", "capabilities/read-knowledge/entrypoints.yaml", "guides/first-publication/guide.md"} {
+	for _, file := range []string{"README.md", "concepts/object/definition.md", "interfaces/writer/definition.md", "mechanisms/governance/definition.md", "mechanisms/hook/definition.md", "capabilities/read-object/entrypoints.yaml", "guides/first-publication/guide.md"} {
 		coordinate["file"] = file
 		read := fileGatewayRequest(t, handler, "agent:reader", "/snapshot/v1/files/file:read", coordinate)
 		if read.Code != http.StatusOK {

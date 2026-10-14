@@ -144,8 +144,8 @@ func (s *FileStore) RecordAccessReceipt(event AccessEvent) (string, error) {
 	if event.OccurredAt == "" {
 		event.OccurredAt = s.now().Format(time.RFC3339Nano)
 	}
-	if event.Knowledge == nil {
-		event.Knowledge = []KnowledgeAccess{}
+	if event.Object == nil {
+		event.Object = []ObjectAccess{}
 	}
 	if event.Files == nil {
 		event.Files = []FileAccess{}

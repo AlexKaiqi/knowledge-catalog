@@ -43,10 +43,10 @@ type TraverseStep struct {
 // node set by minimum depth; edges stay complete. The scope is supplied by
 // the executing channel and is deliberately not part of the query digest.
 type TraverseQuery struct {
-	Start   objectmodel.KnowledgeRef `json:"start"`
-	Step    TraverseStep             `json:"step,omitempty"`
-	MinHops int                      `json:"minHops,omitempty"`
-	MaxHops int                      `json:"maxHops"`
+	Start   objectmodel.ObjectRef `json:"start"`
+	Step    TraverseStep          `json:"step,omitempty"`
+	MinHops int                   `json:"minHops,omitempty"`
+	MaxHops int                   `json:"maxHops"`
 }
 
 func TraverseQueryDigest(query TraverseQuery) kernel.Digest {
@@ -126,13 +126,13 @@ type EdgeCoordinate struct {
 // the token so a resumed run reproduces the same closure without
 // re-expanding. Positions carries per-node relation lane continuations.
 type TraversePosition struct {
-	Depth     int                        `json:"depth"`
-	Frontier  []TraverseFrontierEntry    `json:"frontier"`
-	Visited   []objectmodel.KnowledgeRef `json:"visited"`
-	Edges     []EdgeCoordinate           `json:"edges"`
-	Boundary  []TraverseBoundary         `json:"boundary,omitempty"`
-	Claims    []string                   `json:"claims,omitempty"`
-	Positions map[string]string          `json:"positions,omitempty"`
+	Depth     int                     `json:"depth"`
+	Frontier  []TraverseFrontierEntry `json:"frontier"`
+	Visited   []objectmodel.ObjectRef `json:"visited"`
+	Edges     []EdgeCoordinate        `json:"edges"`
+	Boundary  []TraverseBoundary      `json:"boundary,omitempty"`
+	Claims    []string                `json:"claims,omitempty"`
+	Positions map[string]string       `json:"positions,omitempty"`
 }
 
 // TraversePositionKey is the per-node relation lane continuation key used in
@@ -189,7 +189,7 @@ func DecodeTraversePosition(token string, query TraverseQuery, view SearchView, 
 }
 
 func (p *TraversePosition) normalize() {
-	sortRefs := func(refs []objectmodel.KnowledgeRef) {
+	sortRefs := func(refs []objectmodel.ObjectRef) {
 		for i := 1; i < len(refs); i++ {
 			for j := i; j > 0 && refLess(refs[j], refs[j-1]); j-- {
 				refs[j], refs[j-1] = refs[j-1], refs[j]
@@ -224,7 +224,7 @@ func sortBoundaries(boundaries []TraverseBoundary) {
 	}
 }
 
-func refLess(left, right objectmodel.KnowledgeRef) bool {
+func refLess(left, right objectmodel.ObjectRef) bool {
 	if left.Repository != right.Repository {
 		return left.Repository < right.Repository
 	}

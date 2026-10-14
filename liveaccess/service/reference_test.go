@@ -71,8 +71,8 @@ func newLogicalReferenceFixture(t *testing.T, origin string) (*reader.Serving, [
 	}
 	rd := reader.NewReader(registry)
 	return reader.Open(func(id kernel.RepositoryID) (objectmodel.Repository, error) {
-		return rd.Require(id, kernel.ErrKnowledgeRefUnresolved)
-	}, reader.KnowledgeSetPin{SetID: "logical-reference", Repositories: commits, Items: reader.WholeRepositoryItems(commits)}), ids, commits
+		return rd.Require(id, kernel.ErrObjectRefUnresolved)
+	}, reader.DatasetPin{SetID: "logical-reference", Repositories: commits, Items: reader.WholeRepositoryItems(commits)}), ids, commits
 }
 
 func TestLogicalReferencePreservesStateAndSelectsOnlyExplicitSource(t *testing.T) {
@@ -179,12 +179,12 @@ func TestLogicalReferenceRequiresRuntimeAndDoesNotInventBoundFacets(t *testing.T
 	lookup := &stateLookup{}
 	withRuntime := liveservice.Open(base, lookup, kernel.IdentityContext{Principal: "agent"})
 	_, err = readLogicalReference(t, withRuntime, objectmodel.Reference{Repository: ids[0], Object: "job/shared", Locator: "/unknown/status"})
-	testkit.ExpectCode(t, err, kernel.ErrKnowledgeRefUnresolved)
+	testkit.ExpectCode(t, err, kernel.ErrObjectRefUnresolved)
 	if len(lookup.requests) != 0 {
 		t.Fatalf("unconfirmed facet contacted runtime: %#v", lookup.requests)
 	}
 	_, err = readLogicalReference(t, withRuntime, objectmodel.Reference{Repository: "kr://unpublished", Object: "job/shared", Locator: "/runtime/status"})
-	testkit.ExpectCode(t, err, kernel.ErrKnowledgeRefUnresolved)
+	testkit.ExpectCode(t, err, kernel.ErrObjectRefUnresolved)
 }
 
 type streamReferenceRepo struct {
@@ -193,7 +193,7 @@ type streamReferenceRepo struct {
 	commit kernel.CommitID
 }
 
-func (r *streamReferenceRepo) Read(id objectmodel.ObjectID, at kernel.CommitID) (objectmodel.KnowledgeValue, error) {
+func (r *streamReferenceRepo) Read(id objectmodel.ObjectID, at kernel.CommitID) (objectmodel.ObjectValue, error) {
 	return objectmodel.AssembleObjectValue(r.ID(), id, at, []objectmodel.Unit{r.unit})
 }
 func (r *streamReferenceRepo) ReadReferenceUnits(ref objectmodel.Reference, at kernel.CommitID) ([]objectmodel.Unit, error) {
@@ -209,7 +209,7 @@ func TestLogicalReferenceRejectsStreamBeforeRuntime(t *testing.T) {
 	unit := objectmodel.Unit{ObjectID: address.ObjectID, Address: address, Value: map[string]any{}, Digest: kernel.CanonicalDigest(map[string]any{}), ValueSource: &objectmodel.ValueSource{Kind: objectmodel.ValueSourceBinding, Binding: &objectmodel.BindingDeclaration{Mode: objectmodel.BindingStream, Runtime: "scheduler", Protocol: "scheduler/v1", Operations: map[string]objectmodel.BindingOperation{"read": {Call: "job.status"}}}}}
 	native := &streamReferenceRepo{Repository: repo, unit: unit, commit: commit}
 	commits := map[kernel.RepositoryID]kernel.CommitID{id: commit}
-	scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return native, nil }, reader.KnowledgeSetPin{SetID: "stream", Repositories: commits, Items: reader.WholeRepositoryItems(commits)})
+	scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return native, nil }, reader.DatasetPin{SetID: "stream", Repositories: commits, Items: reader.WholeRepositoryItems(commits)})
 	lookup := &stateLookup{}
 	svc := liveservice.Open(scope, lookup, kernel.IdentityContext{Principal: "agent"})
 	values, err := svc.Read(context.Background(), address.ObjectID, nil)
@@ -229,10 +229,10 @@ type selectedStateReferenceRepo struct {
 	wholeReads int
 }
 
-func (r *selectedStateReferenceRepo) Read(id objectmodel.ObjectID, at kernel.CommitID) (objectmodel.KnowledgeValue, error) {
+func (r *selectedStateReferenceRepo) Read(id objectmodel.ObjectID, at kernel.CommitID) (objectmodel.ObjectValue, error) {
 	if id == r.unit.ObjectID {
 		r.wholeReads++
-		return objectmodel.KnowledgeValue{}, fmt.Errorf("selected binding must not reread the whole object or its unselected siblings")
+		return objectmodel.ObjectValue{}, fmt.Errorf("selected binding must not reread the whole object or its unselected siblings")
 	}
 	return r.Repository.Read(id, at)
 }
@@ -241,7 +241,7 @@ func (r *selectedStateReferenceRepo) ReadReferenceUnits(objectmodel.Reference, k
 	return []objectmodel.Unit{r.unit}, nil
 }
 
-func (r *selectedStateReferenceRepo) ReadAddress(address objectmodel.Address, at kernel.CommitID) (objectmodel.KnowledgeValue, error) {
+func (r *selectedStateReferenceRepo) ReadAddress(address objectmodel.Address, at kernel.CommitID) (objectmodel.ObjectValue, error) {
 	if address != r.unit.Address {
 		return r.Repository.ReadAddress(address, at)
 	}
@@ -259,7 +259,7 @@ func TestLogicalReferenceHydratesActualSelectedUnitBeforeMissingLeafWithoutRerea
 	placeholder := map[string]any{"cached": "declaration only"}
 	selectedRepo := &selectedStateReferenceRepo{Repository: repo, unit: objectmodel.Unit{ObjectID: address.ObjectID, Address: address, Value: placeholder, Digest: kernel.CanonicalDigest(placeholder), SchemaRef: "schema/job.runtime", ValueSource: &objectmodel.ValueSource{Kind: objectmodel.ValueSourceBinding, Binding: &objectmodel.BindingDeclaration{Mode: objectmodel.BindingState, Runtime: "scheduler", Protocol: "scheduler/v1", Operations: map[string]objectmodel.BindingOperation{"read": {Call: "job.status"}}}}}}
 	commits := map[kernel.RepositoryID]kernel.CommitID{id: commit}
-	scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return selectedRepo, nil }, reader.KnowledgeSetPin{SetID: "selected-actual", Repositories: commits, Items: reader.WholeRepositoryItems(commits)})
+	scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return selectedRepo, nil }, reader.DatasetPin{SetID: "selected-actual", Repositories: commits, Items: reader.WholeRepositoryItems(commits)})
 	lookup := &stateLookup{result: liveaccess.StateObservation{Value: map[string]any{"status": "observed-running"}, Basis: objectmodel.ObservationBasis{BindingGeneration: "runtime-7", Consistency: objectmodel.ObservationRepeatable, SourceRevision: "runtime-rev-8", ObservedAt: "2026-10-13T00:00:00Z"}}}
 	values, err := readLogicalReference(t, liveservice.Open(scope, lookup, kernel.IdentityContext{Principal: "agent"}), objectmodel.Reference{Repository: id, Object: address.ObjectID, Locator: "/runtime/status"})
 	if err != nil || len(values) != 1 || values[0].Value != "observed-running" || values[0].Digest != "" || values[0].Address != address || len(values[0].Observations) != 1 || values[0].Observations[0].Basis.SourceRevision != "runtime-rev-8" {
@@ -296,7 +296,7 @@ func TestLogicalReferenceDoesNotExpandBindingExecutionToEntityOrSchema(t *testin
 			source := &objectmodel.ValueSource{Kind: objectmodel.ValueSourceBinding, Binding: &objectmodel.BindingDeclaration{Mode: objectmodel.BindingState, Runtime: "scheduler", Protocol: "scheduler/v1", Operations: map[string]objectmodel.BindingOperation{"read": {Call: "job.status"}}}}
 			selectedRepo := &selectedStateReferenceRepo{Repository: repo, unit: objectmodel.Unit{ObjectID: tc.address.ObjectID, Address: tc.address, Value: placeholder, Digest: kernel.CanonicalDigest(placeholder), ValueSource: source}}
 			commits := map[kernel.RepositoryID]kernel.CommitID{id: commit}
-			scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return selectedRepo, nil }, reader.KnowledgeSetPin{SetID: "no-expanded-execution", Repositories: commits, Items: reader.WholeRepositoryItems(commits)})
+			scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return selectedRepo, nil }, reader.DatasetPin{SetID: "no-expanded-execution", Repositories: commits, Items: reader.WholeRepositoryItems(commits)})
 			lookup := &stateLookup{result: liveaccess.StateObservation{Value: map[string]any{"status": "forbidden-execution"}, Basis: objectmodel.ObservationBasis{BindingGeneration: "g1", Consistency: objectmodel.ObservationLatestOnly, ObservedAt: "2026-10-13T00:00:00Z"}}}
 			values, err := readLogicalReference(t, liveservice.Open(scope, lookup, kernel.IdentityContext{Principal: "agent"}), objectmodel.Reference{Repository: id, Object: tc.address.ObjectID, Locator: tc.locator})
 			assertFailedUnitRead(t, values, err, tc.address, kernel.ErrUsageInvalid)

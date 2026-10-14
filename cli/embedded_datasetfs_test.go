@@ -19,7 +19,7 @@ import (
 
 // datasetFSProjection is the frozen, authorized input used by embedded
 // application tests. Public kcfs obtains the same information through the
-// Knowledge Set File Gateway.
+// Dataset File Gateway.
 type datasetFSProjection struct {
 	home       string
 	root       string
@@ -27,12 +27,12 @@ type datasetFSProjection struct {
 	flags      map[string]FlagValue
 	homeState  *apphome.Home
 	datasets   dataset.Service
-	definition dataset.KnowledgeSet
-	resolved   dataset.ResolvedKnowledgeSet
+	definition dataset.Dataset
+	resolved   dataset.ResolvedDataset
 	mounts     []dataset.VirtualMount
 }
 
-func (p datasetFSProjection) recordKnowledgeSetFSRead(mount dataset.VirtualMount, relative string, data []byte, readErr error) ([]byte, error) {
+func (p datasetFSProjection) recordDatasetFSRead(mount dataset.VirtualMount, relative string, data []byte, readErr error) ([]byte, error) {
 	virtualPath := path.Join(mount.Path, relative)
 	result := map[string]any{"path": virtualPath, "repository": mount.Repository, "commit": mount.Commit}
 	readFlags := make(map[string]FlagValue, len(p.flags)+2)
@@ -41,7 +41,7 @@ func (p datasetFSProjection) recordKnowledgeSetFSRead(mount dataset.VirtualMount
 	}
 	readFlags["path"] = virtualPath
 	readFlags["_action"] = "file.read"
-	if _, _, err := inv.RecordKnowledgeAccess(p.home, "file-read", readFlags, result, readErr); err != nil && readErr == nil {
+	if _, _, err := inv.RecordObjectAccess(p.home, "file-read", readFlags, result, readErr); err != nil && readErr == nil {
 		return nil, err
 	}
 	return data, nil
@@ -92,10 +92,10 @@ func (p datasetFSProjection) build() (datasetfs.Plan, datasetFSManifest, error) 
 						var data []byte
 						data, err = tree.ReadFile(repositoryPath, mountCopy.Commit)
 						if err == nil {
-							return p.recordKnowledgeSetFSRead(mountCopy, relativeFile, data, nil)
+							return p.recordDatasetFSRead(mountCopy, relativeFile, data, nil)
 						}
 					}
-					_, _ = p.recordKnowledgeSetFSRead(mountCopy, relativeFile, nil, err)
+					_, _ = p.recordDatasetFSRead(mountCopy, relativeFile, nil, err)
 					return nil, err
 				},
 			},
@@ -112,9 +112,9 @@ func (p datasetFSProjection) build() (datasetfs.Plan, datasetFSManifest, error) 
 	return plan, manifest, nil
 }
 
-// prepareEmbeddedKnowledgeSetFS is a conformance-test seam, not a product
+// prepareEmbeddedDatasetFS is a conformance-test seam, not a product
 // transport. It proves plan semantics against the shared application services.
-func prepareEmbeddedKnowledgeSetFS(homeDir string, config datasetFSConfig) (datasetfs.Plan, datasetFSManifest, func(), error) {
+func prepareEmbeddedDatasetFS(homeDir string, config datasetFSConfig) (datasetfs.Plan, datasetFSManifest, func(), error) {
 	root, err := filepath.Abs(config.root)
 	if err != nil {
 		return datasetfs.Plan{}, datasetFSManifest{}, func() {}, err

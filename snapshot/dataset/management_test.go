@@ -7,9 +7,9 @@ import (
 )
 
 func TestDatasetManagementViewSelectsOnlyAcceptedHistory(t *testing.T) {
-	old := KnowledgeSet{SetID: "shared", Revision: 1, Sources: []KnowledgeSetSource{{Repository: "kr://old", Commit: "c1"}}}
-	current := KnowledgeSet{SetID: "shared", Revision: 3, Retired: true, Sources: []KnowledgeSetSource{{Repository: "kr://new", Commit: "c3"}}}
-	state := State{KnowledgeSets: []KnowledgeSet{current}, DatasetVersions: []KnowledgeSet{old, current, {SetID: "other", Revision: 2}}}
+	old := Dataset{SetID: "shared", Revision: 1, Sources: []DatasetSource{{Repository: "kr://old", Commit: "c1"}}}
+	current := Dataset{SetID: "shared", Revision: 3, Retired: true, Sources: []DatasetSource{{Repository: "kr://new", Commit: "c3"}}}
+	state := State{Datasets: []Dataset{current}, DatasetVersions: []Dataset{old, current, {SetID: "other", Revision: 2}}}
 	view, err := ManagementView(state, "shared", 1, ManagementOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -17,7 +17,7 @@ func TestDatasetManagementViewSelectsOnlyAcceptedHistory(t *testing.T) {
 	if view["revision"] != 1 || view["servingRevision"] != 3 || view["retired"] != true || !reflect.DeepEqual(view["versions"], []int{1, 3}) {
 		t.Fatalf("history lost current lifecycle or invented a version: %#v", view)
 	}
-	sources, ok := view["sources"].([]KnowledgeSetSource)
+	sources, ok := view["sources"].([]DatasetSource)
 	if !ok || len(sources) != 1 || sources[0].Commit != "c1" {
 		t.Fatalf("history source is not frozen: %#v", view)
 	}
@@ -26,10 +26,10 @@ func TestDatasetManagementViewSelectsOnlyAcceptedHistory(t *testing.T) {
 		t.Fatalf("unpublished v2: %v", err)
 	}
 	_, err = ManagementView(state, "other", 2, ManagementOptions{})
-	if kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
+	if kernel.CodeOf(err) != kernel.ErrDatasetInvalid {
 		t.Fatalf("historical record must not invent a visible current dataset: %v", err)
 	}
-	state.KnowledgeSets[0].Retired = false
+	state.Datasets[0].Retired = false
 	state.DatasetVersions[0].Retired = true
 	view, err = ManagementView(state, "shared", 1, ManagementOptions{})
 	if err != nil || view["retired"] == true {
@@ -38,7 +38,7 @@ func TestDatasetManagementViewSelectsOnlyAcceptedHistory(t *testing.T) {
 }
 
 func TestDatasetManagementViewPreservesLegacyAcceptedCurrentVersion(t *testing.T) {
-	view, err := ManagementView(State{KnowledgeSets: []KnowledgeSet{{SetID: "legacy", Revision: 7}}}, "legacy", 0, ManagementOptions{})
+	view, err := ManagementView(State{Datasets: []Dataset{{SetID: "legacy", Revision: 7}}}, "legacy", 0, ManagementOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,11 +48,11 @@ func TestDatasetManagementViewPreservesLegacyAcceptedCurrentVersion(t *testing.T
 }
 
 func TestDatasetManagementHistoryPagesAcceptedRevisionsWithHardLimit(t *testing.T) {
-	state := State{AuthorityID: "kr://history", KnowledgeSets: []KnowledgeSet{{SetID: "shared", Revision: 501}}}
+	state := State{AuthorityID: "kr://history", Datasets: []Dataset{{SetID: "shared", Revision: 501}}}
 	// Accepted releases deliberately contain gaps and a duplicate current
 	// record, as durable State does. Neither creates a synthetic version.
 	for revision := 1; revision <= 501; revision += 2 {
-		state.DatasetVersions = append(state.DatasetVersions, KnowledgeSet{SetID: "shared", Revision: revision})
+		state.DatasetVersions = append(state.DatasetVersions, Dataset{SetID: "shared", Revision: revision})
 	}
 	for _, limit := range []int{0} {
 		view, err := ManagementView(state, "shared", 1, ManagementOptions{Limit: limit})
@@ -93,7 +93,7 @@ func oddRevisions(start, end int) []int {
 }
 
 func TestDatasetManagementHistoryContinuationRejectsChangedBasis(t *testing.T) {
-	state := State{AuthorityID: "kr://history", KnowledgeSets: []KnowledgeSet{{SetID: "shared", Revision: 3}}, DatasetVersions: []KnowledgeSet{{SetID: "shared", Revision: 1}}}
+	state := State{AuthorityID: "kr://history", Datasets: []Dataset{{SetID: "shared", Revision: 3}}, DatasetVersions: []Dataset{{SetID: "shared", Revision: 1}}}
 	view, err := ManagementView(state, "shared", 0, ManagementOptions{Limit: 1})
 	if err != nil {
 		t.Fatal(err)
@@ -115,7 +115,7 @@ func TestDatasetManagementHistoryContinuationRejectsChangedBasis(t *testing.T) {
 	if kernel.CodeOf(err) != kernel.ErrUsageInvalid {
 		t.Fatalf("malformed continuation: %v", err)
 	}
-	state.KnowledgeSets[0].Revision = 4
+	state.Datasets[0].Revision = 4
 	_, err = ManagementView(state, "shared", 0, ManagementOptions{Continuation: raw})
 	if kernel.CodeOf(err) != kernel.ErrUsageInvalid {
 		t.Fatalf("published update changed paging basis without rejection: %v", err)

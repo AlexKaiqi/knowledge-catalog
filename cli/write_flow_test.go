@@ -162,7 +162,7 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 	if asMap(t, io["value"])["inputs"].([]any)[0] != "a" {
 		t.Fatal(io)
 	}
-	expectCode(t, kc(h, "read", testObjectReference(t, core, "policy/B", ""), "--ref", "refs/heads/main"), "KNOWLEDGE_REF_UNRESOLVED")
+	expectCode(t, kc(h, "read", testObjectReference(t, core, "policy/B", ""), "--ref", "refs/heads/main"), "OBJECT_REF_UNRESOLVED")
 }
 
 func hasRepository(status map[string]any, repoID string) bool {

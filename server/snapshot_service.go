@@ -152,11 +152,11 @@ func (f *httpFacade) snapshotResources(opened *Home, caller identity.HTTPIdentit
 		}
 		return view, nil
 	}
-	resources.BeforePublish = func(ctx context.Context, caller identity.HTTPIdentity, cat dataset.Service, definition dataset.KnowledgeSet) (dataset.KnowledgeSet, map[string]any, error) {
+	resources.BeforePublish = func(ctx context.Context, caller identity.HTTPIdentity, cat dataset.Service, definition dataset.Dataset) (dataset.Dataset, map[string]any, error) {
 		flags := snapshotRequestFlags(ctx, caller, access.Query{Action: "dataset.manage", Dataset: definition.SetID})
 		flags["home"] = opened.Dir
 		flags["revision"] = definition.Revision
-		prepared, err := inv.PublishKnowledgeSetRecipe(&inv.Invocation{
+		prepared, err := inv.PublishDatasetRecipe(&inv.Invocation{
 			Home: opened.Dir, WS: opened, Context: ctx, Flags: flags, Command: operation,
 		}, definition)
 		if err != nil || prepared == nil {
@@ -174,7 +174,7 @@ func (f *httpFacade) snapshotResources(opened *Home, caller identity.HTTPIdentit
 		}
 		return definition, receipt, nil
 	}
-	resources.PreparePublication = func(ctx context.Context, _ identity.HTTPIdentity, definition dataset.KnowledgeSet) error {
+	resources.PreparePublication = func(ctx context.Context, _ identity.HTTPIdentity, definition dataset.Dataset) error {
 		return opened.DatasetPreparation.Execute(ctx, definition)
 	}
 	resources.EnsureDataset = func(_ context.Context, _ identity.HTTPIdentity, cat dataset.Service, id string) error {
@@ -186,7 +186,7 @@ func (f *httpFacade) snapshotResources(opened *Home, caller identity.HTTPIdentit
 	resources.RecordRead = func(ctx context.Context, caller identity.HTTPIdentity, evidence snapshotservice.FileReadEvidence) error {
 		return f.snapshotRecordFileRead(ctx, opened, caller, evidence)
 	}
-	resources.OpenView = func(ctx context.Context, caller identity.HTTPIdentity, coordinate snapshotservice.FileCoordinate, cat dataset.Service, definition dataset.KnowledgeSet, pin dataset.ResolvedKnowledgeSet) (snapshotservice.FileView, error) {
+	resources.OpenView = func(ctx context.Context, caller identity.HTTPIdentity, coordinate snapshotservice.FileCoordinate, cat dataset.Service, definition dataset.Dataset, pin dataset.ResolvedDataset) (snapshotservice.FileView, error) {
 		return f.snapshotSemanticView(ctx, opened, caller, coordinate, cat, definition, pin)
 	}
 	return resources
@@ -229,7 +229,7 @@ func (f *httpFacade) authorizeSnapshotRequest(ctx context.Context, opened *Home,
 			}
 		}
 	case request.Query.Action == "file.read" && request.Definition != nil && request.Pin != nil:
-		err = inv.RequireCompleteWorkspaceRead(opened.Dir, flags, inv.KnowledgeSetPin(*request.Pin), request.Query.Object)
+		err = inv.RequireCompleteWorkspaceRead(opened.Dir, flags, inv.DatasetPin(*request.Pin), request.Query.Object)
 	case request.Query.Action == "file.read" && request.Query.Repo != "":
 		var allowed bool
 		allowed, err = inv.DatasetFSMayReadRepository(opened.Dir, flags, request.Query.Repo, opened)

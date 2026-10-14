@@ -41,7 +41,7 @@ type memberSchemaReadGuard struct {
 	schemaReads int
 }
 
-func (r *memberSchemaReadGuard) Read(id objectmodel.ObjectID, at kernel.CommitID) (objectmodel.KnowledgeValue, error) {
+func (r *memberSchemaReadGuard) Read(id objectmodel.ObjectID, at kernel.CommitID) (objectmodel.ObjectValue, error) {
 	if objectmodel.IsSchemaObject(id) {
 		r.schemaReads++
 	}
@@ -63,7 +63,7 @@ func TestDeclaredMemberSchemaFailureStaysLocalWithoutPrivateRead(t *testing.T) {
 	for _, path := range paths {
 		items = append(items, reader.DatasetItem{Repository: repo.ID(), Commit: commit, Kind: "file", File: path})
 	}
-	scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return guard, nil }, reader.KnowledgeSetPin{
+	scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return guard, nil }, reader.DatasetPin{
 		Repositories: map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit}, Items: items,
 	})
 	lookup := &unitLookup{failure: "source"}
@@ -74,7 +74,7 @@ func TestDeclaredMemberSchemaFailureStaysLocalWithoutPrivateRead(t *testing.T) {
 		t.Fatalf("Member Schema failure erased siblings or crossed publication scope: %#v calls=%d private=%d %v", values, len(lookup.requests), guard.schemaReads, err)
 	}
 	for _, key := range []string{"good", "empty", "broken"} {
-		assertUnitFailure(t, values[0], objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: id, AspectName: "readings", MemberKey: key}, kernel.ErrKnowledgeRefUnresolved)
+		assertUnitFailure(t, values[0], objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: id, AspectName: "readings", MemberKey: key}, kernel.ErrObjectRefUnresolved)
 	}
 	if !reflect.DeepEqual(values[0].Value.(map[string]any)["readings"].(map[string]any)["fixed"], map[string]any{"owner": "fixed"}) {
 		t.Fatalf("unavailable Schema changed the static Member: %#v", values)
@@ -125,11 +125,11 @@ func TestRepositoryReadHydratesOnlySelectedMemberShape(t *testing.T) {
 	request := objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "consumer"}}
 	for _, tc := range []struct {
 		name string
-		read func() (objectmodel.KnowledgeValue, error)
+		read func() (objectmodel.ObjectValue, error)
 		want any
 	}{
-		{"address", func() (objectmodel.KnowledgeValue, error) { return repo.ReadAddress(address, commit) }, map[string]any{"value": float64(47)}},
-		{"leaf", func() (objectmodel.KnowledgeValue, error) {
+		{"address", func() (objectmodel.ObjectValue, error) { return repo.ReadAddress(address, commit) }, map[string]any{"value": float64(47)}},
+		{"leaf", func() (objectmodel.ObjectValue, error) {
 			return port.ReadReference(objectmodel.Reference{Repository: repo.ID(), Object: id, Locator: "/readings/good/value"}, commit)
 		}, float64(47)},
 	} {

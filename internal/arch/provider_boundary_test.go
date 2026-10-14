@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// Knowledge-provider implementations live outside the protocol module. Local
+// Object-provider implementations live outside the protocol module. Local
 // black-box fixtures may be kept below ignored .data while they are incubating.
 func TestProviderImplementationRootsStayOutOfMain(t *testing.T) {
 	root := moduleRoot(t)

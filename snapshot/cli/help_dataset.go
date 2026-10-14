@@ -15,7 +15,7 @@ const helpDatasetDefine = `kc dataset define <id> --revision <n> (--source <repo
   --file-source <repo>[=<selector>]@<来源文件>@<交付路径> 可重复并与 --source 同用。
   --file 读取普通 YAML 配方：name 是便携名称，mounts 选目录，files 选单文件，metadata 是可选字符串属性。
   每条 YAML 来源须显式填写 repository/selector；mount 的 path 是交付目录（空字符串为根），subPath 是来源子目录。
-  file 的 file 是来源仓相对文件路径，target 是交付相对文件路径；发布前编译文件清单时检查它们不能逃出所属树根，不要填知识对象 id。
+  file 的 file 是来源仓相对文件路径，target 是交付相对文件路径；发布前编译文件清单时检查它们不能逃出所属树根，不要填对象 id。
   可选 baseRev 写管理者核对的完整 commit ID，发布时才检查 selector 当前 tip 与它相等；不是直接选旧 commit 的字段。
   同一仓的条目须共享 selector/baseRev；目录片段不能重叠。YAML 不提供 commit 输入，发布后才返回冻结 commit。
   发布 id 仍由 <id>/--dataset 指定；使用 --file 时不能再同用 --file-source，本机输入文件不会自动改写。
@@ -26,7 +26,7 @@ const helpDatasetDefine = `kc dataset define <id> --revision <n> (--source <repo
   已认证并有该 Dataset 的 dataset.manage；每个来源还需独立 repository.dataset.publish，范围覆盖来源仓、所选 ref 和目标 Dataset。
   普通仓读取或 dataset.* 不授予来源发布许可；来源已登记、selector 可解析且源版本可用。
   同一 Repository 的片段共享一致版本，选定文件必须存在，目标文件及文件/目录不能冲突；已退役 Dataset 不能再发布。
-  文件组合不要求知识索引；宿主若另外承诺知识查询，可在接受前要求其准备成功。
+  文件组合不要求对象索引；宿主若另外承诺对象查询，可在接受前要求其准备成功。
 结果：
   成功 JSON 返回 setId、revision、已冻结 sources 和可选 metadata；出现 recipeFile/recipeRepository/recipeCommit/recipeLocation/recipeSkipped 时核对实际配方去向。
 后果：
@@ -43,10 +43,10 @@ const helpDatasetDefine = `kc dataset define <id> --revision <n> (--source <repo
   来源、布局或准备失败时修复对应原因，再核对当前服务版与可能已写回的配方；已接受旧版继续保留。
   原始版本和路径先请来源管理者在原 lakeFS 仓的分支、提交历史与文件浏览器核对；本 CLI 不提供来源历史或原始树浏览。
   要采用某个旧 commit，请管理者保留指向它的专用分支，再选 refs/heads/<分支名> 并用 baseRev 核对当前 tip。
-  dataset show 只核对已接受交付，files list 只浏览交付树；Writer 是知识发布入口，不是普通文件版本浏览器。
+  dataset show 只核对已接受交付，files list 只浏览交付树；Writer 是对象发布入口，不是普通文件版本浏览器。
   无权时分别申请 Dataset 管理与来源发布许可；只有目标 Dataset 的授权管理者不能自授来源权。来源连接问题由服务管理者处理，不能以 metadata 或另起 Dataset 名称绕过授权。
 示例：
-  kc dataset define scene-set --revision 1 --source kr://scene/knowledge@
+  kc dataset define scene-set --revision 1 --source kr://scene/object@
   kc dataset define delivery --revision 2 --source docs@reference@handbook --file-source docs@handbook/start.md@reference/index.md --metadata '{"description":"项目材料"}'
   以下完整文件示例在专用新目录执行，recipe.yaml 应尚不存在；cat 会覆盖同名文件。
   docs/archive/metrics 是已登记来源示例，请替换为你的仓与已核对路径；所有版本选择均为默认分支。
@@ -108,7 +108,7 @@ const helpDatasetClone = `kc dataset clone <dataset> <dir>
   把 Dataset 当前服务版的交付文件物化到一个普通本地目录，供现有文件工具使用。
 用法与参数：
   kc dataset clone <dataset> <dir>
-  Dataset 与目标目录必须明确；本入口采用当前版，不提供选择历史版的 revision 或 pin 参数。
+ Dataset 与目标目录必须明确；本入口采用当前版，不提供选择历史版的 revision 或 pin 参数。
 条件：
   已认证，持有该 Dataset 的 dataset.resolve 和 file.read；来源版本仍保留，Dataset 未退役且成员未移除。
   <dir> 必须不存在或为空，父路径可写，本机有足够磁盘容量。

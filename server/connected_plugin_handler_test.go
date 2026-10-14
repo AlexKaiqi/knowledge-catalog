@@ -16,7 +16,7 @@ func TestConnectedPluginHandlerColdConstructionAndExplanationDoNotProbe(t *testi
 	if got := f.requests.Load(); got != before {
 		t.Errorf("cold handler construction contacted the connected authority: before=%d after=%d", before, got)
 	}
-	request := httptest.NewRequest(http.MethodGet, "/knowledge/v1/plugins/declarative-index", nil)
+	request := httptest.NewRequest(http.MethodGet, "/object/v1/plugins/declarative-index", nil)
 	request.Header.Set("X-Kc-As", f.principal)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)

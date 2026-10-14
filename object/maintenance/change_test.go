@@ -21,7 +21,7 @@ func (r *failingFastChangesRepository) ObjectIDsPage(kernel.CommitID, int, strin
 	return objectmodel.ObjectIDPage{}, kernel.Fail(kernel.ErrPreconditionFailed, "full scan must not run")
 }
 
-func (r *failingFastChangesRepository) ReadMany([]objectmodel.ObjectID, kernel.CommitID) (map[objectmodel.ObjectID]objectmodel.KnowledgeValue, error) {
+func (r *failingFastChangesRepository) ReadMany([]objectmodel.ObjectID, kernel.CommitID) (map[objectmodel.ObjectID]objectmodel.ObjectValue, error) {
 	return nil, kernel.Fail(kernel.ErrPreconditionFailed, "full scan hydrate must not run")
 }
 

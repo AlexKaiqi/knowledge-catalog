@@ -13,7 +13,7 @@ import (
 )
 
 // The source is literal bytes at immutable coordinates. It deliberately has
-// no knowledge object API; even a body containing object_id is just a file.
+// no object API; even a body containing object_id is just a file.
 type fileHTTPSource struct {
 	*datasetHTTPSource
 	files      map[kernel.CommitID]map[string][]byte
@@ -26,7 +26,7 @@ func (s *fileHTTPSource) ReadFile(file string, commit kernel.CommitID) ([]byte, 
 	s.reads++
 	body, ok := s.files[commit][file]
 	if !ok {
-		return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "file %s missing", file)
+		return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "file %s missing", file)
 	}
 	return append([]byte{}, body...), nil
 }
@@ -157,7 +157,7 @@ func TestSnapshotFileHTTPRechecksRevocationAndRejectsForgedFileList(t *testing.T
 	forged["items"] = []any{map[string]any{"target": "public.json", "repository": source.id, "commit": "c1", "kind": "file", "file": "private/hidden.txt"}}
 	before := source.reads
 	failed := datasetHTTPCall(t, handler, http.MethodPost, "/snapshot/v1/files/file:read", map[string]any{"dataset": "files", "pin": forged, "path": "public.json"}, http.StatusBadRequest)
-	if failed["error"].(map[string]any)["code"] != string(kernel.ErrKnowledgeSetInvalid) || source.reads != before {
+	if failed["error"].(map[string]any)["code"] != string(kernel.ErrDatasetInvalid) || source.reads != before {
 		t.Fatalf("forged file list reached delivery or failed for the wrong reason: %#v reads=%d", failed, source.reads)
 	}
 	fixture.rules.rules = []access.Rule{{ID: "resolve", Principal: "alice", Dataset: "files", Actions: []string{"dataset.resolve"}}}
@@ -170,13 +170,13 @@ func TestSnapshotFileHTTPRechecksRevocationAndRejectsForgedFileList(t *testing.T
 		t.Fatal("untrusted pin or revoked permission reached source bytes")
 	}
 }
-func TestSnapshotFileHTTPDoesNotInterpretKnowledgeIdentifiersOrRequireExternalViews(t *testing.T) {
+func TestSnapshotFileHTTPDoesNotInterpretObjectIdentifiersOrRequireExternalViews(t *testing.T) {
 	fixture, source := newFileHTTPFixture(t)
 	response := datasetHTTPCall(t, fixture.handler(), http.MethodPost, "/snapshot/v1/datasets", map[string]any{"dataset": "bad", "revision": 1, "sources": []any{map[string]any{"repository": source.id, "selector": snapshot.DefaultRef, "object_id": "Business:old"}}}, http.StatusBadRequest)
 	if response["error"].(map[string]any)["code"] != string(kernel.ErrUsageInvalid) {
-		t.Fatalf("knowledge identity entered file declaration: %v", response)
+		t.Fatalf("object identity entered file declaration: %v", response)
 	}
-	if _, err := fixture.catalog.Set("bad"); kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
+	if _, err := fixture.catalog.Set("bad"); kernel.CodeOf(err) != kernel.ErrDatasetInvalid {
 		t.Fatal("invalid definition created a release")
 	}
 	if fixture.resources.OpenView != nil || fixture.resources.PreparePublication != nil {

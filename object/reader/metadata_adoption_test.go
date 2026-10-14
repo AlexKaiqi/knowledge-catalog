@@ -14,7 +14,7 @@ func TestSchemaAdoptionMetadataCannotReadBodiesOrEscapePublishedScope(t *testing
 	for _, path := range []string{"private/description.yaml", "public/id.yaml", "private/status.yaml"} {
 		guard.blocked[path] = true
 	}
-	repo, err := rd.Require(guard.ID(), kernel.ErrKnowledgeRefUnresolved)
+	repo, err := rd.Require(guard.ID(), kernel.ErrObjectRefUnresolved)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -22,7 +22,7 @@ func TestSchemaAdoptionMetadataCannotReadBodiesOrEscapePublishedScope(t *testing
 	if err != nil || len(refs) != 0 {
 		t.Fatalf("known empty Schema adoption required object bodies: %v %v", refs, err)
 	}
-	scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return repo, nil }, reader.KnowledgeSetPin{
+	scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return repo, nil }, reader.DatasetPin{
 		Repositories: map[kernel.RepositoryID]kernel.CommitID{guard.ID(): at},
 		Items:        []reader.DatasetItem{{Repository: guard.ID(), Commit: at, Kind: "prefix", Prefix: "public"}},
 	})
@@ -30,7 +30,7 @@ func TestSchemaAdoptionMetadataCannotReadBodiesOrEscapePublishedScope(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := member.(objectmodel.SchemaAdoptionLocator).AdoptedSchemaRefs("table/orders", at); kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+	if _, err := member.(objectmodel.SchemaAdoptionLocator).AdoptedSchemaRefs("table/orders", at); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		t.Fatalf("partial object metadata became complete virtual type evidence: %v", err)
 	}
 	locations, err := repofile.ReadObjectUnitLocations(guard.TreeStore, "table/orders", at)

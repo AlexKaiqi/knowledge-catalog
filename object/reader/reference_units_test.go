@@ -32,7 +32,7 @@ type referenceUnitsRepo struct {
 	calls int
 }
 
-func (*referenceUnitsRepo) NativeKnowledgeRepository() {}
+func (*referenceUnitsRepo) NativeObjectRepository() {}
 
 func (r *referenceUnitsRepo) ReadReferenceUnits(objectmodel.Reference, kernel.CommitID) ([]objectmodel.Unit, error) {
 	r.calls++
@@ -41,7 +41,7 @@ func (r *referenceUnitsRepo) ReadReferenceUnits(objectmodel.Reference, kernel.Co
 
 func TestNativeReferenceUnitsRejectProviderIdentitySelectionAndDigestDrift(t *testing.T) {
 	rd, guard, _, at := newReferenceReadFixture(t)
-	base, err := rd.Require(guard.ID(), kernel.ErrKnowledgeRefUnresolved)
+	base, err := rd.Require(guard.ID(), kernel.ErrObjectRefUnresolved)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestNativeReferenceUnitsRejectProviderIdentitySelectionAndDigestDrift(t *te
 			if err != nil {
 				t.Fatal(err)
 			}
-			scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return view, nil }, reader.KnowledgeSetPin{SetID: "native-units", Repositories: map[kernel.RepositoryID]kernel.CommitID{repo.ID(): at}, Items: reader.WholeRepositoryItems(map[kernel.RepositoryID]kernel.CommitID{repo.ID(): at})})
+			scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return view, nil }, reader.DatasetPin{SetID: "native-units", Repositories: map[kernel.RepositoryID]kernel.CommitID{repo.ID(): at}, Items: reader.WholeRepositoryItems(map[kernel.RepositoryID]kernel.CommitID{repo.ID(): at})})
 			scoped, err := scope.Member(repo.ID())
 			if err != nil {
 				t.Fatal(err)

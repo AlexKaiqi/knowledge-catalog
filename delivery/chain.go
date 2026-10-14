@@ -11,10 +11,10 @@ type Context struct {
 	Principal string
 }
 
-// Envelope is one already-hydrated knowledge object. ID is the locate result;
+// Envelope is one already-hydrated object. ID is the locate result;
 // the remaining fields are Canonical content the caller may or may not receive.
 type Envelope struct {
-	ID           objectmodel.PinnedKnowledgeRef
+	ID           objectmodel.PinnedObjectRef
 	Address      objectmodel.Address
 	Value        any
 	Provenance   *objectmodel.ProvenanceEnvelope
@@ -55,7 +55,7 @@ func (c Chain) Apply(ctx Context, env Envelope) (Envelope, error) {
 			return Envelope{}, err
 		}
 		if next.ID != id || next.Address != address {
-			return Envelope{}, kernel.Fail(kernel.ErrPreconditionFailed, "delivery stage changed knowledge identity")
+			return Envelope{}, kernel.Fail(kernel.ErrPreconditionFailed, "delivery stage changed object identity")
 		}
 		env = next
 	}
@@ -64,9 +64,9 @@ func (c Chain) Apply(ctx Context, env Envelope) (Envelope, error) {
 
 // FromValue copies a hydrated Canonical unit into a delivery envelope.
 // Envelope identity uses the object's repository when present so a stale
-// KnowledgeRef cannot widen the AUTH-01 read boundary.
-func FromValue(value objectmodel.KnowledgeValue, observations []objectmodel.UnitObservation) Envelope {
-	ref := value.KnowledgeRef
+// ObjectRef cannot widen the AUTH-01 read boundary.
+func FromValue(value objectmodel.ObjectValue, observations []objectmodel.UnitObservation) Envelope {
+	ref := value.ObjectRef
 	if value.Repository != "" {
 		ref.Repository = value.Repository
 	}
@@ -74,9 +74,9 @@ func FromValue(value objectmodel.KnowledgeValue, observations []objectmodel.Unit
 		ref.Object = value.Address.ObjectID
 	}
 	return Envelope{
-		ID: objectmodel.PinnedKnowledgeRef{
-			KnowledgeRef: ref,
-			Commit:       value.Commit,
+		ID: objectmodel.PinnedObjectRef{
+			ObjectRef: ref,
+			Commit:    value.Commit,
 		},
 		Address:      value.Address,
 		Value:        value.Value,
@@ -89,7 +89,7 @@ func FromValue(value objectmodel.KnowledgeValue, observations []objectmodel.Unit
 
 // WriteBody copies visible content back onto a hydrated unit without touching
 // identity coordinates.
-func (env Envelope) WriteBody(value objectmodel.KnowledgeValue) (objectmodel.KnowledgeValue, []objectmodel.UnitObservation) {
+func (env Envelope) WriteBody(value objectmodel.ObjectValue) (objectmodel.ObjectValue, []objectmodel.UnitObservation) {
 	value.Value = env.Value
 	value.Provenance = env.Provenance
 	value.Units = append([]objectmodel.Address(nil), env.Units...)

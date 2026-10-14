@@ -22,7 +22,7 @@ func TestFileDownloadDoesNotReplaceTargetCreatedDuringTransfer(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "out.bin")
 	concurrentContent := []byte("created by another writer during the download")
-	pin := dataset.ResolvedKnowledgeSet{SetID: "delivery", Revision: 2, PinID: "fixed", Repositories: map[kernel.RepositoryID]kernel.CommitID{"docs": "commit"}}
+	pin := dataset.ResolvedDataset{SetID: "delivery", Revision: 2, PinID: "fixed", Repositories: map[kernel.RepositoryID]kernel.CommitID{"docs": "commit"}}
 	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -95,7 +95,7 @@ func TestFileDownloadDoesNotReplaceTargetCreatedDuringTransfer(t *testing.T) {
 func TestEmptyDeliveredFileProducesEmptyBase64Content(t *testing.T) {
 	t.Setenv("KC_CONFIG_DIR", t.TempDir())
 	t.Setenv("KC_AUTH_TOKEN", "")
-	pin := dataset.ResolvedKnowledgeSet{SetID: "delivery", Revision: 2, PinID: "fixed", Repositories: map[kernel.RepositoryID]kernel.CommitID{"docs": "commit"}}
+	pin := dataset.ResolvedDataset{SetID: "delivery", Revision: 2, PinID: "fixed", Repositories: map[kernel.RepositoryID]kernel.CommitID{"docs": "commit"}}
 	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

@@ -12,7 +12,7 @@ func ReadTree(tree snapshot.TreeReader, commit kernel.CommitID) (*Tree, error) {
 	}
 	idx := NewTree()
 	for _, path := range paths {
-		if !KnowledgePath(path) {
+		if !ObjectPath(path) {
 			continue
 		}
 		content, err := tree.ReadFile(path, commit)

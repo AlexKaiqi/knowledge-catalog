@@ -9,9 +9,9 @@ import (
 	"kc/snapshot"
 )
 
-// applyKnowledgeCommit is the sole ② → ⓪ codec. Snapshot adapters receive
+// applyObjectCommit is the sole ② → ⓪ codec. Snapshot adapters receive
 // only literal path changes and never see Address, Aspect, or PUT/REMOVE.
-func applyKnowledgeCommit(commandID string, target snapshot.Store, cs objectmodel.ChangeSet) (_ kernel.CommitID, err error) {
+func applyObjectCommit(commandID string, target snapshot.Store, cs objectmodel.ChangeSet) (_ kernel.CommitID, err error) {
 	writeStarted := false
 	defer func() {
 		if err != nil && !writeStarted {
@@ -22,22 +22,22 @@ func applyKnowledgeCommit(commandID string, target snapshot.Store, cs objectmode
 		// An omitted path retains the existing unit's location. Only the native
 		// provider knows whether this is a new unit needing a default path.
 		writeStarted = true
-		return native.ApplyKnowledgeChange(commandID, cs)
+		return native.ApplyObjectChange(commandID, cs)
 	}
 	if _, native := target.(objectmodel.NativeRepository); native {
 		return "", kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-			"native repository %s does not provide typed knowledge writes", target.ID())
+			"native repository %s does not provide typed object writes", target.ID())
 	}
 	tree, ok := snapshot.TreeStoreOf(target)
 	if !ok {
 		return "", kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-			"repository %s is mounted as a plain snapshot and cannot accept knowledge changes without tree access", target.ID())
+			"repository %s is mounted as a plain snapshot and cannot accept object changes without tree access", target.ID())
 	}
 	if err := requireIncrementalLocatorLayout(tree, cs.BaseCommit); err != nil {
 		return "", err
 	}
 
-	idx, err := readChangedKnowledgeObjects(tree, cs.BaseCommit, cs.Operations)
+	idx, err := readChangedObjects(tree, cs.BaseCommit, cs.Operations)
 	if err != nil {
 		return "", err
 	}
@@ -123,21 +123,21 @@ func requireIncrementalLocatorLayout(tree snapshot.TreeStore, commit kernel.Comm
 			if err == nil && string(referrers) == repofile.LocatorReferrersCompleteBody {
 				return nil
 			}
-			if err != nil && kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+			if err != nil && kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 				return err
 			}
 			return kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-				"knowledge locator lacks complete Schema referrers; explicitly rebuild locators before writing")
+				"object locator lacks complete Schema referrers; explicitly rebuild locators before writing")
 		}
 		return kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-			"outdated knowledge locator layout requires explicit migration before writing")
-	} else if kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+			"outdated object locator layout requires explicit migration before writing")
+	} else if kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		return err
 	}
 	if _, err := tree.ReadFile(repofile.LocatorManifestPath, commit); err == nil {
 		return kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-			"legacy whole-repository knowledge locator requires explicit migration before writing")
-	} else if kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+			"legacy whole-repository object locator requires explicit migration before writing")
+	} else if kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		return err
 	}
 	return nil
@@ -157,10 +157,10 @@ func changedObjectIDs(operations []objectmodel.Operation) []objectmodel.ObjectID
 	return ids
 }
 
-func readChangedKnowledgeObjects(tree snapshot.TreeStore, commit kernel.CommitID, operations []objectmodel.Operation) (*repofile.Tree, error) {
+func readChangedObjects(tree snapshot.TreeStore, commit kernel.CommitID, operations []objectmodel.Operation) (*repofile.Tree, error) {
 	idx := repofile.NewTree()
 	for _, objectID := range changedObjectIDs(operations) {
-		units, err := readKnowledgeObject(tree, objectID, commit)
+		units, err := readObject(tree, objectID, commit)
 		if err != nil {
 			return nil, err
 		}
@@ -174,7 +174,7 @@ func readChangedKnowledgeObjects(tree snapshot.TreeStore, commit kernel.CommitID
 	return idx, nil
 }
 
-func readKnowledgeObject(tree snapshot.TreeStore, objectID objectmodel.ObjectID, commit kernel.CommitID) ([]repofile.Unit, error) {
+func readObject(tree snapshot.TreeStore, objectID objectmodel.ObjectID, commit kernel.CommitID) ([]repofile.Unit, error) {
 	paths, err := repofile.ReadObjectLocator(tree, objectID, commit)
 	if err != nil {
 		return nil, err

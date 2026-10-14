@@ -1,4 +1,4 @@
-// Package semanticview renders immutable Knowledge values as human- and
+// Package semanticview renders immutable Object values as human- and
 // Agent-readable YAML files. The output is a disposable consumer projection:
 // it preserves canonical coordinates but is never a Writer input or authority.
 package semanticview
@@ -34,7 +34,7 @@ type document struct {
 
 // Render emits actual assembled YAML values, not the canonical storage
 // envelope. _kc is sufficient to return to structured READ/PROVENANCE.
-func Render(value objectmodel.KnowledgeValue) ([]byte, error) {
+func Render(value objectmodel.ObjectValue) ([]byte, error) {
 	schemas := map[string]string{}
 	declarations := append([]objectmodel.UnitDeclaration(nil), value.Declarations...)
 	sort.Slice(declarations, func(i, j int) bool {
@@ -71,7 +71,7 @@ func Render(value objectmodel.KnowledgeValue) ([]byte, error) {
 
 // Path chooses a readable, deterministic projection path. Entity comes from
 // the exact Domain Schema resolved at the same Repository commit.
-func Path(value objectmodel.KnowledgeValue, entity string) string {
+func Path(value objectmodel.ObjectValue, entity string) string {
 	if objectmodel.IsSchemaObject(value.Address.ObjectID) {
 		return objectmodel.CanonicalSchemaDir + "/" + Slug(string(value.Address.ObjectID)) + ".yaml"
 	}
@@ -85,7 +85,7 @@ func Path(value objectmodel.KnowledgeValue, entity string) string {
 	return directory + "/" + fileStem(value) + ".yaml"
 }
 
-func relation(value objectmodel.KnowledgeValue) bool {
+func relation(value objectmodel.ObjectValue) bool {
 	if value.Address.Kind == objectmodel.KindRelation {
 		return true
 	}
@@ -97,14 +97,14 @@ func relation(value objectmodel.KnowledgeValue) bool {
 	return false
 }
 
-func fileStem(value objectmodel.KnowledgeValue) string {
+func fileStem(value objectmodel.ObjectValue) string {
 	name := displayName(value.Value)
 	if name == "" {
 		name = string(value.Address.ObjectID)
 	}
 	base := Slug(name)
 	if base == "" {
-		base = "knowledge"
+		base = "object"
 	}
 	digest := string(kernel.CanonicalDigest(string(value.Address.ObjectID)))
 	if len(digest) > 8 {

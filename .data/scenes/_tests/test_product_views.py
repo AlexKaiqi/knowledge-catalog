@@ -26,7 +26,7 @@ class ProductViewsTest(unittest.TestCase):
         (self.repo / "doc/design").mkdir(parents=True)
         (self.repo / "doc/design/product.md").write_text(
             "# Product\n\n## 1. Introduction\n### U9: Outside section\n"
-            "## 8. 用例\n### U1：发现已有知识\nThe consumer discovers knowledge.\n"
+            "## 8. 用例\n### U1：发现已有对象\nThe consumer discovers object.\n"
             "### U2：发表领域 Schema\nPublish through Writer.\n"
             "### U3：跨客户端消费\nA known missing journey.\n"
             "## 9. Invariants\n### U8: Outside section\n", encoding="utf-8")
@@ -91,7 +91,7 @@ class ProductViewsTest(unittest.TestCase):
         views = model["views"]
         self.assertEqual([key for key in views if key.startswith("product/")],
                          ["product/product/U1", "product/product/U2", "product/product/U3"])
-        self.assertEqual(views["product/product/U1"]["title"], "U1：发现已有知识")
+        self.assertEqual(views["product/product/U1"]["title"], "U1：发现已有对象")
         self.assertEqual(views["engineering"]["family"], "engineering")
         self.assertEqual(views["product/product/U1"]["family"], "product")
         claims = {claim["id"]: claim for claim in model["product"]["claims"]}

@@ -15,7 +15,7 @@ const helpShow = `kc show
   当前 kc show 不读取 Repository 自定义元数据表；它是 lakeFS 原仓维护的可选字符串键值属性，不随 commit 冻结。
   查看或编辑原仓属性：打开本服务 /console → Repositories → 目标仓 → Settings → General 的“Repository 自定义元数据”。
   读取需 repository.metadata.read，新增/更新键或删除键需 repository.metadata.write；进入页面仍受原仓浏览权限检查。
-  Dataset metadata 由 dataset define 的 --metadata 或输入配方随 revision 完整发布；dataset show --revision 回读历史属性。
+ Dataset metadata 由 dataset define 的 --metadata 或输入配方随 revision 完整发布；dataset show --revision 回读历史属性。
 后果：
   读取当前登记状态，不登记来源、不发表新版本、不授予权限。
   Repo 属性不复制到登记账，也不自动继承到 Dataset；当前原仓属性变化不会替换 Dataset 已接受版本的属性。

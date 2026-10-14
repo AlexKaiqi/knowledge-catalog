@@ -7,7 +7,7 @@ import (
 	objectmodel "kc/object"
 )
 
-// IdempotencyEntry is the Knowledge Writer view of the shared command ledger.
+// IdempotencyEntry is the Object Writer view of the shared command ledger.
 // Raw tree requests deliberately do not appear in this package.
 type IdempotencyEntry struct {
 	CommandID string        `json:"commandId"`

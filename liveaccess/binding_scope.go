@@ -22,7 +22,7 @@ func ResolveBinding(scope *reader.Serving, address objectmodel.Address) ([]Resol
 	for _, id := range ids {
 		binding, err := ResolveBindingAt(scope, id, address)
 		if err != nil {
-			if kernel.CodeOf(err) == kernel.ErrCapabilityUnsatisfied || kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+			if kernel.CodeOf(err) == kernel.ErrCapabilityUnsatisfied || kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 				continue
 			}
 			return nil, err
@@ -37,14 +37,14 @@ func ResolveBinding(scope *reader.Serving, address objectmodel.Address) ([]Resol
 func ResolveBindingAt(scope *reader.Serving, repository kernel.RepositoryID, address objectmodel.Address) (ResolvedBinding, error) {
 	commit, ok := scope.Pin().Repositories[repository]
 	if !ok {
-		return ResolvedBinding{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "repository %s is not in dataset", repository)
+		return ResolvedBinding{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "repository %s is not in dataset", repository)
 	}
 	allowed, err := scope.Contains(repository, address.ObjectID)
 	if err != nil {
 		return ResolvedBinding{}, err
 	}
 	if !allowed {
-		return ResolvedBinding{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "address %s is not in dataset", address.ObjectID)
+		return ResolvedBinding{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "address %s is not in dataset", address.ObjectID)
 	}
 	repo, err := scope.Member(repository)
 	if err != nil {

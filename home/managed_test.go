@@ -22,7 +22,7 @@ func TestManagedRepositoryConfigurationRequiresExplicitCreatorPolicy(t *testing.
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("managed provisioning accepted privilege escalation policy")
 	}
-	cfg.ManagedRepositories.CreatorActions = []string{"writer.commit", "knowledge.read"}
+	cfg.ManagedRepositories.CreatorActions = []string{"writer.commit", "object.read"}
 	if err := cfg.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func managedFixtureWithInterceptor(t *testing.T, intercept func(http.ResponseWri
 		return false
 	})
 	cfg := deploymentFixture(t)
-	cfg.ManagedRepositories = &ManagedRepositoryConfig{Driver: "lakefs", DSN: fake.Origin(), Root: "s3://kc-authority", PublicURL: "https://kc.example.test", CreatorActions: []string{"writer.commit", "knowledge.read"}}
+	cfg.ManagedRepositories = &ManagedRepositoryConfig{Driver: "lakefs", DSN: fake.Origin(), Root: "s3://kc-authority", PublicURL: "https://kc.example.test", CreatorActions: []string{"writer.commit", "object.read"}}
 	if err := InitializeDeployment(cfg, func(dir, principal string) error {
 		return os.WriteFile(filepath.Join(dir, "allow.json"), []byte(`{"version":2,"rules":[]}`), 0600)
 	}); err != nil {

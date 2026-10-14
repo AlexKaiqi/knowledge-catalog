@@ -113,7 +113,7 @@ func ValidateManagedRepositoryCoordinates(flags map[string]invoke.FlagValue) err
 	return nil
 }
 
-// requireRepo resolves an attached Knowledge Repository. Every verb that names --repo goes
+// requireRepo resolves an attached Object Repository. Every verb that names --repo goes
 // through here so the error code and wording are the same everywhere.
 // Verbs needing layer ② ask ws.Reader to interpret the mounted TreeStore.
 func RequireRepo(ws *kchome.Home, repositoryID string) (snapshot.Store, error) {
@@ -220,7 +220,7 @@ func OriginFrom(flags map[string]invoke.FlagValue) *objectmodel.ProvenanceEnvelo
 }
 
 func ServingWorkspace(flags map[string]invoke.FlagValue) bool {
-	return SuppliedKnowledgeSet(flags) != nil ||
+	return SuppliedDataset(flags) != nil ||
 		invoke.FlagString(flags, "pin") != "" ||
 		invoke.FlagString(flags, "dataset-file") != "" ||
 		(invoke.DatasetOf(flags) != "" && !ReadingInventoryCommand(flags))
@@ -248,7 +248,7 @@ func SearchWorkspace(cx *Invocation) (any, error) {
 	embedder, _ := cx.Flags["_embedder"].(retrieval.Embedder)
 	return (discoveryservice.DatasetSearchExecutor{
 		Embedder:  embedder,
-		Authorize: func(context.Context) error { return Authorize(cx.Home, "knowledge.search", cx.Flags, nil, cx.WS) },
+		Authorize: func(context.Context) error { return Authorize(cx.Home, "object.search", cx.Flags, nil, cx.WS) },
 		Resolve: func(context.Context) (*reader.Serving, discoveryservice.LogicalHydrator, error) {
 			serving, _, err := OpenServingAt(cx, cx.WS, cx.Flags)
 			if err != nil {
@@ -258,7 +258,7 @@ func SearchWorkspace(cx *Invocation) (any, error) {
 			return serving, logical, err
 		},
 		Repositories: cx.WS.Reader, Projection: cx.WS.Index,
-		Deliver: func(_ context.Context, hit retrieval.KnowledgeHit) (retrieval.KnowledgeHit, error) {
+		Deliver: func(_ context.Context, hit retrieval.ObjectHit) (retrieval.ObjectHit, error) {
 			return DeliverSearchHit(cx.Home, cx.Flags, hit)
 		},
 	}).Execute(cx.Context, req)
@@ -324,18 +324,18 @@ func WriteOperation(flags map[string]invoke.FlagValue, op objectmodel.OpKind, va
 
 func ReadingInventoryCommand(flags map[string]invoke.FlagValue) bool { return false }
 
-func DeliverSearchHit(home string, flags map[string]invoke.FlagValue, hit retrieval.KnowledgeHit) (retrieval.KnowledgeHit, error) {
-	env, err := KnowledgeDelivery(home, flags).Apply(delivery.Context{Principal: invoke.FlagString(flags, "as")}, delivery.FromValue(hit.Knowledge, hit.Version.Observations))
+func DeliverSearchHit(home string, flags map[string]invoke.FlagValue, hit retrieval.ObjectHit) (retrieval.ObjectHit, error) {
+	env, err := ObjectDelivery(home, flags).Apply(delivery.Context{Principal: invoke.FlagString(flags, "as")}, delivery.FromValue(hit.Object, hit.Version.Observations))
 	if err != nil {
-		return retrieval.KnowledgeHit{}, err
+		return retrieval.ObjectHit{}, err
 	}
-	hit.Knowledge, hit.Version.Observations = env.WriteBody(hit.Knowledge)
+	hit.Object, hit.Version.Observations = env.WriteBody(hit.Object)
 	return hit, nil
 }
 
 func OpenServingAt(cx *Invocation, ws *kchome.Home, flags map[string]invoke.FlagValue) (*reader.Serving, dataset.Service, error) {
 	if invoke.FlagString(flags, "repo") != "" || invoke.FlagString(flags, "commit") != "" || invoke.FlagString(flags, "ref") != "" {
-		if err := RejectMixedKnowledgeBasis(flags); err != nil {
+		if err := RejectMixedObjectBasis(flags); err != nil {
 			return nil, nil, err
 		}
 		return nil, nil, kernel.Fail(kernel.ErrUsageInvalid, "choose a Workspace definition/pin or a Repository basis; do not mix")
@@ -345,7 +345,7 @@ func OpenServingAt(cx *Invocation, ws *kchome.Home, flags map[string]invoke.Flag
 		return nil, nil, err
 	}
 	setID := invoke.DatasetOf(flags)
-	if setID == "" && SuppliedKnowledgeSet(flags) == nil &&
+	if setID == "" && SuppliedDataset(flags) == nil &&
 		invoke.FlagString(flags, "pin") == "" && invoke.FlagString(flags, "dataset-file") == "" {
 		return nil, nil, fmt.Errorf("missing --dataset or temporary definition")
 	}
@@ -357,7 +357,7 @@ func OpenServingAt(cx *Invocation, ws *kchome.Home, flags map[string]invoke.Flag
 	if err != nil {
 		return nil, nil, err
 	}
-	serving := reader.Open(ws.Reader.Lookup(cat.Require), KnowledgeSetPin(resolved))
+	serving := reader.Open(ws.Reader.Lookup(cat.Require), DatasetPin(resolved))
 	serving.SetHydrator(ws.Hydrator)
 	return serving, cat, nil
 }
@@ -374,8 +374,8 @@ func LogicalWorkspaceServing(cx *Invocation, declarations *reader.Serving) (*liv
 	return liveservice.OpenRequest(declarations, lookup, request), nil
 }
 
-func KnowledgeDelivery(home string, flags map[string]invoke.FlagValue) delivery.Chain {
-	return delivery.Chain{delivery.RepositoryRead{Allowed: func(_ string, ref objectmodel.KnowledgeRef) bool {
+func ObjectDelivery(home string, flags map[string]invoke.FlagValue) delivery.Chain {
+	return delivery.Chain{delivery.RepositoryRead{Allowed: func(_ string, ref objectmodel.ObjectRef) bool {
 		return AllowedRepoRead(home, flags, string(ref.Repository), string(ref.Object))
 	}}}
 }
@@ -421,7 +421,7 @@ func AllowedRepoRead(home string, flags map[string]invoke.FlagValue, repo, objec
 		return true
 	}
 	as := invoke.FlagString(flags, "as")
-	if RepositoryAuthenticatedAllowed(home, as, "knowledge.read", repo) {
+	if RepositoryAuthenticatedAllowed(home, as, "object.read", repo) {
 		return true
 	}
 	file, err := ReadAllow(home)
@@ -431,7 +431,7 @@ func AllowedRepoRead(home string, flags map[string]invoke.FlagValue, repo, objec
 		// secondary per-repository check could not be evaluated.
 		return false
 	}
-	_, ok := MatchAllow(file.Rules, AllowQuery{Principal: as, Action: "knowledge.read", Repo: repo, Object: object})
+	_, ok := MatchAllow(file.Rules, AllowQuery{Principal: as, Action: "object.read", Repo: repo, Object: object})
 	return ok
 }
 
@@ -439,7 +439,7 @@ func AllowedRepoRead(home string, flags map[string]invoke.FlagValue, repo, objec
 // operation cannot see every member at the requested object scope. The error is
 // intentionally generic: callers learn that the Workspace read is incomplete,
 // not which hidden repository may contain the object.
-func RequireCompleteWorkspaceRead(home string, flags map[string]invoke.FlagValue, pin reader.KnowledgeSetPin, object string) error {
+func RequireCompleteWorkspaceRead(home string, flags map[string]invoke.FlagValue, pin reader.DatasetPin, object string) error {
 	if OwnerBypass(flags) {
 		return nil
 	}

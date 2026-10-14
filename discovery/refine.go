@@ -23,7 +23,7 @@ const (
 )
 
 type Candidate struct {
-	Ref          objectmodel.KnowledgeRef      `json:"ref"`
+	Ref          objectmodel.ObjectRef         `json:"ref"`
 	Value        any                           `json:"value"`
 	Observations []objectmodel.UnitObservation `json:"observations,omitempty"`
 	// OriginalRank and RetrievalEvidence are executor evidence. ExecuteRerank
@@ -34,27 +34,27 @@ type Candidate struct {
 }
 
 type SemanticFilterResult struct {
-	Matched          []objectmodel.KnowledgeRef `json:"matched"`
-	Rejected         []objectmodel.KnowledgeRef `json:"rejected"`
-	Unknown          []objectmodel.KnowledgeRef `json:"unknown"`
-	Unjudged         []objectmodel.KnowledgeRef `json:"unjudged"`
-	Complete         bool                       `json:"complete"`
-	TruncationReason string                     `json:"truncationReason,omitempty"`
+	Matched          []objectmodel.ObjectRef `json:"matched"`
+	Rejected         []objectmodel.ObjectRef `json:"rejected"`
+	Unknown          []objectmodel.ObjectRef `json:"unknown"`
+	Unjudged         []objectmodel.ObjectRef `json:"unjudged"`
+	Complete         bool                    `json:"complete"`
+	TruncationReason string                  `json:"truncationReason,omitempty"`
 }
 
 type RankGroup struct {
-	Rank int                        `json:"rank"`
-	Refs []objectmodel.KnowledgeRef `json:"refs"`
+	Rank int                     `json:"rank"`
+	Refs []objectmodel.ObjectRef `json:"refs"`
 }
 
 type SemanticRerankResult struct {
-	SearchView       *SearchView                `json:"searchView,omitempty"`
-	Groups           []RankGroup                `json:"groups"`
-	NotSelected      []objectmodel.KnowledgeRef `json:"notSelected,omitempty"`
-	Unjudged         []objectmodel.KnowledgeRef `json:"unjudged"`
-	Complete         bool                       `json:"complete"`
-	TruncationReason string                     `json:"truncationReason,omitempty"`
-	Evidence         *SemanticRerankEvidence    `json:"evidence,omitempty"`
+	SearchView       *SearchView             `json:"searchView,omitempty"`
+	Groups           []RankGroup             `json:"groups"`
+	NotSelected      []objectmodel.ObjectRef `json:"notSelected,omitempty"`
+	Unjudged         []objectmodel.ObjectRef `json:"unjudged"`
+	Complete         bool                    `json:"complete"`
+	TruncationReason string                  `json:"truncationReason,omitempty"`
+	Evidence         *SemanticRerankEvidence `json:"evidence,omitempty"`
 }
 
 type FilterJudge func(candidate Candidate, criterion string) FilterJudgment
@@ -80,12 +80,12 @@ type RerankRequest struct {
 // or Unjudged. Raw model scores are neither required nor exposed as globally
 // comparable probabilities.
 type RerankProviderResult struct {
-	Groups         []RankGroup                `json:"groups"`
-	Unjudged       []objectmodel.KnowledgeRef `json:"unjudged,omitempty"`
-	Provider       string                     `json:"provider"`
-	Model          string                     `json:"model"`
-	ModelRevision  string                     `json:"modelRevision,omitempty"`
-	PromptRevision string                     `json:"promptRevision,omitempty"`
+	Groups         []RankGroup             `json:"groups"`
+	Unjudged       []objectmodel.ObjectRef `json:"unjudged,omitempty"`
+	Provider       string                  `json:"provider"`
+	Model          string                  `json:"model"`
+	ModelRevision  string                  `json:"modelRevision,omitempty"`
+	PromptRevision string                  `json:"promptRevision,omitempty"`
 }
 
 type SemanticRerankEvidence struct {
@@ -120,9 +120,9 @@ type RerankExecutionRecord struct {
 // RerankCandidateEvidence preserves where a candidate came from without
 // exposing retrieval rank/score to the semantic provider.
 type RerankCandidateEvidence struct {
-	Ref               objectmodel.KnowledgeRef `json:"ref"`
-	OriginalRank      int                      `json:"originalRank"`
-	RetrievalEvidence []LaneEvidence           `json:"retrievalEvidence,omitempty"`
+	Ref               objectmodel.ObjectRef `json:"ref"`
+	OriginalRank      int                   `json:"originalRank"`
+	RetrievalEvidence []LaneEvidence        `json:"retrievalEvidence,omitempty"`
 }
 
 // Reranker is the wall-out semantic provider port. Implementations own model
@@ -221,10 +221,10 @@ func projectFields(value any, projection EvaluationProjection) any {
 type Refine struct{}
 
 func (Refine) Filter(candidates []Candidate, criterion string, judge FilterJudge, budget *int) SemanticFilterResult {
-	matched := []objectmodel.KnowledgeRef{}
-	rejected := []objectmodel.KnowledgeRef{}
-	unknown := []objectmodel.KnowledgeRef{}
-	unjudged := []objectmodel.KnowledgeRef{}
+	matched := []objectmodel.ObjectRef{}
+	rejected := []objectmodel.ObjectRef{}
+	unknown := []objectmodel.ObjectRef{}
+	unjudged := []objectmodel.ObjectRef{}
 	judged := 0
 	for _, c := range candidates {
 		if budget != nil && judged >= *budget {
@@ -253,7 +253,7 @@ func (Refine) Filter(candidates []Candidate, criterion string, judge FilterJudge
 
 func (Refine) Rerank(candidates []Candidate, criterion string, scorer RerankScorer, topK *int) SemanticRerankResult {
 	type scored struct {
-		ref   objectmodel.KnowledgeRef
+		ref   objectmodel.ObjectRef
 		score float64
 	}
 	items := make([]scored, 0, len(candidates))
@@ -262,7 +262,7 @@ func (Refine) Rerank(candidates []Candidate, criterion string, scorer RerankScor
 	}
 	sort.SliceStable(items, func(i, j int) bool { return items[i].score > items[j].score })
 	var groups []RankGroup
-	var current []objectmodel.KnowledgeRef
+	var current []objectmodel.ObjectRef
 	var currentScore *float64
 	for _, s := range items {
 		if currentScore != nil && *currentScore != s.score {
@@ -306,7 +306,7 @@ func ExecuteRerankRecorded(ctx context.Context, reranker Reranker, request Reran
 	if reranker == nil {
 		return SemanticRerankResult{}, empty, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "semantic reranker is not configured")
 	}
-	seen := map[objectmodel.KnowledgeRef]struct{}{}
+	seen := map[objectmodel.ObjectRef]struct{}{}
 	projected := make([]Candidate, len(request.Candidates))
 	evidence := make([]RerankCandidateEvidence, len(request.Candidates))
 	for i, candidate := range request.Candidates {
@@ -389,8 +389,8 @@ func ExecuteRerankRecorded(ctx context.Context, reranker Reranker, request Reran
 	return result, execution, nil
 }
 
-func validateProviderRanking(inputs map[objectmodel.KnowledgeRef]struct{}, result RerankProviderResult) (int, error) {
-	seen := map[objectmodel.KnowledgeRef]struct{}{}
+func validateProviderRanking(inputs map[objectmodel.ObjectRef]struct{}, result RerankProviderResult) (int, error) {
+	seen := map[objectmodel.ObjectRef]struct{}{}
 	judged := 0
 	for i, group := range result.Groups {
 		if group.Rank != i+1 || len(group.Refs) == 0 {
@@ -422,10 +422,10 @@ func validateProviderRanking(inputs map[objectmodel.KnowledgeRef]struct{}, resul
 	return judged, nil
 }
 
-func applyRerankOutput(groups []RankGroup, unjudged []objectmodel.KnowledgeRef, contract OutputContract) SemanticRerankResult {
+func applyRerankOutput(groups []RankGroup, unjudged []objectmodel.ObjectRef, contract OutputContract) SemanticRerankResult {
 	result := SemanticRerankResult{
-		Groups: []RankGroup{}, NotSelected: []objectmodel.KnowledgeRef{},
-		Unjudged: append([]objectmodel.KnowledgeRef(nil), unjudged...), Complete: len(unjudged) == 0,
+		Groups: []RankGroup{}, NotSelected: []objectmodel.ObjectRef{},
+		Unjudged: append([]objectmodel.ObjectRef(nil), unjudged...), Complete: len(unjudged) == 0,
 	}
 	if len(unjudged) > 0 {
 		result.TruncationReason = "PROVIDER_BUDGET"
@@ -442,7 +442,7 @@ func applyRerankOutput(groups []RankGroup, unjudged []objectmodel.KnowledgeRef, 
 			break
 		}
 		if len(group.Refs) <= remaining || contract.AllowTies {
-			result.Groups = append(result.Groups, RankGroup{Rank: group.Rank, Refs: append([]objectmodel.KnowledgeRef(nil), group.Refs...)})
+			result.Groups = append(result.Groups, RankGroup{Rank: group.Rank, Refs: append([]objectmodel.ObjectRef(nil), group.Refs...)})
 			kept += len(group.Refs)
 			if kept >= *contract.TopK {
 				appendNotSelected(&result, groups[i+1:])
@@ -450,7 +450,7 @@ func applyRerankOutput(groups []RankGroup, unjudged []objectmodel.KnowledgeRef, 
 			}
 			continue
 		}
-		result.Groups = append(result.Groups, RankGroup{Rank: group.Rank, Refs: append([]objectmodel.KnowledgeRef(nil), group.Refs[:remaining]...)})
+		result.Groups = append(result.Groups, RankGroup{Rank: group.Rank, Refs: append([]objectmodel.ObjectRef(nil), group.Refs[:remaining]...)})
 		result.NotSelected = append(result.NotSelected, group.Refs[remaining:]...)
 		appendNotSelected(&result, groups[i+1:])
 		break
@@ -467,7 +467,7 @@ func appendNotSelected(result *SemanticRerankResult, groups []RankGroup) {
 func cloneRankGroups(groups []RankGroup) []RankGroup {
 	out := make([]RankGroup, len(groups))
 	for i, group := range groups {
-		out[i] = RankGroup{Rank: group.Rank, Refs: append([]objectmodel.KnowledgeRef(nil), group.Refs...)}
+		out[i] = RankGroup{Rank: group.Rank, Refs: append([]objectmodel.ObjectRef(nil), group.Refs...)}
 	}
 	return out
 }

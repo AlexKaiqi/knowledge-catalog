@@ -13,14 +13,14 @@ import (
 
 // Kernel is deliberately smaller than "all shared types": it owns errors,
 // digests, and Snapshot coordinates. Layer ② identity and declarations belong
-// to knowledge even when putting them in kernel would avoid an import.
+// to object even when putting them in kernel would avoid an import.
 func TestLayerOwnedDeclarationsDoNotDriftBack(t *testing.T) {
 	checkTopLevelDeclarations(t, "kernel", map[string]struct{}{
 		"ObjectID": {}, "Address": {}, "AddressKind": {},
-		"KnowledgeRef": {}, "PinnedKnowledgeRef": {},
+		"ObjectRef": {}, "PinnedObjectRef": {},
 		"ProvenanceEnvelope": {}, "OriginKind": {}, "AlgorithmRef": {},
 		"ParsedSchemaRef": {}, "SchemaObjectPrefix": {},
-		"FormatKnowledgeRef": {}, "FormatPinnedRef": {},
+		"FormatObjectRef": {}, "FormatPinnedRef": {},
 		"ParseSchemaRef": {}, "IsSchemaObject": {},
 	})
 	checkTopLevelDeclarations(t, "object/reader", map[string]struct{}{
@@ -31,11 +31,11 @@ func TestLayerOwnedDeclarationsDoNotDriftBack(t *testing.T) {
 	})
 }
 
-// This catches a second failure mode if a knowledge type is ever added back to
+// This catches a second failure mode if an object type is ever added back to
 // kernel: Snapshot and Catalog still may not consume it through that shortcut.
-func TestSnapshotAndCatalogDoNotUseKnowledgeKernelTypes(t *testing.T) {
+func TestSnapshotAndCatalogDoNotUseObjectKernelTypes(t *testing.T) {
 	forbidden := map[string]struct{}{
-		"ObjectID": {}, "Address": {}, "KnowledgeRef": {},
+		"ObjectID": {}, "Address": {}, "ObjectRef": {},
 		"ProvenanceEnvelope": {}, "OriginKind": {}, "AlgorithmRef": {},
 		"SchemaRef": {}, "AddressKind": {},
 	}

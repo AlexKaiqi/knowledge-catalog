@@ -44,10 +44,10 @@ func TestSchemaAccessCanNarrowAndDisappearWithoutChangingValueStructure(t *testi
 
 func TestSchemaAccessCompilerIgnoresOrdinaryIndexNamedObjects(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	basis, err := s.Repo.ApplyKnowledgeCommit(objectmodel.ChangeSet{TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID, Operations: []objectmodel.Operation{
+	basis, err := s.Repo.ApplyObjectCommit(objectmodel.ChangeSet{TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID, Operations: []objectmodel.Operation{
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/article"}, Value: articleAccessSchema([]any{"text"})},
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "index/ordinary-data"}, Value: map[string]any{"targets": []any{map[string]any{"schemaRef": "schema/article", "fields": map[string]any{"body": []any{"filter"}}}}}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "index/notes"}, Value: map[string]any{"body": "ordinary knowledge"}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "index/notes"}, Value: map[string]any{"body": "ordinary object"}},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -72,7 +72,7 @@ func TestSchemaAccessChangesDoNotPermitStructuralBreaks(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := testkit.NewSetup(t, "")
-			initial, err := s.Repo.ApplyKnowledgeCommit(objectmodel.ChangeSet{TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID, Operations: []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/article"}, Value: tc.previous}}})
+			initial, err := s.Repo.ApplyObjectCommit(objectmodel.ChangeSet{TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID, Operations: []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/article"}, Value: tc.previous}}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -92,7 +92,7 @@ func articleAccessSchema(hints []any) map[string]any {
 func schemaAccessPlan(t *testing.T, repo objectmodel.Repository, basis kernel.CommitID) retrieval.AccessSpec {
 	t.Helper()
 	pins := map[kernel.RepositoryID]kernel.CommitID{repo.ID(): basis}
-	plan, err := retrieval.PlanAccess(func(kernel.RepositoryID) (objectmodel.Repository, error) { return repo, nil }, reader.KnowledgeSetPin{Repositories: pins, Items: reader.WholeRepositoryItems(pins)})
+	plan, err := retrieval.PlanAccess(func(kernel.RepositoryID) (objectmodel.Repository, error) { return repo, nil }, reader.DatasetPin{Repositories: pins, Items: reader.WholeRepositoryItems(pins)})
 	if err != nil {
 		t.Fatal(err)
 	}

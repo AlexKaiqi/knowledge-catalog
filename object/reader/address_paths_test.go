@@ -47,7 +47,7 @@ func TestDatasetExactAddressReadsOnlySelectedTreePaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	at := receipt.Result.CommitID
-	repo, err := reader.NewReader(store).Require(base.ID(), kernel.ErrKnowledgeRefUnresolved)
+	repo, err := reader.NewReader(store).Require(base.ID(), kernel.ErrObjectRefUnresolved)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestDatasetExactAddressReadsOnlySelectedTreePaths(t *testing.T) {
 	if err != nil || selected.Value.(map[string]any)["body"] != "public" {
 		t.Fatalf("selected paths admitted an unselected sibling body: %#v %v", selected, err)
 	}
-	scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return repo, nil }, reader.KnowledgeSetPin{Repositories: map[kernel.RepositoryID]kernel.CommitID{base.ID(): at}, Items: []reader.DatasetItem{{Repository: base.ID(), Commit: at, Kind: "prefix", Prefix: "public"}}})
+	scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return repo, nil }, reader.DatasetPin{Repositories: map[kernel.RepositoryID]kernel.CommitID{base.ID(): at}, Items: []reader.DatasetItem{{Repository: base.ID(), Commit: at, Kind: "prefix", Prefix: "public"}}})
 	rows, err := scope.ReadAddress(public)
 	if err != nil || len(rows) != 1 || rows[0].Value.(map[string]any)["body"] != "public" {
 		t.Fatalf("exact read: %#v %v", rows, err)

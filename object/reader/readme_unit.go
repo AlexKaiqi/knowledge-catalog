@@ -15,7 +15,7 @@ func (r *treeRepository) readmeAddressUnit(address objectmodel.Address, commit k
 		return repofile.Unit{}, false, nil
 	}
 	content, err := r.tree.ReadFile(objectmodel.RepositoryReadmePath, commit)
-	if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+	if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 		return repofile.Unit{}, false, nil
 	}
 	if err != nil {

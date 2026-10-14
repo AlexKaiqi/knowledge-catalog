@@ -7,8 +7,8 @@ const helpGrantAdd = `kc grant add --principal <id> --action <action[,action...]
 用法与参数：
   kc grant add --principal <id> --action <action[,action...]> [--repo <id>] [--dataset <id>]
   可附加 --ref、--object、--aspect 限定；Repository 与 Dataset 同时指定时是交集，均省略为全服务范围。
-  action 使用 knowledge.read 等带点语义名，逗号分隔；不能发 '*'，通配值须加单引号避免 shell 展开。
-  Dataset 文件消费需 dataset.resolve,file.read；object 是规则限定，不能当作 Dataset 文件路径 ACL。
+  action 使用 object.read 等带点语义名，逗号分隔；不能发 '*'，通配值须加单引号避免 shell 展开。
+ Dataset 文件消费需 dataset.resolve,file.read；object 是规则限定，不能当作 Dataset 文件路径 ACL。
   repository.dataset.publish 是来源发布许可：指定来源 --repo，可用 --dataset 限制交付目标、--ref 限制所选引用或显式 commit；Object/Aspect 或仅 Dataset 范围不能开放来源。
 条件：
   已认证并有请求范围的 admin.grants.manage；管理者只能在当前获准范围内发权，原生存储管理员身份不自动获得此权。
@@ -19,12 +19,12 @@ const helpGrantAdd = `kc grant add --principal <id> --action <action[,action...]
   持久新增规则，后续服务请求按当前政策求值；不创建来源、发布 Dataset 或替目标主体登录。
 风险与成本：
   每次调用都会生成新规则，重复提交不是幂等；省略资源范围会扩大到全服务，确认动作和目标后再提交。
-  更新规则账需要持久化，成本随授权规则数量增长；新增规则不证明外部源访问或知识读取也已获权。
+  更新规则账需要持久化，成本随授权规则数量增长；新增规则不证明外部源访问或对象读取也已获权。
 失败恢复：
   无权时申请该范围的授权管理能力；用法错误时核对主体、动作和资源范围。
   响应丢失先由有 grant read 权的管理者按主体/范围核对 grant list，不能盲目重发；误发时按回执 id 执行 grant remove。
 示例：
-  kc grant add --repo docs --principal healzhou --action knowledge.read,knowledge.search
+  kc grant add --repo docs --principal healzhou --action object.read,object.search
   kc grant add --dataset delivery --principal healzhou --action dataset.resolve,file.read
   kc grant add --repo docs --dataset delivery --ref refs/heads/main --principal publisher --action repository.dataset.publish`
 
@@ -51,7 +51,7 @@ const helpGrantList = `kc grant list [--principal <id>] [--action <action>] [--r
   需要确认能否读取材料时使用实际 files read；不要把名单为空或问题拒绝解释成资源不存在。
 示例：
   kc grant list --dataset delivery
-  kc grant list --repo docs --principal healzhou --action knowledge.read`
+  kc grant list --repo docs --principal healzhou --action object.read`
 
 const helpGrantRemove = `kc grant remove --id <rule-id>
 

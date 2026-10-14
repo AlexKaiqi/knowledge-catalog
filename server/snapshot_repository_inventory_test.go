@@ -13,7 +13,7 @@ import (
 	"kc/snapshot/dataset"
 )
 
-func TestSnapshotRepositoryInventoryPreservesExternalKnowledgeMetadata(t *testing.T) {
+func TestSnapshotRepositoryInventoryPreservesExternalObjectMetadata(t *testing.T) {
 	dir := t.TempDir()
 	source := testkit.MakeRepository(t, "kr://inventory/source")
 	store := snapshot.NewRegistry()

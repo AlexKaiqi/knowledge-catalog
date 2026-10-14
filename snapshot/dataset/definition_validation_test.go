@@ -7,21 +7,21 @@ import (
 	"testing"
 )
 
-func TestValidateKnowledgeSetNeedsNoAuthorityOrLiveSelector(t *testing.T) {
-	valid := catalog.KnowledgeSet{Revision: 1, Sources: []catalog.KnowledgeSetSource{{Repository: "kr://acme/docs", Selector: snapshot.DefaultRef, BaseRev: "old-fixed"}}}
-	if err := catalog.ValidateKnowledgeSet(valid); err != nil {
+func TestValidateDatasetNeedsNoAuthorityOrLiveSelector(t *testing.T) {
+	valid := catalog.Dataset{Revision: 1, Sources: []catalog.DatasetSource{{Repository: "kr://acme/docs", Selector: snapshot.DefaultRef, BaseRev: "old-fixed"}}}
+	if err := catalog.ValidateDataset(valid); err != nil {
 		t.Fatal(err)
 	}
-	for name, def := range map[string]catalog.KnowledgeSet{
-		"missing repository": {Sources: []catalog.KnowledgeSetSource{{Selector: snapshot.DefaultRef}}},
-		"missing selector":   {Sources: []catalog.KnowledgeSetSource{{Repository: "kr://acme/source"}}},
+	for name, def := range map[string]catalog.Dataset{
+		"missing repository": {Sources: []catalog.DatasetSource{{Selector: snapshot.DefaultRef}}},
+		"missing selector":   {Sources: []catalog.DatasetSource{{Repository: "kr://acme/source"}}},
 		"empty":              {},
 		"retired":            {Retired: true, Sources: valid.Sources},
 		"duplicate":          {Sources: append(valid.Sources, valid.Sources...)},
-		"overlapping mounts": {Sources: []catalog.KnowledgeSetSource{{Repository: "kr://acme/docs", Selector: snapshot.DefaultRef, Path: catalog.MountPath("docs"), SubPath: "a"}, {Repository: "kr://acme/docs", Selector: snapshot.DefaultRef, Path: catalog.MountPath("more"), SubPath: "a/b"}}},
+		"overlapping mounts": {Sources: []catalog.DatasetSource{{Repository: "kr://acme/docs", Selector: snapshot.DefaultRef, Path: catalog.MountPath("docs"), SubPath: "a"}, {Repository: "kr://acme/docs", Selector: snapshot.DefaultRef, Path: catalog.MountPath("more"), SubPath: "a/b"}}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if err := catalog.ValidateKnowledgeSet(def); kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
+			if err := catalog.ValidateDataset(def); kernel.CodeOf(err) != kernel.ErrDatasetInvalid {
 				t.Fatalf("invalid shape: %v", err)
 			}
 		})

@@ -17,13 +17,13 @@ func TestApplyRejectsPathHintThatSnapshotReaderCannotDiscover(t *testing.T) {
 		PathHint: "service",
 	}
 	err := Apply(idx, op, nil, map[string]string{}, map[string]struct{}{})
-	if err == nil || !strings.Contains(err.Error(), "readable knowledge file extension") {
+	if err == nil || !strings.Contains(err.Error(), "readable object file extension") {
 		t.Fatalf("expected unreadable pathHint rejection, got %v", err)
 	}
 
 	op.PathHint = "service.json"
 	if err := Apply(idx, op, nil, map[string]string{}, map[string]struct{}{}); err != nil {
-		t.Fatalf("valid knowledge pathHint was rejected: %v", err)
+		t.Fatalf("valid object pathHint was rejected: %v", err)
 	}
 }
 
@@ -52,12 +52,12 @@ func TestParseMarkdownReadmeFrontmatter(t *testing.T) {
 	}
 }
 
-func TestKnowledgePathAcceptsYAML(t *testing.T) {
-	if !KnowledgePath("gmv/definition.yaml") {
-		t.Fatal(".yaml must be a readable knowledge file extension")
+func TestObjectPathAcceptsYAML(t *testing.T) {
+	if !ObjectPath("gmv/definition.yaml") {
+		t.Fatal(".yaml must be a readable object file extension")
 	}
-	if !KnowledgePath("gmv/definition.okf") {
-		t.Fatal("legacy .okf must remain a readable knowledge file extension")
+	if !ObjectPath("gmv/definition.okf") {
+		t.Fatal("legacy .okf must remain a readable object file extension")
 	}
 }
 

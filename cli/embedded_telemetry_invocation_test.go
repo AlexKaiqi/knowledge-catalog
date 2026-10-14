@@ -6,7 +6,7 @@ import (
 
 	"kc/internal/telemetry"
 	inv "kc/invocation"
-	knowledgeserving "kc/liveaccess"
+	objectserving "kc/liveaccess"
 
 	"kc/invoke"
 )
@@ -24,11 +24,11 @@ func invokeWithTelemetry(ctx context.Context, runtime *telemetry.Runtime, comman
 	return invokeWithTelemetryAndState(ctx, runtime, command, flags, nil)
 }
 
-func invokeWithTelemetryAndState(ctx context.Context, runtime *telemetry.Runtime, command string, flags map[string]FlagValue, state knowledgeserving.StateLookup) RunResult {
+func invokeWithTelemetryAndState(ctx context.Context, runtime *telemetry.Runtime, command string, flags map[string]FlagValue, state objectserving.StateLookup) RunResult {
 	return invokeWithTelemetryAndStateAtHome(ctx, runtime, command, flags, state, nil)
 }
 
-func invokeWithTelemetryAndStateAtHome(ctx context.Context, runtime *telemetry.Runtime, command string, flags map[string]FlagValue, state knowledgeserving.StateLookup, home *apphome.Home) RunResult {
+func invokeWithTelemetryAndStateAtHome(ctx context.Context, runtime *telemetry.Runtime, command string, flags map[string]FlagValue, state objectserving.StateLookup, home *apphome.Home) RunResult {
 	if flags == nil {
 		flags = map[string]FlagValue{}
 	}

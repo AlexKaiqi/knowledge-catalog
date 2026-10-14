@@ -9,7 +9,7 @@ import (
 )
 
 func TestJSONFixturesKeepPublicObjectInputContracts(t *testing.T) {
-	const reference = "urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:metric%2Fgmv"
+	const reference = "urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv"
 	for _, tc := range []struct {
 		name, task string
 		payload    map[string]any
@@ -23,7 +23,7 @@ func TestJSONFixturesKeepPublicObjectInputContracts(t *testing.T) {
 		{"put reference", "put", map[string]any{"reference": reference + "#/definition", "commandId": "update", "value": "replacement"}, false},
 		{"put legacy identity", "put", map[string]any{"object": "metric/gmv", "commandId": "update", "value": "replacement"}, true},
 		{"remove reference", "remove", map[string]any{"reference": reference, "commandId": "remove"}, false},
-		{"remove legacy identity", "remove", map[string]any{"repository": "kr://scene/knowledge", "object": "metric/gmv", "commandId": "remove"}, true},
+		{"remove legacy identity", "remove", map[string]any{"repository": "kr://scene/object", "object": "metric/gmv", "commandId": "remove"}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var request any

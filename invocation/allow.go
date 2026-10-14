@@ -29,14 +29,15 @@ type AllowQuery = access.Query
 
 const AllowVersion = 2
 
-var legacyActions = map[string]string{
+// commandActions maps a bare command name to the semantic action it requires.
+var commandActions = map[string]string{
 	"put": "writer.commit", "remove": "writer.commit", "commit": "writer.commit",
 	"propose": "governance.proposal.create", "preview": "governance.preview.create",
 	"validate": "governance.validate", "record-validation": "governance.validation.record", "merge": "governance.merge",
-	"resolve": "dataset.resolve", "resolve-object": "knowledge.read", "resolve-binding": "knowledge.binding.resolve",
-	"read": "knowledge.read", "relations": "knowledge.relations", "describe-schema": "knowledge.schema.read",
-	"search": "knowledge.search", "log": "knowledge.history.read", "provenance": "knowledge.provenance",
-	"describe-index": "projection.read", "index-sync": "projection.manage", "index-notify": "projection.manage", "describe-access": "knowledge.access.describe",
+	"resolve": "dataset.resolve", "resolve-object": "object.read", "resolve-binding": "object.binding.resolve",
+	"read": "object.read", "relations": "object.relations", "describe-schema": "object.schema.read",
+	"search": "object.search", "log": "object.history.read", "provenance": "object.provenance",
+	"describe-index": "projection.read", "index-sync": "projection.manage", "index-notify": "projection.manage", "describe-access": "object.access.describe",
 	"register":       "repositories.manage",
 	"archive-repo":   "repositories.manage",
 	"read-workspace": "file.read", "read-catalog": "inventory.read", "audit": "audit.read",
@@ -57,16 +58,6 @@ func ReadAllow(home string) (AllowFile, error) {
 	if raw.Rules == nil {
 		raw.Rules = []AllowRule{}
 	}
-	for i := range raw.Rules {
-		if len(raw.Rules[i].Actions) == 0 && len(raw.Rules[i].Cmds) > 0 {
-			for _, cmd := range raw.Rules[i].Cmds {
-				if action := legacyActions[cmd]; action != "" {
-					raw.Rules[i].Actions = appendUnique(raw.Rules[i].Actions, action)
-				}
-			}
-		}
-		raw.Rules[i].Actions = migrateLegacyDatasetActions(raw.Rules[i].Actions)
-	}
 	raw.Version = AllowVersion
 	return raw, nil
 }
@@ -76,23 +67,7 @@ func WriteAllow(home string, file AllowFile) error {
 		file.Rules = []AllowRule{}
 	}
 	file.Version = AllowVersion
-	for i := range file.Rules {
-		file.Rules[i].Cmds = nil
-	}
 	return jsonfile.Write(AllowPath(home), file)
-}
-
-func appendUnique(items []string, value string) []string {
-	for _, item := range items {
-		if item == value {
-			return items
-		}
-	}
-	return append(items, value)
-}
-
-func migrateLegacyDatasetActions(actions []string) []string {
-	return access.NormalizeActions(actions)
 }
 
 func ValidateActions(actions []string) error {
@@ -154,7 +129,7 @@ func normalizeAction(value string) string {
 	if strings.Contains(value, ".") {
 		return value
 	}
-	if action := legacyActions[value]; action != "" {
+	if action := commandActions[value]; action != "" {
 		return action
 	}
 	return value
@@ -175,18 +150,18 @@ func AuthorizeInventory(home string, flags map[string]invoke.FlagValue, observe 
 func Authorize(home, command string, flags map[string]invoke.FlagValue, observe invoke.AuthorizationObserver, opened ...*kchome.Home) (authErr error) {
 	defer observeAuthorizationResult(observe, &authErr)()
 	action := normalizeAction(command)
-	if strings.HasPrefix(action, "knowledge.") && invoke.FlagString(flags, "repo") == "" {
+	if strings.HasPrefix(action, "object.") && invoke.FlagString(flags, "repo") == "" {
 		if err := HoistTaskPinDefinition(flags); err != nil {
 			return err
 		}
-		definition := SuppliedKnowledgeSet(flags)
+		definition := SuppliedDataset(flags)
 		if definition != nil && invoke.DatasetOf(flags) != "" {
-			if action == "knowledge.search" || action == "knowledge.rerank" {
+			if action == "object.search" || action == "object.rerank" {
 				return kernel.Fail(kernel.ErrForbidden, "a caller label cannot select a published Workspace while supplying a temporary definition")
 			}
 			return kernel.Fail(kernel.ErrUsageInvalid, "choose a named --dataset or a temporary definition")
 		}
-		if err := PrepareKnowledgePinContext(flags); err != nil {
+		if err := PrepareObjectPinContext(flags); err != nil {
 			return err
 		}
 	}
@@ -218,12 +193,12 @@ func Authorize(home, command string, flags map[string]invoke.FlagValue, observe 
 		Aspect:    invoke.FlagString(flags, "aspect"),
 		Dataset:   invoke.DatasetOf(flags),
 	}
-	definition := SuppliedKnowledgeSet(flags)
+	definition := SuppliedDataset(flags)
 	var ws *kchome.Home
 	if len(opened) > 0 {
 		ws = opened[0]
 	}
-	if IsInventoryDiscovery(flags) && (action == "dataset.resolve" || action == "knowledge.search") {
+	if IsInventoryDiscovery(flags) && (action == "dataset.resolve" || action == "object.search") {
 		if !InventoryReadAllowed(home, q.Principal, ws) {
 			return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to inventory.read", q.Principal)
 		}
@@ -235,7 +210,7 @@ func Authorize(home, command string, flags map[string]invoke.FlagValue, observe 
 		}
 		return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to dataset.resolve for every selected member", q.Principal)
 	}
-	if err := AuthorizeWorkspaceKnowledgeDefinition(file.Rules, q, definition); err != ErrNotWorkspaceKnowledge {
+	if err := AuthorizeWorkspaceObjectDefinition(file.Rules, q, definition); err != ErrNotWorkspaceObject {
 		return err
 	}
 	if _, ok := MatchAllow(file.Rules, q); !ok {
@@ -250,20 +225,20 @@ func Authorize(home, command string, flags map[string]invoke.FlagValue, observe 
 	return nil
 }
 
-var ErrNotWorkspaceKnowledge = fmt.Errorf("not workspace knowledge")
+var ErrNotWorkspaceObject = fmt.Errorf("not workspace object")
 
-// AuthorizeWorkspaceKnowledge is the named-dataset gate: file.read on the
-// Dataset admits knowledge interpretation of listed files. It does not admit
-// --repo objectmodel.* or writer.*, and it does not imply dataset.resolve.
-func AuthorizeWorkspaceKnowledge(rules []AllowRule, q AllowQuery, temporary ...bool) error {
-	var definition *dataset.KnowledgeSet
+// AuthorizeWorkspaceObject is the named-dataset gate: file.read on the
+// Dataset admits object interpretation of listed files. It does not admit
+// --repo object.* or writer.*, and it does not imply dataset.resolve.
+func AuthorizeWorkspaceObject(rules []AllowRule, q AllowQuery, temporary ...bool) error {
+	var definition *dataset.Dataset
 	if len(temporary) > 0 && temporary[0] {
-		definition = &dataset.KnowledgeSet{}
+		definition = &dataset.Dataset{}
 	}
-	return AuthorizeWorkspaceKnowledgeDefinition(rules, q, definition)
+	return AuthorizeWorkspaceObjectDefinition(rules, q, definition)
 }
 
-func workspaceScopeAllowed(rules []AllowRule, q AllowQuery, definition *dataset.KnowledgeSet) bool {
+func workspaceScopeAllowed(rules []AllowRule, q AllowQuery, definition *dataset.Dataset) bool {
 	if definition != nil {
 		// Temporary recipe labels never identify a published grant scope.
 		q.Dataset = ""
@@ -287,10 +262,10 @@ func workspaceScopeAllowed(rules []AllowRule, q AllowQuery, definition *dataset.
 	return true
 }
 
-func AuthorizeWorkspaceKnowledgeDefinition(rules []AllowRule, q AllowQuery, definition *dataset.KnowledgeSet) error {
+func AuthorizeWorkspaceObjectDefinition(rules []AllowRule, q AllowQuery, definition *dataset.Dataset) error {
 	hasDefinition := definition != nil
-	if (q.Dataset == "" && !hasDefinition) || q.Repo != "" || !strings.HasPrefix(q.Action, "knowledge.") {
-		return ErrNotWorkspaceKnowledge
+	if (q.Dataset == "" && !hasDefinition) || q.Repo != "" || !strings.HasPrefix(q.Action, "object.") {
+		return ErrNotWorkspaceObject
 	}
 	if hasDefinition {
 		q.Dataset = ""

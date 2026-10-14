@@ -18,7 +18,7 @@ type Preparation struct {
 	Provider BasisPreparer
 }
 
-func (p Preparation) Execute(ctx context.Context, def dataset.KnowledgeSet) error {
+func (p Preparation) Execute(ctx context.Context, def dataset.Dataset) error {
 	if !p.Enabled || p.Provider == nil {
 		return nil
 	}
@@ -60,7 +60,7 @@ func (d ServingBasisDemand) Bases(repository kernel.RepositoryID) ([]kernel.Comm
 	if d.Datasets == nil {
 		return bases, nil
 	}
-	for _, def := range d.Datasets.DumpState().KnowledgeSets {
+	for _, def := range d.Datasets.DumpState().Datasets {
 		if def.Retired {
 			continue
 		}

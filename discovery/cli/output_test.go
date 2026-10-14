@@ -14,7 +14,7 @@ func TestRelationsDailyProductView(t *testing.T) {
 				"repository":   "kr://x",
 				"commit":       "c1",
 				"objectId":     "Team:finance",
-				"knowledgeRef": map[string]any{"object": "Team:finance"},
+				"objectRef":    map[string]any{"object": "Team:finance"},
 				"matchedRoles": []any{"owner"},
 				"relation":     map[string]any{"relationType": "owned-by", "relationId": "relation:owned"},
 				"evidence":     []any{map[string]any{"lane": "graph"}},
@@ -49,11 +49,11 @@ func TestSearchDailyProductView(t *testing.T) {
 		"searchView":          map[string]any{"snapshots": map[string]any{"kr://x": "c1"}},
 		"hits": []any{
 			map[string]any{
-				"knowledge": map[string]any{
-					"knowledgeRef": map[string]any{"object": "note/hello"},
-					"repository":   "kr://x",
-					"commit":       "c1",
-					"value":        map[string]any{"body": "secret"},
+				"object": map[string]any{
+					"objectRef":  map[string]any{"object": "note/hello"},
+					"repository": "kr://x",
+					"commit":     "c1",
+					"value":      map[string]any{"body": "secret"},
 				},
 			},
 		},
@@ -70,8 +70,8 @@ func TestSearchDailyProductView(t *testing.T) {
 	if hit["objectId"] != "note/hello" || hit["repository"] != "kr://x" || hit["commit"] != "c1" {
 		t.Fatalf("search hit identity: %#v", hit)
 	}
-	if _, ok := hit["knowledge"]; ok {
-		t.Fatalf("search hit kept nested knowledge: %#v", hit)
+	if _, ok := hit["object"]; ok {
+		t.Fatalf("search hit kept nested object: %#v", hit)
 	}
 	if _, ok := hit["value"]; ok {
 		t.Fatalf("search hit kept body: %#v", hit)

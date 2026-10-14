@@ -11,7 +11,7 @@ type Receipt struct {
 	EvidenceID string
 }
 
-// Recorder is the fail-closed write port. A successful knowledge response may
+// Recorder is the fail-closed write port. A successful object response may
 // be delivered only after the required evidence kinds have been acknowledged.
 type Recorder interface {
 	RecordAccess(context.Context, AccessEvent) (Receipt, error)

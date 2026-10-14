@@ -35,9 +35,9 @@ func TestLocalDeploymentBootstrapsThenUsesServerClientBoundary(t *testing.T) {
 // TestRemoteProviderReadBackAndConsumerDiscovery is the product Client CLI
 // journey in three phases. Host bootstrap stays in the harness. The governor
 // authorizes, composes, and maintains search. The provider only knows the
-// Server, their identity, their knowledge source id and their drafts. The
+// Server, their identity, their object source id and their drafts. The
 // consumer only knows the Server, their identity, and the question they want
-// answered. Consumers discover a knowledge set only after it has been composed.
+// answered. Consumers discover a dataset only after it has been composed.
 func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 	home := testkit.TempDir(t)
 	repositoryID := "kr://acme/public/core"
@@ -70,11 +70,11 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 
 	// 1. Authorize the provider before they write.
 	body(t, governor("grant", "add", "--principal", provider,
-		"--action", "writer.commit,writer.preview,knowledge.read,knowledge.provenance,knowledge.history.read,knowledge.schema.read",
+		"--action", "writer.commit,writer.preview,object.read,object.provenance,object.history.read,object.schema.read",
 		"--repo", repositoryID))
 
 	// 2. Provider publishes, then reads back on the same --repo. ingest must
-	// not move HEAD; commit must. A knowledge set is not a write prerequisite.
+	// not move HEAD; commit must. A dataset is not a write prerequisite.
 	who := asMap(t, body(t, asProvider("whoami")))
 	if who["principal"] != provider {
 		t.Fatalf("provider whoami: %#v", who)
@@ -118,17 +118,17 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 	expectCode(t, asProvider("dataset", "define", "--dataset", setID,
 		"--revision", "1", "--source", repositoryID), "FORBIDDEN")
 
-	// 3. Governor names the knowledge set, authorizes the consumer, and
+	// 3. Governor names the dataset, authorizes the consumer, and
 	// prepares SEARCH. Consumers must not see a named set before this.
 	beforeCompose := asMap(t, body(t, governor("show")))
-	if _, found := knowledgeSetFromInventory(beforeCompose, setID); found {
-		t.Fatalf("named knowledge set must not exist before compose: %#v", beforeCompose)
+	if _, found := datasetFromInventory(beforeCompose, setID); found {
+		t.Fatalf("named dataset must not exist before compose: %#v", beforeCompose)
 	}
 
 	body(t, governor("grant", "add", "--principal", consumer,
 		"--action", "inventory.read,dataset.resolve,file.read"))
 	body(t, governor("grant", "add", "--principal", consumer,
-		"--action", "knowledge.read,knowledge.provenance,knowledge.search,knowledge.schema.read,knowledge.history.read",
+		"--action", "object.read,object.provenance,object.search,object.schema.read,object.history.read",
 		"--repo", repositoryID))
 	body(t, governor("dataset", "define", "--dataset", setID, "--revision", "1",
 		"--source", repositoryID))
@@ -150,12 +150,12 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 		t.Fatalf("consumer show did not infer the only visible Catalog: %#v", state)
 	}
 	assertInventoryJSON(t, home, state)
-	discoveredWorkspace, discoveredRepo := discoveredKnowledgeSet(t, state, repositoryID)
+	discoveredWorkspace, discoveredRepo := discoveredDataset(t, state, repositoryID)
 	if discoveredWorkspace != setID {
-		t.Fatalf("consumer discovered the wrong knowledge set: %s", discoveredWorkspace)
+		t.Fatalf("consumer discovered the wrong dataset: %s", discoveredWorkspace)
 	}
-	if workspace, ok := knowledgeSetFromInventory(state, discoveredWorkspace); !ok || workspace["id"] != discoveredWorkspace {
-		t.Fatalf("show must include the named knowledge set: %#v", state)
+	if workspace, ok := datasetFromInventory(state, discoveredWorkspace); !ok || workspace["id"] != discoveredWorkspace {
+		t.Fatalf("show must include the named dataset: %#v", state)
 	}
 
 	schemas := asMap(t, body(t, asConsumer("schema", "list", "--repo", discoveredRepo)))
@@ -259,7 +259,7 @@ func writeProviderDrafts(t *testing.T) string {
 	return dir
 }
 
-func discoveredKnowledgeSet(t *testing.T, state map[string]any, wantRepo string) (setID, repositoryID string) {
+func discoveredDataset(t *testing.T, state map[string]any, wantRepo string) (setID, repositoryID string) {
 	t.Helper()
 	for _, raw := range state["datasets"].([]any) {
 		workspace := asMap(t, raw)
@@ -273,11 +273,11 @@ func discoveredKnowledgeSet(t *testing.T, state map[string]any, wantRepo string)
 			}
 		}
 	}
-	t.Fatalf("consumer inventory did not include the published knowledge source: %#v", state)
+	t.Fatalf("consumer inventory did not include the published object source: %#v", state)
 	return "", ""
 }
 
-func knowledgeSetFromInventory(state map[string]any, setID string) (map[string]any, bool) {
+func datasetFromInventory(state map[string]any, setID string) (map[string]any, bool) {
 	raw, _ := state["datasets"].([]any)
 	for _, item := range raw {
 		workspace, _ := item.(map[string]any)
@@ -299,7 +299,7 @@ func searchHitObjectID(t *testing.T, search map[string]any) string {
 			return objectID
 		}
 	}
-	address := asMap(t, asMap(t, hit["knowledge"])["address"])
+	address := asMap(t, asMap(t, hit["object"])["address"])
 	objectID, _ := address["objectId"].(string)
 	if objectID == "" {
 		t.Fatalf("search hit has no object id: %#v", hit)

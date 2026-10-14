@@ -19,7 +19,7 @@ in `AuthenticateRequest`, and never client-asserts identity headers when the
 server derives identity from the verified credential.
 
 `Client.Do` can authenticate a request to KC or another system. Snapshot,
-Knowledge, Workspace Files, Writer, Governance, Identity, Admin and Operations
+Object, Workspace Files, Writer, Governance, Identity, Admin and Operations
 are separate typed clients; there is no arbitrary verb invocation. Every call
 re-reads the current
 client session and propagates W3C trace context without adding
@@ -43,7 +43,7 @@ use this package's `RequestOptions`.
 
 `Client.New` also assembles the independent [Object SDK](../object/client/README.md)
 with that same transport. `ObjectService()` returns its typed interface. Existing
-Knowledge Object request names and Writer Commit names are compatibility aliases
+Object request names and Writer Commit names are compatibility aliases
 and delegates; Object DTOs, HTTP routes and receipt recovery live in `object/client`.
 Object references travel in JSON, including their locator fragments; clients never
 infer write maintenance units from pointer depth.
@@ -74,7 +74,7 @@ of validating an existing configured authority before member registration.
 Existing binding/access methods forward to it over the same authenticated transport.
 Object reads adopt external values on Server; retained results use the separately authorized audit task.
 
-Knowledge requests accept either `repository` with `ref`/`commit`, a named
+Object requests accept either `repository` with `ref`/`commit`, a named
 `workspace`, or an unpublished `definition`. `pin` carries the fixed resolved
 coordinates; `definition` supplies the membership and layout needed to validate
 a temporary pin. Replay does not resolve selectors again or publish a Workspace.
@@ -83,12 +83,12 @@ the definition and pin. That label never borrows a published Workspace's grants;
 temporary resolve/consume requires service-wide or every selected member's
 current grants. Replay supplies the labeled `definition` and `pin`, without a
 separate named `workspace` selector.
-Dataset knowledge delivery evaluates current `file.read` for its admitted scope;
+Dataset object delivery evaluates current `file.read` for its admitted scope;
 temporary definitions use the service-wide or every selected member's scope. Direct
-repository knowledge requests use their separate repository grants. A pin fixes
+repository object requests use their separate repository grants. A pin fixes
 coordinates, not authorization, and never freezes grants.
 
-HTTP knowledge requests may still send a protocol `pin` JSON together with an
+HTTP object requests may still send a protocol `pin` JSON together with an
 unpublished `definition`. Product CLI argv rejects `--pin`; consumers pass
 `--dataset` or `--repo`. Credentials and source locations do not enter pin
 documents.
@@ -104,13 +104,13 @@ provider repository identity. Request bodies containing credentials must never
 be journaled or reflected. The CLI reads these secrets from `--credential-file`.
 
 Inventory discovery uses the same algebra: read `discoveryWorkspaceId` from
-`SnapshotService.Show`, call `ResolveKnowledgeSet` with `InventoryDiscovery: true`,
-then call `KnowledgeService.Search` with that workspace, its fixed `Pin`, and
+`SnapshotService.Show`, call `ResolveDataset` with `InventoryDiscovery: true`,
+then call `Objects.Search` with that workspace, its fixed `Pin`, and
 `InventoryDiscovery: true`. Server validates the exact deployment-selected
 workspace before using current `inventory.read` as admission. Arbitrary
 workspaces, temporary definitions, repository bases and unpinned searches
 cannot use this context. Result delivery still checks current repository
-`knowledge.read`; discovery does not authorize exact reads or file bytes.
+`object.read`; discovery does not authorize exact reads or file bytes.
 
 `RepositoryManagementService` retains KC host-owned supply, connection,
 ownership recovery and sharing. Native metadata, Dataset delivery, repository

@@ -81,13 +81,13 @@ type SearchExecutor struct {
 func (e SearchExecutor) Execute(ctx context.Context, request SearchRequest) (retrieval.SearchResult, error) {
 	if request.Repository == "" || request.Commit == "" {
 		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrUsageInvalid,
-			"knowledge search requires a repository and fixed commit")
+			"object search requires a repository and fixed commit")
 	}
 	if e.Repositories == nil || e.Projection == nil {
 		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-			"knowledge search service is unavailable")
+			"object search service is unavailable")
 	}
-	repo, err := e.Repositories.Require(request.Repository, kernel.ErrKnowledgeRefUnresolved)
+	repo, err := e.Repositories.Require(request.Repository, kernel.ErrObjectRefUnresolved)
 	if err != nil {
 		return retrieval.SearchResult{}, err
 	}

@@ -31,7 +31,7 @@
 
 | | local 测试 `kc-deploy-local` | 本机开发 `kc-deploy-dev` |
 |---|---|---|
-| 用途 | 走查、`deploy-local-scenes`、随时从空开始 | 建仓/发权/写知识后重启还在 |
+| 用途 | 走查、`deploy-local-scenes`、随时从空开始 | 建仓/发权/写对象后重启还在 |
 | 端口清单 | `/tmp/kc-deploy-local`，清盘即丢 | `$HOME/.kc/deploy-dev/compose.env`（值就是下表固定口） |
 | `down` | 默认清卷并删 env | 只停容器，卷和 env 留下 |
 | 清盘 | 与 `down` 相同 | `make deploy-dev-reset` |
@@ -77,7 +77,7 @@ make deploy-dev-down
 make deploy-dev-reset
 ```
 
-`deployment init` 只建唯一登记权威和 System 信任根，不创建业务知识 Snapshot。lakeFS 启动时只有 `kc-catalog` 与 `kc-system`。业务仓由 `kc create --name` 从 `managedStores.lakefs` 分配。Graveler 名、协议 `--repo` 都是 `--name`（例如 `table-meta`）。对象前缀是 `{root}/{name}`（本机 root 为 `s3://kc-authority/tianqiong`，所以 `table-meta` 的 namespace 是 `s3://kc-authority/tianqiong/table-meta`）。`--name` 必须是 lakeFS 允许的小写字母、数字和连字符。
+`deployment init` 只建唯一登记权威和 System 信任根，不创建业务对象 Snapshot。lakeFS 启动时只有 `kc-catalog` 与 `kc-system`。业务仓由 `kc create --name` 从 `managedStores.lakefs` 分配。Graveler 名、协议 `--repo` 都是 `--name`（例如 `table-meta`）。对象前缀是 `{root}/{name}`（本机 root 为 `s3://kc-authority/tianqiong`，所以 `table-meta` 的 namespace 是 `s3://kc-authority/tianqiong/table-meta`）。`--name` 必须是 lakeFS 允许的小写字母、数字和连字符。
 
 ttyd 预置 `KC_SERVER_URL` 与当前 `kc`。在里面：
 
@@ -96,7 +96,7 @@ kc schema list --repo kr://kc/system
 
 ```bash
 make deploy-local-scenes  # 真实部署场景；需先显式 deploy-local-up
-make deploy-local-goto NODE=qinghe-knowledge-published PROBE=probe-publish-dataset-with-scoped-members.feature
+make deploy-local-goto NODE=qinghe-object-published PROBE=probe-publish-dataset-with-scoped-members.feature
 ```
 
 `make deploy-local-scenes` 是独立的真实 lakeFS 部署场景入口，也包含在显式 `make test-all` 中。测试栈由调用者显式准备，测试不隐式重建或清盘。默认 `make test` / `make test-lakefs` 使用原有 lakeFS HTTP 夹具和真实 OpenSearch，不依赖本部署栈。组件/应用混合套件保留为 `make test-contracts`；三者不是相同覆盖范围。人手走查继续走 ttyd → `kc-server`。`make deploy-local-scenes` 可连跑：live Graveler 仓名按次唯一，测完删除。开发栈拒绝 scenes，避免 live DFS 写进长期权威。动态观察由独立 Go 用例配合 State runtime 验证，不再作为可跳过的场景节点。

@@ -1,7 +1,7 @@
 // The private command ledger implements the shared durable command contract.
 //
 // It owns only replay/conflict mechanics. Surface-specific request and receipt
-// semantics stay with their callers (for example knowledge/writer and
+// semantics stay with their callers (for example object/writer and
 // snapshot.RawWriter), which lets unrelated write surfaces share one command
 // namespace without importing each other.
 package snapshot

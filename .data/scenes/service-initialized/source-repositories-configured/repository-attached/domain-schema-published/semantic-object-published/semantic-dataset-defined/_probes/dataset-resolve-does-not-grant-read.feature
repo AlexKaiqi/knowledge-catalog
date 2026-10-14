@@ -1,0 +1,18 @@
+Feature: Dataset resolve 授权不放行文件与仓正文读取
+
+  Scenario: Dataset resolve 授权不放行文件与仓正文读取
+    When I run `kc grant add --principal resolver --action dataset.resolve --dataset scene-set`
+    Then the output has:
+      | principal | resolver |
+      | catalog   | absent |
+      | dataset | scene-set |
+      | actions.0 | dataset.resolve |
+    When I run `kc grant list`
+    Then the output includes:
+      | rules[].principal | resolver |
+      | rules[].dataset | scene-set |
+      | rules[].actions.0 | dataset.resolve |
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv --as resolver --dataset scene-set`
+    Then error FORBIDDEN
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv --as resolver`
+    Then error FORBIDDEN

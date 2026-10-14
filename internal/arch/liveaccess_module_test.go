@@ -65,7 +65,7 @@ func TestLiveAccessLayerAssignmentsAreExplicit(t *testing.T) {
 
 func liveAccessCLILeaves(t *testing.T) snapshotCLILeaves {
 	t.Helper()
-	want := map[string]string{"binding show": "knowledge-binding-show", "access": "knowledge-access", "invoke": "knowledge-invoke"}
+	want := map[string]string{"binding show": "object-binding-show", "access": "object-access", "invoke": "object-invoke"}
 	owned := snapshotCLILeaves{paths: map[string]bool{}, handlers: map[string]bool{}}
 	for _, command := range accesscli.Commands() {
 		if want[command.Path] != command.Handler || owned.paths[command.Path] {

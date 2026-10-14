@@ -18,9 +18,9 @@ func TestRelativeMountPath(t *testing.T) {
 		want  string
 		ok    bool
 	}{
-		{"knowledge/team", "knowledge/team/README.md", "README.md", true},
-		{"knowledge/team", "knowledge/team", "", true},
-		{"knowledge/team", "knowledge/other/a", "", false},
+		{"object/team", "object/team/README.md", "README.md", true},
+		{"object/team", "object/team", "", true},
+		{"object/team", "object/other/a", "", false},
 		{"", "README.md", "README.md", true},
 	} {
 		got, ok := relativeMountPath(tc.mount, tc.path)
@@ -30,16 +30,16 @@ func TestRelativeMountPath(t *testing.T) {
 	}
 }
 
-func TestPrepareRemoteKnowledgeSetFSUsesGatewayAndKeepsFixedPin(t *testing.T) {
+func TestPrepareRemoteDatasetFSUsesGatewayAndKeepsFixedPin(t *testing.T) {
 	home := testkit.TempDir(t)
 	project := testkit.TempDir(t)
 	repository := "kr://acme/remote-docs"
-	mustKnowledgeSetFSRun(t, home, "init")
-	mustKnowledgeSetFSRun(t, home, "repo-add", "--repo", repository, "--dsn", internalLakeFSRepoDSN(t))
-	mustKnowledgeSetFSRun(t, home, "register", "--repo", repository)
+	mustDatasetFSRun(t, home, "init")
+	mustDatasetFSRun(t, home, "repo-add", "--repo", repository, "--dsn", internalLakeFSRepoDSN(t))
+	mustDatasetFSRun(t, home, "register", "--repo", repository)
 	mustRawTreeWrite(t, home, repository, "remote-v1", "shared/README.md", "v1\n")
-	mustKnowledgeSetFSRun(t, home, "dataset", "define", "--dataset", "agent", "--revision", "1",
-		"--source", repository+"=refs/heads/main@knowledge@shared")
+	mustDatasetFSRun(t, home, "dataset", "define", "--dataset", "agent", "--revision", "1",
+		"--source", repository+"=refs/heads/main@object@shared")
 	for _, args := range [][]string{
 		{"grant", "add", "--principal", "agent:test", "--action", "dataset.resolve", "--dataset", "agent"},
 		{"grant", "add", "--principal", "agent:test", "--action", "file.read", "--repo", repository},
@@ -50,7 +50,7 @@ func TestPrepareRemoteKnowledgeSetFSUsesGatewayAndKeepsFixedPin(t *testing.T) {
 	}
 	server := httptest.NewServer(serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{}))
 	defer server.Close()
-	plan, manifest, closeClient, err := prepareKnowledgeSetFS(datasetFSConfig{
+	plan, manifest, closeClient, err := prepareDatasetFS(datasetFSConfig{
 		server: server.URL, dataset: "agent", root: project, principal: "agent:test",
 	})
 	if err != nil {
@@ -71,25 +71,25 @@ func TestPrepareRemoteKnowledgeSetFSUsesGatewayAndKeepsFixedPin(t *testing.T) {
 	}
 }
 
-func TestPrepareKnowledgeSetFSMakesOneTargetPerRecipePath(t *testing.T) {
+func TestPrepareDatasetFSMakesOneTargetPerRecipePath(t *testing.T) {
 	home := testkit.TempDir(t)
 	project := testkit.TempDir(t)
 	one := "kr://acme/team/docs"
 	two := "kr://acme/org/policy"
-	mustKnowledgeSetFSRun(t, home, "init")
-	mustKnowledgeSetFSRun(t, home, "repo-add", "--repo", one, "--dsn", internalLakeFSRepoDSN(t))
-	mustKnowledgeSetFSRun(t, home, "register", "--repo", one)
-	mustKnowledgeSetFSRun(t, home, "repo-add", "--repo", two, "--dsn", internalLakeFSRepoDSN(t))
-	mustKnowledgeSetFSRun(t, home, "register", "--repo", two)
+	mustDatasetFSRun(t, home, "init")
+	mustDatasetFSRun(t, home, "repo-add", "--repo", one, "--dsn", internalLakeFSRepoDSN(t))
+	mustDatasetFSRun(t, home, "register", "--repo", one)
+	mustDatasetFSRun(t, home, "repo-add", "--repo", two, "--dsn", internalLakeFSRepoDSN(t))
+	mustDatasetFSRun(t, home, "register", "--repo", two)
 	mustRawTreeWrite(t, home, one, "team-file", "team/README.md", "team\n")
 	mustRawTreeWrite(t, home, two, "policy-file", "rules.md", "policy\n")
 	mustRawTreeWrite(t, home, one, "runbook-file", "runbooks/incident.md", "incident\n")
-	mustKnowledgeSetFSRun(t, home, "dataset", "define", "--dataset", "agent", "--revision", "1",
+	mustDatasetFSRun(t, home, "dataset", "define", "--dataset", "agent", "--revision", "1",
 		"--source", one+"=refs/heads/main@docs/team@team",
 		"--source", one+"=refs/heads/main@docs/runbooks@runbooks",
-		"--source", two+"=refs/heads/main@knowledge/policy")
+		"--source", two+"=refs/heads/main@object/policy")
 
-	plan, manifest, closeHome, err := prepareEmbeddedKnowledgeSetFS(home, datasetFSConfig{
+	plan, manifest, closeHome, err := prepareEmbeddedDatasetFS(home, datasetFSConfig{
 		dataset: "agent", root: project,
 	})
 	if err != nil {
@@ -115,15 +115,15 @@ func TestPrepareKnowledgeSetFSMakesOneTargetPerRecipePath(t *testing.T) {
 	}
 }
 
-func mustKnowledgeSetFSRun(t *testing.T, home string, args ...string) {
+func mustDatasetFSRun(t *testing.T, home string, args ...string) {
 	t.Helper()
-	result := RunEmbeddedForTest(append([]string{"--home", home}, groupedKnowledgeSetFSTestArgs(args)...), nil)
+	result := RunEmbeddedForTest(append([]string{"--home", home}, groupedDatasetFSTestArgs(args)...), nil)
 	if result.Status != 0 {
 		t.Fatalf("kc %v failed: %s", args, result.Stdout)
 	}
 }
 
-func groupedKnowledgeSetFSTestArgs(args []string) []string {
+func groupedDatasetFSTestArgs(args []string) []string {
 	paths := map[string][]string{
 		"init": {"local", "init"}, "repo-add": {"local", "repository", "attach"},
 		"register": {"attach"},

@@ -34,7 +34,7 @@ func (c *fakeClient) Remove(_ context.Context, r client.MaintenanceRequest, _ cl
 	return nil
 }
 
-const testReference = "urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:table%2Forders#/columns/order_id/constraints/nullable"
+const testReference = "urn:kc:object:kr%3A%2F%2Fscene%2Fobject:table%2Forders#/columns/order_id/constraints/nullable"
 
 func TestReferenceReadPreservesSelectionAndExplicitScope(t *testing.T) {
 	remote := &fakeClient{}

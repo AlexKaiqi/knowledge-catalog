@@ -29,7 +29,7 @@ func TestDeploymentAcceptsLakeFSGravelerRepositoryID(t *testing.T) {
 
 func TestDeploymentRejectsWriteInRepositoryAccess(t *testing.T) {
 	cfg := deploymentFixture(t)
-	cfg.RepositoryAccess = []RepositoryAccess{{ID: "kr://acme/public/core", AuthenticatedActions: []string{"knowledge.read", "writer.commit"}}}
+	cfg.RepositoryAccess = []RepositoryAccess{{ID: "kr://acme/public/core", AuthenticatedActions: []string{"object.read", "writer.commit"}}}
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("authenticated default must not include write")
 	}

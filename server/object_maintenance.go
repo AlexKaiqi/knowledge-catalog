@@ -60,7 +60,7 @@ func requireObjectReference(w http.ResponseWriter, raw string) bool {
 	return true
 }
 
-func (f *httpFacade) knowledgePut(w http.ResponseWriter, r *http.Request) {
+func (f *httpFacade) objectPut(w http.ResponseWriter, r *http.Request) {
 	var request objectMaintenanceRequest
 	if !decodeServiceRequest(w, r, &request) {
 		return
@@ -75,7 +75,7 @@ func (f *httpFacade) knowledgePut(w http.ResponseWriter, r *http.Request) {
 	f.executeTyped(w, r, "writer-put", "writer.commit", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbPut}, request.flags())
 }
 
-func (f *httpFacade) knowledgeRemove(w http.ResponseWriter, r *http.Request) {
+func (f *httpFacade) objectRemove(w http.ResponseWriter, r *http.Request) {
 	var request objectMaintenanceRequest
 	if !decodeServiceRequest(w, r, &request) {
 		return

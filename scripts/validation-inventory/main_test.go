@@ -137,13 +137,13 @@ func TestInventoryReadsOnlyNamedPublicRegistry(t *testing.T) {
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, "surface.go", `package fixture
 var unrelated = map[string]string{"fake": "action"}
-var cliSurface = map[string]commandSurface{"read": {"knowledge-read", "knowledge.read"}}
+var cliSurface = map[string]commandSurface{"read": {"object-read", "object.read"}}
 `, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	got, err := cliDeclarations(fset, file, "surface.go")
-	if err != nil || len(got) != 1 || got[0].Command != "read" || got[0].Action != "knowledge.read" {
+	if err != nil || len(got) != 1 || got[0].Command != "read" || got[0].Action != "object.read" {
 		t.Fatalf("public denominator: %#v, %v", got, err)
 	}
 }

@@ -12,12 +12,12 @@ import (
 )
 
 // plainSnapshot is an ordinary git repo as the Store sees it: embedding the
-// Store interface drops optional tree and knowledge methods from the method set, so
+// Store interface drops optional tree and object methods from the method set, so
 // no amount of type assertion recovers layer ②.
 type plainSnapshot struct{ snapshot.Store }
 
 // plainTreeSnapshot exposes only the literal tree half of the backing adapter.
-// Writer owns the ② codec, so this is writable without becoming a Knowledge
+// Writer owns the ② codec, so this is writable without becoming an Object
 // reader or leaking PUT/REMOVE into snapshot.Store.
 type plainTreeSnapshot struct {
 	snapshot.Store
@@ -36,23 +36,23 @@ func mountPlain(t *testing.T, repositoryID string) (snapshot.Registry, plainSnap
 
 // Both codes are raised elsewhere for unrelated reasons, so the wording is part
 // of the assertion: it proves the refusal came from the missing capability.
-func expectMissingKnowledge(t *testing.T, err error, code kernel.ErrorCode) {
+func expectMissingObject(t *testing.T, err error, code kernel.ErrorCode) {
 	t.Helper()
 	testkit.ExpectCode(t, err, code)
 }
 
-// Composition is layer ⓪+①: a repo nobody taught to interpret knowledge files
+// Composition is layer ⓪+①: a repo nobody taught to interpret object files
 // still mounts, joins a workspace and resolves to a commit.
-func TestPlainGitRepositoryComposesWithoutKnowledgeCapability(t *testing.T) {
+func TestPlainGitRepositoryComposesWithoutObjectCapability(t *testing.T) {
 	store, plain := mountPlain(t, "kr://acme/personals/alice")
 	cat := testkit.OpenDatasets(t, store)
-	if _, err := cat.DefineKnowledgeSet("notes", 1, []catalog.KnowledgeSetSource{
+	if _, err := cat.DefineDataset("notes", 1, []catalog.DatasetSource{
 		{Repository: plain.ID(), Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	resolved, err := cat.ResolveKnowledgeSet("notes")
+	resolved, err := cat.ResolveDataset("notes")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,22 +65,22 @@ func TestPlainGitRepositoryComposesWithoutKnowledgeCapability(t *testing.T) {
 }
 
 // The capability is reported where it is needed, not assumed at mount time.
-func TestKnowledgeCapabilityIsReportedAtTheSeam(t *testing.T) {
+func TestObjectCapabilityIsReportedAtTheSeam(t *testing.T) {
 	store, plain := mountPlain(t, "kr://acme/personals/alice")
 	cat := testkit.OpenDatasets(t, store)
 	if _, err := cat.Require(plain.ID()); err != nil {
 		t.Fatalf("composition must not require layer ②: %v", err)
 	}
 	_, err := reader.NewReader(store).Require(plain.ID(), kernel.ErrCapabilityUnsatisfied)
-	expectMissingKnowledge(t, err, kernel.ErrCapabilityUnsatisfied)
+	expectMissingObject(t, err, kernel.ErrCapabilityUnsatisfied)
 
-	if _, err := cat.DefineKnowledgeSet("notes", 1, []catalog.KnowledgeSetSource{
+	if _, err := cat.DefineDataset("notes", 1, []catalog.DatasetSource{
 		{Repository: plain.ID(), Selector: "refs/heads/main"},
 	}); err != nil {
 		t.Fatal(err)
 	}
 	_, err = testkit.FederatedRead(cat, "notes", "metric/dau")
-	expectMissingKnowledge(t, err, kernel.ErrCapabilityUnsatisfied)
+	expectMissingObject(t, err, kernel.ErrCapabilityUnsatisfied)
 }
 
 // Writing files into a plain repo is layer ⓪ work. Only a claimed schema_ref
@@ -112,5 +112,5 @@ func TestCommitToPlainMemberUntilSchemaRefIsClaimed(t *testing.T) {
 	cs := testkit.CommitChange(plain.ID(), receipt.Result.NewCommit, "note/retention", map[string]any{"text": "draft"}, "")
 	cs.Operations[0].SchemaRef = "kc://acme/personals/alice/schema/note@" + string(receipt.Result.NewCommit)
 	_, err = w.Commit("cmd-schema", cs)
-	expectMissingKnowledge(t, err, kernel.ErrSchemaRevisionUnresolved)
+	expectMissingObject(t, err, kernel.ErrSchemaRevisionUnresolved)
 }

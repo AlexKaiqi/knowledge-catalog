@@ -1,6 +1,6 @@
 # gate/
 
-**Gate 是 `merge` 的证据清单**：跃迁前查钉死的 Preview 上有没有必过的绿记录。不拨用户系统、不改知识、不是 hook。
+**Gate 是 `merge` 的证据清单**：跃迁前查钉死的 Preview 上有没有必过的绿记录。不拨用户系统、不改对象、不是 hook。
 
 配置在服务持久 `stateDir` 下的 `gates.json`，不是成员仓对象。没有匹配清单时走兼容路径（`merge` 仍带一份 PASSED validation）。`--on` 只接受 `merge`。
 

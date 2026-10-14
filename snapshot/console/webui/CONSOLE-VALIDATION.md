@@ -9,11 +9,11 @@
 此次目录收口从已提交 `fc2d589207d5566bed850c62ed4b8e660e753278` 开始，分支为
 `codex/snapshot-store-module`。Dataset 核心、通用显式授权、原始文件 HTTP 和完整静态控制台
 分别由 `snapshot/dataset`、`snapshot/access`、`snapshot/service`、`snapshot/console` 拥有。
-旧 Catalog 为兼容薄壳；KC Server 只装配共享身份、既有默认政策、Knowledge 扩展和租约。
+旧 Catalog 为兼容薄壳；KC Server 只装配共享身份、既有默认政策、Object 扩展和租约。
 不升级依赖、不改变现有部署，原 lakeFS 页面及 API 直接复用。
 
 此次独立真实环境只使用缓存 lakeFS 1.86.0 与 MinIO，并直接装配 Snapshot 模块：真实
-Catalog Snapshot 权威、文件 Store、持久规则端口和共享耐久身份，没有 KC Home、Knowledge
+Catalog Snapshot 权威、文件 Store、持久规则端口和共享耐久身份，没有 KC Home、Object
 或索引。浏览器经同源 preview 一次原登录完成 Repository 目录/CSV（DuckDB/S3）、创建
 分支、原提交、标签和原生 PR 创建/合并，以及 Dataset 的显式 Catalog 选择、目录/单文件映射、预览发布 v1/v2、
 Form/JSON 切换、未知对象标识字段拒绝、定义变化后的预览失效、History/Compare、历史
@@ -186,8 +186,8 @@ KC 未提供 CORS 响应头。浏览器无 error/warn。此次未配置外部 Id
 | 原 PR/Compare | UI 合并真实 PR，状态 Merged、合并 commit 一致；原比较页显示 baseline 到 main 的真实文件正文差异。 |
 | 原 CSV viewer/下载 | 原 DuckDB-WASM 查询 `data/counts.csv`，显示 `console,1`，浏览器无 error/warn；原 API 下载与原 S3 viewer Cookie 链读取准确字节，无有效身份拒绝。 |
 | 原 Actions/Settings/Administration | Actions 列表与 General/GC/Branch Protection 读取真实配置。社区后端的 RBAC `none` 显示原产品升级入口；不把它算成 RBAC 功能验收。 |
-| Dataset 登录与选择 | KC whoami 验证后进入；首次显示 Catalog 选择，选中 Catalog 保留在 URL。原身份和 KC 身份互不串用，分别退出/刷新验证。 |
-| Dataset 定义/发布 | 目录与单文件映射，Form/JSON 保真切换；未知字段明确拒绝；未预览禁止发布，定义变化使预览失效。 |
+|Dataset 登录与选择 | KC whoami 验证后进入；首次显示 Catalog 选择，选中 Catalog 保留在 URL。原身份和 KC 身份互不串用，分别退出/刷新验证。 |
+|Dataset 定义/发布 | 目录与单文件映射，Form/JSON 保真切换；未知字段明确拒绝；未预览禁止发布，定义变化使预览失效。 |
 | 来源漂移与固定版本 | 预览 v1 后通过真实 Writer 推进源头，再发布；v1 仍使用确认的旧 commit。实际预览/下载字节保持 v1，新版显式采用更新后读取 v2。 |
 | 历史、比较、退役 | UI 查看真实 v1/v2、交付映射差异与来源定义；历史 URL 刷新保持 revision。API `limit=1` 得到 v2 后 v1，退役后旧 pin 的 mounts/tree/file 均拒绝继续消费。 |
 | Server embed | 真实 KC Server 的原仓与 Dataset 深链接返回同一入口；已有资产 200，缺失 js/css/png 404。 |

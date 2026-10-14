@@ -13,8 +13,8 @@ import (
 	"time"
 )
 
-func mergeTestHit(id string, order any) retrieval.KnowledgeHit {
-	return retrieval.KnowledgeHit{Knowledge: objectmodel.KnowledgeValue{Address: objectmodel.Address{ObjectID: objectmodel.ObjectID(id)}}, Evidence: []retrieval.LaneEvidence{{ProviderOrder: []any{order}}}}
+func mergeTestHit(id string, order any) retrieval.ObjectHit {
+	return retrieval.ObjectHit{Object: objectmodel.ObjectValue{Address: objectmodel.Address{ObjectID: objectmodel.ObjectID(id)}}, Evidence: []retrieval.LaneEvidence{{ProviderOrder: []any{order}}}}
 }
 
 func TestWorkspaceOrderUsesDeclaredScalarWithoutLoss(t *testing.T) {
@@ -63,7 +63,7 @@ func TestWorkspaceBuffersAndResumesConsumedOffset(t *testing.T) {
 	if err := fillWorkspaceHead(context.Background(), &resumed, fetch); err != nil {
 		t.Fatal(err)
 	}
-	if resumed.head.Knowledge.Address.ObjectID != "5" {
+	if resumed.head.Object.Address.ObjectID != "5" {
 		t.Fatalf("resume skipped/repeated: %#v", resumed.head)
 	}
 	for !resumed.exhausted {
@@ -109,16 +109,16 @@ func TestWorkspacePartialUnknownHeadStopsMerge(t *testing.T) {
 func TestWorkspaceResumeAcrossShortBudgetBatch(t *testing.T) {
 	cursor := workspaceSearchCursor{position: "0", offset: 5}
 	err := fillWorkspaceHead(context.Background(), &cursor, func(context.Context, *workspaceSearchCursor) (retrieval.SearchResult, error) {
-		return retrieval.SearchResult{Completeness: retrieval.CompletenessPartial, Hits: []retrieval.KnowledgeHit{mergeTestHit("0", nil), mergeTestHit("1", nil)}, Continuation: "2"}, nil
+		return retrieval.SearchResult{Completeness: retrieval.CompletenessPartial, Hits: []retrieval.ObjectHit{mergeTestHit("0", nil), mergeTestHit("1", nil)}, Continuation: "2"}, nil
 	})
 	if err != nil || cursor.offset != 3 || cursor.position != "2" || !cursor.blocked {
 		t.Fatalf("replay progress lost: %#v %v", cursor, err)
 	}
 	cursor.blocked = false
 	err = fillWorkspaceHead(context.Background(), &cursor, func(context.Context, *workspaceSearchCursor) (retrieval.SearchResult, error) {
-		return retrieval.SearchResult{Completeness: retrieval.CompletenessComplete, Hits: []retrieval.KnowledgeHit{mergeTestHit("2", nil), mergeTestHit("3", nil), mergeTestHit("4", nil), mergeTestHit("5", nil)}}, nil
+		return retrieval.SearchResult{Completeness: retrieval.CompletenessComplete, Hits: []retrieval.ObjectHit{mergeTestHit("2", nil), mergeTestHit("3", nil), mergeTestHit("4", nil), mergeTestHit("5", nil)}}, nil
 	})
-	if err != nil || cursor.head.Knowledge.Address.ObjectID != "5" {
+	if err != nil || cursor.head.Object.Address.ObjectID != "5" {
 		t.Fatalf("replay resumed incorrectly: %#v %v", cursor, err)
 	}
 }

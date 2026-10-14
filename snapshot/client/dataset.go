@@ -11,13 +11,13 @@ import (
 
 func resourceSegment(value string) string { return url.PathEscape(value) }
 
-type KnowledgeSetRequest struct {
-	Dataset  string                       `json:"dataset"`
-	Revision int                          `json:"revision"`
-	Sources  []dataset.KnowledgeSetSource `json:"sources"`
-	Metadata map[string]string            `json:"metadata,omitempty"`
+type DatasetRequest struct {
+	Dataset  string                  `json:"dataset"`
+	Revision int                     `json:"revision"`
+	Sources  []dataset.DatasetSource `json:"sources"`
+	Metadata map[string]string       `json:"metadata,omitempty"`
 }
-type KnowledgeSetResolveRequest struct {
+type DatasetResolveRequest struct {
 	Pin                json.RawMessage `json:"pin,omitempty"`
 	Revision           *int            `json:"revision,omitempty"`
 	InventoryDiscovery bool            `json:"inventoryDiscovery,omitempty"`
@@ -60,16 +60,16 @@ func (s service) AttachRepository(ctx context.Context, q RepositoryAttachRequest
 func (s service) DetachRepository(ctx context.Context, repository string, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "DELETE", "/snapshot/v1/repositories/"+resourceSegment(repository), nil, o, out)
 }
-func (s service) KnowledgeSets(ctx context.Context, o RequestOptions, out any) error {
+func (s service) Datasets(ctx context.Context, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "GET", "/snapshot/v1/datasets", nil, o, out)
 }
-func (s service) DefineKnowledgeSet(ctx context.Context, q KnowledgeSetRequest, o RequestOptions, out any) error {
+func (s service) DefineDataset(ctx context.Context, q DatasetRequest, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "POST", "/snapshot/v1/datasets", q, o, out)
 }
-func (s service) ResolveDefinition(ctx context.Context, q KnowledgeSetRequest, o RequestOptions, out any) error {
+func (s service) ResolveDefinition(ctx context.Context, q DatasetRequest, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "POST", "/snapshot/v1/datasets:resolve", q, o, out)
 }
-func (s service) KnowledgeSet(ctx context.Context, setID string, o RequestOptions, out any) error {
+func (s service) Dataset(ctx context.Context, setID string, o RequestOptions, out any) error {
 	return s.ShowDataset(ctx, setID, DatasetShowOptions{}, o, out)
 }
 
@@ -93,26 +93,26 @@ func (s service) ShowDataset(ctx context.Context, setID string, query DatasetSho
 	}
 	return s.client.doJSON(ctx, "GET", path, nil, o, out)
 }
-func (s service) RetireKnowledgeSet(ctx context.Context, workspace string, o RequestOptions, out any) error {
+func (s service) RetireDataset(ctx context.Context, workspace string, o RequestOptions, out any) error {
 	return s.client.doJSON(ctx, "POST", "/snapshot/v1/datasets/"+resourceSegment(workspace)+"/retire", struct{}{}, o, out)
 }
-func (s service) ResolveKnowledgeSet(ctx context.Context, setID string, q KnowledgeSetResolveRequest, o RequestOptions, out any) error {
-	if err := validateKnowledgeSetResolveRequest(q); err != nil {
+func (s service) ResolveDataset(ctx context.Context, setID string, q DatasetResolveRequest, o RequestOptions, out any) error {
+	if err := validateDatasetResolveRequest(q); err != nil {
 		return err
 	}
 	return s.client.doJSON(ctx, "POST", "/snapshot/v1/datasets/"+resourceSegment(setID)+"/resolve", q, o, out)
 }
-func (s service) CheckKnowledgeSet(ctx context.Context, setID string, q KnowledgeSetResolveRequest, o RequestOptions, out any) error {
+func (s service) CheckDataset(ctx context.Context, setID string, q DatasetResolveRequest, o RequestOptions, out any) error {
 	if q.Revision != nil {
 		return kernel.Fail(kernel.ErrUsageInvalid, "revision is only valid for Dataset resolve")
 	}
-	if err := validateKnowledgeSetResolveRequest(q); err != nil {
+	if err := validateDatasetResolveRequest(q); err != nil {
 		return err
 	}
 	return s.client.doJSON(ctx, "POST", "/snapshot/v1/datasets/"+resourceSegment(setID)+"/check", q, o, out)
 }
 
-func validateKnowledgeSetResolveRequest(request KnowledgeSetResolveRequest) error {
+func validateDatasetResolveRequest(request DatasetResolveRequest) error {
 	if request.Revision != nil {
 		if *request.Revision <= 0 {
 			return kernel.Fail(kernel.ErrUsageInvalid, "revision must be a positive integer")

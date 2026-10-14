@@ -4,7 +4,7 @@ aspect: definition
 schema_ref: schema/system/explanation/v1
 path_hint: concepts/system-repository/definition.md
 ---
-# 系统知识仓
+# 系统仓
 
 Knowledge Catalog 关于自身的版本化出版物，固定身份为 kr://kc/system，发布基础 Schema、模型、操作入口、运行机制、能力说明、使用指南和导航关系。
 

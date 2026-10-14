@@ -1,6 +1,6 @@
 # object/reader/
 
-**Reader 是声明读取面**：在已经钉死的 Snapshot commit 上做 **② 知识解释**。它不写仓、不调用动态 runtime。拼装 Aspect、`object_id`、来源信封与通用 Schema 解释从这里开始；Binding 等能力声明可固定读取，origin、runtime、protocol、操作和 Descriptor 的专属解释由 `liveaccess` 唯一提供。Dataset 服务 `ResolveKnowledgeSet`（①）只给出 `{repo → commit}`；`reader.Open` 才骑在这次坐标上。面向消费者的逻辑 READ 再由 `liveaccess` 组合本 Reader 与注入的 State runtime；`AccessSpec`、查询和结果合同属于 `discovery/`。
+**Reader 是声明读取面**：在已经钉死的 Snapshot commit 上做 **② 对象解释**。它不写仓、不调用动态 runtime。拼装 Aspect、`object_id`、来源信封与通用 Schema 解释从这里开始；Binding 等能力声明可固定读取，origin、runtime、protocol、操作和 Descriptor 的专属解释由 `liveaccess` 唯一提供。Dataset 服务 `ResolveDataset`（①）只给出 `{repo → commit}`；`reader.Open` 才骑在这次坐标上。面向消费者的逻辑 READ 再由 `liveaccess` 组合本 Reader 与注入的 State runtime；`AccessSpec`、查询和结果合同属于 `discovery/`。
 
 树 Reader 读取选中 Member 后，以其固定 SchemaRef 对应的 binding namespace metadata
 区分静态与绑定来源。派生声明可只带 `ValueSource.Kind=binding`，不猜测 State/Stream、
@@ -8,18 +8,18 @@ runtime 或操作；这是待解析的读取分类，不是可写入或可执行
 LiveAccess 在原固定范围读取 Schema 后才取得实际声明；分类不读取私有 Schema 正文。
 Native Provider 沿既有声明合同诚实给出来源类别，默认 Snapshot 仍可独立读取。
 
-对外入口是 **Reader**（D26）。它也是应用装配处的 Knowledge Service：Dataset 服务 交付
+对外入口是 **Reader**（D26）。它也是应用装配处的 Object Service：Dataset 服务 交付
 `snapshot.Store` 后，`Reader.Lookup` 才包装为结构感知的 Repository。Access 仍是领域名：读取协议 + Provider，不必是远程服务。
 
-`Require`、`Wrap` 和 Dataset `Member` 返回的实际值只持有知识读取能力，不能取得
-CreateRef、Merge 或 Archive；原生 Provider 藏在私有读接口字段中，不能通过导出字段取得原写口。原生知识 Provider 也通过本包的只读视图交付：已选定的
+`Require`、`Wrap` 和 Dataset`Member` 返回的实际值只持有对象读取能力，不能取得
+CreateRef、Merge 或 Archive；原生 Provider 藏在私有读接口字段中，不能通过导出字段取得原写口。原生对象 Provider 也通过本包的只读视图交付：已选定的
 有界读取端口转发给 Provider，缺少端口明确返回缺能力，不降级为文件树解释或扫描。
 
-两种读目标不是两套协议。坐标来自 `snapshot/dataset.Service.ResolveKnowledgeSet`；拼装在本包：
+两种读目标不是两套协议。坐标来自 `snapshot/dataset.Service.ResolveDataset`；拼装在本包：
 
 ```text
 单 Repository Commit  Reader.resolve / read / log / diff  维护方：精确版本上的对象任务
-Workspace               ResolveKnowledgeSet → reader.Open → Serving   消费方：成员 union，不覆盖；调用方不传仓/commit
+Workspace               ResolveDataset → reader.Open → Serving   消费方：成员 union，不覆盖；调用方不传仓/commit
 ```
 
 消费 CLI 只用对象 URN＋locator；可用 `--dataset` 限定交付范围。对象身份始终带来源 Repo，
@@ -41,13 +41,13 @@ Reader 不创建仓对象。它产出的是读结果和可丢的访问状态：
 
 | 产物 | 怎么来 | 之后 |
 |---|---|---|
-| Resolution / KnowledgeValue | `Resolve` / `Read` / `ReadAddress` / `List` | 声明/快照值钉在这次的 commit 上；不是动态 observation |
+| Resolution / ObjectValue | `Resolve` / `Read` / `ReadAddress` / `List` | 声明/快照值钉在这次的 commit 上；不是动态 observation |
 | ObjectRevision / ObjectDiff | `Log` / `Diff` | 对象历史三问之一，不是 git log |
 | ProvenanceTrace | `GetProvenance` | **本对象各单元信封**；不爬 `sourceRefs` |
 | GroundingCitation | `NewGroundingCitation(READ 结果)` | 给 Application/UI，不是仓对象 |
-| Workspace checkout | `WriteCheckout`（内部机制，当前无公开 CLI） | 可丢 grep 树；钉这次 KnowledgeSetPin；不是权威 |
+| Workspace checkout | `WriteCheckout`（内部机制，当前无公开 CLI） | 可丢 grep 树；钉这次 DatasetPin；不是权威 |
 
-联邦读的 `FederatedValue` 由本包产出，字段与 `KnowledgeValue` 对齐（另保留 `objectId`）。不要把 public 知识拷进 personal；用户看见的是 Workspace（这次解开的各仓 commit）。逻辑访问计划用 `kc operations access-spec describe`，各仓物理投影用 `kc operations projection describe`；两者都经 Server，不是新对象。
+联邦读的 `FederatedValue` 由本包产出，字段与 `ObjectValue` 对齐（另保留 `objectId`）。不要把 public 对象拷进 personal；用户看见的是 Workspace（这次解开的各仓 commit）。逻辑访问计划用 `kc operations access-spec describe`，各仓物理投影用 `kc operations projection describe`；两者都经 Server，不是新对象。
 
 ## 三个易混术语
 
@@ -57,19 +57,19 @@ Reader 不创建仓对象。它产出的是读结果和可丢的访问状态：
 |---|---|---|
 | `AspectSelector` | 显式 READ 时对拼装对象的 aspect `include` / `exclude` | 不是 SEARCH 结果形状，不是索引声明。类型在 `object/` |
 | `retrieval.EvaluationProjection` | Refine 时 judge/scorer **可见字段**白名单 | 不是检索文档，不是索引 |
-| Access Projection | 从 pinned commit **可重建**的 lexical 索引 | 不是 Canonical，不是 KnowledgeRef 来源 |
+| Access Projection | 从 pinned commit **可重建**的 lexical 索引 | 不是 Canonical，不是 ObjectRef 来源 |
 
 `READ(ref)` 默认拼 `{ aspectName: value }`；调用方用 `AspectSelector` 裁。`readAddress` 读单维护单元。Entity blob（无 `units`）不受 selector 影响。
 
-`permissions` 是 SOURCE 知识，与其他 Aspect 同构。GRANT 正文通常不声明 `text`；若需要按明确字段发现则声明 `filter`。SEARCH 命中后仍回读完整对象，不能靠 selector 或 stored payload 塑造结果。
+`permissions` 是 SOURCE 对象，与其他 Aspect 同构。GRANT 正文通常不声明 `text`；若需要按明确字段发现则声明 `filter`。SEARCH 命中后仍回读完整对象，不能靠 selector 或 stored payload 塑造结果。
 
 ## 文件（按回答的问题拆）
 
 | 文件 | 负责 |
 |---|---|
 | `reader.go` | `Reader`：构造、精确读 `RESOLVE` / `READ`（Ref 和 Address）、`LIST` |
-| `repository_service.go` | Dataset 服务/Snapshot → Knowledge 包装；`ReadMany` 只在单次调用内共享同 commit tree/解析结果 |
-| `native_repository.go` | 原生知识 Provider 的只读视图；转发固定读取与有界定位端口，不暴露 Provider 的写能力 |
+| `repository_service.go` |Dataset 服务/Snapshot → Object 包装；`ReadMany` 只在单次调用内共享同 commit tree/解析结果 |
+| `native_repository.go` | 原生对象 Provider 的只读视图；转发固定读取与有界定位端口，不暴露 Provider 的写能力 |
 | `reference_reader.go` / `reference_units.go` | 同一固定元数据计划选择所需维护单元；分别交付最终选值和未裁剪的完整单元 |
 | `metadata_adoption.go` | 从固定派生坐标交付完整 Schema 引用；不读取对象或兄弟正文 |
 | `schema.go` | `DESCRIBE_SCHEMA` 编排：固定 commit 上解析 `schema/*` / `schema_ref` |
@@ -81,7 +81,7 @@ Relation 查询不在 Reader 枚举或扫描。合同与候选分页在 `discove
 
 tree-backed authority 的 Writer 在同一 commit 写入每对象的维护坐标／路径和 Schema、Binding
 命名空间目录。它们只保存身份及单元坐标，用于有界读取，不含 Relation endpoint/type/role、
-正文或过滤字段，因此不是检索投影。旧 `.kc/knowledge-units.index` 保持固定读取兼容，
+正文或过滤字段，因此不是检索投影。旧 `.kc/object-units.index` 保持固定读取兼容，
 目录升级通过显式维护完成，消费请求不读正文推导缺失目录。业务直推 published
 ref 时，Reader 仍按文件 frontmatter 解释（仓根 `README.md` 是有界约定路径）；增量投影用
 `ChangedPaths` 上的单元路径 hydrate，不要求该 commit 先有 Writer locator。两种 authority 由同一 Reader/Writer conformance 验收。
@@ -93,7 +93,7 @@ ref 时，Reader 仍按文件 frontmatter 解释（仓根 `README.md` 是有界�
 Reader 包装后的 Repository 实现
 `object.BatchReadStore`，默认 tree locator 在一次批量调用内只读一份固定 commit 的 manifest，
 再读取各唯一对象对应的 unit bytes；重复或空身份不产生额外读取。这次调用结束后不保留
-`object_id → KnowledgeValue`。Adapter 只可缓存原始 tree/blob/transport。可选固定正文缓存由独立 `object/cache` 实现，宿主经 Hydrator 注入；缓存不包含当前授权或动态观察。
+`object_id → ObjectValue`。Adapter 只可缓存原始 tree/blob/transport。可选固定正文缓存由独立 `object/cache` 实现，宿主经 Hydrator 注入；缓存不包含当前授权或动态观察。
 
 ## 精确读
 
@@ -168,7 +168,7 @@ go run ./cmd/kc -- schema describe --repo kr://acme/public/core --object Table:t
 
 多源 `read|search --dataset` 与 `operations access-spec describe --dataset` 走同一已发布 basis。
 
-`Serving` 克隆并固定输入 pin，完整对象的每一条 unit path 都必须在同 commit 的清单内；空清单、未知 item 类型和不匹配 commit 不放行。`Member` 返回受相同范围限制的知识仓视图，Schema、绑定与 Descriptor 不得通过辅助读取绕过切片。Binding namespace 仅交付允许的 Schema 身份与 Reader 自有静态目录的交集，不解析访问声明；非空切片缺安全元数据口时明确缺能力，不信任任意原生分类器去读取范围外正文。专属解释通过 LiveAccess 消费该只读范围。部分对象不以裁剪后的正文冒充 Canonical；已发布的独立 Address 则通过 `object.AddressPathsReader` 在允许的路径内精确读取，不借用整对象缓存。切片不授权仓历史枚举。
+`Serving` 克隆并固定输入 pin，完整对象的每一条 unit path 都必须在同 commit 的清单内；空清单、未知 item 类型和不匹配 commit 不放行。`Member` 返回受相同范围限制的仓视图，Schema、绑定与 Descriptor 不得通过辅助读取绕过切片。Binding namespace 仅交付允许的 Schema 身份与 Reader 自有静态目录的交集，不解析访问声明；非空切片缺安全元数据口时明确缺能力，不信任任意原生分类器去读取范围外正文。专属解释通过 LiveAccess 消费该只读范围。部分对象不以裁剪后的正文冒充 Canonical；已发布的独立 Address 则通过 `object.AddressPathsReader` 在允许的路径内精确读取，不借用整对象缓存。切片不授权仓历史枚举。
 
 仓级入口使用 `--repo`。宿主文件体验用 `kcfs --dataset --root` 经 Workspace File Gateway
 在挂载时内部冻结；没有公开 checkout 或 `refine` 命令。

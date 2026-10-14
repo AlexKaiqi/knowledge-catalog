@@ -17,7 +17,7 @@ import (
 func TestCrossRepositoryRelationsHydrateOnlyScopedStorageCandidates(t *testing.T) {
 	repo, base := testfixture.RelationFixture(t)
 	foreign := kernel.RepositoryID("kr://external/unattached")
-	commit, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: base, ExpectedTargetCommit: base, Operations: []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindRelation, ObjectID: "relation/cross"}, Value: testfixture.RelationBody(foreign, "relation/cross", "Table:a")}}})
+	commit, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: base, ExpectedTargetCommit: base, Operations: []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindRelation, ObjectID: "relation/cross"}, Value: testfixture.RelationBody(foreign, "relation/cross", "Table:a")}}})
 	if err != nil {
 		t.Fatal(err)
 	}

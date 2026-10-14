@@ -25,7 +25,7 @@ type connectedHandlerFixture struct {
 	configPath    string
 	principal     string
 	source        snapshot.Store
-	canonical     objectmodel.KnowledgeValue
+	canonical     objectmodel.ObjectValue
 	requests      atomic.Int64
 	metadataReads atomic.Int64
 	engineWrites  *atomic.Int64
@@ -50,7 +50,7 @@ func newConnectedHandlerFixture(t *testing.T) *connectedHandlerFixture {
 		}
 		return false
 	})
-	id := kernel.RepositoryID("kr://handler/connected-knowledge")
+	id := kernel.RepositoryID("kr://handler/connected-object")
 	dsn := provider.DSN(provider.NewRepo())
 	var err error
 	f.source, err = snapshot.OpenLakeFS(id, dsn, credential)
@@ -60,7 +60,7 @@ func newConnectedHandlerFixture(t *testing.T) *connectedHandlerFixture {
 	f.writeConfig(t, []consumerplugin.PluginSelection{{Name: "declarative-index", Instance: "main"}})
 	repo := testkit.OpenRepository(t, f.source)
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
-	at, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	at, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: id, TargetRef: snapshot.DefaultRef, BaseCommit: root, ExpectedTargetCommit: root,
 		Operations: []objectmodel.Operation{
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/article"}, Value: map[string]any{
@@ -81,7 +81,7 @@ func newConnectedHandlerFixture(t *testing.T) *connectedHandlerFixture {
 	cfg, path := declaredFileGateway(t)
 	f.configPath, f.principal = path, cfg.BootstrapPrincipal
 	cfg.Connections = &apphome.ConnectionPolicy{AllowedOrigins: []string{provider.Origin()}, CreatorActions: []string{
-		"repository.connections.manage", "repository.metadata.read", "knowledge.read", "knowledge.search",
+		"repository.connections.manage", "repository.metadata.read", "object.read", "object.search",
 	}}
 	cfg.Stores.Index = "opensearch"
 	namespace := string(kernel.CanonicalDigest(t.TempDir()))
@@ -148,7 +148,7 @@ func (f *connectedHandlerFixture) handler(t *testing.T) http.Handler {
 
 func (f *connectedHandlerFixture) query(t *testing.T, handler http.Handler) retrieval.SearchResult {
 	t.Helper()
-	response := fileGatewayRequest(t, handler, f.principal, "/knowledge/v1/search", map[string]any{
+	response := fileGatewayRequest(t, handler, f.principal, "/object/v1/search", map[string]any{
 		"repository": f.canonical.Repository, "commit": f.canonical.Commit, "query": "runbook", "limit": 10,
 	})
 	if response.Code != http.StatusOK {
@@ -162,8 +162,8 @@ func (f *connectedHandlerFixture) query(t *testing.T, handler http.Handler) retr
 		t.Fatalf("activated handler did not keep its fixed complete search basis: %#v", result)
 	}
 	hit := result.Hits[0]
-	if hit.Knowledge.Repository != f.canonical.Repository || hit.Knowledge.Commit != f.canonical.Commit || hit.Knowledge.Address != f.canonical.Address ||
-		!reflect.DeepEqual(hit.Knowledge.Value, f.canonical.Value) || !reflect.DeepEqual(hit.Version, retrieval.VersionOf(f.canonical)) || len(hit.Evidence) == 0 {
+	if hit.Object.Repository != f.canonical.Repository || hit.Object.Commit != f.canonical.Commit || hit.Object.Address != f.canonical.Address ||
+		!reflect.DeepEqual(hit.Object.Value, f.canonical.Value) || !reflect.DeepEqual(hit.Version, retrieval.VersionOf(f.canonical)) || len(hit.Evidence) == 0 {
 		t.Fatalf("activated handler lost fixed canonical contents or version: hit=%#v want=%#v", hit, f.canonical)
 	}
 	return result

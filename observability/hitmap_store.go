@@ -17,8 +17,8 @@ func (s *FileStore) Hitmap(query AccessQuery) ([]HitmapEntry, error) {
 			continue
 		}
 		seen := map[string]bool{}
-		for _, target := range event.Knowledge {
-			ref := target.KnowledgeRef
+		for _, target := range event.Object {
+			ref := target.ObjectRef
 			key := strings.Join([]string{string(ref.Repository), string(ref.Commit), string(ref.Object), addressKey(target.Address)}, "\x00")
 			if seen[key] {
 				continue
@@ -27,7 +27,7 @@ func (s *FileStore) Hitmap(query AccessQuery) ([]HitmapEntry, error) {
 			hit := byKey[key]
 			if hit == nil {
 				hit = &HitmapEntry{
-					KnowledgeRef: ref, Address: target.Address,
+					ObjectRef: ref, Address: target.Address,
 					FirstAccessedAt: event.OccurredAt, LastAccessedAt: event.OccurredAt,
 					Principals: map[string]int{}, OnBehalfOf: map[string]int{},
 				}
@@ -57,7 +57,7 @@ func (s *FileStore) Hitmap(query AccessQuery) ([]HitmapEntry, error) {
 		if out[i].Hits != out[j].Hits {
 			return out[i].Hits > out[j].Hits
 		}
-		a, b := out[i].KnowledgeRef, out[j].KnowledgeRef
+		a, b := out[i].ObjectRef, out[j].ObjectRef
 		return string(a.Repository)+string(a.Object)+string(a.Commit) < string(b.Repository)+string(b.Object)+string(b.Commit)
 	})
 	return out, nil

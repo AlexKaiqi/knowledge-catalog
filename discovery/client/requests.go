@@ -7,24 +7,24 @@ import (
 	objectclient "kc/object/client"
 )
 
-type KnowledgeScope = objectclient.KnowledgeScope
+type ObjectScope = objectclient.ObjectScope
 
 // RerankRequest and SearchRerankRequest keep composition inputs with Discovery.
 type RerankRequest struct {
-	objectclient.KnowledgeDatasetIdentity
-	Candidates []objectmodel.KnowledgeRef     `json:"candidates"`
+	objectclient.ObjectDatasetIdentity
+	Candidates []objectmodel.ObjectRef        `json:"candidates"`
 	Spec       retrieval.SemanticOperatorSpec `json:"spec"`
 }
 
 type SearchRerankRequest struct {
-	KnowledgeSearchRequest
+	ObjectSearchRequest
 	Spec retrieval.SemanticOperatorSpec `json:"spec"`
 }
 
-type KnowledgeSearchRequest = SearchRequest
+type ObjectSearchRequest = SearchRequest
 
 type SearchRequest struct {
-	KnowledgeScope
+	ObjectScope
 	InventoryDiscovery bool                    `json:"inventoryDiscovery,omitempty"`
 	Query              string                  `json:"query,omitempty"`
 	Match              []string                `json:"match,omitempty"`
@@ -48,7 +48,7 @@ type SearchRequest struct {
 	Recall             string                  `json:"recall,omitempty"`
 }
 type RelationsRequest struct {
-	KnowledgeScope
+	ObjectScope
 	Endpoint     string `json:"endpoint"`
 	RelationType string `json:"relationType,omitempty"`
 	Role         string `json:"role,omitempty"`
@@ -57,7 +57,7 @@ type RelationsRequest struct {
 	Continuation string `json:"continuation,omitempty"`
 }
 type TraverseRequest struct {
-	KnowledgeScope
+	ObjectScope
 	Endpoint     string `json:"endpoint"`
 	RelationType string `json:"relationType,omitempty"`
 	Role         string `json:"role,omitempty"`

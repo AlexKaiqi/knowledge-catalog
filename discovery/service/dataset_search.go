@@ -25,7 +25,7 @@ type DatasetSearchExecutor struct {
 	Resolve      func(context.Context) (*reader.Serving, LogicalHydrator, error)
 	Repositories RepositoryLookup
 	Projection   SearchProjection
-	Deliver      func(context.Context, retrieval.KnowledgeHit) (retrieval.KnowledgeHit, error)
+	Deliver      func(context.Context, retrieval.ObjectHit) (retrieval.ObjectHit, error)
 	// Embedder serves the request-time query vector for semantic recall
 	// (doc/design/discovery.md). Nil keeps dataset semantic recall fail-closed.
 	Embedder retrieval.Embedder
@@ -42,7 +42,7 @@ type datasetSearchRun struct {
 
 	serving *reader.Serving
 	logical LogicalHydrator
-	pin     reader.KnowledgeSetPin
+	pin     reader.DatasetPin
 	plan    retrieval.AccessPlan
 	out     retrieval.SearchResult
 
@@ -110,7 +110,7 @@ func (e DatasetSearchExecutor) beginSearchRun(ctx context.Context, req retrieval
 		return nil, kernel.Fail(kernel.ErrForbidden, "dataset has no members")
 	}
 	plan, err := retrieval.PlanAccess(func(id kernel.RepositoryID) (objectmodel.Repository, error) {
-		return e.Repositories.Require(id, kernel.ErrKnowledgeRefUnresolved)
+		return e.Repositories.Require(id, kernel.ErrObjectRefUnresolved)
 	}, pin, projectedAccessContracts(e.Projection))
 	if err != nil {
 		cancel()
@@ -121,7 +121,7 @@ func (e DatasetSearchExecutor) beginSearchRun(ctx context.Context, req retrieval
 		serving: serving, logical: logical, pin: pin, plan: plan,
 		out: retrieval.SearchResult{
 			SearchView:   retrieval.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{}},
-			Completeness: retrieval.CompletenessComplete, Hits: []retrieval.KnowledgeHit{},
+			Completeness: retrieval.CompletenessComplete, Hits: []retrieval.ObjectHit{},
 		},
 	}, nil
 }
@@ -275,12 +275,12 @@ func (r *datasetSearchRun) mergePage() error {
 		}
 		cursor := &r.cursors[best]
 		hit := *cursor.head
-		hit.Knowledge.Repository = cursor.spec.Repository
-		hit.Knowledge.KnowledgeRef.Repository = cursor.spec.Repository
-		if hit.Knowledge.KnowledgeRef.Object == "" {
-			hit.Knowledge.KnowledgeRef.Object = hit.Knowledge.Address.ObjectID
+		hit.Object.Repository = cursor.spec.Repository
+		hit.Object.ObjectRef.Repository = cursor.spec.Repository
+		if hit.Object.ObjectRef.Object == "" {
+			hit.Object.ObjectRef.Object = hit.Object.Address.ObjectID
 		}
-		inView, err := r.serving.Contains(cursor.spec.Repository, hit.Knowledge.KnowledgeRef.Object)
+		inView, err := r.serving.Contains(cursor.spec.Repository, hit.Object.ObjectRef.Object)
 		if err != nil {
 			return err
 		}
@@ -325,7 +325,7 @@ func (r *datasetSearchRun) unknownHead() bool {
 // admitHit validates or hydrates one in-view head, delivers it into the
 // page, and advances its cursor. It reports whether the page must stop
 // early because the execution budget ran out during hydration.
-func (r *datasetSearchRun) admitHit(cursor *workspaceSearchCursor, hit *retrieval.KnowledgeHit) (bool, error) {
+func (r *datasetSearchRun) admitHit(cursor *workspaceSearchCursor, hit *retrieval.ObjectHit) (bool, error) {
 	if r.stateMembers[cursor.spec.Repository] {
 		if err := validateDatasetObservations(r.serving, *hit); err != nil {
 			return false, err
@@ -348,8 +348,8 @@ func (r *datasetSearchRun) admitHit(cursor *workspaceSearchCursor, hit *retrieva
 		}
 		*hit = hydrated
 	}
-	if hit.Knowledge.KnowledgeRef.Object == "" {
-		hit.Knowledge.KnowledgeRef.Object = hit.Knowledge.Address.ObjectID
+	if hit.Object.ObjectRef.Object == "" {
+		hit.Object.ObjectRef.Object = hit.Object.Address.ObjectID
 	}
 	delivered, err := r.exec.Deliver(r.ctx, *hit)
 	if err != nil {
@@ -390,8 +390,8 @@ type workspaceSearchCursor struct {
 	position     string
 	offset       int
 	exhausted    bool
-	head         *retrieval.KnowledgeHit
-	buffer       []retrieval.KnowledgeHit
+	head         *retrieval.ObjectHit
+	buffer       []retrieval.ObjectHit
 	nextPosition string
 	sortType     string
 	blocked      bool
@@ -600,7 +600,7 @@ func bestWorkspaceHead(cursors []workspaceSearchCursor, req retrieval.SearchRequ
 	return best
 }
 
-func workspaceHitLess(left, right retrieval.KnowledgeHit, req retrieval.SearchRequest, fieldTypes ...string) bool {
+func workspaceHitLess(left, right retrieval.ObjectHit, req retrieval.SearchRequest, fieldTypes ...string) bool {
 	fieldType := "string"
 	if len(fieldTypes) > 0 {
 		fieldType = fieldTypes[0]
@@ -626,10 +626,10 @@ func workspaceHitLess(left, right retrieval.KnowledgeHit, req retrieval.SearchRe
 			return leftRank < rightRank
 		}
 	}
-	if left.Knowledge.Repository != right.Knowledge.Repository {
-		return left.Knowledge.Repository < right.Knowledge.Repository
+	if left.Object.Repository != right.Object.Repository {
+		return left.Object.Repository < right.Object.Repository
 	}
-	return left.Knowledge.Address.ObjectID < right.Knowledge.Address.ObjectID
+	return left.Object.Address.ObjectID < right.Object.Address.ObjectID
 }
 
 func workspaceSortOrder(req retrieval.SearchRequest) (string, bool) {
@@ -648,7 +648,7 @@ func workspaceHasMatch(req retrieval.SearchRequest) bool {
 	return retrieval.SearchHasOp(req, retrieval.OpMatch)
 }
 
-func providerOrderValue(hit retrieval.KnowledgeHit) (any, bool) {
+func providerOrderValue(hit retrieval.ObjectHit) (any, bool) {
 	for _, evidence := range hit.Evidence {
 		if len(evidence.ProviderOrder) > 0 && evidence.ProviderOrder[0] != nil {
 			return evidence.ProviderOrder[0], true
@@ -657,7 +657,7 @@ func providerOrderValue(hit retrieval.KnowledgeHit) (any, bool) {
 	return nil, false
 }
 
-func localRank(hit retrieval.KnowledgeHit) int {
+func localRank(hit retrieval.ObjectHit) int {
 	for _, evidence := range hit.Evidence {
 		if evidence.LocalRank > 0 {
 			return evidence.LocalRank
@@ -682,18 +682,18 @@ func appendUniqueClaims(existing []string, claims ...string) []string {
 	return existing
 }
 
-func HydrateSearchHit(ctx context.Context, logical LogicalHydrator, hit retrieval.KnowledgeHit) (retrieval.KnowledgeHit, error) {
-	raw := hit.Knowledge
+func HydrateSearchHit(ctx context.Context, logical LogicalHydrator, hit retrieval.ObjectHit) (retrieval.ObjectHit, error) {
+	raw := hit.Object
 	federated := objectmodel.FederatedValue{
-		KnowledgeRef: raw.KnowledgeRef, Repository: raw.Repository, Commit: raw.Commit,
+		ObjectRef: raw.ObjectRef, Repository: raw.Repository, Commit: raw.Commit,
 		ObjectID: raw.Address.ObjectID, Address: raw.Address, Value: raw.Value,
 		Provenance: raw.Provenance, Units: raw.Units, Declarations: raw.Declarations,
 	}
 	hydrated, err := logical.Hydrate(ctx, federated, nil)
 	if err != nil {
-		return retrieval.KnowledgeHit{}, err
+		return retrieval.ObjectHit{}, err
 	}
-	hit.Knowledge.Value = hydrated.Value
+	hit.Object.Value = hydrated.Value
 	hit.Version.Observations = append([]objectmodel.UnitObservation(nil), hydrated.Observations...)
 	return hit, nil
 }

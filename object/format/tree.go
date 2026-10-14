@@ -1,4 +1,4 @@
-// Package repofile is the on-disk knowledge unit format used by Snapshot adapters.
+// Package repofile is the on-disk object unit format used by Snapshot adapters.
 // It is not a store.
 package format
 

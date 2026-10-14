@@ -17,7 +17,7 @@ type Hook interface {
 
 // Snapshot is a registered repository moving from → to.
 // service does not list object_id; index computes the changed set from from→to.
-// A member that does not interpret knowledge files still emits: subscribers that
+// A member that does not interpret object files still emits: subscribers that
 // need layer ② (index) check the capability and skip.
 type Snapshot struct {
 	Repository snapshot.Store

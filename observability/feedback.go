@@ -8,20 +8,20 @@ import (
 )
 
 type FeedbackEvent struct {
-	SchemaVersion       int                        `json:"schemaVersion,omitempty"`
-	OccurredAt          string                     `json:"occurredAt"`
-	Identity            IdentityContext            `json:"identity"`
-	Trace               TraceContext               `json:"trace"`
-	SubmissionTrace     *TraceContext              `json:"submissionTrace,omitempty"`
-	Dataset             string                     `json:"dataset,omitempty"`
-	Outcome             string                     `json:"outcome"`
-	Message             string                     `json:"message,omitempty"`
-	RetrievalEvidenceID string                     `json:"retrievalEvidenceId,omitempty"`
-	RefineEvidenceID    string                     `json:"refineEvidenceId,omitempty"`
-	LabelSource         string                     `json:"labelSource,omitempty"`
-	Answer              string                     `json:"answer,omitempty"`
-	SelectedRefs        []objectmodel.KnowledgeRef `json:"selectedRefs,omitempty"`
-	IdealGroups         []RefineRankGroup          `json:"idealGroups,omitempty"`
+	SchemaVersion       int                     `json:"schemaVersion,omitempty"`
+	OccurredAt          string                  `json:"occurredAt"`
+	Identity            IdentityContext         `json:"identity"`
+	Trace               TraceContext            `json:"trace"`
+	SubmissionTrace     *TraceContext           `json:"submissionTrace,omitempty"`
+	Dataset             string                  `json:"dataset,omitempty"`
+	Outcome             string                  `json:"outcome"`
+	Message             string                  `json:"message,omitempty"`
+	RetrievalEvidenceID string                  `json:"retrievalEvidenceId,omitempty"`
+	RefineEvidenceID    string                  `json:"refineEvidenceId,omitempty"`
+	LabelSource         string                  `json:"labelSource,omitempty"`
+	Answer              string                  `json:"answer,omitempty"`
+	SelectedRefs        []objectmodel.ObjectRef `json:"selectedRefs,omitempty"`
+	IdealGroups         []RefineRankGroup       `json:"idealGroups,omitempty"`
 }
 
 func (e FeedbackEvent) Validate() error {
@@ -55,7 +55,7 @@ func (e FeedbackEvent) Validate() error {
 	if len(e.Answer) > 32<<10 {
 		return fmt.Errorf("feedback answer is too long")
 	}
-	seen := map[objectmodel.KnowledgeRef]struct{}{}
+	seen := map[objectmodel.ObjectRef]struct{}{}
 	for _, ref := range e.SelectedRefs {
 		if ref.Repository == "" || ref.Object == "" {
 			return fmt.Errorf("selectedRefs require repository and object")
@@ -65,7 +65,7 @@ func (e FeedbackEvent) Validate() error {
 		}
 		seen[ref] = struct{}{}
 	}
-	seen = map[objectmodel.KnowledgeRef]struct{}{}
+	seen = map[objectmodel.ObjectRef]struct{}{}
 	for i, group := range e.IdealGroups {
 		if group.Rank != i+1 || len(group.Refs) == 0 {
 			return fmt.Errorf("idealGroups require consecutive non-empty ranks")

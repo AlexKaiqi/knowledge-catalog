@@ -87,7 +87,7 @@ func TestHTTPDatasetSemanticRecallServesMemberVectorWindows(t *testing.T) {
 	body(t, kc(home, "put", testObjectReference(t, repository, "runbook/deploy", ""), "--command-id", "semantic-p2", "--schema-ref", "schema/runbook.semantic", "--value", `{"body":"deployment checklist"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "1", "--source", repository+"=refs/heads/main@"))
 	body(t, kc(home, "allow", "--principal", "agent:semantic-http", "--cmd", "read-workspace", "--dataset", workspace))
-	body(t, kc(home, "allow", "--principal", "agent:semantic-http", "--action", "knowledge.read,knowledge.search", "--repo", repository))
+	body(t, kc(home, "allow", "--principal", "agent:semantic-http", "--action", "object.read,object.search", "--repo", repository))
 	syncIndexes(t, home, repository)
 
 	// Same constructor the kc serve entry applies to the declared
@@ -105,7 +105,7 @@ func TestHTTPDatasetSemanticRecallServesMemberVectorWindows(t *testing.T) {
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
-	status, response := semanticHTTPAs(t, server, "/knowledge/v1/search", "agent:semantic-http", map[string]any{
+	status, response := semanticHTTPAs(t, server, "/object/v1/search", "agent:semantic-http", map[string]any{
 		"dataset": workspace, "query": "refund timeout", "limit": 2, "recall": "semantic",
 	})
 	if status != http.StatusOK {
@@ -120,8 +120,8 @@ func TestHTTPDatasetSemanticRecallServesMemberVectorWindows(t *testing.T) {
 		t.Fatalf("semantic recall returned no hits: %#v", response)
 	}
 	first, _ := hits[0].(map[string]any)
-	knowledge, _ := first["knowledge"].(map[string]any)
-	address, _ := knowledge["address"].(map[string]any)
+	hitObject, _ := first["object"].(map[string]any)
+	address, _ := hitObject["address"].(map[string]any)
 	object, _ := address["objectId"].(string)
 	if object != "runbook/refund" {
 		t.Fatalf("nearest neighbor must rank runbook/refund first, got %q", object)
@@ -141,7 +141,7 @@ func TestHTTPDatasetSemanticRecallServesMemberVectorWindows(t *testing.T) {
 	}
 
 	// Lexical recall on the same request stays exact and unchanged.
-	status, lexical := semanticHTTPAs(t, server, "/knowledge/v1/search", "agent:semantic-http", map[string]any{
+	status, lexical := semanticHTTPAs(t, server, "/object/v1/search", "agent:semantic-http", map[string]any{
 		"dataset": workspace, "query": "refund timeout", "limit": 2, "recall": "lexical",
 	})
 	if status != http.StatusOK {
@@ -159,7 +159,7 @@ func TestHTTPDatasetSemanticRecallServesMemberVectorWindows(t *testing.T) {
 	}
 	plainServer := httptest.NewServer(plainHandler)
 	t.Cleanup(plainServer.Close)
-	status, failClosed := semanticHTTPAs(t, plainServer, "/knowledge/v1/search", "agent:semantic-http", map[string]any{
+	status, failClosed := semanticHTTPAs(t, plainServer, "/object/v1/search", "agent:semantic-http", map[string]any{
 		"dataset": workspace, "query": "refund timeout", "limit": 2, "recall": "semantic",
 	})
 	if status != http.StatusBadRequest {

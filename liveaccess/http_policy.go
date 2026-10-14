@@ -10,7 +10,7 @@ import (
 )
 
 // HTTPStateLookupOptions binds trusted credential audiences to the runtime
-// adapter. Knowledge declarations select the target, never the proof policy.
+// adapter. Object declarations select the target, never the proof policy.
 type HTTPStateLookupOptions struct {
 	Client            *http.Client
 	CredentialOrigins []string

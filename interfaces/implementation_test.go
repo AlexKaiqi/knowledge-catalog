@@ -13,7 +13,7 @@ import (
 
 func commitInterfaceFixture(t *testing.T, s testkit.Setup, operations []objectmodel.Operation) kernel.CommitID {
 	t.Helper()
-	head, err := s.Repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID, Operations: operations})
+	head, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID, Operations: operations})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +30,7 @@ func TestObjectInterfaceExplicitForeignContractRemainsPinnedAndScoped(t *testing
 		{Op: objectmodel.OpPut, Address: implementation, SchemaRef: "schema/custom/v1", Value: map[string]any{"interfaceRef": objectmodel.FormatPinnedRef(contracts.RepositoryID, contractCommit, "interface/custom/v1")}},
 	})
 	repos := map[kernel.RepositoryID]objectmodel.Repository{contracts.RepositoryID: contracts.Repo, business.RepositoryID: business.Repo}
-	pin := reader.KnowledgeSetPin{SetID: "both", Repositories: map[kernel.RepositoryID]kernel.CommitID{contracts.RepositoryID: contractCommit, business.RepositoryID: businessCommit}}
+	pin := reader.DatasetPin{SetID: "both", Repositories: map[kernel.RepositoryID]kernel.CommitID{contracts.RepositoryID: contractCommit, business.RepositoryID: businessCommit}}
 	pin.Items = reader.WholeRepositoryItems(pin.Repositories)
 	lookups := map[kernel.RepositoryID]int{}
 	lookup := func(id kernel.RepositoryID) (objectmodel.Repository, error) { lookups[id]++; return repos[id], nil }
@@ -40,14 +40,14 @@ func TestObjectInterfaceExplicitForeignContractRemainsPinnedAndScoped(t *testing
 		t.Fatalf("cross repo fixed contract: %#v %v", resolved, err)
 	}
 	_, err = interfaces.ResolveRepoObjectInterface(business.Repo, businessCommit, implementation.ObjectID, "custom")
-	if kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+	if kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		t.Fatalf("repository reader inferred foreign dependency: %v", err)
 	}
 	before := lookups[contracts.RepositoryID]
 	delete(pin.Repositories, contracts.RepositoryID)
 	pin.Items = reader.WholeRepositoryItems(pin.Repositories)
 	_, err = interfaces.ResolveObjectInterfaceAt(reader.Open(lookup, pin), business.RepositoryID, implementation.ObjectID, "custom")
-	if kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved || lookups[contracts.RepositoryID] != before {
+	if kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved || lookups[contracts.RepositoryID] != before {
 		t.Fatalf("cross-scope dependency lookup: %v lookups %#v", err, lookups)
 	}
 }

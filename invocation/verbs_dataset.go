@@ -35,11 +35,11 @@ func ReadInventoryStatePart(part string) Handler {
 		case "repositories":
 			return map[string]any{"repositories": RepositoryInventory(cx.WS, typed.Repositories)}, nil
 		case "datasets":
-			return map[string]any{"datasets": PublicKnowledgeSets(typed.KnowledgeSets)}, nil
+			return map[string]any{"datasets": PublicDatasets(typed.Datasets)}, nil
 		case "dataset":
 			id := cx.Flag("dataset")
 			if id == "" {
-				return nil, kernel.Fail(kernel.ErrUsageInvalid, "knowledge set show requires --dataset")
+				return nil, kernel.Fail(kernel.ErrUsageInvalid, "dataset show requires --dataset")
 			}
 			revision := 0
 			if raw := cx.Flag("revision"); raw != "" {
@@ -91,7 +91,7 @@ func VerbCreateManagedRepository(cx *Invocation) (any, error) {
 	})
 }
 
-func VerbDefineKnowledgeSet(cx *Invocation) (any, error) {
+func VerbDefineDataset(cx *Invocation) (any, error) {
 	cat, err := PickDatasets(cx.WS, cx.Flags)
 	if err != nil {
 		return nil, err
@@ -121,14 +121,14 @@ func VerbDefineKnowledgeSet(cx *Invocation) (any, error) {
 	}
 	// Reject an invalid publication before writing its portable recipe. The
 	// final freeze and publish recheck the revision after that independent write.
-	if _, err := cat.PrepareKnowledgeSet(setID, revision, sources); err != nil {
+	if _, err := cat.PrepareDataset(setID, revision, sources); err != nil {
 		return nil, err
 	}
 	// Include the portable recipe in the frozen source commit. The retained
 	// projection is then prepared at exactly that commit before acceptance.
 	var published *RecipePublish
 	if !adopted {
-		published, err = PublishKnowledgeSetRecipe(cx, dataset.KnowledgeSet{
+		published, err = PublishDatasetRecipe(cx, dataset.Dataset{
 			SetID: setID, Revision: revision, Sources: sources, Metadata: metadata,
 		})
 		if err != nil {
@@ -184,7 +184,7 @@ func VerbRegister(cx *Invocation) (any, error) {
 	return map[string]any{"repositoryId": repositoryID}, nil
 }
 
-func VerbRetireKnowledgeSet(cx *Invocation) (any, error) {
+func VerbRetireDataset(cx *Invocation) (any, error) {
 	cat, err := PickDatasets(cx.WS, cx.Flags)
 	if err != nil {
 		return nil, err
@@ -193,7 +193,7 @@ func VerbRetireKnowledgeSet(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := cat.RetireKnowledgeSet(setID); err != nil {
+	if err := cat.RetireDataset(setID); err != nil {
 		return nil, err
 	}
 	return map[string]any{"dataset": setID, "retired": true}, nil
@@ -214,7 +214,7 @@ func DefineRevision(cx *Invocation) (int, error) {
 	return revision, nil
 }
 
-func DefineSetID(cx *Invocation, rec dataset.KnowledgeSetRecipe) (string, error) {
+func DefineSetID(cx *Invocation, rec dataset.DatasetRecipe) (string, error) {
 	workspace := invoke.FlagString(cx.Flags, "dataset")
 	if workspace != "" {
 		return workspace, nil
@@ -225,7 +225,7 @@ func DefineSetID(cx *Invocation, rec dataset.KnowledgeSetRecipe) (string, error)
 	return "", fmt.Errorf("missing --dataset")
 }
 
-func ApplyBaseRevs(sources []dataset.KnowledgeSetSource, items []string) ([]dataset.KnowledgeSetSource, error) {
+func ApplyBaseRevs(sources []dataset.DatasetSource, items []string) ([]dataset.DatasetSource, error) {
 	if len(items) == 0 {
 		return sources, nil
 	}
@@ -241,7 +241,7 @@ func ApplyBaseRevs(sources []dataset.KnowledgeSetSource, items []string) ([]data
 		}
 		byRepo[rid] = rev
 	}
-	out := append([]dataset.KnowledgeSetSource{}, sources...)
+	out := append([]dataset.DatasetSource{}, sources...)
 	hit := map[kernel.RepositoryID]bool{}
 	for i := range out {
 		if rev, ok := byRepo[out[i].Repository]; ok {
@@ -257,12 +257,12 @@ func ApplyBaseRevs(sources []dataset.KnowledgeSetSource, items []string) ([]data
 	return out, nil
 }
 
-func PublishKnowledgeSetRecipe(cx *Invocation, def dataset.KnowledgeSet) (*RecipePublish, error) {
-	rec, ok := dataset.RecipeFromKnowledgeSet(def)
+func PublishDatasetRecipe(cx *Invocation, def dataset.Dataset) (*RecipePublish, error) {
+	rec, ok := dataset.RecipeFromDataset(def)
 	if !ok {
 		return nil, nil
 	}
-	raw, err := dataset.FormatKnowledgeSetRecipe(rec)
+	raw, err := dataset.FormatDatasetRecipe(rec)
 	if err != nil {
 		return nil, err
 	}
@@ -287,17 +287,17 @@ type RecipePublish struct {
 	Skipped    string `json:"recipeSkipped,omitempty"`
 }
 
-func WorkspaceSources(cx *Invocation) ([]dataset.KnowledgeSetSource, dataset.KnowledgeSetRecipe, bool, error) {
+func WorkspaceSources(cx *Invocation) ([]dataset.DatasetSource, dataset.DatasetRecipe, bool, error) {
 	file := cx.Flag("file")
 	fromRepo := cx.Flag("from-repo")
 	items := cx.FlagValues("source")
 	payload := cx.Flag("payload")
 	fileEntries, err := dataset.ParseFileMappings(cx.FlagValues("file-source"))
 	if err != nil {
-		return nil, dataset.KnowledgeSetRecipe{}, false, err
+		return nil, dataset.DatasetRecipe{}, false, err
 	}
 	if len(fileEntries) > 0 && (file != "" || fromRepo != "" || payload != "") {
-		return nil, dataset.KnowledgeSetRecipe{}, false, kernel.Fail(kernel.ErrUsageInvalid,
+		return nil, dataset.DatasetRecipe{}, false, kernel.Fail(kernel.ErrUsageInvalid,
 			"--file-source combines with --source only; a recipe file carries file entries in its files section")
 	}
 	n := 0
@@ -314,51 +314,51 @@ func WorkspaceSources(cx *Invocation) ([]dataset.KnowledgeSetSource, dataset.Kno
 		n++
 	}
 	if n > 1 {
-		return nil, dataset.KnowledgeSetRecipe{}, false, kernel.Fail(kernel.ErrUsageInvalid, "use only one of --source, --file, --from-repo, or typed payload")
+		return nil, dataset.DatasetRecipe{}, false, kernel.Fail(kernel.ErrUsageInvalid, "use only one of --source, --file, --from-repo, or typed payload")
 	}
 	if payload != "" {
-		var sources []dataset.KnowledgeSetSource
+		var sources []dataset.DatasetSource
 		if err := json.Unmarshal([]byte(payload), &sources); err != nil || len(sources) == 0 {
-			return nil, dataset.KnowledgeSetRecipe{}, false, kernel.Fail(kernel.ErrUsageInvalid, "typed Workspace payload must contain sources")
+			return nil, dataset.DatasetRecipe{}, false, kernel.Fail(kernel.ErrUsageInvalid, "typed Workspace payload must contain sources")
 		}
-		return sources, dataset.KnowledgeSetRecipe{}, false, nil
+		return sources, dataset.DatasetRecipe{}, false, nil
 	}
 	if fromRepo != "" {
 		rec, ok := ReadRecipeAtHead(cx.WS, kernel.RepositoryID(fromRepo))
 		if !ok {
-			return nil, dataset.KnowledgeSetRecipe{}, false, kernel.Fail(kernel.ErrUsageInvalid, "%s has no %s at %s", fromRepo, dataset.KnowledgeSetFileName, snapshot.DefaultRef)
+			return nil, dataset.DatasetRecipe{}, false, kernel.Fail(kernel.ErrUsageInvalid, "%s has no %s at %s", fromRepo, dataset.DatasetFileName, snapshot.DefaultRef)
 		}
 		return rec.Sources(), rec, true, nil
 	}
 	if file != "" {
 		raw, err := os.ReadFile(file)
 		if err != nil {
-			return nil, dataset.KnowledgeSetRecipe{}, false, err
+			return nil, dataset.DatasetRecipe{}, false, err
 		}
-		rec, err := dataset.ParseKnowledgeSetRecipe(raw)
+		rec, err := dataset.ParseDatasetRecipe(raw)
 		if err != nil {
-			return nil, dataset.KnowledgeSetRecipe{}, false, err
+			return nil, dataset.DatasetRecipe{}, false, err
 		}
 		return rec.Sources(), rec, false, nil
 	}
-	var sources []dataset.KnowledgeSetSource
+	var sources []dataset.DatasetSource
 	if len(items) > 0 {
 		sources, err = dataset.ParseSourceMappings(items)
 		if err != nil {
-			return nil, dataset.KnowledgeSetRecipe{}, false, err
+			return nil, dataset.DatasetRecipe{}, false, err
 		}
 	}
 	sources = append(sources, fileEntries...)
 	if len(sources) == 0 {
-		return nil, dataset.KnowledgeSetRecipe{}, false, kernel.Fail(kernel.ErrUsageInvalid, "at least one --source or --file-source is required")
+		return nil, dataset.DatasetRecipe{}, false, kernel.Fail(kernel.ErrUsageInvalid, "at least one --source or --file-source is required")
 	}
-	return sources, dataset.KnowledgeSetRecipe{}, false, nil
+	return sources, dataset.DatasetRecipe{}, false, nil
 }
 
-func WriteRecipeToRepo(cx *Invocation, root dataset.KnowledgeSetSource, raw []byte, setID string, revision int) (*RecipePublish, error) {
+func WriteRecipeToRepo(cx *Invocation, root dataset.DatasetSource, raw []byte, setID string, revision int) (*RecipePublish, error) {
 	if err := AuthorizeRoutedWrite(cx, root.Repository); err != nil {
 		if kernel.CodeOf(err) == kernel.ErrForbidden {
-			return &RecipePublish{File: dataset.KnowledgeSetFileName, Repository: string(root.Repository), Skipped: "no write grant for root mount"}, nil
+			return &RecipePublish{File: dataset.DatasetFileName, Repository: string(root.Repository), Skipped: "no write grant for root mount"}, nil
 		}
 		return nil, err
 	}
@@ -368,19 +368,19 @@ func WriteRecipeToRepo(cx *Invocation, root dataset.KnowledgeSetSource, raw []by
 	}
 	files, ok := snapshot.TreeStoreOf(snap)
 	if !ok {
-		return &RecipePublish{File: dataset.KnowledgeSetFileName, Repository: string(root.Repository), Skipped: "root mount does not support raw path writes"}, nil
+		return &RecipePublish{File: dataset.DatasetFileName, Repository: string(root.Repository), Skipped: "root mount does not support raw path writes"}, nil
 	}
 	ref := snapshot.RefOrDefault(root.Selector)
 	head, err := snap.Head(ref)
 	if err != nil {
 		return nil, err
 	}
-	if existing, err := files.ReadFile(dataset.KnowledgeSetFileName, head); err == nil && bytes.Equal(existing, raw) {
-		return &RecipePublish{File: dataset.KnowledgeSetFileName, Repository: string(root.Repository), Commit: string(head), Location: "repository"}, nil
+	if existing, err := files.ReadFile(dataset.DatasetFileName, head); err == nil && bytes.Equal(existing, raw) {
+		return &RecipePublish{File: dataset.DatasetFileName, Repository: string(root.Repository), Commit: string(head), Location: "repository"}, nil
 	}
 	sum := sha256.Sum256(raw)
 	commandID := fmt.Sprintf("dataset-define:%s:%d:%x", setID, revision, sum[:8])
-	changes := []snapshot.TreeChange{{Path: dataset.KnowledgeSetFileName, Content: raw}}
+	changes := []snapshot.TreeChange{{Path: dataset.DatasetFileName, Content: raw}}
 	receipt, err := cx.WS.TreeWriter.Commit(commandID, snapshot.TreeChangeSet{
 		TargetRepository:     root.Repository,
 		TargetRef:            ref,
@@ -390,10 +390,10 @@ func WriteRecipeToRepo(cx *Invocation, root dataset.KnowledgeSetSource, raw []by
 		Message:              "workspace " + setID,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("%s was not written for workspace %s: %w", dataset.KnowledgeSetFileName, setID, err)
+		return nil, fmt.Errorf("%s was not written for workspace %s: %w", dataset.DatasetFileName, setID, err)
 	}
 	return &RecipePublish{
-		File:       dataset.KnowledgeSetFileName,
+		File:       dataset.DatasetFileName,
 		Repository: string(root.Repository),
 		Commit:     string(receipt.Result.NewCommit),
 		Location:   "repository",
@@ -438,7 +438,7 @@ func VerbOverlay(cx *Invocation) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		over, err := dataset.ParseKnowledgeSetOverlay(raw)
+		over, err := dataset.ParseDatasetOverlay(raw)
 		if err != nil {
 			return nil, err
 		}
@@ -472,7 +472,7 @@ func VerbOverlay(cx *Invocation) (any, error) {
 	}
 	out := map[string]any{"setId": setID, "file": path, "sources": def.Sources}
 	if err == nil {
-		over, parseErr := dataset.ParseKnowledgeSetOverlay(raw)
+		over, parseErr := dataset.ParseDatasetOverlay(raw)
 		if parseErr != nil {
 			return nil, parseErr
 		}
@@ -510,10 +510,10 @@ func VerbDetach(cx *Invocation) (any, error) {
 
 // effectiveWorkspace is the recipe this command actually uses: Registry (or a
 // hitchhiking yaml) plus the local overlay for this --as, if any.
-func EffectiveWorkspace(ws *kchome.Home, home string, cat dataset.Service, setID string, flags map[string]invoke.FlagValue) (dataset.KnowledgeSet, error) {
+func EffectiveWorkspace(ws *kchome.Home, home string, cat dataset.Service, setID string, flags map[string]invoke.FlagValue) (dataset.Dataset, error) {
 	def, err := EnsureWorkspace(ws, home, cat, setID)
 	if err != nil {
-		return dataset.KnowledgeSet{}, err
+		return dataset.Dataset{}, err
 	}
 	if ws.Deployment != nil {
 		return def, nil

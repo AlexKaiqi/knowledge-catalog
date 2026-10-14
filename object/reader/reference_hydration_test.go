@@ -32,7 +32,7 @@ func TestRootReferenceHydrationKeepsFixedContentAndDatasetScope(t *testing.T) {
 		t.Fatal("root Reference did not reuse the injected exact-basis cache")
 	}
 	lookup := rd.Lookup(func(kernel.RepositoryID) (snapshot.Store, error) { return guard, nil })
-	whole := reader.Open(lookup, reader.KnowledgeSetPin{
+	whole := reader.Open(lookup, reader.DatasetPin{
 		Repositories: map[kernel.RepositoryID]kernel.CommitID{guard.ID(): at},
 		Items:        reader.WholeRepositoryItems(map[kernel.RepositoryID]kernel.CommitID{guard.ID(): at}),
 	})
@@ -41,13 +41,13 @@ func TestRootReferenceHydrationKeepsFixedContentAndDatasetScope(t *testing.T) {
 	if err != nil || len(values) != 1 || !reflect.DeepEqual(values[0].Value, first.Value) || values[0].Digest != first.Digest {
 		t.Fatalf("whole Dataset lost the same reference content: %#v %v", values, err)
 	}
-	partial := reader.Open(lookup, reader.KnowledgeSetPin{
+	partial := reader.Open(lookup, reader.DatasetPin{
 		Repositories: map[kernel.RepositoryID]kernel.CommitID{guard.ID(): at},
 		Items:        []reader.DatasetItem{{Repository: guard.ID(), Commit: at, Kind: "file", File: "public/id.yaml"}},
 	})
 	partial.SetHydrator(cache)
 	before := cache.Stats()
-	if _, err := partial.ReadReference(ref); kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+	if _, err := partial.ReadReference(ref); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		t.Fatalf("warmed whole object escaped a partial Dataset: %v", err)
 	}
 	if got := cache.Stats(); got.Hits != before.Hits || got.Misses != before.Misses {

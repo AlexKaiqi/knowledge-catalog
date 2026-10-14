@@ -79,12 +79,12 @@ func TestLiveAccessRegistrationUsesPublicationAndWriteAuthorization(t *testing.T
 		}
 	}
 	operations = append(operations, objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: "table/orders", AspectName: "interfaces", MemberKey: "live"}, SchemaRef: string(liveaccesscontract.LiveAccessImplementationSchemaV1), Value: map[string]any{"interfaceRef": string(liveaccesscontract.LiveAccessInterfaceV1), "runtime": "source", "protocol": objectmodel.ProtocolResourceAccessV1, "origin": "https://source.example", "operations": map[string]any{"read": map[string]any{"call": "state"}, "invoke": map[string]any{"call": "preview"}}}})
-	head, err := s.Repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID, Operations: operations})
+	head, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID, Operations: operations})
 	if err != nil {
 		t.Fatal(err)
 	}
 	repositories := map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: head}
-	declarations := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return s.Repo, nil }, reader.KnowledgeSetPin{SetID: "live", Repositories: repositories, Items: reader.WholeRepositoryItems(repositories)})
+	declarations := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return s.Repo, nil }, reader.DatasetPin{SetID: "live", Repositories: repositories, Items: reader.WholeRepositoryItems(repositories)})
 	implementation, err := interfaces.ResolveObjectInterfaceAt(declarations, s.RepositoryID, "table/orders", "live")
 	if err != nil {
 		t.Fatal(err)

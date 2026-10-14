@@ -68,12 +68,12 @@ func TestLogicalVirtualBoundReferenceRequiresPublishedObjectAndSchemaEvidence(t 
 			rd := reader.NewReader(readRegistry)
 			at := receipt.Result.NewCommit
 			scope := reader.Open(func(id kernel.RepositoryID) (objectmodel.Repository, error) {
-				return rd.Require(id, kernel.ErrKnowledgeRefUnresolved)
-			}, reader.KnowledgeSetPin{SetID: "scoped", Repositories: map[kernel.RepositoryID]kernel.CommitID{raw.ID(): at}, Items: []reader.DatasetItem{{Repository: raw.ID(), Commit: at, Kind: "prefix", Prefix: "public"}}})
+				return rd.Require(id, kernel.ErrObjectRefUnresolved)
+			}, reader.DatasetPin{SetID: "scoped", Repositories: map[kernel.RepositoryID]kernel.CommitID{raw.ID(): at}, Items: []reader.DatasetItem{{Repository: raw.ID(), Commit: at, Kind: "prefix", Prefix: "public"}}})
 			lookup := &stateLookup{result: liveaccess.StateObservation{Value: map[string]any{"status": "running"}, Basis: objectmodel.ObservationBasis{BindingGeneration: "g1", Consistency: objectmodel.ObservationRepeatable, SourceRevision: "rev-1", ObservedAt: "2026-10-13T00:00:00Z"}}}
 			values, err := readLogicalReference(t, liveservice.Open(scope, lookup, kernel.IdentityContext{Principal: "agent"}), objectmodel.Reference{Repository: raw.ID(), Object: "job/scoped", Locator: "/runtime/status"})
 			if tc.wantErr {
-				testkit.ExpectCode(t, err, kernel.ErrKnowledgeRefUnresolved)
+				testkit.ExpectCode(t, err, kernel.ErrObjectRefUnresolved)
 				if len(lookup.requests) != 0 {
 					t.Fatalf("unpublished evidence invoked runtime: %#v", lookup.requests)
 				}

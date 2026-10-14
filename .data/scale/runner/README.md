@@ -6,7 +6,7 @@
   不编排任何容器**。本地被测环境怎么起（lakeFS 部署）由部署方
   脚本负责，与 runner 无关。
 - 只经公开 HTTP surface：`/snapshot/v1/connections`（托管建仓）与 `/snapshot/v1/repositories`（成员准入/移除）、`/writer/v1`（commit/receipt/
-  head）、`/knowledge/v1`（read/search/schemas:list）、`/operations/v1`
+  head）、`/object/v1`（read/search/schemas:list）、`/operations/v1`
   （projections:describe）。
 - 执行探针子集（量级阶梯远小于资格档）：
   `bulk-loaded.construct`、`probe-upload-filecount-curve`（含 command-id 幂等
@@ -72,7 +72,7 @@ python3 .data/scale/runner/ladder.py --env <env.yaml> [--max-files 100]
   live HEAD 车道的可检索性由该仓的下一次内容唤醒驱动（写入后秒级），多数
   情况下 sync 返回后下一个 reconcile tick 也会完成。冒烟报告把两者分开登记：
   `index.catchup.sync_wall_ms` 与 `index.recovery_after_burst_ms`。
-- **objectCount 口径**：`projections:describe` 的 objectCount 只数可检索知识
+- **objectCount 口径**：`projections:describe` 的 objectCount 只数可检索对象
   文档，不含 schema 对象。
 - **部署卫生**：全局 reconcile 的 `applyPending` 串行执行且遇错即返回；一个带
   不可达 Bound State origin 的残留仓会让其它仓的后台追平被饿死（本机冒烟环境

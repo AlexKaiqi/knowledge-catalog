@@ -4,7 +4,7 @@ aspect: usage
 schema_ref: schema/system/capability-usage/v1
 path_hint: capabilities/repositories/usage.md
 ---
-# 接入知识来源：使用与核对
+# 接入对象来源：使用与核对
 
 连接明确的目标服务。已有仓使用接入能力，托管仓由部署供给策略创建；以回执核对仓身份和登记。解除登记不等于物理删除源仓。
 

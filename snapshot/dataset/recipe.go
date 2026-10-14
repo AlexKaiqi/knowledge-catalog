@@ -10,25 +10,25 @@ import (
 	"kc/kernel"
 )
 
-// KnowledgeSetFileName is the recipe file that lives at a member Repository's root and
+// DatasetFileName is the recipe file that lives at a member Repository's root and
 // travels with Git (doc/design/dataset.md). It is not a required
 // format for the Repository to be usable without this tool — it is how a Workspace
 // declaration hitchhikes on an ordinary clone.
-const KnowledgeSetFileName = ".kc-dataset.yaml"
+const DatasetFileName = ".kc-dataset.yaml"
 
-// KnowledgeSetRecipe is the on-disk shape of a mount Workspace. Path is always
+// DatasetRecipe is the on-disk shape of a mount Workspace. Path is always
 // declared (empty string = root). files lists per-file deliveries (U10):
 // one repository file delivered to one target path. This file is only for
 // mount/file recipes; federated-read workspaces (Path nil) stay service-only.
-type KnowledgeSetRecipe struct {
-	Name     string                  `yaml:"name" json:"name"`
-	Mounts   []KnowledgeSetMount     `yaml:"mounts" json:"mounts"`
-	Files    []KnowledgeSetFileMount `yaml:"files,omitempty" json:"files,omitempty"`
-	Metadata map[string]string       `yaml:"metadata,omitempty" json:"metadata,omitempty"`
+type DatasetRecipe struct {
+	Name     string             `yaml:"name" json:"name"`
+	Mounts   []DatasetMount     `yaml:"mounts" json:"mounts"`
+	Files    []DatasetFileMount `yaml:"files,omitempty" json:"files,omitempty"`
+	Metadata map[string]string  `yaml:"metadata,omitempty" json:"metadata,omitempty"`
 }
 
-// KnowledgeSetMount is one mount line in KnowledgeSetRecipe.
-type KnowledgeSetMount struct {
+// DatasetMount is one mount line in DatasetRecipe.
+type DatasetMount struct {
 	Repository string `yaml:"repository" json:"repository"`
 	Selector   string `yaml:"selector" json:"selector"`
 	Path       string `yaml:"path" json:"path"`
@@ -36,11 +36,11 @@ type KnowledgeSetMount struct {
 	BaseRev    string `yaml:"baseRev,omitempty" json:"baseRev,omitempty"`
 }
 
-// KnowledgeSetFileMount is one per-file line in KnowledgeSetRecipe: the file
+// DatasetFileMount is one per-file line in DatasetRecipe: the file
 // lives at File inside the member repository and is delivered at Target in
 // the composed tree. Every entry of one repository shares one selector and
 // one frozen commit, like its mounts.
-type KnowledgeSetFileMount struct {
+type DatasetFileMount struct {
 	Repository string `yaml:"repository" json:"repository"`
 	Selector   string `yaml:"selector" json:"selector"`
 	File       string `yaml:"file" json:"file"`
@@ -48,35 +48,35 @@ type KnowledgeSetFileMount struct {
 	BaseRev    string `yaml:"baseRev,omitempty" json:"baseRev,omitempty"`
 }
 
-// ParseKnowledgeSetRecipe reads .kc-dataset.yaml bytes.
-func ParseKnowledgeSetRecipe(raw []byte) (KnowledgeSetRecipe, error) {
+// ParseDatasetRecipe reads .kc-dataset.yaml bytes.
+func ParseDatasetRecipe(raw []byte) (DatasetRecipe, error) {
 	var document yaml.Node
 	if err := yaml.Unmarshal(raw, &document); err != nil {
-		return KnowledgeSetRecipe{}, kernel.Fail(kernel.ErrUsageInvalid, "invalid %s: %v", KnowledgeSetFileName, err)
+		return DatasetRecipe{}, kernel.Fail(kernel.ErrUsageInvalid, "invalid %s: %v", DatasetFileName, err)
 	}
 	if err := validateRecipeMetadata(&document); err != nil {
-		return KnowledgeSetRecipe{}, err
+		return DatasetRecipe{}, err
 	}
-	var rec KnowledgeSetRecipe
+	var rec DatasetRecipe
 	if err := document.Decode(&rec); err != nil {
-		return KnowledgeSetRecipe{}, kernel.Fail(kernel.ErrUsageInvalid, "invalid %s: %v", KnowledgeSetFileName, err)
+		return DatasetRecipe{}, kernel.Fail(kernel.ErrUsageInvalid, "invalid %s: %v", DatasetFileName, err)
 	}
 	if strings.TrimSpace(rec.Name) == "" {
-		return KnowledgeSetRecipe{}, kernel.Fail(kernel.ErrUsageInvalid, "%s is missing name", KnowledgeSetFileName)
+		return DatasetRecipe{}, kernel.Fail(kernel.ErrUsageInvalid, "%s is missing name", DatasetFileName)
 	}
 	if len(rec.Mounts) == 0 && len(rec.Files) == 0 {
-		return KnowledgeSetRecipe{}, kernel.Fail(kernel.ErrUsageInvalid, "%s has no mounts or files", KnowledgeSetFileName)
+		return DatasetRecipe{}, kernel.Fail(kernel.ErrUsageInvalid, "%s has no mounts or files", DatasetFileName)
 	}
 	for i, m := range rec.Mounts {
 		if strings.TrimSpace(m.Repository) == "" || strings.TrimSpace(m.Selector) == "" {
-			return KnowledgeSetRecipe{}, kernel.Fail(kernel.ErrUsageInvalid, "%s mount %d needs repository and selector", KnowledgeSetFileName, i)
+			return DatasetRecipe{}, kernel.Fail(kernel.ErrUsageInvalid, "%s mount %d needs repository and selector", DatasetFileName, i)
 		}
 	}
 	for i, f := range rec.Files {
 		if strings.TrimSpace(f.Repository) == "" || strings.TrimSpace(f.Selector) == "" ||
 			strings.TrimSpace(f.File) == "" || strings.TrimSpace(f.Target) == "" {
-			return KnowledgeSetRecipe{}, kernel.Fail(kernel.ErrUsageInvalid,
-				"%s file %d needs repository, selector, file and target", KnowledgeSetFileName, i)
+			return DatasetRecipe{}, kernel.Fail(kernel.ErrUsageInvalid,
+				"%s file %d needs repository, selector, file and target", DatasetFileName, i)
 		}
 	}
 	return rec, nil
@@ -93,19 +93,19 @@ func validateRecipeMetadata(document *yaml.Node) error {
 		}
 		metadata := root.Content[i+1]
 		if metadata.Kind != yaml.MappingNode {
-			return kernel.Fail(kernel.ErrUsageInvalid, "%s metadata must contain string keys and values", KnowledgeSetFileName)
+			return kernel.Fail(kernel.ErrUsageInvalid, "%s metadata must contain string keys and values", DatasetFileName)
 		}
 		for _, entry := range metadata.Content {
 			if entry.Kind != yaml.ScalarNode || entry.Tag != "!!str" {
-				return kernel.Fail(kernel.ErrUsageInvalid, "%s metadata must contain string keys and values", KnowledgeSetFileName)
+				return kernel.Fail(kernel.ErrUsageInvalid, "%s metadata must contain string keys and values", DatasetFileName)
 			}
 		}
 	}
 	return nil
 }
 
-// FormatKnowledgeSetRecipe writes the yaml alice (or bob) would commit.
-func FormatKnowledgeSetRecipe(rec KnowledgeSetRecipe) ([]byte, error) {
+// FormatDatasetRecipe writes the yaml alice (or bob) would commit.
+func FormatDatasetRecipe(rec DatasetRecipe) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := yaml.NewEncoder(&buf)
 	enc.SetIndent(2)
@@ -118,17 +118,17 @@ func FormatKnowledgeSetRecipe(rec KnowledgeSetRecipe) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// RecipeFromKnowledgeSet builds the portable file for a mount/file Workspace.
+// RecipeFromDataset builds the portable file for a mount/file Workspace.
 // Pure federated-read recipes (no Path and no File) return ok=false: they have
 // nothing to hitchhike on git.
-func RecipeFromKnowledgeSet(def KnowledgeSet) (KnowledgeSetRecipe, bool) {
+func RecipeFromDataset(def Dataset) (DatasetRecipe, bool) {
 	if len(def.Sources) == 0 {
-		return KnowledgeSetRecipe{}, false
+		return DatasetRecipe{}, false
 	}
-	rec := KnowledgeSetRecipe{Name: def.SetID, Metadata: maps.Clone(def.Metadata)}
+	rec := DatasetRecipe{Name: def.SetID, Metadata: maps.Clone(def.Metadata)}
 	for _, src := range def.Sources {
 		if src.IsFileEntry() {
-			rec.Files = append(rec.Files, KnowledgeSetFileMount{
+			rec.Files = append(rec.Files, DatasetFileMount{
 				Repository: string(src.Repository),
 				Selector:   src.Selector,
 				File:       src.File,
@@ -138,9 +138,9 @@ func RecipeFromKnowledgeSet(def KnowledgeSet) (KnowledgeSetRecipe, bool) {
 			continue
 		}
 		if src.Path == nil {
-			return KnowledgeSetRecipe{}, false
+			return DatasetRecipe{}, false
 		}
-		rec.Mounts = append(rec.Mounts, KnowledgeSetMount{
+		rec.Mounts = append(rec.Mounts, DatasetMount{
 			Repository: string(src.Repository),
 			Selector:   src.Selector,
 			Path:       *src.Path,
@@ -151,11 +151,11 @@ func RecipeFromKnowledgeSet(def KnowledgeSet) (KnowledgeSetRecipe, bool) {
 	return rec, len(rec.Mounts) > 0 || len(rec.Files) > 0
 }
 
-// Sources is the KnowledgeSet.Sources equivalent of this recipe.
-func (r KnowledgeSetRecipe) Sources() []KnowledgeSetSource {
-	out := make([]KnowledgeSetSource, 0, len(r.Mounts)+len(r.Files))
+// Sources is the Dataset.Sources equivalent of this recipe.
+func (r DatasetRecipe) Sources() []DatasetSource {
+	out := make([]DatasetSource, 0, len(r.Mounts)+len(r.Files))
 	for _, m := range r.Mounts {
-		out = append(out, KnowledgeSetSource{
+		out = append(out, DatasetSource{
 			Repository: kernel.RepositoryID(m.Repository),
 			Selector:   m.Selector,
 			Path:       MountPath(m.Path),
@@ -164,7 +164,7 @@ func (r KnowledgeSetRecipe) Sources() []KnowledgeSetSource {
 		})
 	}
 	for _, f := range r.Files {
-		out = append(out, KnowledgeSetSource{
+		out = append(out, DatasetSource{
 			Repository: kernel.RepositoryID(f.Repository),
 			Selector:   f.Selector,
 			File:       f.File,
@@ -176,7 +176,7 @@ func (r KnowledgeSetRecipe) Sources() []KnowledgeSetSource {
 }
 
 // RootMount is the source declared at path "" (new-file fallback), or nil.
-func RootMount(sources []KnowledgeSetSource) *KnowledgeSetSource {
+func RootMount(sources []DatasetSource) *DatasetSource {
 	for i := range sources {
 		src := &sources[i]
 		if src.Path != nil && normalizeMountPath(*src.Path) == "" {
@@ -187,7 +187,7 @@ func RootMount(sources []KnowledgeSetSource) *KnowledgeSetSource {
 }
 
 // HasMountPaths reports a Workspace recipe (every source declared Path).
-func HasMountPaths(sources []KnowledgeSetSource) bool {
+func HasMountPaths(sources []DatasetSource) bool {
 	if len(sources) == 0 {
 		return false
 	}

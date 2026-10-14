@@ -20,4 +20,4 @@ Agent 的代理关系不能自行合并权限。所有业务 kc 请求经 Server
 
 登录、库存发现、知道 pin 或后台可见都不授予其它能力。Dataset 交付限定发布范围，跨仓引用不扩权，外部资源仍需独立授权。
 
-相关说明：[登记空间](../../concepts/registration/definition.md)、[知识仓](../../concepts/repository/definition.md)、[Dataset](../../concepts/dataset/definition.md)、[CLI](../../interfaces/cli/definition.md)。
+相关说明：[登记空间](../../concepts/registration/definition.md)、[仓](../../concepts/repository/definition.md)、[Dataset](../../concepts/dataset/definition.md)、[CLI](../../interfaces/cli/definition.md)。

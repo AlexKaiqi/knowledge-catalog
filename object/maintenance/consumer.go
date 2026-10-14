@@ -159,7 +159,7 @@ func (c *Coordinator) consumerHead(id kernel.RepositoryID) (objectmodel.Reposito
 		return nil, "", err
 	}
 	if repo == nil {
-		return nil, "", kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Snapshot consumer requires a knowledge repository")
+		return nil, "", kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Snapshot consumer requires an object repository")
 	}
 	head, err := repo.Head(snapshot.DefaultRef)
 	if err != nil {
@@ -287,7 +287,7 @@ func (s *ProgressStore) failConsumerHead(id string, repository kernel.Repository
 			}
 		} else if kernel.CodeOf(headErr) == kernel.ErrCapabilityUnsatisfied {
 			// Inventory may include plain Snapshot repositories. They are not
-			// consumers of Knowledge derivatives; previously known targets are
+			// consumers of Object derivatives; previously known targets are
 			// still marked failed when their capability disappears.
 			return nil
 		}

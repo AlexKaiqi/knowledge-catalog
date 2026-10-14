@@ -6,7 +6,7 @@ Dataset 与对应权限管理入口。
 ## 边界
 
 拥有 `webui/` 的前端源码、许可与锁定依赖、`webapp/` 的嵌入资产、页面深链接与静态资源交付。
-Dataset 组织版本化文件，不要求解析知识对象、Schema 或检索索引。
+Dataset 组织版本化文件，不要求解析对象、Schema 或检索索引。
 原 Repositories、对象浏览、提交、分支、标签、比较、PR、Actions、Settings、Administration、
 登录、Setup 和插件能力全部保留。
 
@@ -32,7 +32,7 @@ Vite 输出到本包 `webapp/`，只跟踪 `.gitkeep`。未构建时 handler 显
 
 ## 依赖方向
 
-Go handler 仅依赖标准库，可独立挂载。禁止依赖 `server`、`cli`、`catalog`、`knowledge`、
+Go handler 仅依赖标准库，可独立挂载。禁止依赖 `server`、`cli`、`catalog`、`object`、
 `retrieval` 或应用执行器。静态控制台不是 `snapshot.Store` 接口的一部分。
 前端沿用 pinned lakeFS v1.58.0 的 Apache-2.0 源码和依赖，不单独建立 Dataset 登录。
 完整代理、凭证边界、版本说明与检查入口见 [接线说明](webui/KC-VENDOR.md)。

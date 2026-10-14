@@ -1,0 +1,15 @@
+# proposal-opened：candidate 存在；main 不动；read --repo 仍旧值。
+
+Feature: proposal-opened
+
+  Scenario: construct
+    When I run `kc governance proposal create --proposal-id PR-scene --repo kr://scene/object --target refs/heads/main --candidate refs/heads/candidates/PR-scene --object note/hello --value '{"text":"proposed"}'`
+    Then the output has:
+      | proposalId      | PR-scene |
+      | candidateCommit | nonempty |
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:note%2Fhello`
+    Then the output has:
+      | value.text | hi |
+    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:note%2Fhello --ref refs/heads/candidates/PR-scene`
+    Then the output has:
+      | value.text | proposed |

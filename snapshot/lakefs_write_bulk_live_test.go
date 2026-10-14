@@ -69,7 +69,7 @@ func TestLiveBulkApplyAgainstRealLakeFS(t *testing.T) {
 	if got, err := repo.ReadFile("objects/keep.bin", second); err != nil || string(got) != "keep" {
 		t.Fatalf("keep.bin = %q err=%v", got, err)
 	}
-	if _, err := repo.ReadFile("objects/drop.bin", second); kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+	if _, err := repo.ReadFile("objects/drop.bin", second); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		t.Fatalf("drop.bin should be gone, err=%v", kernel.CodeOf(err))
 	}
 	if got, err := repo.ReadFile("objects/add.bin", second); err != nil || string(got) != "add" {

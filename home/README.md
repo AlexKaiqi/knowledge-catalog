@@ -1,6 +1,6 @@
 # home/
 
-部署装配入口：按声明配置连接独立登记表 Snapshot 权威和已有知识 Snapshot，把 Writer / Reader / ControlPlane / Index 装配到 Server。Snapshot 后端只经 `kc/snapshot` 公开构造与能力契约接入；lakeFS 实现归私有 `snapshot/internal/lakefsimpl`（A-01）；`declarativeindex/opensearch` 只允许在 stores 族与就绪端口绑定（`readiness_ports.go`：`NewSearchBackendProbe` 把具体索引探测绑定成端口函数，CAP-ORG-01 B7）。本包不得 import `cli`、`client` 或 `httpsurface`。
+部署装配入口：按声明配置连接独立登记表 Snapshot 权威和已有对象 Snapshot，把 Writer / Reader / ControlPlane / Index 装配到 Server。Snapshot 后端只经 `kc/snapshot` 公开构造与能力契约接入；lakeFS 实现归私有 `snapshot/internal/lakefsimpl`（A-01）；`declarativeindex/opensearch` 只允许在 stores 族与就绪端口绑定（`readiness_ports.go`：`NewSearchBackendProbe` 把具体索引探测绑定成端口函数，CAP-ORG-01 B7）。本包不得 import `cli`、`client` 或 `httpsurface`。
 
 业务 CLI 经 Server 和显式 principal。`kc deployment init --config` 显式初始化；`kc serve --config` 与 `OpenDeployment` 仅恢复。没有公开 `local` 命令或由实例目录扫描得到的部署清单。
 
@@ -38,14 +38,14 @@ repositories:
   - id: kr://kc/system
     driver: lakefs
     dsn: https://lakefs.example/kc-system
-  - id: kr://acme/knowledge
+  - id: kr://acme/object
     driver: lakefs
-    dsn: https://lakefs.example/acme-knowledge
+    dsn: https://lakefs.example/acme-object
 stores:
   index: none
 ```
 
-`stateDir` 必须挂载独立持久卷；`cacheDir` 可随实例删除。两者是绝对且不互相嵌套的目录。登记表 使用独立 Snapshot repository（与知识仓同类介质、不同 identity）；初始化只写入登记表 YAML，不把 登记表 变成 Knowledge Repository。`file://` 或实例盘上的 Git remote 不能充当生产 登记表 权威。
+`stateDir` 必须挂载独立持久卷；`cacheDir` 可随实例删除。两者是绝对且不互相嵌套的目录。登记表 使用独立 Snapshot repository（与仓同类介质、不同 identity）；初始化只写入登记表 YAML，不把 登记表 变成 Object Repository。`file://` 或实例盘上的 Git remote 不能充当生产 登记表 权威。
 
 `stores` 在部署配置中仅接受 `index` 与 `opensearch`；夹具的 `profile`、默认 `repository` driver 与 `layout` 不得混入部署配置。每个来源声明自己的 driver，实例路径由 `stateDir` / `cacheDir` 唯一决定。
 
@@ -57,7 +57,7 @@ managedRepositories:
   dsn: https://lakefs.example
   root: s3://kc-authority
   publicURL: https://kc.example
-  creatorActions: [writer.preview, writer.commit, writer.receipt.read, repository.metadata.read, knowledge.read, knowledge.provenance]
+  creatorActions: [writer.preview, writer.commit, writer.receipt.read, repository.metadata.read, object.read, object.provenance]
 ```
 
 LakeFS 使用部署声明的 URL `dsn`、S3 兼容对象存储 `root` 前缀与服务凭证，客户端不接触服务凭证。Snapshot 存储只支持 lakeFS，其它 driver 以 `USAGE_INVALID` 拒绝。创建动作不要求目标仓预先出现在 repositories。`creatorActions` 必须显式选择 `validateCreatorActions` 允许的窄动作，包含可选的仓元数据、自己的回执、分享、评审和仓维护能力；没有默认发权，不允许全局管理员、登记表 管理或投影写权限。创建者获得的普通 grant 可以撤销。重复创建请求返回原结果，重启与重试不得补回已撤销权限。新仓 binding、创建身份与分阶段进度保存在 `stateDir/managed.db`；RESERVED → OWNED → REGISTERED → READY 逐步记录分配、拥有来源、登记表 准入与创建完成。已完成结果保留初始 HEAD，重复请求不把它替换成当前 HEAD；登记表 仍只保存来源登记与配方。
@@ -71,12 +71,12 @@ managedStores:
     dsn: https://lakefs.example
     root: s3://kc-authority/tianqiong
     publicURL: https://kc.example
-    creatorActions: [writer.preview, writer.commit, writer.receipt.read, knowledge.read, knowledge.schema.read, repository.metadata.read]
+    creatorActions: [writer.preview, writer.commit, writer.receipt.read, object.read, object.schema.read, repository.metadata.read]
 ```
 
 LakeFS 业务仓的 Graveler 名、协议 `--repo` 和管理入口最后一段都是 `--name`（必须能写成 lakeFS 允许的 `[a-z0-9-]{3,63}`），不含 owner；对象前缀是 `{root}/{name}`（例如 `s3://kc-authority/tianqiong/table-meta`）。`kc-` 只留给平台仓 `kc-catalog` / `kc-system`。allocation 只做账本令牌，不出现在仓名或对象前缀里。创建进度 READY 不表示远端当前健康，管理详情会另外查询当前发布和检索状态。
 
-`ManagedRepositoryResult` 的名称、owner、Store、管理地址和分配进度来自耐久账。`ListManagedRepositories`/`GetOwnedManagedRepository` 只选择本人控制记录；HTTP 应用再检查当前 `repository.metadata.read`，不会为导航授予 登记表 全局发现或知识正文读权。
+`ManagedRepositoryResult` 的名称、owner、Store、管理地址和分配进度来自耐久账。`ListManagedRepositories`/`GetOwnedManagedRepository` 只选择本人控制记录；HTTP 应用再检查当前 `repository.metadata.read`，不会为导航授予 登记表 全局发现或对象正文读权。
 
 一套服务只有一份登记状态。部署认证后的主体可以发现库存；成员正文仍需逐仓或 Dataset 消费授权。配置不接受 `catalogs`、`private` 或请求 登记表 选择。
 
@@ -85,14 +85,14 @@ LakeFS 业务仓的 Graveler 名、协议 `--repo` 和管理入口最后一段�
 ```yaml
 repositoryAccess:
   - id: kr://kc/system
-    authenticatedActions: [knowledge.read, knowledge.schema.read, knowledge.search, knowledge.history.read, knowledge.provenance, knowledge.relations, knowledge.access.describe, file.read, projection.read]
+    authenticatedActions: [object.read, object.schema.read, object.search, object.history.read, object.provenance, object.relations, object.access.describe, file.read, projection.read]
 ```
 
 `repositories` 只是运营者批准的连接绑定，不代表 登记表 成员关系。`attach --repo <id>` 使用静态绑定或已供给托管仓的耐久绑定，只读检查已有 Snapshot，再通过一次 登记表 Snapshot 提交完成接入；重复准入不创建新仓或重新发权。没有单独手工 register，也没有持久化的第二份 attached 状态。已有但不兼容的 authority 状态必须报错，不能在接入或恢复时迁移。
 
 `repositories` 必须显式绑定 `kr://kc/system` 的实际 LakeFS Snapshot。`kc deployment init --config` 将随版本交付的 `systemrepo/content` 出版源经 System Writer 发布到空仓，然后登记到 登记表；相同出版物只核对，不产生新提交。已初始化部署重新 init 只核对既有 system 内容，缺失或漂移须恢复权威。`kc deployment system publish --config` 保留为显式发布/核对入口，同样不覆盖已有不同版本。
 
-`OpenDeployment` / `kc serve` 只打开并核对实际 system 仓。运行时知识与文件读取全部来自该 Snapshot，引用修改、归档和字面文件写入均拒绝；不存在内置仓或来源失败时的回退。二进制携带出版源和校验信任根，不充当运行时仓。
+`OpenDeployment` / `kc serve` 只打开并核对实际 system 仓。运行时对象与文件读取全部来自该 Snapshot，引用修改、归档和字面文件写入均拒绝；不存在内置仓或来源失败时的回退。二进制携带出版源和校验信任根，不充当运行时仓。
 
 ## 权威与恢复
 
@@ -119,7 +119,7 @@ repositoryAccess:
 | 文件 | 职责 |
 |---|---|
 | `deployment.go` / `deployment_runtime.go` | 声明解析、初始化、恢复、只读接入与持久状态检查 |
-| `registry_authority.go` | 独立登记表 Snapshot 容器的打开/创建；不进入知识 Store |
+| `registry_authority.go` | 独立登记表 Snapshot 容器的打开/创建；不进入对象 Store |
 | `home.go` | Store、登记表、Writer、Reader、ControlPlane、Index 的共同装配 |
 | `managed.go` / `managed_ledger.go` | 显式托管仓创建、耐久分配账和只读恢复；重试不重新发权 |
 | `authority_drivers.go` | 唯一具体 Snapshot adapter 选择点；创建与只读打开分离 |
@@ -171,15 +171,15 @@ Server 的 `BeginShutdown` 先拒绝新工作，再调用 `StopMaintenance` 取�
 ```yaml
 connections:
   allowedOrigins: [https://lakefs.example.org]
-  creatorActions: [repository.connections.manage, repository.metadata.read, writer.preview, writer.commit, knowledge.read]
-  shareActions: [knowledge.read, dataset.resolve, file.read]
+  creatorActions: [repository.connections.manage, repository.metadata.read, writer.preview, writer.commit, object.read]
+  shareActions: [object.read, dataset.resolve, file.read]
 ```
 
 `repositories.connect` 授予服务的连接准入。`ConnectRepository` 只读验证已存在的非空 Snapshot，不建仓、不初始化分支、不写 stamp。固定 lakeFS 仓库名与初始 commit 和逻辑 identity 一起进入 Server 私有 `connections.db`；登记表 只登记 identity。`creatorActions` 必须显式包含 `repository.connections.manage`，其余动作沿用窄创建动作白名单。初始 grant 使用稳定 allocation 回执只应用一次，重放连接不能补回撤销的权限。`shareActions` 在连接时冻结；分享仍要求发起人当前拥有相应整仓能力。
 
 `GetConnection` 返回 owner、管理 URL、初始 HEAD、状态与 revision，不返回凭证；`CheckConnection` 只读验证并报告当前 HEAD；`RotateConnectionCredential` 只接受新凭证，先验证同 provider identity 与初始 commit，成功才原子替换秘密。三个管理动作都要求当前仓级管理权以及 durable owner 相符；知道一个仓的 identity 不意味着可以替换它的凭证。旧绑定和可用凭证在失败时保留。
 
-用户显式授权的逐仓 credential 是部署凭证环境注入规则的窄例外：仅在模式 `0600` 的私有 `connections.db` credential bucket 保存，和公开 binding 分开，只有具体 adapter 打开时读取。它不进入配置、登记表、知识对象、日志、trace 或客户端 pin。备份必须包括该私有账本及初始化回执；回执存在后账本缺失或损坏会失败，不重新创建空账。
+用户显式授权的逐仓 credential 是部署凭证环境注入规则的窄例外：仅在模式 `0600` 的私有 `connections.db` credential bucket 保存，和公开 binding 分开，只有具体 adapter 打开时读取。它不进入配置、登记表、对象、日志、trace 或客户端 pin。备份必须包括该私有账本及初始化回执；回执存在后账本缺失或损坏会失败，不重新创建空账。
 
 冷恢复从私有账复原固定 lakeFS authority 句柄，不联系 provider。普通 Snapshot 操作读取当前 credential；显式检查与轮换才按各自合同核验仓库绑定、初始 commit 和凭据，失败保持原绑定。管理查询与轮换继续遵守当前仓级权限和 durable owner。恢复不写入外部仓，也不自动更换 authority；上层只消费 Store 与明确可选能力合同。
 
@@ -206,13 +206,13 @@ stores:
 `disabled: true` 禁用缓存及其预热，不禁用已配置的搜索投影。数值 0 使用默认值，负值拒绝。
 `snapshot-body-cache/v1` 是注册的独立后台消费者，按当前 published HEAD 刷新有限热点；
 没有 OpenSearch 也可以工作。Cache `Stats()` 和 Controller `ConsumerTargets()` 提供装配侧观测，
-不新增公开知识查询字段或运维路由。缓存 miss 始终可同版本回源；旧 pin 不跟随预热到新版本。
+不新增公开对象查询字段或运维路由。缓存 miss 始终可同版本回源；旧 pin 不跟随预热到新版本。
 
 ## 库存发现入口
 
-`RegistryBinding.discoveryWorkspaceId` 可指向本服务中一条普通、管理员维护的 KnowledgeSet。配置只选择发现入口，不创建或更改配方，也不自动收集全部已登记来源。`show` 返回该 identity；入口未配置时，库存范围搜索明确返回能力缺失。
+`RegistryBinding.discoveryWorkspaceId` 可指向本服务中一条普通、管理员维护的 Dataset。配置只选择发现入口，不创建或更改配方，也不自动收集全部已登记来源。`show` 返回该 identity；入口未配置时，库存范围搜索明确返回能力缺失。
 
-库存发现入口 由 Client 执行 show → 普通 ResolveKnowledgeSet → 固定 pin SEARCH。已有 typed Resolve 与 Search 请求的 `inventoryDiscovery: true` 只表达发现语境，Server 必须校验它匹配本部署配置的精确发现 Dataset，禁止混入临时 definition 或单仓坐标，SEARCH 必须携带固定 pin。通过该验证后的准入只看当前 `inventory.read`；没有 `file.read` 或逐仓 `knowledge.search` 不裁掉 discovery 成员。正文仍通过现有交付链按当前逐仓 `knowledge.read` 屏蔽；其他 Workspace、READ、Schema、文件、rerank 等动作不使用这条例外。
+库存发现入口 由 Client 执行 show → 普通 ResolveDataset → 固定 pin SEARCH。已有 typed Resolve 与 Search 请求的 `inventoryDiscovery: true` 只表达发现语境，Server 必须校验它匹配本部署配置的精确发现 Dataset，禁止混入临时 definition 或单仓坐标，SEARCH 必须携带固定 pin。通过该验证后的准入只看当前 `inventory.read`；没有 `file.read` 或逐仓 `object.search` 不裁掉 discovery 成员。正文仍通过现有交付链按当前逐仓 `object.read` 屏蔽；其他 Workspace、READ、Schema、文件、rerank 等动作不使用这条例外。
 
 旧单空间耐久回执可以只读恢复：原 deployment marker 必须恰含一个权威并与唯一 `registry.id` 一致；混合格式、多权威和重复别名拒绝。历史 managed allocation 按原 request 字节验证摘要，原 allocation、初始政策与 READY 回执不因公共选择字段退出而重算；重放不会补权或改写记录。未完成创建由显式重试迁到新格式，显式 `deployment init` 才写新版 marker。旧连接记录同样严格核对原登记权威。
 

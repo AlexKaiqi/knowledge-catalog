@@ -8,7 +8,7 @@ import (
 
 // IdentityContext is the principal evidence shape shared by authorization,
 // access evidence, and serving views (CAP-ORG-01 B13, ruling A: the shape
-// lives on the protocol base so the knowledge layer consumes a narrow port
+// lives on the protocol base so the object layer consumes a narrow port
 // instead of the app-layer observability capability).
 type IdentityContext struct {
 	Principal  string `json:"principal"`

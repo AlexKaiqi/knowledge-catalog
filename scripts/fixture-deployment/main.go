@@ -1,5 +1,5 @@
 // fixture-deployment verifies declared authorities for acceptance harnesses.
-// It is not part of the kc product command surface. Knowledge is published by
+// It is not part of the kc product command surface. Object is published by
 // the harness through the public Writer after deployment initialization.
 package main
 
@@ -90,7 +90,7 @@ func run() error {
 				"publicURL": *managedPublicURL,
 				"creatorActions": []string{
 					"writer.preview", "writer.commit", "writer.receipt.read",
-					"knowledge.read", "knowledge.schema.read", "repository.metadata.read",
+					"object.read", "object.schema.read", "repository.metadata.read",
 				},
 			},
 		}})

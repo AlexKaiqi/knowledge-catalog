@@ -14,7 +14,7 @@ type ChangedObject struct {
 	ToPaths   []string
 }
 
-// FastObjectChanges reports identities and the knowledge files that changed.
+// FastObjectChanges reports identities and the object files that changed.
 // Tree authorities use this so a git commit that did not refresh locators is
 // still indexed from the files themselves.
 type FastObjectChanges interface {
@@ -23,19 +23,19 @@ type FastObjectChanges interface {
 
 // UnitPathsHydrator reads objects using caller-supplied unit paths.
 type UnitPathsHydrator interface {
-	ReadManyAtPaths(objectIDs []ObjectID, commit kernel.CommitID, paths map[ObjectID][]string) (map[ObjectID]KnowledgeValue, error)
+	ReadManyAtPaths(objectIDs []ObjectID, commit kernel.CommitID, paths map[ObjectID][]string) (map[ObjectID]ObjectValue, error)
 }
 
 // AddressPathsReader reads one exact unit from an explicit set of candidate
 // paths. It must not hydrate other paths, and must not assemble a partial object.
 type AddressPathsReader interface {
-	ReadAddressAtPaths(Address, kernel.CommitID, []string) (KnowledgeValue, error)
+	ReadAddressAtPaths(Address, kernel.CommitID, []string) (ObjectValue, error)
 	ResolveAddressAtPaths(Address, kernel.CommitID, []string) (Resolution, error)
 }
 
-// KnowledgeFileReader is a bounded tree read for convention paths such as
+// ObjectFileReader is a bounded tree read for convention paths such as
 // README.md and Schema files under _schemas/. It is not a Snapshot scan and
 // not a Dataset service protocol type.
-type KnowledgeFileReader interface {
-	ReadKnowledgeFile(rel string, commit kernel.CommitID) ([]byte, error)
+type ObjectFileReader interface {
+	ReadObjectFile(rel string, commit kernel.CommitID) ([]byte, error)
 }

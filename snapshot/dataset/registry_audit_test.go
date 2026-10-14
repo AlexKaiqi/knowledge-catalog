@@ -56,7 +56,7 @@ func TestSnapshotCatalogDatasetAuditCrossesBackendHistoryPage(t *testing.T) {
 	if err := cat.RegisterRepository("table-meta"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := cat.DefineKnowledgeSet("orders", 1, []catalog.KnowledgeSetSource{{Repository: "table-meta", Selector: snapshot.DefaultRef}}); err != nil {
+	if _, err := cat.DefineDataset("orders", 1, []catalog.DatasetSource{{Repository: "table-meta", Selector: snapshot.DefaultRef}}); err != nil {
 		t.Fatal(err)
 	}
 	want, _ := reg.Head()
@@ -116,22 +116,22 @@ func TestSnapshotCatalogDatasetAuditTracksActualChangingCommits(t *testing.T) {
 			if err := cat.RegisterRepository("table-meta"); err != nil {
 				t.Fatal(err)
 			}
-			sources := []catalog.KnowledgeSetSource{{Repository: "table-meta", Selector: snapshot.DefaultRef, Path: catalog.MountPath("tables")}}
-			if _, err := cat.DefineKnowledgeSet("orders", 1, sources); err != nil {
+			sources := []catalog.DatasetSource{{Repository: "table-meta", Selector: snapshot.DefaultRef, Path: catalog.MountPath("tables")}}
+			if _, err := cat.DefineDataset("orders", 1, sources); err != nil {
 				t.Fatal(err)
 			}
 			v1, _ := reg.Head()
-			if _, err := cat.DefineKnowledgeSet("unrelated", 1, sources); err != nil {
+			if _, err := cat.DefineDataset("unrelated", 1, sources); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := cat.DefineKnowledgeSet("orders", 2, sources); err != nil {
+			if _, err := cat.DefineDataset("orders", 2, sources); err != nil {
 				t.Fatal(err)
 			}
 			v2, _ := reg.Head()
 			if err := cat.RegisterRepository("another"); err != nil {
 				t.Fatal(err)
 			}
-			if err := cat.RetireKnowledgeSet("orders"); err != nil {
+			if err := cat.RetireDataset("orders"); err != nil {
 				t.Fatal(err)
 			}
 			retired, _ := reg.Head()

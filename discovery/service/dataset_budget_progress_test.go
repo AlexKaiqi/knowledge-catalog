@@ -76,7 +76,7 @@ func workspaceBudgetFixture(t *testing.T, members, objects int, superset bool) (
 		return engine, nil
 	})
 	t.Cleanup(func() { _ = idx.Close() })
-	sources := []dataset.KnowledgeSetSource{}
+	sources := []dataset.DatasetSource{}
 	for member := 0; member < members; member++ {
 		id := kernel.RepositoryID(fmt.Sprintf("kr://acme/public/member-%03d", member))
 		repo := testkit.MakeRepository(t, string(id))
@@ -92,7 +92,7 @@ func workspaceBudgetFixture(t *testing.T, members, objects int, superset bool) (
 			}
 			ops = append(ops, objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: objectmodel.ObjectID(fmt.Sprintf("item/%03d", n))}, SchemaRef: "schema/item", Value: map[string]any{"status": status}})
 		}
-		commit, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{TargetRepository: id, TargetRef: snapshot.DefaultRef, BaseCommit: head, ExpectedTargetCommit: head, Operations: ops})
+		commit, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{TargetRepository: id, TargetRef: snapshot.DefaultRef, BaseCommit: head, ExpectedTargetCommit: head, Operations: ops})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -100,7 +100,7 @@ func workspaceBudgetFixture(t *testing.T, members, objects int, superset bool) (
 		if _, err := idx.Rebuild(repo, commit); err != nil {
 			t.Fatal(err)
 		}
-		sources = append(sources, dataset.KnowledgeSetSource{Repository: id, Selector: snapshot.DefaultRef})
+		sources = append(sources, dataset.DatasetSource{Repository: id, Selector: snapshot.DefaultRef})
 	}
 	cat, err := dataset.NewService(registry, testkit.MakeRegistry(t))
 	if err != nil {
@@ -111,28 +111,28 @@ func workspaceBudgetFixture(t *testing.T, members, objects int, superset bool) (
 		repositories[i] = string(source.Repository)
 	}
 	// Seed registry state once: this test exercises consumption, not 101 separate
-	// registry publications. Every knowledge body above still crosses Writer.
-	cat.LoadState(dataset.State{Repositories: repositories, KnowledgeSets: []dataset.KnowledgeSet{{SetID: "budget", Revision: 1, Sources: sources}}})
+	// registry publications. Every object body above still crosses Writer.
+	cat.LoadState(dataset.State{Repositories: repositories, Datasets: []dataset.Dataset{{SetID: "budget", Revision: 1, Sources: sources}}})
 	sourceReader := reader.NewReader(registry)
 	executor := DatasetSearchExecutor{
 		Authorize:    func(context.Context) error { return nil },
 		Repositories: sourceReader,
 		Projection:   idx,
 		Resolve: func(context.Context) (*reader.Serving, LogicalHydrator, error) {
-			resolved, err := cat.ResolveKnowledgeSet("budget")
+			resolved, err := cat.ResolveDataset("budget")
 			if err != nil {
 				return nil, nil, err
 			}
-			pin := reader.KnowledgeSetPin{SetID: resolved.SetID, Revision: resolved.Revision, Repositories: resolved.Repositories}
+			pin := reader.DatasetPin{SetID: resolved.SetID, Revision: resolved.Revision, Repositories: resolved.Repositories}
 			for _, item := range resolved.Items {
 				pin.Items = append(pin.Items, reader.DatasetItem{Target: item.Target, Repository: item.Repository, Commit: item.Commit, Kind: item.Kind, Prefix: item.Prefix, File: item.File})
 			}
 			scope := reader.Open(func(id kernel.RepositoryID) (objectmodel.Repository, error) {
-				return sourceReader.Require(id, kernel.ErrKnowledgeRefUnresolved)
+				return sourceReader.Require(id, kernel.ErrObjectRefUnresolved)
 			}, pin)
 			return scope, liveservice.Open(scope, nil, observability.IdentityContext{Principal: "agent:budget"}), nil
 		},
-		Deliver: func(_ context.Context, hit retrieval.KnowledgeHit) (retrieval.KnowledgeHit, error) { return hit, nil },
+		Deliver: func(_ context.Context, hit retrieval.ObjectHit) (retrieval.ObjectHit, error) { return hit, nil },
 	}
 	run := func(budget index.SearchBudget, token string) (retrieval.SearchResult, error) {
 		ctx, cancel := index.WithSearchBudget(context.Background(), budget)
@@ -249,7 +249,7 @@ func TestWorkspaceBudgetOffsetReplayDebtCanAdvanceOnEmptyPages(t *testing.T) {
 		token = page.Continuation
 	}
 	last, err := run(budget, token)
-	if err != nil || len(last.Hits) != 1 || last.Hits[0].Knowledge.Address.ObjectID != "item/005" {
+	if err != nil || len(last.Hits) != 1 || last.Hits[0].Object.Address.ObjectID != "item/005" {
 		t.Fatalf("replay lost next unread hit: %#v %v", last, err)
 	}
 }
@@ -271,7 +271,7 @@ func TestWorkspaceBudgetPrimingReplaysSavedOffsetInOneBatch(t *testing.T) {
 	engine := engines[state.Members[0].Repository]
 	engine.requests = nil
 	out, err := run(budget, retrieval.EncodeContinuation(state))
-	if err != nil || len(out.Hits) != 1 || out.Hits[0].Knowledge.Address.ObjectID != "item/005" {
+	if err != nil || len(out.Hits) != 1 || out.Hits[0].Object.Address.ObjectID != "item/005" {
 		t.Fatalf("resumed unread hit: %#v %v", out, err)
 	}
 	if len(engine.requests) != 1 || engine.requests[0] != 6 {

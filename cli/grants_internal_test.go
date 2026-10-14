@@ -19,7 +19,7 @@ func TestRemoteGrantListPreservesInventoryFiltersAndLegacyExplicitQuestion(t *te
 			t.Errorf("wrong typed grant request: %s %s %v", r.Method, r.URL.RequestURI(), r.Header)
 		}
 		query = r.URL.RawQuery
-		_ = json.NewEncoder(w).Encode(inv.GrantList{Rules: []inv.AllowRule{{ID: "limited", Principal: "reader", Repo: "repo-A", Object: "data/*", Actions: []string{"knowledge.read"}}}})
+		_ = json.NewEncoder(w).Encode(inv.GrantList{Rules: []inv.AllowRule{{ID: "limited", Principal: "reader", Repo: "repo-A", Object: "data/*", Actions: []string{"object.read"}}}})
 	}))
 	t.Cleanup(server.Close)
 	client, err := kcclient.New(kcclient.Config{BaseURL: server.URL, HTTPClient: server.Client()})
@@ -34,10 +34,10 @@ func TestRemoteGrantListPreservesInventoryFiltersAndLegacyExplicitQuestion(t *te
 	if err != nil || len(listed.(inv.GrantList).Rules) != 1 || query != "aspect=body&object=data%2F%2A&principal=reader&ref=main&repository=repo-A" {
 		t.Fatalf("remote inventory dropped filters: %#v %s %v", listed, query, err)
 	}
-	flags["action"] = "knowledge.read"
+	flags["action"] = "object.read"
 	flags["object"] = "data/file"
 	value, err := executeSnapshotCommand(context.Background(), client, "grant list", flags, kcclient.RequestOptions{})
-	if err != nil || value.(map[string]any)["ruleId"] != "limited" || query != "action=knowledge.read&principal=reader" {
+	if err != nil || value.(map[string]any)["ruleId"] != "limited" || query != "action=object.read&principal=reader" {
 		t.Fatalf("remote question became a list or excluded applicable global rules: %#v %s %v", value, query, err)
 	}
 	flags["repo"] = "repo-other"

@@ -14,7 +14,7 @@ func (r *treeRepository) AdoptedSchemaRefs(id objectmodel.ObjectID, at kernel.Co
 		return nil, err
 	}
 	if len(locations) == 0 {
-		return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "object has no published maintenance coordinates")
+		return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "object has no published maintenance coordinates")
 	}
 	seen := map[string]bool{}
 	refs := []string{}

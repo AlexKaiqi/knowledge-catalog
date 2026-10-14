@@ -58,8 +58,8 @@ views:
     title: 接入与授权
     description: 部署、身份、仓接入与独立授权边界；查看哪些条件允许发现、读取和写入。
   publication:
-    title: 知识发布
-    description: 从已接入仓出发，查看 Schema、知识写入、声明式投影和接入方资源声明。
+    title: 对象发布
+    description: 从已接入仓出发，查看 Schema、对象写入、声明式投影和接入方资源声明。
     entry: repository-attached
   consumption:
     title: 消费与走查

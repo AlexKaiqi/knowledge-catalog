@@ -6,55 +6,55 @@ import (
 	"kc/snapshot/dataset"
 )
 
-type KnowledgeDatasetIdentity struct {
-	Dataset    string                `json:"dataset,omitempty"`
-	Pin        json.RawMessage       `json:"pin,omitempty"`
-	Definition *dataset.KnowledgeSet `json:"definition,omitempty"`
+type ObjectDatasetIdentity struct {
+	Dataset    string           `json:"dataset,omitempty"`
+	Pin        json.RawMessage  `json:"pin,omitempty"`
+	Definition *dataset.Dataset `json:"definition,omitempty"`
 }
 
-type KnowledgeRepoPin struct {
+type ObjectRepoPin struct {
 	Repository string `json:"repository,omitempty"`
 	Commit     string `json:"commit,omitempty"`
 	Ref        string `json:"ref,omitempty"`
 }
 
-type KnowledgeScope struct {
-	Dataset    string                `json:"dataset,omitempty"`
-	Pin        json.RawMessage       `json:"pin,omitempty"`
-	Definition *dataset.KnowledgeSet `json:"definition,omitempty"`
-	Repository string                `json:"repository,omitempty"`
-	Commit     string                `json:"commit,omitempty"`
-	Ref        string                `json:"ref,omitempty"`
+type ObjectScope struct {
+	Dataset    string           `json:"dataset,omitempty"`
+	Pin        json.RawMessage  `json:"pin,omitempty"`
+	Definition *dataset.Dataset `json:"definition,omitempty"`
+	Repository string           `json:"repository,omitempty"`
+	Commit     string           `json:"commit,omitempty"`
+	Ref        string           `json:"ref,omitempty"`
 }
 
 type ReadRequest struct {
-	KnowledgeDatasetIdentity
+	ObjectDatasetIdentity
 	Reference string `json:"reference"`
 	Commit    string `json:"commit,omitempty"`
 	Ref       string `json:"ref,omitempty"`
 }
 
 type ObjectRequest struct {
-	KnowledgeScope
+	ObjectScope
 	Object       string `json:"object"`
 	Limit        int    `json:"limit,omitempty"`
 	Continuation string `json:"continuation,omitempty"`
 }
 
 type ResolveRequest struct {
-	KnowledgeScope
+	ObjectScope
 	Object string `json:"object"`
 	Aspect string `json:"aspect,omitempty"`
 	Member string `json:"member,omitempty"`
 }
 
 type SchemaRequest struct {
-	KnowledgeScope
+	ObjectScope
 	Object string `json:"object,omitempty"`
 }
 
 type SchemaPageRequest struct {
-	KnowledgeRepoPin
+	ObjectRepoPin
 	Limit        int    `json:"limit,omitempty"`
 	Continuation string `json:"continuation,omitempty"`
 }

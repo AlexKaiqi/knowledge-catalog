@@ -30,7 +30,7 @@ type connectedPluginFixture struct {
 	config        DeploymentConfig
 	id            kernel.RepositoryID
 	basis         kernel.CommitID
-	canonical     objectmodel.KnowledgeValue
+	canonical     objectmodel.ObjectValue
 	credential    atomic.Value
 	metadataFault atomic.Int64
 	metadataReads atomic.Int64
@@ -69,7 +69,7 @@ func newConnectedPluginFixture(t *testing.T) *connectedPluginFixture {
 	writeConnectedPluginConfig(t, source, []consumerplugin.PluginSelection{{Name: "declarative-index", Instance: "main"}})
 	repo := testkit.OpenRepository(t, source)
 	root := testkit.MustHead(t, source, snapshot.DefaultRef)
-	f.basis, err = repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	f.basis, err = repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: f.id, TargetRef: snapshot.DefaultRef, BaseCommit: root, ExpectedTargetCommit: root,
 		Operations: []objectmodel.Operation{
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/article"}, Value: map[string]any{
@@ -94,7 +94,7 @@ func newConnectedPluginFixture(t *testing.T) *connectedPluginFixture {
 		URL: connectedPluginSearchEndpoint(t, namespace), Namespace: namespace, PrimaryShards: 1,
 	}
 	f.config.Connections = &ConnectionPolicy{AllowedOrigins: []string{provider.Origin()}, CreatorActions: []string{
-		"repository.connections.manage", "repository.metadata.read", "knowledge.read", "knowledge.search",
+		"repository.connections.manage", "repository.metadata.read", "object.read", "object.search",
 	}}
 	if err := InitializeDeployment(f.config, func(dir, _ string) error {
 		return os.WriteFile(filepath.Join(dir, "allow.json"), []byte(`{"version":2,"rules":[]}`), 0600)
@@ -146,9 +146,9 @@ func writeConnectedPluginConfig(t *testing.T, source snapshot.Store, selections 
 	}
 }
 
-func (f *connectedPluginFixture) frozen(t *testing.T, ws *Home) dataset.KnowledgeSet {
+func (f *connectedPluginFixture) frozen(t *testing.T, ws *Home) dataset.Dataset {
 	t.Helper()
-	def, err := ws.Datasets.PrepareKnowledgeSet("connected-articles", 1, []dataset.KnowledgeSetSource{{
+	def, err := ws.Datasets.PrepareDataset("connected-articles", 1, []dataset.DatasetSource{{
 		Repository: f.id, Selector: snapshot.DefaultRef, BaseRev: string(f.basis), Path: dataset.MountPath("articles"),
 	}})
 	if err != nil {
@@ -171,7 +171,7 @@ func (f *connectedPluginFixture) prepareAndRead(t *testing.T, ws *Home) {
 
 func (f *connectedPluginFixture) assertCanonical(t *testing.T, ws *Home) {
 	t.Helper()
-	repo, err := ws.Reader.Require(f.id, kernel.ErrKnowledgeRefUnresolved)
+	repo, err := ws.Reader.Require(f.id, kernel.ErrObjectRefUnresolved)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,8 +180,8 @@ func (f *connectedPluginFixture) assertCanonical(t *testing.T, ws *Home) {
 		t.Fatalf("verified connected plugin did not serve its fixed complete result: result=%#v error=%v", result, err)
 	}
 	hit := result.Hits[0]
-	if !reflect.DeepEqual(hit.Knowledge, f.canonical) || !reflect.DeepEqual(hit.Version, retrieval.VersionOf(f.canonical)) || len(hit.Evidence) == 0 {
-		t.Fatalf("plugin returned indexed fields instead of fixed canonical knowledge and version: hit=%#v want=%#v", hit, f.canonical)
+	if !reflect.DeepEqual(hit.Object, f.canonical) || !reflect.DeepEqual(hit.Version, retrieval.VersionOf(f.canonical)) || len(hit.Evidence) == 0 {
+		t.Fatalf("plugin returned indexed fields instead of fixed canonical object and version: hit=%#v want=%#v", hit, f.canonical)
 	}
 	if head := testkit.MustHead(t, repo, snapshot.DefaultRef); head != f.basis {
 		t.Fatalf("plugin assembly or preparation changed the source HEAD: %s", head)

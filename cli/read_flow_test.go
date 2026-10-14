@@ -163,7 +163,7 @@ func TestCatalogRepoReadErrors(t *testing.T) {
 	expectMsg(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--ref", "refs/heads/missing"), "does not exist")
 	expectCode(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--commit", "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"), "VERSION_UNRESOLVED")
 	expectCode(t, kc(h, "log", "--repo", core, "--object", "policy/A", "--commit", "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"), "VERSION_UNRESOLVED")
-	expectCode(t, kc(h, "read", testObjectReference(t, core, "missing", ""), "--commit", c1), "KNOWLEDGE_REF_UNRESOLVED")
+	expectCode(t, kc(h, "read", testObjectReference(t, core, "missing", ""), "--commit", c1), "OBJECT_REF_UNRESOLVED")
 	expectCode(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--as", "other", "--ref", "refs/heads/main"), "FORBIDDEN")
 }
 

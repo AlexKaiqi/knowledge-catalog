@@ -8,7 +8,7 @@ KC 应用的 typed handler 通过本包连接授权、固定范围、证据与�
 ## 边界
 
 拥有：`Invocation` 载体与其 Flag/Require/TargetRef/RequireProposal/RequirePreview/
-BindingScope/KnowledgeRef 读取器；`Command`（Stage + Run）与 `Handler` 类型；授权判定闸
+BindingScope/ObjectRef 读取器；`Command`（Stage + Run）与 `Handler` 类型；授权判定闸
 （allow.json 模型 + `Authorize`/`AuthorizeInventory`/`AuthorizationFlags`，B5b 迁入）；
 Inventory discovery 请求验证标记；任务 pin 上下文归一（`--pin`/`--dataset-file` → 内部坐标）；
 **动词操作体（B6 迁入）**：读/写/索引/资源/目录/观测/授权域的 `Verb*` 函数
@@ -42,7 +42,7 @@ result, err := cmd.Run(cx)
 ## 验证
 
 对象 Interface 的通用消费由 `InvokeObjectInterface` 连接固定 Reader 与装配的注册表，
-生产 CLI 经 typed HTTP 使用此路径。`ObserveObjectInterfaceCall` 将执行回执映射到既有知识访问
+生产 CLI 经 typed HTTP 使用此路径。`ObserveObjectInterfaceCall` 将执行回执映射到既有对象访问
 记录，保留实现 Member、合同及实现 Schema 固定引用；LiveAccess 读取另保留独立观察。
 审计记录保存合同/声明/Schema 摘要及处理器版本，不从任意业务结果里猜测这些身份。
 

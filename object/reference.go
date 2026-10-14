@@ -22,7 +22,7 @@ type Reference struct {
 // ReferenceReader reads the selected maintenance units at one fixed version.
 // An implementation must plan from coordinates before reading unit bodies.
 type ReferenceReader interface {
-	ReadReference(Reference, kernel.CommitID) (KnowledgeValue, error)
+	ReadReference(Reference, kernel.CommitID) (ObjectValue, error)
 }
 
 // ReferencePlanner exposes only maintenance coordinates from immutable

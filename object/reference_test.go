@@ -11,9 +11,9 @@ import (
 
 func TestObjectReferenceKeepsIdentitySeparateFromPointer(t *testing.T) {
 	for _, ref := range []object.Reference{
-		{Repository: "kr://scene/knowledge", Object: "table/orders"},
+		{Repository: "kr://scene/object", Object: "table/orders"},
 		{Repository: "kr://仓/100%:a?b#c", Object: "table/订单:%?#/空 格", Locator: "/columns/order_id/constraints/nullable"},
-		{Repository: "kr://scene/knowledge", Object: "table/a+b", Locator: "/display name/中文/~01"},
+		{Repository: "kr://scene/object", Object: "table/a+b", Locator: "/display name/中文/~01"},
 	} {
 		raw, err := object.FormatReference(ref)
 		if err != nil {
@@ -24,10 +24,10 @@ func TestObjectReferenceKeepsIdentitySeparateFromPointer(t *testing.T) {
 			t.Fatalf("reference round trip: raw=%s got=%#v want=%#v error=%v", raw, got, ref, err)
 		}
 	}
-	base := "urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:table%2Forders"
+	base := "urn:kc:object:kr%3A%2F%2Fscene%2Fobject:table%2Forders"
 	for _, raw := range []string{base, base + "#"} {
 		got, err := object.ParseReference(raw)
-		if err != nil || got.Locator != "" || got.Repository != "kr://scene/knowledge" || got.Object != "table/orders" {
+		if err != nil || got.Locator != "" || got.Repository != "kr://scene/object" || got.Object != "table/orders" {
 			t.Fatalf("root reference: %#v %v", got, err)
 		}
 	}
@@ -36,8 +36,8 @@ func TestObjectReferenceKeepsIdentitySeparateFromPointer(t *testing.T) {
 		t.Fatalf("URI decoding must precede pointer decoding: %#v %v", got, err)
 	}
 	for _, raw := range []string{
-		"", "kc://scene/knowledge/table/orders", "urn:kc:object::orders",
-		"urn:kc:object:kr%3A%2F%2Fscene%2Fknowledge:", base + ":ambiguous",
+		"", "kc://scene/object/table/orders", "urn:kc:object::orders",
+		"urn:kc:object:kr%3A%2F%2Fscene%2Fobject:", base + ":ambiguous",
 		"urn:kc:object:kr%ZZ:orders", "urn:kc:object:kr%00:orders",
 		base + "?query", base + "#not-a-pointer", base + "#/bad~2",
 		base + "#/bad~", base + "#/bad%ZZ", base + "#/a#b",
@@ -68,7 +68,7 @@ func TestPointerSelectionDistinguishesKeysArraysAndMissingValues(t *testing.T) {
 		}
 	}
 	for _, pointer := range []string{"/missing", "/nil/child", "/array/2", "/array/-"} {
-		if _, err := object.SelectPointer(value, pointer); kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+		if _, err := object.SelectPointer(value, pointer); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 			t.Errorf("unresolved pointer %q: %v", pointer, err)
 		}
 	}
@@ -80,8 +80,8 @@ func TestPointerSelectionDistinguishesKeysArraysAndMissingValues(t *testing.T) {
 }
 
 func TestReferenceURNPrefixIsCaseInsensitiveWithoutChangingIdentity(t *testing.T) {
-	ref, err := object.ParseReference("URN:KC:object:kr%3A%2F%2FScene%2FKnowledge:Table%2FOrders#/Column/Id")
-	if err != nil || ref.Repository != "kr://Scene/Knowledge" || ref.Object != "Table/Orders" || ref.Locator != "/Column/Id" {
+	ref, err := object.ParseReference("URN:KC:object:kr%3A%2F%2FScene%2FObject:Table%2FOrders#/Column/Id")
+	if err != nil || ref.Repository != "kr://Scene/Object" || ref.Object != "Table/Orders" || ref.Locator != "/Column/Id" {
 		t.Fatalf("URN prefix casing changed namespace-specific identity: %#v %v", ref, err)
 	}
 	raw, err := object.FormatReference(ref)

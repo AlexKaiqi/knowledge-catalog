@@ -13,7 +13,7 @@ import (
 func TestDatasetFSProjectionRejectsPerFileEntries(t *testing.T) {
 	projection := datasetFSProjection{
 		dataset: "delivery",
-		resolved: dataset.ResolvedKnowledgeSet{
+		resolved: dataset.ResolvedDataset{
 			SetID: "delivery", PinID: "p", Items: []dataset.DatasetItem{
 				{Kind: dataset.DatasetItemFile, Target: "a.txt", File: "a.txt"},
 			},

@@ -23,9 +23,9 @@ type VirtualFile struct {
 }
 
 // ReadVirtualFile routes path to its frozen file or prefix and reads raw bytes
-// there at this ResolveKnowledgeSet's pin. A member without TreeStore fails with
+// there at this ResolveDataset's pin. A member without TreeStore fails with
 // CAPABILITY_UNSATISFIED naming it, the same seam-reporting pattern as
-// Store.Knowledge.
+// Store.Object.
 func (c *service) ReadVirtualFile(setID, path string) (VirtualFile, error) {
 	def, err := c.Set(setID)
 	if err != nil {
@@ -34,7 +34,7 @@ func (c *service) ReadVirtualFile(setID, path string) (VirtualFile, error) {
 	return c.ReadVirtualFileOf(def, path)
 }
 
-func (c *service) ReadVirtualFileOf(def KnowledgeSet, path string) (VirtualFile, error) {
+func (c *service) ReadVirtualFileOf(def Dataset, path string) (VirtualFile, error) {
 	resolved, err := c.ResolveDefinition(def)
 	if err != nil {
 		return VirtualFile{}, err
@@ -43,12 +43,12 @@ func (c *service) ReadVirtualFileOf(def KnowledgeSet, path string) (VirtualFile,
 }
 
 // ReadVirtualFileAt reads against a caller-supplied command pin. This is the
-// VFS equivalent of reader.Open over a ResolvedKnowledgeSet: repeated remote
+// VFS equivalent of reader.Open over a ResolvedDataset: repeated remote
 // filesystem calls can share one snapshot instead of re-following selectors.
-func (c *service) ReadVirtualFileAt(def KnowledgeSet, resolved ResolvedKnowledgeSet, path string) (VirtualFile, error) {
+func (c *service) ReadVirtualFileAt(def Dataset, resolved ResolvedDataset, path string) (VirtualFile, error) {
 	route, err := RouteDatasetFile(resolved.Items, path)
 	if err != nil {
-		if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+		if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 			return VirtualFile{}, kernel.Fail(kernel.ErrUsageInvalid, "no source in workspace %s owns path %s", def.SetID, path)
 		}
 		return VirtualFile{}, err
@@ -58,10 +58,10 @@ func (c *service) ReadVirtualFileAt(def KnowledgeSet, resolved ResolvedKnowledge
 	}
 	commit, ok := resolved.Repositories[route.Repository]
 	if !ok {
-		return VirtualFile{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "resolved pin has no commit for repository %s", route.Repository)
+		return VirtualFile{}, kernel.Fail(kernel.ErrDatasetInvalid, "resolved pin has no commit for repository %s", route.Repository)
 	}
 	if route.Commit != commit {
-		return VirtualFile{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "selected file disagrees with resolved repository commit")
+		return VirtualFile{}, kernel.Fail(kernel.ErrDatasetInvalid, "selected file disagrees with resolved repository commit")
 	}
 	snapshot, err := c.store.Require(route.Repository, kernel.ErrUsageInvalid)
 	if err != nil {
@@ -73,7 +73,7 @@ func (c *service) ReadVirtualFileAt(def KnowledgeSet, resolved ResolvedKnowledge
 			"repository %s does not support raw path reads", route.Repository)
 	}
 	if !DatasetPathAllowed(resolved.Items, route.Repository, route.File) {
-		return VirtualFile{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "path %s is not in dataset %s", path, def.SetID)
+		return VirtualFile{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "path %s is not in dataset %s", path, def.SetID)
 	}
 	content, err := raw.ReadFile(route.File, commit)
 	if err != nil {
@@ -82,7 +82,7 @@ func (c *service) ReadVirtualFileAt(def KnowledgeSet, resolved ResolvedKnowledge
 	return VirtualFile{Path: path, Repository: route.Repository, Commit: commit, Content: content}, nil
 }
 
-func hasDeclaredPrefix(sources []KnowledgeSetSource, item DatasetItem) bool {
+func hasDeclaredPrefix(sources []DatasetSource, item DatasetItem) bool {
 	for _, source := range sources {
 		if source.Path != nil && source.Repository == item.Repository && normalizeMountPath(*source.Path) == normalizeMountPath(item.Target) && normalizeMemberSubPath(source.SubPath) == item.Prefix {
 			return true
@@ -107,8 +107,8 @@ type VirtualMount struct {
 // and members without TreeStore. Per-file entries are not mounts and never
 // appear here; the file gateway composes them through DatasetDeliveredTree.
 // It is recipe/pin metadata, not a claim that a file exists at Path.
-func ListVirtualMountsAt(def KnowledgeSet, resolved ResolvedKnowledgeSet) ([]VirtualMount, error) {
-	mounts := make([]KnowledgeSetSource, 0, len(def.Sources))
+func ListVirtualMountsAt(def Dataset, resolved ResolvedDataset) ([]VirtualMount, error) {
+	mounts := make([]DatasetSource, 0, len(def.Sources))
 	for _, src := range def.Sources {
 		if !src.IsFileEntry() {
 			mounts = append(mounts, src)
@@ -121,7 +121,7 @@ func ListVirtualMountsAt(def KnowledgeSet, resolved ResolvedKnowledgeSet) ([]Vir
 	for _, src := range rootFirst(mounts) {
 		commit, ok := resolved.Repositories[src.Repository]
 		if !ok {
-			return nil, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "resolved pin has no commit for repository %s", src.Repository)
+			return nil, kernel.Fail(kernel.ErrDatasetInvalid, "resolved pin has no commit for repository %s", src.Repository)
 		}
 		out = append(out, VirtualMount{
 			Path:       normalizeMountPath(*src.Path),

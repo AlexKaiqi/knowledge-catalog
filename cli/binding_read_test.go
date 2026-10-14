@@ -54,7 +54,7 @@ func postAny(t *testing.T, base, path string, body map[string]any) any {
 	return payload
 }
 
-func TestWorkspaceReadHydratesStateBindingThroughTypedKnowledgeAPI(t *testing.T) {
+func TestWorkspaceReadHydratesStateBindingThroughTypedObjectAPI(t *testing.T) {
 	home := testkit.TempDir(t)
 	repositoryID := "kr://acme/public/core"
 	body(t, kc(home, "init"))
@@ -103,7 +103,7 @@ func TestWorkspaceReadHydratesStateBindingThroughTypedKnowledgeAPI(t *testing.T)
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
-	read := postAny(t, server.URL, "/knowledge/v1/objects:read", map[string]any{
+	read := postAny(t, server.URL, "/object/v1/objects:read", map[string]any{
 		"dataset": "agent", "reference": testObjectReference(t, repositoryID, "Service:orders", "/health"),
 	})
 	result := asMap(t, read)
@@ -130,7 +130,7 @@ func TestWorkspaceReadHydratesStateBindingThroughTypedKnowledgeAPI(t *testing.T)
 		if !ok || entry["result"] != "RESOLVED" {
 			continue
 		}
-		accessed, _ := entry["knowledge"].([]any)
+		accessed, _ := entry["object"].([]any)
 		if len(accessed) != 1 {
 			continue
 		}
@@ -145,7 +145,7 @@ func TestWorkspaceReadHydratesStateBindingThroughTypedKnowledgeAPI(t *testing.T)
 	}
 }
 
-func TestTypedKnowledgeReadForwardsTaihuCallerAuthentication(t *testing.T) {
+func TestTypedObjectReadForwardsTaihuCallerAuthentication(t *testing.T) {
 	home := testkit.TempDir(t)
 	repositoryID := "kr://acme/public/core"
 	body(t, kc(home, "init"))
@@ -192,7 +192,7 @@ func TestTypedKnowledgeReadForwardsTaihuCallerAuthentication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req, err := http.NewRequest(http.MethodPost, server.URL+"/knowledge/v1/objects:read", bytes.NewReader(raw))
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/object/v1/objects:read", bytes.NewReader(raw))
 	if err != nil {
 		t.Fatal(err)
 	}

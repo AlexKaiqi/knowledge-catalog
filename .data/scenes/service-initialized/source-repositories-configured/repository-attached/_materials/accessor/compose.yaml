@@ -23,7 +23,7 @@ services:
       KC_SOURCE_PATH: /data/source.json
       KC_SERVER_URL: ${KC_SERVER_URL:-}
       KC_AS: ${KC_AS:-}
-      KC_REPOSITORY: ${KC_REPOSITORY:-kr://scene/knowledge}
+      KC_REPOSITORY: ${KC_REPOSITORY:-kr://scene/object}
     ports:
       - "127.0.0.1:7391:7391"
     volumes:
@@ -41,7 +41,7 @@ services:
       KC_SOURCE_PATH: /data/source.json
       KC_SERVER_URL: ${KC_SERVER_URL:-}
       KC_AS: ${KC_AS:-agent:observer}
-      KC_NOTICE_REPOSITORY: ${KC_NOTICE_REPOSITORY:-${KC_REPOSITORY:-kr://scene/knowledge}}
+      KC_NOTICE_REPOSITORY: ${KC_NOTICE_REPOSITORY:-${KC_REPOSITORY:-kr://scene/object}}
     ports:
       - "127.0.0.1:7392:7392"
     volumes:

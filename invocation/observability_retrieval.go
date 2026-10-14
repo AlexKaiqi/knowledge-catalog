@@ -32,7 +32,7 @@ type relationObservationRequest struct {
 
 func RecordRetrievalEvidence(home, command string, flags map[string]invoke.FlagValue, result any, accessEvidenceID string, callErr error) (string, int64, error) {
 	switch command {
-	case "knowledge-search", "search-rerank", "knowledge-relations", "knowledge-traverse":
+	case "object-search", "search-rerank", "object-relations", "object-traverse":
 	default:
 		return "", -1, nil
 	}
@@ -67,7 +67,7 @@ func RetrievalEventFrom(command string, flags map[string]invoke.FlagValue, resul
 		Outcome: "COMPLETED", Candidates: []observability.RetrievalCandidate{}, Claims: []string{},
 		SearchView: observability.RefineSearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{}},
 	}
-	if command == "knowledge-traverse" {
+	if command == "object-traverse" {
 		event.Operator = observability.RetrievalOperatorTraverse
 		maxHops, maxErr := TraverseHops(flags)
 		if maxErr != nil {
@@ -91,7 +91,7 @@ func RetrievalEventFrom(command string, flags map[string]invoke.FlagValue, resul
 			Role: invoke.FlagString(flags, "role"), Direction: strings.ToUpper(invoke.FlagString(flags, "direction")),
 			MinHops: minHops, MaxHops: maxHops, Limit: limit,
 		}
-	} else if command == "knowledge-relations" {
+	} else if command == "object-relations" {
 		event.Operator = observability.RetrievalOperatorRelation
 		limit, limitErr := LimitFrom(flags, 0)
 		if limitErr != nil {
@@ -168,12 +168,12 @@ func populateSearchRetrievalEvent(event *observability.RetrievalEvent, result re
 		HydrateMillis: result.Stats.HydrateDuration.Milliseconds(),
 	}
 	for i, hit := range result.Hits {
-		ref := objectmodel.PinnedKnowledgeRef{
-			KnowledgeRef: objectmodel.KnowledgeRef{Repository: hit.Knowledge.Repository, Object: hit.Knowledge.Address.ObjectID},
-			Commit:       hit.Knowledge.Commit,
+		ref := objectmodel.PinnedObjectRef{
+			ObjectRef: objectmodel.ObjectRef{Repository: hit.Object.Repository, Object: hit.Object.Address.ObjectID},
+			Commit:    hit.Object.Commit,
 		}
 		event.Candidates = append(event.Candidates, observability.RetrievalCandidate{
-			KnowledgeRef: ref, Rank: i + 1, ValueDigest: kernel.CanonicalDigest(hit.Knowledge.Value),
+			ObjectRef: ref, Rank: i + 1, ValueDigest: kernel.CanonicalDigest(hit.Object.Value),
 			Evidence: retrievalLaneEvidence(hit.Evidence), Observations: append([]objectmodel.UnitObservation(nil), hit.Version.Observations...),
 		})
 	}
@@ -189,7 +189,7 @@ func populateRelationRetrievalEvent(event *observability.RetrievalEvent, result 
 	event.Execution = observability.RetrievalExecution{Candidates: len(result.Hits), Hydrated: len(result.Hits)}
 	for i, hit := range result.Hits {
 		event.Candidates = append(event.Candidates, observability.RetrievalCandidate{
-			KnowledgeRef: objectmodel.PinnedKnowledgeRef{KnowledgeRef: hit.KnowledgeRef, Commit: hit.Commit}, Rank: i + 1,
+			ObjectRef: objectmodel.PinnedObjectRef{ObjectRef: hit.ObjectRef, Commit: hit.Commit}, Rank: i + 1,
 			ValueDigest: kernel.CanonicalDigest(hit.Relation), Evidence: retrievalLaneEvidence(hit.Evidence),
 			MatchedRoles: append([]string(nil), hit.MatchedRoles...),
 		})
@@ -219,9 +219,9 @@ func populateTraverseRetrievalEvent(event *observability.RetrievalEvent, result 
 	for _, node := range result.Nodes {
 		rank++
 		event.Candidates = append(event.Candidates, observability.RetrievalCandidate{
-			KnowledgeRef: objectmodel.PinnedKnowledgeRef{
-				KnowledgeRef: objectmodel.KnowledgeRef{Repository: node.Repository, Object: node.ObjectID},
-				Commit:       result.SearchView.Snapshots[node.Repository],
+			ObjectRef: objectmodel.PinnedObjectRef{
+				ObjectRef: objectmodel.ObjectRef{Repository: node.Repository, Object: node.ObjectID},
+				Commit:    result.SearchView.Snapshots[node.Repository],
 			},
 			Rank:        rank,
 			ValueDigest: kernel.CanonicalDigest(node),
@@ -230,9 +230,9 @@ func populateTraverseRetrievalEvent(event *observability.RetrievalEvent, result 
 	for _, edge := range result.Edges {
 		rank++
 		event.Candidates = append(event.Candidates, observability.RetrievalCandidate{
-			KnowledgeRef: objectmodel.PinnedKnowledgeRef{
-				KnowledgeRef: objectmodel.KnowledgeRef{Repository: edge.Repository, Object: edge.ObjectID},
-				Commit:       edge.Commit,
+			ObjectRef: objectmodel.PinnedObjectRef{
+				ObjectRef: objectmodel.ObjectRef{Repository: edge.Repository, Object: edge.ObjectID},
+				Commit:    edge.Commit,
 			},
 			Rank:        rank,
 			ValueDigest: kernel.CanonicalDigest(edge.Relation),

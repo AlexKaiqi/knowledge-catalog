@@ -32,7 +32,7 @@ func managementFixture(t *testing.T) (*datasetHTTPFixture, *datasetHTTPSource) {
 
 func TestSnapshotStandaloneInventoryUsesOnlyRegisteredAuthority(t *testing.T) {
 	f, other := managementFixture(t)
-	if _, err := f.catalog.DefineKnowledgeSet("delivery", 1, []dataset.KnowledgeSetSource{{Repository: f.source.id, Selector: snapshot.DefaultRef, Path: dataset.MountPath("docs")}}); err != nil {
+	if _, err := f.catalog.DefineDataset("delivery", 1, []dataset.DatasetSource{{Repository: f.source.id, Selector: snapshot.DefaultRef, Path: dataset.MountPath("docs")}}); err != nil {
 		t.Fatal(err)
 	}
 	before := dataset.NormalizeState(f.catalog.DumpState())
@@ -58,10 +58,10 @@ func TestSnapshotStandaloneRegistrationChangesOnlyMembershipAndCurrentAdmission(
 	if !reflect.DeepEqual(attached, map[string]any{"repositoryId": string(other.id)}) || !f.catalog.HasRepository(other.id) {
 		t.Fatalf("registration was not accepted by the Dataset authority: %#v", attached)
 	}
-	if _, err := f.catalog.DefineKnowledgeSet("delivery", 1, []dataset.KnowledgeSetSource{{Repository: other.id, Selector: snapshot.DefaultRef, Path: dataset.MountPath("docs")}}); err != nil {
+	if _, err := f.catalog.DefineDataset("delivery", 1, []dataset.DatasetSource{{Repository: other.id, Selector: snapshot.DefaultRef, Path: dataset.MountPath("docs")}}); err != nil {
 		t.Fatal(err)
 	}
-	accepted, err := f.catalog.ResolveKnowledgeSet("delivery")
+	accepted, err := f.catalog.ResolveDataset("delivery")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestSnapshotStandaloneRegistrationChangesOnlyMembershipAndCurrentAdmission(
 	if after, err := f.catalog.DatasetVersion("delivery", 1); err != nil || !reflect.DeepEqual(after, definition) {
 		t.Fatal("detach changed an accepted Dataset release", after, err)
 	}
-	if _, err := f.catalog.ReplayPublished(accepted); kernel.CodeOf(err) != kernel.ErrKnowledgeSetInvalid {
+	if _, err := f.catalog.ReplayPublished(accepted); kernel.CodeOf(err) != kernel.ErrDatasetInvalid {
 		t.Fatalf("old accepted pin bypassed current member admission: %v", err)
 	}
 }

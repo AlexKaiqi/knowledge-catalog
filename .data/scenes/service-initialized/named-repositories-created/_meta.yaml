@@ -6,5 +6,5 @@ role: "provider"
 surface: feature
 publishes:
   - "repository.provisioning"
-summary: "两个托管仓 table-meta 与 sales-semantic 已创建并接入，供清河知识发布复用。"
-fixture: "显式创建并登记 table-meta 与 sales-semantic 两个托管仓，供后续清河知识发布及其两个独立消费用例复用。"
+summary: "两个托管仓 table-meta 与 sales-semantic 已创建并接入，供清河对象发布复用。"
+fixture: "显式创建并登记 table-meta 与 sales-semantic 两个托管仓，供后续清河对象发布及其两个独立消费用例复用。"

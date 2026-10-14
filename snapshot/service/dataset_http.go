@@ -29,10 +29,10 @@ func (h *handler) registerDatasetRoutes(mux *http.ServeMux) {
 }
 
 type datasetRequest struct {
-	Dataset  string                       `json:"dataset"`
-	Revision int                          `json:"revision"`
-	Sources  []dataset.KnowledgeSetSource `json:"sources"`
-	Metadata datasetMetadata              `json:"metadata,omitempty"`
+	Dataset  string                  `json:"dataset"`
+	Revision int                     `json:"revision"`
+	Sources  []dataset.DatasetSource `json:"sources"`
+	Metadata datasetMetadata         `json:"metadata,omitempty"`
 }
 
 type datasetMetadata map[string]string
@@ -73,7 +73,7 @@ func (h *handler) datasetList(w http.ResponseWriter, r *http.Request) {
 			return nil, err
 		}
 		state := dataset.NormalizeState(cat.DumpState())
-		return map[string]any{"datasets": dataset.PublicKnowledgeSets(state.KnowledgeSets)}, nil
+		return map[string]any{"datasets": dataset.PublicDatasets(state.Datasets)}, nil
 	})
 }
 
@@ -142,10 +142,10 @@ func publishDataset(ctx context.Context, caller identity.HTTPIdentity, resources
 	}
 	// Validate before an optional independent portable-recipe write. Its
 	// resulting source version is frozen again before the serving switch.
-	if _, err := cat.PrepareKnowledgeSet(request.Dataset, request.Revision, request.Sources); err != nil {
+	if _, err := cat.PrepareDataset(request.Dataset, request.Revision, request.Sources); err != nil {
 		return nil, err
 	}
-	definition := dataset.KnowledgeSet{SetID: request.Dataset, Revision: request.Revision, Sources: request.Sources, Metadata: maps.Clone(request.Metadata)}
+	definition := dataset.Dataset{SetID: request.Dataset, Revision: request.Revision, Sources: request.Sources, Metadata: maps.Clone(request.Metadata)}
 	var receipt map[string]any
 	if resources.BeforePublish != nil {
 		var err error
@@ -165,7 +165,7 @@ func publishDataset(ctx context.Context, caller identity.HTTPIdentity, resources
 	// an explicitly supplied commit cannot borrow that selector's authority.
 	selectedSources := clonePublicationSources(definition.Sources)
 	metadata := maps.Clone(definition.Metadata)
-	definition, err := cat.PrepareKnowledgeSet(definition.SetID, definition.Revision, definition.Sources)
+	definition, err := cat.PrepareDataset(definition.SetID, definition.Revision, definition.Sources)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +185,7 @@ func publishDataset(ctx context.Context, caller identity.HTTPIdentity, resources
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	accepted, err := cat.PublishKnowledgeSet(definition)
+	accepted, err := cat.PublishDataset(definition)
 	if err != nil {
 		return nil, err
 	}
@@ -201,14 +201,14 @@ func publishDataset(ctx context.Context, caller identity.HTTPIdentity, resources
 	return out, nil
 }
 
-func authorizePublication(ctx context.Context, caller identity.HTTPIdentity, resources Resources, id string, sources []dataset.KnowledgeSetSource) error {
+func authorizePublication(ctx context.Context, caller identity.HTTPIdentity, resources Resources, id string, sources []dataset.DatasetSource) error {
 	if err := resources.authorize(ctx, Authorization{Caller: caller, Query: access.Query{Action: "dataset.manage", Dataset: id}}); err != nil {
 		return err
 	}
 	return authorizePublicationSources(ctx, caller, resources, id, sources)
 }
 
-func authorizePublicationSources(ctx context.Context, caller identity.HTTPIdentity, resources Resources, id string, sources []dataset.KnowledgeSetSource) error {
+func authorizePublicationSources(ctx context.Context, caller identity.HTTPIdentity, resources Resources, id string, sources []dataset.DatasetSource) error {
 	for _, source := range sources {
 		ref := snapshot.RefOrDefault(source.Selector)
 		if source.Commit != "" {
@@ -221,7 +221,7 @@ func authorizePublicationSources(ctx context.Context, caller identity.HTTPIdenti
 	return nil
 }
 
-func clonePublicationSources(sources []dataset.KnowledgeSetSource) []dataset.KnowledgeSetSource {
+func clonePublicationSources(sources []dataset.DatasetSource) []dataset.DatasetSource {
 	cloned := slices.Clone(sources)
 	for i := range cloned {
 		if cloned[i].Path != nil {
@@ -246,7 +246,7 @@ func (h *handler) datasetRetire(w http.ResponseWriter, r *http.Request) {
 			if err := resources.authorize(ctx, Authorization{Caller: caller, Query: access.Query{Action: "dataset.manage", Dataset: id}}); err != nil {
 				return nil, err
 			}
-			if err := cat.RetireKnowledgeSet(id); err != nil {
+			if err := cat.RetireDataset(id); err != nil {
 				return nil, err
 			}
 			return map[string]any{"dataset": id, "retired": true}, nil
@@ -268,30 +268,30 @@ func datasetResolveRevision(request datasetResolveRequest) (*int, error) {
 	return &revision, nil
 }
 
-func resolveNamedDataset(cat dataset.Service, id string, request datasetResolveRequest, revision *int) (dataset.ResolvedKnowledgeSet, error) {
+func resolveNamedDataset(cat dataset.Service, id string, request datasetResolveRequest, revision *int) (dataset.ResolvedDataset, error) {
 	if revision != nil {
 		definition, err := cat.DatasetVersion(id, *revision)
 		if err != nil {
-			return dataset.ResolvedKnowledgeSet{}, err
+			return dataset.ResolvedDataset{}, err
 		}
-		pin := dataset.ResolvedKnowledgeSet{SetID: definition.SetID, Revision: definition.Revision, Repositories: map[kernel.RepositoryID]kernel.CommitID{}}
+		pin := dataset.ResolvedDataset{SetID: definition.SetID, Revision: definition.Revision, Repositories: map[kernel.RepositoryID]kernel.CommitID{}}
 		for _, source := range definition.Sources {
 			if source.Commit == "" {
-				return dataset.ResolvedKnowledgeSet{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "published Dataset source has no frozen commit")
+				return dataset.ResolvedDataset{}, kernel.Fail(kernel.ErrDatasetInvalid, "published Dataset source has no frozen commit")
 			}
 			pin.Repositories[source.Repository] = source.Commit
 		}
 		return cat.ReplayPublished(pin)
 	}
 	if len(request.Pin) == 0 {
-		return cat.ResolveKnowledgeSet(id)
+		return cat.ResolveDataset(id)
 	}
-	var pin dataset.ResolvedKnowledgeSet
+	var pin dataset.ResolvedDataset
 	if err := dataset.DecodeJSON(request.Pin, &pin); err != nil {
-		return dataset.ResolvedKnowledgeSet{}, kernel.Fail(kernel.ErrUsageInvalid, "pin must be a ResolvedKnowledgeSet JSON object")
+		return dataset.ResolvedDataset{}, kernel.Fail(kernel.ErrUsageInvalid, "pin must be a ResolvedDataset JSON object")
 	}
 	if pin.SetID != "" && pin.SetID != id {
-		return dataset.ResolvedKnowledgeSet{}, kernel.Fail(kernel.ErrUsageInvalid, "pin names a different dataset")
+		return dataset.ResolvedDataset{}, kernel.Fail(kernel.ErrUsageInvalid, "pin names a different dataset")
 	}
 	pin.SetID = id
 	return cat.ReplayPublished(pin)
@@ -320,7 +320,7 @@ func (h *handler) datasetResolveOrCheck(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	if check && request.InventoryDiscovery {
-		writeError(w, kernel.Fail(kernel.ErrUsageInvalid, "inventoryDiscovery is only valid for ResolveKnowledgeSet and SEARCH"))
+		writeError(w, kernel.Fail(kernel.ErrUsageInvalid, "inventoryDiscovery is only valid for ResolveDataset and SEARCH"))
 		return
 	}
 	operation := "pin"
@@ -359,7 +359,7 @@ func (h *handler) datasetResolveOrCheck(w http.ResponseWriter, r *http.Request, 
 // probe its selected bodies, so all fixed sources require current consumption
 // permission before any provider is touched. A Dataset management or source
 // publication grant cannot substitute for file.read here.
-func authorizeCheckedFiles(ctx context.Context, caller identity.HTTPIdentity, resources Resources, pin dataset.ResolvedKnowledgeSet) error {
+func authorizeCheckedFiles(ctx context.Context, caller identity.HTTPIdentity, resources Resources, pin dataset.ResolvedDataset) error {
 	for repository, commit := range pin.Repositories {
 		request := Authorization{Caller: caller, Query: access.Query{Action: "file.read", Dataset: pin.SetID, Repo: string(repository), Ref: string(commit)}, Pin: &pin}
 		if err := resources.authorize(ctx, request); err != nil {
@@ -369,7 +369,7 @@ func authorizeCheckedFiles(ctx context.Context, caller identity.HTTPIdentity, re
 	return nil
 }
 
-func authorizeDefinition(ctx context.Context, caller identity.HTTPIdentity, resources Resources, action string, definition *dataset.KnowledgeSet, pin *dataset.ResolvedKnowledgeSet) error {
+func authorizeDefinition(ctx context.Context, caller identity.HTTPIdentity, resources Resources, action string, definition *dataset.Dataset, pin *dataset.ResolvedDataset) error {
 	request := Authorization{Caller: caller, Query: access.Query{Action: action}, Definition: definition, Pin: pin}
 	err := resources.authorize(ctx, request)
 	if err == nil || kernel.CodeOf(err) != kernel.ErrForbidden {
@@ -401,7 +401,7 @@ func (h *handler) datasetResolveDefinition(w http.ResponseWriter, r *http.Reques
 	}
 	r = requestWithDataset(r, request.Dataset)
 	h.withResources(w, r, "pin-source", func(ctx context.Context, caller identity.HTTPIdentity, resources Resources) (any, error) {
-		definition := dataset.KnowledgeSet{SetID: request.Dataset, Revision: request.Revision, Sources: request.Sources, Metadata: maps.Clone(request.Metadata)}
+		definition := dataset.Dataset{SetID: request.Dataset, Revision: request.Revision, Sources: request.Sources, Metadata: maps.Clone(request.Metadata)}
 		if err := authorizeDefinition(ctx, caller, resources, "dataset.resolve", &definition, nil); err != nil {
 			return nil, err
 		}

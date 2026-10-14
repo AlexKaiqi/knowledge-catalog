@@ -141,10 +141,10 @@ func TestIndexPluginsCloseCancelsBackgroundStateBeforeDrainingCatchUp(t *testing
 		t.Fatal("accepted foreground CatchUp did not publish the actual State projection")
 	}
 	result, err := queries.SearchStateAtRevisionContext(context.Background(), repo, commit.Result.NewCommit, revision, query)
-	if err != nil || len(result.Hits) != 1 || result.Hits[0].Knowledge.Address.ObjectID != "Job:shutdown" || result.Hits[0].Knowledge.Commit != commit.Result.NewCommit || len(result.Hits[0].Version.Observations) != 1 {
+	if err != nil || len(result.Hits) != 1 || result.Hits[0].Object.Address.ObjectID != "Job:shutdown" || result.Hits[0].Object.Commit != commit.Result.NewCommit || len(result.Hits[0].Version.Observations) != 1 {
 		t.Fatalf("draining task did not preserve the real fixed State query: %#v %v", result, err)
 	}
-	value := result.Hits[0].Knowledge.Value.(map[string]any)
+	value := result.Hits[0].Object.Value.(map[string]any)
 	if value["runtime"].(map[string]any)["status"] != "running" {
 		t.Fatalf("State query did not return the observed body: %#v", value)
 	}

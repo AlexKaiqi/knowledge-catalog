@@ -14,32 +14,32 @@ type Observer func(operation string, refs map[string]any, err error) error
 // Service is the file Dataset authority. Implementations remain private.
 type Service interface {
 	AddHook(h Hook)
-	CheckResolved(resolved ResolvedKnowledgeSet) KnowledgeSetCheck
-	CheckResolvedRepository(resolved ResolvedKnowledgeSet, repositoryID kernel.RepositoryID) KnowledgeSetCheck
-	DatasetVersion(setID string, revision int) (KnowledgeSet, error)
-	DefineKnowledgeSet(setID string, revision int, sources []KnowledgeSetSource) (KnowledgeSet, error)
+	CheckResolved(resolved ResolvedDataset) DatasetCheck
+	CheckResolvedRepository(resolved ResolvedDataset, repositoryID kernel.RepositoryID) DatasetCheck
+	DatasetVersion(setID string, revision int) (Dataset, error)
+	DefineDataset(setID string, revision int, sources []DatasetSource) (Dataset, error)
 	DumpState() State
 	HasRepository(repositoryID kernel.RepositoryID) bool
 	LoadState(state State)
 	Log(query LogQuery) (History, error)
 	NotifySnapshot(ev Snapshot)
-	PrepareKnowledgeSet(setID string, revision int, sources []KnowledgeSetSource) (KnowledgeSet, error)
-	PublishKnowledgeSet(def KnowledgeSet) (KnowledgeSet, error)
+	PrepareDataset(setID string, revision int, sources []DatasetSource) (Dataset, error)
+	PublishDataset(def Dataset) (Dataset, error)
 	ReadView(j Observer) Service
 	ReadVirtualFile(setID, path string) (VirtualFile, error)
-	ReadVirtualFileAt(def KnowledgeSet, resolved ResolvedKnowledgeSet, path string) (VirtualFile, error)
-	ReadVirtualFileOf(def KnowledgeSet, path string) (VirtualFile, error)
+	ReadVirtualFileAt(def Dataset, resolved ResolvedDataset, path string) (VirtualFile, error)
+	ReadVirtualFileOf(def Dataset, path string) (VirtualFile, error)
 	RecordCreated() error
 	RegisterRepository(repositoryID kernel.RepositoryID) error
-	ReplayPublished(pin ResolvedKnowledgeSet) (ResolvedKnowledgeSet, error)
+	ReplayPublished(pin ResolvedDataset) (ResolvedDataset, error)
 	Repositories() []string
 	Require(repositoryID kernel.RepositoryID) (snapshot.Store, error)
-	ResolveDefinition(def KnowledgeSet) (ResolvedKnowledgeSet, error)
-	ResolveDefinitionOverlay(def KnowledgeSet, overlay map[kernel.RepositoryID]kernel.CommitID) (ResolvedKnowledgeSet, error)
-	ResolveKnowledgeSet(setID string) (ResolvedKnowledgeSet, error)
-	ResolveKnowledgeSetOverlay(setID string, overlay map[kernel.RepositoryID]kernel.CommitID) (ResolvedKnowledgeSet, error)
-	RetireKnowledgeSet(setID string) error
-	Set(setID string) (KnowledgeSet, error)
+	ResolveDefinition(def Dataset) (ResolvedDataset, error)
+	ResolveDefinitionOverlay(def Dataset, overlay map[kernel.RepositoryID]kernel.CommitID) (ResolvedDataset, error)
+	ResolveDataset(setID string) (ResolvedDataset, error)
+	ResolveDatasetOverlay(setID string, overlay map[kernel.RepositoryID]kernel.CommitID) (ResolvedDataset, error)
+	RetireDataset(setID string) error
+	Set(setID string) (Dataset, error)
 	SetObserver(j Observer)
 	SetStamp(as, requestID, ruleID string)
 	UnregisterRepository(repositoryID kernel.RepositoryID) error

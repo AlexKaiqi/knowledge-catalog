@@ -69,14 +69,14 @@ func remoteCurrentDigests(ctx context.Context, client *kcclient.Client, reposito
 				}
 				op := ops[index]
 				var raw any
-				err := client.KnowledgeService().Resolve(ctx, kcclient.KnowledgeResolveRequest{
-					KnowledgeScope: kcclient.KnowledgeScope{Repository: repository, Commit: string(commit)},
-					Object:         string(op.Address.ObjectID),
-					Aspect:         op.Address.AspectName,
-					Member:         op.Address.MemberKey,
+				err := client.Objects().Resolve(ctx, kcclient.ObjectResolveRequest{
+					ObjectScope: kcclient.ObjectScope{Repository: repository, Commit: string(commit)},
+					Object:      string(op.Address.ObjectID),
+					Aspect:      op.Address.AspectName,
+					Member:      op.Address.MemberKey,
 				}, options, &raw)
 				if err != nil {
-					if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+					if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 						continue
 					}
 					mu.Lock()

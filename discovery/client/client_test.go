@@ -46,21 +46,21 @@ func TestDiscoveryTransportKeepsExistingQueryWireAndScope(t *testing.T) {
 	}
 	var output any
 	o := RequestOptions{RequestID: "request-1"}
-	scope := KnowledgeScope{Repository: "kr://source", Commit: "fixed"}
-	err = remote.Search(context.Background(), SearchRequest{KnowledgeScope: scope, Query: "orders", MatchMode: "Phrase", Match: []string{"body=orders"}, Equal: []string{"count=9007199254740993"}, NotEqual: []string{"state=cancelled"}, In: []string{"state=open,closed"}, Exists: []string{"owner"}, Missing: []string{"archived"}, Prefix: []string{"code=ORD"}, Contains: []string{"name=order"}, GreaterThan: []string{"count=1"}, GreaterEqual: []string{"count=2"}, LessThan: []string{"count=10"}, LessEqual: []string{"count=9"}, Sort: []string{"count:asc"}, Continuation: "cursor", Recall: "lexical"}, o, &output)
+	scope := ObjectScope{Repository: "kr://source", Commit: "fixed"}
+	err = remote.Search(context.Background(), SearchRequest{ObjectScope: scope, Query: "orders", MatchMode: "Phrase", Match: []string{"body=orders"}, Equal: []string{"count=9007199254740993"}, NotEqual: []string{"state=cancelled"}, In: []string{"state=open,closed"}, Exists: []string{"owner"}, Missing: []string{"archived"}, Prefix: []string{"code=ORD"}, Contains: []string{"name=order"}, GreaterThan: []string{"count=1"}, GreaterEqual: []string{"count=2"}, LessThan: []string{"count=10"}, LessEqual: []string{"count=9"}, Sort: []string{"count:asc"}, Continuation: "cursor", Recall: "lexical"}, o, &output)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if output.(map[string]any)["value"] != json.Number("9007199254740993") {
 		t.Fatalf("precise result changed: %#v", output)
 	}
-	if err := remote.Relations(context.Background(), RelationsRequest{KnowledgeScope: scope, Endpoint: "orders", Role: "from", Continuation: "relations-cursor"}, o, &output); err != nil {
+	if err := remote.Relations(context.Background(), RelationsRequest{ObjectScope: scope, Endpoint: "orders", Role: "from", Continuation: "relations-cursor"}, o, &output); err != nil {
 		t.Fatal(err)
 	}
-	if err := remote.Traverse(context.Background(), TraverseRequest{KnowledgeScope: scope, Endpoint: "orders", MaxHops: 2}, o, &output); err != nil {
+	if err := remote.Traverse(context.Background(), TraverseRequest{ObjectScope: scope, Endpoint: "orders", MaxHops: 2}, o, &output); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(paths, ",") != "/api/knowledge/v1/search,/api/knowledge/v1/relations:query,/api/knowledge/v1/traverse:query" {
+	if strings.Join(paths, ",") != "/api/object/v1/search,/api/object/v1/relations:query,/api/object/v1/traverse:query" {
 		t.Fatal(paths)
 	}
 }
@@ -96,7 +96,7 @@ func TestPluginHelpAndAccessOverviewTransportRemainReadOnly(t *testing.T) {
 	if output.(map[string]any)["plugins"].([]any)[0].(map[string]any)["repository"] != "kr://chosen" {
 		t.Fatalf("source capability lost: %#v", output)
 	}
-	if strings.Join(paths, ",") != "GET /knowledge/v1/plugins/experimental%2Fname,POST /operations/v1/access-specs:describe" {
+	if strings.Join(paths, ",") != "GET /object/v1/plugins/experimental%2Fname,POST /operations/v1/access-specs:describe" {
 		t.Fatal(paths)
 	}
 }

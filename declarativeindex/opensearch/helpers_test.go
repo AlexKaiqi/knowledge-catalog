@@ -7,7 +7,7 @@ import (
 func objectIDs(hits retrieval.SearchResult) []string {
 	out := make([]string, len(hits.Hits))
 	for i, hit := range hits.Hits {
-		out[i] = string(hit.Knowledge.Address.ObjectID)
+		out[i] = string(hit.Object.Address.ObjectID)
 	}
 	return out
 }

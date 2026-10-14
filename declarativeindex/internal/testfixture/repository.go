@@ -12,14 +12,14 @@ import (
 	"time"
 )
 
-type knowledgeWriter interface {
+type objectWriter interface {
 	objectmodel.Repository
-	ApplyKnowledgeCommit(objectmodel.ChangeSet) (kernel.CommitID, error)
+	ApplyObjectCommit(objectmodel.ChangeSet) (kernel.CommitID, error)
 }
 
-func PutAt(t *testing.T, repo knowledgeWriter, base kernel.CommitID, ops []objectmodel.Operation) kernel.CommitID {
+func PutAt(t *testing.T, repo objectWriter, base kernel.CommitID, ops []objectmodel.Operation) kernel.CommitID {
 	t.Helper()
-	head, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	head, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef,
 		BaseCommit: base, ExpectedTargetCommit: base, Operations: ops,
 	})
@@ -41,7 +41,7 @@ func PolicyBodySchema() objectmodel.Operation {
 
 var indexTestSequence atomic.Uint64
 
-func MakeIndexRepository(t *testing.T, base string) *testkit.KnowledgeRepository {
+func MakeIndexRepository(t *testing.T, base string) *testkit.ObjectRepository {
 	t.Helper()
 	return testkit.MakeRepository(t, uniqueRepositoryID(base))
 }
@@ -50,11 +50,11 @@ func uniqueRepositoryID(base string) string {
 	return fmt.Sprintf("%s/index-test-%d-%d", strings.TrimRight(base, "/"), time.Now().UnixNano(), indexTestSequence.Add(1))
 }
 
-func RelationFixture(t *testing.T) (*testkit.KnowledgeRepository, kernel.CommitID) {
+func RelationFixture(t *testing.T) (*testkit.ObjectRepository, kernel.CommitID) {
 	t.Helper()
 	repo := testkit.MakeRepository(t, "kr://acme/public/core")
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
-	commit, err := repo.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	commit, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef,
 		BaseCommit: root, ExpectedTargetCommit: root,
 		Operations: []objectmodel.Operation{
@@ -78,7 +78,7 @@ func RelationBody(repository kernel.RepositoryID, id, endpoint string) map[strin
 	}
 }
 
-func CommittedSearchablePolicy(t *testing.T) (*testkit.KnowledgeRepository, kernel.CommitID, kernel.CommitID) {
+func CommittedSearchablePolicy(t *testing.T) (*testkit.ObjectRepository, kernel.CommitID, kernel.CommitID) {
 	t.Helper()
 	repo := MakeIndexRepository(t, "kr://acme/public/core")
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)

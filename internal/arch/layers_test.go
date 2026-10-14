@@ -54,7 +54,7 @@ var forbidden = []struct {
 	{
 		pkg:    "snapshot/dataset",
 		denied: []string{"home", "invocation", "invoke", "server", "client", "object", "discovery/service", "discovery", "declarativeindex", "discovery/projection", "controlplane", "hook", "gate", "cli"},
-		why:    "Snapshot Store owns file Dataset definitions and release authority; it cannot depend on consumers, knowledge interpretation, or concrete storage providers",
+		why:    "Snapshot Store owns file Dataset definitions and release authority; it cannot depend on consumers, object interpretation, or concrete storage providers",
 	},
 	{
 		pkg:    "snapshot/access",
@@ -129,7 +129,7 @@ var forbidden = []struct {
 	{
 		pkg:    "liveaccess",
 		denied: []string{"discovery", "declarativeindex", "discovery/projection", "object/writer", "hook", "gate", "cli", "client", "delivery"},
-		why:    "consumer Knowledge Serving may compose Reader with an injected State port, but must not own providers, credentials, composition, writes, retrieval, or caller-visible delivery",
+		why:    "consumer Object Serving may compose Reader with an injected State port, but must not own providers, credentials, composition, writes, retrieval, or caller-visible delivery",
 	},
 	{
 		pkg:    "discovery/plugin",
@@ -154,7 +154,7 @@ var forbidden = []struct {
 	{
 		pkg:    "discovery",
 		denied: []string{"object/writer", "discovery/projection", "declarativeindex/control", "declarativeindex/projection", "controlplane", "declarativeindex/opensearch", "cli", "delivery"},
-		why:    "layer ③ logical retrieval contracts may consume Knowledge declarations but not providers, application wiring, or caller-visible delivery",
+		why:    "layer ③ logical retrieval contracts may consume Object declarations but not providers, application wiring, or caller-visible delivery",
 	},
 	{
 		pkg:    "discovery/projection",
@@ -243,7 +243,7 @@ var forbidden = []struct {
 	{
 		pkg:    "observability",
 		denied: []string{"discovery", "declarativeindex", "discovery/projection", "controlplane", "hook", "gate", "cli", "httpsurface", "client", "home"},
-		why:    "evidence and telemetry are consumed by knowledge/serving and the transports; they must not reach retrieval, index, hooks, gates, or transports (knowledge stays allowed: knowledge/serving imports it)",
+		why:    "evidence and telemetry are consumed by object/serving and the transports; they must not reach retrieval, index, hooks, gates, or transports (object stays allowed: object/serving imports it)",
 	},
 }
 
@@ -309,7 +309,7 @@ func TestArchitectureGuardIncludesProductionScripts(t *testing.T) {
 
 // Client is an application boundary above every protocol layer. Login state,
 // credentials, HTTP transport, and token refresh must never leak downward into
-// Snapshot, Catalog, Knowledge, retrieval contracts, or their adapters.
+// Snapshot, Catalog, Object, retrieval contracts, or their adapters.
 func TestProtocolLayersDoNotDependOnClient(t *testing.T) {
 	graph := loadGraph(t)
 	for _, pkg := range []string{
@@ -325,10 +325,10 @@ func TestProtocolLayersDoNotDependOnClient(t *testing.T) {
 	}
 }
 
-// TestCatalogStaysOffTheKnowledgeProtocol is the rule that regressed before:
+// TestCatalogStaysOffTheObjectProtocol is the rule that regressed before:
 // catalog/ reached reader/ and index/ through a concrete adapter, so
 // linking layer ① dragged in layers ② and ③.
-func TestCatalogStaysOffTheKnowledgeProtocol(t *testing.T) {
+func TestCatalogStaysOffTheObjectProtocol(t *testing.T) {
 	graph := loadGraph(t)
 	for dependency, trail := range graph.reachable("snapshot/dataset") {
 		for _, denied := range []string{"object", "discovery/projection", "discovery", "home", "invocation", "server", "internal/gitdir", "internal/journal"} {
@@ -714,7 +714,7 @@ func TestCLIAndHTTPUseSameTypedApplicationExecutor(t *testing.T) {
 
 // Semantic object caches are an upper-product concern. Request-local maps are
 // allowed, but Reader and Snapshot adapter structs/package variables must not
-// retain ObjectID/KnowledgeRef -> KnowledgeValue/CanonicalRelation state.
+// retain ObjectID/ObjectRef -> ObjectValue/CanonicalRelation state.
 func TestLowerLayersDoNotDeclareSemanticObjectCaches(t *testing.T) {
 	root := moduleRoot(t)
 	prefixes := []string{"object/reader", "snapshot"}
@@ -758,8 +758,8 @@ func TestLowerLayersDoNotDeclareSemanticObjectCaches(t *testing.T) {
 				return err
 			}
 			text := rendered.String()
-			identity := strings.Contains(text, "ObjectID") || strings.Contains(text, "KnowledgeRef")
-			body := strings.Contains(text, "KnowledgeValue") || strings.Contains(text, "CanonicalRelation")
+			identity := strings.Contains(text, "ObjectID") || strings.Contains(text, "ObjectRef")
+			body := strings.Contains(text, "ObjectValue") || strings.Contains(text, "CanonicalRelation")
 			if identity && body && strings.Contains(text, "map[") {
 				t.Errorf("lower layer %s declares a semantic object cache: %s", rel, strings.TrimSpace(text))
 			}

@@ -79,7 +79,7 @@ Snapshot 叶 help 按可供性说明用途、输入、条件、结果、后果�
 独立模块、`kc help <命令>` 与 `<命令> --help` 显示同一完整内容。
 
 `kc plugin <名称> help` 经同一已认证 Server 读取登记说明；`kc help plugin` 本地显示该任务用法。
-知识访问概览沿既有 `operations access-spec describe` 保留逻辑合同并附本次来源的插件帮助入口；
+对象访问概览沿既有 `operations access-spec describe` 保留逻辑合同并附本次来源的插件帮助入口；
 说明不证明支持或就绪，不在 Schema JSON 中附加运行匹配，不为说明读取启动来源或维护。
 
 ### 部署与应用过程
@@ -106,22 +106,22 @@ create 只让 KC 能打开该 Repository，不登记来源成员；用户随后�
 `home.ManagedRepositoryResult` 的调用者 command 回执。`GET /repositories/{repository}` 只
 交付不带仓数据的网页外壳，所有内容仍经同源 typed API 认证授权。
 
-`RepositoryReadiness` 分别报告 `publication/publishedCommit`、可查询时的 `schemaCount` 与 `search/searchBasis/reason`。README 是仓内知识对象，不进入这份就绪结构。检索状态需要另有当前仓的 `projection.read`；只有固定发布版本通过 `index.CheckSearchProjectionAt` 的 READY、AccessDigest 与物理提供方校验，才返回 `READY`。已观察到的 `BUILDING/UPDATING` 表示处理中，`FAILED/RETIRED` 表示失败或停用，`NOT_READY` 表示尚无可用投影；都不改变已经发布的版本。`NOT_CONFIGURED` 表示没有索引实例，`NOT_AUTHORIZED` 只表示明确拒绝，提供方或授权存储异常为 `UNAVAILABLE` 并带错误原因。此只读状态不会触发查询或重建，也不代替具体查询的能力与权限检查。
+`RepositoryReadiness` 分别报告 `publication/publishedCommit`、可查询时的 `schemaCount` 与 `search/searchBasis/reason`。README 是仓内对象，不进入这份就绪结构。检索状态需要另有当前仓的 `projection.read`；只有固定发布版本通过 `index.CheckSearchProjectionAt` 的 READY、AccessDigest 与物理提供方校验，才返回 `READY`。已观察到的 `BUILDING/UPDATING` 表示处理中，`FAILED/RETIRED` 表示失败或停用，`NOT_READY` 表示尚无可用投影；都不改变已经发布的版本。`NOT_CONFIGURED` 表示没有索引实例，`NOT_AUTHORIZED` 只表示明确拒绝，提供方或授权存储异常为 `UNAVAILABLE` 并带错误原因。此只读状态不会触发查询或重建，也不代替具体查询的能力与权限检查。
 
 ### 应用操作
 
 生产 CLI 经模块 SDK 请求 Server，服务端由 `invocation/verbs_*.go` 适配所属任务服务。
 本包旧 command/verbs 注册与嵌入夹具执行链仅保留在 `_test.go`，用于组件测试；
 模块叶参数、帮助、产品结果及回执恢复由所属 CLI/SDK 拥有。
-跨 Dataset / Knowledge / File Gateway 复用的固定版本与消费上下文由
+跨 Dataset / Object / File Gateway 复用的固定版本与消费上下文由
 `invocation/dataset_access.go`、`invocation/task_pin.go` 持有。
 
 公开原始文件入口归 Snapshot Service；语义 Workspace File Gateway 与 `kcfs` 由应用装配。
 旧 `catalog/worktree` Git checkout / sync 已退役，不能作为 Snapshot 合同之外的入口。
 
 `invocation/request_shape.go` 把 flags 编成 `SearchRequest`，共享用例由 `discovery/service/` 执行。
-`invocation/allow.go` 是授权求值；命名知识集 SEARCH 要 `file.read`
-与 `knowledge.search`，正文走 `delivery/` 按仓 `knowledge.read` 屏蔽。访问证据不在这里。
+`invocation/allow.go` 是授权求值；命名 Dataset SEARCH 要 `file.read`
+与 `object.search`，正文走 `delivery/` 按仓 `object.read` 屏蔽。访问证据不在这里。
 
 `AllowFile.initialGrants` 保存 allocation → 请求 digest 的一次策略应用回执，与初始仓级规则原子持久化。普通 `grant remove` 保留这份回执，create retry 不会重建已撤销规则。策略可明确授予仓级 `writer.receipt.read`；receipt 授权从耐久 command entry 取得真实 Repository/ref，不信任调用者指定的仓。托管创建的过程回执不进入登记 Snapshot 或 Writer command ledger。
 
@@ -226,9 +226,9 @@ Dataset、ref、object、aspect 过滤，不暴露授权账本私有回执。
 
 已有自有 lakeFS 来源通过 `kc create --url --credential-file` 连接。credential 只进入 typed
 请求体和 Server 私有耐久账，不进入日志、trace 或公开结果。连接成功不等于 attach，也不发
-`knowledge.read`。
+`object.read`。
 
-知识消费只接受 `--repo` 或 `--dataset`；没有 Catalog 选择范围，也不接受
+对象消费只接受 `--repo` 或 `--dataset`；没有 Catalog 选择范围，也不接受
 `--catalog`、`--source`、`--pin`。Writer、`diff` 与 `schema list` 拒绝 `--dataset`。
 
 `kc dataset define` 可通过配方中的可选 `metadata`，或 `--metadata '<JSON object>'`

@@ -1,0 +1,18 @@
+---
+object_id: kc/relation/review-a-change.uses.publish-object
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: relations/review-a-change.uses.publish-object.yaml
+---
+relationId: kc/relation/review-a-change.uses.publish-object
+relationType: uses
+direction: DIRECTED
+endpoints:
+  - role: from
+    objectRef:
+      repository: kr://kc/system
+      object: kc/guide/review-a-change
+  - role: to
+    objectRef:
+      repository: kr://kc/system
+      object: kc/capability/publish-object

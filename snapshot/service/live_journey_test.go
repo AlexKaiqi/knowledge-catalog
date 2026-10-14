@@ -31,7 +31,7 @@ func (transport liveJourneyTransport) Do(ctx context.Context, _ string, request 
 }
 
 // This independent journey uses the deployed lakeFS data plane, with no Home,
-// Invocation, Knowledge or search adapter behind the Snapshot Handler.
+// Invocation, Object or search adapter behind the Snapshot Handler.
 func TestLiveSnapshotPublicationJourney(t *testing.T) {
 	origin := strings.TrimSpace(os.Getenv("KC_SCENE_LIVE_LAKEFS_URL"))
 	if origin == "" {
@@ -100,10 +100,10 @@ func TestLiveSnapshotPublicationJourney(t *testing.T) {
 	if _, err := executor.Execute(ctx, "show", nil, options); err != nil {
 		t.Fatal(err)
 	}
-	definition := client.KnowledgeSetRequest{Dataset: "delivery", Revision: 1, Metadata: map[string]string{"description": "可选资源属性", "owner": "data-team"}, Sources: []dataset.KnowledgeSetSource{{Repository: source.ID(), Selector: snapshot.DefaultRef, File: "plain.bin", Target: "docs/data.bin"}}}
+	definition := client.DatasetRequest{Dataset: "delivery", Revision: 1, Metadata: map[string]string{"description": "可选资源属性", "owner": "data-team"}, Sources: []dataset.DatasetSource{{Repository: source.ID(), Selector: snapshot.DefaultRef, File: "plain.bin", Target: "docs/data.bin"}}}
 	before := testkit.MustHead(t, authority, snapshot.DefaultRef)
-	testkit.ExpectCode(t, manager.SnapshotService().DefineKnowledgeSet(ctx, definition, options, nil), kernel.ErrForbidden)
-	if testkit.MustHead(t, authority, snapshot.DefaultRef) != before || len(cat.DumpState().KnowledgeSets) != 0 {
+	testkit.ExpectCode(t, manager.SnapshotService().DefineDataset(ctx, definition, options, nil), kernel.ErrForbidden)
+	if testkit.MustHead(t, authority, snapshot.DefaultRef) != before || len(cat.DumpState().Datasets) != 0 {
 		t.Fatal("source permission denial published a Dataset")
 	}
 	var grant struct {
@@ -115,7 +115,7 @@ func TestLiveSnapshotPublicationJourney(t *testing.T) {
 	if grant.ID == "" {
 		t.Fatal("source grant has no durable rule identity")
 	}
-	if err := manager.SnapshotService().DefineKnowledgeSet(ctx, definition, options, nil); err != nil {
+	if err := manager.SnapshotService().DefineDataset(ctx, definition, options, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := manager.SnapshotService().SetRepositoryMetadata(ctx, sourceName, map[string]string{"owner": "source-team", "description": "原生 lakeFS 属性"}, options); err != nil {
@@ -127,8 +127,8 @@ func TestLiveSnapshotPublicationJourney(t *testing.T) {
 	}
 	read := func(revision int, want []byte, commit kernel.CommitID) {
 		t.Helper()
-		var pin dataset.ResolvedKnowledgeSet
-		if err := consumer.SnapshotService().ResolveKnowledgeSet(ctx, "delivery", client.KnowledgeSetResolveRequest{Revision: &revision}, options, &pin); err != nil {
+		var pin dataset.ResolvedDataset
+		if err := consumer.SnapshotService().ResolveDataset(ctx, "delivery", client.DatasetResolveRequest{Revision: &revision}, options, &pin); err != nil {
 			t.Fatal(err)
 		}
 		encoded, err := json.Marshal(pin)
@@ -152,7 +152,7 @@ func TestLiveSnapshotPublicationJourney(t *testing.T) {
 	verifyLivePublicationRecovery(t, source, origin, sourceName, credential, secondCommit, firstCommit)
 	read(1, first, firstCommit)
 	definition.Revision, definition.Metadata = 2, map[string]string{"owner": "new-owner"}
-	if err := manager.SnapshotService().DefineKnowledgeSet(ctx, definition, options, nil); err != nil {
+	if err := manager.SnapshotService().DefineDataset(ctx, definition, options, nil); err != nil {
 		t.Fatal(err)
 	}
 	// Reopen the real registry instead of replaying client summaries.
@@ -179,7 +179,7 @@ func TestLiveSnapshotPublicationJourney(t *testing.T) {
 	}
 	definition.Revision = 3
 	before = testkit.MustHead(t, authority, snapshot.DefaultRef)
-	testkit.ExpectCode(t, manager.SnapshotService().DefineKnowledgeSet(ctx, definition, options, nil), kernel.ErrForbidden)
+	testkit.ExpectCode(t, manager.SnapshotService().DefineDataset(ctx, definition, options, nil), kernel.ErrForbidden)
 	if testkit.MustHead(t, authority, snapshot.DefaultRef) != before {
 		t.Fatal("revoked source permission advanced registry")
 	}
@@ -187,8 +187,8 @@ func TestLiveSnapshotPublicationJourney(t *testing.T) {
 	if _, err := executor.Execute(ctx, "detach", map[string]any{"repo": string(source.ID())}, options); err != nil {
 		t.Fatal(err)
 	}
-	var pin dataset.ResolvedKnowledgeSet
-	err = consumer.SnapshotService().ResolveKnowledgeSet(ctx, "delivery", client.KnowledgeSetResolveRequest{}, options, &pin)
+	var pin dataset.ResolvedDataset
+	err = consumer.SnapshotService().ResolveDataset(ctx, "delivery", client.DatasetResolveRequest{}, options, &pin)
 	if err == nil {
 		t.Fatal("detached source remained consumable")
 	}

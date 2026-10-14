@@ -9,10 +9,10 @@ func hostWriterHelpEntries() map[string]helpEntry {
     在发布前查看目录中声明的 Address 相对仓内固定基点有哪些正文差异。
   用法与参数：
     --dir 是期望正文。对照当前发布版本列出 add / update，不写仓。
-    --repo 是一个知识 Repository，不能用 Dataset；可用 --ref 选择目标引用、--base 固定对照 commit。
+    --repo 是一个对象 Repository，不能用 Dataset；可用 --ref 选择目标引用、--base 固定对照 commit。
     默认 ref 为 refs/heads/main，未给 --base 时读取该引用的当前 HEAD。
   条件：
-    目录可读且知识文件可解析；当前主体可读取基点和解析目录涉及的 Address。
+    目录可读且对象文件可解析；当前主体可读取基点和解析目录涉及的 Address。
   结果：
     返回 repository、commit 对照基点和 add/update 明细；正文相同的 Address 不列为变更。
   后果：
@@ -24,8 +24,8 @@ func hostWriterHelpEntries() map[string]helpEntry {
     修复文件声明、读取权限或来源后重新 diff；准备发布时用固定 --base 防止静默换基点。
     想删除 Address 须显式 writer remove，不能依赖删掉本机文件。
   示例：
-    例：kc diff --repo kr://scene/knowledge --dir drafts
-    例：kc diff --repo kr://scene/knowledge --dir drafts --base commit-123`,
+    例：kc diff --repo kr://scene/object --dir drafts
+    例：kc diff --repo kr://scene/object --dir drafts --base commit-123`,
 		},
 
 		"writer commit": {
@@ -39,7 +39,7 @@ func hostWriterHelpEntries() map[string]helpEntry {
     也可用 --changeset <file> 提交明确 ChangeSet，与 --dir 互斥；目标、操作和前置条件来自该文件。
     --bulk 一次性接入大量文件时走介质批量通路；介质不支持时整条拒绝，不带时行为不变。
   条件：
-    目录/ChangeSet 可读且解析合法，只有一个知识 Repository 目标，当前主体有相应读取与写入权限。
+    目录/ChangeSet 可读且解析合法，只有一个对象 Repository 目标，当前主体有相应读取与写入权限。
     所有操作须通过 Writer 的 Schema、来源与并发校验；不能写 Dataset、登记权威或 system 仓。
   结果：
     一次 Commit 的耐久回执及 oldCommit/newCommit；同 command-id 同摘要返回原回执。
@@ -56,8 +56,8 @@ func hostWriterHelpEntries() map[string]helpEntry {
     并发冲突重新 diff 并选择新基点；内容变化后的新发布使用新 id，不能借旧 id 提交另一份目录。
     若自己拆批，先确认每批已完成的回执，再处理未完成批次，不能假定整批回滚。
   示例：
-    例：kc writer commit --command-id commit-1 --repo kr://scene/knowledge --dir drafts
-    例：kc writer commit --command-id commit-bulk-1 --repo kr://scene/knowledge --dir drafts --bulk
+    例：kc writer commit --command-id commit-1 --repo kr://scene/object --dir drafts
+    例：kc writer commit --command-id commit-bulk-1 --repo kr://scene/object --dir drafts --bulk
     例：kc writer receipt --command-id commit-1`,
 		},
 		"writer head": {
@@ -72,14 +72,14 @@ func hostWriterHelpEntries() map[string]helpEntry {
   结果：
     返回 repository 和 commit；不返回对象正文或目录明细。
   后果：
-    不推进引用、不发布知识；这次查询也不为后续命令保留锁或冻结权限。
+    不推进引用、不发布对象；这次查询也不为后续命令保留锁或冻结权限。
   风险与成本：
     一次 HEAD 查询；结果可能随后被其它发布推进，不能当成永久最新版本。
   失败恢复：
     核对仓/引用、当前授权与来源可用性；提交时将选定 commit 明确作为基点，冲突后重新核对。
   示例：
-    例：kc writer head --repo kr://scene/knowledge
-    例：kc writer head --repo kr://scene/knowledge --ref refs/heads/main`,
+    例：kc writer head --repo kr://scene/object
+    例：kc writer head --repo kr://scene/object --ref refs/heads/main`,
 		},
 		"writer receipt": {
 			Description: "查询 Writer 命令回执",

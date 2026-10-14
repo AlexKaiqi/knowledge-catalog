@@ -1,5 +1,5 @@
 // Package dataset owns Snapshot Store file composition and publication.
-// It consumes opaque paths and fixed commits without interpreting Knowledge.
+// It consumes opaque paths and fixed commits without interpreting Object.
 package dataset
 
 import (
@@ -12,31 +12,31 @@ import (
 
 // service is combination over a set of Snapshot repositories.
 //
-//	KnowledgeSet — published Dataset: file pointers frozen to commits at define
-//	ResolvedKnowledgeSet   — ResolveKnowledgeSet returns that version's file list and implied {Repository → commit}
+//	Dataset — published Dataset: file pointers frozen to commits at define
+//	ResolvedDataset  — ResolveDataset returns that version's file list and implied {Repository → commit}
 //
-// service composes files over snapshot.Store and is not a knowledge
-// protocol. Knowledge wrapping lives in knowledge/{writer,reader} and index. Dynamic State/Stream
+// service composes files over snapshot.Store and is not an object
+// protocol. Object wrapping lives in object/{writer,reader} and index. Dynamic State/Stream
 // observation belongs to an upper-layer Materialization runtime; this package
 // freezes only Repository commits.
 //
 // Operations, by what they change:
 //
-//	recipe:   DefineKnowledgeSet, Workspace, RetireKnowledgeSet
-//	resolve:  ResolveKnowledgeSet / CheckResolved
+//	recipe:   DefineDataset, Workspace, RetireDataset
+//	resolve:  ResolveDataset / CheckResolved
 //	register: RegisterRepository
 //	history:  Log
 //	hooks:    AddHook / NotifySnapshot (in-process; not outbound kc hook-add)
 //
-// object_id is not a service concern. Consumer Read lives in knowledge/reader;
+// object_id is not a service concern. Consumer Read lives in object/reader;
 // AccessSpec lives in retrieval/.
 type service struct {
 	mu           sync.RWMutex
 	store        snapshot.Registry
 	registry     *registry
 	registryHead string
-	datasets     map[string]KnowledgeSet
-	versions     map[string]map[int]KnowledgeSet
+	datasets     map[string]Dataset
+	versions     map[string]map[int]Dataset
 	repositories map[string]struct{}
 	readOnly     bool
 	observer     Observer
@@ -54,7 +54,7 @@ func NewService(store snapshot.Registry, source Registry) (Service, error) {
 	c := &service{
 		store:        store,
 		registry:     registry,
-		datasets:     map[string]KnowledgeSet{},
+		datasets:     map[string]Dataset{},
 		repositories: map[string]struct{}{},
 	}
 	state, head, err := registry.loadSnapshot()
@@ -83,12 +83,12 @@ func (c *service) DumpState() State {
 }
 
 func (c *service) dumpState() State {
-	workspaces := make([]KnowledgeSet, 0, len(c.datasets))
+	workspaces := make([]Dataset, 0, len(c.datasets))
 	for _, workspace := range c.datasets {
-		workspaces = append(workspaces, cloneKnowledgeSet(workspace))
+		workspaces = append(workspaces, cloneDataset(workspace))
 	}
 	return State{
-		KnowledgeSets:   workspaces,
+		Datasets:        workspaces,
 		DatasetVersions: c.datasetVersions(),
 		Repositories:    c.repositoriesList(),
 		AuthorityID:     c.registry.AuthorityID(),
@@ -103,14 +103,14 @@ func (c *service) LoadState(state State) {
 }
 
 func (c *service) loadState(state State) {
-	c.datasets = map[string]KnowledgeSet{}
-	c.versions = map[string]map[int]KnowledgeSet{}
+	c.datasets = map[string]Dataset{}
+	c.versions = map[string]map[int]Dataset{}
 	c.repositories = map[string]struct{}{}
 	for _, id := range state.Repositories {
 		c.repositories[id] = struct{}{}
 	}
-	for _, workspace := range state.KnowledgeSets {
-		c.datasets[workspace.SetID] = cloneKnowledgeSet(workspace)
+	for _, workspace := range state.Datasets {
+		c.datasets[workspace.SetID] = cloneDataset(workspace)
 		// Existing registries have only the current release. Preserve that
 		// accepted release on the first write; never invent older versions.
 		c.loadVersion(workspace)
@@ -120,19 +120,19 @@ func (c *service) loadState(state State) {
 	}
 }
 
-func (c *service) loadVersion(def KnowledgeSet) {
+func (c *service) loadVersion(def Dataset) {
 	if c.versions[def.SetID] == nil {
-		c.versions[def.SetID] = map[int]KnowledgeSet{}
+		c.versions[def.SetID] = map[int]Dataset{}
 	}
 	def.Retired = false // retirement is current policy, not versioned content
-	c.versions[def.SetID][def.Revision] = cloneKnowledgeSet(def)
+	c.versions[def.SetID][def.Revision] = cloneDataset(def)
 }
 
-func (c *service) datasetVersions() []KnowledgeSet {
-	var out []KnowledgeSet
+func (c *service) datasetVersions() []Dataset {
+	var out []Dataset
 	for _, versions := range c.versions {
 		for _, def := range versions {
-			out = append(out, cloneKnowledgeSet(def))
+			out = append(out, cloneDataset(def))
 		}
 	}
 	return normalizeDatasetVersions(out)

@@ -28,7 +28,7 @@ func TestManagedRestoreKeepsDriverCapabilities(t *testing.T) {
 		t.Fatal("lakeFS restoration replaced its driver handle")
 	}
 	if _, ok := restored.(objectmodel.NativeRepository); !ok {
-		t.Fatal("native knowledge capability was erased")
+		t.Fatal("native object capability was erased")
 	}
 	if _, ok := restored.(snapshot.TreeStore); ok {
 		t.Fatal("restoration invented a TreeStore capability")

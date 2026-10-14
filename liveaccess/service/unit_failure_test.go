@@ -92,12 +92,12 @@ func publishUnitFixture(t *testing.T, id objectmodel.ObjectID, operations []obje
 		}
 	}
 	rd := reader.NewReader(registry)
-	repo, err := rd.Require(raw.ID(), kernel.ErrKnowledgeRefUnresolved)
+	repo, err := rd.Require(raw.ID(), kernel.ErrObjectRefUnresolved)
 	if err != nil {
 		t.Fatal(err)
 	}
 	commits := map[kernel.RepositoryID]kernel.CommitID{raw.ID(): commit}
-	base := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return repo, nil }, reader.KnowledgeSetPin{
+	base := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return repo, nil }, reader.DatasetPin{
 		SetID: "mixed", Repositories: commits, Items: reader.WholeRepositoryItems(commits),
 	})
 	return base, repo, commit, id

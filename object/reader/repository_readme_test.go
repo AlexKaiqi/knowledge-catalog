@@ -120,13 +120,13 @@ func TestReadmeGitCommitWithoutWriterLocators(t *testing.T) {
 	}
 	guard.blockReadme = true
 	before := guard.readmeReads
-	if _, err := paths.ReadAddressAtPaths(address, commit, []string{"public/allowed.yaml"}); kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+	if _, err := paths.ReadAddressAtPaths(address, commit, []string{"public/allowed.yaml"}); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		t.Fatalf("unpublished README Address was accepted: %v", err)
 	}
 	refPaths := repo.(interface {
-		ReadReferenceAtPaths(objectmodel.Reference, kernel.CommitID, []string) (objectmodel.KnowledgeValue, error)
+		ReadReferenceAtPaths(objectmodel.Reference, kernel.CommitID, []string) (objectmodel.ObjectValue, error)
 	})
-	if _, err := refPaths.ReadReferenceAtPaths(ref, commit, []string{"public/allowed.yaml"}); kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+	if _, err := refPaths.ReadReferenceAtPaths(ref, commit, []string{"public/allowed.yaml"}); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		t.Fatalf("unpublished README reference was accepted: %v", err)
 	}
 	if guard.readmeReads != before {
@@ -134,7 +134,7 @@ func TestReadmeGitCommitWithoutWriterLocators(t *testing.T) {
 	}
 }
 
-func TestPlainMarkdownReadmeIsNotKnowledge(t *testing.T) {
+func TestPlainMarkdownReadmeIsNotObject(t *testing.T) {
 	raw := testkit.MakeTreeStore(t, "kr://acme/payments")
 	tree, ok := snapshot.TreeStoreOf(raw)
 	if !ok {
@@ -157,11 +157,11 @@ func TestPlainMarkdownReadmeIsNotKnowledge(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := repo.Read("payments", commit); err == nil {
-		t.Fatal("plain markdown must not be readable as knowledge")
+		t.Fatal("plain markdown must not be readable as object")
 	}
 	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "payments", AspectName: objectmodel.ReadmeAspect}
-	if _, err := repo.ReadAddress(address, commit); kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
-		t.Fatalf("plain markdown became an exact knowledge unit: %v", err)
+	if _, err := repo.ReadAddress(address, commit); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
+		t.Fatalf("plain markdown became an exact object unit: %v", err)
 	}
 	resolved, err := repo.ResolveAddress(address, commit)
 	if err != nil || resolved.Status != objectmodel.StatusUnresolved {

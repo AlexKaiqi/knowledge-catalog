@@ -9,7 +9,7 @@ import (
 	"kc/kernel"
 )
 
-// Unit is the provider-neutral knowledge atom. It deliberately has no storage
+// Unit is the provider-neutral object atom. It deliberately has no storage
 // path, filename, extension, or serialized-file field.
 type Unit struct {
 	ObjectID    ObjectID
@@ -219,14 +219,14 @@ func ApplyUnits(existing []Unit, operations []Operation, provenance *ProvenanceE
 	return final, deleted, nil
 }
 
-func AssembleObjectValue(repository kernel.RepositoryID, objectID ObjectID, commit kernel.CommitID, units []Unit) (KnowledgeValue, error) {
+func AssembleObjectValue(repository kernel.RepositoryID, objectID ObjectID, commit kernel.CommitID, units []Unit) (ObjectValue, error) {
 	assembled, err := AssembleUnits(units)
 	if err != nil {
-		return KnowledgeValue{}, err
+		return ObjectValue{}, err
 	}
-	value := KnowledgeValue{
-		KnowledgeRef: KnowledgeRef{Repository: repository, Object: objectID},
-		Repository:   repository, Commit: commit,
+	value := ObjectValue{
+		ObjectRef:  ObjectRef{Repository: repository, Object: objectID},
+		Repository: repository, Commit: commit,
 		Address: Address{Kind: KindEntity, ObjectID: objectID},
 		Value:   assembled, Declarations: DeclareUnits(units),
 	}

@@ -23,33 +23,33 @@ type daemonMountResult struct {
 	PID int `json:"pid"`
 }
 
-// daemonMountKnowledgeSetFS is the synchronous host-controller boundary: it
+// daemonMountDatasetFS is the synchronous host-controller boundary: it
 // returns only after the child has mounted every path and emitted its fixed
 // manifest. A host can therefore reject a failed mount without racing an
 // asynchronous stdout listener.
-func daemonMountKnowledgeSetFS(argv []string, stdout, stderr io.Writer) int {
+func daemonMountDatasetFS(argv []string, stdout, stderr io.Writer) int {
 	// Reject shape errors in the synchronous controller before starting a
 	// detached child. Otherwise a malformed request has no stdout manifest and
 	// the controller can only discover it after the readiness timeout.
-	if _, err := parseKnowledgeSetFSConfig("daemon-mount", argv, io.Discard); err != nil {
-		writeKnowledgeSetFSError(stderr, err)
+	if _, err := parseDatasetFSConfig("daemon-mount", argv, io.Discard); err != nil {
+		writeDatasetFSError(stderr, err)
 		return 2
 	}
 	executable, err := os.Executable()
 	if err != nil {
-		writeKnowledgeSetFSError(stderr, err)
+		writeDatasetFSError(stderr, err)
 		return 1
 	}
 	cmd := exec.Command(executable, append([]string{"mount"}, argv...)...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	pipe, err := cmd.StdoutPipe()
 	if err != nil {
-		writeKnowledgeSetFSError(stderr, err)
+		writeDatasetFSError(stderr, err)
 		return 1
 	}
 	logFile, err := os.CreateTemp("", "kcfs-daemon-*.log")
 	if err != nil {
-		writeKnowledgeSetFSError(stderr, err)
+		writeDatasetFSError(stderr, err)
 		return 1
 	}
 	logPath := logFile.Name()
@@ -57,7 +57,7 @@ func daemonMountKnowledgeSetFS(argv []string, stdout, stderr io.Writer) int {
 	if err := cmd.Start(); err != nil {
 		_ = logFile.Close()
 		_ = os.Remove(logPath)
-		writeKnowledgeSetFSError(stderr, err)
+		writeDatasetFSError(stderr, err)
 		return 1
 	}
 	pidLogPath := datasetFSDaemonLogPath(cmd.Process.Pid)
@@ -65,7 +65,7 @@ func daemonMountKnowledgeSetFS(argv []string, stdout, stderr io.Writer) int {
 		_ = logFile.Close()
 		stopDaemonMountChild(cmd)
 		_ = os.Remove(logPath)
-		writeKnowledgeSetFSError(stderr, err)
+		writeDatasetFSError(stderr, err)
 		return 1
 	}
 	logPath = pidLogPath
@@ -76,7 +76,7 @@ func daemonMountKnowledgeSetFS(argv []string, stdout, stderr io.Writer) int {
 	}
 	ready := make(chan readyResult, 1)
 	go func() {
-		manifest, err := decodeKnowledgeSetFSReady(pipe)
+		manifest, err := decodeDatasetFSReady(pipe)
 		if err != nil {
 			ready <- readyResult{err: err}
 			return
@@ -89,7 +89,7 @@ func daemonMountKnowledgeSetFS(argv []string, stdout, stderr io.Writer) int {
 			stopDaemonMountChild(cmd)
 			writeDaemonMountLog(stderr, logPath)
 			_ = os.Remove(logPath)
-			writeKnowledgeSetFSError(stderr, result.err)
+			writeDatasetFSError(stderr, result.err)
 			return 1
 		}
 		pid := cmd.Process.Pid
@@ -97,16 +97,16 @@ func daemonMountKnowledgeSetFS(argv []string, stdout, stderr io.Writer) int {
 			stopDaemonMountChild(cmd)
 			writeDaemonMountLog(stderr, logPath)
 			_ = os.Remove(logPath)
-			writeKnowledgeSetFSError(stderr, err)
+			writeDatasetFSError(stderr, err)
 			return 1
 		}
-		writeKnowledgeSetFSJSON(stdout, daemonMountResult{datasetFSManifest: result.manifest, PID: pid})
+		writeDatasetFSJSON(stdout, daemonMountResult{datasetFSManifest: result.manifest, PID: pid})
 		return 0
 	case <-time.After(30 * time.Second):
 		stopDaemonMountChild(cmd)
 		writeDaemonMountLog(stderr, logPath)
 		_ = os.Remove(logPath)
-		writeKnowledgeSetFSError(stderr, kernel.Fail(kernel.ErrTemporaryUnavailable, "kcfs mount did not become ready within 30s"))
+		writeDatasetFSError(stderr, kernel.Fail(kernel.ErrTemporaryUnavailable, "kcfs mount did not become ready within 30s"))
 		return 1
 	}
 }
@@ -126,7 +126,7 @@ func writeDaemonMountLog(stderr io.Writer, logPath string) {
 	}
 }
 
-func decodeKnowledgeSetFSReady(reader io.Reader) (datasetFSManifest, error) {
+func decodeDatasetFSReady(reader io.Reader) (datasetFSManifest, error) {
 	var manifest datasetFSManifest
 	if err := json.NewDecoder(reader).Decode(&manifest); err != nil {
 		return datasetFSManifest{}, fmt.Errorf("decode kcfs ready manifest: %w", err)
@@ -152,7 +152,7 @@ func stopDaemonMountChild(cmd *exec.Cmd) {
 	}
 }
 
-func stopKnowledgeSetFS(argv []string, stderr io.Writer) int {
+func stopDatasetFS(argv []string, stderr io.Writer) int {
 	set := flag.NewFlagSet("kcfs stop", flag.ContinueOnError)
 	set.SetOutput(stderr)
 	pid := set.Int("pid", 0, "daemon mount process id")
@@ -160,11 +160,11 @@ func stopKnowledgeSetFS(argv []string, stderr io.Writer) int {
 		if err == nil {
 			err = fmt.Errorf("kcfs stop requires one valid --pid")
 		}
-		writeKnowledgeSetFSError(stderr, err)
+		writeDatasetFSError(stderr, err)
 		return 2
 	}
 	if err := syscall.Kill(*pid, syscall.SIGTERM); err != nil && err != syscall.ESRCH {
-		writeKnowledgeSetFSError(stderr, err)
+		writeDatasetFSError(stderr, err)
 		return 1
 	}
 	deadline := time.Now().Add(10 * time.Second)
@@ -175,6 +175,6 @@ func stopKnowledgeSetFS(argv []string, stderr io.Writer) int {
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
-	writeKnowledgeSetFSError(stderr, kernel.Fail(kernel.ErrTemporaryUnavailable, "kcfs process %d did not stop within 10s", *pid))
+	writeDatasetFSError(stderr, kernel.Fail(kernel.ErrTemporaryUnavailable, "kcfs process %d did not stop within 10s", *pid))
 	return 1
 }

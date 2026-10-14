@@ -37,7 +37,7 @@ func TestProjectionControllerNoticePullsStateWithoutChangingSnapshot(t *testing.
 	controller, err := NewController(idx, NewTargetStore(filepath.Join(t.TempDir(), "controller.db")),
 		func(id kernel.RepositoryID) (objectmodel.Repository, error) {
 			if id != repo.ID() {
-				return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "not a knowledge repository")
+				return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "not an object repository")
 			}
 			return repo, nil
 		})
@@ -92,7 +92,7 @@ func TestProjectionControllerNoticePullsStateWithoutChangingSnapshot(t *testing.
 	if body, _ := raw.Value.(map[string]any); body["runtime"] != nil {
 		t.Fatalf("notice wrote observation into Snapshot: %#v", raw)
 	}
-	if _, err := repo.ReadAddress(address, commit); kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+	if _, err := repo.ReadAddress(address, commit); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		t.Fatalf("Bound State must not occupy a Snapshot unit: %#v %v", address, err)
 	}
 	head, err := repo.Head(snapshot.DefaultRef)
@@ -111,7 +111,7 @@ func TestProjectionControllerStartAppliesNotice(t *testing.T) {
 	controller, err := NewController(idx, NewTargetStore(filepath.Join(t.TempDir(), "controller.db")),
 		func(id kernel.RepositoryID) (objectmodel.Repository, error) {
 			if id != repo.ID() {
-				return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "not a knowledge repository")
+				return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "not an object repository")
 			}
 			return repo, nil
 		})
@@ -160,7 +160,7 @@ func TestIngestionControllerKeepsStaticAspectAndDynamicRecipeLanesSeparate(t *te
 	controller, err := NewController(idx, NewTargetStore(filepath.Join(t.TempDir(), "controller.db")),
 		func(id kernel.RepositoryID) (objectmodel.Repository, error) {
 			if id != repo.ID() {
-				return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "not a knowledge repository")
+				return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "not an object repository")
 			}
 			return repo, nil
 		})
@@ -184,12 +184,12 @@ func TestIngestionControllerKeepsStaticAspectAndDynamicRecipeLanesSeparate(t *te
 		t.Fatal(err)
 	}
 	writable, ok := repo.(interface {
-		ApplyKnowledgeCommit(objectmodel.ChangeSet) (kernel.CommitID, error)
+		ApplyObjectCommit(objectmodel.ChangeSet) (kernel.CommitID, error)
 	})
 	if !ok {
 		t.Fatal("fixture repository is not writable")
 	}
-	second, err := writable.ApplyKnowledgeCommit(objectmodel.CommitChangeSet{
+	second, err := writable.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef,
 		BaseCommit: first, ExpectedTargetCommit: first,
 		Operations: []objectmodel.Operation{{

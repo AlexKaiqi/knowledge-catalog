@@ -19,15 +19,15 @@ func TestSnapshotExternalFileViewMissingResultFailsBeforeDelivery(t *testing.T) 
 	for _, route := range []string{"mounts:list", "tree:list", "file:read"} {
 		t.Run(route, func(t *testing.T) {
 			fixture, source := newFileHTTPFixture(t)
-			if _, err := fixture.catalog.DefineKnowledgeSet("files", 1, []dataset.KnowledgeSetSource{{Repository: source.id, Selector: snapshot.DefaultRef, Path: dataset.MountPath("docs"), SubPath: "reference"}}); err != nil {
+			if _, err := fixture.catalog.DefineDataset("files", 1, []dataset.DatasetSource{{Repository: source.id, Selector: snapshot.DefaultRef, Path: dataset.MountPath("docs"), SubPath: "reference"}}); err != nil {
 				t.Fatal(err)
 			}
-			pin, err := fixture.catalog.ResolveKnowledgeSet("files")
+			pin, err := fixture.catalog.ResolveDataset("files")
 			if err != nil {
 				t.Fatal(err)
 			}
 			called, released := 0, 0
-			fixture.resources.OpenView = func(context.Context, identity.HTTPIdentity, service.FileCoordinate, dataset.Service, dataset.KnowledgeSet, dataset.ResolvedKnowledgeSet) (service.FileView, error) {
+			fixture.resources.OpenView = func(context.Context, identity.HTTPIdentity, service.FileCoordinate, dataset.Service, dataset.Dataset, dataset.ResolvedDataset) (service.FileView, error) {
 				called++
 				return nil, nil
 			}
@@ -64,15 +64,15 @@ func TestSnapshotExternalFileViewMissingResultFailsBeforeDelivery(t *testing.T) 
 
 func TestSnapshotExternalFileViewPreservesCallbackFailure(t *testing.T) {
 	fixture, source := newFileHTTPFixture(t)
-	if _, err := fixture.catalog.DefineKnowledgeSet("files", 1, []dataset.KnowledgeSetSource{{Repository: source.id, Selector: snapshot.DefaultRef, Path: dataset.MountPath("docs"), SubPath: "reference"}}); err != nil {
+	if _, err := fixture.catalog.DefineDataset("files", 1, []dataset.DatasetSource{{Repository: source.id, Selector: snapshot.DefaultRef, Path: dataset.MountPath("docs"), SubPath: "reference"}}); err != nil {
 		t.Fatal(err)
 	}
-	pin, err := fixture.catalog.ResolveKnowledgeSet("files")
+	pin, err := fixture.catalog.ResolveDataset("files")
 	if err != nil {
 		t.Fatal(err)
 	}
 	called, released := 0, 0
-	fixture.resources.OpenView = func(context.Context, identity.HTTPIdentity, service.FileCoordinate, dataset.Service, dataset.KnowledgeSet, dataset.ResolvedKnowledgeSet) (service.FileView, error) {
+	fixture.resources.OpenView = func(context.Context, identity.HTTPIdentity, service.FileCoordinate, dataset.Service, dataset.Dataset, dataset.ResolvedDataset) (service.FileView, error) {
 		called++
 		return nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "external view unavailable")
 	}

@@ -27,7 +27,7 @@ func TestPrePutDeniedLeavesNoCommit(t *testing.T) {
 	writeHookScript(t, h, "deny.sh", "#!/bin/sh\nexit 1\n")
 	body(t, kc(h, "hook-add", "--on", "put", "--phase", "pre", "--repo", "kr://acme/public/core", "--run", "deny.sh"))
 	expectCode(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/A", ""), "--command-id", "x", "--value", `{"v":1}`), "HOOK_DENIED")
-	expectCode(t, kc(h, "read", testObjectReference(t, "kr://acme/public/core", "policy/A", ""), "--ref", "refs/heads/main"), "KNOWLEDGE_REF_UNRESOLVED")
+	expectCode(t, kc(h, "read", testObjectReference(t, "kr://acme/public/core", "policy/A", ""), "--ref", "refs/heads/main"), "OBJECT_REF_UNRESOLVED")
 }
 
 func TestReplayedSkipsHook(t *testing.T) {
@@ -143,7 +143,7 @@ func TestValidationAuthorizationDerivesWorkspaceFromPreview(t *testing.T) {
 	expectCode(t, kc(h, "validate", "--as", "other", "--preview", previewID, "--dataset", "other"), "FORBIDDEN")
 }
 
-func TestPostDefineKnowledgeSetPointersOnlyAndFailureDoesNotRollback(t *testing.T) {
+func TestPostDefineDatasetPointersOnlyAndFailureDoesNotRollback(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 	kc(h, "init")

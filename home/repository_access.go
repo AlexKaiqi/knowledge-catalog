@@ -33,16 +33,16 @@ type RepositoryAccessFile struct {
 
 // AuthenticatedRepositoryActions is the closed consume-side set a Repository
 // may grant to every authenticated principal. Write, grant, Registry manage
-// and knowledge-set administer stay on explicit allow rules.
+// and dataset administer stay on explicit allow rules.
 func AuthenticatedRepositoryActions() []string {
 	return []string{
-		"knowledge.read",
-		"knowledge.schema.read",
-		"knowledge.search",
-		"knowledge.history.read",
-		"knowledge.provenance",
-		"knowledge.relations",
-		"knowledge.access.describe",
+		"object.read",
+		"object.schema.read",
+		"object.search",
+		"object.history.read",
+		"object.provenance",
+		"object.relations",
+		"object.access.describe",
 		"file.read",
 		"projection.read",
 	}

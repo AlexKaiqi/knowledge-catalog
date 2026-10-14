@@ -121,7 +121,7 @@ func (s *memoryStore) ReadFile(name string, commit kernel.CommitID) ([]byte, err
 	}
 	raw, ok := state.files[name]
 	if !ok {
-		return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "path %s does not exist", name)
+		return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "path %s does not exist", name)
 	}
 	return append([]byte(nil), raw...), nil
 }
@@ -150,7 +150,7 @@ func (s *memoryStore) ObjectUnitPaths(objectID objectmodel.ObjectID, commit kern
 	}
 	paths := []string{}
 	for name, raw := range state.files {
-		if !repofile.KnowledgePath(name) {
+		if !repofile.ObjectPath(name) {
 			continue
 		}
 		unit := repofile.Parse(string(raw))

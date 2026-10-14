@@ -13,10 +13,10 @@ import (
 
 // compileProjectionDocument turns the shared logical field meaning into the
 // physical document shape. It contains no unit applicability or residual rules.
-func compileProjectionDocument(repo objectmodel.Repository, value objectmodel.KnowledgeValue, spec retrieval.AccessSpec) (ports.CompiledDoc, error) {
+func compileProjectionDocument(repo objectmodel.Repository, value objectmodel.ObjectValue, spec retrieval.AccessSpec) (ports.CompiledDoc, error) {
 	return compileProjectionDocumentObserved(repo, value, nil, spec)
 }
-func compileProjectionDocumentObserved(repo objectmodel.Repository, value objectmodel.KnowledgeValue, observations []objectmodel.UnitObservation, spec retrieval.AccessSpec) (ports.CompiledDoc, error) {
+func compileProjectionDocumentObserved(repo objectmodel.Repository, value objectmodel.ObjectValue, observations []objectmodel.UnitObservation, spec retrieval.AccessSpec) (ports.CompiledDoc, error) {
 	logical, err := retrieval.ExtractFields(repo, value, observations, spec)
 	if err != nil {
 		return ports.CompiledDoc{}, err

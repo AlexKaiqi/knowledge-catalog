@@ -34,31 +34,31 @@ type RefineFieldRef struct {
 type RefineLaneEvidence = RetrievalLaneEvidence
 
 type RefineCandidate struct {
-	KnowledgeRef      objectmodel.PinnedKnowledgeRef `json:"knowledgeRef"`
-	Value             any                            `json:"value"`
-	ValueDigest       kernel.Digest                  `json:"valueDigest"`
-	OriginalRank      int                            `json:"originalRank"`
-	RetrievalEvidence []RefineLaneEvidence           `json:"retrievalEvidence,omitempty"`
-	Observations      []objectmodel.UnitObservation  `json:"observations,omitempty"`
+	ObjectRef         objectmodel.PinnedObjectRef   `json:"objectRef"`
+	Value             any                           `json:"value"`
+	ValueDigest       kernel.Digest                 `json:"valueDigest"`
+	OriginalRank      int                           `json:"originalRank"`
+	RetrievalEvidence []RefineLaneEvidence          `json:"retrievalEvidence,omitempty"`
+	Observations      []objectmodel.UnitObservation `json:"observations,omitempty"`
 }
 
 type RefineRankGroup struct {
-	Rank int                        `json:"rank"`
-	Refs []objectmodel.KnowledgeRef `json:"refs"`
+	Rank int                     `json:"rank"`
+	Refs []objectmodel.ObjectRef `json:"refs"`
 }
 
 type RefineModelOutput struct {
-	Provider       string                     `json:"provider"`
-	Model          string                     `json:"model"`
-	ModelRevision  string                     `json:"modelRevision,omitempty"`
-	PromptRevision string                     `json:"promptRevision,omitempty"`
-	DurationMillis int64                      `json:"durationMillis"`
-	Groups         []RefineRankGroup          `json:"groups"`
-	Unjudged       []objectmodel.KnowledgeRef `json:"unjudged"`
+	Provider       string                  `json:"provider"`
+	Model          string                  `json:"model"`
+	ModelRevision  string                  `json:"modelRevision,omitempty"`
+	PromptRevision string                  `json:"promptRevision,omitempty"`
+	DurationMillis int64                   `json:"durationMillis"`
+	Groups         []RefineRankGroup       `json:"groups"`
+	Unjudged       []objectmodel.ObjectRef `json:"unjudged"`
 }
 
 // RefineEvent is non-Canonical semantic inference evidence. Candidate Value is
-// exactly the EvaluationProjection visible to the model; unprojected knowledge,
+// exactly the EvaluationProjection visible to the model; unprojected object,
 // credentials, provider transport bodies and chain-of-thought are forbidden.
 type RefineEvent struct {
 	SchemaVersion       int                `json:"schemaVersion"`
@@ -104,16 +104,16 @@ func (e RefineEvent) Validate() error {
 	if e.CandidateDigest == "" || e.ProjectedBytes <= 0 || len(e.Candidates) == 0 {
 		return fmt.Errorf("refine evidence requires projected candidate input")
 	}
-	seen := map[objectmodel.KnowledgeRef]struct{}{}
+	seen := map[objectmodel.ObjectRef]struct{}{}
 	for i, candidate := range e.Candidates {
-		ref := candidate.KnowledgeRef
+		ref := candidate.ObjectRef
 		if ref.Repository == "" || ref.Commit == "" || ref.Object == "" || candidate.OriginalRank != i+1 {
 			return fmt.Errorf("refine candidate requires pinned ref and window rank")
 		}
-		if _, duplicate := seen[ref.KnowledgeRef]; duplicate {
+		if _, duplicate := seen[ref.ObjectRef]; duplicate {
 			return fmt.Errorf("refine candidate ref is duplicated")
 		}
-		seen[ref.KnowledgeRef] = struct{}{}
+		seen[ref.ObjectRef] = struct{}{}
 		if _, err := json.Marshal(candidate.Value); err != nil || candidate.ValueDigest != kernel.CanonicalDigest(candidate.Value) {
 			return fmt.Errorf("refine candidate requires canonical projected value digest")
 		}

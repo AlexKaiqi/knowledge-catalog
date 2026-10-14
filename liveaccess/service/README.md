@@ -31,7 +31,7 @@ Domain Schema 实际声明的 Bound Aspect 才可合成，未知名称明确失�
 选中单元的 Schema／遗留 Descriptor 解释仍由 LiveAccess 同一核心算法采用，
 不再次加载整对象和未选兄弟来定位已经选好的实际单元。
 Member 从自身实际采用的固定 Schema origin 解释取值，同样核验 Schema 和来源依据，
-不以 Member 的固定知识值冒充外部观察。
+不以 Member 的固定对象值冒充外部观察。
 Member 是否为 Binding 采用 Reader 已固定分类的 `ValueSource`：只对 Binding 读取真实 Schema，
 普通 Snapshot Member 不因其 Schema 未发布而变成外部失败。Binding Schema 在作用域外时
 保留该单位的失败，不读取私有 Schema、不回退 Member 占位值。

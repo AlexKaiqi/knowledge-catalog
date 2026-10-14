@@ -73,11 +73,11 @@ type Resolution struct {
 	Status            ResolutionStatus    `json:"status"`
 }
 
-type KnowledgeValue struct {
+type ObjectValue struct {
 	Reference    string              `json:"reference,omitempty"`
 	Locator      string              `json:"locator,omitempty"`
 	Digest       kernel.Digest       `json:"digest,omitempty"`
-	KnowledgeRef KnowledgeRef        `json:"knowledgeRef"`
+	ObjectRef    ObjectRef           `json:"objectRef"`
 	Repository   kernel.RepositoryID `json:"repository"`
 	Commit       kernel.CommitID     `json:"commit"`
 	Address      Address             `json:"address"`
@@ -98,7 +98,7 @@ type FederatedValue struct {
 	Reference    string              `json:"reference,omitempty"`
 	Locator      string              `json:"locator,omitempty"`
 	Digest       kernel.Digest       `json:"digest,omitempty"`
-	KnowledgeRef KnowledgeRef        `json:"knowledgeRef"`
+	ObjectRef    ObjectRef           `json:"objectRef"`
 	Repository   kernel.RepositoryID `json:"repository"`
 	Commit       kernel.CommitID     `json:"commit"`
 	ObjectID     ObjectID            `json:"objectId"`

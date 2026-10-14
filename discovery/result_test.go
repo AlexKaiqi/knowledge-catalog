@@ -11,7 +11,7 @@ import (
 func TestSearchResultUsesSearchViewTermInJSON(t *testing.T) {
 	raw, err := json.Marshal(retrieval.SearchResult{
 		SearchView: retrieval.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{}},
-		Hits:       []retrieval.KnowledgeHit{},
+		Hits:       []retrieval.ObjectHit{},
 	})
 	if err != nil {
 		t.Fatal(err)

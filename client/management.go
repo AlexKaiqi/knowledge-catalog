@@ -151,7 +151,7 @@ type FeedbackRequest struct {
 	RetrievalEvidenceID string                          `json:"retrievalEvidenceId,omitempty"`
 	RefineEvidenceID    string                          `json:"refineEvidenceId,omitempty"`
 	Answer              string                          `json:"answer,omitempty"`
-	SelectedRefs        []objectmodel.KnowledgeRef      `json:"selectedRefs,omitempty"`
+	SelectedRefs        []objectmodel.ObjectRef         `json:"selectedRefs,omitempty"`
 	IdealGroups         []observability.RefineRankGroup `json:"idealGroups,omitempty"`
 }
 

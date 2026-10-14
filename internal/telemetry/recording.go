@@ -19,7 +19,7 @@ func (r *Runtime) RecordHTTP(ctx context.Context, started time.Time, method, rou
 	attrs := []attribute.KeyValue{
 		attribute.String("http.request.method", enumValue(method, "OTHER", "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "OTHER")),
 		attribute.String("http.route", enumValue(route, "unmatched", "/", "/health", "/livez", "/readyz", "/readyz/{surface}", "/metrics",
-			"/snapshot/v1/{operation}", "/knowledge/v1/{operation}", "/writer/v1/{operation}",
+			"/snapshot/v1/{operation}", "/object/v1/{operation}", "/writer/v1/{operation}",
 			"/governance/v1/{operation}", "/identity/v1/{operation}", "/admin/v1/{operation}", "/operations/v1/{operation}", "unmatched")),
 		attribute.Int("http.response.status_code", status),
 		attribute.String("kc.propagation.outcome", enumValue(propagationOutcome, "invalid", "accepted", "generated", "legacy", "invalid", "conflict")),
@@ -123,7 +123,7 @@ func (r *Runtime) EndSnapshot(ctx context.Context, span trace.Span, started time
 	span.End()
 }
 
-func (r *Runtime) RecordKnowledgeReadFanout(ctx context.Context, objects, units int) {
+func (r *Runtime) RecordObjectReadFanout(ctx context.Context, objects, units int) {
 	span := trace.SpanFromContext(ctx)
 	if objects >= 0 {
 		r.readObjectCount.Record(ctx, int64(objects))

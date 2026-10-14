@@ -1,8 +1,8 @@
 # 已配置但未接入的业务源
 
-construct 准备知识仓与关系仓的既有 Snapshot binding，确认 登记空间 仍只登记 System Repository。两仓前态由未登记边界 probe 与后续 attach 共用。System 信任根已在初始化时提供；Schema 浏览、正文回读与不可写验证挂在初始化前态。
+construct 准备仓与关系仓的既有 Snapshot binding，确认 登记空间 仍只登记 System Repository。两仓前态由未登记边界 probe 与后续 attach 共用。System 信任根已在初始化时提供；Schema 浏览、正文回读与不可写验证挂在初始化前态。
 
-知识仓 `kr://scene/knowledge` 的来源 authority 原生 `kc.plugins` 明确选择
+仓 `kr://scene/object` 的来源 authority 原生 `kc.plugins` 明确选择
 `liveaccess/main`；已有索引选择保留，关系仓不因此选择访问插件。`Given existing
 repository ... with LiveAccess instance main` 是墙外来源配置前态，不是新增 CLI
 参数。Go 夹具和真实 lakeFS 场景重放都在绑定前写入同一原生 metadata，再冻结或

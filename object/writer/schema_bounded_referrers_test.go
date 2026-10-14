@@ -144,7 +144,7 @@ func TestTreeSchemaReferrersFollowBatchMigrationAndRootRemoval(t *testing.T) {
 		{Op: objectmodel.OpRemove, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/b"}},
 	})
 	assertTreeSchemaReferrers(t, r, tree.ID(), "schema/b", removed, nil)
-	if _, err := r.ReadAddress(tree.ID(), a, removed); kernel.CodeOf(err) != kernel.ErrKnowledgeRefUnresolved {
+	if _, err := r.ReadAddress(tree.ID(), a, removed); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		t.Fatalf("root removal left referenced Aspect: %v", err)
 	}
 	if _, err := r.ReadAddress(tree.ID(), a, first); err != nil {

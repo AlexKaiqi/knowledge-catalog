@@ -31,9 +31,9 @@ type fixedBasisAuthorityHydrator struct {
 	beforeRead func(objectmodel.Repository, kernel.CommitID, []objectmodel.ObjectID)
 }
 
-func (h fixedBasisAuthorityHydrator) ReadMany(repo objectmodel.Repository, commit kernel.CommitID, ids []objectmodel.ObjectID) (map[objectmodel.ObjectID]objectmodel.KnowledgeValue, error) {
+func (h fixedBasisAuthorityHydrator) ReadMany(repo objectmodel.Repository, commit kernel.CommitID, ids []objectmodel.ObjectID) (map[objectmodel.ObjectID]objectmodel.ObjectValue, error) {
 	h.beforeRead(repo, commit, ids)
-	values := make(map[objectmodel.ObjectID]objectmodel.KnowledgeValue, len(ids))
+	values := make(map[objectmodel.ObjectID]objectmodel.ObjectValue, len(ids))
 	for _, id := range ids {
 		value, err := repo.Read(id, commit)
 		if err != nil {
@@ -44,7 +44,7 @@ func (h fixedBasisAuthorityHydrator) ReadMany(repo objectmodel.Repository, commi
 	return values, nil
 }
 
-func (h fixedBasisAuthorityHydrator) ReadAddress(repo objectmodel.Repository, commit kernel.CommitID, address objectmodel.Address) (objectmodel.KnowledgeValue, error) {
+func (h fixedBasisAuthorityHydrator) ReadAddress(repo objectmodel.Repository, commit kernel.CommitID, address objectmodel.Address) (objectmodel.ObjectValue, error) {
 	return repo.ReadAddress(address, commit)
 }
 
@@ -118,8 +118,8 @@ func TestSearchKeepsCandidateBasisWhenWriterAdvancesBeforeObjectRead(t *testing.
 		t.Fatalf("search changed its candidate set, completeness, or fixed view: order=%v result=%#v", order, result)
 	}
 	hit := result.Hits[0]
-	if hit.Knowledge.Address != article || hit.Knowledge.Commit != a || hit.Version.DeclarationCommit != a ||
-		!reflect.DeepEqual(hit.Knowledge.Value, originalValue) || len(hit.Version.Units) != 1 ||
+	if hit.Object.Address != article || hit.Object.Commit != a || hit.Version.DeclarationCommit != a ||
+		!reflect.DeepEqual(hit.Object.Value, originalValue) || len(hit.Version.Units) != 1 ||
 		hit.Version.Units[0].SchemaRef != string(schemaAddress.ObjectID) || hit.Version.Units[0].ValueBasis != "snapshot:"+string(a) {
 		t.Fatalf("candidate a was combined with later content or version: %#v", hit)
 	}

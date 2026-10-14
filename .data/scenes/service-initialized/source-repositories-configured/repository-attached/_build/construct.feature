@@ -3,10 +3,10 @@
 Feature: repository-attached
 
   Scenario: construct
-    When I run `kc attach --repo kr://scene/knowledge`
+    When I run `kc attach --repo kr://scene/object`
     Then the output has:
       | catalog      | absent |
-      | repositoryId | kr://scene/knowledge |
+      | repositoryId | kr://scene/object |
     When I run `kc attach --repo kr://scene/graph`
     Then the output has:
       | catalog      | absent |
@@ -18,5 +18,5 @@ Feature: repository-attached
       | repositories.0.schemaCount | 11 |
       | repositories.1.id | kr://scene/graph |
       | repositories.1.schemaCount | 0 |
-      | repositories.2.id | kr://scene/knowledge |
+      | repositories.2.id | kr://scene/object |
       | repositories.2.schemaCount | 0 |

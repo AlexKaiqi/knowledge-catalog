@@ -61,7 +61,7 @@ func TestDeploymentPublishesAndRestoresActualSystem(t *testing.T) {
 	}
 	read, err := repo.Read("kc/concept/object", published)
 	if err != nil || read.Commit != published {
-		t.Fatalf("actual system knowledge was not readable: %#v %v", read, err)
+		t.Fatalf("actual system object was not readable: %#v %v", read, err)
 	}
 	if err := ws.Close(); err != nil {
 		t.Fatal(err)

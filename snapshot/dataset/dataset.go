@@ -22,8 +22,8 @@ type DatasetItem struct {
 	File       string              `json:"file,omitempty"`
 }
 
-func (c *service) freezeSources(sources []KnowledgeSetSource) ([]KnowledgeSetSource, error) {
-	frozen := make([]KnowledgeSetSource, len(sources))
+func (c *service) freezeSources(sources []DatasetSource) ([]DatasetSource, error) {
+	frozen := make([]DatasetSource, len(sources))
 	copy(frozen, sources)
 	commits := map[kernel.RepositoryID]kernel.CommitID{}
 	for i, src := range frozen {
@@ -32,11 +32,11 @@ func (c *service) freezeSources(sources []KnowledgeSetSource) ([]KnowledgeSetSou
 			continue
 		}
 		if c.store == nil {
-			return nil, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "service cannot freeze selectors without a snapshot store")
+			return nil, kernel.Fail(kernel.ErrDatasetInvalid, "service cannot freeze selectors without a snapshot store")
 		}
 		repo, ok := c.store.Get(src.Repository)
 		if !ok {
-			return nil, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "repository %s is not attached", src.Repository)
+			return nil, kernel.Fail(kernel.ErrDatasetInvalid, "repository %s is not attached", src.Repository)
 		}
 		if src.Commit != "" {
 			if !repo.HasCommit(src.Commit) {
@@ -47,7 +47,7 @@ func (c *service) freezeSources(sources []KnowledgeSetSource) ([]KnowledgeSetSou
 		}
 		commit, ok := repo.GetRef(src.Selector)
 		if !ok {
-			return nil, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "repository %s has no ref %s", src.Repository, src.Selector)
+			return nil, kernel.Fail(kernel.ErrDatasetInvalid, "repository %s has no ref %s", src.Repository, src.Selector)
 		}
 		if src.BaseRev != "" && commit != kernel.CommitID(src.BaseRev) {
 			return nil, kernel.Fail(kernel.ErrNonFastForward,
@@ -59,7 +59,7 @@ func (c *service) freezeSources(sources []KnowledgeSetSource) ([]KnowledgeSetSou
 	return frozen, nil
 }
 
-func datasetItemsFromSources(sources []KnowledgeSetSource, commits map[kernel.RepositoryID]kernel.CommitID) ([]DatasetItem, error) {
+func datasetItemsFromSources(sources []DatasetSource, commits map[kernel.RepositoryID]kernel.CommitID) ([]DatasetItem, error) {
 	items := make([]DatasetItem, 0, len(sources))
 	seen := map[string]struct{}{}
 	for _, src := range sources {
@@ -68,7 +68,7 @@ func datasetItemsFromSources(sources []KnowledgeSetSource, commits map[kernel.Re
 			return nil, err
 		}
 		if _, dup := seen[item.Target]; dup {
-			return nil, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "dataset target %s is not unique", itemTargetLabel(item.Target))
+			return nil, kernel.Fail(kernel.ErrDatasetInvalid, "dataset target %s is not unique", itemTargetLabel(item.Target))
 		}
 		seen[item.Target] = struct{}{}
 		items = append(items, item)
@@ -79,13 +79,13 @@ func datasetItemsFromSources(sources []KnowledgeSetSource, commits map[kernel.Re
 	return items, nil
 }
 
-func datasetItemFromSource(src KnowledgeSetSource, commits map[kernel.RepositoryID]kernel.CommitID) (DatasetItem, error) {
+func datasetItemFromSource(src DatasetSource, commits map[kernel.RepositoryID]kernel.CommitID) (DatasetItem, error) {
 	item := DatasetItem{Repository: src.Repository, Commit: src.Commit}
 	if commit, ok := commits[src.Repository]; ok {
 		item.Commit = commit
 	}
 	if item.Commit == "" {
-		return DatasetItem{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid, "dataset item %s has no frozen commit", itemTargetLabel(src.Target))
+		return DatasetItem{}, kernel.Fail(kernel.ErrDatasetInvalid, "dataset item %s has no frozen commit", itemTargetLabel(src.Target))
 	}
 	if src.IsFileEntry() {
 		if err := validateRelativeTreePath("dataset file", src.File, false); err != nil {
@@ -97,7 +97,7 @@ func datasetItemFromSource(src KnowledgeSetSource, commits map[kernel.Repository
 		file := normalizeMemberSubPath(src.File)
 		target := normalizeMountPath(src.Target)
 		if file == "" || target == "" {
-			return DatasetItem{}, kernel.Fail(kernel.ErrKnowledgeSetInvalid,
+			return DatasetItem{}, kernel.Fail(kernel.ErrDatasetInvalid,
 				"file entry of repository %s needs a repository file and a delivered target", src.Repository)
 		}
 		item.Kind = DatasetItemFile
@@ -138,7 +138,7 @@ func validateDeliveredTargets(items []DatasetItem) error {
 					continue
 				}
 				if strings.HasPrefix(other.Target, file.Target+"/") || strings.HasPrefix(file.Target, other.Target+"/") {
-					return kernel.Fail(kernel.ErrKnowledgeSetInvalid,
+					return kernel.Fail(kernel.ErrDatasetInvalid,
 						"delivered files %s and %s nest inside each other; a file entry delivers exactly one path",
 						file.Target, other.Target)
 				}
@@ -148,12 +148,12 @@ func validateDeliveredTargets(items []DatasetItem) error {
 				continue
 			}
 			if file.Target == other.Target {
-				return kernel.Fail(kernel.ErrKnowledgeSetInvalid,
+				return kernel.Fail(kernel.ErrDatasetInvalid,
 					"delivered path %s is a directory delivered from %s and cannot also be one file",
 					file.Target, other.Repository)
 			}
 			if strings.HasPrefix(other.Target, file.Target+"/") {
-				return kernel.Fail(kernel.ErrKnowledgeSetInvalid,
+				return kernel.Fail(kernel.ErrDatasetInvalid,
 					"delivered directory %s (%s) cannot live under delivered file %s",
 					other.Target, other.Repository, file.Target)
 			}

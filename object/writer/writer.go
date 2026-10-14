@@ -157,7 +157,7 @@ func (w *Writer) applySnapshot(commandID string, surface objectmodel.Surface, cs
 		if err != nil {
 			return nil, snapshot.WriteNotApplied(err)
 		}
-		commitID, err := applyKnowledgeCommit(commandID, repo, cs)
+		commitID, err := applyObjectCommit(commandID, repo, cs)
 		if err != nil {
 			return nil, err
 		}

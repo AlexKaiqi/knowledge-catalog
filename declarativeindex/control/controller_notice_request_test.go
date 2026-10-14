@@ -49,7 +49,7 @@ func noticeRequestFixture(t *testing.T, origins ...string) (*Controller, *query.
 	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Job:request-notice", AspectName: "runtime"}
 	for _, id := range []string{"kr://notice/request-a", "kr://notice/request-b"} {
 		s := testkit.NewSetup(t, id)
-		at, err := s.Repo.ApplyKnowledgeCommit(objectmodel.ChangeSet{TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID, Operations: []objectmodel.Operation{
+		at, err := s.Repo.ApplyObjectCommit(objectmodel.ChangeSet{TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID, Operations: []objectmodel.Operation{
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.runtime"}, Value: map[string]any{"entity": "Job", "aspect": "runtime", "origin": origin, "fields": map[string]any{"status": map[string]any{"type": "string", "access": []any{"text"}}}}},
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: address.ObjectID, AspectName: "definition"}, Value: map[string]any{"owner": "fixed"}},
 		}})
@@ -73,7 +73,7 @@ func noticeRequestFixture(t *testing.T, origins ...string) (*Controller, *query.
 				return repo, nil
 			}
 		}
-		return nil, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "unknown repository")
+		return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "unknown repository")
 	})
 	if err != nil {
 		t.Fatal(err)

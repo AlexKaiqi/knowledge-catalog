@@ -34,16 +34,16 @@ func (c *recordingClient) AccessResource(_ context.Context, request accesscli.Ac
 
 func TestLiveAccessCLIUsesFixedBasisAndAdoptsTransportResult(t *testing.T) {
 	remote := &recordingClient{}
-	scope := objectclient.KnowledgeScope{Dataset: "selected", Pin: json.RawMessage(`{"revision":3}`)}
+	scope := objectclient.ObjectScope{Dataset: "selected", Pin: json.RawMessage(`{"revision":3}`)}
 	executor := accesscli.New(remote, accesscli.Context{Scope: scope})
 	options := accesscli.RequestOptions{RequestID: "request-3"}
 	flags := map[string]any{"object": "service/orders", "aspect": "health", "member": "current"}
 	output, err := executor.Execute(context.Background(), "binding show", flags, options)
-	if err != nil || !reflect.DeepEqual(output, map[string]any{"binding": "service/orders"}) || !reflect.DeepEqual(remote.bindings[0].KnowledgeScope, scope) {
+	if err != nil || !reflect.DeepEqual(output, map[string]any{"binding": "service/orders"}) || !reflect.DeepEqual(remote.bindings[0].ObjectScope, scope) {
 		t.Fatalf("fixed binding request/result changed: %#v %#v %v", remote.bindings, output, err)
 	}
 	output, err = executor.Execute(context.Background(), "access", flags, options)
-	if err != nil || !reflect.DeepEqual(output, map[string]any{"value": "service/orders"}) || remote.accesses[0].Aspect != "health" || remote.accesses[0].Member != "current" || !reflect.DeepEqual(remote.accesses[0].KnowledgeScope, scope) {
+	if err != nil || !reflect.DeepEqual(output, map[string]any{"value": "service/orders"}) || remote.accesses[0].Aspect != "health" || remote.accesses[0].Member != "current" || !reflect.DeepEqual(remote.accesses[0].ObjectScope, scope) {
 		t.Fatalf("access request/result changed: %#v %#v %v", remote.accesses, output, err)
 	}
 	_, err = executor.Execute(context.Background(), "invoke", map[string]any{"repo": "source-repo", "commit": "fixed", "object": "service/orders", "implementation": "live", "operation": "read", "input": `{"amount":1234567890123456789}`}, options)

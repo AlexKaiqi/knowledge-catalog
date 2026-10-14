@@ -19,9 +19,9 @@ var stateValueBucket = []byte("values")
 
 // stateRecord is the basis-addressable Serving State for one object. It is
 // kept outside the Repository and outside the retrieval provider so search
-// hits can be hydrated without retaining the whole knowledge space in memory.
+// hits can be hydrated without retaining the whole object space in memory.
 type stateRecord struct {
-	Value        objectmodel.KnowledgeValue    `json:"value"`
+	Value        objectmodel.ObjectValue       `json:"value"`
 	Observations []objectmodel.UnitObservation `json:"observations,omitempty"`
 	Doc          ports.CompiledDoc             `json:"doc"`
 }

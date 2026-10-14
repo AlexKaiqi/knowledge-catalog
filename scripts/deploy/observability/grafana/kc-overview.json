@@ -31,11 +31,11 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "kc-prometheus"},
-      "description": "所选窗口内 Canonical READ 次数。操作名是 knowledge-read。",
+      "description": "所选窗口内 Canonical READ 次数。操作名是 object-read。",
       "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
       "gridPos": {"h": 5, "w": 5, "x": 9, "y": 0}, "id": 3,
       "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
-      "targets": [{"expr": "sum(increase(kc_operation_executions_total{kc_face=\"knowledge\",kc_operation=\"knowledge-read\"}[$__range]))", "instant": true, "legendFormat": "reads", "refId": "A"}],
+      "targets": [{"expr": "sum(increase(kc_operation_executions_total{kc_face=\"object\",kc_operation=\"object-read\"}[$__range]))", "instant": true, "legendFormat": "reads", "refId": "A"}],
       "title": "Canonical READ / selected range", "type": "stat"
     },
     {

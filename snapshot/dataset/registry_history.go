@@ -112,7 +112,7 @@ func (g *registry) registryFileAt(path string, commit kernel.CommitID) ([]byte, 
 		return nil, nil
 	}
 	body, err := g.tree.ReadFile(path, commit)
-	if kernel.CodeOf(err) == kernel.ErrKnowledgeRefUnresolved {
+	if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 		return nil, nil
 	}
 	return body, err

@@ -28,7 +28,7 @@ func copyInterfaceJSON[T any](value T) (T, error) {
 	var copy T
 	raw, err := json.Marshal(value)
 	if err != nil {
-		return copy, kernel.Fail(kernel.ErrUsageInvalid, "interface value must be serializable knowledge: %v", err)
+		return copy, kernel.Fail(kernel.ErrUsageInvalid, "interface value must be serializable object: %v", err)
 	}
 	if err := kernel.UnmarshalJSON(raw, &copy); err != nil {
 		return copy, kernel.Fail(kernel.ErrUsageInvalid, "interface value cannot be decoded: %v", err)

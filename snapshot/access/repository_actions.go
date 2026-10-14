@@ -1,7 +1,7 @@
 package access
 
 // Repository operations concern native metadata, snapshot files and their version graph.
-// They do not imply Knowledge/Writer permissions or authority to grant access.
+// They do not imply Object/Writer permissions or authority to grant access.
 const (
 	RepositoryMetadataRead   = "repository.metadata.read"
 	RepositoryMetadataWrite  = "repository.metadata.write"

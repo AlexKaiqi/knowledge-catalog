@@ -8,7 +8,7 @@ import (
 	consumerplugin "kc/discovery/plugin"
 	index "kc/discovery/projection"
 	"kc/kernel"
-	knowledgeserving "kc/liveaccess"
+	objectserving "kc/liveaccess"
 	objectmodel "kc/object"
 	"kc/object/reader"
 )
@@ -37,7 +37,7 @@ func (e ProjectionDescribeExecutor) Execute(_ context.Context, request Projectio
 		return index.IndexDescriptor{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
 			"projection describe service is unavailable")
 	}
-	repo, err := e.Repositories.Require(request.Repository, kernel.ErrKnowledgeRefUnresolved)
+	repo, err := e.Repositories.Require(request.Repository, kernel.ErrObjectRefUnresolved)
 	if err != nil {
 		return index.IndexDescriptor{}, err
 	}
@@ -47,7 +47,7 @@ func (e ProjectionDescribeExecutor) Execute(_ context.Context, request Projectio
 type ProjectionSyncRequest struct {
 	Repository   kernel.RepositoryID
 	Commit       kernel.CommitID
-	State        knowledgeserving.StateLookup
+	State        objectserving.StateLookup
 	StateRequest ProjectionStateRequest
 }
 
@@ -68,7 +68,7 @@ func (e ProjectionSyncExecutor) Execute(ctx context.Context, request ProjectionS
 		return ProjectionSyncResult{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
 			"projection sync service is unavailable")
 	}
-	repo, err := e.Repositories.Require(request.Repository, kernel.ErrKnowledgeRefUnresolved)
+	repo, err := e.Repositories.Require(request.Repository, kernel.ErrObjectRefUnresolved)
 	if err != nil {
 		return ProjectionSyncResult{}, err
 	}
@@ -113,7 +113,7 @@ func (e ProjectionSyncExecutor) Execute(ctx context.Context, request ProjectionS
 
 type ProjectionNoticeRequest struct {
 	Notice  index.ChangeNotice
-	State   knowledgeserving.StateLookup
+	State   objectserving.StateLookup
 	Request objectmodel.RequestContext
 }
 
@@ -159,7 +159,7 @@ func (e ProjectionNoticeExecutor) Execute(ctx context.Context, request Projectio
 	if err := catchUpRepository(ctx, e.Controller, request.Notice.Repository); err != nil {
 		return ProjectionNoticeResult{}, err
 	}
-	repo, err := e.Repositories.Require(request.Notice.Repository, kernel.ErrKnowledgeRefUnresolved)
+	repo, err := e.Repositories.Require(request.Notice.Repository, kernel.ErrObjectRefUnresolved)
 	if err != nil {
 		return ProjectionNoticeResult{}, err
 	}
@@ -187,7 +187,7 @@ func catchUpRepository(ctx context.Context, controller ProjectionController, rep
 }
 
 type AccessDescribeRequest struct {
-	Pin reader.KnowledgeSetPin
+	Pin reader.DatasetPin
 }
 
 type AccessDescribeExecutor struct {

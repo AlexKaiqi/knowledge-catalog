@@ -24,7 +24,7 @@ func BeginReadEvidence(ctx context.Context, requestID string) (context.Context, 
 
 // RetainReadEvidence retains only source results present in the delivered
 // object set, after the application has applied its existing read policy.
-func RetainReadEvidence(ctx context.Context, home string, request objectmodel.RequestContext, delivered []objectmodel.PinnedKnowledgeRef) (*evidence.Reference, error) {
+func RetainReadEvidence(ctx context.Context, home string, request objectmodel.RequestContext, delivered []objectmodel.PinnedObjectRef) (*evidence.Reference, error) {
 	samples, err := evidence.CapturedValues(ctx)
 	if err != nil {
 		return nil, err

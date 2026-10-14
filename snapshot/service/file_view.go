@@ -13,7 +13,7 @@ import (
 // accepted Dataset and current policy. External views may supply byte/paging
 // ports without placing their interpretation in the file module.
 type ViewOptions struct {
-	Pin       dataset.ResolvedKnowledgeSet
+	Pin       dataset.ResolvedDataset
 	Mounts    []dataset.VirtualMount
 	Items     []dataset.DatasetItem
 	Sources   Sources
@@ -24,7 +24,7 @@ type ViewOptions struct {
 }
 
 type fileView struct {
-	pin         dataset.ResolvedKnowledgeSet
+	pin         dataset.ResolvedDataset
 	mounts      []dataset.VirtualMount
 	tree        dataset.DatasetDeliveredTree
 	items       []dataset.DatasetItem
@@ -47,7 +47,7 @@ func NewFileView(options ViewOptions) FileView {
 	}
 	return &fileView{pin: options.Pin, mounts: append([]dataset.VirtualMount{}, options.Mounts...), tree: dataset.NewDatasetDeliveredTree(items), items: scope, sources: options.Sources, delivered: options.Delivered, directory: options.Directory, sourceRead: options.Read, record: options.Record, pagingScope: filePagingScope(options.Mounts, items, scope)}
 }
-func (v *fileView) FixedPin() dataset.ResolvedKnowledgeSet { return v.pin }
+func (v *fileView) FixedPin() dataset.ResolvedDataset { return v.pin }
 func (v *fileView) VisibleMounts() []dataset.VirtualMount {
 	return append([]dataset.VirtualMount{}, v.mounts...)
 }
@@ -237,7 +237,7 @@ func (v *fileView) readDelivered(request FileReadRequest) (FileReadResponse, err
 			if !visible {
 				return FileReadResponse{}, kernel.Fail(kernel.ErrForbidden, "delivered path is a hidden declared directory")
 			}
-			return FileReadResponse{}, kernel.Fail(kernel.ErrKnowledgeRefUnresolved, "delivered path is a directory")
+			return FileReadResponse{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "delivered path is a directory")
 		}
 	}
 	mount := dataset.VirtualMount{Path: deliveredParent(delivered), Repository: item.Repository, Commit: item.Commit}

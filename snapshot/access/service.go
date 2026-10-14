@@ -7,7 +7,7 @@ import (
 )
 
 // Service supplies authenticated explicit-rule administration without Home,
-// knowledge interpretation or deployment-default policy. The caller must pass
+// object interpretation or deployment-default policy. The caller must pass
 // the verified principal, never a name asserted in the request body.
 type service struct{ store RuleStore }
 

@@ -28,7 +28,7 @@ func leafHelpEntries() map[string]helpEntry {
   本地查看此任务用法：kc help plugin`,
 		},
 		"search": {
-			Description: "在固定仓或 Dataset 上按 Schema 字段的查询声明检索知识，列出匹配对象",
+			Description: "在固定仓或 Dataset 上按 Schema 字段的查询声明检索对象，列出匹配对象",
 			Usage: `kc search (--repo <id> | --dataset <id>) --query <text>
 
 用途：
@@ -39,12 +39,12 @@ func leafHelpEntries() map[string]helpEntry {
   --recall lexical|semantic，省略为 lexical；semantic 需要文本查询，当前只返回一个近似候选窗口，不支持续页。
   单仓可用 --commit 或 --ref 固定依据；省略使用 published。含空格、* 或 $ 的值须加单引号。
 条件：
-  已认证；单仓需 knowledge.search，命名 Dataset 按覆盖选定材料的 file.read 准入，不另要求 knowledge.search。
+  已认证；单仓需 object.search，命名 Dataset 按覆盖选定材料的 file.read 准入，不另要求 object.search。
   不带范围的库存发现需 inventory.read；另行解析 Dataset pin 才需 dataset.resolve，解析权不代替材料读取权。
   查询字段须经 Schema 声明，固定版本的检索投影须就绪；semantic 另需向量投影与 embedding 能力。
 结果：
   JSON hits 给出 repository/objectId/commit，供后续 read；还返回范围、完整性、续页或检索证据信息。
-  hits 不带正文；单仓搜索权不替代 knowledge.read，Dataset 的知识消费范围由 file.read 和清单限定。
+  hits 不带正文；单仓搜索权不替代 object.read，Dataset 的对象消费范围由 file.read 和清单限定。
   无命中不代表范围外或无权读取的对象不存在。
 后果：
   执行查询并留下服务配置的访问/检索证据，不发布对象、不自动建立或同步投影。
@@ -56,10 +56,10 @@ func leafHelpEntries() map[string]helpEntry {
   字段被拒绝时先 schema list/schema describe；投影未就绪时查 operations projection describe，请维护者修复，不能把失败当零命中。
   lexical 续页须保持查询、范围和版本；游标失效时核对依据后重新查询，单仓可显式复用已返回的 commit。
 示例：
-  例：kc search --repo kr://scene/knowledge --query 'merchandise'
+  例：kc search --repo kr://scene/object --query 'merchandise'
   例：kc search --dataset scene-set --query 'merchandise'
-  例：kc search --repo kr://scene/knowledge --eq unit=CNY
-  例：kc search --repo kr://scene/knowledge --eq 'name=Gross merchandise value'`,
+  例：kc search --repo kr://scene/object --eq unit=CNY
+  例：kc search --repo kr://scene/object --eq 'name=Gross merchandise value'`,
 		},
 
 		"relations": {
@@ -73,8 +73,8 @@ func leafHelpEntries() map[string]helpEntry {
   可按 --relation-type、--role 筛选；--direction 是关系的方向类型，不是 in/out。
   --limit 默认 100、最大 1000；用 --continuation 续页。单仓可用 --commit 或 --ref 固定依据。
 条件：
-  已认证；单仓需 knowledge.relations，命名 Dataset 以其 file.read 准入，不另要求来源仓 knowledge.relations。
-  Dataset 须通过整份选择范围的完整读取检查，单个端点放行不能替代；另行解析 pin 需 dataset.resolve。
+  已认证；单仓需 object.relations，命名 Dataset 以其 file.read 准入，不另要求来源仓 object.relations。
+ Dataset 须通过整份选择范围的完整读取检查，单个端点放行不能替代；另行解析 pin 需 dataset.resolve。
   固定版本的关系检索投影必须就绪。
 结果：
   JSON hits 的 objectId 是关系对象身份，含 repository/commit/relationType/matchedRoles；不是邻居身份。
@@ -88,8 +88,8 @@ func leafHelpEntries() map[string]helpEntry {
   无投影时查 operations projection describe；Dataset 端点被拒绝时核对完整引用是否属于当前范围。
   续页保持端点、过滤和固定依据；游标失效时重新查询，单仓可复用返回的 commit，勿拼接不同版本的页。
 示例：
-  例：kc relations --repo kr://scene/knowledge --object metric/gmv --direction DIRECTED
-  例：kc relations --dataset scene-set --object kc://scene/knowledge/metric/gmv --direction DIRECTED`,
+  例：kc relations --repo kr://scene/object --object metric/gmv --direction DIRECTED
+  例：kc relations --dataset scene-set --object kc://scene/object/metric/gmv --direction DIRECTED`,
 		},
 		"traverse": {
 			Description: "在固定范围内沿关系做有界邻域遍历，不是图查询语言",
@@ -102,8 +102,8 @@ func leafHelpEntries() map[string]helpEntry {
   --max-hops 必填且为 1-8；--min-hops 默认 0，须不大于 max-hops。类型、角色和方向可限制关系。
   --limit 默认 100、最大 1000；续页须复用过滤与范围。单仓 --commit/--ref 固定来源版本。
 条件：
-  已认证；单仓需 knowledge.traverse，命名 Dataset 以其 file.read 准入，不另要求来源仓 knowledge.traverse。
-  Dataset 须通过整份选择范围的完整读取检查，单个起点放行不能替代；另行解析 pin 需 dataset.resolve。
+  已认证；单仓需 object.traverse，命名 Dataset 以其 file.read 准入，不另要求来源仓 object.traverse。
+ Dataset 须通过整份选择范围的完整读取检查，单个起点放行不能替代；另行解析 pin 需 dataset.resolve。
   起点在已解析范围内，所需固定版本的关系投影可用。
 结果：
   nodes 按仓/对象去重并给最小跳深；edges 给关系坐标及完整端点，boundary 表示越界处停止。
@@ -118,7 +118,7 @@ func leafHelpEntries() map[string]helpEntry {
   游标拒绝时核对固定依据，不混接不同版本的增量；临时失败可重试同一页，合并时按身份去重。
 示例：
   例：kc traverse --dataset scene-set --object kc://acme/public/core/Table:orders --max-hops 3
-  例：kc traverse --repo kr://scene/knowledge --object Table:orders --max-hops 2 --relation-type owned-by`,
+  例：kc traverse --repo kr://scene/object --object Table:orders --max-hops 2 --relation-type owned-by`,
 		},
 
 		"operations access-spec describe": {
@@ -131,7 +131,7 @@ func leafHelpEntries() map[string]helpEntry {
   选择 --repo 或 --dataset；单仓当前采用 published，Dataset 使用本次解析的来源选择。
   此入口不传递 --commit/--ref，不能靠这两个 flag 指定其它单仓依据。
 条件：
-  已认证；单仓需 knowledge.access.describe 及整仓 knowledge.read，命名 Dataset 按其 file.read 准入，不另要求这两项来源仓动作。
+  已认证；单仓需 object.access.describe 及整仓 object.read，命名 Dataset 按其 file.read 准入，不另要求这两项来源仓动作。
   此报告须通过整份选择范围的完整读取检查，单个对象放行不能替代；另行解析 Dataset pin 需 dataset.resolve。
   来源已登记且可解析，所需 Schema 在合法范围内。
 结果：
@@ -147,7 +147,7 @@ func leafHelpEntries() map[string]helpEntry {
   来源或合同缺失时用 show/schema list/schema describe 核对登记与发布，请维护者修复合法选择及合同。
   就绪问题另查 operations projection describe；不要把描述失败替换为空合同或隐式触发投影重建。
 示例：
-  例：kc operations access-spec describe --repo kr://scene/knowledge
+  例：kc operations access-spec describe --repo kr://scene/object
   例：kc operations access-spec describe --dataset scene-set`,
 		},
 	}

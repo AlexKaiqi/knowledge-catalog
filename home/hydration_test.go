@@ -49,7 +49,7 @@ func TestHomeWiresCacheAndRecoversWarmupWithoutSearchProvider(t *testing.T) {
 			t.Fatal(err)
 		}
 		id := systemrepo.SystemSchemaOperations()[0].Address.ObjectID
-		ref := objectmodel.KnowledgeRef{Repository: repo.ID(), Object: id}
+		ref := objectmodel.ObjectRef{Repository: repo.ID(), Object: id}
 		if _, err := ws.Reader.Read(ref, head, nil); err != nil {
 			t.Fatal(err)
 		}

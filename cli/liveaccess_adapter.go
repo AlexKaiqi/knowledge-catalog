@@ -33,12 +33,12 @@ func preflightLiveAccessClient(path string, flags map[string]FlagValue) error {
 	if !liveAccessCommandPath(path) {
 		return nil
 	}
-	return accesscli.New(nil, accesscli.Context{Scope: objectclient.KnowledgeScope{Dataset: invoke.FlagString(flags, "dataset")}}).Validate(path, snapshotFlags(flags))
+	return accesscli.New(nil, accesscli.Context{Scope: objectclient.ObjectScope{Dataset: invoke.FlagString(flags, "dataset")}}).Validate(path, snapshotFlags(flags))
 }
 func executeLiveAccessCommand(ctx context.Context, remote *kcclient.Client, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
-	if err := inv.PrepareKnowledgePinContext(flags); err != nil {
+	if err := inv.PrepareObjectPinContext(flags); err != nil {
 		return nil, err
 	}
-	scope := objectclient.KnowledgeScope{Dataset: invoke.FlagString(flags, "dataset"), Pin: remotePin(flags), Definition: inv.SuppliedKnowledgeSet(flags)}
+	scope := objectclient.ObjectScope{Dataset: invoke.FlagString(flags, "dataset"), Pin: remotePin(flags), Definition: inv.SuppliedDataset(flags)}
 	return accesscli.New(remote.LiveAccessService(), accesscli.Context{Scope: scope}).Execute(ctx, path, accesscli.InputFlags(path, snapshotFlags(flags)), accessclient.RequestOptions{RequestID: options.RequestID})
 }
