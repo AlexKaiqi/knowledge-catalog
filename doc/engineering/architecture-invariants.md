@@ -38,7 +38,7 @@
 | AUTH-01 | `--repo` SEARCH 以仓为候选；无 `object.read` 时交付链屏蔽正文，不标 `partial`、不从 SearchView 抹仓。Dataset SEARCH 不得超出当前服务版 path | 用缺少读权裁 `--repo` 候选；把未授权 Canonical 原文交给调用方；因缺读权报 `partial`；搜出清单外对象 | `TestDatasetAuthorizationCoverageIsHonest` `TestRepoSearchDeliveryStripsUnauthorizedBody` `TestMetricPermissionScenes` `TestCatalogReadDiscoversWithoutObjectRead` `TestCatalogInventoryDoesNotHideReposWithoutObjectRead` `TestDatasetSearchExcludesPathsOutsidePublishedList` |
 | AUTH-02 | Dataset`file.read` 足以解释清单内文件；不放行仓 `object.*`；`inventory.read` 不能跳过 Dataset`file.read` | `file.read`×Dataset 隐含仓 `object.read`；inventory.read 跳过 Dataset 消费 | `TestDatasetConsumeDoesNotImplyObjectActions` `TestDatasetFileReadDoesNotImplyRepoObject` `TestAuthorizeDatasetObjectSeparatesConsumeFromSearch` `TestDeliverSearchHitKeepsDatasetFileReadBody` `TestHTTPWorkspaceSearchKeepsDatasetFileReadBody` |
 | AUTH-03 | 交付链输入是已 hydrate 的对象 ID；按序改写可见正文；无 `object.read` 只清空正文；不得改 ID/Address | 改 Candidate 身份后仍返回；后续 stage 看到未屏蔽正文；把交付写进 `discovery/` / `discovery/projection/` | `TestEmptyChainReturnsHydratedBody` `TestRepositoryReadStripsUnauthorizedBodyAndKeepsID` `TestChainRejectsIdentityMutation` `TestChainRunsLaterStagesOnStrippedEnvelope` `TestLaterStageMayRewriteVisibleBody` `TestFromValueRoundTripWritesOnlyBody` |
-| D-01 | Binding declaration basis 与 observation basis 分开 | 动态值冒充 commit 内容；Stream 隐式数组化 | `TestStateBindingHydratesConsumerReadAndKeepsBothBases` `TestOrdinaryReadRejectsStreamBinding` `TestProjectionCompilerSkipsStreamBindingUnits` |
+| D-01 | Binding declaration basis 与 observation basis 分开 | 动态值冒充 commit 内容；Stream 隐式数组化 | `TestStateBindingHydratesConsumerReadAndKeepsBothBases` `TestOrdinaryReadRejectsStreamBinding` `TestProjectionCompilerSkipsUnobservedBindingContent` |
 | CA-01 | 底层 Snapshot、Dataset 组合与 Reader 不拥有跨请求对象缓存的具体状态；上层缓存经 Object hydrate 端口装配 | Reader/Snapshot 持有 ObjectID→ObjectValue 或 import 具体缓存；未注入端口时暗中缓存完整对象 | `TestLowerLayersDoNotDeclareSemanticObjectCaches` `TestObjectsBatchHydratesOneTreeWithoutCrossRequestObjectCache` |
 | CA-02 | 缓存只复用固定 Repository、commit 与完整对象或 Address 的 Snapshot 读取，保持完整元数据及副本隔离 | 同 ID 跨仓/跨版本命中；Address 坐标丢失；调用方修改污染缓存；错误 basis 成为成功条目 | `TestCacheUsesRepositoryVersionAndBatchedMisses` `TestCacheClonesAllMutableSnapshotData` `TestCacheAddressKeysRetainEveryCoordinate` `TestCacheFailsOnSourceErrorsAndWrongBasis` `TestSearchReusesHydrationCacheAcrossQueriesAndRejectsWrongBasis` `TestReaderAndWorkspaceUseInjectedHydrationAtFixedBasis` |
 | CA-03 | 正文缓存、预热与单次回源均有界；miss 子集批量回源，旧 pin 不随预热推进 | 缓存无限增长；冷热预热全仓物化；命中仍回源；新 commit 覆盖旧版本内容；消费 miss 启动维护扫描 | `TestCacheLRUEvictionByteBudgetAndLifecycle` `TestColdWarmIsOptInAndOnlyOneBoundedPage` `TestWarmRefreshesHotObjectsWithoutDiscardingOldPin` `TestCacheConcurrentReadsAndWarmAreIsolated` `TestRelationsReuseSameBasisHydrationCache` `TestConsumerReadSchemaSearchAndRelationsNeverCallMaintenanceScanner` |
@@ -154,7 +154,7 @@ K 表保留设计推导层的语义结论（原系统设计 §9.3，替换后并
 | `K-25` | Candidate 不作为对象结果；SEARCH 命中必须在计划固定的 SearchView/basis 上 hydrate Canonical，不得用 Candidate 或 stored fields 充当对象。调用方信封是否含全文由权限体系交付链首段决定，不取消本条 |
 | `K-26` | Schema 字段访问声明不包含 provider、物理存储载荷或对象身份的替代定义 |
 | `K-27` | 不能证明无漏项的 provider/plan 必须返回 partial；不得用 score、缓存命中或 invalidation 推断完整性 |
-| `K-28` | Bound State 消费结果必须同时标识声明与 observation basis；VFS/commit 不得冒充冻结动态值，Stream 不得隐式数组化 |
+| `K-28` | 外部单元（binding 单元）的消费结果必须同时标识声明（单元与取值描述的组合摘要）与逐单元 observation basis；VFS/commit 不得冒充冻结动态值，Stream 不得隐式数组化 |
 
 ## 3. 变更规则
 
@@ -176,7 +176,6 @@ K 表保留设计推导层的语义结论（原系统设计 §9.3，替换后并
 
 插件声明移出 Schema 已在[插件](../design/plugins.md)、[发现](../design/discovery.md#索引声明)与
 [LiveAccess](../design/liveaccess.md#声明)选定：索引声明是仓里的 `index` 方面，外部取值只在方面或成员上
-引用取值描述，观察依据按地址挂在值旁边。`S-01`、`K-26`、`K-28` 的表述与证据仍对应 Schema 上的访问
-声明和 Bound State，按第 3 节规则随代码与反例测试一起改写：`S-01`/`K-26` 改为“Schema 只描述结构，
-索引声明不含 provider、物理载荷或身份替代定义”，`K-28` 改为外部单元的结果同时标识声明与逐单元观察依据。
-改写前不删除也不削弱现有证据。
+引用取值描述，观察依据按地址挂在值旁边。`K-28` 已随 binding 单元实现改写。`S-01`、`K-26` 的表述与证据
+仍对应 Schema 上的字段访问声明，随索引声明迁入 `index` 方面时按第 3 节规则一起改写为“Schema 只描述结构，
+索引声明不含 provider、物理载荷或身份替代定义”；改写前不删除也不削弱现有证据。

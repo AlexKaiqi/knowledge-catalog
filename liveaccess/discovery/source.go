@@ -21,5 +21,7 @@ func (s Source) ObserveRepositoryValue(ctx context.Context, repo objectmodel.Rep
 	if s.Lookup == nil {
 		return objectmodel.ObservedValue{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "dynamic State projection requires a Materialization Runtime")
 	}
-	return liveservice.HydrateRepositoryValue(ctx, repo, value, s.Lookup, s.Request)
+	// Dynamic projection resolves descriptorRef inside the projected
+	// Repository commit only; the Dataset-frozen scope is debt for stage 4c.
+	return liveservice.HydrateRepositoryValue(ctx, repo, value, s.Lookup, s.Request, liveaccess.RepositoryDescriptors(repo, value.Commit))
 }

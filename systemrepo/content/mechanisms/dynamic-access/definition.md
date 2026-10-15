@@ -10,7 +10,7 @@ LiveAccess 是访问当前状态与已声明操作的内置插件。版本化实
 
 ## 动态访问声明（Binding）
 
-声明某个对象单元的动态值如何从外部 runtime 取得。它说明取值模式、访问入口与操作，随对象声明版本化；LiveAccess 实现提供访问原点和操作映射；历史 Schema origin 与 ResourceDescriptor 继续兼容解释。
+声明某个对象单元的动态值如何从外部 runtime 取得。方面或成员单元以 `valueSource: {kind: binding, binding: {descriptorRef}}` 引用一个 ResourceDescriptor，由它说明来源 origin、取值模式、运行时、协议与操作；单元与取值描述各自随对象版本化，binding 单元不带固定值。Schema 只描述结构，不承载 origin。
 
 固定版本只固定声明，不冻结外部值。凭证、游标与运行进度留在外部运行面；动态取值经资源访问与 Serving，保留声明和观察两种依据。当前普通读取支持 State 取值，事件窗口与持续订阅尚未选定，不能由声明中的 Stream 模式推导已有流处理能力。
 

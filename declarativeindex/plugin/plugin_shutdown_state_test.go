@@ -13,6 +13,7 @@ import (
 	indeximplementation "kc/declarativeindex/projection"
 	retrieval "kc/discovery"
 	index "kc/discovery/projection"
+	"kc/internal/bindingfixture"
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/liveaccess"
@@ -37,11 +38,13 @@ func TestIndexPluginsCloseCancelsBackgroundStateBeforeDrainingCatchUp(t *testing
 		TargetRepository: source.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: base, ExpectedTargetCommit: base,
 		Operations: []objectmodel.Operation{
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "job/shutdown"}, Value: map[string]any{"name": "shutdown"}},
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/shutdown", AspectName: "definition"}, Value: map[string]any{"name": "shutdown"}},
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.runtime"}, Value: map[string]any{
-				"entity": "Job", "aspect": "runtime", "origin": "https://scheduler.example",
+				"entity": "Job", "aspect": "runtime",
 				"fields": map[string]any{"status": map[string]any{"type": "string", "access": []any{"filter"}}},
 			}},
+			bindingfixture.PutDescriptor("resource/scheduler", bindingfixture.Descriptor("https://scheduler.example")),
+			bindingfixture.PutAspect("job/shutdown", "runtime", "schema/job.runtime", "resource/scheduler"),
 		},
 	})
 	if err != nil {

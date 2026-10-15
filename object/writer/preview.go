@@ -124,10 +124,6 @@ func ingestFile(rel string, content []byte) (objectmodel.Operation, IngestFile, 
 		if err := unit.DeclarationError(); err != nil {
 			return objectmodel.Operation{}, IngestFile{}, err
 		}
-		if unit.ValueSource.Normalized() != nil {
-			return objectmodel.Operation{}, IngestFile{}, kernel.Fail(kernel.ErrUsageInvalid,
-				"Bound State is declared on Domain Schema origin, not an instance value_source")
-		}
 		return objectmodel.Operation{
 				Op:          objectmodel.OpPut,
 				Address:     unit.Address,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"kc/internal/bindingfixture"
 	"kc/kernel"
 	"kc/liveaccess/evidence"
 	liveservice "kc/liveaccess/service"
@@ -17,12 +18,9 @@ func TestUnavailableDeclaredDescriptorIsLocalBeforeSourceLookup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	placeholder := map[string]any{"cached": "declaration only"}
 	selectedRepo := &selectedStateReferenceRepo{Repository: repo, unit: objectmodel.Unit{
-		ObjectID: address.ObjectID, Address: address, Value: placeholder, Digest: kernel.CanonicalDigest(placeholder),
-		ValueSource: &objectmodel.ValueSource{Kind: objectmodel.ValueSourceBinding, Binding: &objectmodel.BindingDeclaration{
-			Mode: objectmodel.BindingState, DescriptorRef: "descriptor/unavailable",
-		}},
+		ObjectID: address.ObjectID, Address: address, Digest: kernel.CanonicalDigest(nil),
+		ValueSource: bindingfixture.Source("descriptor/unavailable"),
 	}}
 	commits := map[kernel.RepositoryID]kernel.CommitID{id: commit}
 	scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return selectedRepo, nil },
@@ -42,7 +40,7 @@ func TestUnavailableDeclaredDescriptorIsLocalBeforeSourceLookup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := liveservice.HydrateRepositoryValue(context.Background(), selectedRepo, raw, lookup, objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "maintenance"}})
+	result, err := liveservice.HydrateRepositoryValue(context.Background(), selectedRepo, raw, lookup, objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "maintenance"}}, nil)
 	if kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved || result.Value != nil || len(lookup.requests) != 0 {
 		t.Fatalf("strict hydration admitted an unavailable declared handle: %#v %#v %v", result, lookup.requests, err)
 	}

@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	kcclient "kc/client"
+	"kc/internal/bindingfixture"
 	"kc/kernel"
 	objectmodel "kc/object"
 	"kc/server"
@@ -77,7 +78,7 @@ func TestServerLiveAccessCredentialBoundariesPreserveSiblingsAndSafeEvidence(t *
 	f.start(t)
 	f.publish(t, acceptanceR1, source.URL)
 	changeOrigin := func(origin string) {
-		f.commit(t, acceptanceR1, []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/widget.broken"}, Value: map[string]any{"entity": "Widget", "aspect": "broken", "pattern": "record", "origin": origin, "fields": map[string]any{"value": map[string]any{"type": "number"}}}}})
+		f.commit(t, acceptanceR1, []objectmodel.Operation{bindingfixture.PutDescriptor(acceptanceDescriptor(acceptanceR1, "broken"), bindingfixture.Descriptor(origin))})
 	}
 	assertFailure := func(t *testing.T, requestID string, code kernel.ErrorCode) {
 		t.Helper()

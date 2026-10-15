@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	retrieval "kc/discovery"
+	"kc/internal/bindingfixture"
 	"kc/internal/testkit"
 	"kc/kernel"
 	objectserving "kc/liveaccess"
@@ -40,11 +41,13 @@ func TestLiveOpenSearchStateProjectionRefreshAndSameBasisHydrate(t *testing.T) {
 			},
 		}},
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.runtime"}, Value: map[string]any{
-			"entity": "Job", "aspect": "runtime", "origin": "https://scheduler.example", "fields": map[string]any{
+			"entity": "Job", "aspect": "runtime", "fields": map[string]any{
 				"status":   map[string]any{"type": "string", "access": []any{"text", "filter"}},
 				"attempts": map[string]any{"type": "integer", "access": []any{"filter", "sort"}},
 			},
 		}},
+		bindingfixture.PutDescriptor("resource/scheduler", bindingfixture.Descriptor("https://scheduler.example")),
+		bindingfixture.Bind(address, "schema/job.runtime", "resource/scheduler"),
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: address.ObjectID, AspectName: "definition"}, Value: map[string]any{"owner": "data"}, SchemaRef: "schema/job.definition"},
 	})
 	idx := liveIndex(t)

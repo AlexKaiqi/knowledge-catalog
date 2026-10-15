@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"kc/internal/bindingfixture"
 	"kc/internal/testkit"
 	"kc/kernel"
 	liveservice "kc/liveaccess/service"
@@ -25,7 +26,7 @@ func (g *historicalSchemaReadGuard) ReadFile(path string, at kernel.CommitID) ([
 	return g.repositorySiblingGuard.ReadFile(path, at)
 }
 
-func TestVirtualAspectUsesHistoricalAdoptedSchemaWithoutSiblingReads(t *testing.T) {
+func TestBindingAspectUsesHistoricalAdoptedSchemaWithoutSiblingReads(t *testing.T) {
 	raw := testkit.MakeTreeStore(t, "kr://liveaccess/historical-adoption")
 	registry := snapshot.NewRegistry()
 	if err := registry.Add(raw); err != nil {
@@ -46,28 +47,22 @@ func TestVirtualAspectUsesHistoricalAdoptedSchemaWithoutSiblingReads(t *testing.
 		commit = receipt.Result.NewCommit
 		return commit
 	}
-	definition := func(entity string) map[string]any {
-		return map[string]any{"entity": entity, "aspect": "definition", "fields": map[string]any{"owner": map[string]any{"type": "string"}}}
+	metric := func(fields map[string]any) map[string]any {
+		fields["value"] = map[string]any{"type": "number"}
+		return map[string]any{"entity": "Widget", "aspect": "metric", "fields": fields}
 	}
 	schemaBasis := put("publish-typed-schemas", []objectmodel.Operation{
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/object.definition"}, PathHint: "schemas/type.yaml", Value: definition("Widget")},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/widget.metric"}, Value: map[string]any{
-			"entity": "Widget", "aspect": "metric", "origin": "https://widget.example", "fields": map[string]any{"value": map[string]any{"type": "number"}},
-		}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/gadget.metric"}, Value: map[string]any{
-			"entity": "Gadget", "aspect": "metric", "origin": "https://gadget.example", "fields": map[string]any{"value": map[string]any{"type": "number"}},
-		}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/widget.metric"}, PathHint: "schemas/type.yaml", Value: metric(map[string]any{})},
+		bindingfixture.PutDescriptor("resource/widget-metric", bindingfixture.Descriptor("https://widget.example")),
 	})
 	id := objectmodel.ObjectID("thing/one")
-	ref := "schema/object.definition@" + string(schemaBasis)
+	ref := "schema/widget.metric@" + string(schemaBasis)
 	put("publish-historically-typed-object", []objectmodel.Operation{{Op: objectmodel.OpPut,
 		Address:  objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: id, AspectName: "definition"},
-		PathHint: "poison/sibling.yaml", SchemaRef: ref, Value: map[string]any{"owner": "fixed"},
-	}})
-	advanced := definition("Widget")
-	advanced["fields"].(map[string]any)["later"] = map[string]any{"type": "number"}
+		PathHint: "poison/sibling.yaml", Value: map[string]any{"owner": "fixed"},
+	}, bindingfixture.PutAspect(id, "metric", ref, "resource/widget-metric")})
 	put("advance-current-schema-body", []objectmodel.Operation{{Op: objectmodel.OpPut,
-		Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/object.definition"}, Value: advanced,
+		Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/widget.metric"}, Value: metric(map[string]any{"later": map[string]any{"type": "number"}}),
 	}})
 	guard := &historicalSchemaReadGuard{repositorySiblingGuard: &repositorySiblingGuard{Store: raw, TreeStore: raw.(snapshot.TreeStore)}, schemaReads: map[kernel.CommitID]int{}}
 	readRegistry := snapshot.NewRegistry()
@@ -88,7 +83,7 @@ func TestVirtualAspectUsesHistoricalAdoptedSchemaWithoutSiblingReads(t *testing.
 		objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "consumer"}})
 	if err != nil || result.Value != float64(31) || len(lookup.requests) != 1 || lookup.requests[0].Origin != "https://widget.example" || guard.siblingReads != 0 ||
 		guard.schemaReads[schemaBasis] == 0 || guard.schemaReads[commit] != 0 {
-		t.Fatalf("virtual Aspect followed current Schema instead of the actual historical adoption: %#v %#v sibling=%d schema=%v %v", result, lookup.requests, guard.siblingReads, guard.schemaReads, err)
+		t.Fatalf("binding Aspect followed current Schema instead of the actual historical adoption: %#v %#v sibling=%d schema=%v %v", result, lookup.requests, guard.siblingReads, guard.schemaReads, err)
 	}
 	commits := map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit}
 	scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return repo, nil }, reader.DatasetPin{
@@ -102,7 +97,8 @@ func TestVirtualAspectUsesHistoricalAdoptedSchemaWithoutSiblingReads(t *testing.
 	rejected, err := liveservice.ReadRepository(context.Background(), member, liveservice.ReadRequest{Commit: commit,
 		Reference: &objectmodel.Reference{Repository: repo.ID(), Object: id, Locator: "/metric/value"}}, lookup,
 		objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "consumer"}})
-	if kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved || rejected.Value != nil || len(lookup.requests) != 1 ||
+	failure, failed := rejected.Value.(liveservice.ValueFailure)
+	if err != nil || !failed || failure.Error.Code != kernel.ErrObjectRefUnresolved || len(rejected.Observations) != 0 || len(lookup.requests) != 1 ||
 		guard.schemaReads[schemaBasis] != oldReads || guard.siblingReads != 0 {
 		t.Fatalf("Repository interpretation bypassed its supplied Dataset version boundary: %#v lookups=%d sibling=%d schema=%v %v", rejected, len(lookup.requests), guard.siblingReads, guard.schemaReads, err)
 	}

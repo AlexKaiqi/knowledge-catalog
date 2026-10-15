@@ -103,8 +103,8 @@ func validateChangeSet(cs objectmodel.ChangeSet) error {
 			if err := objectmodel.ValidateValueSource(op.ValueSource); err != nil {
 				return err
 			}
-			if op.ValueSource.Normalized() != nil {
-				return kernel.Fail(kernel.ErrUsageInvalid, "Bound State is declared on Domain Schema origin, not an instance value_source")
+			if err := validateBindingOperation(op); err != nil {
+				return err
 			}
 			if op.Address.Kind == objectmodel.KindRelation {
 				if _, err := objectmodel.DecodeRelation(op.Address, op.Value); err != nil {
@@ -157,7 +157,7 @@ func (w *Writer) applySnapshot(commandID string, surface objectmodel.Surface, cs
 		BaseCommit: string(cs.BaseCommit), ExpectedTargetCommit: string(cs.ExpectedTargetCommit),
 		OperationCount: len(cs.Operations),
 	}, func() (any, error) {
-		if err := validateSchemaRefs(repo, cs); err != nil {
+		if err := validateSchemaRefs(w.store, repo, cs); err != nil {
 			return nil, snapshot.WriteNotApplied(err)
 		}
 		oldCommit, err := repo.Head(cs.TargetRef)

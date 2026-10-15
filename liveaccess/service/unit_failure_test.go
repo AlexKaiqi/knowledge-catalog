@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"kc/internal/bindingfixture"
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/liveaccess"
@@ -46,18 +47,22 @@ func (s *unitLookup) LookupState(_ context.Context, request liveaccess.StateLook
 	return observation, nil
 }
 
+const widgetDescriptor objectmodel.ObjectID = "resource/widget-source"
+
 func mixedUnitFixture(t *testing.T, readWrappers ...func(snapshot.Store) snapshot.Store) (*reader.Serving, objectmodel.Repository, kernel.CommitID, objectmodel.ObjectID) {
 	t.Helper()
 	id := objectmodel.ObjectID("widget/mixed")
 	operations := []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{
 		Kind: objectmodel.KindAspect, ObjectID: id, AspectName: "definition",
-	}, PathHint: "poison/sibling.yaml", Value: map[string]any{"owner": "fixed"}}}
+	}, PathHint: "poison/sibling.yaml", Value: map[string]any{"owner": "fixed"}},
+		bindingfixture.PutDescriptor(widgetDescriptor, bindingfixture.Descriptor("https://source.example"))}
 	for _, aspect := range []string{"good", "empty", "broken"} {
+		schemaRef := "schema/widget." + aspect
 		operations = append(operations, objectmodel.Operation{Op: objectmodel.OpPut,
-			Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: objectmodel.ObjectID("schema/widget." + aspect)},
-			Value: map[string]any{"entity": "Widget", "aspect": aspect, "pattern": "record", "origin": "https://source.example",
+			Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: objectmodel.ObjectID(schemaRef)},
+			Value: map[string]any{"entity": "Widget", "aspect": aspect, "pattern": "record",
 				"fields": map[string]any{"value": map[string]any{"type": "number", "access": []any{"filter"}}}},
-		})
+		}, bindingfixture.PutAspect(id, aspect, schemaRef, widgetDescriptor))
 	}
 	return publishUnitFixture(t, id, operations, readWrappers...)
 }
@@ -176,7 +181,7 @@ func TestMixedUnitReadPreservesSnapshotSuccessNullAndLocalFailure(t *testing.T) 
 				t.Fatalf("read lost successful bases, fixed commit, or lookups: %#v %#v", result, lookup.requests)
 			}
 			fixed, err := repo.Read(id, commit)
-			if err != nil || !reflect.DeepEqual(fixed.Value, map[string]any{"definition": map[string]any{"owner": "fixed"}}) {
+			if err != nil || !reflect.DeepEqual(fixed.Value, map[string]any{"definition": map[string]any{"owner": "fixed"}, "good": nil, "empty": nil, "broken": nil}) {
 				t.Fatalf("logical hydration changed the fixed declaration: %#v %v", fixed, err)
 			}
 		})
@@ -216,7 +221,7 @@ func TestProjectionHydrationRejectsEveryFailedDynamicUnit(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			result, err := liveservice.HydrateRepositoryValue(context.Background(), repo, value, &unitLookup{failure: kind}, objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "maintenance"}})
+			result, err := liveservice.HydrateRepositoryValue(context.Background(), repo, value, &unitLookup{failure: kind}, objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "maintenance"}}, liveaccess.RepositoryDescriptors(repo, commit))
 			if kernel.CodeOf(err) != failureCode(kind) || result.Value != nil || len(result.Observations) != 0 {
 				t.Fatalf("projection accepted a failed dynamic value: %#v %v", result, err)
 			}

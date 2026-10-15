@@ -1,0 +1,7 @@
+---
+object_id: table/shop.order_items
+aspect_name: stats
+kind: Aspect
+schema_ref: schema/table.stats
+valueSource: {kind: binding, binding: {descriptorRef: resource/shop-stats}}
+---

@@ -146,12 +146,7 @@ func (r *ObjectRepository) BindingSchemaObjectIDs(commit kernel.CommitID) ([]obj
 	}
 	seen := map[objectmodel.ObjectID]struct{}{}
 	for _, unit := range tree.Units {
-		if objectmodel.IsSchemaObject(unit.Address.ObjectID) {
-			if definition, parseErr := objectmodel.ParseSchemaDefinition(unit.Address.ObjectID, unit.Value); parseErr == nil && definition.Bound() {
-				seen[unit.Address.ObjectID] = struct{}{}
-			}
-		}
-		if unit.ValueSource == nil || unit.ValueSource.Kind != objectmodel.ValueSourceBinding {
+		if !unit.ValueSource.IsBinding() {
 			continue
 		}
 		if parsed, ok := objectmodel.ParseSchemaRef(unit.SchemaRef); ok {

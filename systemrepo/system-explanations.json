@@ -257,7 +257,7 @@
         "owner": "doc/concepts.md",
         "topic": "扩展能力",
         "term": "LiveAccess",
-        "source": "object/origin.go",
+        "source": "object/resource_descriptor.go",
         "symbol": "ResourceAccessEndpoint"
       }
     ]

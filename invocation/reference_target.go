@@ -1,7 +1,6 @@
 package invocation
 
 import (
-	objectserving "kc/liveaccess"
 	"sort"
 
 	"kc/invoke"
@@ -162,11 +161,6 @@ func selectReferenceHoldings(cx *Invocation, reference objectmodel.Reference, ca
 		if err != nil {
 			return objectmodel.HoldingSelection{}, err
 		}
-		bound, err := boundAspectUnits(cx, id, candidates[id], reference.Object)
-		if err != nil {
-			return objectmodel.HoldingSelection{}, err
-		}
-		units = append(units, bound...)
 		holdings = append(holdings, objectmodel.HoldingOf(id, candidates[id], readable[id], units))
 	}
 	return objectmodel.SelectHoldings(reference.Object, reference.Locator, holdings)
@@ -179,16 +173,6 @@ func anyTrue(values map[kernel.RepositoryID]bool) bool {
 		}
 	}
 	return false
-}
-
-// boundAspectUnits adds the Aspects a Repository's Schemas bind for an object
-// it holds; they are part of that holding even though no unit stores them.
-func boundAspectUnits(cx *Invocation, id kernel.RepositoryID, commit kernel.CommitID, object objectmodel.ObjectID) ([]objectmodel.Address, error) {
-	repo, err := cx.WS.Reader.Require(id, kernel.ErrCapabilityUnsatisfied)
-	if err != nil {
-		return nil, err
-	}
-	return objectserving.BoundAspectUnits(repo, commit, object)
 }
 
 func readDatasetReference(cx *Invocation, ref objectmodel.Reference) ([]objectmodel.ObservedValue, error) {

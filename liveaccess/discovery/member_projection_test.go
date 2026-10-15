@@ -16,6 +16,7 @@ import (
 	common "kc/discovery/plugin"
 	ports "kc/discovery/projection"
 	discoveryservice "kc/discovery/service"
+	"kc/internal/bindingfixture"
 	"kc/internal/testkit"
 	"kc/kernel"
 	sourcebridge "kc/liveaccess/discovery"
@@ -125,10 +126,11 @@ func newMemberProjectionFixture(t *testing.T, mode string) memberProjectionFixtu
 	receipt, err := w.Commit("publish-live-member", objectmodel.ChangeSet{TargetRepository: raw.ID(), TargetRef: snapshot.DefaultRef,
 		BaseCommit: root, ExpectedTargetCommit: root, Operations: []objectmodel.Operation{
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/sensor.readings"}, Value: map[string]any{
-				"entity": "Sensor", "aspect": "readings", "pattern": "keyed_collection", "origin": runtime.URL,
+				"entity": "Sensor", "aspect": "readings", "pattern": "keyed_collection",
 				"fields": map[string]any{"value": map[string]any{"type": "number", "required": true, "access": []any{"filter", "sort"}}},
 			}},
-			{Op: objectmodel.OpPut, Address: address, SchemaRef: "schema/sensor.readings", Value: map[string]any{"value": float64(7)}},
+			bindingfixture.PutDescriptor("resource/sensor-readings", bindingfixture.Descriptor(runtime.URL)),
+			bindingfixture.Bind(address, "schema/sensor.readings", "resource/sensor-readings"),
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: address.ObjectID, AspectName: "definition"}, Value: map[string]any{"owner": "fixed"}},
 		}})
 	if err != nil {
@@ -232,7 +234,7 @@ func TestSelectedLiveAccessMemberProjectionRetainsOriginalObservation(t *testing
 		t.Fatalf("query reobserved the updated source instead of its published basis: %#v calls=%d %v", current, len(f.origin.calls()), err)
 	}
 	fixed, err := f.repo.ReadAddress(f.address, f.commit)
-	if err != nil || kernel.CanonicalDigest(fixed.Value) != kernel.CanonicalDigest(map[string]any{"value": float64(7)}) ||
+	if err != nil || fixed.Value != nil ||
 		testkit.MustHead(t, f.repo, snapshot.DefaultRef) != f.commit {
 		t.Fatalf("index observations changed the fixed Member or Snapshot: %#v %v", fixed, err)
 	}

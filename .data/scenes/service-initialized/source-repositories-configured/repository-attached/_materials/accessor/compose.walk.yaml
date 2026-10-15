@@ -1,5 +1,5 @@
 # 走查：挂到 deploy-local 网，对着刚 create 的托管仓。
-# 协议 construct 仍用 origin :9，不读本文件。
+# 协议 construct 的取值描述仍指向 origin :9，不读本文件。
 name: kc-scene-accessor
 
 services:

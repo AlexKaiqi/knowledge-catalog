@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"kc/internal/bindingfixture"
 	"kc/internal/testkit"
 	"kc/kernel"
 	objectmodel "kc/object"
@@ -15,41 +16,42 @@ import (
 func TestTreeWriterMaintainsBindingSchemaCoordinates(t *testing.T) {
 	raw, tree, w := newBindingCoordinateWriter(t)
 	root := testkit.MustHead(t, raw, snapshot.DefaultRef)
-	schema := func(origin string) map[string]any {
-		value := map[string]any{"entity": "Table", "aspect": "stats", "fields": map[string]any{"rows": map[string]any{"type": "number"}}}
-		if origin != "" {
-			value["origin"] = origin
-		}
-		return value
+	schema := map[string]any{"entity": "Table", "aspect": "stats", "fields": map[string]any{"rows": map[string]any{"type": "number"}}}
+	snapshotUnit := func(object objectmodel.ObjectID, schemaRef string) objectmodel.Operation {
+		return objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: object, AspectName: "stats"}, SchemaRef: schemaRef, Value: map[string]any{"rows": 1}}
 	}
 	first, err := w.Commit("seed", objectmodel.ChangeSet{
 		TargetRepository: raw.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: root, ExpectedTargetCommit: root,
 		Operations: []objectmodel.Operation{
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/a"}, Value: schema("https://a.example")},
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/b"}, Value: schema("https://b.example")},
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/static"}, Value: schema("")},
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/a"}, Value: schema},
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/b"}, Value: schema},
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/static"}, Value: schema},
+			bindingfixture.PutDescriptor("resource/stats", bindingfixture.Descriptor("https://stats.example")),
+			bindingfixture.PutAspect("table/x", "stats", "schema/a", "resource/stats"),
+			bindingfixture.PutAspect("table/y", "stats", "schema/b", "resource/stats"),
+			snapshotUnit("table/z", "schema/static"),
 		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertBindingCoordinates(t, tree, first.Result.NewCommit, []objectmodel.ObjectID{"schema/a", "schema/b"})
-	second, err := w.Commit("change-directory", objectmodel.ChangeSet{
+	second, err := w.Commit("change-sources", objectmodel.ChangeSet{
 		TargetRepository: raw.ID(), TargetRef: snapshot.DefaultRef,
 		BaseCommit: first.Result.NewCommit, ExpectedTargetCommit: first.Result.NewCommit,
 		Operations: []objectmodel.Operation{
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/a"}, Value: schema("")},
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/static"}, Value: schema("https://static.example")},
+			snapshotUnit("table/x", "schema/a"),
+			bindingfixture.PutAspect("table/z", "stats", "schema/static", "resource/stats"),
 		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertBindingCoordinates(t, tree, second.Result.NewCommit, []objectmodel.ObjectID{"schema/b", "schema/static"})
-	third, err := w.Commit("remove-schema", objectmodel.ChangeSet{
+	third, err := w.Commit("remove-binding-unit", objectmodel.ChangeSet{
 		TargetRepository: raw.ID(), TargetRef: snapshot.DefaultRef,
 		BaseCommit: second.Result.NewCommit, ExpectedTargetCommit: second.Result.NewCommit,
-		Operations: []objectmodel.Operation{{Op: objectmodel.OpRemove, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/b"}}},
+		Operations: []objectmodel.Operation{{Op: objectmodel.OpRemove, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/y", AspectName: "stats"}}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -57,7 +59,7 @@ func TestTreeWriterMaintainsBindingSchemaCoordinates(t *testing.T) {
 	assertBindingCoordinates(t, tree, third.Result.NewCommit, []objectmodel.ObjectID{"schema/static"})
 	assertBindingCoordinates(t, tree, first.Result.NewCommit, []objectmodel.ObjectID{"schema/a", "schema/b"})
 	if _, err := tree.ReadFile(repofile.LocatorManifestPath, third.Result.NewCommit); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
-		t.Fatalf("incremental Schema write introduced a whole-repository manifest: %v", err)
+		t.Fatalf("incremental write introduced a whole-repository manifest: %v", err)
 	}
 	rebuilt, err := w.RebuildTreeLocators("rebuild-bindings", raw.ID(), snapshot.DefaultRef, third.Result.NewCommit)
 	if err != nil {
@@ -84,10 +86,13 @@ func newBindingCoordinateWriter(t *testing.T) (snapshot.Store, snapshot.TreeStor
 func TestTreeWriterRequiresExplicitBindingCoordinateRebuild(t *testing.T) {
 	raw, tree, w := newBindingCoordinateWriter(t)
 	root := testkit.MustHead(t, raw, snapshot.DefaultRef)
-	bound := map[string]any{"entity": "Table", "aspect": "stats", "origin": "https://stats.example"}
 	first, err := w.Commit("seed", objectmodel.ChangeSet{
 		TargetRepository: raw.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: root, ExpectedTargetCommit: root,
-		Operations: testkit.PutEntity("schema/stats", bound, ""),
+		Operations: []objectmodel.Operation{
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/stats"}, Value: map[string]any{"entity": "Table", "aspect": "stats"}},
+			bindingfixture.PutDescriptor("resource/stats", bindingfixture.Descriptor("https://stats.example")),
+			bindingfixture.PutAspect("table/orders", "stats", "schema/stats", "resource/stats"),
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -113,10 +118,10 @@ func TestTreeWriterRequiresExplicitBindingCoordinateRebuild(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertBindingCoordinates(t, tree, rebuilt.NewCommit, []objectmodel.ObjectID{"schema/stats"})
-	updated, err := w.Commit("static-schema", objectmodel.ChangeSet{
+	updated, err := w.Commit("snapshot-unit", objectmodel.ChangeSet{
 		TargetRepository: raw.ID(), TargetRef: snapshot.DefaultRef,
 		BaseCommit: rebuilt.NewCommit, ExpectedTargetCommit: rebuilt.NewCommit,
-		Operations: testkit.PutEntity("schema/stats", map[string]any{"entity": "Table", "aspect": "stats"}, ""),
+		Operations: []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/orders", AspectName: "stats"}, SchemaRef: "schema/stats", Value: map[string]any{}}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -130,7 +135,11 @@ func assertBindingCoordinates(t *testing.T, tree snapshot.TreeReader, commit ker
 	if err != nil {
 		t.Fatalf("fixed Binding coordinates are missing: %v", err)
 	}
-	ids, err := repofile.DecodeSchemaIndex(raw)
+	coordinates, err := repofile.DecodeBindingIndex(raw)
+	ids := repofile.BindingSchemas(coordinates)
+	if len(want) == 0 && len(ids) == 0 {
+		return
+	}
 	if err != nil || !reflect.DeepEqual(ids, want) {
 		t.Fatalf("Binding coordinates at %s: got=%v want=%v error=%v", commit, ids, want, err)
 	}

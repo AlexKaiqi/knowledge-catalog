@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	retrieval "kc/discovery"
+	"kc/internal/bindingfixture"
 	"kc/kernel"
 	objectmodel "kc/object"
 	"kc/object/reader"
@@ -31,16 +32,14 @@ func TestProjectionCompilerRequiresObservationForBindingEligibility(t *testing.T
 		Type:     "string", Access: []reader.AccessHint{reader.HintFilter},
 	}
 	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/orders", AspectName: "status"}
-	declarationDigest := objectmodel.DeclarationDigest("schema/live", &objectmodel.ValueSource{
-		Kind:    objectmodel.ValueSourceBinding,
-		Binding: &objectmodel.BindingDeclaration{Mode: objectmodel.BindingState, Runtime: "fixture", Protocol: "resource-access/v1", Operations: map[string]objectmodel.BindingOperation{"lookup": {Call: "status"}}},
-	})
+	source := bindingfixture.Source("resource/live")
+	declarationDigest := objectmodel.BindingDeclarationDigest(objectmodel.DeclarationDigest("schema/live", source), "descriptor-digest")
 	value := objectmodel.ObjectValue{
 		Commit: "c1", Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "table/orders"},
 		Value: map[string]any{"status": nil},
 		Declarations: []objectmodel.UnitDeclaration{{
 			Address: address, SchemaRef: "schema/live", DeclarationDigest: declarationDigest,
-			ValueSource: &objectmodel.ValueSource{Kind: objectmodel.ValueSourceBinding, Binding: &objectmodel.BindingDeclaration{Mode: objectmodel.BindingState}},
+			ValueSource: source,
 		}},
 	}
 	doc, err := compileProjectionDocument(nil, value, retrieval.AccessSpec{Fields: []retrieval.AccessField{field}})
@@ -202,32 +201,28 @@ func TestProjectionCompilerIndexesReadmeBodyAsText(t *testing.T) {
 	}
 }
 
-func TestProjectionCompilerSkipsStreamBindingUnits(t *testing.T) {
+// Stream Bindings never produce an ordinary observation (READ rejects them
+// before any lookup), so the compiler sees them as unobserved Binding units:
+// content at that position in the fixed value never becomes a document cell.
+func TestProjectionCompilerSkipsUnobservedBindingContent(t *testing.T) {
 	field := retrieval.AccessField{
 		FieldRef: retrieval.FieldRef{Schema: "schema/live", Aspect: "events", Path: "last"},
 		Type:     "string", Access: []reader.AccessHint{reader.HintFilter},
 	}
 	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/orders", AspectName: "events"}
-	declarationDigest := objectmodel.DeclarationDigest("schema/live", &objectmodel.ValueSource{
-		Kind:    objectmodel.ValueSourceBinding,
-		Binding: &objectmodel.BindingDeclaration{Mode: objectmodel.BindingStream, Runtime: "fixture", Protocol: "resource-access/v1", Operations: map[string]objectmodel.BindingOperation{"read": {Call: "events"}}},
-	})
+	source := bindingfixture.Source("resource/events")
 	value := objectmodel.ObjectValue{
 		Commit: "c1", Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "job/orders"},
 		Value: map[string]any{"events": map[string]any{"last": "should-not-index"}},
 		Declarations: []objectmodel.UnitDeclaration{{
-			Address: address, SchemaRef: "schema/live", DeclarationDigest: declarationDigest,
-			ValueSource: &objectmodel.ValueSource{Kind: objectmodel.ValueSourceBinding, Binding: &objectmodel.BindingDeclaration{Mode: objectmodel.BindingStream}},
+			Address: address, SchemaRef: "schema/live", DeclarationDigest: objectmodel.DeclarationDigest("schema/live", source), ValueSource: source,
 		}},
 	}
-	doc, err := compileProjectionDocumentObserved(nil, value, []objectmodel.UnitObservation{{
-		Address: address, DeclarationCommit: "c1", DeclarationDigest: declarationDigest,
-		Basis: objectmodel.ObservationBasis{BindingGeneration: "g1", Consistency: objectmodel.ObservationRepeatable, SourceRevision: "r1", ObservedAt: "2026-08-27T00:00:00Z"},
-	}}, retrieval.AccessSpec{Fields: []retrieval.AccessField{field}})
+	doc, err := compileProjectionDocumentObserved(nil, value, nil, retrieval.AccessSpec{Fields: []retrieval.AccessField{field}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(doc.Cells) != 0 || len(doc.EligibleFields) != 0 {
-		t.Fatalf("Stream Binding must not become a snapshot object document: %#v", doc)
+		t.Fatalf("unobserved Binding content must not become a snapshot object document: %#v", doc)
 	}
 }

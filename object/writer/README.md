@@ -17,15 +17,15 @@ ChangeSet 合同须保持同一语义，实际文件位置和序列化由格式�
 新提交和显式 locator 重建在派生条目中固定每个 Address 的实际 Path，位置迁移仍保留原身份。
 读取无需从文件名猜测 Aspect/Member；旧 paths-only 条目保持原完整读取与维护入口兼容，精确
 选取通过格式层明确报告缺少坐标，不隐式补读其它单元正文。Canonical 正文格式不变。
-Schema 变更同步更新 `.kc/object-locators/schemas.index` 与 `bindings.index`，后一份目录
-固定 `SchemaDefinition.Bound()` 为真的 Schema 身份。旧布局已有 Schema 却缺 Bound 目录时，
-Schema 写入要求显式 `RebuildTreeLocators`，不能隐式扫描全部 Schema 或遗漏未改的 Bound 声明。
+Schema 变更同步更新 `.kc/object-locators/schemas.index`；`bindings.index` 列出全部 binding 单元及其采纳的
+Schema（`BindingCoordinate`），由涉及对象的最终单元集精确维护。旧布局缺 binding 目录时，
+写入要求显式 `RebuildTreeLocators`，不能隐式扫描全部单元或遗漏未改的 binding 单元。
 同一提交按涉及对象的变更前与最终单位集维护每 Schema 的引用者条目及完整性标记；省略
 SchemaRef 的继承、改用另一 Schema、路径迁移和整体删除都沿唯一单位代数计算。Schema
 演进只读取该固定版反向条目与引用者维护单元，旧版本 Schema 也用精确 locator；没有完整
 反向元数据时明确要求重建，不隐式遍历全仓或把未知引用者当成零引用。
 
-PUT 替换一个完整 Address 单元，可携带 `schema_ref` 与 provenance。Bound State 写在 Domain Schema `origin` 上，Writer 拒绝实例 `value_source.kind=binding`。动态值要沉淀为对象时，墙外 Collector 显式翻译为 Snapshot ChangeSet 再 COMMIT。
+PUT 替换一个完整 Address 单元，可携带 `schema_ref`、provenance 与 `valueSource`。外部取值只写在方面或成员单元上：`valueSource: {kind: binding, binding: {descriptorRef}}` 指向仓内的 ResourceDescriptor（来源 origin 与取值方式 mode 写在取值描述上），binding 单元不带 Snapshot 值；Schema 写 `origin` 报 `SCHEMA_UNSUPPORTED`，旧 `value_source` 头与单元头 `origin` 报 `USAGE_INVALID`。descriptorRef 依次在本 ChangeSet、目标 basis、其他仓 DefaultRef 中按 ID 解析，多仓同 ID 为歧义。动态值要沉淀为对象时，墙外 Collector 显式翻译为 Snapshot ChangeSet 再 COMMIT。
 
 更新未指定 `path_hint` 时保留该 Address 的原有路径；显式指定才迁移。原生 provider 接收原始 ChangeSet，合并现有单元后仅为尚无路径的单元分配默认路径，Writer 不提前把路径省略改写成迁移。
 
@@ -49,12 +49,11 @@ major。`schema/core/readme/v1` 是平台 README Aspect：副本必须与 System
 PUT/REMOVE 的 Address 由本批结果承担。REMOVE 一个仍被引用的 `schema/*` 返回
 `SCHEMA_INCOMPATIBLE`。带 `schema_ref` 的实例 PUT 使用同批 Schema 草稿或目标仓固定 basis
 校验；**省略 `schema_ref` 时继承该 Address 已存储的声明并同样校验**，不符合合同返回
-`SCHEMA_INSTANCE_INVALID`，且不推进 Ref。Bound State 的对象声明由 Domain Schema 承载，
-不通过实例 Binding PUT 写入动态值。
+`SCHEMA_INSTANCE_INVALID`，且不推进 Ref。binding 单元只声明 Schema 与取值描述，不写入动态值。
 
-Member 可采用带 origin 的固定值 Schema，其对象值仍按原值 Schema 校验；消费时由
-LiveAccess 采用实际观察。Writer 仍拒绝实例 `value_source.kind=binding`，不将来源值写回
-Snapshot。同提交的固定 locator 记录所采用完整 SchemaRef，保证声明类别及旧版本可复核。
+同一方面的方面级声明与成员级声明互斥（方面只存为一个记录单元或一组成员单元）。消费时由
+LiveAccess 采用实际观察并按 binding 单元采纳的 Schema 校验，Writer 不将来源值写回
+Snapshot。同提交的固定 locator 记录 binding 单元所采用完整 SchemaRef，保证声明及旧版本可复核。
 
 主要文件：`writer.go` 共用校验与 applySnapshot；`commit.go`、`propose.go` 两个 Surface；`schema.go` 校验 Meta Schema、schema_ref 和实例；`idempotency.go` 解释共享 command ledger 中的 Object 请求；`receipt.go` 定义 durable receipt；`preview.go` 只做预览。
 

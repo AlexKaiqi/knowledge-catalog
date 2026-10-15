@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"kc/home"
+	"kc/internal/bindingfixture"
 	"kc/internal/testkit"
 	"kc/invoke"
 	"kc/kernel"
@@ -100,9 +101,11 @@ func directAccessFixture(t *testing.T) (*home.Home, map[string]invoke.FlagValue,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: []objectmodel.Operation{
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/service.health"}, Value: map[string]any{
-				"entity": "Service", "aspect": "health", "origin": "https://runtime.example",
+				"entity": "Service", "aspect": "health",
 				"fields": map[string]any{"status": map[string]any{"type": "string", "required": true}},
 			}},
+			bindingfixture.PutDescriptor("resource/health", bindingfixture.Descriptor("https://runtime.example")),
+			bindingfixture.Bind(address, "schema/service.health", "resource/health"),
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: address.ObjectID, AspectName: "properties"}, Value: map[string]any{"name": "orders"}},
 		},
 	})
@@ -110,7 +113,7 @@ func directAccessFixture(t *testing.T) (*home.Home, map[string]invoke.FlagValue,
 		t.Fatal(err)
 	}
 	commit := receipt.Result.CommitID
-	binding, err := liveaccess.ResolveRepoBinding(s.Repo, commit, address)
+	binding, err := liveaccess.ResolveRepoBinding(s.Repo, commit, address, liveaccess.RepositoryDescriptors(s.Repo, commit))
 	if err != nil {
 		t.Fatal(err)
 	}

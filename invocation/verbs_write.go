@@ -66,7 +66,7 @@ func VerbPut(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !ok {
+	if !ok && cx.Flag("value-source") == "" {
 		return nil, fmt.Errorf("put requires --file or --value")
 	}
 	return maintainReference(cx, objectmodel.OpPut, value)

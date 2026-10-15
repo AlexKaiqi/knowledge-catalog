@@ -9,7 +9,7 @@ func leafHelpEntries() map[string]helpEntry {
 			Usage: `kc binding show (--repo <id> | --dataset <id>) --object <object-id> --aspect <name>
 
 用途：
-  核对对象 Aspect 的 Bound State 声明，确定其固定 Schema origin 与绑定依据。
+  核对对象 Aspect 的 binding 单元声明，确定其固定取值描述（origin、mode、descriptorRef）与绑定依据。
 用法与参数：
   --object 与 --aspect 必填；集合成员可加 --member <key>。
   单仓可用 --commit 或 --ref；Dataset 从本次固定选择范围解析绑定，不接受任意源 URL。
@@ -32,7 +32,7 @@ func leafHelpEntries() map[string]helpEntry {
   例：kc binding show --dataset scene-set --object table/orders --aspect stats`,
 		},
 		"access": {
-			Description: "按 Schema origin 与对象 ID 读取该 Aspect 的当前观察",
+			Description: "按取值描述的 origin 与对象 ID 读取该 Aspect 的当前观察",
 			Usage: `kc access (--repo <id> | --dataset <id>) --object <object-id> --aspect <name>
 
 用途：

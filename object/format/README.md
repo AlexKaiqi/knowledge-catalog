@@ -8,7 +8,7 @@
 
 `ReadObjectUnitLocations` 只读固定版本元数据，不为补坐标或 Schema 引用读取对象正文；旧 paths-only locator 仍可由 `ReadObjectLocator` 支持完整固定读与既有维护入口，但精确选取明确报告缺少能力。已有坐标但缺 Schema 引用证明时，元数据类型解释同样须显式重建；不能自动迁移固定历史版本。Canonical frontmatter 没有新增字段。
 
-`LocatorSchemaIndexPath` 与 `LocatorBindingIndexPath` 分别固定全部 Schema 与 Bound Schema 的身份目录，共用 Schema ID codec。Writer 在 Schema 变更的同一 commit 更新两份目录；普通对象更新不读取目录。Bound 分类沿 `SchemaDefinition.Bound()`，不要求消费方扫描 Schema 正文来补分类；缺目录须显式重建。
+`LocatorSchemaIndexPath` 固定全部 Schema 的身份目录；`LocatorBindingIndexPath` 列出全部 binding 单元及其采纳的 Schema（`BindingCoordinate`，`BindingSchemaObjectIDs` 由其导出）。Writer 在同一 commit 按涉及对象维护两份目录；binding 分类沿单元自身的 `valueSource`，不要求消费方扫描 Schema 或单元正文来补分类；缺目录须显式重建。
 
 `ReadSchemaReferrers` 从每 Schema 的派生条目返回固定版本引用者 Address；完整性标记使不存在条目可明确表示零引用。它不扫描仓、不读取 Schema 或实例正文来发现引用；旧完整 reverse metadata 可读，缺少证明须显式 `RebuildTreeLocators`。`ReadAddressUnit` 沿单元坐标只读一个维护单元，供 Schema 校验精确取得引用实例。
 

@@ -1,70 +1,75 @@
 package liveaccess_test
 
 import (
+	"testing"
+
+	"kc/internal/bindingfixture"
 	"kc/internal/testkit"
+	"kc/kernel"
 	"kc/liveaccess"
 	objectmodel "kc/object"
 	"kc/snapshot"
-	"testing"
 )
 
+// The declaration version covers the unit and the adopted descriptor: changing
+// either one versions the Binding while the entity Snapshot stays unchanged.
 func TestBindingDeclarationChangeIsVersionedWhenValueIsUnchanged(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	schema := objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/service.health"}
+	descriptor := objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "resource/health"}
 	entity := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "service/orders", AspectName: "properties"}
 	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "service/orders", AspectName: "health"}
-	schemaValue := func(origin string) map[string]any {
-		return map[string]any{
-			"entity": "Service", "aspect": "health", "origin": origin,
-			"fields": map[string]any{"status": map[string]any{"type": "string"}},
+	commit := func(base kernel.CommitID, ops ...objectmodel.Operation) kernel.CommitID {
+		t.Helper()
+		next, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
+			TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
+			BaseCommit: base, ExpectedTargetCommit: base, Operations: ops,
+		})
+		if err != nil {
+			t.Fatal(err)
 		}
+		return next
 	}
-	c1, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
-		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
-		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
-		Operations: []objectmodel.Operation{
-			{Op: objectmodel.OpPut, Address: schema, Value: schemaValue("https://stats.example/v1")},
-			{Op: objectmodel.OpPut, Address: entity, Value: map[string]any{"name": "orders"}},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
+	resolve := func(at kernel.CommitID) liveaccess.ResolvedBinding {
+		t.Helper()
+		got, err := liveaccess.ResolveRepoBinding(s.Repo, at, address, liveaccess.RepositoryDescriptors(s.Repo, at))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
 	}
-	b1, err := liveaccess.ResolveRepoBinding(s.Repo, c1, address)
-	if err != nil {
-		t.Fatal(err)
-	}
-	c2, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
-		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
-		BaseCommit: c1, ExpectedTargetCommit: c1,
-		Operations: []objectmodel.Operation{{Op: objectmodel.OpPut, Address: schema, Value: schemaValue("https://stats.example/v2")}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	b2, err := liveaccess.ResolveRepoBinding(s.Repo, c2, address)
-	if err != nil {
-		t.Fatal(err)
-	}
+	c1 := commit(s.RootCommitID,
+		bindingfixture.PutDescriptor(descriptor.ObjectID, bindingfixture.Descriptor("https://stats.example/v1")),
+		bindingfixture.PutDescriptor("resource/health-next", bindingfixture.Descriptor("https://next.example")),
+		objectmodel.Operation{Op: objectmodel.OpPut, Address: entity, Value: map[string]any{"name": "orders"}},
+		bindingfixture.PutAspect(address.ObjectID, address.AspectName, "", descriptor.ObjectID),
+	)
+	b1 := resolve(c1)
+	c2 := commit(c1, bindingfixture.PutDescriptor(descriptor.ObjectID, bindingfixture.Descriptor("https://stats.example/v2")))
+	b2 := resolve(c2)
+	c3 := commit(c2, bindingfixture.PutAspect(address.ObjectID, address.AspectName, "", "resource/health-next"))
+	b3 := resolve(c3)
 	r1, err := s.Repo.ResolveAddress(entity, c1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	r2, err := s.Repo.ResolveAddress(entity, c2)
+	r3, err := s.Repo.ResolveAddress(entity, c3)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r1.Digest != r2.Digest {
-		t.Fatalf("entity Snapshot digest must stay stable: r1=%#v r2=%#v", r1, r2)
+	if r1.Digest != r3.Digest {
+		t.Fatalf("entity Snapshot digest must stay stable: r1=%#v r3=%#v", r1, r3)
 	}
-	if b1.DeclarationDigest == b2.DeclarationDigest || b1.Origin == b2.Origin {
-		t.Fatalf("schema origin change must version the Binding declaration: b1=%#v b2=%#v", b1, b2)
+	if b1.DeclarationDigest == b2.DeclarationDigest || b1.Origin == b2.Origin || b1.DescriptorDigest == b2.DescriptorDigest {
+		t.Fatalf("descriptor change must version the Binding declaration: b1=%#v b2=%#v", b1, b2)
 	}
-	history, err := s.Repo.Log(schema.ObjectID, c2, objectmodel.ObjectLogQuery{Limit: 10})
+	if b2.DeclarationDigest == b3.DeclarationDigest || b3.DescriptorRef != "resource/health-next" {
+		t.Fatalf("unit descriptorRef change must version the Binding declaration: b2=%#v b3=%#v", b2, b3)
+	}
+	history, err := s.Repo.Log(descriptor.ObjectID, c3, objectmodel.ObjectLogQuery{Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(history) < 2 {
-		t.Fatalf("LOG must retain Schema origin revisions: %#v", history)
+		t.Fatalf("LOG must retain ResourceDescriptor revisions: %#v", history)
 	}
 }

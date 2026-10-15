@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Resource Access: serve resource-access/v1 at the Schema origin."""
+"""Resource Access: serve resource-access/v1 at the origin named by a ResourceDescriptor."""
 
 from __future__ import annotations
 

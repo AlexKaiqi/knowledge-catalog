@@ -8,7 +8,7 @@ import (
 )
 
 func TestSchemaStructureDigestExcludesOnlyFieldAccessAndPreservesOriginal(t *testing.T) {
-	base := objectmodel.SchemaDefinition{ObjectID: "schema/implements.example/v1", MetaSchema: objectmodel.MetaSchemaV1, Entity: "Object", Description: "Implementation", Aspect: "interfaces", Pattern: "keyed_collection", Origin: "https://runtime.example", Fields: []objectmodel.SchemaFieldDefinition{{Path: "target", Type: "object_ref", Required: true, Access: []string{"filter"}, RefTypes: []string{"Object"}}}}
+	base := objectmodel.SchemaDefinition{ObjectID: "schema/implements.example/v1", MetaSchema: objectmodel.MetaSchemaV1, Entity: "Object", Description: "Implementation", Aspect: "interfaces", Pattern: "keyed_collection", Fields: []objectmodel.SchemaFieldDefinition{{Path: "target", Type: "object_ref", Required: true, Access: []string{"filter"}, RefTypes: []string{"Object"}}}}
 	originalDigest := kernel.CanonicalDigest(base)
 	structureDigest := objectmodel.SchemaStructureDigest(base)
 	withoutAccess := base
@@ -28,7 +28,6 @@ func TestSchemaStructureDigestExcludesOnlyFieldAccessAndPreservesOriginal(t *tes
 		"aspect":               func(s *objectmodel.SchemaDefinition) { s.Aspect = "bindings" },
 		"pattern":              func(s *objectmodel.SchemaDefinition) { s.Pattern = "record" },
 		"additionalProperties": func(s *objectmodel.SchemaDefinition) { s.AdditionalProperties = true },
-		"origin":               func(s *objectmodel.SchemaDefinition) { s.Origin = "https://other.example" },
 		"field path":           func(s *objectmodel.SchemaDefinition) { s.Fields[0].Path = "source" },
 		"field type":           func(s *objectmodel.SchemaDefinition) { s.Fields[0].Type = "string" },
 		"required":             func(s *objectmodel.SchemaDefinition) { s.Fields[0].Required = false },

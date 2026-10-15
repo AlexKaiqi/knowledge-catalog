@@ -11,9 +11,10 @@ Repo 原生 metadata 的 `kc.plugins` 选择 `liveaccess` 实例。Server 启动
 Dataset 沿每个来源 Repo 的选择组合；没有选中贡献时，外部值明确失败，不调用旧全局实现。
 配置、登记和生命周期合同见 [插件入口](plugin/README.md)与[消费服务](service/README.md)。
 
-`ResolvedBinding`、`ResolveRepoBinding`、`ResolveBindingAt`、`BoundAspectDeclarations`
-共用固定 Schema origin 和已有 Descriptor 的解释。`ResolveRepoDeclarationBinding` 使用
-已经选定的完整单位声明，辅助 Schema/Descriptor 仍从同一固定来源和允许范围读取。
+`ResolvedBinding`、`ResolveRepoBinding`、`ResolveBinding`、`ResolveBindingAt`、`ResolveDeclaration`
+是唯一一条解释路径：binding 单元的 `descriptorRef` 经 `DescriptorScope`（`RepositoryDescriptors` /
+`ServingDescriptors`）在请求范围内按 ID 解析并固定版本，origin 与 mode 取自 ResourceDescriptor，
+声明摘要组合单元与取值描述两个版本；范围内同一 ID 多处持有为 `OBJECT_ID_CONFLICT`。
 声明解释不调用来源，不重新读取兄弟单元或改用 HEAD。
 
 业务 `read` 的 Repo/Dataset 入口均采用[逻辑读取](service/README.md)：静态值保留，

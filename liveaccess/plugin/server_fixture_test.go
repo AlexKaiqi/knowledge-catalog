@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"sync/atomic"
 	"testing"
@@ -15,6 +16,7 @@ import (
 	kcclient "kc/client"
 	common "kc/discovery/plugin"
 	"kc/home"
+	"kc/internal/bindingfixture"
 	"kc/internal/testkit"
 	inv "kc/invocation"
 	"kc/kernel"
@@ -236,14 +238,29 @@ func (acceptanceClientAuthenticator) AuthenticateRequest(_ context.Context, sess
 }
 func (f *acceptanceFixture) publish(t *testing.T, repo kernel.RepositoryID, origin string) {
 	t.Helper()
-	operations := []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: acceptanceObject, AspectName: "definition"}, Value: map[string]any{"owner": "fixed"}}}
+	// Descriptor IDs are unique per request scope, so each Repository names its
+	// own; broken has a separate descriptor so tests can move only its origin.
+	source, broken := acceptanceDescriptor(repo, "source"), acceptanceDescriptor(repo, "broken")
+	operations := []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: acceptanceObject, AspectName: "definition"}, Value: map[string]any{"owner": "fixed"}},
+		bindingfixture.PutDescriptor(source, bindingfixture.Descriptor(origin)), bindingfixture.PutDescriptor(broken, bindingfixture.Descriptor(origin))}
 	for _, aspect := range []string{"good", "empty", "broken"} {
-		operations = append(operations, objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: objectmodel.ObjectID("schema/widget." + aspect)}, Value: map[string]any{"entity": "Widget", "aspect": aspect, "pattern": "record", "origin": origin, "fields": map[string]any{"value": map[string]any{"type": "number"}}}})
+		schemaRef := "schema/widget." + aspect
+		descriptor := source
+		if aspect == "broken" {
+			descriptor = broken
+		}
+		operations = append(operations, objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: objectmodel.ObjectID(schemaRef)}, Value: map[string]any{"entity": "Widget", "aspect": aspect, "pattern": "record", "fields": map[string]any{"value": map[string]any{"type": "number"}}}},
+			bindingfixture.PutAspect(acceptanceObject, aspect, schemaRef, descriptor))
 	}
-	operations = append(operations, objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/widget.readings"}, Value: map[string]any{"entity": "Widget", "aspect": "readings", "pattern": "keyed_collection", "origin": origin, "fields": map[string]any{"value": map[string]any{"type": "number"}}}})
-	operations = append(operations, objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: acceptanceObject, AspectName: "readings", MemberKey: "good"}, SchemaRef: "schema/widget.readings", Value: map[string]any{"value": -1}})
+	operations = append(operations, objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/widget.readings"}, Value: map[string]any{"entity": "Widget", "aspect": "readings", "pattern": "keyed_collection", "fields": map[string]any{"value": map[string]any{"type": "number"}}}},
+		bindingfixture.PutMember(acceptanceObject, "readings", "good", "schema/widget.readings", source))
 	f.commit(t, repo, operations)
 }
+
+func acceptanceDescriptor(repo kernel.RepositoryID, name string) objectmodel.ObjectID {
+	return objectmodel.ObjectID("resource/" + path.Base(string(repo)) + "-" + name)
+}
+
 func (f *acceptanceFixture) commit(t *testing.T, repo kernel.RepositoryID, operations []objectmodel.Operation) {
 	t.Helper()
 	head := testkit.MustHead(t, f.sources[repo], snapshot.DefaultRef)

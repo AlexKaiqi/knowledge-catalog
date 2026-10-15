@@ -1,6 +1,5 @@
 ---
 object_id: schema/table.stats
-origin: http://resource-access:7390
 ---
 entity: Table
 aspect: stats

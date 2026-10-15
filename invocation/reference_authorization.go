@@ -59,8 +59,8 @@ func prepareReferenceAuthorization(cx *Invocation, action string) error {
 			return nil // A same-named field inside a whole value is not an Aspect.
 		}
 	}
-	// Composite and virtual Bound Aspects share their declared Aspect namespace.
-	// Actual content and Bound Schema proof remain scoped in the reader/runtime.
+	// Composite and binding Aspects share their declared Aspect namespace.
+	// Actual content, Schema and descriptor proof remain scoped in the reader/runtime.
 	cx.Flags[referenceAspectFlag] = tokens[0]
 	return nil
 }

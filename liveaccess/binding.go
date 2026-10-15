@@ -5,45 +5,154 @@ import (
 
 	"kc/kernel"
 	objectmodel "kc/object"
+	"kc/object/reader"
 )
 
 // ResolvedBinding is the complete stable access declaration resolved at one
-// Repository commit. Credentials and observation values stay out of it.
-// Origin comes from the Domain Schema that names the Aspect.
+// Repository commit: the unit's valueSource plus the fixed ResourceDescriptor
+// version it references. Credentials and observation values stay out of it.
+//
+// DeclarationDigest is the declaration version: it combines the unit's
+// declaration digest with the content digest of the adopted
+// ResourceDescriptor, so a change to either is a different declaration.
 type ResolvedBinding struct {
-	Repository        kernel.RepositoryID                     `json:"repository"`
-	DeclarationCommit kernel.CommitID                         `json:"declarationCommit"`
-	Address           objectmodel.Address                     `json:"address"`
-	DeclarationDigest kernel.Digest                           `json:"declarationDigest"`
-	Mode              objectmodel.BindingMode                 `json:"mode"`
-	Runtime           string                                  `json:"runtime"`
-	Protocol          string                                  `json:"protocol"`
-	Operations        map[string]objectmodel.BindingOperation `json:"operations"`
-	SchemaRef         string                                  `json:"schemaRef,omitempty"`
-	Origin            string                                  `json:"origin,omitempty"`
-	DescriptorRef     objectmodel.ObjectID                    `json:"descriptorRef,omitempty"`
-	DescriptorDigest  kernel.Digest                           `json:"descriptorDigest,omitempty"`
+	Repository           kernel.RepositoryID                     `json:"repository"`
+	DeclarationCommit    kernel.CommitID                         `json:"declarationCommit"`
+	Address              objectmodel.Address                     `json:"address"`
+	DeclarationDigest    kernel.Digest                           `json:"declarationDigest"`
+	Mode                 objectmodel.BindingMode                 `json:"mode"`
+	Runtime              string                                  `json:"runtime"`
+	Protocol             string                                  `json:"protocol"`
+	Operations           map[string]objectmodel.BindingOperation `json:"operations"`
+	SchemaRef            string                                  `json:"schemaRef,omitempty"`
+	Origin               string                                  `json:"origin"`
+	DescriptorRef        objectmodel.ObjectID                    `json:"descriptorRef"`
+	DescriptorRepository kernel.RepositoryID                     `json:"descriptorRepository"`
+	DescriptorCommit     kernel.CommitID                         `json:"descriptorCommit"`
+	DescriptorDigest     kernel.Digest                           `json:"descriptorDigest"`
 }
 
-func ResolveRepoBinding(repo objectmodel.Repository, commit kernel.CommitID, address objectmodel.Address) (ResolvedBinding, error) {
+// DescriptorAt is one ResourceDescriptor version visible in a request scope.
+type DescriptorAt struct {
+	Repository kernel.RepositoryID
+	Commit     kernel.CommitID
+	Value      any
+}
+
+// DescriptorScope resolves a descriptorRef inside the caller's request scope.
+// A Dataset read resolves within its fixed pin; a direct Repository read
+// resolves within the Repositories the caller may read.
+type DescriptorScope func(objectmodel.ObjectID) (DescriptorAt, error)
+
+// ServingDescriptors resolves descriptorRef inside one fixed Serving scope.
+// The descriptor must be selected exactly once by that scope.
+func ServingDescriptors(scope *reader.Serving) DescriptorScope {
+	return func(id objectmodel.ObjectID) (DescriptorAt, error) {
+		values, err := scope.Read(id, nil)
+		if err != nil && kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
+			return DescriptorAt{}, err
+		}
+		switch {
+		case err != nil || len(values) == 0:
+			return DescriptorAt{}, kernel.Fail(kernel.ErrObjectRefUnresolved,
+				"descriptorRef %s is not readable in this request scope", id)
+		case len(values) > 1:
+			return DescriptorAt{}, kernel.Fail(kernel.ErrObjectIDConflict,
+				"descriptorRef %s is held by several repositories in this request scope", id)
+		}
+		return DescriptorAt{Repository: values[0].Repository, Commit: values[0].Commit, Value: values[0].Value}, nil
+	}
+}
+
+// RepositoryDescriptors resolves descriptorRef inside one Repository commit:
+// the scope of a declaration read with no wider request scope.
+func RepositoryDescriptors(repo objectmodel.Repository, commit kernel.CommitID) DescriptorScope {
+	return func(id objectmodel.ObjectID) (DescriptorAt, error) {
+		value, err := repo.Read(id, commit)
+		if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
+			return DescriptorAt{}, kernel.Fail(kernel.ErrObjectRefUnresolved,
+				"descriptorRef %s is not readable in %s at %s", id, repo.ID(), commit)
+		}
+		if err != nil {
+			return DescriptorAt{}, err
+		}
+		return DescriptorAt{Repository: repo.ID(), Commit: commit, Value: value.Value}, nil
+	}
+}
+
+// ResolveRepoBinding reads one stored unit declaration at a fixed commit and
+// resolves it through the single declaration path.
+func ResolveRepoBinding(repo objectmodel.Repository, commit kernel.CommitID, address objectmodel.Address, descriptors DescriptorScope) (ResolvedBinding, error) {
 	if err := validateBindingAddress(address); err != nil {
 		return ResolvedBinding{}, err
 	}
-	binding, err := resolveSchemaBinding(repo, commit, address)
-	if err == nil {
-		return binding, nil
-	}
-	if kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
+	resolution, err := repo.ResolveAddress(address, commit)
+	if err != nil {
 		return ResolvedBinding{}, err
 	}
-	instance, instErr := resolveInstanceBinding(repo, commit, address)
-	if instErr == nil {
-		return instance, nil
+	if resolution.Status != objectmodel.StatusResolved {
+		return ResolvedBinding{}, kernel.Fail(kernel.ErrObjectRefUnresolved,
+			"binding address %s is not resolved at %s", objectmodel.AddressKey(address), commit)
 	}
-	if kernel.CodeOf(instErr) == kernel.ErrObjectRefUnresolved {
+	return ResolveDeclaration(descriptors, repo.ID(), commit, objectmodel.UnitDeclaration{
+		Address: address, ValueSource: resolution.ValueSource,
+		SchemaRef: resolution.SchemaRef, DeclarationDigest: resolution.DeclarationDigest,
+	})
+}
+
+// ResolveDeclaration is the only LiveAccess declaration path: one unit
+// valueSource plus the ResourceDescriptor its descriptorRef selects in the
+// request scope.
+func ResolveDeclaration(descriptors DescriptorScope, repository kernel.RepositoryID, commit kernel.CommitID, declaration objectmodel.UnitDeclaration) (ResolvedBinding, error) {
+	address := declaration.Address
+	if err := validateBindingAddress(address); err != nil {
 		return ResolvedBinding{}, err
 	}
-	return ResolvedBinding{}, instErr
+	if err := objectmodel.AssertWritable(address); err != nil {
+		return ResolvedBinding{}, err
+	}
+	source := declaration.ValueSource
+	if !source.IsBinding() {
+		return ResolvedBinding{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+			"address %s declares no binding valueSource", objectmodel.AddressKey(address))
+	}
+	if err := objectmodel.ValidateValueSource(source); err != nil {
+		return ResolvedBinding{}, err
+	}
+	if descriptors == nil {
+		return ResolvedBinding{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+			"address %s has no request scope for its ResourceDescriptor", objectmodel.AddressKey(address))
+	}
+	ref := source.Binding.DescriptorRef
+	at, err := descriptors(ref)
+	if err != nil {
+		return ResolvedBinding{}, err
+	}
+	descriptor, err := objectmodel.ParseResourceDescriptor(ref, at.Value)
+	if err != nil {
+		return ResolvedBinding{}, err
+	}
+	unitDigest := declaration.DeclarationDigest
+	if unitDigest == "" {
+		unitDigest = objectmodel.DeclarationDigest(declaration.SchemaRef, source)
+	}
+	descriptorDigest := kernel.CanonicalDigest(at.Value)
+	return ResolvedBinding{
+		Repository:           repository,
+		DeclarationCommit:    commit,
+		Address:              address,
+		DeclarationDigest:    objectmodel.BindingDeclarationDigest(unitDigest, descriptorDigest),
+		Mode:                 descriptor.Mode,
+		Runtime:              descriptor.Runtime,
+		Protocol:             descriptor.Protocol,
+		Operations:           copyOperations(descriptor.Access),
+		SchemaRef:            declaration.SchemaRef,
+		Origin:               descriptor.Origin,
+		DescriptorRef:        ref,
+		DescriptorRepository: at.Repository,
+		DescriptorCommit:     at.Commit,
+		DescriptorDigest:     descriptorDigest,
+	}, nil
 }
 
 func validateBindingAddress(address objectmodel.Address) error {
@@ -51,305 +160,9 @@ func validateBindingAddress(address objectmodel.Address) error {
 		return kernel.Fail(kernel.ErrUsageInvalid, "resolve-binding requires --aspect")
 	}
 	if objectmodel.IsSchemaObject(address.ObjectID) {
-		return kernel.Fail(kernel.ErrUsageInvalid, "Bound State access targets an entity, not a schema object")
+		return kernel.Fail(kernel.ErrUsageInvalid, "LiveAccess targets an entity, not a schema object")
 	}
 	return nil
-}
-
-func resolveSchemaBinding(repo objectmodel.Repository, commit kernel.CommitID, address objectmodel.Address) (ResolvedBinding, error) {
-	schema, err := boundSchemaFor(repo, commit, address)
-	if err != nil {
-		return ResolvedBinding{}, err
-	}
-	return resolvedSchemaBinding(repo.ID(), commit, address, schema), nil
-}
-
-func resolvedSchemaBinding(repository kernel.RepositoryID, commit kernel.CommitID, address objectmodel.Address, schema objectmodel.SchemaDefinition) ResolvedBinding {
-	source := schema.BindingSource()
-	return ResolvedBinding{
-		Repository:        repository,
-		DeclarationCommit: commit,
-		Address:           address,
-		DeclarationDigest: objectmodel.BoundDeclarationDigest(schema),
-		Mode:              source.Binding.Mode,
-		Runtime:           source.Binding.Runtime,
-		Protocol:          source.Binding.Protocol,
-		Operations:        copyOperations(source.Binding.Operations),
-		SchemaRef:         string(schema.ObjectID),
-		Origin:            schema.Origin,
-	}
-}
-
-func resolveInstanceBinding(repo objectmodel.Repository, commit kernel.CommitID, address objectmodel.Address) (ResolvedBinding, error) {
-	resolution, err := repo.ResolveAddress(address, commit)
-	if err != nil {
-		return ResolvedBinding{}, err
-	}
-	if resolution.Status != objectmodel.StatusResolved {
-		return ResolvedBinding{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "binding address %s is not resolved at %s", objectmodel.AddressKey(address), commit)
-	}
-	return resolveLegacyDeclaration(repo, commit, objectmodel.UnitDeclaration{Address: address, ValueSource: resolution.ValueSource, SchemaRef: resolution.SchemaRef, DeclarationDigest: resolution.DeclarationDigest})
-}
-
-// ResolveRepoDeclarationBinding adopts one complete unit declaration already
-// selected by Object's fixed read plan. Auxiliary reads stay on the caller's
-// scoped repository; the object and unselected siblings are not loaded again.
-func ResolveRepoDeclarationBinding(repo objectmodel.Repository, commit kernel.CommitID, declaration objectmodel.UnitDeclaration) (ResolvedBinding, error) {
-	if err := validateBindingAddress(declaration.Address); err != nil {
-		return ResolvedBinding{}, err
-	}
-	if err := objectmodel.AssertWritable(declaration.Address); err != nil {
-		return ResolvedBinding{}, err
-	}
-	if declaration.SchemaRef != "" {
-		ref, ok := objectmodel.ParseSchemaRef(declaration.SchemaRef)
-		if !ok || (ref.Repository != "" && ref.Repository != repo.ID()) {
-			return ResolvedBinding{}, kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "selected Binding has an invalid adopted Schema")
-		}
-		at := commit
-		if ref.Commit != "" {
-			at = ref.Commit
-		}
-		value, err := repo.Read(ref.Object, at)
-		if err != nil {
-			return ResolvedBinding{}, err
-		}
-		schema, err := objectmodel.ParseSchemaDefinition(ref.Object, value.Value)
-		if err != nil {
-			return ResolvedBinding{}, err
-		}
-		if schema.Bound() {
-			if schema.Aspect != declaration.Address.AspectName {
-				return ResolvedBinding{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "selected Binding Schema declares a different Aspect")
-			}
-			return resolvedSchemaBinding(repo.ID(), commit, declaration.Address, schema), nil
-		}
-	}
-	return resolveLegacyDeclaration(repo, commit, declaration)
-}
-
-func resolveLegacyDeclaration(repo objectmodel.Repository, commit kernel.CommitID, declaration objectmodel.UnitDeclaration) (ResolvedBinding, error) {
-	address := declaration.Address
-	source := declaration.ValueSource
-	if source == nil || source.Kind != objectmodel.ValueSourceBinding || source.Binding == nil {
-		return ResolvedBinding{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "address %s has no Bound State schema origin", objectmodel.AddressKey(address))
-	}
-	if err := objectmodel.ValidateValueSource(source); err != nil {
-		return ResolvedBinding{}, err
-	}
-	binding := source.Binding
-	out := ResolvedBinding{
-		Repository:        repo.ID(),
-		DeclarationCommit: commit,
-		Address:           address,
-		DeclarationDigest: declaration.DeclarationDigest,
-		Mode:              binding.Mode,
-		Runtime:           binding.Runtime,
-		Protocol:          binding.Protocol,
-		Operations:        copyOperations(binding.Operations),
-		SchemaRef:         declaration.SchemaRef,
-		DescriptorRef:     binding.DescriptorRef,
-	}
-	if declaration.SchemaRef != "" {
-		origin, err := schemaAccessOrigin(repo, commit, declaration.SchemaRef)
-		if err != nil && kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
-			return ResolvedBinding{}, err
-		}
-		if err == nil {
-			out.Origin = origin
-		}
-	}
-	if binding.DescriptorRef == "" {
-		return out, nil
-	}
-	descriptor, err := repo.Read(binding.DescriptorRef, commit)
-	if err != nil {
-		return ResolvedBinding{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "descriptor %s is not resolved at %s", binding.DescriptorRef, commit)
-	}
-	value, ok := descriptor.Value.(map[string]any)
-	if ok && value["kind"] != "ResourceDescriptor" {
-		if definition, nested := value["definition"].(map[string]any); nested {
-			value = definition
-		}
-	}
-	if !ok || value["kind"] != "ResourceDescriptor" {
-		return ResolvedBinding{}, kernel.Fail(kernel.ErrUsageInvalid, "descriptor %s must be a ResourceDescriptor", binding.DescriptorRef)
-	}
-	out.Runtime = strings.TrimSpace(asString(value["runtime"]))
-	out.Protocol = strings.TrimSpace(asString(value["protocol"]))
-	out.Operations, err = descriptorOperations(value["access"])
-	if err != nil {
-		return ResolvedBinding{}, err
-	}
-	if out.Runtime == "" || out.Protocol == "" || len(out.Operations) == 0 {
-		return ResolvedBinding{}, kernel.Fail(kernel.ErrUsageInvalid, "ResourceDescriptor %s requires runtime, protocol and access", binding.DescriptorRef)
-	}
-	out.DescriptorDigest = kernel.CanonicalDigest(value)
-	return out, nil
-}
-
-// BoundAspectUnits is the holding view of BoundAspectDeclarations: the Aspect
-// addresses a Repository's Schemas bind for an object, which count toward
-// that Repository's holding in identity conflict checks.
-func BoundAspectUnits(repo objectmodel.Repository, commit kernel.CommitID, objectID objectmodel.ObjectID) ([]objectmodel.Address, error) {
-	declarations, err := BoundAspectDeclarations(repo, commit, objectID, nil)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]objectmodel.Address, 0, len(declarations))
-	for _, declaration := range declarations {
-		out = append(out, declaration.Address)
-	}
-	return out, nil
-}
-
-// BoundAspectDeclarations returns State handles implied by Domain Schema
-// origin for one existing object, excluding Aspects already stored as units.
-func BoundAspectDeclarations(repo objectmodel.Repository, commit kernel.CommitID, objectID objectmodel.ObjectID, existing []objectmodel.UnitDeclaration) ([]objectmodel.UnitDeclaration, error) {
-	if objectmodel.IsSchemaObject(objectID) {
-		return nil, nil
-	}
-	schemas, err := listBoundSchemas(repo, commit)
-	if err != nil {
-		if kernel.CodeOf(err) == kernel.ErrCapabilityUnsatisfied {
-			return nil, nil
-		}
-		return nil, err
-	}
-	if len(schemas) == 0 {
-		return nil, nil
-	}
-	entity, err := objectEntity(repo, commit, objectID)
-	if err != nil {
-		return nil, err
-	}
-	seen := map[string]struct{}{}
-	for _, declaration := range existing {
-		if declaration.Address.AspectName != "" {
-			seen[declaration.Address.AspectName] = struct{}{}
-		}
-	}
-	out := []objectmodel.UnitDeclaration{}
-	for _, schema := range schemas {
-		if _, exists := seen[schema.Aspect]; exists {
-			continue
-		}
-		if entity != "" && schema.Entity != entity {
-			continue
-		}
-		source := schema.BindingSource()
-		address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: objectID, AspectName: schema.Aspect}
-		out = append(out, objectmodel.UnitDeclaration{
-			Address: address, SchemaRef: string(schema.ObjectID), ValueSource: source,
-			DeclarationDigest: objectmodel.BoundDeclarationDigest(schema),
-		})
-		seen[schema.Aspect] = struct{}{}
-	}
-	return out, nil
-}
-
-func boundSchemaFor(repo objectmodel.Repository, commit kernel.CommitID, address objectmodel.Address) (objectmodel.SchemaDefinition, error) {
-	schemas, err := listBoundSchemas(repo, commit)
-	if err != nil {
-		return objectmodel.SchemaDefinition{}, err
-	}
-	entity, err := objectEntity(repo, commit, address.ObjectID)
-	if err != nil {
-		return objectmodel.SchemaDefinition{}, err
-	}
-	matches := []objectmodel.SchemaDefinition{}
-	for _, schema := range schemas {
-		if schema.Aspect != address.AspectName {
-			continue
-		}
-		if entity != "" && schema.Entity != entity {
-			continue
-		}
-		matches = append(matches, schema)
-	}
-	if len(matches) == 0 {
-		return objectmodel.SchemaDefinition{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-			"no Bound State schema origin for %s aspect %s", address.ObjectID, address.AspectName)
-	}
-	if len(matches) > 1 {
-		return objectmodel.SchemaDefinition{}, kernel.Fail(kernel.ErrUsageInvalid,
-			"multiple Bound State schemas declare aspect %s", address.AspectName)
-	}
-	return matches[0], nil
-}
-
-func listBoundSchemas(repo objectmodel.Repository, commit kernel.CommitID) ([]objectmodel.SchemaDefinition, error) {
-	var ids []objectmodel.ObjectID
-	var err error
-	if locator, ok := repo.(objectmodel.BindingLocator); ok {
-		ids, err = locator.BindingSchemaObjectIDs(commit)
-	} else if store, ok := repo.(objectmodel.SchemaStore); ok {
-		ids, err = store.SchemaObjectIDs(commit)
-	} else {
-		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "repository %s does not provide schema namespace location", repo.ID())
-	}
-	if err != nil {
-		return nil, err
-	}
-	out := []objectmodel.SchemaDefinition{}
-	for _, id := range ids {
-		value, err := repo.Read(id, commit)
-		if err != nil {
-			return nil, err
-		}
-		definition, err := objectmodel.ParseSchemaDefinition(id, value.Value)
-		if err != nil {
-			return nil, err
-		}
-		if definition.Bound() {
-			out = append(out, definition)
-		}
-	}
-	return out, nil
-}
-
-func objectEntity(repo objectmodel.Repository, commit kernel.CommitID, objectID objectmodel.ObjectID) (string, error) {
-	locator, ok := repo.(objectmodel.SchemaAdoptionLocator)
-	if !ok {
-		return "", kernel.Fail(kernel.ErrCapabilityUnsatisfied, "virtual Bound Aspect requires fixed Schema adoption metadata")
-	}
-	refs, err := locator.AdoptedSchemaRefs(objectID, commit)
-	if err != nil {
-		return "", err
-	}
-	seen := map[string]struct{}{}
-	for _, reference := range refs {
-		ref := strings.TrimSpace(reference)
-		if ref == "" {
-			continue
-		}
-		parsed, ok := objectmodel.ParseSchemaRef(ref)
-		if !ok || parsed.Repository != "" && parsed.Repository != repo.ID() {
-			return "", kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "object has an invalid adopted Schema reference")
-		}
-		at := commit
-		if parsed.Commit != "" {
-			at = parsed.Commit
-		}
-		schemaValue, err := repo.Read(parsed.Object, at)
-		if err != nil {
-			return "", err
-		}
-		definition, err := objectmodel.ParseSchemaDefinition(parsed.Object, schemaValue.Value)
-		if err != nil {
-			return "", err
-		}
-		if definition.Entity != "" {
-			seen[definition.Entity] = struct{}{}
-		}
-	}
-	if len(seen) != 1 {
-		return "", nil
-	}
-	for entity := range seen {
-		return entity, nil
-	}
-	return "", nil
 }
 
 func copyOperations(source map[string]objectmodel.BindingOperation) map[string]objectmodel.BindingOperation {
@@ -358,31 +171,4 @@ func copyOperations(source map[string]objectmodel.BindingOperation) map[string]o
 		out[name] = operation
 	}
 	return out
-}
-
-func descriptorOperations(raw any) (map[string]objectmodel.BindingOperation, error) {
-	obj, ok := raw.(map[string]any)
-	if !ok {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "ResourceDescriptor access must be an object")
-	}
-	out := map[string]objectmodel.BindingOperation{}
-	for name, rawOperation := range obj {
-		operation, ok := rawOperation.(map[string]any)
-		if !ok {
-			return nil, kernel.Fail(kernel.ErrUsageInvalid, "ResourceDescriptor operation %s must be an object", name)
-		}
-		call := strings.TrimSpace(asString(operation["call"]))
-		if strings.TrimSpace(name) == "" || call == "" {
-			return nil, kernel.Fail(kernel.ErrUsageInvalid, "ResourceDescriptor operations require non-empty names and calls")
-		}
-		out[name] = objectmodel.BindingOperation{Call: call}
-	}
-	return out, nil
-}
-
-// asString reads an optional string field from a decoded declaration without
-// asserting on shape; callers validate the resulting declaration.
-func asString(value any) string {
-	s, _ := value.(string)
-	return s
 }

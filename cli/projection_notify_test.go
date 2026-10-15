@@ -90,8 +90,9 @@ func TestProjectionNotifyPullsBoundStateWithoutChangingHEAD(t *testing.T) {
 		})
 	}))
 	t.Cleanup(runtime.Close)
-	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "schema/job.runtime", ""), "--repo", repositoryID, "--command-id", "notify-schema", "--value", `{"entity":"Job","aspect":"runtime","origin":"`+runtime.URL+`","fields":{"status":{"type":"string","access":["text","filter"]}}}`))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "schema/job.runtime", ""), "--repo", repositoryID, "--command-id", "notify-schema", "--value", `{"entity":"Job","aspect":"runtime","fields":{"status":{"type":"string","access":["text","filter"]}}}`))
 	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "job/orders", "/properties"), "--repo", repositoryID, "--command-id", "notify-entity", "--value", `{"name":"orders"}`))
+	putStateBinding(t, home, repositoryID, "job/orders", "runtime", "schema/job.runtime", runtime.URL)
 	head := asMap(t, body(t, kc(home, "writer", "head", "--repo", repositoryID)))
 	before := head["commit"]
 

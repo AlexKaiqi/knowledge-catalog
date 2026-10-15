@@ -19,6 +19,7 @@ import (
 	retrieval "kc/discovery"
 	consumerplugin "kc/discovery/plugin"
 	index "kc/discovery/projection"
+	"kc/internal/bindingfixture"
 	"kc/internal/telemetry"
 	"kc/internal/testkit"
 	inv "kc/invocation"
@@ -48,11 +49,13 @@ func exerciseHTTPPluginShutdown(t *testing.T, beginThenDrain bool) {
 		TargetRepository: source.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: source.RootCommitID, ExpectedTargetCommit: source.RootCommitID,
 		Operations: []objectmodel.Operation{
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "job/shutdown"}, Value: map[string]any{"name": "shutdown"}},
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/shutdown", AspectName: "definition"}, Value: map[string]any{"name": "shutdown"}},
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.runtime"}, Value: map[string]any{
-				"entity": "Job", "aspect": "runtime", "origin": "https://scheduler.example",
+				"entity": "Job", "aspect": "runtime",
 				"fields": map[string]any{"status": map[string]any{"type": "string", "access": []any{"filter"}}},
 			}},
+			bindingfixture.PutDescriptor("resource/scheduler", bindingfixture.Descriptor("https://scheduler.example")),
+			bindingfixture.PutAspect("job/shutdown", "runtime", "schema/job.runtime", "resource/scheduler"),
 		},
 	})
 	if err != nil {
@@ -260,7 +263,7 @@ func exerciseHTTPPluginShutdown(t *testing.T, beginThenDrain bool) {
 		t.Fatal(transportErr)
 	}
 	var synced index.IndexSync
-	if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &synced) != nil || synced.Mode != index.IndexModeReady || synced.Repository != source.RepositoryID || synced.BasisCommit != commit.Result.NewCommit || synced.AccessDigest == "" || synced.ObjectCount != 1 {
+	if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &synced) != nil || synced.Mode != index.IndexModeReady || synced.Repository != source.RepositoryID || synced.BasisCommit != commit.Result.NewCommit || synced.AccessDigest == "" || synced.ObjectCount != 2 /* job and its ResourceDescriptor */ {
 		t.Fatalf("accepted sync failed during shutdown: HTTP %d %s", response.Code, response.Body.String())
 	}
 	if beginThenDrain {

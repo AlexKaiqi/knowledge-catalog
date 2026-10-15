@@ -133,7 +133,7 @@ func (w *Writer) Merge(commandID string, intent MergeIntent) (receipt CommitRece
 			return nil, snapshot.WriteNotApplied(kernel.Fail(kernel.ErrCandidateMoved,
 				"source %s moved from reviewed commit %s", intent.SourceRef, source))
 		}
-		if err := validateMergeSource(repo, target, expected, source); err != nil {
+		if err := validateMergeSource(w.store, repo, target, expected, source); err != nil {
 			return nil, snapshot.WriteNotApplied(err)
 		}
 		commitID, err := repo.Merge(target, source, expected)
@@ -189,7 +189,7 @@ func (w *Writer) writableRepository(id kernel.RepositoryID) (snapshot.Store, err
 // target basis and holds it to the COMMIT contract. Because merge only
 // fast-forwards, the published tree is exactly the validated source tree, so
 // the object locators the source carries must also agree with its units.
-func validateMergeSource(repo snapshot.Store, targetRef string, expected, source kernel.CommitID) error {
+func validateMergeSource(registry snapshot.Registry, repo snapshot.Store, targetRef string, expected, source kernel.CommitID) error {
 	if expected == source {
 		return nil
 	}
@@ -207,7 +207,7 @@ func validateMergeSource(repo snapshot.Store, targetRef string, expected, source
 	if err := validateChangeSet(cs); err != nil {
 		return err
 	}
-	return validateSchemaRefs(repo, cs)
+	return validateSchemaRefs(registry, repo, cs)
 }
 
 type mergeUnit struct {

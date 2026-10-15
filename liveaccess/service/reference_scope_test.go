@@ -2,8 +2,10 @@ package service_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
+	"kc/internal/bindingfixture"
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/liveaccess"
@@ -22,7 +24,7 @@ type logicalReferenceStoreGuard struct {
 
 func (r *logicalReferenceStoreGuard) ReadFile(path string, at kernel.CommitID) ([]byte, error) {
 	r.reads[path]++
-	if path == "private/schema.yaml" || path == "private/sibling.yaml" {
+	if strings.HasPrefix(path, "private/") {
 		return nil, fmt.Errorf("unpublished body accessed: %s", path)
 	}
 	return r.TreeStore.ReadFile(path, at)
@@ -31,15 +33,18 @@ func (*logicalReferenceStoreGuard) ListFiles(kernel.CommitID) ([]string, error) 
 	return nil, fmt.Errorf("logical Reference must not scan files")
 }
 
-func TestLogicalVirtualBoundReferenceRequiresPublishedObjectAndSchemaEvidence(t *testing.T) {
+func TestLogicalBindingReferenceRequiresPublishedUnitSchemaAndDescriptor(t *testing.T) {
+	const private = "private/"
 	for _, tc := range []struct {
-		name                    string
-		schemaPath, siblingPath string
-		wantErr                 bool
+		name                                 string
+		unitPath, schemaPath, descriptorPath string
+		want                                 kernel.ErrorCode
+		unitFailure                          bool
 	}{
-		{"published-evidence", "public/schema.yaml", "public/sibling.yaml", false},
-		{"unpublished-object-evidence", "public/schema.yaml", "private/sibling.yaml", true},
-		{"unpublished-schema-evidence", "private/schema.yaml", "public/sibling.yaml", true},
+		{"published-evidence", "public/runtime.yaml", "public/schema.yaml", "public/descriptor.yaml", "", false},
+		{"unpublished-unit", private + "runtime.yaml", "public/schema.yaml", "public/descriptor.yaml", kernel.ErrObjectRefUnresolved, false},
+		{"unpublished-schema", "public/runtime.yaml", private + "schema.yaml", "public/descriptor.yaml", kernel.ErrObjectRefUnresolved, true},
+		{"unpublished-descriptor", "public/runtime.yaml", "public/schema.yaml", private + "descriptor.yaml", kernel.ErrObjectRefUnresolved, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			raw := testkit.MakeTreeStore(t, "kr://logical/scoped")
@@ -52,10 +57,15 @@ func TestLogicalVirtualBoundReferenceRequiresPublishedObjectAndSchemaEvidence(t 
 				t.Fatal(err)
 			}
 			root := testkit.MustHead(t, raw, snapshot.DefaultRef)
+			descriptor := bindingfixture.PutDescriptor("resource/runtime", bindingfixture.Descriptor("https://runtime.example"))
+			descriptor.PathHint = tc.descriptorPath
+			runtimeUnit := bindingfixture.PutAspect("job/scoped", "runtime", "schema/job.runtime", "resource/runtime")
+			runtimeUnit.PathHint = tc.unitPath
 			receipt, err := w.Commit("scoped-reference", objectmodel.ChangeSet{TargetRepository: raw.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: root, ExpectedTargetCommit: root, Operations: []objectmodel.Operation{
-				{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.runtime"}, PathHint: tc.schemaPath, Value: map[string]any{"entity": "Job", "aspect": "runtime", "origin": "https://runtime.example", "fields": map[string]any{"status": map[string]any{"type": "string"}}}},
+				{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.runtime"}, PathHint: tc.schemaPath, Value: map[string]any{"entity": "Job", "aspect": "runtime", "fields": map[string]any{"status": map[string]any{"type": "string"}}}},
+				descriptor, runtimeUnit,
 				{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/scoped", AspectName: "definition"}, PathHint: "public/definition.yaml", Value: map[string]any{"owner": "agent"}},
-				{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/scoped", AspectName: "audit"}, PathHint: tc.siblingPath, Value: map[string]any{"rule": "fixed"}},
+				{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/scoped", AspectName: "audit"}, PathHint: private + "sibling.yaml", Value: map[string]any{"rule": "fixed"}},
 			}})
 			if err != nil {
 				t.Fatal(err)
@@ -71,17 +81,23 @@ func TestLogicalVirtualBoundReferenceRequiresPublishedObjectAndSchemaEvidence(t 
 				return rd.Require(id, kernel.ErrObjectRefUnresolved)
 			}, reader.DatasetPin{SetID: "scoped", Repositories: map[kernel.RepositoryID]kernel.CommitID{raw.ID(): at}, Items: []reader.DatasetItem{{Repository: raw.ID(), Commit: at, Kind: "prefix", Prefix: "public"}}})
 			lookup := &stateLookup{result: liveaccess.StateObservation{Value: map[string]any{"status": "running"}, Basis: objectmodel.ObservationBasis{BindingGeneration: "g1", Consistency: objectmodel.ObservationRepeatable, SourceRevision: "rev-1", ObservedAt: "2026-10-13T00:00:00Z"}}}
+			address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/scoped", AspectName: "runtime"}
 			values, err := readLogicalReference(t, liveservice.Open(scope, lookup, kernel.IdentityContext{Principal: "agent"}), objectmodel.Reference{Repository: raw.ID(), Object: "job/scoped", Locator: "/runtime/status"})
-			if tc.wantErr {
-				testkit.ExpectCode(t, err, kernel.ErrObjectRefUnresolved)
-				if len(lookup.requests) != 0 {
-					t.Fatalf("unpublished evidence invoked runtime: %#v", lookup.requests)
-				}
-			} else if err != nil || len(values) != 1 || values[0].Value != "running" || len(lookup.requests) != 1 || lookup.requests[0].Binding.DeclarationCommit != at {
-				t.Fatalf("permitted virtual Bound evidence: %#v %#v %v", values, lookup.requests, err)
+			switch {
+			case tc.unitFailure:
+				assertFailedUnitRead(t, values, err, address, tc.want)
+			case tc.want != "":
+				testkit.ExpectCode(t, err, tc.want)
+			case err != nil || len(values) != 1 || values[0].Value != "running" || len(lookup.requests) != 1 || lookup.requests[0].Binding.DeclarationCommit != at:
+				t.Fatalf("permitted Binding evidence: %#v %#v %v", values, lookup.requests, err)
 			}
-			if guard.reads["private/schema.yaml"] != 0 || guard.reads["private/sibling.yaml"] != 0 {
-				t.Fatalf("auxiliary read escaped Dataset scope: %#v", guard.reads)
+			if tc.want != "" && len(lookup.requests) != 0 {
+				t.Fatalf("unpublished evidence invoked runtime: %#v", lookup.requests)
+			}
+			for path, n := range guard.reads {
+				if n != 0 && strings.HasPrefix(path, private) {
+					t.Fatalf("auxiliary read escaped Dataset scope: %#v", guard.reads)
+				}
 			}
 		})
 	}

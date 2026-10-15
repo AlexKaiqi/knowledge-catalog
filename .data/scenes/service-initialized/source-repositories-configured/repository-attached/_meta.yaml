@@ -239,10 +239,12 @@ evidence:
     views:
       - "publication"
     tests:
-      - "TestResolveBindingFromSchemaWithoutInstance"
-      - "TestResolveBindingReadsSchemaOrigin"
-    id: "binding-resolves-schema-origin"
-    title: "Binding 从 Schema 解析 origin 与未实例化地址"
+      - "TestResolveBindingReadsDescriptorOrigin"
+      - "TestBindingUnitOccupiesNoSnapshotValue"
+      - "TestResolveBindingRequiresDescriptorInScope"
+      - "TestResolveBindingWithoutBindingUnitIsUnsatisfied"
+    id: "binding-resolves-descriptor-origin"
+    title: "Binding 从单元声明的取值描述解析 origin，binding 单元不占快照值"
   - source: "resource.handle"
     views:
       - "publication"
@@ -621,13 +623,13 @@ evidence:
       - "TestLogicalReferenceRejectsStreamBeforeRuntime"
       - "TestLogicalReferenceHydratesActualSelectedUnitBeforeMissingLeafWithoutRereadingObject"
       - "TestLogicalReferenceDoesNotExpandBindingExecutionToEntityOrSchema"
-      - "TestLogicalVirtualBoundReferenceRequiresPublishedObjectAndSchemaEvidence"
+      - "TestLogicalBindingReferenceRequiresPublishedUnitSchemaAndDescriptor"
       - "TestReadProductViewPreservesLogicalObservationBasis"
     verifies:
       - claim: "object#U11"
         detail: "旧／新引用实际对照保持逻辑 State 的确值和观察依据，selected deep 在所属单元执行后再取 leaf，不重复完整对象读取；实体／Schema 不被扩为外部执行。"
       - claim: "object#U16"
-        detail: "缺 runtime 与 Stream 在外呼前拒绝；虚拟 Bound Aspect 仅在范围内已出版对象类型依据及 Schema 齐备时成立，private 类型材料不补读，不按 locator 发明任意切面。专属执行是受影响兼容证据，不计入 Object 基础外部能力。"
+        detail: "缺 runtime 与 Stream 在外呼前拒绝；binding 单元仅在范围内已出版单元、Schema 与取值描述齐备时成立，private 材料不补读，不按 locator 发明任意切面。专属执行是受影响兼容证据，不计入 Object 基础外部能力。"
   - id: "object-readonly-and-provider-neutral-contract"
     title: "实际 Reader 只读且唯一模块不携带存储形状"
     source: "writer.snapshot"
@@ -686,7 +688,7 @@ probes:
     views:
       - "publication"
       - "consumption"
-    title: "Descriptor 已发表但调用能力缺失时返回 CAPABILITY_UNSATISFIED"
+    title: "Descriptor 已发表但未声明所调用的操作时返回 CAPABILITY_UNSATISFIED"
   - file: "probe-publish-permissions-keeps-read-denied.feature"
     title: "发表并回读来源权限 Aspect 后对应主体读取仍被拒绝"
     source: "access.rules"

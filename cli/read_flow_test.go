@@ -173,12 +173,14 @@ func TestAspectBindingResolveThroughCLIAndWorkspace(t *testing.T) {
 	body(t, kc(h, "init"))
 	seedRepo(t, h, core)
 	adoptLiveAccessFixture(t, h, core)
-	body(t, kc(h, "put", testObjectReference(t, core, "schema/service.health", ""), "--repo", core, "--command-id", "binding-schema", "--value", `{"entity":"Service","aspect":"health","origin":"http://127.0.0.1:9","fields":{"status":{"type":"string"}}}`))
-	put := asMap(t, body(t, kc(h, "put", testObjectReference(t, core, "service/orders", "/properties"), "--repo", core, "--command-id", "binding-entity", "--value", `{"name":"orders"}`)))
-	commit := asMap(t, put["result"])["newCommit"].(string)
+	body(t, kc(h, "put", testObjectReference(t, core, "schema/service.health", ""), "--repo", core, "--command-id", "binding-schema", "--value", `{"entity":"Service","aspect":"health","fields":{"status":{"type":"string"}}}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "service/orders", "/properties"), "--repo", core, "--command-id", "binding-entity", "--value", `{"name":"orders"}`))
+	descriptor := putStateBinding(t, h, core, "service/orders", "health", "schema/service.health", "http://127.0.0.1:9")
+	commit := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "service/orders", "/properties"), "--repo", core)))["commit"].(string)
 	resolved := asMap(t, body(t, kc(h, "resolve-binding", "--repo", core,
 		"--object", "service/orders", "--aspect", "health", "--commit", commit)))
-	if resolved["mode"] != "state" || resolved["origin"] != "http://127.0.0.1:9" || resolved["schemaRef"] != "schema/service.health" || resolved["declarationCommit"] != commit || resolved["declarationDigest"] == "" {
+	if resolved["mode"] != "state" || resolved["origin"] != "http://127.0.0.1:9" || resolved["schemaRef"] != "schema/service.health" || resolved["declarationCommit"] != commit || resolved["declarationDigest"] == "" ||
+		resolved["descriptorRef"] != descriptor || resolved["descriptorCommit"] != commit || resolved["descriptorDigest"] == "" {
 		t.Fatalf("pinned binding: %#v", resolved)
 	}
 	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))

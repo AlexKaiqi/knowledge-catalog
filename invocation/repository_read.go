@@ -29,5 +29,6 @@ func readRepositoryObserved(cx *Invocation, request objectservice.ReadRequest) (
 	}
 	return liveservice.ReadRepository(cx.Context, repo, liveservice.ReadRequest{
 		Commit: request.Commit, Reference: &request.Reference, Hydrator: cx.WS.Hydrator,
+		Descriptors: requestDescriptors(cx, request.Reference.Repository, request.Commit),
 	}, lookup, readContext)
 }

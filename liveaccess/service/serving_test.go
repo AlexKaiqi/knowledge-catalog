@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"testing"
 
+	"kc/internal/bindingfixture"
 	"kc/internal/testkit"
 	"kc/kernel"
 	serving "kc/liveaccess"
@@ -36,10 +37,13 @@ func setupServing(t *testing.T) (*reader.Serving, kernel.RepositoryID, kernel.Co
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: []objectmodel.Operation{
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.runtime"}, Value: map[string]any{
-				"entity": "Job", "aspect": "runtime", "origin": "https://scheduler.example",
+				"entity": "Job", "aspect": "runtime",
 				"fields": map[string]any{"status": map[string]any{"type": "string"}},
 			}},
+			bindingfixture.PutDescriptor("resource/scheduler", bindingfixture.Descriptor("https://scheduler.example")),
+			bindingfixture.PutDescriptor("resource/scheduler-stream", bindingfixture.StreamDescriptor("https://scheduler.example")),
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: address.ObjectID, AspectName: "definition"}, Value: map[string]any{"owner": "data"}},
+			bindingfixture.PutAspect(address.ObjectID, address.AspectName, "schema/job.runtime", "resource/scheduler"),
 		},
 	})
 	if err != nil {
@@ -54,7 +58,7 @@ func setupServing(t *testing.T) (*reader.Serving, kernel.RepositoryID, kernel.Co
 	return base, s.RepositoryID, commit, address
 }
 
-func TestBoundStateHydratesFromSchemaOriginWithoutInstanceFile(t *testing.T) {
+func TestBindingUnitHydratesFromDescriptorOrigin(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/orders", AspectName: "stats"}
 	commit, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
@@ -62,10 +66,12 @@ func TestBoundStateHydratesFromSchemaOriginWithoutInstanceFile(t *testing.T) {
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: []objectmodel.Operation{
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/table.stats"}, Value: map[string]any{
-				"entity": "Table", "aspect": "stats", "origin": "https://stats.example",
+				"entity": "Table", "aspect": "stats",
 				"fields": map[string]any{"rowCount": map[string]any{"type": "number"}},
 			}},
+			bindingfixture.PutDescriptor("resource/stats", bindingfixture.Descriptor("https://stats.example")),
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/orders", AspectName: "properties"}, Value: map[string]any{"name": "orders"}},
+			bindingfixture.PutAspect("table/orders", "stats", "schema/table.stats", "resource/stats"),
 		},
 	})
 	if err != nil {
@@ -87,7 +93,7 @@ func TestBoundStateHydratesFromSchemaOriginWithoutInstanceFile(t *testing.T) {
 	service := liveservice.Open(base, lookup, observability.IdentityContext{Principal: "agent"})
 	results, err := service.ReadAddress(context.Background(), address)
 	if err != nil || len(results) != 1 {
-		t.Fatalf("access without instance file: %#v %v", results, err)
+		t.Fatalf("binding unit access: %#v %v", results, err)
 	}
 	value, _ := results[0].Value.(map[string]any)
 	if value["rowCount"] != float64(12) || lookup.requests[0].Origin != "https://stats.example" {
@@ -145,8 +151,8 @@ func TestStateBindingHydratesConsumerReadAndKeepsBothBases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(raw) != 0 {
-		t.Fatalf("Bound State must not occupy a Snapshot unit: %#v", raw)
+	if len(raw) != 1 || raw[0].Value != nil || len(raw[0].Declarations) != 1 || !raw[0].Declarations[0].ValueSource.IsBinding() {
+		t.Fatalf("a binding unit carries its declaration and no Snapshot value: %#v", raw)
 	}
 }
 
@@ -184,11 +190,8 @@ func TestOrdinaryReadRejectsStreamBinding(t *testing.T) {
 		ObjectRef:  objectmodel.ObjectRef{Repository: repositoryID, Object: address.ObjectID},
 		Repository: repositoryID, Commit: commit, ObjectID: address.ObjectID, Address: address,
 		Declarations: []objectmodel.UnitDeclaration{{
-			Address: address,
-			ValueSource: &objectmodel.ValueSource{Kind: objectmodel.ValueSourceBinding, Binding: &objectmodel.BindingDeclaration{
-				Mode: objectmodel.BindingStream, Runtime: "scheduler", Protocol: "scheduler/v1",
-				Operations: map[string]objectmodel.BindingOperation{"read": {Call: "job.status"}},
-			}},
+			Address:     address,
+			ValueSource: bindingfixture.Source("resource/scheduler-stream"),
 		}},
 	}
 	value, err := service.Hydrate(context.Background(), raw, nil)

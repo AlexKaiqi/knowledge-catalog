@@ -1,5 +1,5 @@
 // Package serving 的 origin 绑定 State/Resource 查找实现：resource-access/v1
-// 的通用 HTTP 客户端。调用目标来自每个请求所钉 Binding 的 Schema origin，
+// 的通用 HTTP 客户端。调用目标来自每个请求所钉 Binding 的取值描述 origin，
 // 不存在服务级全局地址——这正是 B6「缝不自行构造目标」的准确含义；
 // local 组合由此获得与 server 一致的合同（2026-09-29 复核恢复）。
 package liveaccess
@@ -59,7 +59,7 @@ type HTTPStateLookup struct {
 }
 
 // NewHTTPStateLookup builds a generic HTTP client. The call target comes from
-// the pinned Schema origin on each request.
+// the pinned descriptor origin on each request.
 func NewHTTPStateLookup(client *http.Client) *HTTPStateLookup {
 	if client == nil {
 		client = &http.Client{Timeout: 30 * time.Second}

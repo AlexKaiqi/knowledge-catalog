@@ -41,7 +41,7 @@ func VerbResolveBinding(cx *Invocation) (any, error) {
 			if err != nil {
 				return nil, err
 			}
-			return liveaccess.ResolveRepoBinding(repo, commitID, address)
+			return liveaccess.ResolveRepoBinding(repo, commitID, address, requestDescriptors(cx, repositoryID, commitID))
 		})
 }
 

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	index "kc/discovery/projection"
+	"kc/internal/bindingfixture"
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/liveaccess"
@@ -51,11 +52,13 @@ func noticeBackgroundFixture(t *testing.T) (objectmodel.Repository, kernel.Commi
 		TargetRepository: setup.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: setup.RootCommitID, ExpectedTargetCommit: setup.RootCommitID,
 		Operations: []objectmodel.Operation{
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "job/notice"}, Value: map[string]any{"name": "notice"}},
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/notice", AspectName: "definition"}, Value: map[string]any{"name": "notice"}},
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.runtime"}, Value: map[string]any{
-				"entity": "Job", "aspect": "runtime", "origin": "https://scheduler.example",
+				"entity": "Job", "aspect": "runtime",
 				"fields": map[string]any{"status": map[string]any{"type": "string", "access": []any{"filter"}}},
 			}},
+			bindingfixture.PutDescriptor("resource/scheduler", bindingfixture.Descriptor("https://scheduler.example")),
+			bindingfixture.PutAspect("job/notice", "runtime", "schema/job.runtime", "resource/scheduler"),
 		},
 	})
 	if err != nil {

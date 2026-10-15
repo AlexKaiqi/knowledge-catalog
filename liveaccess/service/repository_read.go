@@ -18,6 +18,9 @@ type ReadRequest struct {
 	Address   *objectmodel.Address
 	Selector  *objectmodel.AspectSelector
 	Hydrator  objectmodel.Hydrator
+	// Descriptors resolves descriptorRef in the caller's request scope; nil
+	// limits it to the read Repository commit.
+	Descriptors liveaccess.DescriptorScope
 }
 
 // ReadRepository reads complete selected units before adopting external values
@@ -28,6 +31,7 @@ func ReadRepository(ctx context.Context, repo objectmodel.Repository, selection 
 	if err != nil {
 		return objectmodel.ObservedValue{}, err
 	}
+	service.WithDescriptors(selection.Descriptors)
 	if err := validateRepositoryRead(repo.ID(), selection); err != nil {
 		return objectmodel.ObservedValue{}, err
 	}

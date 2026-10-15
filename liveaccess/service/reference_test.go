@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 
+	"kc/internal/bindingfixture"
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/liveaccess"
@@ -57,11 +58,16 @@ func newLogicalReferenceFixture(t *testing.T, origin string) (*reader.Serving, [
 		}
 		root := testkit.MustHead(t, raw, snapshot.DefaultRef)
 		ops := []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/shared", AspectName: "definition"}, Value: map[string]any{"owner": string(id)}}}
+		if id == ids[0] {
+			// One descriptor ID per request scope: source-b binds across repositories.
+			ops = append(ops, bindingfixture.PutDescriptor("resource/job-runtime", bindingfixture.Descriptor(origin)))
+		}
 		for _, aspect := range []string{"runtime", "audit"} {
-			ops = append(ops, objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: objectmodel.ObjectID("schema/job." + aspect)}, Value: map[string]any{
-				"entity": "Job", "aspect": aspect, "origin": origin,
+			schemaRef := "schema/job." + aspect
+			ops = append(ops, objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: objectmodel.ObjectID(schemaRef)}, Value: map[string]any{
+				"entity": "Job", "aspect": aspect,
 				"fields": map[string]any{"status": map[string]any{"type": "string"}},
-			}})
+			}}, bindingfixture.PutAspect("job/shared", aspect, schemaRef, "resource/job-runtime"))
 		}
 		receipt, err := w.Commit("logical-reference-seed", objectmodel.ChangeSet{TargetRepository: id, TargetRef: snapshot.DefaultRef, BaseCommit: root, ExpectedTargetCommit: root, Operations: ops})
 		if err != nil {
@@ -137,7 +143,7 @@ func TestLogicalReferencePreservesStateAndSelectsOnlyExplicitSource(t *testing.T
 	ref.Locator = "/runtime/status"
 	deep, err := readLogicalReference(t, svc, ref)
 	if err != nil || len(deep) != 1 {
-		t.Fatalf("virtual Bound leaf: %#v %v", deep, err)
+		t.Fatalf("binding leaf: %#v %v", deep, err)
 	}
 	wantAddr := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/shared", AspectName: "runtime"}
 	if deep[0].Value != string(ids[0])+":runtime" || deep[0].Address != wantAddr || deep[0].Digest != "" || deep[0].Locator != ref.Locator || len(deep[0].Observations) != 1 || deep[0].Observations[0].Basis.SourceRevision != "source-rev-7" {
@@ -194,6 +200,9 @@ type streamReferenceRepo struct {
 }
 
 func (r *streamReferenceRepo) Read(id objectmodel.ObjectID, at kernel.CommitID) (objectmodel.ObjectValue, error) {
+	if id != r.unit.ObjectID {
+		return r.Repository.Read(id, at)
+	}
 	return objectmodel.AssembleObjectValue(r.ID(), id, at, []objectmodel.Unit{r.unit})
 }
 func (r *streamReferenceRepo) ReadReferenceUnits(ref objectmodel.Reference, at kernel.CommitID) ([]objectmodel.Unit, error) {
@@ -206,7 +215,7 @@ func TestLogicalReferenceRejectsStreamBeforeRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	unit := objectmodel.Unit{ObjectID: address.ObjectID, Address: address, Value: map[string]any{}, Digest: kernel.CanonicalDigest(map[string]any{}), ValueSource: &objectmodel.ValueSource{Kind: objectmodel.ValueSourceBinding, Binding: &objectmodel.BindingDeclaration{Mode: objectmodel.BindingStream, Runtime: "scheduler", Protocol: "scheduler/v1", Operations: map[string]objectmodel.BindingOperation{"read": {Call: "job.status"}}}}}
+	unit := objectmodel.Unit{ObjectID: address.ObjectID, Address: address, Digest: kernel.CanonicalDigest(nil), ValueSource: bindingfixture.Source("resource/scheduler-stream")}
 	native := &streamReferenceRepo{Repository: repo, unit: unit, commit: commit}
 	commits := map[kernel.RepositoryID]kernel.CommitID{id: commit}
 	scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return native, nil }, reader.DatasetPin{SetID: "stream", Repositories: commits, Items: reader.WholeRepositoryItems(commits)})
@@ -256,8 +265,7 @@ func TestLogicalReferenceHydratesActualSelectedUnitBeforeMissingLeafWithoutRerea
 	if err != nil {
 		t.Fatal(err)
 	}
-	placeholder := map[string]any{"cached": "declaration only"}
-	selectedRepo := &selectedStateReferenceRepo{Repository: repo, unit: objectmodel.Unit{ObjectID: address.ObjectID, Address: address, Value: placeholder, Digest: kernel.CanonicalDigest(placeholder), SchemaRef: "schema/job.runtime", ValueSource: &objectmodel.ValueSource{Kind: objectmodel.ValueSourceBinding, Binding: &objectmodel.BindingDeclaration{Mode: objectmodel.BindingState, Runtime: "scheduler", Protocol: "scheduler/v1", Operations: map[string]objectmodel.BindingOperation{"read": {Call: "job.status"}}}}}}
+	selectedRepo := &selectedStateReferenceRepo{Repository: repo, unit: objectmodel.Unit{ObjectID: address.ObjectID, Address: address, Digest: kernel.CanonicalDigest(nil), SchemaRef: "schema/job.runtime", ValueSource: bindingfixture.Source("resource/scheduler")}}
 	commits := map[kernel.RepositoryID]kernel.CommitID{id: commit}
 	scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return selectedRepo, nil }, reader.DatasetPin{SetID: "selected-actual", Repositories: commits, Items: reader.WholeRepositoryItems(commits)})
 	lookup := &stateLookup{result: liveaccess.StateObservation{Value: map[string]any{"status": "observed-running"}, Basis: objectmodel.ObservationBasis{BindingGeneration: "runtime-7", Consistency: objectmodel.ObservationRepeatable, SourceRevision: "runtime-rev-8", ObservedAt: "2026-10-13T00:00:00Z"}}}
@@ -292,9 +300,7 @@ func TestLogicalReferenceDoesNotExpandBindingExecutionToEntityOrSchema(t *testin
 		{"schema", "/runtime/status", objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "schema/no-binding", AspectName: "runtime"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			placeholder := map[string]any{"cached": "fixed"}
-			source := &objectmodel.ValueSource{Kind: objectmodel.ValueSourceBinding, Binding: &objectmodel.BindingDeclaration{Mode: objectmodel.BindingState, Runtime: "scheduler", Protocol: "scheduler/v1", Operations: map[string]objectmodel.BindingOperation{"read": {Call: "job.status"}}}}
-			selectedRepo := &selectedStateReferenceRepo{Repository: repo, unit: objectmodel.Unit{ObjectID: tc.address.ObjectID, Address: tc.address, Value: placeholder, Digest: kernel.CanonicalDigest(placeholder), ValueSource: source}}
+			selectedRepo := &selectedStateReferenceRepo{Repository: repo, unit: objectmodel.Unit{ObjectID: tc.address.ObjectID, Address: tc.address, Digest: kernel.CanonicalDigest(nil), ValueSource: bindingfixture.Source("resource/scheduler")}}
 			commits := map[kernel.RepositoryID]kernel.CommitID{id: commit}
 			scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return selectedRepo, nil }, reader.DatasetPin{SetID: "no-expanded-execution", Repositories: commits, Items: reader.WholeRepositoryItems(commits)})
 			lookup := &stateLookup{result: liveaccess.StateObservation{Value: map[string]any{"status": "forbidden-execution"}, Basis: objectmodel.ObservationBasis{BindingGeneration: "g1", Consistency: objectmodel.ObservationLatestOnly, ObservedAt: "2026-10-13T00:00:00Z"}}}

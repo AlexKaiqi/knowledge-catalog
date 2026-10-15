@@ -14,6 +14,7 @@ import (
 
 type Service struct {
 	declarations   *reader.Serving
+	descriptors    liveaccess.DescriptorScope
 	state          liveaccess.StateLookup
 	request        objectmodel.RequestContext
 	strict         bool
@@ -27,30 +28,43 @@ func Open(declarations *reader.Serving, state liveaccess.StateLookup, identity k
 // OpenRequest adds the correlation metadata that an out-of-process runtime
 // needs. The identity has already crossed the Object Server's trusted
 // authentication boundary; this package does not authenticate it again.
+// ResourceDescriptors resolve inside the same fixed declaration scope unless
+// WithDescriptors names the caller's request scope.
 func OpenRequest(declarations *reader.Serving, state liveaccess.StateLookup, request objectmodel.RequestContext) *Service {
-	return &Service{declarations: declarations, state: state, request: request}
+	return &Service{declarations: declarations, descriptors: liveaccess.ServingDescriptors(declarations), state: state, request: request}
+}
+
+// WithDescriptors replaces the scope that resolves descriptorRef. A nil scope
+// keeps the declaration scope.
+func (s *Service) WithDescriptors(descriptors liveaccess.DescriptorScope) *Service {
+	if descriptors != nil {
+		s.descriptors = descriptors
+	}
+	return s
 }
 
 // HydrateRepositoryValue applies the same logical READ semantics to one raw
 // ObjectValue at a fixed Repository commit. Projection control uses this
 // entry point so exact READ and dynamic indexing cannot grow separate Binding
-// implementations.
-func HydrateRepositoryValue(ctx context.Context, repo objectmodel.Repository, value objectmodel.ObjectValue, state liveaccess.StateLookup, request objectmodel.RequestContext) (objectmodel.ObservedValue, error) {
-	return hydrateRepository(ctx, repo, value, state, request, nil, true)
+// implementations. A nil descriptors scope resolves descriptorRef only inside
+// the same Repository commit.
+func HydrateRepositoryValue(ctx context.Context, repo objectmodel.Repository, value objectmodel.ObjectValue, state liveaccess.StateLookup, request objectmodel.RequestContext, descriptors liveaccess.DescriptorScope) (objectmodel.ObservedValue, error) {
+	return hydrateRepository(ctx, repo, value, state, request, nil, true, descriptors)
 }
 
 // HydrateRepositoryRead composes an already read, fixed Repository result with
 // external units. Address and Pointer selections preserve the original shape;
 // one external failure is explained only at that unit's selected position.
 func HydrateRepositoryRead(ctx context.Context, repo objectmodel.Repository, value objectmodel.ObjectValue, state liveaccess.StateLookup, request objectmodel.RequestContext, selector *objectmodel.AspectSelector) (objectmodel.ObservedValue, error) {
-	return hydrateRepository(ctx, repo, value, state, request, selector, false)
+	return hydrateRepository(ctx, repo, value, state, request, selector, false, nil)
 }
 
-func hydrateRepository(ctx context.Context, repo objectmodel.Repository, value objectmodel.ObjectValue, state liveaccess.StateLookup, request objectmodel.RequestContext, selector *objectmodel.AspectSelector, strict bool) (objectmodel.ObservedValue, error) {
+func hydrateRepository(ctx context.Context, repo objectmodel.Repository, value objectmodel.ObjectValue, state liveaccess.StateLookup, request objectmodel.RequestContext, selector *objectmodel.AspectSelector, strict bool, descriptors liveaccess.DescriptorScope) (objectmodel.ObservedValue, error) {
 	service, err := repositoryService(repo, value.Commit, state, request, strict)
 	if err != nil {
 		return objectmodel.ObservedValue{}, err
 	}
+	service.WithDescriptors(descriptors)
 	raw := objectmodel.FederatedValue{
 		ObjectRef: value.ObjectRef, Repository: repo.ID(), Commit: value.Commit,
 		ObjectID: value.Address.ObjectID, Address: value.Address, Value: value.Value,
@@ -123,23 +137,10 @@ func (s *Service) Hydrate(ctx context.Context, value objectmodel.FederatedValue,
 		return objectmodel.ObservedValue{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "value is outside dataset scope")
 	}
 	result := objectmodel.ObservedValue{FederatedValue: value, Observations: []objectmodel.UnitObservation{}}
-	repo, err := s.interpretationRepository(value.Repository)
-	if err != nil {
+	if _, err := s.interpretationRepository(value.Repository); err != nil {
 		return objectmodel.ObservedValue{}, err
 	}
-	var extra []objectmodel.UnitDeclaration
-	if objectmodel.IsEntityBlob(value.Address) && value.Locator == "" {
-		extra, err = liveaccess.BoundAspectDeclarations(repo, value.Commit, value.ObjectID, value.Declarations)
-		if err != nil {
-			return objectmodel.ObservedValue{}, err
-		}
-	}
-	declarations := append(append([]objectmodel.UnitDeclaration{}, value.Declarations...), extra...)
-	result.Declarations = declarations
-	for _, extraDecl := range extra {
-		result.Units = append(result.Units, extraDecl.Address)
-	}
-	for _, declaration := range declarations {
+	for _, declaration := range value.Declarations {
 		if !selected(declaration.Address, selector) {
 			continue
 		}
@@ -161,13 +162,6 @@ func (s *Service) ReadAddress(ctx context.Context, address objectmodel.Address) 
 	if err != nil {
 		return nil, err
 	}
-	if len(values) == 0 {
-		synthesized, err := s.boundAddressValue(address)
-		if err != nil {
-			return nil, err
-		}
-		values = synthesized
-	}
 	out := make([]objectmodel.ObservedValue, 0, len(values))
 	for _, value := range values {
 		result := objectmodel.ObservedValue{FederatedValue: value, Observations: []objectmodel.UnitObservation{}}
@@ -177,42 +171,6 @@ func (s *Service) ReadAddress(ctx context.Context, address objectmodel.Address) 
 			}
 		}
 		out = append(out, result)
-	}
-	return out, nil
-}
-
-func (s *Service) boundAddressValue(address objectmodel.Address) ([]objectmodel.FederatedValue, error) {
-	var bindings []liveaccess.ResolvedBinding
-	var err error
-	if s.interpretation != nil {
-		var binding liveaccess.ResolvedBinding
-		binding, err = liveaccess.ResolveRepoBinding(s.interpretation, s.declarations.Pin().Repositories[s.interpretation.ID()], address)
-		if err == nil {
-			bindings = []liveaccess.ResolvedBinding{binding}
-		}
-	} else {
-		bindings, err = liveaccess.ResolveBinding(s.declarations, address)
-	}
-	if err != nil {
-		return nil, err
-	}
-	out := make([]objectmodel.FederatedValue, 0, len(bindings))
-	for _, binding := range bindings {
-		source := &objectmodel.ValueSource{Kind: objectmodel.ValueSourceBinding, Binding: &objectmodel.BindingDeclaration{
-			Mode: binding.Mode, Runtime: binding.Runtime, Protocol: binding.Protocol,
-			Operations: binding.Operations, DescriptorRef: binding.DescriptorRef,
-		}}
-		out = append(out, objectmodel.FederatedValue{
-			ObjectRef:  objectmodel.ObjectRef{Repository: binding.Repository, Object: address.ObjectID},
-			Repository: binding.Repository,
-			Commit:     binding.DeclarationCommit,
-			ObjectID:   address.ObjectID,
-			Address:    address,
-			Declarations: []objectmodel.UnitDeclaration{{
-				Address: address, SchemaRef: binding.SchemaRef, ValueSource: source,
-				DeclarationDigest: binding.DeclarationDigest,
-			}},
-		})
 	}
 	return out, nil
 }
@@ -227,21 +185,25 @@ func (s *Service) hydrate(ctx context.Context, repositoryID kernel.RepositoryID,
 	if source == nil || source.Kind == "" || source.Kind == objectmodel.ValueSourceSnapshot {
 		return hydratedUnit{}, false, nil
 	}
-	if source.Kind != objectmodel.ValueSourceBinding || source.Binding == nil {
-		return hydratedUnit{}, false, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "address %s has an invalid value_source", objectmodel.AddressKey(declaration.Address))
+	if !source.IsBinding() {
+		return hydratedUnit{}, false, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "address %s has an invalid valueSource", objectmodel.AddressKey(declaration.Address))
 	}
-	if source.Binding.Mode == objectmodel.BindingStream {
+	binding, err := s.resolveHydrationBinding(repositoryID, declaration)
+	if err != nil {
+		return hydratedUnit{}, false, err
+	}
+	if binding.Mode == objectmodel.BindingStream {
 		return hydratedUnit{}, false, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
 			"ordinary READ cannot hydrate stream Binding at %s; use an explicit window/query surface", objectmodel.AddressKey(declaration.Address))
 	}
-	if source.Binding.Mode != objectmodel.BindingState {
+	if binding.Mode != objectmodel.BindingState {
 		return hydratedUnit{}, false, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "address %s is not a State Binding", objectmodel.AddressKey(declaration.Address))
 	}
 	if s.state == nil {
 		return hydratedUnit{}, false, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
 			"State Binding at %s requires a Materialization Runtime", objectmodel.AddressKey(declaration.Address))
 	}
-	binding, err := s.resolveHydrationBinding(repositoryID, declaration)
+	schema, err := s.observedSchema(binding)
 	if err != nil {
 		return hydratedUnit{}, false, err
 	}
@@ -262,7 +224,7 @@ func (s *Service) hydrate(ctx context.Context, repositoryID kernel.RepositoryID,
 	if err := objectmodel.ValidateObservationBasis(observation.Basis); err != nil {
 		return hydratedUnit{}, false, err
 	}
-	if err := s.validateObservedStructure(binding, observation.Value); err != nil {
+	if err := validateObservedStructure(binding.Address, schema, observation.Value); err != nil {
 		return hydratedUnit{}, false, err
 	}
 	return hydratedUnit{
@@ -276,15 +238,10 @@ func (s *Service) hydrate(ctx context.Context, repositoryID kernel.RepositoryID,
 }
 
 func (s *Service) resolveHydrationBinding(repository kernel.RepositoryID, declaration objectmodel.UnitDeclaration) (liveaccess.ResolvedBinding, error) {
-	repo, err := s.interpretationRepository(repository)
-	if err != nil {
+	if _, err := s.interpretationRepository(repository); err != nil {
 		return liveaccess.ResolvedBinding{}, err
 	}
-	binding, err := liveaccess.ResolveRepoDeclarationBinding(repo, s.declarations.Pin().Repositories[repository], declaration)
-	if declaration.SchemaRef != "" {
-		binding.SchemaRef = declaration.SchemaRef
-	}
-	return binding, err
+	return liveaccess.ResolveDeclaration(s.descriptors, repository, s.declarations.Pin().Repositories[repository], declaration)
 }
 
 func selected(address objectmodel.Address, selector *objectmodel.AspectSelector) bool {

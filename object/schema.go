@@ -77,7 +77,6 @@ type SchemaDefinition struct {
 	Aspect               string                  `json:"aspect,omitempty"`
 	Pattern              string                  `json:"pattern"`
 	AdditionalProperties bool                    `json:"additionalProperties"`
-	Origin               string                  `json:"origin,omitempty"`
 	Fields               []SchemaFieldDefinition `json:"fields"`
 }
 
@@ -92,6 +91,10 @@ func ParseSchemaDefinition(objectID ObjectID, value any) (SchemaDefinition, erro
 	if !ok {
 		return SchemaDefinition{}, kernel.Fail(kernel.ErrSchemaUnsupported,
 			"schema %s must be an object", objectID)
+	}
+	if _, declared := body["origin"]; declared {
+		return SchemaDefinition{}, schemaUnsupported(objectID,
+			"Schema describes structure only; origin belongs to a ResourceDescriptor referenced by the unit valueSource")
 	}
 	meta, _, err := optionalSchemaString(body, "metaSchema")
 	if err != nil {
@@ -145,42 +148,11 @@ func ParseSchemaDefinition(objectID ObjectID, value any) (SchemaDefinition, erro
 	if err != nil {
 		return SchemaDefinition{}, err
 	}
-	origin, _, err := optionalSchemaString(body, "origin")
-	if err != nil {
-		return SchemaDefinition{}, schemaUnsupported(objectID, "%v", err)
-	}
-	if origin != "" {
-		origin, err = ParseResourceAccessOrigin(origin)
-		if err != nil {
-			return SchemaDefinition{}, schemaUnsupported(objectID, "%v", err)
-		}
-		if aspect == "" {
-			return SchemaDefinition{}, schemaUnsupported(objectID, "origin requires aspect")
-		}
-	}
 	return SchemaDefinition{
 		ObjectID: objectID, MetaSchema: ObjectID(meta), Entity: entity, Description: description, Aspect: aspect,
-		Pattern: pattern, AdditionalProperties: additional, Origin: origin,
+		Pattern: pattern, AdditionalProperties: additional,
 		Fields: fields,
 	}, nil
-}
-
-// Bound reports whether this Domain Schema hosts Bound State. Access is
-// origin × entity object_id; the Schema names the Aspect that comes back.
-func (d SchemaDefinition) Bound() bool {
-	return strings.TrimSpace(d.Origin) != "" && strings.TrimSpace(d.Aspect) != ""
-}
-
-// BindingSource is the synthesized State handle for a Bound Schema. Runtime
-// and call names are not part of the access protocol; the entity object_id is.
-func (d SchemaDefinition) BindingSource() *ValueSource {
-	if !d.Bound() {
-		return nil
-	}
-	return &ValueSource{Kind: ValueSourceBinding, Binding: &BindingDeclaration{
-		Mode: BindingState, Protocol: ProtocolResourceAccessV1,
-		Operations: map[string]BindingOperation{"lookup": {Call: "lookup"}},
-	}}
 }
 
 func schemaObject(value any) (map[string]any, bool) {
@@ -328,15 +300,8 @@ func schemaUnsupported(objectID ObjectID, format string, args ...any) error {
 // Schema. Binding declarations have no Snapshot value and are validated when
 // hydrated by the serving layer, so Writer calls this only for inline values.
 func ValidateSchemaInstance(address Address, value any, schema SchemaDefinition) error {
-	switch {
-	case schema.Aspect == "" && address.AspectName != "":
-		return schemaInstanceInvalid(address, "schema %s describes an entity/relation, not aspect %s", schema.ObjectID, address.AspectName)
-	case schema.Aspect != "" && address.AspectName != schema.Aspect:
-		return schemaInstanceInvalid(address, "schema %s requires aspect %s", schema.ObjectID, schema.Aspect)
-	case schema.Pattern == "keyed_collection" && address.Kind != KindMember:
-		return schemaInstanceInvalid(address, "schema %s requires a Member address", schema.ObjectID)
-	case schema.Pattern == "record" && schema.Aspect != "" && address.Kind == KindMember:
-		return schemaInstanceInvalid(address, "schema %s requires an Aspect/Record address", schema.ObjectID)
+	if err := ValidateSchemaAddress(address, schema); err != nil {
+		return err
 	}
 	body, ok := value.(map[string]any)
 	if !ok {
@@ -359,6 +324,22 @@ func ValidateSchemaInstance(address Address, value any, schema SchemaDefinition)
 				return schemaInstanceInvalid(address, "field %s is not declared by schema %s", name, schema.ObjectID)
 			}
 		}
+	}
+	return nil
+}
+
+// ValidateSchemaAddress checks that a unit's Address fits the Schema it
+// adopts. External units have no stored value but still take this check.
+func ValidateSchemaAddress(address Address, schema SchemaDefinition) error {
+	switch {
+	case schema.Aspect == "" && address.AspectName != "":
+		return schemaInstanceInvalid(address, "schema %s describes an entity/relation, not aspect %s", schema.ObjectID, address.AspectName)
+	case schema.Aspect != "" && address.AspectName != schema.Aspect:
+		return schemaInstanceInvalid(address, "schema %s requires aspect %s", schema.ObjectID, schema.Aspect)
+	case schema.Pattern == "keyed_collection" && address.Kind != KindMember:
+		return schemaInstanceInvalid(address, "schema %s requires a Member address", schema.ObjectID)
+	case schema.Pattern == "record" && schema.Aspect != "" && address.Kind == KindMember:
+		return schemaInstanceInvalid(address, "schema %s requires an Aspect/Record address", schema.ObjectID)
 	}
 	return nil
 }

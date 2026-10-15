@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"kc/kernel"
-	"kc/liveaccess"
 	objectmodel "kc/object"
 )
 
@@ -78,38 +77,12 @@ func (s *Service) selectedReferenceValue(ref objectmodel.Reference) (objectmodel
 		return objectmodel.FederatedValue{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "repository cannot provide selected complete reference units")
 	}
 	units, err := port.ReadReferenceUnits(ref, commit)
-	var bound []objectmodel.UnitDeclaration
 	if err != nil {
-		if kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
-			return objectmodel.FederatedValue{}, err
-		}
-		// A missing leaf is not a maintenance coordinate. Only declarations
-		// actually supplied by the permitted Domain Schema may synthesize one.
-		interpretation, scopeErr := s.interpretationRepository(ref.Repository)
-		if scopeErr != nil {
-			return objectmodel.FederatedValue{}, scopeErr
-		}
-		extra, scopeErr := liveaccess.BoundAspectDeclarations(interpretation, commit, ref.Object, nil)
-		if scopeErr != nil {
-			return objectmodel.FederatedValue{}, scopeErr
-		}
-		tokens, _ := objectmodel.PointerTokens(ref.Locator)
-		for _, declaration := range extra {
-			if len(tokens) > 0 && declaration.Address.AspectName == tokens[0] {
-				bound = append(bound, declaration)
-				units = append(units, objectmodel.Unit{ObjectID: ref.Object, Address: declaration.Address, SchemaRef: declaration.SchemaRef, ValueSource: declaration.ValueSource})
-			}
-		}
-		if len(bound) == 0 {
-			return objectmodel.FederatedValue{}, err
-		}
+		return objectmodel.FederatedValue{}, err
 	}
 	assembled, err := objectmodel.AssembleObjectValue(ref.Repository, ref.Object, commit, units)
 	if err != nil {
 		return objectmodel.FederatedValue{}, err
-	}
-	if len(bound) > 0 {
-		assembled.Declarations = bound
 	}
 	value := objectmodel.FederatedValue{ObjectRef: assembled.ObjectRef, Repository: assembled.Repository, Commit: assembled.Commit, ObjectID: ref.Object, Address: assembled.Address, Value: assembled.Value, Provenance: assembled.Provenance, Units: assembled.Units, Declarations: assembled.Declarations}
 	if len(units) == 1 && referenceWithinUnit(ref, units[0].Address) {

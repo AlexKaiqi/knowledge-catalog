@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	"kc/internal/bindingfixture"
 	"kc/kernel"
 	"kc/liveaccess/evidence"
 	liveservice "kc/liveaccess/service"
@@ -18,21 +19,17 @@ func memberUnitFixture(t *testing.T, readWrappers ...func(snapshot.Store) snapsh
 	id := objectmodel.ObjectID("widget/members")
 	operations := []objectmodel.Operation{{Op: objectmodel.OpPut,
 		Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/widget.readings"},
-		Value: map[string]any{"entity": "Widget", "aspect": "readings", "pattern": "keyed_collection", "origin": "https://source.example",
+		Value: map[string]any{"entity": "Widget", "aspect": "readings", "pattern": "keyed_collection",
 			"fields": map[string]any{"value": map[string]any{"type": "number", "required": true, "access": []any{"filter"}},
 				"fresh": map[string]any{"type": "number"}}},
-	}}
-	for _, key := range []string{"good", "empty", "broken", "fixed"} {
-		op := objectmodel.Operation{Op: objectmodel.OpPut,
-			Address:   objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: id, AspectName: "readings", MemberKey: key},
-			SchemaRef: "schema/widget.readings", Value: map[string]any{"value": float64(31)},
-		}
-		if key == "fixed" {
-			op.SchemaRef, op.Value = "", map[string]any{"owner": "fixed"}
-			op.PathHint = "poison/sibling.yaml"
-		}
-		operations = append(operations, op)
+	}, bindingfixture.PutDescriptor(widgetDescriptor, bindingfixture.Descriptor("https://source.example"))}
+	for _, key := range []string{"good", "empty", "broken"} {
+		operations = append(operations, bindingfixture.PutMember(id, "readings", key, "schema/widget.readings", widgetDescriptor))
 	}
+	operations = append(operations, objectmodel.Operation{Op: objectmodel.OpPut,
+		Address:  objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: id, AspectName: "readings", MemberKey: "fixed"},
+		PathHint: "poison/sibling.yaml", Value: map[string]any{"owner": "fixed"},
+	})
 	return publishUnitFixture(t, id, operations, readWrappers...)
 }
 
@@ -111,8 +108,8 @@ func TestMemberReadAdoptsExternalValueAndKeepsIndependentFailures(t *testing.T) 
 				t.Fatalf("Member read lost its independently validated observations: %#v %#v", result, lookup.requests)
 			}
 			fixed, err := repo.ReadAddress(objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: id, AspectName: "readings", MemberKey: "good"}, commit)
-			if err != nil || !reflect.DeepEqual(fixed.Value, map[string]any{"value": float64(31)}) {
-				t.Fatalf("external value changed its fixed Member: %#v %v", fixed, err)
+			if err != nil || fixed.Value != nil {
+				t.Fatalf("external value leaked into its fixed binding Member: %#v %v", fixed, err)
 			}
 		})
 	}
@@ -129,9 +126,6 @@ func TestRepositoryReadHydratesOnlySelectedMemberShape(t *testing.T) {
 		want any
 	}{
 		{"address", func() (objectmodel.ObjectValue, error) { return repo.ReadAddress(address, commit) }, map[string]any{"value": float64(47)}},
-		{"leaf", func() (objectmodel.ObjectValue, error) {
-			return port.ReadReference(objectmodel.Reference{Repository: repo.ID(), Object: id, Locator: "/readings/good/value"}, commit)
-		}, float64(47)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			raw, err := tc.read()
@@ -146,6 +140,18 @@ func TestRepositoryReadHydratesOnlySelectedMemberShape(t *testing.T) {
 			}
 		})
 	}
+	t.Run("leaf", func(t *testing.T) {
+		leaf := objectmodel.Reference{Repository: repo.ID(), Object: id, Locator: "/readings/good/value"}
+		if _, err := port.ReadReference(leaf, commit); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
+			t.Fatalf("binding Member stored a fixed leaf: %v", err)
+		}
+		lookup := &unitLookup{failure: "source"}
+		result, err := liveservice.ReadRepository(context.Background(), repo, liveservice.ReadRequest{Commit: commit, Reference: &leaf}, lookup, request)
+		if err != nil || result.Value != float64(47) || result.Address != address || result.Commit != commit || result.Locator != leaf.Locator ||
+			len(result.Observations) != 1 || len(result.Failures) != 0 || len(lookup.requests) != 1 {
+			t.Fatalf("selected Member leaf changed shape, basis, or visited siblings: %#v %#v %v", result, lookup.requests, err)
+		}
+	})
 	static, err := repo.ReadAddress(objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: id, AspectName: "readings", MemberKey: "fixed"}, commit)
 	if err != nil {
 		t.Fatal(err)
@@ -177,8 +183,8 @@ func TestRepositoryReadKeepsSelectedMemberCollectionFailurePositions(t *testing.
 	if _, ok := members["broken"].(liveservice.ValueFailure); !ok {
 		t.Fatalf("Member failure was not explained at its key: %#v", members)
 	}
-	if !reflect.DeepEqual(raw.Value.(map[string]any)["good"], map[string]any{"value": float64(31)}) ||
-		!reflect.DeepEqual(raw.Value.(map[string]any)["broken"], map[string]any{"value": float64(31)}) {
+	if fixed := raw.Value.(map[string]any); fixed["good"] != nil || fixed["broken"] != nil ||
+		!reflect.DeepEqual(fixed["fixed"], map[string]any{"owner": "fixed"}) {
 		t.Fatalf("consumer hydration mutated the fixed selected payload: %#v", raw)
 	}
 }
@@ -189,7 +195,7 @@ func TestMemberProjectionHydrationRejectsFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := liveservice.HydrateRepositoryValue(context.Background(), repo, raw, &unitLookup{failure: "source"}, objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "maintenance"}})
+	result, err := liveservice.HydrateRepositoryValue(context.Background(), repo, raw, &unitLookup{failure: "source"}, objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "maintenance"}}, nil)
 	if kernel.CodeOf(err) != kernel.ErrTemporaryUnavailable || result.Value != nil || len(result.Observations) != 0 {
 		t.Fatalf("index hydration admitted a failed Member explanation: %#v %v", result, err)
 	}

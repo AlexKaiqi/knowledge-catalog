@@ -2,7 +2,6 @@ package liveaccess
 
 import (
 	"sort"
-	"strings"
 
 	"kc/kernel"
 	objectmodel "kc/object"
@@ -10,7 +9,8 @@ import (
 )
 
 // ResolveBinding interprets the permitted declarations at the accepted source
-// versions. It performs no runtime access; unavailable member targets are omitted.
+// versions. Descriptors resolve inside the same fixed scope. It performs no
+// runtime access; unavailable member targets are omitted.
 func ResolveBinding(scope *reader.Serving, address objectmodel.Address) ([]ResolvedBinding, error) {
 	pin := scope.Pin()
 	ids := make([]kernel.RepositoryID, 0, len(pin.Repositories))
@@ -32,8 +32,8 @@ func ResolveBinding(scope *reader.Serving, address objectmodel.Address) ([]Resol
 	return out, nil
 }
 
-// ResolveBindingAt uses the generic Object member scope for all auxiliary
-// Schema and Descriptor reads before interpreting LiveAccess declarations.
+// ResolveBindingAt uses the generic Object member scope for the declaration
+// and the same scope for its ResourceDescriptor.
 func ResolveBindingAt(scope *reader.Serving, repository kernel.RepositoryID, address objectmodel.Address) (ResolvedBinding, error) {
 	commit, ok := scope.Pin().Repositories[repository]
 	if !ok {
@@ -50,35 +50,5 @@ func ResolveBindingAt(scope *reader.Serving, repository kernel.RepositoryID, add
 	if err != nil {
 		return ResolvedBinding{}, err
 	}
-	return ResolveRepoBinding(repo, commit, address)
-}
-
-func schemaAccessOrigin(repo objectmodel.Repository, commit kernel.CommitID, schemaRef string) (string, error) {
-	schemaRef = strings.TrimSpace(schemaRef)
-	if schemaRef == "" {
-		return "", kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Bound State requires a schema_ref that declares origin")
-	}
-	parsed, ok := objectmodel.ParseSchemaRef(schemaRef)
-	if !ok {
-		return "", kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "schema_ref %q is not a pinned schema object", schemaRef)
-	}
-	if parsed.Repository != "" && parsed.Repository != repo.ID() {
-		return "", kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "schema_ref %q is not in this repository", schemaRef)
-	}
-	at := commit
-	if parsed.Commit != "" {
-		at = parsed.Commit
-	}
-	value, err := repo.Read(parsed.Object, at)
-	if err != nil {
-		return "", kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "schema_ref %q does not resolve to a schema object", schemaRef)
-	}
-	definition, err := objectmodel.ParseSchemaDefinition(parsed.Object, value.Value)
-	if err != nil {
-		return "", err
-	}
-	if definition.Origin == "" {
-		return "", kernel.Fail(kernel.ErrCapabilityUnsatisfied, "schema %s does not declare origin", parsed.Object)
-	}
-	return definition.Origin, nil
+	return ResolveRepoBinding(repo, commit, address, ServingDescriptors(scope))
 }

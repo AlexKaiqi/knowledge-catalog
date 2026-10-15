@@ -131,7 +131,7 @@ func RerankWorkspace(cx *Invocation, request RerankApplicationRequest, reranker 
 		if err != nil {
 			return nil, err
 		}
-		hydrated, err := liveservice.HydrateRepositoryValue(cx.Context, repo, raw, cx.State, requestContext)
+		hydrated, err := liveservice.HydrateRepositoryValue(cx.Context, repo, raw, cx.State, requestContext, objectserving.ServingDescriptors(declarations))
 		if err != nil {
 			return nil, err
 		}

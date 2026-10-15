@@ -12,7 +12,7 @@ import (
 type HTTPStateLookup = objectserving.HTTPStateLookup
 
 // NewHTTPStateLookup builds a generic HTTP client. The call target comes from
-// the pinned Schema origin on each request.
+// the pinned descriptor origin on each request.
 func NewHTTPStateLookup(client *http.Client) *objectserving.HTTPStateLookup {
 	return objectserving.NewHTTPStateLookup(client)
 }

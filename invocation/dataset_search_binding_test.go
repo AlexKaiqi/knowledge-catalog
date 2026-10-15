@@ -3,6 +3,7 @@ package invocation
 import (
 	"context"
 	retrieval "kc/discovery"
+	"kc/internal/bindingfixture"
 	"kc/internal/testkit"
 	"kc/kernel"
 	objectserving "kc/liveaccess"
@@ -35,9 +36,11 @@ func TestWorkspaceSearchHitUsesLogicalStateHydration(t *testing.T) {
 		Operations: []objectmodel.Operation{
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: objectID, AspectName: "definition"}, Value: map[string]any{"name": "Orders"}},
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/service.health"}, Value: map[string]any{
-				"entity": "Service", "aspect": "health", "origin": "https://health.example",
+				"entity": "Service", "aspect": "health",
 				"fields": map[string]any{"status": map[string]any{"type": "string", "access": []any{"text", "filter"}}},
 			}},
+			bindingfixture.PutDescriptor("resource/health", bindingfixture.Descriptor("https://health.example")),
+			bindingfixture.PutAspect(objectID, "health", "schema/service.health", "resource/health"),
 		},
 	})
 	if err != nil {

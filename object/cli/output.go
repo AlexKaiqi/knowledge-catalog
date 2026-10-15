@@ -102,9 +102,6 @@ func shapeCLISchemaDescribeReport(value any) any {
 		if v := stringField(schema, "objectId"); v != "" {
 			item["objectId"] = v
 		}
-		if v := stringField(schema, "origin"); v != "" {
-			item["origin"] = v
-		}
 		fieldsIn, _ := schema["fields"].([]any)
 		fields := make([]any, 0, len(fieldsIn))
 		for _, fieldRaw := range fieldsIn {

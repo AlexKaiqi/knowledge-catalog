@@ -10,7 +10,7 @@ schema_ref: schema/system/capability-entrypoints/v1
     {
       "action": "resource.access",
       "command": "kc access",
-      "description": "按 Schema origin 与对象 ID 读取该 Aspect 的当前观察",
+      "description": "按取值描述的 origin 与对象 ID 读取该 Aspect 的当前观察",
       "help": "kc help access"
     },
     {

@@ -117,10 +117,21 @@ func TestIngestFrontmatterYAMLPayload(t *testing.T) {
 	}
 }
 
-func TestIngestSchemaOriginFrontmatter(t *testing.T) {
+func TestIngestRejectsSchemaOriginFrontmatter(t *testing.T) {
 	dir := testkit.TempDir(t)
 	body := "---\nobject_id: schema/table.stats\norigin: http://127.0.0.1:7390\n---\nentity: Table\naspect: stats\npattern: record\nfields:\n  rowCount:\n    type: number\n    access: [filter]\n"
 	if err := os.WriteFile(filepath.Join(dir, "table.stats.aspect.yaml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writer.Ingest(dir, "kr://dw/physical", "P0"); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
+		t.Fatalf("Schema origin frontmatter must be rejected: %v", err)
+	}
+}
+
+func TestIngestBindingUnitDeclaresDescriptorRef(t *testing.T) {
+	dir := testkit.TempDir(t)
+	body := "---\nobject_id: table/orders\naspect_name: stats\nschema_ref: schema/table.stats\nvalueSource:\n  kind: binding\n  binding:\n    descriptorRef: resource/shop-stats\n---\n"
+	if err := os.WriteFile(filepath.Join(dir, "orders.stats.yaml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	preview, err := writer.Ingest(dir, "kr://dw/physical", "P0")
@@ -130,16 +141,13 @@ func TestIngestSchemaOriginFrontmatter(t *testing.T) {
 	if len(preview.ChangeSet.Operations) != 1 {
 		t.Fatalf("%#v", preview.ChangeSet.Operations)
 	}
-	value, ok := preview.ChangeSet.Operations[0].Value.(map[string]any)
-	if !ok || value["origin"] != "http://127.0.0.1:7390" || value["aspect"] != "stats" {
-		t.Fatalf("frontmatter origin must assemble onto the Schema value: %#v", preview.ChangeSet.Operations[0].Value)
-	}
-	if preview.ChangeSet.Operations[0].PathHint != "_schemas/table.stats.aspect.yaml" {
-		t.Fatalf("schema ingest must land under _schemas/: %#v", preview.ChangeSet.Operations[0].PathHint)
+	op := preview.ChangeSet.Operations[0]
+	if op.Value != nil || !op.ValueSource.IsBinding() || op.ValueSource.Binding.DescriptorRef != "resource/shop-stats" || op.Address.AspectName != "stats" {
+		t.Fatalf("binding unit ingest %#v", op)
 	}
 }
 
-func TestIngestRejectsInstanceBinding(t *testing.T) {
+func TestIngestRejectsRetiredValueSourceHeader(t *testing.T) {
 	dir := testkit.TempDir(t)
 	body := "---\nobject_id: table/orders\naspect_name: profile\nschema_ref: schema/table.profile\nvalue_source: {\"kind\":\"binding\",\"binding\":{\"mode\":\"state\",\"descriptorRef\":\"resource/mysql\"}}\n---\nnull\n"
 	if err := os.WriteFile(filepath.Join(dir, "profile.yaml"), []byte(body), 0o644); err != nil {
@@ -147,7 +155,7 @@ func TestIngestRejectsInstanceBinding(t *testing.T) {
 	}
 	_, err := writer.Ingest(dir, "kr://dw/physical", "P0")
 	if kernel.CodeOf(err) != kernel.ErrUsageInvalid {
-		t.Fatalf("instance Binding must be rejected: %v", err)
+		t.Fatalf("retired value_source header must be rejected: %v", err)
 	}
 }
 

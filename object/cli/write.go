@@ -29,7 +29,7 @@ func ReceiptWaitBudget() time.Duration {
 func (e *executor) write(ctx context.Context, path string, flags map[string]any, options client.RequestOptions) (any, error) {
 	var value any
 	var err error
-	if path == "writer put" {
+	if path == "writer put" && !bindingWithoutValue(flags) {
 		value, err = jsonValue(flags)
 		if err != nil {
 			return nil, err
@@ -46,6 +46,11 @@ func (e *executor) write(ctx context.Context, path string, flags map[string]any,
 	}
 	request := client.MaintenanceRequest{Reference: reference, Repository: flagString(flags, "repo"), CommandID: flagString(flags, "command-id"), Ref: flagString(flags, "ref"), Base: flagString(flags, "base"), Expected: flagString(flags, "expected"), Value: value, Kind: flagString(flags, "kind"), SchemaRef: flagString(flags, "schema-ref"), PathHint: flagString(flags, "path-hint"), IfAbsent: flagBool(flags, "if-absent"), IfDigest: flagString(flags, "if-digest"), Message: flagString(flags, "message"), Provenance: provenance(flags), ValueSource: source}
 	return client.MaintainWithReceiptRecovery(ctx, e.client, path == "writer remove", request, options, wait)
+}
+
+// bindingWithoutValue reports a binding unit declaration: it carries a value source and no value.
+func bindingWithoutValue(flags map[string]any) bool {
+	return flagString(flags, "value-source") != "" && flagString(flags, "value") == "" && flagString(flags, "file") == ""
 }
 
 func valueSource(flags map[string]any) (*objectmodel.ValueSource, error) {

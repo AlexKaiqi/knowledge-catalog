@@ -23,7 +23,7 @@ import (
 //
 // A normal schema_ref never resolves through another Repository. The System
 // Meta Schema is a protocol trust root, not a cross-Repository instance ref.
-func validateSchemaRefs(target snapshot.Store, cs objectmodel.ChangeSet) error {
+func validateSchemaRefs(registry snapshot.Registry, target snapshot.Store, cs objectmodel.ChangeSet) error {
 	drafts := map[objectmodel.ObjectID]objectmodel.SchemaDefinition{}
 	removedSchemas := map[objectmodel.ObjectID]struct{}{}
 	instancePuts := false
@@ -54,6 +54,9 @@ func validateSchemaRefs(target snapshot.Store, cs objectmodel.ChangeSet) error {
 		return err
 	}
 	if err := resolver.prepareFinalUnits(cs); err != nil {
+		return err
+	}
+	if err := resolver.validateValueSources(registry, cs); err != nil {
 		return err
 	}
 
@@ -96,9 +99,13 @@ func validateSchemaRefs(target snapshot.Store, cs objectmodel.ChangeSet) error {
 		if err != nil {
 			return err
 		}
-		if definition.Bound() && op.Address.Kind != objectmodel.KindMember {
-			return kernel.Fail(kernel.ErrUsageInvalid,
-				"schema %s declares Bound State; access uses the existing object identity, not an instance Aspect file", definition.ObjectID)
+		if r := resolver.final[objectmodel.AddressKey(op.Address)]; r.ValueSource.IsBinding() {
+			// A binding unit has no Snapshot body; only its Address shape is
+			// governed by the structure-only Schema.
+			if err := objectmodel.ValidateSchemaAddress(op.Address, definition); err != nil {
+				return err
+			}
+			continue
 		}
 		if err := objectmodel.ValidateSchemaInstance(op.Address, op.Value, definition); err != nil {
 			return err
@@ -160,19 +167,15 @@ func (r *schemaResolver) schemaValue(objectID objectmodel.ObjectID, commit kerne
 		}
 		return value.Value, nil
 	}
-	if !r.treeOK {
-		return nil, kernel.Fail(kernel.ErrSchemaRevisionUnresolved,
-			"repository %s cannot resolve schema %s", r.target.ID(), objectID)
-	}
-	units, err := readObject(r.tree, objectID, commit)
+	value, found, err := storeObjectValue(r.target, objectID, commit)
 	if err != nil {
 		return nil, err
 	}
-	if len(units) == 0 {
+	if !found {
 		return nil, kernel.Fail(kernel.ErrSchemaRevisionUnresolved,
 			"schema %s is missing at commit %s", objectID, commit)
 	}
-	return repofile.Assemble(units)
+	return value, nil
 }
 
 // effectiveSchemaRef is the schema_ref this PUT will actually be stored with.

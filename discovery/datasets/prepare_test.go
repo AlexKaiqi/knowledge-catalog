@@ -51,7 +51,7 @@ func TestDatasetPublicationRejectsAspectConflictAcrossSources(t *testing.T) {
 		Prepare: Preparation{Conflicts: func(candidate dataset.ResolvedDataset) error {
 			return reader.Open(func(id kernel.RepositoryID) (objectmodel.Repository, error) {
 				return objects.Require(id, kernel.ErrCapabilityUnsatisfied)
-			}, testkit.DatasetPin(candidate)).CheckHoldingConflicts(nil)
+			}, testkit.DatasetPin(candidate)).CheckHoldingConflicts()
 		}}.Execute}
 	_, err := publisher.Execute(context.Background(), DatasetPublication{Dataset: "orders", Revision: 2, Sources: []dataset.DatasetSource{
 		{Repository: ids[0], Selector: snapshot.DefaultRef, Path: dataset.MountPath("a")},

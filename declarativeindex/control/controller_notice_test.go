@@ -92,8 +92,8 @@ func TestProjectionControllerNoticePullsStateWithoutChangingSnapshot(t *testing.
 	if body, _ := raw.Value.(map[string]any); body["runtime"] != nil {
 		t.Fatalf("notice wrote observation into Snapshot: %#v", raw)
 	}
-	if _, err := repo.ReadAddress(address, commit); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
-		t.Fatalf("Bound State must not occupy a Snapshot unit: %#v %v", address, err)
+	if unit, err := repo.ReadAddress(address, commit); err != nil || unit.Value != nil || len(unit.Declarations) != 1 || !unit.Declarations[0].ValueSource.IsBinding() {
+		t.Fatalf("Binding unit must stay a value-less declaration in Snapshot: %#v %v", unit, err)
 	}
 	head, err := repo.Head(snapshot.DefaultRef)
 	if err != nil || head != commit {

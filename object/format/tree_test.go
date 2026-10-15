@@ -61,54 +61,40 @@ func TestObjectPathAcceptsYAML(t *testing.T) {
 	}
 }
 
-func TestSchemaOriginRoundtripsInFrontmatter(t *testing.T) {
-	address := objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/table.stats"}
-	value := map[string]any{
-		"entity": "Table", "aspect": "stats", "origin": "https://stats.example",
-		"fields": map[string]any{"rowCount": map[string]any{"type": "number"}},
-	}
-	encoded, err := Serialize(address, "_schemas/table.stats.aspect.yaml", "", nil, value)
+func TestBindingUnitRoundtripsAsHeaderOnly(t *testing.T) {
+	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/orders", AspectName: "stats"}
+	source := &objectmodel.ValueSource{Kind: objectmodel.ValueSourceBinding, Binding: &objectmodel.BindingDeclaration{DescriptorRef: "resource/shop-stats"}}
+	encoded, err := SerializeWithSource(address, "tables/orders.stats.yaml", "schema/table.stats", source, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	frontmatter, body, ok := splitCanonical(encoded)
-	if !ok {
-		t.Fatalf("encoded %#v", encoded)
-	}
-	if !strings.Contains(frontmatter, "origin: https://stats.example") {
-		t.Fatalf("origin must be Canonical frontmatter: %s", encoded)
-	}
-	if strings.Contains(body, "origin") {
-		t.Fatalf("origin must not remain in the Schema body: %s", encoded)
+	if !ok || !strings.Contains(frontmatter, `valueSource: {"kind":"binding","binding":{"descriptorRef":"resource/shop-stats"}}`) || strings.TrimSpace(body) != "" {
+		t.Fatalf("binding unit must be a header-only unit: %q", encoded)
 	}
 	unit := Parse(encoded)
-	if unit == nil {
-		t.Fatal("parse returned nil")
-	}
-	if err := unit.DeclarationError(); err != nil {
-		t.Fatal(err)
-	}
-	got, ok := unit.Value.(map[string]any)
-	if !ok || got["origin"] != "https://stats.example" || got["entity"] != "Table" {
-		t.Fatalf("assembled value %#v", unit.Value)
+	if unit == nil || unit.DeclarationError() != nil || unit.Value != nil || !unit.ValueSource.IsBinding() || unit.ValueSource.Binding.DescriptorRef != "resource/shop-stats" {
+		t.Fatalf("parsed %#v", unit)
 	}
 
-	walk := "---\nobject_id: schema/table.stats\norigin: http://127.0.0.1:7390\n---\nentity: Table\naspect: stats\npattern: record\nfields:\n  rowCount:\n    type: number\n"
+	walk := "---\nobject_id: table/orders\naspect_name: stats\nschema_ref: schema/table.stats\nvalueSource:\n  kind: binding\n  binding:\n    descriptorRef: resource/shop-stats\n---\n"
 	parsed := Parse(walk)
-	if parsed == nil {
-		t.Fatal("walk-style parse returned nil")
+	if parsed == nil || parsed.DeclarationError() != nil || !parsed.ValueSource.IsBinding() || parsed.ValueSource.Binding.DescriptorRef != "resource/shop-stats" {
+		t.Fatalf("YAML block valueSource %#v", parsed)
 	}
-	if err := parsed.DeclarationError(); err != nil {
-		t.Fatal(err)
-	}
-	walkValue, ok := parsed.Value.(map[string]any)
-	if !ok || walkValue["origin"] != "http://127.0.0.1:7390" || walkValue["aspect"] != "stats" {
-		t.Fatalf("walk-style value %#v", parsed.Value)
-	}
+}
 
-	instance := Parse("---\nobject_id: table/orders\naspect_name: stats\norigin: https://stats.example\n---\n{}\n")
-	if instance == nil || kernel.CodeOf(instance.DeclarationError()) != kernel.ErrUsageInvalid {
-		t.Fatalf("instance origin must fail closed: %#v %v", instance, instance.DeclarationError())
+func TestRetiredAccessHeadersFailClosed(t *testing.T) {
+	for _, content := range []string{
+		"---\nobject_id: schema/table.stats\norigin: http://127.0.0.1:7390\n---\nentity: Table\naspect: stats\npattern: record\n",
+		"---\nobject_id: table/orders\naspect_name: stats\norigin: https://stats.example\n---\n{}\n",
+		"---\nobject_id: table/orders\naspect_name: stats\nvalue_source: {\"kind\":\"binding\",\"binding\":{\"descriptorRef\":\"resource/r\"}}\n---\n",
+		"---\nobject_id: table/orders\naspect_name: stats\nvalueSource: {\"kind\":\"binding\",\"binding\":{\"mode\":\"state\"}}\n---\n",
+	} {
+		unit := Parse(content)
+		if unit == nil || kernel.CodeOf(unit.DeclarationError()) != kernel.ErrUsageInvalid {
+			t.Fatalf("retired header must fail closed: %q", content)
+		}
 	}
 }
 

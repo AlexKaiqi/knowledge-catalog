@@ -201,22 +201,22 @@ func (l *treeManifestLocator) BindingSchemaObjectIDs(commit kernel.CommitID) ([]
 			if schemaErr != nil || len(ids) == 0 {
 				return ids, schemaErr
 			}
-			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "object layout has no binding namespace coordinates; explicitly rebuild locators")
+			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "object layout has no binding unit coordinates; explicitly rebuild locators")
 		}
 		if err != nil {
 			return nil, err
 		}
-		ids, err := repofile.DecodeSchemaIndex(raw)
+		coordinates, err := repofile.DecodeBindingIndex(raw)
 		if err != nil {
-			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "invalid binding namespace coordinates at %s: %v", commit, err)
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "invalid binding unit coordinates at %s: %v", commit, err)
 		}
-		return ids, nil
+		return repofile.BindingSchemas(coordinates), nil
 	}
 	manifest, err := l.load(commit)
 	if err != nil {
 		return nil, err
 	}
-	return append([]objectmodel.ObjectID(nil), manifest.BindingSchemas...), nil
+	return repofile.BindingSchemas(manifest.Bindings), nil
 }
 
 func (l *treeManifestLocator) SchemaReferrerAddresses(schema objectmodel.ObjectID, commit kernel.CommitID) ([]objectmodel.Address, error) {
@@ -241,7 +241,7 @@ func readObjectUnitsAtPaths(store snapshot.TreeReader, repository kernel.Reposit
 			return nil, err
 		}
 	}
-	return classifyMemberSources(store, repository, commit, tree.ObjectUnits(objectID))
+	return tree.ObjectUnits(objectID), nil
 }
 
 func (r *treeRepository) objectUnits(objectID objectmodel.ObjectID, commit kernel.CommitID) ([]repofile.Unit, error) {

@@ -1,0 +1,14 @@
+---
+object_id: resource/shop-stats
+---
+kind: ResourceDescriptor
+name: Qinghe shop table statistics
+description: Look up live row-count statistics for one Table in the Qinghe shop MySQL database.
+origin: http://resource-access:7390
+mode: state
+runtime: mysql-shop
+protocol: resource-access/v1
+access:
+  lookup:
+    call: lookup
+    description: 'Return {table, rowCount} for the Table entity named by the binding unit.'

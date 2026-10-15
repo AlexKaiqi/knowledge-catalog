@@ -183,8 +183,10 @@ func ApplyUnits(existing []Unit, operations []Operation, provenance *ProvenanceE
 		if pathHint == "" && exists {
 			pathHint = current.PathHint
 		}
+		// A PUT carrying a value publishes a Snapshot unit; only a value-less
+		// PUT keeps the existing binding declaration.
 		source := operation.ValueSource
-		if source == nil && exists {
+		if source == nil && exists && operation.Value == nil {
 			source = current.ValueSource
 		} else {
 			source = source.Normalized()

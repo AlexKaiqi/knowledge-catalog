@@ -2,6 +2,7 @@ package format
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -14,15 +15,7 @@ func Serialize(address objectmodel.Address, pathHint, schemaRef string, provenan
 }
 
 func SerializeWithSource(address objectmodel.Address, pathHint, schemaRef string, source *objectmodel.ValueSource, provenance *objectmodel.ProvenanceEnvelope, value any) (string, error) {
-	origin := ""
 	bodyValue := value
-	if objectmodel.IsSchemaObject(address.ObjectID) {
-		var err error
-		origin, bodyValue, err = objectmodel.SplitSchemaOrigin(value)
-		if err != nil {
-			return "", kernel.Fail(kernel.ErrUsageInvalid, "%s", err)
-		}
-	}
 	markdown, markdownBody := markdownAspectBody(address, pathHint, schemaRef, bodyValue)
 	var fm []string
 	if markdown {
@@ -48,15 +41,12 @@ func SerializeWithSource(address objectmodel.Address, pathHint, schemaRef string
 	if schemaRef != "" {
 		fm = append(fm, "schema_ref: "+schemaRef)
 	}
-	if origin != "" {
-		fm = append(fm, "origin: "+origin)
-	}
 	if source = source.Normalized(); source != nil {
 		b, err := json.Marshal(source)
 		if err != nil {
 			return "", err
 		}
-		fm = append(fm, "value_source: "+string(b))
+		fm = append(fm, "valueSource: "+string(b))
 	}
 	if provenance != nil {
 		b, err := json.Marshal(provenance)
@@ -67,6 +57,9 @@ func SerializeWithSource(address objectmodel.Address, pathHint, schemaRef string
 	}
 	if markdown {
 		return "---\n" + strings.Join(fm, "\n") + "\n---\n" + markdownBody + "\n", nil
+	}
+	if source != nil && bodyValue == nil {
+		return "---\n" + strings.Join(fm, "\n") + "\n---\n", nil
 	}
 	body, err := json.MarshalIndent(bodyValue, "", "  ")
 	if err != nil {
@@ -115,9 +108,11 @@ func Parse(content string) *Unit {
 	obj := map[string]string{}
 	var provenance *objectmodel.ProvenanceEnvelope
 	var valueSource *objectmodel.ValueSource
-	for _, line := range lines[1:endIdx] {
+	header := lines[1:endIdx]
+	for i := 0; i < len(header); i++ {
+		line := header[i]
 		idx := strings.Index(line, ":")
-		if idx < 0 {
+		if idx < 0 || strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") {
 			continue
 		}
 		key := strings.TrimSpace(line[:idx])
@@ -129,17 +124,17 @@ func Parse(content string) *Unit {
 			}
 			continue
 		}
-		if key == "value_source" && value != "" {
-			var source objectmodel.ValueSource
-			if err := json.Unmarshal([]byte(value), &source); err != nil {
-				valueSource = nil
-				obj["value_source_error"] = "value_source must be valid JSON"
-			} else if err := objectmodel.ValidateValueSource(&source); err != nil {
+		if key == "valueSource" {
+			block := []string{line}
+			for i+1 < len(header) && (strings.HasPrefix(header[i+1], " ") || strings.HasPrefix(header[i+1], "\t")) {
+				i++
+				block = append(block, header[i])
+			}
+			source, err := decodeFrontMatterValueSource(strings.Join(block, "\n"))
+			if err != nil {
 				obj["value_source_error"] = err.Error()
 			} else {
-				// Historical Canonical files may still carry an instance Binding.
-				// Writer rejects new PUTs; Parse must still read the tree so REMOVE can migrate them.
-				valueSource = source.Normalized()
+				valueSource = source
 			}
 			continue
 		}
@@ -159,7 +154,9 @@ func Parse(content string) *Unit {
 	body := strings.TrimSpace(strings.Join(lines[endIdx+1:], "\n"))
 	schemaRef := obj["schema_ref"]
 	var value any
-	if objectmodel.IsReadmeSchema(schemaRef) || (obj["entity"] != "" && strings.HasSuffix(strings.ToLower(obj["path_hint"]), ".md")) {
+	if valueSource != nil && body == "" {
+		// An external unit's header is its whole content.
+	} else if objectmodel.IsReadmeSchema(schemaRef) || (obj["entity"] != "" && strings.HasSuffix(strings.ToLower(obj["path_hint"]), ".md")) {
 		value = map[string]any{"body": body}
 	} else if kernel.UnmarshalJSON([]byte(body), &value) != nil && looksLikeStructuredYAML(body) {
 		// Object drafts are commonly authored as YAML. Decode the
@@ -178,22 +175,37 @@ func Parse(content string) *Unit {
 		PathHint: obj["path_hint"], SchemaRef: schemaRef, ValueSource: valueSource,
 		Provenance: provenance, Value: value,
 	}
-	if origin := strings.TrimSpace(obj["origin"]); origin != "" {
-		if !objectmodel.IsSchemaObject(objectmodel.ObjectID(objectID)) {
-			unit.declarationErr = kernel.Fail(kernel.ErrUsageInvalid, "origin is only valid on schema/* documents")
-		} else {
-			attached, err := objectmodel.AttachSchemaOrigin(value, origin)
-			if err != nil {
-				unit.declarationErr = kernel.Fail(kernel.ErrUsageInvalid, "%s", err)
-			} else {
-				unit.Value = attached
-			}
-		}
+	if _, declared := obj["origin"]; declared {
+		unit.declarationErr = kernel.Fail(kernel.ErrUsageInvalid, "origin is not a unit header; it belongs to a ResourceDescriptor referenced by valueSource")
+	}
+	if _, declared := obj["value_source"]; declared {
+		unit.declarationErr = kernel.Fail(kernel.ErrUsageInvalid, "value_source is retired; declare valueSource: {kind: binding, binding: {descriptorRef: <id>}}")
 	}
 	if message := obj["value_source_error"]; message != "" {
 		unit.declarationErr = kernel.Fail(kernel.ErrUsageInvalid, "%s", message)
 	}
 	return unit
+}
+
+// decodeFrontMatterValueSource reads `valueSource:` written either as one
+// JSON/flow line or as a nested YAML block, then applies the strict JSON shape.
+func decodeFrontMatterValueSource(block string) (*objectmodel.ValueSource, error) {
+	var header map[string]any
+	if err := yaml.Unmarshal([]byte(block), &header); err != nil {
+		return nil, fmt.Errorf("valueSource must be a YAML or JSON mapping")
+	}
+	raw, err := json.Marshal(header["valueSource"])
+	if err != nil {
+		return nil, fmt.Errorf("valueSource must be a mapping")
+	}
+	var source objectmodel.ValueSource
+	if err := json.Unmarshal(raw, &source); err != nil {
+		return nil, err
+	}
+	if err := objectmodel.ValidateValueSource(&source); err != nil {
+		return nil, err
+	}
+	return source.Normalized(), nil
 }
 
 func looksLikeStructuredYAML(body string) bool {

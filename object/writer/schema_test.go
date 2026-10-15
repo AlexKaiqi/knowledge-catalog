@@ -50,9 +50,9 @@ func strictPolicySchema() map[string]any {
 	}
 }
 
-func TestWriterRejectsInstancePutAgainstBoundSchema(t *testing.T) {
+func TestWriterRejectsSchemaOrigin(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	_, err := s.Writer.Commit("bound-instance", objectmodel.CommitChangeSet{
+	_, err := s.Writer.Commit("schema-origin", objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: []objectmodel.Operation{
@@ -60,13 +60,11 @@ func TestWriterRejectsInstancePutAgainstBoundSchema(t *testing.T) {
 				"entity": "Table", "aspect": "stats", "origin": "https://stats.example",
 				"fields": map[string]any{"rowCount": map[string]any{"type": "number"}},
 			}},
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/orders", AspectName: "stats"},
-				SchemaRef: "schema/table.stats", Value: map[string]any{"rowCount": 1}},
 		},
 	})
-	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
+	testkit.ExpectCode(t, err, kernel.ErrSchemaUnsupported)
 	if got := testkit.MustHead(t, s.Repo, snapshot.DefaultRef); got != s.RootCommitID {
-		t.Fatalf("bound instance moved HEAD to %s", got)
+		t.Fatalf("schema origin moved HEAD to %s", got)
 	}
 }
 

@@ -13,8 +13,8 @@ import (
 	retrieval "kc/discovery"
 
 	indeximplementation "kc/declarativeindex/projection"
+	"kc/internal/bindingfixture"
 	"kc/internal/testkit"
-	"kc/kernel"
 	serving "kc/liveaccess"
 	objectmodel "kc/object"
 	"kc/observability"
@@ -67,11 +67,13 @@ func TestLiveHTTPRuntimeBuildsOpenSearchStateProjection(t *testing.T) {
 		BaseCommit: setup.RootCommitID, ExpectedTargetCommit: setup.RootCommitID,
 		Operations: []objectmodel.Operation{
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/service.health"}, Value: map[string]any{
-				"entity": "Service", "aspect": "health", "origin": origin, "fields": map[string]any{
+				"entity": "Service", "aspect": "health", "fields": map[string]any{
 					"status": map[string]any{"type": "string", "access": []any{"text", "filter"}},
 				},
 			}},
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: address.ObjectID, AspectName: "properties"}, Value: map[string]any{"name": "orders"}},
+			bindingfixture.PutDescriptor("resource/health", bindingfixture.Descriptor(origin)),
+			bindingfixture.Bind(address, "schema/service.health", "resource/health"),
 		},
 	})
 	if err != nil {
@@ -99,8 +101,8 @@ func TestLiveHTTPRuntimeBuildsOpenSearchStateProjection(t *testing.T) {
 	if body, _ := raw.Value.(map[string]any); body["health"] != nil {
 		t.Fatalf("runtime observation leaked into Snapshot: %#v", raw)
 	}
-	if _, err := setup.Repo.ReadAddress(address, commit); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
-		t.Fatalf("Bound State must not occupy a Snapshot unit: %#v %v", address, err)
+	if unit, err := setup.Repo.ReadAddress(address, commit); err != nil || unit.Value != nil || len(unit.Declarations) != 1 || !unit.Declarations[0].ValueSource.IsBinding() {
+		t.Fatalf("binding unit must stay a value-free declaration: %#v %v", unit, err)
 	}
 	if head, err := setup.Repo.Head(snapshot.DefaultRef); err != nil || head != commit {
 		t.Fatalf("dynamic refresh moved Repository HEAD: %s %v", head, err)

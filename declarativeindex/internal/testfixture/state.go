@@ -6,6 +6,7 @@ import (
 	"context"
 	retrieval "kc/discovery"
 	ports "kc/discovery/projection"
+	"kc/internal/bindingfixture"
 	"kc/internal/testkit"
 	"kc/kernel"
 	objectserving "kc/liveaccess"
@@ -101,6 +102,9 @@ func (s *StateLookup) LookupState(context.Context, objectserving.StateLookupRequ
 	return objectserving.StateObservation{Value: s.Value, Basis: s.Basis}, nil
 }
 
+// StateDescriptor is the ResourceDescriptor the StateProjection runtime unit binds.
+const StateDescriptor objectmodel.ObjectID = "resource/scheduler"
+
 func StateProjection(t *testing.T) (objectmodel.Repository, kernel.CommitID, objectmodel.Address) {
 	t.Helper()
 	setup := testkit.NewSetup(t, "")
@@ -113,12 +117,14 @@ func StateProjection(t *testing.T) (objectmodel.Repository, kernel.CommitID, obj
 				"entity": "Job", "aspect": "definition", "fields": map[string]any{"owner": map[string]any{"type": "string", "access": []any{"filter"}}},
 			}},
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.runtime"}, Value: map[string]any{
-				"entity": "Job", "aspect": "runtime", "origin": "https://scheduler.example", "fields": map[string]any{
+				"entity": "Job", "aspect": "runtime", "fields": map[string]any{
 					"status": map[string]any{"type": "string", "access": []any{"text", "filter"}},
 					"owner":  map[string]any{"type": "string", "access": []any{"filter"}},
 				},
 			}},
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: address.ObjectID, AspectName: "definition"}, Value: map[string]any{"owner": "data"}, SchemaRef: "schema/job.definition"},
+			bindingfixture.PutDescriptor(StateDescriptor, bindingfixture.Descriptor("https://scheduler.example")),
+			bindingfixture.Bind(address, "schema/job.runtime", StateDescriptor),
 		},
 	})
 	if err != nil {

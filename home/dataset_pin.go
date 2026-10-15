@@ -23,8 +23,8 @@ func DatasetPin(resolved dataset.ResolvedDataset) reader.DatasetPin {
 // publicationConflicts is the Dataset publication object-identity check: it
 // reads a frozen candidate as a pin and rejects one Aspect of one object taken
 // from two source Repositories. bound adds Schema-bound Aspects.
-func publicationConflicts(lookup func(kernel.RepositoryID) (objectmodel.Repository, error), bound reader.BoundUnits) func(dataset.ResolvedDataset) error {
+func publicationConflicts(lookup func(kernel.RepositoryID) (objectmodel.Repository, error)) func(dataset.ResolvedDataset) error {
 	return func(candidate dataset.ResolvedDataset) error {
-		return reader.Open(reader.MemberLookup(lookup), DatasetPin(candidate)).CheckHoldingConflicts(bound)
+		return reader.Open(reader.MemberLookup(lookup), DatasetPin(candidate)).CheckHoldingConflicts()
 	}
 }

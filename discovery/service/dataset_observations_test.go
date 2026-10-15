@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	retrieval "kc/discovery"
+	"kc/internal/bindingfixture"
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/liveaccess"
@@ -32,7 +33,7 @@ func TestDatasetStatePlanningUsesPublishedSchemaScope(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	at, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID, Operations: []objectmodel.Operation{
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/public"}, PathHint: "public/schema.yaml", Value: map[string]any{"entity": "Public", "fields": map[string]any{"status": map[string]any{"type": "string", "access": []any{"filter"}}}}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/private"}, PathHint: "private/schema.yaml", Value: map[string]any{"entity": "Private", "aspect": "runtime", "origin": "https://scheduler.example", "fields": map[string]any{"secret": map[string]any{"type": "string", "access": []any{"filter"}}}}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/private"}, PathHint: "private/schema.yaml", Value: map[string]any{"entity": "Private", "aspect": "runtime", "fields": map[string]any{"secret": map[string]any{"type": "string", "access": []any{"filter"}}}}},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -52,18 +53,20 @@ func TestDatasetStatePlanningUsesPublishedSchemaScope(t *testing.T) {
 func TestDatasetStateObservationRequiresPublishedDeclaration(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	commit, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID, Operations: []objectmodel.Operation{
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "job/one"}, PathHint: "public/job.yaml", Value: map[string]any{"name": "one"}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/runtime"}, PathHint: "private/runtime.yaml", Value: map[string]any{"entity": "Job", "aspect": "runtime", "origin": "https://scheduler.example", "fields": map[string]any{"status": map[string]any{"type": "string", "access": []any{"filter"}}}}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/one", AspectName: "definition"}, PathHint: "public/job.yaml", Value: map[string]any{"name": "one"}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/runtime"}, PathHint: "public/schema.yaml", Value: map[string]any{"entity": "Job", "aspect": "runtime", "fields": map[string]any{"status": map[string]any{"type": "string", "access": []any{"filter"}}}}},
+		bindingfixture.WithPath(bindingfixture.PutDescriptor("resource/scheduler", bindingfixture.Descriptor("https://scheduler.example")), "public/descriptor.yaml"),
+		bindingfixture.WithPath(bindingfixture.PutAspect("job/one", "runtime", "schema/runtime", "resource/scheduler"), "private/runtime.yaml"),
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/one", AspectName: "runtime"}
-	binding, err := liveaccess.ResolveRepoBinding(s.Repo, commit, address)
+	binding, err := liveaccess.ResolveRepoBinding(s.Repo, commit, address, liveaccess.RepositoryDescriptors(s.Repo, commit))
 	if err != nil {
 		t.Fatal(err)
 	}
-	hit := retrieval.ObjectHit{Object: objectmodel.ObjectValue{Repository: s.RepositoryID, ObjectRef: objectmodel.ObjectRef{Repository: s.RepositoryID, Object: address.ObjectID}}, Version: retrieval.ObjectVersion{Observations: []objectmodel.UnitObservation{{Address: address, DeclarationCommit: commit, DeclarationDigest: binding.DeclarationDigest}}}}
+	hit := retrieval.ObjectHit{Object: objectmodel.ObjectValue{Repository: s.RepositoryID, ObjectRef: objectmodel.ObjectRef{Repository: s.RepositoryID, Object: address.ObjectID}}, Version: retrieval.ObjectVersion{Observations: []objectmodel.UnitObservation{{Address: address, DeclarationCommit: commit, DeclarationDigest: binding.DeclarationDigest, DescriptorDigest: binding.DescriptorDigest}}}}
 	lookup := func(kernel.RepositoryID) (objectmodel.Repository, error) { return s.Repo.Repository, nil }
 	pin := reader.DatasetPin{Repositories: map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit}, Items: []reader.DatasetItem{{Repository: s.RepositoryID, Commit: commit, Kind: "prefix", Prefix: "public"}}}
 	if err := validateDatasetObservations(reader.Open(lookup, pin), hit); err == nil {

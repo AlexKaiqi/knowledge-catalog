@@ -36,7 +36,7 @@ type HTTPServerOptions struct {
 	// adoption authority. The standard entry may use StateLookup as its adapter.
 	LiveAccessPlugins map[string]liveservice.PluginEntry
 	// LiveAccessCredentialOrigins is the deployment's trusted proof audience
-	// set. Object Schema origin and redirects cannot extend this set.
+	// set. Descriptor origins and redirects cannot extend this set.
 	LiveAccessCredentialOrigins []string
 	// Embedder is an optional request-time query-vector provider for semantic
 	// recall. Nil keeps semantic recall fail-closed (CAPABILITY_UNSATISFIED).

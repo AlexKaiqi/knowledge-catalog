@@ -48,12 +48,14 @@ Feature: qinghe-object-published
       | value.relationType | produces |
     When I run `kc binding show --repo table-meta --object table/shop.orders --aspect stats`
     Then the output has:
-      | mode   | state |
-      | origin | http://resource-access:7390 |
+      | mode          | state |
+      | origin        | http://resource-access:7390 |
+      | descriptorRef | resource/shop-stats |
     When I run `kc binding show --repo table-meta --object table/shop.customers --aspect stats`
     Then the output has:
-      | mode   | state |
-      | origin | http://resource-access:7390 |
+      | mode          | state |
+      | origin        | http://resource-access:7390 |
+      | descriptorRef | resource/shop-stats |
     When I run `kc access --repo table-meta --object table/shop.orders --aspect stats`
     Then the output has:
       | objectId       | table/shop.orders |

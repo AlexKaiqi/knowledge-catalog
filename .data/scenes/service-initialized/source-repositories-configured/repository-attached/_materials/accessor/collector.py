@@ -20,6 +20,7 @@ import source
 
 REPOSITORY = os.environ.get("KC_REPOSITORY", "kr://scene/object")
 PLATFORM_REF = "platform/mysql"
+STATS_DESCRIPTOR = os.environ.get("KC_STATS_DESCRIPTOR", "resource/shop-stats")
 
 
 def captured_at() -> str:
@@ -37,8 +38,8 @@ def json_source_units(current: dict[str, Any]) -> list[dict[str, Any]]:
     return units
 
 
-def canonical_file(object_id: str, aspect: str, schema_ref: str, value: Any, kind: str = "Aspect") -> str:
-    body = json.dumps(value, indent=2, ensure_ascii=False)
+def canonical_file(object_id: str, aspect: str, schema_ref: str, value: Any, kind: str = "Aspect", descriptor_ref: str = "") -> str:
+    body = "" if descriptor_ref else json.dumps(value, indent=2, ensure_ascii=False)
     header = [
         "---",
         f"object_id: {object_id}",
@@ -48,6 +49,11 @@ def canonical_file(object_id: str, aspect: str, schema_ref: str, value: Any, kin
     header.extend([
         f"kind: {kind}",
         f"schema_ref: {schema_ref}",
+    ])
+    if descriptor_ref:
+        # A binding unit names its ResourceDescriptor and carries no Snapshot value.
+        header.append("valueSource: {kind: binding, binding: {descriptorRef: " + descriptor_ref + "}}")
+    header.extend([
         "---",
         body,
         "",
@@ -85,6 +91,14 @@ def catalog_units(catalog: shop.登记空间) -> list[dict[str, Any]]:
                     f"column/{db}.{table.name}.{column}" for column in table.primary_keys
                 ],
             },
+        })
+        units.append({
+            "object_id": table.object_id,
+            "aspect": "stats",
+            "schema_ref": "schema/table.stats",
+            "path": f"tables/{table.name}.stats.yaml",
+            "descriptor_ref": STATS_DESCRIPTOR,
+            "value": None,
         })
         for column in table.columns:
             object_id = f"column/{db}.{table.name}.{column.name}"
@@ -203,7 +217,8 @@ def write_catalog(units: list[dict[str, Any]], revision: str) -> None:
                 os.makedirs(os.path.dirname(path), exist_ok=True)
                 with open(path, "w", encoding="utf-8") as handle:
                     handle.write(canonical_file(
-                        unit["object_id"], unit["aspect"], unit["schema_ref"], unit["value"]
+                        unit["object_id"], unit["aspect"], unit["schema_ref"], unit["value"],
+                        descriptor_ref=unit.get("descriptor_ref", ""),
                     ))
             completed = kc_command(
                 "writer", "commit",

@@ -1,6 +1,8 @@
 package object
 
 import (
+	"bytes"
+	"encoding/json"
 	"strings"
 
 	"kc/kernel"
@@ -13,6 +15,7 @@ const (
 	ValueSourceBinding  ValueSourceKind = "binding"
 )
 
+// BindingMode is declared by a ResourceDescriptor, never by a unit.
 type BindingMode string
 
 const (
@@ -22,21 +25,35 @@ const (
 	ProtocolResourceAccessV1 = "resource-access/v1"
 )
 
+// BindingOperation is one call a ResourceDescriptor declares.
 type BindingOperation struct {
 	Call string `json:"call"`
 }
 
+// BindingDeclaration names the ResourceDescriptor that supplies a unit's
+// value. How the external system is accessed lives only in that descriptor.
 type BindingDeclaration struct {
-	Mode          BindingMode                 `json:"mode"`
-	Runtime       string                      `json:"runtime,omitempty"`
-	Protocol      string                      `json:"protocol,omitempty"`
-	Operations    map[string]BindingOperation `json:"operations,omitempty"`
-	DescriptorRef ObjectID                    `json:"descriptorRef,omitempty"`
+	DescriptorRef ObjectID `json:"descriptorRef"`
 }
 
+// ValueSource is declared on an Aspect or Member unit. It is decoded strictly:
+// an inline access description is a different (retired) shape and rejected.
 type ValueSource struct {
 	Kind    ValueSourceKind     `json:"kind"`
 	Binding *BindingDeclaration `json:"binding,omitempty"`
+}
+
+func (s *ValueSource) UnmarshalJSON(raw []byte) error {
+	type plain ValueSource
+	var decoded plain
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&decoded); err != nil {
+		return kernel.Fail(kernel.ErrUsageInvalid,
+			"valueSource accepts only {kind, binding: {descriptorRef}}; access is described by a ResourceDescriptor: %v", err)
+	}
+	*s = ValueSource(decoded)
+	return nil
 }
 
 func (s *ValueSource) Normalized() *ValueSource {
@@ -46,37 +63,29 @@ func (s *ValueSource) Normalized() *ValueSource {
 	return s
 }
 
+// IsBinding reports whether the unit's value comes from a ResourceDescriptor.
+func (s *ValueSource) IsBinding() bool {
+	return s != nil && s.Kind == ValueSourceBinding && s.Binding != nil
+}
+
 func ValidateValueSource(source *ValueSource) error {
 	if source == nil || source.Kind == "" || source.Kind == ValueSourceSnapshot {
 		if source != nil && source.Binding != nil {
-			return kernel.Fail(kernel.ErrUsageInvalid, "snapshot value_source cannot contain binding")
+			return kernel.Fail(kernel.ErrUsageInvalid, "snapshot valueSource cannot contain binding")
 		}
 		return nil
 	}
 	if source.Kind != ValueSourceBinding || source.Binding == nil {
-		return kernel.Fail(kernel.ErrUsageInvalid, "value_source kind must be snapshot or binding")
+		return kernel.Fail(kernel.ErrUsageInvalid, "valueSource kind must be snapshot or binding")
 	}
-	binding := source.Binding
-	if binding.Mode != BindingState && binding.Mode != BindingStream {
-		return kernel.Fail(kernel.ErrUsageInvalid, "binding mode must be state or stream")
+	ref := ObjectID(strings.TrimSpace(string(source.Binding.DescriptorRef)))
+	if ref == "" {
+		return kernel.Fail(kernel.ErrUsageInvalid, "binding requires descriptorRef naming a ResourceDescriptor")
 	}
-	ref := strings.TrimSpace(string(binding.DescriptorRef))
-	inline := strings.TrimSpace(binding.Runtime) != "" || strings.TrimSpace(binding.Protocol) != "" || len(binding.Operations) > 0
-	if ref != "" && inline {
-		return kernel.Fail(kernel.ErrUsageInvalid, "binding must use either descriptorRef or inline runtime/protocol/operations")
+	if IsSchemaObject(ref) {
+		return kernel.Fail(kernel.ErrUsageInvalid, "descriptorRef %s names a schema, not a ResourceDescriptor", ref)
 	}
-	if ref != "" {
-		return nil
-	}
-	if strings.TrimSpace(binding.Runtime) == "" || strings.TrimSpace(binding.Protocol) == "" || len(binding.Operations) == 0 {
-		return kernel.Fail(kernel.ErrUsageInvalid, "inline binding requires runtime, protocol and operations")
-	}
-	for name, operation := range binding.Operations {
-		if strings.TrimSpace(name) == "" || strings.TrimSpace(operation.Call) == "" {
-			return kernel.Fail(kernel.ErrUsageInvalid, "binding operations require non-empty names and calls")
-		}
-	}
-	return nil
+	return ValidateObjectID(ref)
 }
 
 type UnitDeclaration struct {
@@ -89,6 +98,8 @@ type UnitDeclaration struct {
 	Provenance *ProvenanceEnvelope `json:"provenance,omitempty"`
 }
 
+// DeclarationDigest versions the unit side of a declaration. LiveAccess
+// combines it with the resolved descriptor's digest.
 func DeclarationDigest(schemaRef string, source *ValueSource) kernel.Digest {
 	return kernel.CanonicalDigest(map[string]any{
 		"schemaRef":   strings.TrimSpace(schemaRef),
@@ -96,12 +107,9 @@ func DeclarationDigest(schemaRef string, source *ValueSource) kernel.Digest {
 	})
 }
 
-// BoundDeclarationDigest versions a Schema origin change even when the
-// synthesized handle (protocol/lookup) stays the same.
-func BoundDeclarationDigest(definition SchemaDefinition) kernel.Digest {
-	return kernel.CanonicalDigest(map[string]any{
-		"schemaRef":   string(definition.ObjectID),
-		"origin":      definition.Origin,
-		"valueSource": definition.BindingSource().Normalized(),
-	})
+// BindingDeclarationDigest is the declaration version of one binding unit. It
+// changes when either the unit declaration or the adopted ResourceDescriptor
+// version changes.
+func BindingDeclarationDigest(unit, descriptor kernel.Digest) kernel.Digest {
+	return kernel.CanonicalDigest(map[string]any{"unit": string(unit), "descriptor": string(descriptor)})
 }

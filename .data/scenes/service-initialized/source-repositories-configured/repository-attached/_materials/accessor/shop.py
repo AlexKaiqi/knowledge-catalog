@@ -1,8 +1,9 @@
 """Qinghe shop MySQL catalog for walk Resource Access / Collector / Observer.
 
-Bound State is schema-level: any Table entity under this database is a stats
-coordinate. Collector translates INFORMATION_SCHEMA into table-meta units.
-Observer notices stats for every live table. Protocol compose without MySQL
+Stats are declared per Table: each table's stats aspect is a binding unit that
+names resource/shop-stats. Collector translates INFORMATION_SCHEMA into
+table-meta units, including those binding units. Observer notices stats for
+every live table. Protocol compose without MySQL
 does not import this path.
 """
 

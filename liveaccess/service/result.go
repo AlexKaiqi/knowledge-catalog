@@ -18,12 +18,8 @@ type ValueFailure struct {
 }
 
 func (s *Service) adoptUnit(ctx context.Context, result *objectmodel.ObservedValue, declaration objectmodel.UnitDeclaration) error {
-	prepared, err := s.prepareMemberDeclaration(result.Repository, declaration)
-	var observation hydratedUnit
-	var dynamic bool
-	if err == nil {
-		observation, dynamic, err = s.hydrate(ctx, result.Repository, prepared)
-	}
+	prepared := declaration
+	observation, dynamic, err := s.hydrate(ctx, result.Repository, prepared)
 	if !dynamic && err == nil {
 		return nil
 	}
@@ -56,41 +52,6 @@ func (s *Service) adoptUnit(ctx context.Context, result *objectmodel.ObservedVal
 	result.Declarations = declarations
 	result.Digest = ""
 	return evidence.Capture(ctx, sample)
-}
-
-// A Member's actual adopted Schema is the access declaration. Writer keeps its
-// fixed object value, while logical consumption adopts the external value.
-func (s *Service) prepareMemberDeclaration(repository kernel.RepositoryID, declaration objectmodel.UnitDeclaration) (objectmodel.UnitDeclaration, error) {
-	if declaration.Address.Kind != objectmodel.KindMember || declaration.SchemaRef == "" ||
-		declaration.ValueSource == nil || declaration.ValueSource.Kind != objectmodel.ValueSourceBinding {
-		return declaration, nil
-	}
-	ref, ok := objectmodel.ParseSchemaRef(declaration.SchemaRef)
-	if !ok || ref.Repository != "" && ref.Repository != repository {
-		return declaration, kernel.Fail(kernel.ErrSchemaRevisionUnresolved, "Member has no valid adopted Schema")
-	}
-	repo, err := s.interpretationRepository(repository)
-	if err != nil {
-		return declaration, err
-	}
-	at := ref.Commit
-	if at == "" {
-		at = s.declarations.Pin().Repositories[repository]
-	}
-	value, err := repo.Read(ref.Object, at)
-	if err != nil {
-		return declaration, err
-	}
-	schema, err := objectmodel.ParseSchemaDefinition(ref.Object, value.Value)
-	if err != nil {
-		return declaration, err
-	}
-	if !schema.Bound() {
-		return declaration, kernel.Fail(kernel.ErrPreconditionFailed, "fixed Binding namespace does not match the adopted Member Schema")
-	}
-	declaration.ValueSource = schema.BindingSource()
-	declaration.DeclarationDigest = objectmodel.BoundDeclarationDigest(schema)
-	return declaration, nil
 }
 
 func unitPointerTokens(address objectmodel.Address) []string {

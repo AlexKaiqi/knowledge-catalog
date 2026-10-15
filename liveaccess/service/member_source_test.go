@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"kc/internal/bindingfixture"
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/liveaccess/evidence"
@@ -32,13 +33,19 @@ func (g *memberPrivateSchemaGuard) ReadFile(path string, commit kernel.CommitID)
 func memberSourceOperations(bound bool) []objectmodel.Operation {
 	schema := map[string]any{"entity": "Widget", "aspect": "readings", "pattern": "keyed_collection",
 		"fields": map[string]any{"value": map[string]any{"type": "number"}}}
-	if bound {
-		schema["origin"] = "https://source.example"
-	}
-	return []objectmodel.Operation{
+	address := objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: "widget/selected", AspectName: "readings", MemberKey: "good"}
+	member := objectmodel.Operation{Op: objectmodel.OpPut, Address: address, SchemaRef: "schema/widget.readings", PathHint: "public/member.yaml", Value: map[string]any{"value": float64(31)}}
+	operations := []objectmodel.Operation{
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/widget.readings"}, PathHint: "private/schema.yaml", Value: schema},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: "widget/selected", AspectName: "readings", MemberKey: "good"}, SchemaRef: "schema/widget.readings", PathHint: "public/member.yaml", Value: map[string]any{"value": float64(31)}},
 	}
+	if bound {
+		descriptor := bindingfixture.PutDescriptor(widgetDescriptor, bindingfixture.Descriptor("https://source.example"))
+		descriptor.PathHint = "private/descriptor.yaml"
+		member = bindingfixture.Bind(address, "schema/widget.readings", widgetDescriptor)
+		member.PathHint = "public/member.yaml"
+		operations = append(operations, descriptor)
+	}
+	return append(operations, member)
 }
 
 func selectedMemberScope(repo objectmodel.Repository, commit kernel.CommitID) *reader.Serving {
@@ -115,7 +122,7 @@ func (n *nativeMemberSourceFixture) ReadAddress(address objectmodel.Address, com
 func (n *nativeMemberSourceFixture) declare(value objectmodel.ObjectValue) objectmodel.ObjectValue {
 	if n.bound {
 		for i := range value.Declarations {
-			value.Declarations[i].ValueSource = (&objectmodel.SchemaDefinition{Aspect: "readings", Origin: "https://source.example"}).BindingSource()
+			value.Declarations[i].ValueSource = bindingfixture.Source(widgetDescriptor)
 			value.Declarations[i].DeclarationDigest = objectmodel.DeclarationDigest(value.Declarations[i].SchemaRef, value.Declarations[i].ValueSource)
 		}
 	}

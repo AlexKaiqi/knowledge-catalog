@@ -58,7 +58,7 @@ func TestIndexControlHeadFailureDoesNotAcknowledgeUnfinishedStateNotice(t *testi
 				t.Fatal("HEAD-only fault removed fixed Schema adoption metadata")
 			}
 			refs, err := adoptions.AdoptedSchemaRefs(address.ObjectID, at)
-			if err != nil || !reflect.DeepEqual(refs, []string{"schema/job.definition"}) {
+			if err != nil || !reflect.DeepEqual(refs, []string{"schema/job.definition", "schema/job.runtime"}) {
 				t.Fatalf("HEAD-only fault changed actual fixed adoption references: %#v %v", refs, err)
 			}
 			beforeCalls := len(lookup.requests)

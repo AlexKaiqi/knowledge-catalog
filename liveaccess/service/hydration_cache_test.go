@@ -29,8 +29,13 @@ func TestHotSnapshotCacheKeepsStateObservationsFreshAndDeclarationsUnchanged(t *
 			if err != nil || len(original) != 1 || original[0].Commit != commit {
 				t.Fatalf("warm declaration: %+v %v", original, err)
 			}
+			// The binding unit's ResourceDescriptor is fixed declaration content
+			// too: warm it so only State lookups remain dynamic.
+			if _, err := base.Read("resource/scheduler", nil); err != nil {
+				t.Fatal(err)
+			}
 			warm := cache.Stats()
-			if warm.Entries != 1 || warm.SourceReads != 1 {
+			if warm.Entries != 2 || warm.SourceReads != 2 {
 				t.Fatalf("declaration was not retained: %+v", warm)
 			}
 			identity := observability.IdentityContext{Principal: "agent", OnBehalfOf: "alice"}
@@ -93,7 +98,8 @@ func TestHotSnapshotCacheKeepsStateObservationsFreshAndDeclarationsUnchanged(t *
 			if after.SourceReads != warm.SourceReads {
 				t.Fatalf("dynamic hydration caused extra Snapshot source reads: before=%+v after=%+v", warm, after)
 			}
-			if shape == "object" && after.Hits != warm.Hits+4 {
+			// Per round: logical object read, its descriptor, and the raw re-read.
+			if shape == "object" && after.Hits != warm.Hits+6 {
 				t.Fatalf("test did not exercise retained Snapshot bodies on every read: before=%+v after=%+v", warm, after)
 			}
 		})

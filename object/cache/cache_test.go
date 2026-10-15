@@ -134,14 +134,14 @@ func TestCacheClonesAllMutableSnapshotData(t *testing.T) {
 	v.Value = map[string]any{"items": []any{map[string]any{"count": int64(7), "bytes": []byte{1, 2}}}}
 	v.Units = []objectmodel.Address{{Kind: objectmodel.KindAspect, ObjectID: "a", AspectName: "x"}}
 	v.Provenance = &objectmodel.ProvenanceEnvelope{SourceRefs: []string{"source"}, EvidenceRefs: []string{"evidence"}, Algorithm: &objectmodel.AlgorithmRef{CodeHash: "original"}}
-	v.Declarations = []objectmodel.UnitDeclaration{{Address: v.Units[0], ValueSource: &objectmodel.ValueSource{Kind: objectmodel.ValueSourceBinding, Binding: &objectmodel.BindingDeclaration{Mode: objectmodel.BindingState, Operations: map[string]objectmodel.BindingOperation{"get": {Call: "original"}}}}}}
+	v.Declarations = []objectmodel.UnitDeclaration{{Address: v.Units[0], ValueSource: &objectmodel.ValueSource{Kind: objectmodel.ValueSourceBinding, Binding: &objectmodel.BindingDeclaration{DescriptorRef: "resource/original"}}}}
 	r.values["c1"]["a"] = v
 	first := read(t, c, r, "c1", "a")["a"]
 	first.Value.(map[string]any)["items"].([]any)[0].(map[string]any)["bytes"].([]byte)[0] = 9
 	first.Provenance.SourceRefs[0] = "changed"
 	first.Provenance.Algorithm.CodeHash = "changed"
 	first.Units[0].AspectName = "changed"
-	first.Declarations[0].ValueSource.Binding.Operations["get"] = objectmodel.BindingOperation{Call: "changed"}
+	first.Declarations[0].ValueSource.Binding.DescriptorRef = "resource/changed"
 	second := read(t, c, r, "c1", "a")["a"]
 	if !reflect.DeepEqual(second, v) {
 		t.Fatalf("caller mutation leaked into cache: %#v", second)

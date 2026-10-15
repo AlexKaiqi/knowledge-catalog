@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"testing"
 
+	"kc/internal/bindingfixture"
 	"kc/internal/testkit"
 	"kc/kernel"
 	objectmodel "kc/object"
-	repofile "kc/object/format"
 	"kc/object/reader"
 	"kc/object/writer"
 	"kc/snapshot"
@@ -28,8 +28,9 @@ func fixedMemberSourceFixture(t *testing.T, bound bool) (snapshot.Store, *writer
 	address := objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: "widget/selected", AspectName: "readings", MemberKey: "good"}
 	receipt, err := w.Commit("publish-member-source", objectmodel.ChangeSet{TargetRepository: raw.ID(), TargetRef: snapshot.DefaultRef,
 		BaseCommit: root, ExpectedTargetCommit: root, Operations: []objectmodel.Operation{
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/widget.readings"}, PathHint: "private/schema.yaml", Value: memberSchema(bound)},
-			{Op: objectmodel.OpPut, Address: address, SchemaRef: "schema/widget.readings", PathHint: "public/member.yaml", Value: map[string]any{"value": float64(31)}},
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/widget.readings"}, PathHint: "private/schema.yaml", Value: memberSchema("readings")},
+			bindingfixture.PutDescriptor("resource/widget-source", bindingfixture.Descriptor("https://source.example")),
+			memberUnit(address, "schema/widget.readings", bound),
 		}})
 	if err != nil {
 		t.Fatal(err)
@@ -37,23 +38,32 @@ func fixedMemberSourceFixture(t *testing.T, bound bool) (snapshot.Store, *writer
 	return raw, w, receipt.Result.NewCommit, address
 }
 
-func memberSchema(bound bool) map[string]any {
-	schema := map[string]any{"entity": "Widget", "aspect": "readings", "pattern": "keyed_collection",
+func memberSchema(description string) map[string]any {
+	return map[string]any{"entity": "Widget", "aspect": "readings", "pattern": "keyed_collection", "description": description,
 		"fields": map[string]any{"value": map[string]any{"type": "number"}}}
-	if bound {
-		schema["origin"] = "https://source.example"
-	}
-	return schema
 }
 
-func TestMemberSourceClassificationUsesAdoptedSchemaCommit(t *testing.T) {
+// memberUnit declares the Member's source on the unit itself: a binding unit
+// names a ResourceDescriptor and carries no value.
+func memberUnit(address objectmodel.Address, schemaRef string, bound bool) objectmodel.Operation {
+	if bound {
+		op := bindingfixture.Bind(address, schemaRef, "resource/widget-source")
+		op.PathHint = "public/member.yaml"
+		return op
+	}
+	return objectmodel.Operation{Op: objectmodel.OpPut, Address: address, SchemaRef: schemaRef, PathHint: "public/member.yaml", Value: map[string]any{"value": float64(31)}}
+}
+
+// The source category is the unit's own fixed declaration: changing the
+// current Schema neither flips it nor requires reading Schema bodies.
+func TestMemberSourceClassificationFollowsUnitDeclaration(t *testing.T) {
 	for _, bound := range []bool{false, true} {
 		t.Run(fmt.Sprint("bound=", bound), func(t *testing.T) {
 			raw, w, original, address := fixedMemberSourceFixture(t, bound)
 			newer, err := w.Commit("change-current-schema", objectmodel.ChangeSet{TargetRepository: raw.ID(), TargetRef: snapshot.DefaultRef,
 				BaseCommit: original, ExpectedTargetCommit: original, Operations: []objectmodel.Operation{
-					{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/widget.readings"}, Value: memberSchema(!bound)},
-					{Op: objectmodel.OpPut, Address: address, SchemaRef: "schema/widget.readings@" + string(original), Value: map[string]any{"value": float64(31)}},
+					{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/widget.readings"}, Value: memberSchema("changed readings")},
+					memberUnit(address, "schema/widget.readings@"+string(original), bound),
 				}})
 			if err != nil {
 				t.Fatal(err)
@@ -99,14 +109,20 @@ func assertMemberCategory(t *testing.T, declarations []objectmodel.UnitDeclarati
 	}
 	source := declarations[0].ValueSource
 	if (source != nil && source.Kind == objectmodel.ValueSourceBinding) != bound {
-		t.Fatalf("Member source followed the current Schema instead of the adopted fixed one: %#v", declarations)
+		t.Fatalf("Member source must follow the unit valueSource: %#v", declarations)
 	}
 }
 
-func TestMemberSourceClassificationCannotTreatMissingMetadataAsSnapshot(t *testing.T) {
-	raw, _, commit, address := fixedMemberSourceFixture(t, true)
-	lost, err := raw.(snapshot.TreeStore).ApplyTreeCommit(snapshot.TreeChangeSet{TargetRepository: raw.ID(), TargetRef: snapshot.DefaultRef,
-		BaseCommit: commit, ExpectedTargetCommit: commit, Changes: []snapshot.TreeChange{{Path: repofile.LocatorBindingIndexPath, Remove: true}}})
+// A Member's category is its own declaration. A snapshot Member adopting the
+// same Schema as a binding Member stays a snapshot value.
+func TestMemberSourceIsNotInferredFromSharedSchema(t *testing.T) {
+	raw, w, commit, address := fixedMemberSourceFixture(t, true)
+	plain := address
+	plain.MemberKey = "plain"
+	next, err := w.Commit("publish-snapshot-member", objectmodel.ChangeSet{TargetRepository: raw.ID(), TargetRef: snapshot.DefaultRef,
+		BaseCommit: commit, ExpectedTargetCommit: commit, Operations: []objectmodel.Operation{
+			{Op: objectmodel.OpPut, Address: plain, SchemaRef: "schema/widget.readings", PathHint: "public/plain.yaml", Value: map[string]any{"value": float64(7)}},
+		}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +130,14 @@ func TestMemberSourceClassificationCannotTreatMissingMetadataAsSnapshot(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := repo.ReadAddress(address, lost); kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
-		t.Fatalf("missing fixed classification metadata became a Snapshot value: %v", err)
+	value, err := repo.ReadAddress(plain, next.Result.NewCommit)
+	if err != nil {
+		t.Fatal(err)
 	}
+	assertMemberCategory(t, value.Declarations, false)
+	bound, err := repo.ReadAddress(address, next.Result.NewCommit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertMemberCategory(t, bound.Declarations, true)
 }

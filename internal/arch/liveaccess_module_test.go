@@ -122,7 +122,7 @@ func liveAccessOwnershipSignals(files map[string]*ast.File) []string {
 	owners := map[string]string{
 		"HTTPStateLookup": "liveaccess", "NewHTTPStateLookup": "liveaccess", "NewHTTPStateLookupWithOptions": "liveaccess",
 		"LiveAccessHandler": "liveaccess", "NewLiveAccessHandler": "liveaccess", "RegisterLiveAccess": "liveaccess", "WithLiveAccess": "liveaccess",
-		"ResolvedBinding": "liveaccess", "ResolveBinding": "liveaccess", "ResolveRepoDeclarationBinding": "liveaccess",
+		"ResolvedBinding": "liveaccess", "ResolveBinding": "liveaccess", "ResolveDeclaration": "liveaccess",
 		"Plugins": "liveaccess/service", "OpenPlugins": "liveaccess/service", "ValueFailure": "liveaccess/service",
 		"HydrateRepositoryRead": "liveaccess/service", "BeginReadEvidence": "liveaccess/service", "RetainReadEvidence": "liveaccess/service",
 		"OpenResultStore": "liveaccess/service", "AuditEntries": "liveaccess/service", "Collector": "liveaccess/evidence", "NewCollector": "liveaccess/evidence",

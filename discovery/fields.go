@@ -37,15 +37,14 @@ func ExtractFields(repo objectmodel.Repository, value objectmodel.ObjectValue, o
 	}
 
 	for _, unit := range fieldUnits(repo, value) {
-		if isStreamBindingUnit(unit) {
-			continue
-		}
 		unitObserved := false
 		if isBindingUnit(unit) {
 			observation, ok := observed[objectmodel.AddressKey(unit.Address)]
 			if !ok {
 				continue
 			}
+			// Hydrated declarations already carry the observed declaration
+			// version (unit plus ResourceDescriptor digest).
 			if observation.DeclarationCommit != value.Commit || observation.DeclarationDigest != unit.DeclarationDigest {
 				return FieldSet{}, kernel.Fail(kernel.ErrPreconditionFailed,
 					"observation basis does not match Binding declaration at %s", objectmodel.AddressKey(unit.Address))
@@ -118,12 +117,10 @@ func ExtractFields(repo objectmodel.Repository, value objectmodel.ObjectValue, o
 	return doc, nil
 }
 
+// A binding unit contributes only through an observation; stream bindings
+// are never observed by ordinary READ, so they never contribute.
 func isBindingUnit(unit objectmodel.UnitDeclaration) bool {
-	return unit.ValueSource != nil && unit.ValueSource.Kind == objectmodel.ValueSourceBinding
-}
-
-func isStreamBindingUnit(unit objectmodel.UnitDeclaration) bool {
-	return isBindingUnit(unit) && unit.ValueSource.Binding != nil && unit.ValueSource.Binding.Mode == objectmodel.BindingStream
+	return unit.ValueSource.IsBinding()
 }
 
 func fieldObjectKind(value objectmodel.ObjectValue) objectmodel.AddressKind {

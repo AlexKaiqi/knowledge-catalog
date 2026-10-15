@@ -9,6 +9,7 @@ import (
 
 	retrieval "kc/discovery"
 	index "kc/discovery/projection"
+	"kc/internal/bindingfixture"
 	"kc/internal/testkit"
 	"kc/kernel"
 	"kc/liveaccess"
@@ -206,7 +207,7 @@ func TestIndexControlColdStateRecoveryUsesAcceptedDeclarationAfterHeadChanges(t 
 	b, err := source.Writer.Commit("remove-head-state-binding", objectmodel.CommitChangeSet{
 		TargetRepository: source.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: a, ExpectedTargetCommit: a,
 		Operations: []objectmodel.Operation{
-			{Op: objectmodel.OpRemove, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.runtime"}},
+			{Op: objectmodel.OpRemove, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/control", AspectName: "runtime"}},
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/control", AspectName: "definition"}, SchemaRef: "schema/job.definition", Value: map[string]any{"owner": "b-owner"}},
 		},
 	})
@@ -251,7 +252,9 @@ func controlBoundJob(t *testing.T, f *controlRecoveryFixture) (kernel.CommitID, 
 		TargetRepository: source.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: base, ExpectedTargetCommit: base,
 		Operations: []objectmodel.Operation{
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.definition"}, Value: map[string]any{"entity": "Job", "aspect": "definition", "fields": map[string]any{"owner": map[string]any{"type": "string", "access": []any{"filter"}}}}},
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.runtime"}, Value: map[string]any{"entity": "Job", "aspect": "runtime", "origin": "https://old-state.example", "fields": map[string]any{"status": map[string]any{"type": "string", "access": []any{"filter"}}}}},
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.runtime"}, Value: map[string]any{"entity": "Job", "aspect": "runtime", "fields": map[string]any{"status": map[string]any{"type": "string", "access": []any{"filter"}}}}},
+			bindingfixture.PutDescriptor("resource/state", bindingfixture.Descriptor("https://old-state.example")),
+			bindingfixture.PutAspect("job/control", "runtime", "schema/job.runtime", "resource/state"),
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/control", AspectName: "definition"}, SchemaRef: "schema/job.definition", Value: map[string]any{"owner": "a-owner"}},
 		},
 	})

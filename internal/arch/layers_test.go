@@ -376,7 +376,7 @@ func architectureLayer(pkg string) (string, bool) {
 		return "snapshot", true
 	case "snapshot/dataset":
 		return "dataset", true
-	case "object/format", "object", "object/maintenance", "object/reader", "object/semanticview", "object/writer", "object/cache", "liveaccess/handler", "liveaccess/dispatch", "liveaccess/contract", "liveaccess/evidence":
+	case "object/format", "object", "object/maintenance", "object/reader", "object/semanticview", "object/writer", "object/cache", "internal/bindingfixture", "liveaccess/handler", "liveaccess/dispatch", "liveaccess/contract", "liveaccess/evidence":
 		return "object", true
 	case "discovery", "discovery/llmhttp", "liveaccess", "discovery/projection", "declarativeindex/projection", "declarativeindex/control", "declarativeindex/opensearch", "declarativeindex/opensearch/internal/opensearchimpl":
 		return "discovery", true

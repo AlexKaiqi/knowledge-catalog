@@ -28,7 +28,6 @@ type SchemaDescription struct {
 	Aspect               string                       `json:"aspect,omitempty"`
 	Pattern              string                       `json:"pattern,omitempty"`
 	AdditionalProperties bool                         `json:"additionalProperties"`
-	Origin               string                       `json:"origin,omitempty"`
 	Fields               []FieldAccess                `json:"fields"`
 	Definition           objectmodel.SchemaDefinition `json:"definition"`
 	// Digest covers the complete normalized Definition, including constraints.
@@ -199,7 +198,6 @@ func describeValue(_ kernel.RepositoryID, _ kernel.CommitID, objectID objectmode
 		Aspect:               definition.Aspect,
 		Pattern:              definition.Pattern,
 		AdditionalProperties: definition.AdditionalProperties,
-		Origin:               definition.Origin,
 		Fields:               fields,
 		Definition:           definition,
 	}

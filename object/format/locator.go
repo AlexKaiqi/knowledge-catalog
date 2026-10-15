@@ -50,6 +50,69 @@ func DecodeSchemaIndex(raw []byte) ([]objectmodel.ObjectID, error) {
 	return ids, nil
 }
 
+// BindingCoordinate is one binding unit and the Schema it adopts. The binding
+// index lists every binding unit so Writer maintains it exactly from the
+// objects a ChangeSet touches; BindingSchemaObjectIDs is derived from it.
+type BindingCoordinate struct {
+	Address objectmodel.Address  `json:"address"`
+	Schema  objectmodel.ObjectID `json:"schema"`
+}
+
+// BindingCoordinates lists the binding units in tree that adopt a Schema.
+func BindingCoordinates(tree *Tree) []BindingCoordinate {
+	out := []BindingCoordinate{}
+	for _, units := range tree.ByObject {
+		for _, unit := range units {
+			parsed, ok := objectmodel.ParseSchemaRef(unit.SchemaRef)
+			if ok && unit.ValueSource.IsBinding() {
+				out = append(out, BindingCoordinate{Address: unit.Address, Schema: parsed.Object})
+			}
+		}
+	}
+	sortBindingCoordinates(out)
+	return out
+}
+
+func sortBindingCoordinates(coordinates []BindingCoordinate) {
+	sort.Slice(coordinates, func(i, j int) bool {
+		return objectmodel.AddressKey(coordinates[i].Address) < objectmodel.AddressKey(coordinates[j].Address)
+	})
+}
+
+func EncodeBindingIndex(coordinates []BindingCoordinate) ([]byte, error) {
+	coordinates = append([]BindingCoordinate{}, coordinates...)
+	sortBindingCoordinates(coordinates)
+	return json.Marshal(coordinates)
+}
+
+func DecodeBindingIndex(raw []byte) ([]BindingCoordinate, error) {
+	coordinates := []BindingCoordinate{}
+	if err := json.Unmarshal(raw, &coordinates); err != nil {
+		return nil, err
+	}
+	for _, coordinate := range coordinates {
+		if !objectmodel.IsSchemaObject(coordinate.Schema) || coordinate.Address.ObjectID == "" {
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "binding index entry %s has no adopted schema", objectmodel.AddressKey(coordinate.Address))
+		}
+	}
+	sortBindingCoordinates(coordinates)
+	return coordinates, nil
+}
+
+// BindingSchemas returns the distinct Schemas adopted by binding units.
+func BindingSchemas(coordinates []BindingCoordinate) []objectmodel.ObjectID {
+	seen := map[objectmodel.ObjectID]struct{}{}
+	out := []objectmodel.ObjectID{}
+	for _, coordinate := range coordinates {
+		if _, dup := seen[coordinate.Schema]; !dup {
+			seen[coordinate.Schema] = struct{}{}
+			out = append(out, coordinate.Schema)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
+}
+
 func ObjectLocatorPath(objectID objectmodel.ObjectID) string {
 	name := kernel.CanonicalDigest(map[string]any{"objectId": objectID})
 	return path.Join(LocatorObjectDirectory, string(name)+".entry")
@@ -135,9 +198,9 @@ func ReadObjectLocator(tree snapshot.TreeReader, objectID objectmodel.ObjectID, 
 }
 
 type LocatorManifest struct {
-	Objects        map[objectmodel.ObjectID][]string `json:"objects"`
-	Schemas        []objectmodel.ObjectID            `json:"schemas,omitempty"`
-	BindingSchemas []objectmodel.ObjectID            `json:"bindingSchemas,omitempty"`
+	Objects  map[objectmodel.ObjectID][]string `json:"objects"`
+	Schemas  []objectmodel.ObjectID            `json:"schemas,omitempty"`
+	Bindings []BindingCoordinate               `json:"bindings,omitempty"`
 	// Referrers maps a schema identity to the exact unit Addresses that declare
 	// it. It is bounded reverse-dependency metadata for Schema publication, not
 	// a searchable field index.
@@ -146,23 +209,14 @@ type LocatorManifest struct {
 
 func BuildLocatorManifest(tree *Tree) LocatorManifest {
 	manifest := LocatorManifest{Objects: map[objectmodel.ObjectID][]string{}}
-	bindingSchemas := map[objectmodel.ObjectID]struct{}{}
 	referrers := map[objectmodel.ObjectID][]objectmodel.Address{}
 	for objectID, units := range tree.ByObject {
 		paths := make([]string, 0, len(units))
 		for _, unit := range units {
 			paths = append(paths, unit.Path)
-			if objectmodel.IsSchemaObject(objectID) {
-				if definition, err := objectmodel.ParseSchemaDefinition(objectID, unit.Value); err == nil && definition.Bound() {
-					bindingSchemas[objectID] = struct{}{}
-				}
-			}
 			parsed, ok := objectmodel.ParseSchemaRef(unit.SchemaRef)
 			if !ok {
 				continue
-			}
-			if unit.ValueSource != nil && unit.ValueSource.Kind == objectmodel.ValueSourceBinding {
-				bindingSchemas[parsed.Object] = struct{}{}
 			}
 			if !objectmodel.IsSchemaObject(objectID) {
 				referrers[parsed.Object] = append(referrers[parsed.Object], unit.Address)
@@ -174,8 +228,8 @@ func BuildLocatorManifest(tree *Tree) LocatorManifest {
 			manifest.Schemas = append(manifest.Schemas, objectID)
 		}
 	}
-	for objectID := range bindingSchemas {
-		manifest.BindingSchemas = append(manifest.BindingSchemas, objectID)
+	if bindings := BindingCoordinates(tree); len(bindings) > 0 {
+		manifest.Bindings = bindings
 	}
 	if len(referrers) > 0 {
 		for schema := range referrers {
@@ -187,7 +241,6 @@ func BuildLocatorManifest(tree *Tree) LocatorManifest {
 		manifest.Referrers = referrers
 	}
 	sort.Slice(manifest.Schemas, func(i, j int) bool { return manifest.Schemas[i] < manifest.Schemas[j] })
-	sort.Slice(manifest.BindingSchemas, func(i, j int) bool { return manifest.BindingSchemas[i] < manifest.BindingSchemas[j] })
 	return manifest
 }
 

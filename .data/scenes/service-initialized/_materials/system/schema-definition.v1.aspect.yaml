@@ -7,7 +7,7 @@ path_hint: _schemas/schema-definition.v1.aspect.yaml
 # against the built-in parser of the same contract, not a floating copy.
 metaSchema: schema/meta/schema-definition/v1
 entity: SchemaDefinition
-description: Domain Schema 文档自身的合同：声明实体名、可选说明、Aspect、resource-access 原点（Canonical frontmatter）、字段结构与逻辑访问声明；结构校验、查询合同解释及物理能力分别维护。
+description: Domain Schema 文档自身的合同：声明实体名、可选说明、Aspect、字段结构与逻辑访问声明；Schema 只描述结构，取值来源由单元的 valueSource 引用 ResourceDescriptor；结构校验、查询合同解释及物理能力分别维护。
 pattern: record
 additionalProperties: false
 fields:
@@ -29,9 +29,6 @@ fields:
     access: [filter]
   additionalProperties:
     type: boolean
-  origin:
-    type: string
-    access: [filter]
   fields:
     type: object
     required: true

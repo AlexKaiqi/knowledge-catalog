@@ -7,11 +7,6 @@ import (
 	objectmodel "kc/object"
 )
 
-// BoundUnits returns the Aspect addresses a Repository's Schemas bind for an
-// object it stores. They belong to that Repository's holding even though no
-// unit stores them. Nil means only stored units count.
-type BoundUnits func(objectmodel.Repository, kernel.CommitID, objectmodel.ObjectID) ([]objectmodel.Address, error)
-
 // holdingConflictPageLimit bounds one identity page during the publication scan.
 const holdingConflictPageLimit = 1000
 
@@ -19,7 +14,7 @@ const holdingConflictPageLimit = 1000
 // the same Aspect from two member Repositories. Dataset publication runs it
 // before acceptance; it enumerates identities only, then plans the objects
 // that more than one member stores. A single-member pin cannot conflict.
-func (s *Serving) CheckHoldingConflicts(bound BoundUnits) error {
+func (s *Serving) CheckHoldingConflicts() error {
 	ids := make([]kernel.RepositoryID, 0, len(s.pin.Repositories))
 	for id := range s.pin.Repositories {
 		ids = append(ids, id)
@@ -52,7 +47,7 @@ func (s *Serving) CheckHoldingConflicts(bound BoundUnits) error {
 	for _, object := range shared {
 		holdings := make([]objectmodel.Holding, 0, len(holders[object]))
 		for _, id := range holders[object] {
-			holding, ok, err := s.publishedHolding(id, repos[id], object, bound)
+			holding, ok, err := s.publishedHolding(id, repos[id], object)
 			if err != nil {
 				return err
 			}
@@ -70,7 +65,7 @@ func (s *Serving) CheckHoldingConflicts(bound BoundUnits) error {
 	return nil
 }
 
-func (s *Serving) publishedHolding(id kernel.RepositoryID, repo objectmodel.Repository, object objectmodel.ObjectID, bound BoundUnits) (objectmodel.Holding, bool, error) {
+func (s *Serving) publishedHolding(id kernel.RepositoryID, repo objectmodel.Repository, object objectmodel.ObjectID) (objectmodel.Holding, bool, error) {
 	commit := s.pin.Repositories[id]
 	inRange, err := s.objectInDataset(id, commit, repo, object)
 	if err != nil || !inRange {
@@ -83,15 +78,7 @@ func (s *Serving) publishedHolding(id kernel.RepositoryID, repo objectmodel.Repo
 	if err != nil {
 		return objectmodel.Holding{}, false, err
 	}
-	units := append([]objectmodel.Address(nil), value.Units...)
-	if bound != nil {
-		extra, err := bound(repo, commit, object)
-		if err != nil {
-			return objectmodel.Holding{}, false, err
-		}
-		units = append(units, extra...)
-	}
-	return objectmodel.HoldingOf(id, commit, true, units), true, nil
+	return objectmodel.HoldingOf(id, commit, true, value.Units), true, nil
 }
 
 func eachStoredObjectID(repo objectmodel.Repository, commit kernel.CommitID, visit func(objectmodel.ObjectID)) error {

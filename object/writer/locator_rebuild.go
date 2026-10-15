@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"kc/kernel"
-	objectmodel "kc/object"
 	repofile "kc/object/format"
 	"kc/snapshot"
 )
@@ -87,15 +86,17 @@ func (w *Writer) RebuildTreeLocators(commandID string, repository kernel.Reposit
 			})
 		}
 		manifest := repofile.BuildLocatorManifest(index)
-		for file, ids := range map[string][]objectmodel.ObjectID{
-			repofile.LocatorSchemaIndexPath: manifest.Schemas, repofile.LocatorBindingIndexPath: manifest.BindingSchemas,
-		} {
-			encoded, err := repofile.EncodeSchemaIndex(ids)
-			if err != nil {
-				return nil, err
-			}
-			changes = append(changes, snapshot.TreeChange{Path: file, Content: encoded})
+		schemas, err := repofile.EncodeSchemaIndex(manifest.Schemas)
+		if err != nil {
+			return nil, err
 		}
+		bindings, err := repofile.EncodeBindingIndex(manifest.Bindings)
+		if err != nil {
+			return nil, err
+		}
+		changes = append(changes,
+			snapshot.TreeChange{Path: repofile.LocatorSchemaIndexPath, Content: schemas},
+			snapshot.TreeChange{Path: repofile.LocatorBindingIndexPath, Content: bindings})
 		for schema, addresses := range manifest.Referrers {
 			encoded, err := repofile.EncodeSchemaReferrers(schema, addresses)
 			if err != nil {
@@ -109,7 +110,7 @@ func (w *Writer) RebuildTreeLocators(commandID string, repository kernel.Reposit
 		changes = append(changes, snapshot.TreeChange{
 			Path: repofile.LocatorCompletePath, Content: []byte(repofile.LocatorCompleteBody),
 		})
-		sort.Slice(changes, func(i, j int) bool { return changes[i].Path < changes[j].Path })
+		changes = collapseRebuildChanges(changes)
 		writeStarted = true
 		next, err := tree.ApplyTreeCommit(snapshot.TreeChangeSet{
 			TargetRepository: repository, TargetRef: targetRef,
@@ -135,4 +136,22 @@ func (w *Writer) RebuildTreeLocators(commandID string, repository kernel.Reposit
 	}
 	receipt.Replayed = replayed
 	return receipt, nil
+}
+
+// collapseRebuildChanges keeps one change per path: a rewritten locator file
+// replaces its removal, so the rebuilt layout never depends on change order.
+func collapseRebuildChanges(changes []snapshot.TreeChange) []snapshot.TreeChange {
+	byPath := make(map[string]snapshot.TreeChange, len(changes))
+	for _, change := range changes {
+		if previous, seen := byPath[change.Path]; seen && !previous.Remove && change.Remove {
+			continue
+		}
+		byPath[change.Path] = change
+	}
+	out := make([]snapshot.TreeChange, 0, len(byPath))
+	for _, change := range byPath {
+		out = append(out, change)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
+	return out
 }

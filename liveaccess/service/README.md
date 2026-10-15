@@ -19,18 +19,17 @@
 不补读未发布材料、不调用未经授权的来源。`HydrateRepositoryValue` 为索引维护采用严格路径，
 任何动态失败都返回 error，索引不会采用失败说明或旧值。
 
-Schema origin、遗留 Descriptor、操作及 Bound State 单元合成由 LiveAccess 根入口唯一解释，
-服务再采用其结果调用 StateLookup。Dataset 解释先沿 Object 的 Member 取得相同固定范围，
+binding 单元的取值描述、操作与声明摘要由 LiveAccess 根入口唯一解释，服务再采用其结果调用
+StateLookup；调用前先解析单元采纳的 Schema，Schema 不可用时本地失败、不访问来源。Dataset 解释先沿 Object 的 Member 取得相同固定范围，
 不借来源仓补齐未发布的 Schema，也不让固定声明版本冒充外部观察版本。
 
 `ReadReference(ctx, object.Reference)` 保留 URN 指定的单一来源仓及 Dataset 固定版本。
 对象根沿既有 `Hydrate` 执行；非根位置先经 `ReferenceUnitsReader` 取得完整选中单元，
 采用相同的 State/Stream 核验，再以根 Object 的 JSON Pointer 选取内容。
-固定声明中没有目标 leaf 不会提前阻止 State 观察；没有维护单元时，只有已发布的
-Domain Schema 实际声明的 Bound Aspect 才可合成，未知名称明确失败。
-选中单元的 Schema／遗留 Descriptor 解释仍由 LiveAccess 同一核心算法采用，
+binding 单元没有固定 leaf，目标 leaf 在观察采用后选取；没有维护单元的方面明确失败，
+不按 Schema 合成虚拟方面。选中单元的 Schema／取值描述解释仍由 LiveAccess 同一核心算法采用，
 不再次加载整对象和未选兄弟来定位已经选好的实际单元。
-Member 从自身实际采用的固定 Schema origin 解释取值，同样核验 Schema 和来源依据，
+Member binding 单元从自身声明的取值描述解释取值，同样核验 Schema 和来源依据，
 不以 Member 的固定对象值冒充外部观察。
 Member 是否为 Binding 采用 Reader 已固定分类的 `ValueSource`：只对 Binding 读取真实 Schema，
 普通 Snapshot Member 不因其 Schema 未发布而变成外部失败。Binding Schema 在作用域外时

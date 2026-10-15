@@ -187,13 +187,13 @@ func TestHTTPStateLookupRequiresCallerPrincipal(t *testing.T) {
 	}
 }
 
-func TestHTTPStateLookupRequiresSchemaOrigin(t *testing.T) {
+func TestHTTPStateLookupRequiresDescriptorOrigin(t *testing.T) {
 	lookup := NewHTTPStateLookup(nil)
 	_, err := lookup.LookupState(context.Background(), StateLookupRequest{Binding: ResolvedBinding{
 		Address:    objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "service/x", AspectName: "health"},
 		Operations: map[string]objectmodel.BindingOperation{"lookup": {Call: "health.lookup"}},
 	}})
 	if kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
-		t.Fatalf("missing schema origin: %v", err)
+		t.Fatalf("missing descriptor origin: %v", err)
 	}
 }

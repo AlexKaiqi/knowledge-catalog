@@ -44,6 +44,7 @@ func applyObjectCommit(commandID string, target snapshot.Store, cs objectmodel.C
 	toWrite := map[string]string{}
 	toDelete := map[string]struct{}{}
 	beforeRefs := repofile.BuildLocatorManifest(idx).Referrers
+	beforeBindings := repofile.BindingCoordinates(idx)
 	if err := repofile.ApplyOperations(idx, cs.Operations, cs.Provenance, toWrite, toDelete); err != nil {
 		return "", err
 	}
@@ -60,7 +61,7 @@ func applyObjectCommit(commandID string, target snapshot.Store, cs objectmodel.C
 		}
 		toWrite[locatorPath] = string(locator)
 	}
-	if err := updateSchemaLocator(tree, cs.BaseCommit, idx, cs.Operations, toWrite); err != nil {
+	if err := updateSchemaLocator(tree, cs.BaseCommit, beforeBindings, idx, cs.Operations, toWrite); err != nil {
 		return "", err
 	}
 	if err := updateSchemaReferrerLocators(tree, cs.BaseCommit, beforeRefs, idx, cs.Operations, toWrite, toDelete); err != nil {
