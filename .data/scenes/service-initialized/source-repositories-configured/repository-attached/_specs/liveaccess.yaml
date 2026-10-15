@@ -15,12 +15,12 @@
   title: 来源声明选中的插件真实调用并贡献读取结果
   claims: ["liveaccess#U14", "liveaccess#U10"]
   given:
-    - R1、R2 分别配置 A、B，Server 按仓装配；两仓通过 Writer 发布固定取值声明，A、B 返回不同值并记录调用目标。
-    - 一个 Dataset 组合这两个来源，Dataset 自身不另设插件采用。
+    - 部署装了 LiveAccess，按取值描述的 runtime 与协议对应到实例 A、B；R1、R2 的成员分别引用协议对应 A、B 的取值描述，A、B 返回不同值并记录调用目标。
+    - 一个 Dataset 组合这两个来源；仓与 Dataset 都不选择插件实例。
   when:
     - 通过公共对象读取入口分别读取两个 Repository，再从 Dataset 读取所组合的值。
   then:
-    - 每个值调用来源 Repo 配置的实例，来源、固定声明和最终采用值逐一对应。
+    - 每个值调用其取值描述对应的实例，来源、固定声明和最终采用值逐一对应。
     - A 的返回不会被 B、旧全局处理器或对象中的句柄替代；组合后仍保留每个值的来源依据。
   risk: 插件只被登记却没被调用，或 Dataset 组合把不同来源错误地路由到同一实现。
 
@@ -28,20 +28,20 @@
   title: 更换运行实例不改固定来源声明
   claims: ["liveaccess#U14", "liveaccess#U11"]
   given:
-    - 来源 Repo 配置 A，已完成一次读取；固定声明明确目标、Schema 和 origin，兼容的 C 返回可区分的新值。
+    - 部署把取值描述的协议对应到实例 A，已完成一次读取；固定声明明确单元地址、Schema 和取值描述（含 origin），兼容的 C 返回可区分的新值。
   when:
-    - 将来源 Repo 配置改为 C，替换服务进程后发起新的公共对象读取。
+    - 在部署配置里把同一协议改为对应 C，替换服务进程后发起新的公共对象读取。
   then:
-    - 新请求只调用 C 并采用 C 返回值，不调用 A。
-    - C 收到同一固定目标、Schema 和 origin，不以运行实例地址覆盖来源声明。
-  risk: 换实例仍调用旧全局实现，或把固定来源与运行实例配置混为一体。
+    - 新请求只调用 C 并采用 C 返回值，不调用 A；仓内容与 HEAD 不变。
+    - C 收到同一单元地址、Schema 和 origin，不以运行实例地址覆盖取值描述。
+  risk: 换实例仍调用旧全局实现，或把取值描述与运行实例配置混为一体。
 
 - id: liveaccess-no-compatible-plugin
   title: 未匹配或不支持固定声明时不偷偷回退
   claims: ["liveaccess#U14", "liveaccess#U12", "liveaccess#U15"]
   given:
-    - 对象包含固定值和外部值；来源 Repo 已配置访问实例，外部值有固定声明，另有可计数的旧全局实现和来源。
-    - 独立变体分别为指定实例缺失，以及实例存在但不能满足声明的协议或版本。
+    - 对象包含固定值和外部值；外部值有固定声明，另有可计数的旧全局实现和来源。
+    - 独立变体分别为部署没有对应该协议的实例，以及实例存在但不能满足声明的协议或版本。
   when:
     - 各变体独立通过公共对象读取入口访问该对象。
   then:
@@ -194,10 +194,10 @@
   title: LiveAccess Member 的实际值进入索引并按原观察回读
   claims: ["liveaccess#U20"]
   given:
-    - 来源 Repo 配置 LiveAccess；经 Writer 发布可索引的 Member，其值 Schema 和 access 允许已有字段查询，取值使用固定来源声明。
+    - 部署装了 LiveAccess 与声明式索引；经 Writer 发布外部取值 Member，选进 Dataset 的索引声明有成员指向其值 Schema 的字段，取值使用固定来源声明。
     - 独立前态分别为来源返回 31 和合法观察 g1，以及首次取值失败且没有该 Member 的成功观察。
   when:
-    - 从正式准备或维护入口建立索引，经公共查询按该 Member 的值匹配，并读取该查询命中的 Member 正文。
+    - 发布 Dataset 并完成准备，在该 Dataset 里按该 Member 的值匹配，并读取该查询命中的 Member 正文。
     - 成功变体中源值改成 47 后，以首次查询固定的 StateRevision 再次查询和回读命中正文。
   then:
     - 成功变体索引实际采用 31，查询命中正确 Member，回读值、Schema、固定来源和观察依据均对应 g1。

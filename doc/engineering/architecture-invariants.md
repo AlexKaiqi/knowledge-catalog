@@ -168,7 +168,15 @@ K 表保留设计推导层的语义结论（原系统设计 §9.3，替换后并
 
 调用方信封是否含全文由交付链首段决定，不改写 `C-01`。命名 Dataset与 `--repo` SEARCH 的搜宽读严已由 `AUTH-01` / `AUTH-02` 固化；链的独立层与身份冻结已由 `AUTH-03` 固化。
 
-产品搜索入口只接受一个 Repository 或固定 pin；Dataset 登记服务 范围 SEARCH 未选定，也不是待实现
-入口。
+搜索范围已在[发现](../design/discovery.md)选定为“只按 Dataset”：索引声明选进 Dataset 才生效，插件只作
+解释器、不按仓或 Dataset 绑定，不再提供按 Repository 或跨仓按类型的搜索。现有 `AUTH-01` / `AUTH-02` 中 `--repo` SEARCH
+的表述与证据仍对应旧入口，按第 3 节规则随代码与反例测试一起改写；改写前不删除也不削弱现有证据。
 
 交付链首段之后的隐私化 / 脱敏 **未选定**（[权限体系](../design/permissions.md) Non-Goal）：不是本表不变量，不是 MVP 待做项，禁止实现，也不得写成当前入口或已挂链段。
+
+插件声明移出 Schema 已在[插件](../design/plugins.md)、[发现](../design/discovery.md#索引声明)与
+[LiveAccess](../design/liveaccess.md#声明)选定：索引声明是仓里的 `index` 方面，外部取值只在方面或成员上
+引用取值描述，观察依据按地址挂在值旁边。`S-01`、`K-26`、`K-28` 的表述与证据仍对应 Schema 上的访问
+声明和 Bound State，按第 3 节规则随代码与反例测试一起改写：`S-01`/`K-26` 改为“Schema 只描述结构，
+索引声明不含 provider、物理载荷或身份替代定义”，`K-28` 改为外部单元的结果同时标识声明与逐单元观察依据。
+改写前不删除也不削弱现有证据。

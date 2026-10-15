@@ -30,7 +30,7 @@
 | 底座 | `kernel/` | 所有层都能用的最小概念：错误信封、摘要、仓和版本坐标 |
 | 存储层 | `snapshot/` | 根包是存储合同；`dataset/`、`access/`、`service/`、`console/`、`client/`、`cli/` 是它的子能力；lakeFS 实现在 `snapshot/internal/` |
 | 对象层 | `object/`、`systemrepo/` | 对象合同与读写；平台自描述出版物 |
-| 插件层 | `discovery/`、`declarativeindex/`、`liveaccess/` | 通用发现合同与插件采用；按 Schema 声明维护的索引（OpenSearch）；外部取值，其处理器合同在 `liveaccess/handler/`，不对外暴露 |
+| 插件层 | `discovery/`、`declarativeindex/`、`liveaccess/` | 通用发现合同与插件采用；按 Dataset 选进的索引声明维护的索引（OpenSearch）；外部取值，其处理器合同在 `liveaccess/handler/`，不对外暴露 |
 | 服务层 | `server/`、`invocation/`、`home/`、`identity/`、`delivery/`、`observability/`、`hook/` | HTTP 处理与授权；应用调用载体；装配；身份；结果交付；访问证据；出站 Hook |
 | 入口层 | `cli/`、`client/`、`invoke/`、`datasetfs/`、`cmd/` | 产品命令；调用方 SDK 与会话；命令与 HTTP 共用的调用词汇；只读挂载；可执行入口 |
 
@@ -70,5 +70,5 @@ flowchart LR
 - 派生可重建：索引、缓存可以丢失重建，不能反过来当成内容权威。
 - 缺能力要明说：没装配某个能力时明确失败，不降级成扫描或空结果。
 - 对象身份不带仓：URN 只由带命名空间的 `object_id` 构成，仓只出现在方面和依据上，见[对象](design/object.md)。
-- 插件声明在类型上：Schema 定切点，服务装了插件就自动织入，仓可以关闭；Dataset 只决定查询范围，不决定插件行为，见[插件](design/plugins.md)。
+- 插件声明是经 Writer 发布的对象：索引声明指向 Schema 字段、选进 Dataset 生效，取值来源写在方面或成员上；Schema 只描述结构。插件只作解释器，部署装了就按声明自动织入，不绑定 Dataset 或仓；搜索只以 Dataset 为范围，见[插件](design/plugins.md)。
 - 多团队各自提交：不做跨仓事务，需要同时满足的约束靠固定一组版本。
