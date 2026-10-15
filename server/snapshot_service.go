@@ -8,6 +8,7 @@ import (
 
 	"go.opentelemetry.io/otel/trace"
 
+	kchome "kc/home"
 	"kc/identity"
 	"kc/internal/journal"
 	inv "kc/invocation"
@@ -229,7 +230,7 @@ func (f *httpFacade) authorizeSnapshotRequest(ctx context.Context, opened *Home,
 			}
 		}
 	case request.Query.Action == "file.read" && request.Definition != nil && request.Pin != nil:
-		err = inv.RequireCompleteWorkspaceRead(opened.Dir, flags, inv.DatasetPin(*request.Pin), request.Query.Object)
+		err = inv.RequireCompleteWorkspaceRead(opened.Dir, flags, kchome.DatasetPin(*request.Pin), request.Query.Object)
 	case request.Query.Action == "file.read" && request.Query.Repo != "":
 		var allowed bool
 		allowed, err = inv.DatasetFSMayReadRepository(opened.Dir, flags, request.Query.Repo, opened)

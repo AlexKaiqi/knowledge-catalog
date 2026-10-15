@@ -171,11 +171,11 @@ func TestSupersetResidualRestoresCompleteAndContinuesCandidates(t *testing.T) {
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/table.structure"}, Value: map[string]any{
 			"entity": "Table", "aspect": "structure", "fields": map[string]any{"db": map[string]any{"type": "string", "access": []any{"filter"}}},
 		}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:no", AspectName: "structure"}, Value: map[string]any{"db": "other"}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:a", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:b", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/no", AspectName: "structure"}, Value: map[string]any{"db": "other"}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/a", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/b", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
 	})
-	engine := &supersetEngine{ids: []objectmodel.ObjectID{"Table:no", "Table:a", "Table:b"}}
+	engine := &supersetEngine{ids: []objectmodel.ObjectID{"table/no", "table/a", "table/b"}}
 	idx := index.NewIndexEngine("", func(string, kernel.RepositoryID) (ports.Engine, error) { return engine, nil })
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Rebuild(repo, head); err != nil {
@@ -184,7 +184,7 @@ func TestSupersetResidualRestoresCompleteAndContinuesCandidates(t *testing.T) {
 	request := retrieval.SearchOf(retrieval.SearchEQ("db", "tl"))
 	request.Limit = 1
 	first, err := idx.SearchAt(repo, head, request)
-	if err != nil || first.Completeness != retrieval.CompletenessComplete || len(first.Hits) != 1 || first.Hits[0].Object.Address.ObjectID != "Table:a" || first.Continuation == "" {
+	if err != nil || first.Completeness != retrieval.CompletenessComplete || len(first.Hits) != 1 || first.Hits[0].Object.Address.ObjectID != "table/a" || first.Continuation == "" {
 		t.Fatalf("first residual page: %#v %v", first, err)
 	}
 	if first.Stats.Candidates != 2 || first.Stats.Hydrated != 2 || first.Stats.Dropped != 1 {
@@ -195,7 +195,7 @@ func TestSupersetResidualRestoresCompleteAndContinuesCandidates(t *testing.T) {
 	}
 	request.Continuation = first.Continuation
 	second, err := idx.SearchAt(repo, head, request)
-	if err != nil || second.Completeness != retrieval.CompletenessComplete || len(second.Hits) != 1 || second.Hits[0].Object.Address.ObjectID != "Table:b" || second.Continuation != "" {
+	if err != nil || second.Completeness != retrieval.CompletenessComplete || len(second.Hits) != 1 || second.Hits[0].Object.Address.ObjectID != "table/b" || second.Continuation != "" {
 		t.Fatalf("second residual page: %#v %v", second, err)
 	}
 	if second.Stats.Candidates != 1 || second.Stats.Hydrated != 1 || second.Stats.Dropped != 0 {
@@ -236,7 +236,7 @@ func TestIndexSchemaChangeForcesRebuild(t *testing.T) {
 			"entity": "Table", "aspect": "structure", "pattern": "record",
 			"fields": map[string]any{"db": map[string]any{"access": []any{"filter"}}},
 		}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:t", AspectName: "structure"}, Value: map[string]any{"db": "tl", "note": "events"}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/t", AspectName: "structure"}, Value: map[string]any{"db": "tl", "note": "events"}},
 	})
 	idx := liveIndex(t)
 	t.Cleanup(func() { _ = idx.Close() })
@@ -274,7 +274,7 @@ func TestIndexSchemaDocWithoutHintChangeIsContent(t *testing.T) {
 	}
 	c1 := testfixture.PutAt(t, repo, root, []objectmodel.Operation{
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/dw.table.structure"}, Value: schema},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:t", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/t", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
 	})
 	idx := liveIndex(t)
 	t.Cleanup(func() { _ = idx.Close() })
@@ -304,8 +304,8 @@ func TestIndexOmitsUnhintedPermissions(t *testing.T) {
 			"entity": "Table", "aspect": "permissions", "pattern": "record",
 			"fields": map[string]any{"principal": map[string]any{"type": "string"}},
 		}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:t", AspectName: "structure"}, Value: map[string]any{"db": "tl", "description": "user events"}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:t", AspectName: "permissions"}, Value: map[string]any{"principal": "user:a", "privileges": []any{"SELECT"}}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/t", AspectName: "structure"}, Value: map[string]any{"db": "tl", "description": "user events"}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/t", AspectName: "permissions"}, Value: map[string]any{"principal": "user:a", "privileges": []any{"SELECT"}}},
 	})
 	idx := liveIndex(t)
 	t.Cleanup(func() { _ = idx.Close() })
@@ -334,8 +334,8 @@ func TestIndexPermissionsWhenHinted(t *testing.T) {
 			"entity": "Table", "aspect": "permissions", "pattern": "record",
 			"fields": map[string]any{"principal": map[string]any{"access": []any{"filter"}}},
 		}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:t", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:t", AspectName: "permissions"}, Value: map[string]any{"principal": "user:a"}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/t", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/t", AspectName: "permissions"}, Value: map[string]any{"principal": "user:a"}},
 	})
 	idx := liveIndex(t)
 	t.Cleanup(func() { _ = idx.Close() })
@@ -343,7 +343,7 @@ func TestIndexPermissionsWhenHinted(t *testing.T) {
 		t.Fatal(err)
 	}
 	hits, err := idx.SearchAt(repo, head, retrieval.SearchOf(retrieval.SearchEQ("principal", "user:a")))
-	if err != nil || len(hits.Hits) != 1 || hits.Hits[0].Object.Address.ObjectID != "Table:t" {
+	if err != nil || len(hits.Hits) != 1 || hits.Hits[0].Object.Address.ObjectID != "table/t" {
 		t.Fatalf("hinted permissions are object: %#v %v", hits, err)
 	}
 	miss, err := idx.SearchAt(repo, head, retrieval.SearchOf(retrieval.SearchEQ("principal", "user:b")))
@@ -450,9 +450,9 @@ func TestIndexSchemaRefSelectsFields(t *testing.T) {
 			"entity": "Doc", "pattern": "record",
 			"fields": map[string]any{"note": map[string]any{"access": []any{"text"}}},
 		}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "Doc:a"},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "doc/a"},
 			Value: map[string]any{"secret": "alphasecret", "note": "betanote"}, SchemaRef: "schema/alpha"},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "Doc:b"},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "doc/b"},
 			Value: map[string]any{"secret": "alphasecret", "note": "betanote"}, SchemaRef: "schema/beta"},
 	})
 	idx := liveIndex(t)
@@ -461,11 +461,11 @@ func TestIndexSchemaRefSelectsFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	alpha, err := idx.SearchAt(repo, head, retrieval.SearchOf(retrieval.SearchMATCH("alphasecret")))
-	if err != nil || len(alpha.Hits) != 1 || string(alpha.Hits[0].Object.Address.ObjectID) != "Doc:a" {
+	if err != nil || len(alpha.Hits) != 1 || string(alpha.Hits[0].Object.Address.ObjectID) != "doc/a" {
 		t.Fatalf("alpha: %#v %v", alpha.Hits, err)
 	}
 	beta, err := idx.SearchAt(repo, head, retrieval.SearchOf(retrieval.SearchMATCH("betanote")))
-	if err != nil || len(beta.Hits) != 1 || string(beta.Hits[0].Object.Address.ObjectID) != "Doc:b" {
+	if err != nil || len(beta.Hits) != 1 || string(beta.Hits[0].Object.Address.ObjectID) != "doc/b" {
 		t.Fatalf("beta: %#v %v", beta.Hits, err)
 	}
 }
@@ -481,7 +481,7 @@ func TestDescribeIndexShowsCompiledSpec(t *testing.T) {
 				"note": map[string]any{"access": []any{"text"}},
 			},
 		}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:t", AspectName: "structure"},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/t", AspectName: "structure"},
 			Value: map[string]any{"db": "tl", "note": "events"}},
 	})
 	idx := liveIndex(t)
@@ -558,18 +558,18 @@ func TestIndexSharedPathUntypedObjectKeepsLiveAtHead(t *testing.T) {
 			Value: map[string]any{"entity": "Skill", "pattern": "record", "fields": map[string]any{"text": map[string]any{"access": []any{"text"}}}}},
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/metricview.definition"},
 			Value: map[string]any{"entity": "MetricView", "pattern": "record", "fields": map[string]any{"text": map[string]any{"access": []any{"text"}}}}},
-		testkit.PutEntity("Skill:sql.execute", map[string]any{"text": "run sql"}, "")[0],
+		testkit.PutEntity("skill/sql.execute", map[string]any{"text": "run sql"}, "")[0],
 	})
 	idx := liveIndex(t)
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Ensure(repo, c1); err != nil {
 		t.Fatal(err)
 	}
-	c2 := testfixture.PutAt(t, repo, c1, testkit.PutEntity("Note:channel", map[string]any{"text": "semantic o_channel"}, ""))
+	c2 := testfixture.PutAt(t, repo, c1, testkit.PutEntity("note/channel", map[string]any{"text": "semantic o_channel"}, ""))
 	if _, err := idx.Ensure(repo, c2); err != nil {
 		t.Fatal(err)
 	}
-	c3 := testfixture.PutAt(t, repo, c2, testkit.PutEntity("Metric:idem", map[string]any{"description": "probe", "formula": "1"}, ""))
+	c3 := testfixture.PutAt(t, repo, c2, testkit.PutEntity("metric/idem", map[string]any{"description": "probe", "formula": "1"}, ""))
 	if _, err := idx.Ensure(repo, c3); err != nil {
 		t.Fatal(err)
 	}
@@ -581,7 +581,7 @@ func TestIndexSharedPathUntypedObjectKeepsLiveAtHead(t *testing.T) {
 		t.Fatalf("untyped note sharing path text must not stall live: %#v %v", desc, err)
 	}
 	hits, err := idx.SearchAt(repo, c3, retrieval.SearchOf(retrieval.SearchMATCH("semantic")))
-	if err != nil || len(hits.Hits) != 1 || hits.Hits[0].Object.Address.ObjectID != "Note:channel" {
+	if err != nil || len(hits.Hits) != 1 || hits.Hits[0].Object.Address.ObjectID != "note/channel" {
 		t.Fatalf("note must be searchable after shared-path compile: %#v %v", hits, err)
 	}
 	pin, err := idx.DescribeAt(repo, c2)
@@ -617,7 +617,7 @@ func TestCatalogHookSharedPathDoesNotLeaveLiveLagging(t *testing.T) {
 	if _, err := s.Writer.Commit("note", objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: "refs/heads/main",
 		BaseCommit: head, ExpectedTargetCommit: head,
-		Operations: testkit.PutEntity("Note:channel", map[string]any{"text": "semantic o_channel"}, ""),
+		Operations: testkit.PutEntity("note/channel", map[string]any{"text": "semantic o_channel"}, ""),
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -625,7 +625,7 @@ func TestCatalogHookSharedPathDoesNotLeaveLiveLagging(t *testing.T) {
 	if _, err := s.Writer.Commit("idem", objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: "refs/heads/main",
 		BaseCommit: head, ExpectedTargetCommit: head,
-		Operations: testkit.PutEntity("Metric:idem", map[string]any{"formula": "1"}, ""),
+		Operations: testkit.PutEntity("metric/idem", map[string]any{"formula": "1"}, ""),
 	}); err != nil {
 		t.Fatal(err)
 	}

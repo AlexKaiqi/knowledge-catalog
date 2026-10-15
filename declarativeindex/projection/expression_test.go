@@ -27,11 +27,11 @@ func TestSupersetResidualEvaluatesNestedAllAnyExpression(t *testing.T) {
 				"owner": map[string]any{"type": "string", "access": []any{"filter"}},
 			},
 		}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:no", AspectName: "structure"}, Value: map[string]any{"db": "other", "owner": "alice"}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:a", AspectName: "structure"}, Value: map[string]any{"db": "tl", "owner": "alice"}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:b", AspectName: "structure"}, Value: map[string]any{"db": "prod", "owner": "bob"}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/no", AspectName: "structure"}, Value: map[string]any{"db": "other", "owner": "alice"}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/a", AspectName: "structure"}, Value: map[string]any{"db": "tl", "owner": "alice"}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/b", AspectName: "structure"}, Value: map[string]any{"db": "prod", "owner": "bob"}},
 	})
-	engine := &supersetEngine{ids: []objectmodel.ObjectID{"Table:no", "Table:a", "Table:b"}}
+	engine := &supersetEngine{ids: []objectmodel.ObjectID{"table/no", "table/a", "table/b"}}
 	idx := index.NewIndexEngine("", func(string, kernel.RepositoryID) (ports.Engine, error) { return engine, nil })
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Rebuild(repo, head); err != nil {
@@ -48,7 +48,7 @@ func TestSupersetResidualEvaluatesNestedAllAnyExpression(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Completeness != retrieval.CompletenessComplete || len(result.Hits) != 1 || result.Hits[0].Object.Address.ObjectID != "Table:a" {
+	if result.Completeness != retrieval.CompletenessComplete || len(result.Hits) != 1 || result.Hits[0].Object.Address.ObjectID != "table/a" {
 		t.Fatalf("result = %#v", result)
 	}
 }
@@ -62,11 +62,11 @@ func TestSupersetResidualContainsKeepsSubstringHits(t *testing.T) {
 				"db": map[string]any{"type": "string", "access": []any{"filter"}},
 			},
 		}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:a", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:b", AspectName: "structure"}, Value: map[string]any{"db": "dw"}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:c", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/a", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/b", AspectName: "structure"}, Value: map[string]any{"db": "dw"}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/c", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
 	})
-	engine := &supersetEngine{ids: []objectmodel.ObjectID{"Table:a", "Table:b", "Table:c"}}
+	engine := &supersetEngine{ids: []objectmodel.ObjectID{"table/a", "table/b", "table/c"}}
 	idx := index.NewIndexEngine("", func(string, kernel.RepositoryID) (ports.Engine, error) { return engine, nil })
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Rebuild(repo, head); err != nil {
@@ -83,7 +83,7 @@ func TestSupersetResidualContainsKeepsSubstringHits(t *testing.T) {
 	for _, hit := range result.Hits {
 		seen[hit.Object.Address.ObjectID] = true
 	}
-	if !seen["Table:a"] || !seen["Table:c"] || seen["Table:b"] {
+	if !seen["table/a"] || !seen["table/c"] || seen["table/b"] {
 		t.Fatalf("CONTAINS residual must keep substring hits only: %#v", result.Hits)
 	}
 }
@@ -97,17 +97,17 @@ func TestSupersetResidualContainsTreatsWildcardMetaAsLiteral(t *testing.T) {
 				"db": map[string]any{"type": "string", "access": []any{"filter"}},
 			},
 		}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:star", AspectName: "structure"}, Value: map[string]any{"db": "prod*east"}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:dash", AspectName: "structure"}, Value: map[string]any{"db": "prod-east"}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/star", AspectName: "structure"}, Value: map[string]any{"db": "prod*east"}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/dash", AspectName: "structure"}, Value: map[string]any{"db": "prod-east"}},
 	})
-	engine := &supersetEngine{ids: []objectmodel.ObjectID{"Table:star", "Table:dash"}}
+	engine := &supersetEngine{ids: []objectmodel.ObjectID{"table/star", "table/dash"}}
 	idx := index.NewIndexEngine("", func(string, kernel.RepositoryID) (ports.Engine, error) { return engine, nil })
 	t.Cleanup(func() { _ = idx.Close() })
 	if _, err := idx.Rebuild(repo, head); err != nil {
 		t.Fatal(err)
 	}
 	star, err := idx.SearchAt(repo, head, retrieval.SearchOf(retrieval.SearchCONTAINS("db", "prod*")))
-	if err != nil || len(star.Hits) != 1 || star.Hits[0].Object.Address.ObjectID != "Table:star" {
+	if err != nil || len(star.Hits) != 1 || star.Hits[0].Object.Address.ObjectID != "table/star" {
 		t.Fatalf("literal CONTAINS prod* must not GLOB: %#v %v", star, err)
 	}
 	both, err := idx.SearchAt(repo, head, retrieval.SearchOf(retrieval.SearchCONTAINS("db", "east")))
@@ -125,7 +125,7 @@ func TestExpressionSearchFailsClosedWithoutCompositionProof(t *testing.T) {
 				"db": map[string]any{"type": "string", "access": []any{"filter"}},
 			},
 		}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:a", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/a", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
 	})
 	engine := &staleCandidateEngine{}
 	idx := index.NewIndexEngine("", func(string, kernel.RepositoryID) (ports.Engine, error) { return engine, nil })

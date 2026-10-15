@@ -8,7 +8,7 @@ type helpEntry struct {
 var leafHelp = map[string]helpEntry{
 	"read": {
 		Description: "按固定声明依据读取对象或 URN 指定的数据",
-		Usage: `kc read <object-urn[#/json/pointer]> [--dataset <id>] [--commit <id> | --ref <name>]
+		Usage: `kc read <object-urn[#/json/pointer]> [--repo <id> | --dataset <id>] [--commit <id> | --ref <name>]
 
 用途：
   读取来源对象的完整内容或指定数据；同一个引用可随后交给 writer put/remove 维护完整单元。
@@ -17,14 +17,15 @@ var leafHelp = map[string]helpEntry{
   /columns/order_id 选 Member；/columns/order_id/constraints/nullable 选其中的字段；/tags/0 选数组首项。
   键中的 / 写 ~1，~ 写 ~0；不支持通配、过滤或把点当层级。深层读取不会新增写粒度。
   --dataset 限制统一引用的交付范围；此时 --commit 须匹配发布版中的来源 commit，不接受 --ref。
-  直接来源仓可选 --commit 或 --ref，省略固定读取 refs/heads/main（published）的当前 commit。
-  来源仓与对象身份只由 URN 指定，内容只由 locator 选择；所有选择仍受授权与内容完整性限制。
+  省略 --repo 与 --dataset 时，在你可读的全部仓里按 ID 解析：多个仓各持有不同方面时组合返回，同一方面来自两个仓时报 OBJECT_ID_CONFLICT，无权的仓列在 withheld。
+  --repo 只读该仓，可加 --commit 或 --ref；省略时读取 refs/heads/main（published）的当前 commit。
+  对象身份只由 URN 指定，内容只由 locator 选择；sources 记录每个方面来自哪个仓、哪个 commit。
 条件：
   已认证；单仓需 object.read，命名 Dataset 按 file.read 解释发布版清单内材料。
  Dataset 须通过对象与选择范围的完整读取检查，不能越过已获准的范围读取源仓。
  Dataset 选中 Bound State 时，沿既有 logical READ 通路，还需相应 Runtime 可用并允许实际源访问。
 结果：
-  统一引用的 JSON 保留 reference/locator/repository/objectId/commit/value、维护 Address/digest 和逐单元 declarations/provenance。
+  统一引用的 JSON 保留 reference/locator/repository/objectId/commit/value、sources/withheld、维护 Address/digest 和逐单元 declarations/provenance。
   适用的 digest 属于已保存的完整维护单元，可作写入条件；叶值为 null 与定位不存在分别处理。
  Dataset 的动态值另保留 observations：commit 固定声明依据，源观察及其版本不能当作该 commit 的固定正文。
 后果：
@@ -38,10 +39,10 @@ var leafHelp = map[string]helpEntry{
   核对 URN 的来源仓与 object_id、Pointer 转义、固定版本及获准范围；拒绝或缺失不能当作空值。
   若准备修订，保存返回 Address/digest，并提交完整维护单元；读出深字段不能直接局部 PATCH。
 示例：
-  例：kc read 'urn:kc:object:kr%3A%2F%2Fscene%2Fobject:table%2Forders#/columns/order_id/constraints/nullable'
-  例：kc read 'urn:kc:object:kr%3A%2F%2Fscene%2Fobject:table%2Forders#/columns/order_id' --dataset scene-set
-  例：kc read 'urn:kc:object:kr%3A%2F%2Fkc%2Fsystem:kc%2Fsystem#/readme'
-  例：kc read 'urn:kc:object:kr%3A%2F%2Fkc%2Fsystem:kc%2Fconcept%2Fobject#/definition'
+  例：kc read 'urn:kc:object:table/orders#/columns/order_id/constraints/nullable'
+  例：kc read 'urn:kc:object:table/orders#/columns/order_id' --dataset scene-set
+  例：kc read 'urn:kc:object:kc/system#/readme'
+  例：kc read 'urn:kc:object:kc/concept/object#/definition'
   系统对象示例仅在该服务已出版相应对象且当前主体有读取权时可用；理解本地 kc help 不需要这个前提。
 `,
 	},
@@ -69,8 +70,8 @@ var leafHelp = map[string]helpEntry{
   UNRESOLVED 时核对对象 id、切面、成员和版本；不要把拒绝访问解释为对象不存在。
   需读正文时使用 read，并在单仓复用已返回的 commit；临时错误可重试，重新解析可能得到新依据。
 示例：
-  例：kc resolve --repo kr://scene/object --object metric/gmv
-  例：kc resolve --dataset scene-set --object metric/gmv`,
+  例：kc resolve --repo kr://scene/object --object example/report
+  例：kc resolve --dataset scene-set --object example/report`,
 	},
 	"provenance": {
 		Description: "读取对象来源信封",
@@ -96,8 +97,8 @@ var leafHelp = map[string]helpEntry{
   未解析时先 resolve 核对对象及固定版本；无权时按单仓 provenance 或 Dataset file.read 通路申请相应范围。
   需要核实某个来源对象时按其坐标另行 read，并接受该来源自己的权限和版本检查。
 示例：
-  例：kc provenance --repo kr://scene/object --object metric/gmv
-  例：kc provenance --dataset scene-set --object metric/gmv`,
+  例：kc provenance --repo kr://scene/object --object example/report
+  例：kc provenance --dataset scene-set --object example/report`,
 	},
 	"log": {
 		Description: "分页读取对象修订历史",
@@ -124,8 +125,8 @@ var leafHelp = map[string]helpEntry{
   历史能力或授权缺失时请相应维护者处理，不以当前正文替代历史结果。
   游标与当前依据不符时重新查询；单仓保存并显式复用起点 commit，避免 published 推进后混页。
 示例：
-  例：kc log --repo kr://scene/object --object metric/gmv
-  例：kc log --dataset scene-set --object metric/gmv`,
+  例：kc log --repo kr://scene/object --object example/report
+  例：kc log --dataset scene-set --object example/report`,
 	},
 	"schema list": {
 		Description: "列出一个 Repository 已发布的对象类型，不是对象实例目录或合同正文",
@@ -183,7 +184,7 @@ var leafHelp = map[string]helpEntry{
 	},
 	"writer put": {
 		Description: "按对象 URN 与 locator 创建或替换完整内容",
-		Usage: `kc writer put <object-urn[#/json/pointer]> --command-id <id> (--value <json> | --file <path>)
+		Usage: `kc writer put <object-urn[#/json/pointer]> --repo <repository> --command-id <id> (--value <json> | --file <path>)
   用途：
     按统一引用创建或更新完整维护单元。PUT 替换完整单元，不合并部分字段。
   用法与参数：
@@ -210,12 +211,12 @@ var leafHelp = map[string]helpEntry{
     NON_FAST_FORWARD 要重新核对基点并构造新请求；Schema/权限拒绝先修正原因。
     PENDING 或查询不到最终回执时保留原请求并请运营者对账，不能以换 id 推断安全重写。
   示例：
-    例：kc writer put 'urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv' --command-id put-1 --value '{"name":"GMV"}'
+    例：kc writer put 'urn:kc:object:example/report' --repo kr://scene/object --command-id put-1 --value '{"name":"GMV"}'
     例：kc writer receipt --command-id put-1`,
 	},
 	"writer remove": {
 		Description: "按对象 URN 与 locator 删除对象或完整维护单元",
-		Usage: `kc writer remove <object-urn[#/json/pointer]> --command-id <id>
+		Usage: `kc writer remove <object-urn[#/json/pointer]> --repo <repository> --command-id <id>
   用途：
     从新的发布版本中显式删除整个对象或选定的完整维护内容。
   用法与参数：
@@ -239,8 +240,8 @@ var leafHelp = map[string]helpEntry{
     用原 command-id 查 writer receipt；同 id 换内容会冲突，结果未明先对账。
     并发冲突先重新读取，Schema 仍被引用先处理依赖；恢复内容需要一次新的明确 PUT，不倒退历史。
   示例：
-    例：kc writer remove 'urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv' --command-id rm-1
-    例：kc writer remove 'urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv#/description' --command-id rm-description
+    例：kc writer remove 'urn:kc:object:example/report' --repo kr://scene/object --command-id rm-1
+    例：kc writer remove 'urn:kc:object:example/report#/description' --repo kr://scene/object --command-id rm-description
     例：kc writer receipt --command-id rm-1`,
 	},
 }

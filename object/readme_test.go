@@ -57,15 +57,15 @@ func TestSystemRepositoryPublishesReadmeSchemaAndInstance(t *testing.T) {
 }
 
 func TestAssertReadmeBinding(t *testing.T) {
-	okAddr := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "payments", AspectName: objectmodel.ReadmeAspect}
+	okAddr := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "fixture/payments", AspectName: objectmodel.ReadmeAspect}
 	if err := objectmodel.AssertReadmeBinding(okAddr, objectmodel.CoreReadmeSchemaV1); err != nil {
 		t.Fatal(err)
 	}
-	blob := objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "payments"}
+	blob := objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "fixture/payments"}
 	if err := objectmodel.AssertReadmeBinding(blob, objectmodel.CoreReadmeSchemaV1); err == nil {
 		t.Fatal("entity blob must not use the README schema")
 	}
-	other := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "payments", AspectName: "body"}
+	other := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "fixture/payments", AspectName: "body"}
 	if err := objectmodel.AssertReadmeBinding(other, objectmodel.CoreReadmeSchemaV1); err == nil {
 		t.Fatal("wrong aspect must not use the README schema")
 	}

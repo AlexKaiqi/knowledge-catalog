@@ -90,19 +90,19 @@ func TestProjectionNotifyPullsBoundStateWithoutChangingHEAD(t *testing.T) {
 		})
 	}))
 	t.Cleanup(runtime.Close)
-	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "schema/job.runtime", ""), "--command-id", "notify-schema", "--value", `{"entity":"Job","aspect":"runtime","origin":"`+runtime.URL+`","fields":{"status":{"type":"string","access":["text","filter"]}}}`))
-	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "Job:orders", "/properties"), "--command-id", "notify-entity", "--value", `{"name":"orders"}`))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "schema/job.runtime", ""), "--repo", repositoryID, "--command-id", "notify-schema", "--value", `{"entity":"Job","aspect":"runtime","origin":"`+runtime.URL+`","fields":{"status":{"type":"string","access":["text","filter"]}}}`))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "job/orders", "/properties"), "--repo", repositoryID, "--command-id", "notify-entity", "--value", `{"name":"orders"}`))
 	head := asMap(t, body(t, kc(home, "writer", "head", "--repo", repositoryID)))
 	before := head["commit"]
 
 	notified := asMap(t, body(t, kc(home, "operations", "projection", "notice",
-		"--repo", repositoryID, "--object", "Job:orders", "--aspect", "runtime")))
+		"--repo", repositoryID, "--object", "job/orders", "--aspect", "runtime")))
 	if notified["repository"] != repositoryID || notified["basisCommit"] != before || notified["revision"] == "" {
 		t.Fatalf("notify must publish State at the unchanged HEAD: %#v want commit %v", notified, before)
 	}
 	status = "stopped"
 	again := asMap(t, body(t, kc(home, "operations", "projection", "notice",
-		"--repo", repositoryID, "--object", "Job:orders", "--aspect", "runtime", "--source-revision", "r2")))
+		"--repo", repositoryID, "--object", "job/orders", "--aspect", "runtime", "--source-revision", "r2")))
 	if again["revision"] == "" || again["revision"] == notified["revision"] || again["basisCommit"] != before {
 		t.Fatalf("second notice must publish a new observation on the same commit: %#v vs %#v", again, notified)
 	}
@@ -122,7 +122,7 @@ func TestProjectionNotifyPullsBoundStateWithoutChangingHEAD(t *testing.T) {
 	t.Cleanup(server.Close)
 	status = "archived"
 	remote := asMap(t, body(t, kcRemote(t, server.URL, "operator", "operations", "projection", "notice",
-		"--repo", repositoryID, "--object", "Job:orders", "--aspect", "runtime")))
+		"--repo", repositoryID, "--object", "job/orders", "--aspect", "runtime")))
 	if remote["basisCommit"] != before || remote["revision"] == "" || remote["revision"] == again["revision"] {
 		t.Fatalf("HTTP notice without a worker runtime lost its local source or fixed basis: %#v", remote)
 	}

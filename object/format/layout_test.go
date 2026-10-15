@@ -34,15 +34,15 @@ func TestDefaultPathPlacesInstancesUnderTypeDirectories(t *testing.T) {
 	if got != "table/lineitem/properties.json" {
 		t.Fatalf("without schema_ref: got %s", got)
 	}
-	typed := DefaultPath(objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "dw-metric-1", AspectName: "properties"}, "schema/metric.properties")
-	if typed != "metrics/dw-metric-1/properties.json" {
+	typed := DefaultPath(objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "fixture/dw-metric-1", AspectName: "properties"}, "schema/metric.properties")
+	if typed != "metrics/fixture/dw-metric-1/properties.json" {
 		t.Fatalf("with schema_ref: got %s", typed)
 	}
 	resource := DefaultPath(objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "resource/mysql-tpch-sql"}, "schema/core/resource-descriptor/v1")
 	if resource != "resources/resource/mysql-tpch-sql.json" {
 		t.Fatalf("resource: got %s", resource)
 	}
-	readme := DefaultPath(objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "payments", AspectName: objectmodel.ReadmeAspect}, string(objectmodel.CoreReadmeSchemaV1))
+	readme := DefaultPath(objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "fixture/payments", AspectName: objectmodel.ReadmeAspect}, string(objectmodel.CoreReadmeSchemaV1))
 	if readme != objectmodel.RepositoryReadmePath {
 		t.Fatalf("readme: got %s", readme)
 	}
@@ -79,7 +79,7 @@ func TestPathHintForIngestPutsSchemaDraftsInOneDirectory(t *testing.T) {
 }
 
 func TestPathHintForIngestPlacesReadmeAtRepositoryRoot(t *testing.T) {
-	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "payments", AspectName: objectmodel.ReadmeAspect}
+	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "fixture/payments", AspectName: objectmodel.ReadmeAspect}
 	got := PathHintForIngest(address, "notes/about.md", "notes/about.md")
 	if got != objectmodel.RepositoryReadmePath {
 		t.Fatalf("got %s", got)

@@ -85,6 +85,10 @@ type ObjectValue struct {
 	Provenance   *ProvenanceEnvelope `json:"provenance,omitempty"`
 	Units        []Address           `json:"units,omitempty"`
 	Declarations []UnitDeclaration   `json:"declarations,omitempty"`
+	// Sources is the version vector when the scope resolved the object across
+	// Repositories; Withheld names holders the caller may not read.
+	Sources  []SourceBasis         `json:"sources,omitempty"`
+	Withheld []kernel.RepositoryID `json:"withheld,omitempty"`
 }
 
 type ProvenanceTrace struct {
@@ -95,18 +99,20 @@ type ProvenanceTrace struct {
 }
 
 type FederatedValue struct {
-	Reference    string              `json:"reference,omitempty"`
-	Locator      string              `json:"locator,omitempty"`
-	Digest       kernel.Digest       `json:"digest,omitempty"`
-	ObjectRef    ObjectRef           `json:"objectRef"`
-	Repository   kernel.RepositoryID `json:"repository"`
-	Commit       kernel.CommitID     `json:"commit"`
-	ObjectID     ObjectID            `json:"objectId"`
-	Address      Address             `json:"address"`
-	Value        any                 `json:"value"`
-	Provenance   *ProvenanceEnvelope `json:"provenance,omitempty"`
-	Units        []Address           `json:"units,omitempty"`
-	Declarations []UnitDeclaration   `json:"declarations,omitempty"`
+	Reference    string                `json:"reference,omitempty"`
+	Locator      string                `json:"locator,omitempty"`
+	Digest       kernel.Digest         `json:"digest,omitempty"`
+	ObjectRef    ObjectRef             `json:"objectRef"`
+	Repository   kernel.RepositoryID   `json:"repository"`
+	Commit       kernel.CommitID       `json:"commit"`
+	ObjectID     ObjectID              `json:"objectId"`
+	Address      Address               `json:"address"`
+	Value        any                   `json:"value"`
+	Provenance   *ProvenanceEnvelope   `json:"provenance,omitempty"`
+	Units        []Address             `json:"units,omitempty"`
+	Declarations []UnitDeclaration     `json:"declarations,omitempty"`
+	Sources      []SourceBasis         `json:"sources,omitempty"`
+	Withheld     []kernel.RepositoryID `json:"withheld,omitempty"`
 }
 
 // ObservedValue retains a fixed declaration and independently observed values.

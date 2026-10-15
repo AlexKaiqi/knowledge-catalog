@@ -9,10 +9,6 @@ relationType: uses_concept
 direction: DIRECTED
 endpoints:
   - role: from
-    objectRef:
-      repository: kr://kc/system
-      object: kc/capability/schemas
+    object: kc/capability/schemas
   - role: to
-    objectRef:
-      repository: kr://kc/system
-      object: kc/concept/meta-schema
+    object: kc/concept/meta-schema

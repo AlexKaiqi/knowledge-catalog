@@ -34,7 +34,7 @@ func (c *fakeClient) Remove(_ context.Context, r client.MaintenanceRequest, _ cl
 	return nil
 }
 
-const testReference = "urn:kc:object:kr%3A%2F%2Fscene%2Fobject:table%2Forders#/columns/order_id/constraints/nullable"
+const testReference = "urn:kc:object:table/orders#/columns/order_id/constraints/nullable"
 
 func TestReferenceReadPreservesSelectionAndExplicitScope(t *testing.T) {
 	remote := &fakeClient{}
@@ -93,7 +93,7 @@ func TestReferenceWriteRetainsUnitCASAndJSONPrecision(t *testing.T) {
 
 func TestBasicObjectCommandsRejectSplitAddressesBeforeTransport(t *testing.T) {
 	for _, path := range []string{"read", "writer put", "writer remove"} {
-		for _, name := range []string{"repo", "object", "aspect", "member", "include", "exclude"} {
+		for _, name := range []string{"object", "aspect", "member", "include", "exclude"} {
 			t.Run(path+"/"+name, func(t *testing.T) {
 				remote := &fakeClient{}
 				flags := positionalReferenceFlags(t, path, testReference, map[string]any{name: "obsolete"})
@@ -179,10 +179,15 @@ func TestBasicObjectHelpShowsOnlyReferenceAddress(t *testing.T) {
 		if !strings.HasPrefix(entry.Usage, "kc "+path+" <object-urn") {
 			t.Fatalf("%s lost complete reference syntax: %s", path, entry.Usage)
 		}
-		for _, old := range []string{"--reference", "--repo", "--object", "--aspect", "--member", "--include", "--exclude", "兼容"} {
+		for _, old := range []string{"--reference", "--object", "--aspect", "--member", "--include", "--exclude", "兼容"} {
 			if strings.Contains(entry.Usage, old) {
 				t.Fatalf("%s still documents a second address form %q: %s", path, old, entry.Usage)
 			}
+		}
+		// --repo is the request scope (read) or the write target (writer); it
+		// never forms part of the object address.
+		if !strings.Contains(entry.Usage, "--repo <") || strings.Contains(entry.Usage, "--repo <id>/") {
+			t.Fatalf("%s must document --repo as a scope, not an address part: %s", path, entry.Usage)
 		}
 		metadata, _ := command(path)
 		if !reflect.DeepEqual(metadata.Operands, []string{"reference"}) {
@@ -193,6 +198,24 @@ func TestBasicObjectHelpShowsOnlyReferenceAddress(t *testing.T) {
 				t.Fatalf("%s still advertises the target flag alias", path)
 			}
 		}
+	}
+}
+
+func TestRepoIsAReadScopeNotAnAddressPart(t *testing.T) {
+	remote := &fakeClient{}
+	flags := positionalReferenceFlags(t, "read", testReference, map[string]any{"repo": "kr://core"})
+	if _, err := New(remote, Context{}).Execute(context.Background(), "read", flags, client.RequestOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if remote.read.Reference != testReference || remote.read.Repository != "kr://core" || remote.read.Dataset != "" {
+		t.Fatalf("repo scope was not carried as scope: %#v", remote.read)
+	}
+	put := positionalReferenceFlags(t, "writer put", testReference, map[string]any{"repo": "kr://core", "command-id": "put-repo", "value": "null"})
+	if _, err := New(remote, Context{}).Execute(context.Background(), "writer put", put, client.RequestOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if remote.put.Repository != "kr://core" {
+		t.Fatalf("write lost its target Repository: %#v", remote.put)
 	}
 }
 
@@ -217,7 +240,7 @@ func TestReferenceDatasetAcceptsExplicitMatchingBasisWithoutGuessing(t *testing.
 	if remote.read.Reference != testReference || remote.read.Dataset != "delivery" || remote.read.Commit != "fixed" {
 		t.Fatalf("lost explicit basis: %#v", remote.read)
 	}
-	for _, bad := range []map[string]any{positionalReferenceFlags(t, "read", testReference, map[string]any{"dataset": "delivery", "ref": "published"}), positionalReferenceFlags(t, "read", testReference, map[string]any{"repo": "kr://other"}), {"dataset": "delivery", "object": "table/orders", "commit": "fixed"}} {
+	for _, bad := range []map[string]any{positionalReferenceFlags(t, "read", testReference, map[string]any{"dataset": "delivery", "ref": "published"}), positionalReferenceFlags(t, "read", testReference, map[string]any{"dataset": "delivery", "repo": "kr://other"}), {"dataset": "delivery", "object": "table/orders", "commit": "fixed"}} {
 		if err := New(remote, Context{}).Validate("read", bad); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
 			t.Fatalf("conflicting basis accepted: %#v %v", bad, err)
 		}

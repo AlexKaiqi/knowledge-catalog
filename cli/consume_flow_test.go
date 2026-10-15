@@ -19,11 +19,11 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	core := "kr://acme/public/core"
 	body(t, kc(h, "init"))
 	seedRepo(t, h, core)
-	body(t, kc(h, "put", testObjectReference(t, core, "ETLTask:daily-orders", "/io"), "--command-id", "task-io", "--value", `{"inputs":["orders"]}`))
-	body(t, kc(h, "put", testObjectReference(t, core, "schema/policy.body", ""), "--command-id", "schema-body", "--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`))
-	c1 := asMap(t, asMap(t, body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--command-id", "v1", "--value", `{"body":"needs a runbook"}`)))["result"])["newCommit"].(string)
+	body(t, kc(h, "put", testObjectReference(t, core, "etl-task/daily-orders", "/io"), "--repo", core, "--command-id", "task-io", "--value", `{"inputs":["orders"]}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "schema/policy.body", ""), "--repo", core, "--command-id", "schema-body", "--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`))
+	c1 := asMap(t, asMap(t, body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--repo", core, "--command-id", "v1", "--value", `{"body":"needs a runbook"}`)))["result"])["newCommit"].(string)
 	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
-	c2 := asMap(t, asMap(t, body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--command-id", "v2", "--value", `{"body":"later live 冻结窗口"}`)))["result"])["newCommit"].(string)
+	c2 := asMap(t, asMap(t, body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--repo", core, "--command-id", "v2", "--value", `{"body":"later live 冻结窗口"}`)))["result"])["newCommit"].(string)
 	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "2", "--source", core+"=refs/heads/main"))
 
 	serving := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--dataset", "agent")))
@@ -58,12 +58,12 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 		t.Fatalf("object resolve must freeze this command's pin: %#v", resolvedObject)
 	}
 	aspectResolved := body(t, kc(h, "resolve", "--dataset", "agent",
-		"--object", "ETLTask:daily-orders", "--aspect", "io")).([]any)
+		"--object", "etl-task/daily-orders", "--aspect", "io")).([]any)
 	if len(aspectResolved) != 1 || asMap(t, aspectResolved[0])["status"] != "RESOLVED" {
 		t.Fatalf("object resolve --aspect: %#v", aspectResolved)
 	}
 	missingAspect := body(t, kc(h, "resolve", "--dataset", "agent",
-		"--object", "ETLTask:daily-orders", "--aspect", "missing")).([]any)
+		"--object", "etl-task/daily-orders", "--aspect", "missing")).([]any)
 	if len(missingAspect) != 0 {
 		t.Fatalf("workspace resolve of a missing Address is an empty union: %#v", missingAspect)
 	}
@@ -160,7 +160,7 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	expectMsg(t, kc(h, "log", "--dataset", "agent"), "missing --object")
 	expectMsg(t, kc(h, "log", "--dataset", "agent", "--repo", core, "--object", "policy/A"), "do not mix")
 
-	live := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--ref", "refs/heads/main")))
+	live := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--repo", core, "--ref", "refs/heads/main")))
 	if asMap(t, live["value"])["body"] != "later live 冻结窗口" {
 		t.Fatal("maintainer read --repo still follows the named ref", live)
 	}
@@ -184,7 +184,7 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 	expectCode(t, kc(h, "list", "--dataset", "agent", "--ref", "refs/heads/main"), "USAGE_INVALID")
 	expectCode(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--dataset", "missing"), "DATASET_INVALID")
 	expectMsg(t, kc(h, "promote", "--dataset", "agent"), "unknown command promote")
-	expectMsg(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--release", "stable"), "unknown flag --release")
+	expectMsg(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--repo", core, "--release", "stable"), "unknown flag --release")
 }
 
 func TestDatasetAuthorizationCoverageIsHonest(t *testing.T) {
@@ -194,18 +194,18 @@ func TestDatasetAuthorizationCoverageIsHonest(t *testing.T) {
 	body(t, kc(h, "init"))
 	for _, repo := range []string{public, private} {
 		seedRepo(t, h, repo)
-		body(t, kc(h, "put", testObjectReference(t, repo, "schema/runbook.body", ""), "--command-id", "schema-"+repo, "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+		body(t, kc(h, "put", testObjectReference(t, repo, "schema/runbook.body", ""), "--repo", repo, "--command-id", "schema-"+repo, "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
 	}
-	body(t, kc(h, "put", testObjectReference(t, public, "runbook/public", ""), "--command-id", "public-body", "--schema-ref", "schema/runbook.body", "--value", `{"body":"payment public procedure"}`))
-	body(t, kc(h, "put", testObjectReference(t, private, "runbook/private", ""), "--command-id", "private-body", "--schema-ref", "schema/runbook.body", "--value", `{"body":"payment private procedure"}`))
+	body(t, kc(h, "put", testObjectReference(t, public, "runbook/public", ""), "--repo", public, "--command-id", "public-body", "--schema-ref", "schema/runbook.body", "--value", `{"body":"payment public procedure"}`))
+	body(t, kc(h, "put", testObjectReference(t, private, "runbook/private", ""), "--repo", private, "--command-id", "private-body", "--schema-ref", "schema/runbook.body", "--value", `{"body":"payment private procedure"}`))
 	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1",
 		"--source", public+"=refs/heads/main", "--source", private+"=refs/heads/main"))
 	body(t, kc(h, "allow", "--principal", "bot", "--action", "file.read,dataset.resolve,object.search", "--dataset", "agent"))
 	body(t, kc(h, "allow", "--principal", "bot", "--cmd", "read", "--repo", public))
 	body(t, kc(h, "allow", "--principal", "bot", "--action", "object.history.read", "--repo", public))
 
-	expectCode(t, kc(h, "read", testObjectReference(t, private, "runbook/private", ""), "--as", "bot"), "FORBIDDEN")
-	body(t, kc(h, "read", testObjectReference(t, public, "runbook/public", ""), "--as", "bot"))
+	expectCode(t, kc(h, "read", testObjectReference(t, private, "runbook/private", ""), "--repo", private, "--as", "bot"), "FORBIDDEN")
+	body(t, kc(h, "read", testObjectReference(t, public, "runbook/public", ""), "--repo", public, "--as", "bot"))
 
 	for _, source := range []struct{ repository, object string }{{private, "runbook/private"}, {public, "runbook/public"}} {
 		ref := testObjectReference(t, source.repository, source.object, "")
@@ -255,7 +255,7 @@ func TestCatalogReadDiscoversWithoutObjectRead(t *testing.T) {
 	repo := "kr://acme/public/runbooks"
 	body(t, kc(h, "init"))
 	seedRepo(t, h, repo)
-	body(t, kc(h, "put", testObjectReference(t, repo, "runbook/public", ""), "--command-id", "seed", "--value", `{"body":"secret procedure"}`))
+	body(t, kc(h, "put", testObjectReference(t, repo, "runbook/public", ""), "--repo", repo, "--command-id", "seed", "--value", `{"body":"secret procedure"}`))
 	body(t, kc(h, "allow", "--principal", "bot", "--action", "inventory.read"))
 
 	state := asMap(t, body(t, kc(h, "show", "--as", "bot")))
@@ -263,7 +263,7 @@ func TestCatalogReadDiscoversWithoutObjectRead(t *testing.T) {
 	if len(listed) != 1 || listed[0] != repo {
 		t.Fatalf("inventory.read must discover registered repositories: %#v", state)
 	}
-	expectCode(t, kc(h, "read", testObjectReference(t, repo, "runbook/public", ""), "--as", "bot"), "FORBIDDEN")
+	expectCode(t, kc(h, "read", testObjectReference(t, repo, "runbook/public", ""), "--repo", repo, "--as", "bot"), "FORBIDDEN")
 }
 
 func TestRepoSearchDeliveryStripsUnauthorizedBody(t *testing.T) {
@@ -271,8 +271,8 @@ func TestRepoSearchDeliveryStripsUnauthorizedBody(t *testing.T) {
 	repo := "kr://acme/public/runbooks"
 	body(t, kc(h, "init"))
 	seedRepo(t, h, repo)
-	body(t, kc(h, "put", testObjectReference(t, repo, "schema/runbook.body", ""), "--command-id", "schema", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
-	body(t, kc(h, "put", testObjectReference(t, repo, "runbook/public", ""), "--command-id", "body", "--schema-ref", "schema/runbook.body", "--value", `{"body":"payment public procedure"}`))
+	body(t, kc(h, "put", testObjectReference(t, repo, "schema/runbook.body", ""), "--repo", repo, "--command-id", "schema", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+	body(t, kc(h, "put", testObjectReference(t, repo, "runbook/public", ""), "--repo", repo, "--command-id", "body", "--schema-ref", "schema/runbook.body", "--value", `{"body":"payment public procedure"}`))
 	body(t, kc(h, "allow", "--principal", "bot", "--action", "object.search", "--repo", repo))
 	if !searchAvailable() {
 		expectCode(t, kc(h, "search", "--as", "bot", "--repo", repo, "--query", "payment"), "CAPABILITY_UNSATISFIED")
@@ -303,8 +303,8 @@ func TestHTTPWorkspaceSearchKeepsDatasetFileReadBody(t *testing.T) {
 	repo := "kr://acme/public/runbooks"
 	body(t, kc(h, "init"))
 	seedRepo(t, h, repo)
-	body(t, kc(h, "put", testObjectReference(t, repo, "schema/runbook.body", ""), "--command-id", "schema", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
-	body(t, kc(h, "put", testObjectReference(t, repo, "runbook/public", ""), "--command-id", "body", "--schema-ref", "schema/runbook.body", "--value", `{"body":"payment public procedure"}`))
+	body(t, kc(h, "put", testObjectReference(t, repo, "schema/runbook.body", ""), "--repo", repo, "--command-id", "schema", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+	body(t, kc(h, "put", testObjectReference(t, repo, "runbook/public", ""), "--repo", repo, "--command-id", "body", "--schema-ref", "schema/runbook.body", "--value", `{"body":"payment public procedure"}`))
 	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1",
 		"--source", repo+"=refs/heads/main"))
 	body(t, kc(h, "allow", "--principal", "taihu:alice", "--action", "file.read", "--dataset", "agent"))
@@ -363,8 +363,8 @@ func TestObjectOnlyWorkspaceCannotCheckoutByScanning(t *testing.T) {
 	body(t, kc(h, "init"))
 	seedRepo(t, h, core)
 	seedRepo(t, h, group)
-	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-103", ""), "--command-id", "pub", "--value", `{"body":"public"}`))
-	body(t, kc(h, "put", testObjectReference(t, group, "policy/P-103", ""), "--command-id", "grp", "--value", `{"body":"group"}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-103", ""), "--repo", core, "--command-id", "pub", "--value", `{"body":"public"}`))
+	body(t, kc(h, "put", testObjectReference(t, group, "policy/P-103", ""), "--repo", group, "--command-id", "grp", "--value", `{"body":"group"}`))
 	body(t, kc(h, "dataset", "define", "--dataset", "payments-agent", "--revision", "1",
 		"--source", core+"=refs/heads/main",
 		"--source", group+"=refs/heads/main"))
@@ -406,17 +406,17 @@ func TestDatasetSearchExcludesPathsOutsidePublishedList(t *testing.T) {
 	core := "kr://acme/public/core"
 	body(t, kc(h, "init"))
 	seedRepo(t, h, core)
-	body(t, kc(h, "put", testObjectReference(t, core, "schema/policy.body", ""), "--command-id", "schema-body", "--path-hint", "policies/schema.yaml", "--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`))
-	body(t, kc(h, "put", testObjectReference(t, core, "listed", ""), "--command-id", "listed", "--schema-ref", "schema/policy.body", "--path-hint", "policies/listed.yaml", "--value", `{"body":"listed payment procedure"}`))
-	body(t, kc(h, "put", testObjectReference(t, core, "schema/note.body", ""), "--command-id", "schema-note", "--value", `{"entity":"Note","pattern":"record","fields":{"body":{"access":["text"]}}}`))
-	body(t, kc(h, "put", testObjectReference(t, core, "secret", ""), "--command-id", "secret", "--schema-ref", "schema/note.body", "--path-hint", "notes/secret.yaml", "--value", `{"body":"secret payment procedure"}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "schema/policy.body", ""), "--repo", core, "--command-id", "schema-body", "--path-hint", "policies/schema.yaml", "--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "fixture/listed", ""), "--repo", core, "--command-id", "listed", "--schema-ref", "schema/policy.body", "--path-hint", "policies/listed.yaml", "--value", `{"body":"listed payment procedure"}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "schema/note.body", ""), "--repo", core, "--command-id", "schema-note", "--value", `{"entity":"Note","pattern":"record","fields":{"body":{"access":["text"]}}}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "fixture/secret", ""), "--repo", core, "--command-id", "secret", "--schema-ref", "schema/note.body", "--path-hint", "notes/secret.yaml", "--value", `{"body":"secret payment procedure"}`))
 	body(t, kc(h, "dataset", "define", "--dataset", "docs", "--revision", "1",
 		"--source", core+"=refs/heads/main@policies@policies"))
-	listed := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "listed", ""), "--dataset", "docs")))
-	if listed["reference"] != testObjectReference(t, core, "listed", "") {
+	listed := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "fixture/listed", ""), "--dataset", "docs")))
+	if listed["reference"] != testObjectReference(t, core, "fixture/listed", "") {
 		t.Fatalf("prefix dataset must read listed files: %#v", listed)
 	}
-	secret := kc(h, "read", testObjectReference(t, core, "secret", ""), "--dataset", "docs")
+	secret := kc(h, "read", testObjectReference(t, core, "fixture/secret", ""), "--dataset", "docs")
 	expectCode(t, secret, "OBJECT_REF_UNRESOLVED")
 	if strings.Contains(secret.Stdout, "secret payment procedure") {
 		t.Fatal("prefix Dataset read leaked a file outside its published list", secret.Stdout)
@@ -426,7 +426,7 @@ func TestDatasetSearchExcludesPathsOutsidePublishedList(t *testing.T) {
 		syncIndexes(t, h, core)
 		search := asMap(t, body(t, kc(h, "search", "--dataset", "docs", "--query", "payment")))
 		hits := search["hits"].([]any)
-		if len(hits) != 1 || asMap(t, hits[0])["objectId"] != "listed" {
+		if len(hits) != 1 || asMap(t, hits[0])["objectId"] != "fixture/listed" {
 			t.Fatalf("SEARCH must not return paths outside the serving file list: %#v", search)
 		}
 	} else {
@@ -439,13 +439,13 @@ func TestHistoricalDatasetReadStaysOnPublishedCommit(t *testing.T) {
 	core := "kr://acme/public/core"
 	body(t, kc(h, "init"))
 	seedRepo(t, h, core)
-	body(t, kc(h, "put", testObjectReference(t, core, "schema/policy.body", ""), "--command-id", "schema-body", "--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`))
-	frozenCommit := asMap(t, asMap(t, body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--command-id", "v1", "--schema-ref", "schema/policy.body", "--value", `{"body":"frozen payment"}`)))["result"])["newCommit"].(string)
+	body(t, kc(h, "put", testObjectReference(t, core, "schema/policy.body", ""), "--repo", core, "--command-id", "schema-body", "--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`))
+	frozenCommit := asMap(t, asMap(t, body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--repo", core, "--command-id", "v1", "--schema-ref", "schema/policy.body", "--value", `{"body":"frozen payment"}`)))["result"])["newCommit"].(string)
 	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
 	if searchAvailable() {
 		syncIndexes(t, h, core)
 	}
-	laterCommit := asMap(t, asMap(t, body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--command-id", "v2", "--schema-ref", "schema/policy.body", "--value", `{"body":"later live payment"}`)))["result"])["newCommit"].(string)
+	laterCommit := asMap(t, asMap(t, body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--repo", core, "--command-id", "v2", "--schema-ref", "schema/policy.body", "--value", `{"body":"later live payment"}`)))["result"])["newCommit"].(string)
 	if searchAvailable() {
 		syncIndexes(t, h, core)
 	}

@@ -35,8 +35,8 @@ func TestConsumerReadSchemaSearchAndRelationsNeverCallMaintenanceScanner(t *test
 			}},
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "policy/a"},
 				Value: map[string]any{"body": "runbook"}, SchemaRef: "schema/policy.body"},
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindRelation, ObjectID: "relation:owned"},
-				Value: testfixture.RelationBody(repo.ID(), "relation:owned", "Table:a")},
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindRelation, ObjectID: "relation/owned"},
+				Value: testfixture.RelationBody("relation/owned", "table/a")},
 		},
 	})
 	if err != nil {
@@ -62,11 +62,11 @@ func TestConsumerReadSchemaSearchAndRelationsNeverCallMaintenanceScanner(t *test
 	relationProvider := &relationEngine{
 		meta: ports.Meta{Basis: commit, State: ports.ProjectionStateReady, Generation: "g1"}, calls: &calls,
 		pages: [][]retrieval.RelationCandidate{{{
-			Repository: repo.ID(), ObjectID: "relation:owned", Basis: commit,
+			Repository: repo.ID(), ObjectID: "relation/owned", Basis: commit,
 		}}},
 	}
 	relations := index.NewIndexEngine("", func(string, kernel.RepositoryID) (ports.Engine, error) { return relationProvider, nil })
-	if _, err := relations.RelationsAt(poison, commit, relationRequest(repo.ID())); err != nil {
+	if _, err := relations.RelationsAt(poison, commit, relationRequest()); err != nil {
 		t.Fatal(err)
 	}
 }

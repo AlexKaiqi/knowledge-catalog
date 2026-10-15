@@ -46,7 +46,7 @@ func TestSnapshotRepositoryHTTPFeedsStandaloneFilePublication(t *testing.T) {
 	if err := json.Unmarshal(raw, &delivered); err != nil {
 		t.Fatal(err)
 	}
-	if string(delivered.Content) != `{"object_id":"Business:old","value":1}` {
+	if string(delivered.Content) != `{"object_id":"business/old","value":1}` {
 		t.Fatalf("standalone inventory did not lead to fixed file delivery: %s", raw)
 	}
 }

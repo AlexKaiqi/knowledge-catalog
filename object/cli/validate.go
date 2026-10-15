@@ -41,7 +41,7 @@ func (e *executor) ValidateFlags(path string, flags map[string]any) error {
 		name := unknown[0]
 		if referenceCommand(path) {
 			switch name {
-			case "repo", "object", "aspect", "member", "include", "exclude", "dataset", "pin", "catalog", "source":
+			case "object", "aspect", "member", "include", "exclude", "dataset", "pin", "catalog", "source":
 				return usage("kc %s rejects --%s; select the object with an object URN and optional locator", path, name)
 			}
 		}
@@ -110,7 +110,7 @@ func validateCoordinates(flags map[string]any) error {
 			return usage("member address requires --aspect and --member")
 		}
 	}
-	if reference == "" && repo != "" && set != "" {
+	if repo != "" && set != "" {
 		return usage("choose --repo or --dataset; do not mix")
 	}
 	if set != "" && flagString(flags, "ref") != "" {

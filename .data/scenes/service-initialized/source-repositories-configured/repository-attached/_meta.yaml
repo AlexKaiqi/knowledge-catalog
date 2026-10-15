@@ -167,7 +167,7 @@ evidence:
     title: "跨仓关系发布不写端点仓、不扩大读权、保留端点坐标"
     verifies:
       - claim: "object#U6"
-        detail: "在 core 发布 owned-by 关系、owner 端点指向 other 仓 Team:finance：other 的 HEAD 与授权规则不变；关系对象经精确读取保留两端点坐标与存储来源（无索引时精确读仍成立）。"
+        detail: "在 core 发布 owned-by 关系、owner 端点指向 other 仓 team/finance：other 的 HEAD 与授权规则不变；关系对象经精确读取保留两端点坐标与存储来源（无索引时精确读仍成立）。"
   - source: "snapshot.authority"
     views:
       - "access-control"

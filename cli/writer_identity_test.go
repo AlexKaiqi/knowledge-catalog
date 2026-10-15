@@ -17,13 +17,13 @@ func TestAspectModificationKeepsSiblingAndIdentity(t *testing.T) {
 	h := testkit.TempDir(t)
 	kc(h, "init")
 	seedRepo(t, h, "kr://acme/public/core")
-	body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "Policy:P-103", "/definition"), "--command-id", "def-v1", "--value", `{"text":"v1"}`))
-	body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "Policy:P-103", "/runtime"), "--command-id", "run-v1", "--value", `{"status":"on"}`))
+	body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/P-103", "/definition"), "--repo", "kr://acme/public/core", "--command-id", "def-v1", "--value", `{"text":"v1"}`))
+	body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/P-103", "/runtime"), "--repo", "kr://acme/public/core", "--command-id", "run-v1", "--value", `{"status":"on"}`))
 
-	body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "Policy:P-103", "/definition"), "--command-id", "def-v2", "--value", `{"text":"v2"}`))
+	body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/P-103", "/definition"), "--repo", "kr://acme/public/core", "--command-id", "def-v2", "--value", `{"text":"v2"}`))
 
-	definition := asMap(t, body(t, kc(h, "read", testObjectReference(t, "kr://acme/public/core", "Policy:P-103", "/definition"))))
-	runtime := asMap(t, body(t, kc(h, "read", testObjectReference(t, "kr://acme/public/core", "Policy:P-103", "/runtime"))))
+	definition := asMap(t, body(t, kc(h, "read", testObjectReference(t, "kr://acme/public/core", "policy/P-103", "/definition"), "--repo", "kr://acme/public/core")))
+	runtime := asMap(t, body(t, kc(h, "read", testObjectReference(t, "kr://acme/public/core", "policy/P-103", "/runtime"), "--repo", "kr://acme/public/core")))
 	if got := definition["value"]; !reflect.DeepEqual(got, map[string]any{"text": "v2"}) {
 		t.Fatalf("modified aspect must serve v2: %#v", got)
 	}
@@ -31,7 +31,7 @@ func TestAspectModificationKeepsSiblingAndIdentity(t *testing.T) {
 		t.Fatalf("sibling aspect must keep its value: %#v", got)
 	}
 	for _, hit := range []map[string]any{definition, runtime} {
-		if hit["objectId"] != "Policy:P-103" {
+		if hit["objectId"] != "policy/P-103" {
 			t.Fatalf("aspect identity must stay on the same object: %#v", hit)
 		}
 		if hit["aspectName"] != "definition" && hit["aspectName"] != "runtime" {
@@ -45,20 +45,20 @@ func TestLostResponseRecoversFromReceiptAndRefusesContentSwap(t *testing.T) {
 	h := testkit.TempDir(t)
 	kc(h, "init")
 	seedRepo(t, h, "kr://acme/public/core")
-	accepted := asMap(t, body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/A", ""), "--command-id", "sync-1", "--value", `{"v":1}`)))
+	accepted := asMap(t, body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/A", ""), "--repo", "kr://acme/public/core", "--command-id", "sync-1", "--value", `{"v":1}`)))
 	if accepted["disposition"] != "APPLIED" {
 		t.Fatalf("first publish must apply: %#v", accepted)
 	}
 	head := body(t, kc(h, "writer", "head", "--repo", "kr://acme/public/core"))
 
 	// 同一命令身份、另一份内容：拒绝，HEAD 不动。
-	expectCode(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/A", ""), "--command-id", "sync-1", "--value", `{"v":2}`), "IDEMPOTENCY_CONFLICT")
+	expectCode(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/A", ""), "--repo", "kr://acme/public/core", "--command-id", "sync-1", "--value", `{"v":2}`), "IDEMPOTENCY_CONFLICT")
 	if got := body(t, kc(h, "writer", "head", "--repo", "kr://acme/public/core")); !reflect.DeepEqual(got, head) {
 		t.Fatalf("content swap must not move HEAD: %v vs %v", got, head)
 	}
 
 	// 响应丢失：回执暴露已接受事实，无需重写。
-	replay := asMap(t, body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/A", ""), "--command-id", "sync-1", "--value", `{"v":1}`)))
+	replay := asMap(t, body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/A", ""), "--repo", "kr://acme/public/core", "--command-id", "sync-1", "--value", `{"v":1}`)))
 	if replay["disposition"] != "REPLAYED" {
 		t.Fatalf("identical retry must replay: %#v", replay)
 	}
@@ -89,12 +89,12 @@ func TestCrossRepositoryRelationPublishKeepsEndpointRepoUntouched(t *testing.T) 
 		"targetRef":        "refs/heads/main",
 		"operations": []any{map[string]any{
 			"op":      "PUT",
-			"address": map[string]any{"kind": "Relation", "objectId": "relation:owned"},
+			"address": map[string]any{"kind": "Relation", "objectId": "relation/owned"},
 			"value": map[string]any{
-				"relationId": "relation:owned", "relationType": "owned-by", "direction": "DIRECTED",
+				"relationId": "relation/owned", "relationType": "owned-by", "direction": "DIRECTED",
 				"endpoints": []any{
-					map[string]any{"role": "subject", "objectRef": map[string]any{"repository": "kr://acme/public/core", "object": "Table:orders"}},
-					map[string]any{"role": "owner", "objectRef": map[string]any{"repository": "kr://acme/other/teams", "object": "Team:finance"}},
+					map[string]any{"role": "subject", "object": "table/orders"},
+					map[string]any{"role": "owner", "object": "team/finance"},
 				},
 			},
 		}},
@@ -111,7 +111,7 @@ func TestCrossRepositoryRelationPublishKeepsEndpointRepoUntouched(t *testing.T) 
 	if got := body(t, kc(h, "grant", "list")); !reflect.DeepEqual(got, grants) {
 		t.Fatalf("relation publish must not widen grants: %#v", got)
 	}
-	relation := asMap(t, body(t, kc(h, "read", testObjectReference(t, "kr://acme/public/core", "relation:owned", ""))))
+	relation := asMap(t, body(t, kc(h, "read", testObjectReference(t, "kr://acme/public/core", "relation/owned", ""), "--repo", "kr://acme/public/core")))
 	rawValue, err := json.Marshal(relation["value"])
 	if err != nil {
 		t.Fatal(err)
@@ -124,8 +124,8 @@ func TestCrossRepositoryRelationPublishKeepsEndpointRepoUntouched(t *testing.T) 
 	if !ok || len(endpoints) != 2 {
 		t.Fatalf("relation must keep both endpoint coordinates: %#v", value)
 	}
-	owner := asMap(t, endpoints[1])["objectRef"].(map[string]any)
-	if owner["repository"] != "kr://acme/other/teams" || owner["object"] != "Team:finance" {
-		t.Fatalf("cross-repo endpoint must keep its storage source: %#v", owner)
+	owner := asMap(t, endpoints[1])
+	if _, named := owner["repository"]; named || owner["object"] != "team/finance" {
+		t.Fatalf("cross-repo endpoint must be the object ID only: %#v", owner)
 	}
 }

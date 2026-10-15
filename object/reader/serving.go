@@ -135,6 +135,37 @@ func (s *Serving) Contains(repositoryID kernel.RepositoryID, objectID objectmode
 	return s.objectInDataset(repositoryID, commit, repo, objectID)
 }
 
+// Holds reports whether some member Repository stores the object ID at its
+// pinned commit inside the Dataset's published range. Unlike Contains, a
+// whole-Repository member does not make every ID in scope: the ID has to be
+// stored there.
+func (s *Serving) Holds(objectID objectmodel.ObjectID) (bool, error) {
+	for repositoryID, commit := range s.pin.Repositories {
+		repo, err := s.lookup(repositoryID)
+		if err != nil {
+			return false, err
+		}
+		locator, ok := repo.(objectmodel.UnitLocator)
+		if !ok {
+			return false, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "repository %s cannot locate object units", repositoryID)
+		}
+		paths, err := locator.ObjectUnitPaths(objectID, commit)
+		if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved || err == nil && len(paths) == 0 {
+			continue
+		}
+		if err != nil {
+			return false, err
+		}
+		if !datasetHasRepository(s.pin.Items, repositoryID) {
+			continue
+		}
+		if !datasetRestrictsRepository(s.pin.Items, repositoryID) || datasetPathsAllowed(s.pin.Items, repositoryID, paths) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (s *Serving) Member(id kernel.RepositoryID) (objectmodel.Repository, error) {
 	commit, ok := s.pin.Repositories[id]
 	if !ok {

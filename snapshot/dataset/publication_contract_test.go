@@ -107,7 +107,7 @@ func TestDatasetPreservesFileJSON(t *testing.T) {
 		t.Fatalf("file definition wire shape changed: %s, %v", body, err)
 	}
 	for _, invalid := range []string{
-		`{"setId":"files","sources":[{"repository":"kr://files/source","objectId":"Entity:a"}]}`,
+		`{"setId":"files","sources":[{"repository":"kr://files/source","objectId":"fixture/a"}]}`,
 		`{"setId":"files","sources":[{"repository":"kr://files/source","aspect":"canonical"}]}`,
 	} {
 		if err := catalog.DecodeJSON([]byte(invalid), &definition); err == nil {

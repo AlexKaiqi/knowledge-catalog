@@ -84,9 +84,9 @@ func (r *poisonAuthority) ReadMany(ids []objectmodel.ObjectID, commit kernel.Com
 	return values, nil
 }
 
-func relationRequest(repository kernel.RepositoryID) retrieval.RelationPageRequest {
+func relationRequest() retrieval.RelationPageRequest {
 	return retrieval.RelationPageRequest{Query: retrieval.RelationQuery{
-		Endpoint: objectmodel.ObjectRef{Repository: repository, Object: "Table:a"}, RelationType: "owned-by", Role: "subject",
+		Endpoint: "table/a", RelationType: "owned-by", Role: "subject",
 	}}
 }
 
@@ -103,14 +103,14 @@ func TestRelationsUsesExactRetrieverBeforePoisonAuthorityReadMany(t *testing.T) 
 	repo, commit := testfixture.RelationFixture(t)
 	calls := []string{}
 	engine := &relationEngine{meta: ports.Meta{Basis: commit, State: ports.ProjectionStateReady, Generation: "g1"}, calls: &calls,
-		pages: [][]retrieval.RelationCandidate{{{Repository: repo.ID(), ObjectID: "relation:owned", Basis: commit}}}}
+		pages: [][]retrieval.RelationCandidate{{{Repository: repo.ID(), ObjectID: "relation/owned", Basis: commit}}}}
 	idx := index.NewIndexEngine("", func(string, kernel.RepositoryID) (ports.Engine, error) { return engine, nil })
-	poison := &poisonAuthority{Repository: repo, batch: relationBatch(t, repo), allowed: map[objectmodel.ObjectID]bool{"relation:owned": true}, calls: &calls}
-	page, err := idx.RelationsAt(poison, commit, relationRequest(repo.ID()))
+	poison := &poisonAuthority{Repository: repo, batch: relationBatch(t, repo), allowed: map[objectmodel.ObjectID]bool{"relation/owned": true}, calls: &calls}
+	page, err := idx.RelationsAt(poison, commit, relationRequest())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(page.Hits) != 1 || page.Hits[0].Relation.RelationID != "relation:owned" {
+	if len(page.Hits) != 1 || page.Hits[0].Relation.RelationID != "relation/owned" {
 		t.Fatalf("canonical oracle mismatch: %#v", page)
 	}
 	if fmt.Sprint(calls) != "[retrieve read-many]" {
@@ -122,10 +122,10 @@ func TestRelationsRejectsWrongBasisBeforeAuthority(t *testing.T) {
 	repo, commit := testfixture.RelationFixture(t)
 	calls := []string{}
 	engine := &relationEngine{meta: ports.Meta{Basis: commit, State: ports.ProjectionStateReady}, calls: &calls,
-		pages: [][]retrieval.RelationCandidate{{{Repository: repo.ID(), ObjectID: "relation:owned", Basis: "wrong"}}}}
+		pages: [][]retrieval.RelationCandidate{{{Repository: repo.ID(), ObjectID: "relation/owned", Basis: "wrong"}}}}
 	idx := index.NewIndexEngine("", func(string, kernel.RepositoryID) (ports.Engine, error) { return engine, nil })
 	poison := &poisonAuthority{Repository: repo, batch: relationBatch(t, repo), allowed: map[objectmodel.ObjectID]bool{}, calls: &calls}
-	_, err := idx.RelationsAt(poison, commit, relationRequest(repo.ID()))
+	_, err := idx.RelationsAt(poison, commit, relationRequest())
 	testkit.ExpectCode(t, err, kernel.ErrPreconditionFailed)
 	if fmt.Sprint(calls) != "[retrieve]" {
 		t.Fatalf("authority must remain untouched: %v", calls)
@@ -144,7 +144,7 @@ func TestRelationsRequiresReadyProviderBeforeAuthority(t *testing.T) {
 			engine := &relationEngine{meta: ports.Meta{Basis: commit, State: tc.state}, calls: &calls}
 			idx := index.NewIndexEngine("", func(string, kernel.RepositoryID) (ports.Engine, error) { return engine, nil })
 			poison := &poisonAuthority{Repository: repo, batch: relationBatch(t, repo), allowed: map[objectmodel.ObjectID]bool{}, calls: &calls}
-			_, err := idx.RelationsAt(poison, commit, relationRequest(repo.ID()))
+			_, err := idx.RelationsAt(poison, commit, relationRequest())
 			testkit.ExpectCode(t, err, tc.code)
 			if len(calls) != 0 {
 				t.Fatalf("authority/retriever must remain untouched: %v", calls)
@@ -158,17 +158,17 @@ func TestRelationsPagesCandidatesAndRechecksFalsePositives(t *testing.T) {
 	calls := []string{}
 	engine := &relationEngine{meta: ports.Meta{Basis: commit, State: ports.ProjectionStateReady}, calls: &calls,
 		pages: [][]retrieval.RelationCandidate{
-			{{Repository: repo.ID(), ObjectID: "relation:false-positive", Basis: commit}},
-			{{Repository: repo.ID(), ObjectID: "relation:owned", Basis: commit}},
+			{{Repository: repo.ID(), ObjectID: "relation/false-positive", Basis: commit}},
+			{{Repository: repo.ID(), ObjectID: "relation/owned", Basis: commit}},
 		}}
 	idx := index.NewIndexEngine("", func(string, kernel.RepositoryID) (ports.Engine, error) { return engine, nil })
 	poison := &poisonAuthority{Repository: repo, batch: relationBatch(t, repo), allowed: map[objectmodel.ObjectID]bool{
-		"relation:false-positive": true, "relation:owned": true,
+		"relation/false-positive": true, "relation/owned": true,
 	}, calls: &calls}
-	request := relationRequest(repo.ID())
+	request := relationRequest()
 	request.Limit = 1
 	page, err := idx.RelationsAt(poison, commit, request)
-	if err != nil || len(page.Hits) != 1 || page.Hits[0].ObjectID != "relation:owned" {
+	if err != nil || len(page.Hits) != 1 || page.Hits[0].ObjectID != "relation/owned" {
 		t.Fatalf("false-positive residual: %#v %v", page, err)
 	}
 	if len(page.Claims) != 1 {
@@ -185,7 +185,7 @@ func TestRelationsRejectsInvalidLimit(t *testing.T) {
 		t.Fatal("invalid page limit must fail before opening a provider")
 		return nil, nil
 	})
-	request := relationRequest(repo.ID())
+	request := relationRequest()
 	request.Limit = 1001
 	_, err := idx.RelationsAt(repo, commit, request)
 	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
@@ -195,11 +195,11 @@ func TestRelationsTreatsMissingCandidateAsProjectionConsistencyError(t *testing.
 	repo, commit := testfixture.RelationFixture(t)
 	calls := []string{}
 	engine := &relationEngine{meta: ports.Meta{Basis: commit, State: ports.ProjectionStateReady}, calls: &calls,
-		pages: [][]retrieval.RelationCandidate{{{Repository: repo.ID(), ObjectID: "relation:owned", Basis: commit}}}}
+		pages: [][]retrieval.RelationCandidate{{{Repository: repo.ID(), ObjectID: "relation/owned", Basis: commit}}}}
 	idx := index.NewIndexEngine("", func(string, kernel.RepositoryID) (ports.Engine, error) { return engine, nil })
-	poison := &poisonAuthority{Repository: repo, batch: relationBatch(t, repo), allowed: map[objectmodel.ObjectID]bool{"relation:owned": true},
-		missing: map[objectmodel.ObjectID]bool{"relation:owned": true}, calls: &calls}
-	_, err := idx.RelationsAt(poison, commit, relationRequest(repo.ID()))
+	poison := &poisonAuthority{Repository: repo, batch: relationBatch(t, repo), allowed: map[objectmodel.ObjectID]bool{"relation/owned": true},
+		missing: map[objectmodel.ObjectID]bool{"relation/owned": true}, calls: &calls}
+	_, err := idx.RelationsAt(poison, commit, relationRequest())
 	testkit.ExpectCode(t, err, kernel.ErrPreconditionFailed)
 }
 
@@ -213,8 +213,8 @@ func TestRelationsContinuationBindsQueryBasisAndGeneration(t *testing.T) {
 		TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef,
 		BaseCommit: commit, ExpectedTargetCommit: commit,
 		Operations: []objectmodel.Operation{{
-			Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindRelation, ObjectID: "relation:owned-2"},
-			Value: testfixture.RelationBody(repo.ID(), "relation:owned-2", "Table:a"),
+			Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindRelation, ObjectID: "relation/owned-2"},
+			Value: testfixture.RelationBody("relation/owned-2", "table/a"),
 		}},
 	})
 	if err != nil {
@@ -223,11 +223,11 @@ func TestRelationsContinuationBindsQueryBasisAndGeneration(t *testing.T) {
 	calls := []string{}
 	engine := &relationEngine{meta: ports.Meta{Basis: next, State: ports.ProjectionStateReady, Generation: "g1"}, calls: &calls,
 		pages: [][]retrieval.RelationCandidate{
-			{{Repository: repo.ID(), ObjectID: "relation:owned", Basis: next}},
-			{{Repository: repo.ID(), ObjectID: "relation:owned-2", Basis: next}},
+			{{Repository: repo.ID(), ObjectID: "relation/owned", Basis: next}},
+			{{Repository: repo.ID(), ObjectID: "relation/owned-2", Basis: next}},
 		}}
 	idx := index.NewIndexEngine("", func(string, kernel.RepositoryID) (ports.Engine, error) { return engine, nil })
-	request := relationRequest(repo.ID())
+	request := relationRequest()
 	request.Limit = 1
 	first, err := idx.RelationsAt(repo, next, request)
 	if err != nil || len(first.Hits) != 1 || first.Continuation == "" || first.Exhausted {

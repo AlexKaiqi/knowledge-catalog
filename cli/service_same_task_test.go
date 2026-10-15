@@ -21,8 +21,8 @@ func TestSameTaskViaCLIAndHTTPYieldsSameDomainResult(t *testing.T) {
 	principal := "agent:parity"
 	body(t, kc(home, "init"))
 	seedRepo(t, home, repository)
-	body(t, kc(home, "put", testObjectReference(t, repository, "Policy:one", ""), "--command-id", "v1", "--value", `{"body":"one"}`))
-	body(t, kc(home, "put", testObjectReference(t, repository, "Policy:one", ""), "--command-id", "v2", "--value", `{"body":"two"}`))
+	body(t, kc(home, "put", testObjectReference(t, repository, "policy/one", ""), "--repo", repository, "--command-id", "v1", "--value", `{"body":"one"}`))
+	body(t, kc(home, "put", testObjectReference(t, repository, "policy/one", ""), "--repo", repository, "--command-id", "v2", "--value", `{"body":"two"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "1", "--source", repository+"=refs/heads/main"))
 	body(t, kc(home, "allow", "--principal", principal, "--cmd", "read-workspace", "--dataset", workspace))
 
@@ -33,11 +33,11 @@ func TestSameTaskViaCLIAndHTTPYieldsSameDomainResult(t *testing.T) {
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	cliRead := func() map[string]any {
-		return readSingleHit(t, body(t, kcRemote(t, server.URL, principal, "read", testObjectReference(t, repository, "Policy:one", ""), "--dataset", workspace)))
+		return readSingleHit(t, body(t, kcRemote(t, server.URL, principal, "read", testObjectReference(t, repository, "policy/one", ""), "--dataset", workspace)))
 	}
 	httpRead := func(as string) (int, any) {
 		status, payload, _ := httpSurfaceRequest(t, server, http.MethodPost, "/object/v1/objects:read",
-			map[string]any{"dataset": workspace, "reference": testObjectReference(t, repository, "Policy:one", "")}, as)
+			map[string]any{"dataset": workspace, "reference": testObjectReference(t, repository, "policy/one", "")}, as)
 		return status, payload
 	}
 
@@ -61,7 +61,7 @@ func TestSameTaskViaCLIAndHTTPYieldsSameDomainResult(t *testing.T) {
 	}
 
 	// 同一任务：CLI 与 HTTP 都落在 workspace pin 的同一领域结果上。
-	if fromCLI["objectId"] != "Policy:one" || fromCLI["commit"] == "" || fromCLI["commit"] == nil {
+	if fromCLI["objectId"] != "policy/one" || fromCLI["commit"] == "" || fromCLI["commit"] == nil {
 		t.Fatalf("fixed task result must retain object identity and commit: %#v", fromCLI)
 	}
 	if got := fromCLI["value"]; !reflect.DeepEqual(got, map[string]any{"body": "two"}) {
@@ -70,11 +70,11 @@ func TestSameTaskViaCLIAndHTTPYieldsSameDomainResult(t *testing.T) {
 	assertSameResult()
 
 	// 仓库推进（v3）：两个入口都保持原完整结果与 commit。
-	body(t, kc(home, "put", testObjectReference(t, repository, "Policy:one", ""), "--command-id", "v3", "--value", `{"body":"three"}`))
+	body(t, kc(home, "put", testObjectReference(t, repository, "policy/one", ""), "--repo", repository, "--command-id", "v3", "--value", `{"body":"three"}`))
 	assertSameResult()
 
 	// 无权主体：两个入口一致拒绝（授权不随入口变化）。
-	expectCode(t, kcRemote(t, server.URL, "agent:intruder", "read", testObjectReference(t, repository, "Policy:one", ""), "--dataset", workspace), "FORBIDDEN")
+	expectCode(t, kcRemote(t, server.URL, "agent:intruder", "read", testObjectReference(t, repository, "policy/one", ""), "--dataset", workspace), "FORBIDDEN")
 	if status, payload := httpRead("agent:intruder"); status != http.StatusForbidden || asMap(t, asMap(t, payload)["error"])["code"] != "FORBIDDEN" {
 		t.Fatalf("unauthorized HTTP read status=%d payload=%#v", status, payload)
 	}

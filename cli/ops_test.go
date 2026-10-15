@@ -40,7 +40,7 @@ func TestCatalogAuditReadsSnapshotHistory(t *testing.T) {
 	expectCode(t, kc(h, "audit", "--limit", "201"), "USAGE_INVALID")
 
 	seedRepo(t, h, core)
-	body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--command-id", "seed", "--value", `{"v":1}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--repo", core, "--command-id", "seed", "--value", `{"v":1}`))
 	afterPut := asMap(t, body(t, kc(h, "audit")))
 	if catalogLogHas(t, afterPut, "put") || catalogLogHas(t, afterPut, "COMMIT") {
 		t.Fatal("object writes must not land in Catalog Snapshot history", afterPut["entries"])
@@ -55,7 +55,7 @@ func TestCatalogAuditReadsSnapshotHistory(t *testing.T) {
 		t.Fatal(afterView["entries"])
 	}
 
-	expectCode(t, kc(h, "put", testObjectReference(t, catID, "ops/note", ""), "--command-id", "catalog-is-not-a-repo", "--value", `{"note":"no"}`), "TARGET_REPOSITORY_DENIED")
+	expectCode(t, kc(h, "put", testObjectReference(t, catID, "ops/note", ""), "--repo", catID, "--command-id", "catalog-is-not-a-repo", "--value", `{"note":"no"}`), "TARGET_REPOSITORY_DENIED")
 }
 
 func TestCatalogSnapshotStampsPrincipal(t *testing.T) {

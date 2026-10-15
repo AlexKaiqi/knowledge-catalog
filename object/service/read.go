@@ -32,6 +32,10 @@ func (e ReadExecutor) Execute(_ context.Context, request ReadRequest) (objectmod
 		return objectmodel.ObjectValue{}, kernel.Fail(kernel.ErrUsageInvalid,
 			"reference read requires a fixed commit")
 	}
+	if request.Reference.Repository == "" {
+		return objectmodel.ObjectValue{}, kernel.Fail(kernel.ErrUsageInvalid,
+			"reference read at a fixed commit needs the Repository that commit belongs to")
+	}
 	if _, err := objectmodel.FormatReference(request.Reference); err != nil {
 		return objectmodel.ObjectValue{}, err
 	}

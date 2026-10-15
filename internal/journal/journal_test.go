@@ -78,7 +78,7 @@ func TestContextStampPreservesDelegationAndTrace(t *testing.T) {
 		Principal: "agent:finance", OnBehalfOf: "user:kai", RequestID: "req-1",
 		TraceID: "trace-1", SpanID: "span-1", ParentSpanID: "root", RuleID: "alw_1",
 	})
-	if err := journal.Finish(j, journal.LayerSystem, "reader", "read", map[string]any{"object": "Metric:gmv"}, nil); err != nil {
+	if err := journal.Finish(j, journal.LayerSystem, "reader", "read", map[string]any{"object": "metric/gmv"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	got := mem.events[0]

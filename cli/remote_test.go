@@ -27,12 +27,12 @@ func TestRemoteGroupedCLIUsesTypedObjectClient(t *testing.T) {
 	t.Setenv("KC_SERVER_URL", server.URL)
 	t.Setenv("KC_AS", "agent:test")
 	t.Setenv("KC_HOME", t.TempDir())
-	result := Run([]string{"read", "urn:kc:object:kr%3A%2F%2Facme%2Fcore:policy%2FA", "--dataset", "agent"})
+	result := Run([]string{"read", "urn:kc:object:policy/A", "--dataset", "agent"})
 	if result.Status != 0 {
 		t.Fatal(result.Stdout)
 	}
 	request := <-seen
-	if request["dataset"] != "agent" || request["reference"] != "urn:kc:object:kr%3A%2F%2Facme%2Fcore:policy%2FA" {
+	if request["dataset"] != "agent" || request["reference"] != "urn:kc:object:policy/A" {
 		t.Fatalf("typed request %#v", request)
 	}
 	if _, ok := request["repository"]; ok {
@@ -58,12 +58,12 @@ func TestRemoteObjectReadUsesRepositoryBasisWithoutWorkspace(t *testing.T) {
 	t.Setenv("KC_SERVER_URL", server.URL)
 	t.Setenv("KC_AS", "agent:provider")
 	t.Setenv("KC_WORKSPACE", "")
-	result := Run([]string{"read", "urn:kc:object:kr%3A%2F%2Facme%2Fcore:runbook%2Fpayment-oncall"})
+	result := Run([]string{"read", "urn:kc:object:runbook/payment-oncall"})
 	if result.Status != 0 {
 		t.Fatal(result.Stdout)
 	}
 	request := <-seen
-	if request["reference"] != "urn:kc:object:kr%3A%2F%2Facme%2Fcore:runbook%2Fpayment-oncall" {
+	if request["reference"] != "urn:kc:object:runbook/payment-oncall" {
 		t.Fatalf("typed repository read %#v", request)
 	}
 	if _, ok := request["workspace"]; ok {
@@ -124,12 +124,12 @@ func TestRemoteCLIUsesRepositoryWithoutCatalogContext(t *testing.T) {
 	isolateLoginConfig(t)
 	t.Setenv("KC_SERVER_URL", server.URL)
 	t.Setenv("KC_AS", "agent:test")
-	result := Run([]string{"read", "urn:kc:object:kr%3A%2F%2Facme%2Fcore:policy%2FA"})
+	result := Run([]string{"read", "urn:kc:object:policy/A"})
 	if result.Status != 0 {
 		t.Fatal(result.Stdout)
 	}
 	request := <-seen
-	if request["catalog"] != nil || request["reference"] != "urn:kc:object:kr%3A%2F%2Facme%2Fcore:policy%2FA" {
+	if request["catalog"] != nil || request["reference"] != "urn:kc:object:policy/A" {
 		t.Fatalf("typed request did not send only the explicit repository: %#v", request)
 	}
 }
@@ -370,7 +370,7 @@ func TestProductCommandsRequireServer(t *testing.T) {
 	}{
 		{[]string{"search", "--workspace", "agent", "--query", "runbook"}, "USAGE_INVALID"},
 		{[]string{"show"}, "requires KC Server"},
-		{[]string{"writer", "put", "urn:kc:object:kr%3A%2F%2Facme%2Fcore:Policy%3Ax", "--command-id", "c1", "--value", `{}`}, "requires KC Server"},
+		{[]string{"writer", "put", "urn:kc:object:policy/x", "--command-id", "c1", "--value", `{}`}, "requires KC Server"},
 	} {
 		result := Run(tc.argv)
 		if result.Status == 0 || !strings.Contains(result.Stdout, tc.want) {

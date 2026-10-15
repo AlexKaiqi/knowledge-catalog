@@ -111,7 +111,7 @@ func TestManagedRepositoryProviderCreatesPublishesAndResumes(t *testing.T) {
 	if after := body(t, provide("writer", "head", "--repo", repositoryID)); !reflect.DeepEqual(after, headBefore) {
 		t.Fatal("conflicting creation changed the original source")
 	}
-	putArgs := []string{"writer", "put", testObjectReference(t, repositoryID, "note/managed", ""), "--command-id", "provider-first", "--if-absent", "--value", `{"text":"first publication"}`, "--origin-kind", "SOURCE", "--source-ref", "file:///scene/source/managed.md"}
+	putArgs := []string{"writer", "put", testObjectReference(t, repositoryID, "note/managed", ""), "--repo", repositoryID, "--command-id", "provider-first", "--if-absent", "--value", `{"text":"first publication"}`, "--origin-kind", "SOURCE", "--source-ref", "file:///scene/source/managed.md"}
 	firstReceipt := asMap(t, body(t, provide(putArgs...)))
 	first := publishedCommit(t, firstReceipt)
 	if firstReceipt["disposition"] != "APPLIED" || first == created["head"] {
@@ -119,7 +119,7 @@ func TestManagedRepositoryProviderCreatesPublishesAndResumes(t *testing.T) {
 	}
 	assertRead := func(object, commit, text string) map[string]any {
 		t.Helper()
-		row := asMap(t, body(t, provide("read", testObjectReference(t, repositoryID, object, ""), "--commit", commit)))
+		row := asMap(t, body(t, provide("read", testObjectReference(t, repositoryID, object, ""), "--repo", repositoryID, "--commit", commit)))
 		if row["commit"] != commit || asMap(t, row["value"])["text"] != text {
 			t.Fatalf("read did not preserve published version/content: %#v", row)
 		}
@@ -141,8 +141,8 @@ func TestManagedRepositoryProviderCreatesPublishesAndResumes(t *testing.T) {
 	}
 	batch := publishedCommit(t, asMap(t, body(t, provide("writer", "commit", "--command-id", "provider-batch", "--repo", repositoryID, "--dir", draftDir))))
 	assertRead("note/batch", batch, "batch publication")
-	expectCode(t, kcRemote(t, server.URL, ungranted, "read", testObjectReference(t, repositoryID, "note/managed", ""), "--commit", first), "FORBIDDEN")
-	expectCode(t, kcRemote(t, server.URL, ungranted, "writer", "put", testObjectReference(t, repositoryID, "note/managed", ""), "--command-id", "ungranted-write", "--value", `{}`), "FORBIDDEN")
+	expectCode(t, kcRemote(t, server.URL, ungranted, "read", testObjectReference(t, repositoryID, "note/managed", ""), "--repo", repositoryID, "--commit", first), "FORBIDDEN")
+	expectCode(t, kcRemote(t, server.URL, ungranted, "writer", "put", testObjectReference(t, repositoryID, "note/managed", ""), "--repo", repositoryID, "--command-id", "ungranted-write", "--value", `{}`), "FORBIDDEN")
 
 	// Instance replacement is a platform event between two provider requests.
 	// It may discard caches, but never add the dynamic target to static config.
@@ -174,7 +174,7 @@ func TestManagedRepositoryProviderCreatesPublishesAndResumes(t *testing.T) {
 	if !ok || digest == "" {
 		t.Fatalf("read did not expose the update precondition: %#v", current)
 	}
-	updated := publishedCommit(t, asMap(t, body(t, provide("writer", "put", testObjectReference(t, repositoryID, "note/managed", ""), "--command-id", "provider-update", "--expected", batch, "--if-digest", digest, "--value", `{"text":"after replacement"}`, "--origin-kind", "SOURCE", "--source-ref", "file:///scene/source/managed.md"))))
+	updated := publishedCommit(t, asMap(t, body(t, provide("writer", "put", testObjectReference(t, repositoryID, "note/managed", ""), "--repo", repositoryID, "--command-id", "provider-update", "--expected", batch, "--if-digest", digest, "--value", `{"text":"after replacement"}`, "--origin-kind", "SOURCE", "--source-ref", "file:///scene/source/managed.md"))))
 	assertRead("note/managed", updated, "after replacement")
 	assertRead("note/managed", first, "first publication")
 
@@ -201,6 +201,6 @@ func TestManagedRepositoryProviderCreatesPublishesAndResumes(t *testing.T) {
 	if replayedCreate["status"] != "REPLAYED" {
 		t.Fatalf("revocation changed creation history: %#v", replayedCreate)
 	}
-	expectCode(t, provide("read", testObjectReference(t, repositoryID, "note/managed", ""), "--commit", first), "FORBIDDEN")
-	expectCode(t, provide("writer", "put", testObjectReference(t, repositoryID, "note/revoked", ""), "--command-id", "revoked-write", "--value", `{}`), "FORBIDDEN")
+	expectCode(t, provide("read", testObjectReference(t, repositoryID, "note/managed", ""), "--repo", repositoryID, "--commit", first), "FORBIDDEN")
+	expectCode(t, provide("writer", "put", testObjectReference(t, repositoryID, "note/revoked", ""), "--repo", repositoryID, "--command-id", "revoked-write", "--value", `{}`), "FORBIDDEN")
 }

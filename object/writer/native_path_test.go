@@ -32,8 +32,8 @@ func TestNativeWriterPreservesOmittedPathAndAllowsExplicitMove(t *testing.T) {
 				value = map[string]any{
 					"relationId": "record/A", "relationType": "links", "direction": "DIRECTED",
 					"endpoints": []any{
-						map[string]any{"role": "from", "objectRef": map[string]any{"repository": string(base.ID()), "object": "source"}},
-						map[string]any{"role": "to", "objectRef": map[string]any{"repository": "kr://foreign/repo", "object": "target"}},
+						map[string]any{"role": "from", "object": "fixture/source"},
+						map[string]any{"role": "to", "object": "fixture/target"},
 					},
 				}
 			}

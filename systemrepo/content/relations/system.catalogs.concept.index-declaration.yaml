@@ -11,17 +11,11 @@ path_hint: relations/system.catalogs.concept.index-declaration.yaml
   "endpoints": [
     {
       "role": "from",
-      "objectRef": {
-        "repository": "kr://kc/system",
-        "object": "kc/system"
-      }
+      "object":"kc/system"
     },
     {
       "role": "to",
-      "objectRef": {
-        "repository": "kr://kc/system",
-        "object": "kc/concept/index-declaration"
-      }
+      "object":"kc/concept/index-declaration"
     }
   ]
 }

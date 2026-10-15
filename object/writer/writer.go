@@ -96,6 +96,9 @@ func validateChangeSet(cs objectmodel.ChangeSet) error {
 		if err := objectmodel.AssertWritable(op.Address); err != nil {
 			return err
 		}
+		if err := objectmodel.ValidateObjectID(op.Address.ObjectID); err != nil {
+			return err
+		}
 		if op.Op == objectmodel.OpPut {
 			if err := objectmodel.ValidateValueSource(op.ValueSource); err != nil {
 				return err

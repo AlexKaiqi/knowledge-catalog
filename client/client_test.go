@@ -156,7 +156,7 @@ func TestPagedObjectRequestsOmitZeroLimit(t *testing.T) {
 		raw  []byte
 	}{
 		{"schema page", mustJSON(t, client.ObjectSchemaPageRequest{ObjectRepoPin: client.ObjectRepoPin{Repository: "kr://acme/public/core"}, Limit: 0})},
-		{"relations", mustJSON(t, client.ObjectRelationsRequest{ObjectScope: client.ObjectScope{Dataset: "agent"}, Endpoint: "kc://acme/public/core/Table:x", Limit: 0})},
+		{"relations", mustJSON(t, client.ObjectRelationsRequest{ObjectScope: client.ObjectScope{Dataset: "agent"}, Endpoint: "table/x", Limit: 0})},
 		{"search", mustJSON(t, client.ObjectSearchRequest{ObjectScope: client.ObjectScope{Dataset: "agent"}, Query: "refund", Limit: 0})},
 	}
 	for _, tc := range cases {

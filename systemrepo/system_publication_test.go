@@ -113,7 +113,7 @@ func TestSystemPublicationNavigationIsClosed(t *testing.T) {
 				t.Fatal(err)
 			}
 			for _, endpoint := range relation.Endpoints {
-				if endpoint.ObjectRef.Repository != objectmodel.SystemRepositoryID || !objects[endpoint.ObjectRef.Object] {
+				if !objects[endpoint.Object] {
 					t.Errorf("%s has unresolved navigation endpoint %#v", operation.PathHint, endpoint)
 				}
 			}

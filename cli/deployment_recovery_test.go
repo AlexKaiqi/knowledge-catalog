@@ -97,10 +97,10 @@ func TestDeploymentSurvivesInstanceReplacement(t *testing.T) {
 	defer sink.Close()
 	body(t, call("operations", "hook", "add", "--on", "writer.commit", "--phase", "post", "--url", sink.URL))
 	body(t, call("operations", "hook", "add", "--on", "writer.merge", "--phase", "post", "--repo", "kr://recover/source", "--url", sink.URL))
-	receipt := body(t, call("writer", "put", testObjectReference(t, "kr://recover/source", "note/recover", ""), "--command-id", "recovery-write", "--value", `{"text":"durable"}`))
+	receipt := body(t, call("writer", "put", testObjectReference(t, "kr://recover/source", "note/recover", ""), "--repo", "kr://recover/source", "--command-id", "recovery-write", "--value", `{"text":"durable"}`))
 	body(t, call("dataset", "define", "incident", "--revision", "2", "--source", "kr://recover/source"))
 	body(t, call("writer", "branch", "--repo", "kr://recover/source", "--name", "review/recovery"))
-	proposed := asMap(t, body(t, call("writer", "put", testObjectReference(t, "kr://recover/source", "note/recover", ""), "--command-id", "recovery-branch-write", "--ref", "refs/heads/review/recovery", "--value", `{"text":"proposed"}`)))
+	proposed := asMap(t, body(t, call("writer", "put", testObjectReference(t, "kr://recover/source", "note/recover", ""), "--repo", "kr://recover/source", "--command-id", "recovery-branch-write", "--ref", "refs/heads/review/recovery", "--value", `{"text":"proposed"}`)))
 	reviewed := asMap(t, proposed["result"])["newCommit"].(string)
 	oldHead := body(t, call("writer", "head", "--repo", "kr://recover/source"))
 	catalogState := body(t, call("show"))
@@ -145,11 +145,11 @@ func TestDeploymentSurvivesInstanceReplacement(t *testing.T) {
 	if got := body(t, call("operations", "hook", "list")); !reflect.DeepEqual(got, hooks) {
 		t.Fatal("hooks lost on replacement")
 	}
-	replay := asMap(t, body(t, call("writer", "put", testObjectReference(t, "kr://recover/source", "note/recover", ""), "--command-id", "recovery-write", "--value", `{"text":"durable"}`)))
+	replay := asMap(t, body(t, call("writer", "put", testObjectReference(t, "kr://recover/source", "note/recover", ""), "--repo", "kr://recover/source", "--command-id", "recovery-write", "--value", `{"text":"durable"}`)))
 	if replay["disposition"] != "REPLAYED" {
 		t.Fatalf("idempotency receipt lost: original=%#v replay=%#v", receipt, replay)
 	}
-	expectCode(t, kcRemote(t, server.URL, "agent:reader", "writer", "put", testObjectReference(t, "kr://recover/source", "note/recover", ""), "--command-id", "forbidden-recovery", "--value", `{}`), "FORBIDDEN")
+	expectCode(t, kcRemote(t, server.URL, "agent:reader", "writer", "put", testObjectReference(t, "kr://recover/source", "note/recover", ""), "--repo", "kr://recover/source", "--command-id", "forbidden-recovery", "--value", `{}`), "FORBIDDEN")
 	merged := asMap(t, body(t, call("writer", "merge", "--command-id", "recovery-merge", "--repo", "kr://recover/source", "--from", "review/recovery", "--commit", reviewed)))
 	if asMap(t, merged["result"])["commitId"] != reviewed {
 		t.Fatalf("the reviewed branch commit did not survive replacement: %#v", merged)

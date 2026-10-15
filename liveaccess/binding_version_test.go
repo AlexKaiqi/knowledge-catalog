@@ -11,8 +11,8 @@ import (
 func TestBindingDeclarationChangeIsVersionedWhenValueIsUnchanged(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	schema := objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/service.health"}
-	entity := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Service:orders", AspectName: "properties"}
-	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Service:orders", AspectName: "health"}
+	entity := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "service/orders", AspectName: "properties"}
+	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "service/orders", AspectName: "health"}
 	schemaValue := func(origin string) map[string]any {
 		return map[string]any{
 			"entity": "Service", "aspect": "health", "origin": origin,

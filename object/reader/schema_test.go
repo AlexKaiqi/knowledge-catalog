@@ -73,7 +73,7 @@ func TestDescribeSchemaIgnoresNonSchemaObjects(t *testing.T) {
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: append(
 			testkit.PutEntity("schema/dw.table.structure", tableStructureSchema(), ""),
-			testkit.PutEntity("Table:tl.db.t", map[string]any{"db": "tl"}, "")...,
+			testkit.PutEntity("table/tl.db.t", map[string]any{"db": "tl"}, "")...,
 		),
 	})
 	if err != nil {
@@ -88,7 +88,7 @@ func TestDescribeSchemaIgnoresNonSchemaObjects(t *testing.T) {
 func TestWorkspaceDescribeSchemaSkipsMembersWithoutObject(t *testing.T) {
 	physical := testkit.NewSetup(t, "kr://dw/physical")
 	semantic := testkit.NewSetup(t, "kr://dw/semantic")
-	objectID := objectmodel.ObjectID("Table:tpch.lineitem")
+	objectID := objectmodel.ObjectID("table/tpch.lineitem")
 	head, err := physical.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: physical.RepositoryID, TargetRef: "HEAD",
 		BaseCommit: physical.RootCommitID, ExpectedTargetCommit: physical.RootCommitID,
@@ -131,7 +131,7 @@ func TestDescribeSchemaFollowsSchemaRef(t *testing.T) {
 			},
 			{
 				Op:        objectmodel.OpPut,
-				Address:   objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:tl.db.t", AspectName: "structure"},
+				Address:   objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/tl.db.t", AspectName: "structure"},
 				SchemaRef: "schema/dw.table.structure",
 				Value:     map[string]any{"db": "tl"},
 			},
@@ -140,7 +140,7 @@ func TestDescribeSchemaFollowsSchemaRef(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	report, err := s.Reader.DescribeSchema(s.RepositoryID, head, "Table:tl.db.t")
+	report, err := s.Reader.DescribeSchema(s.RepositoryID, head, "table/tl.db.t")
 	if err != nil || len(report.Schemas) != 1 || report.Schemas[0].ObjectID != "schema/dw.table.structure" {
 		t.Fatalf("%#v %v", report, err)
 	}
@@ -153,7 +153,7 @@ func TestDescribeSchemaUnresolvedRef(t *testing.T) {
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: []objectmodel.Operation{{
 			Op:        objectmodel.OpPut,
-			Address:   objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:tl.db.t", AspectName: "structure"},
+			Address:   objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/tl.db.t", AspectName: "structure"},
 			SchemaRef: "schema/missing",
 			Value:     map[string]any{"db": "tl"},
 		}},

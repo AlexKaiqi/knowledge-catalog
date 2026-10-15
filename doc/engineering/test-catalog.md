@@ -452,7 +452,8 @@ U14 的一次任务完整选用、资源归属与退出复用[共同插件验收
 |---|---|---|---|---|---|
 | V-01 | W4 然后又 COMMIT | **新** `read --dataset` | 解到新 HEAD（跟已发布 selector） | 已定位 | consume_flow / T11 / serving |
 | V-02 | 已 OpenDataset | 命令进行中再 COMMIT | 本次 pin 不动（K-11） | 已定位 | `TestOpenedDatasetPinDoesNotMoveWithLaterCommit`；Help 明示一条 CLI 命令只 resolve 一次，跨命令跟已发布 Dataset 或抄 `--repo --commit` |
-| V-03 | W8 同 object_id 两仓 | `read --dataset --object` | 两条 FederatedValue，不按 scope 覆盖（K-13） | 已定位 | T11 / S4 / WriteCheckout 两文件 |
+| V-03 | W8 同 object_id 两仓、方面不相交 | `read urn:kc:object:<ns>/<name> --dataset` | 组合成一个对象，`sources` 逐仓列出版本与方面；同一方面两仓已在发布时拒绝（V-15） | 已定位 | `TestObjectIdentityComposesWithholdsAndConflictsAcrossRepositories`（`cli/object_identity_scope_test.go`）、`TestSelectHoldingsComposesDisjointAspectsAcrossRepositories`、`TestComposeHoldingValuesRecordsVersionVector` |
+| V-15 | 两个来源仓持有同一对象的同一方面（含 Schema 绑定方面） | `dataset define` / HTTP 发布 | `OBJECT_ID_CONFLICT`，指出对象、方面与两个来源仓；服务版不变；单来源不扫描 | 已定位 | `TestDatasetPublicationRejectsAspectConflictAcrossSources`、`TestPublicationRejectsSameAspectFromTwoSources`、`TestPublicationComposesDisjointAspectsAndHonorsRange`、`TestServerLiveAccessRepoSelectionMixedValuesAndDataset` |
 | V-04 | W4 | `read --dataset` / `resolve --dataset` 不存在对象 | **空数组**，不是错误（维护口才是 `OBJECT_REF_UNRESOLVED` / `UNRESOLVED`） | 已定位 | consume_flow / `TestCatalogViewsChecksAndObjectResolve` `TestObjectResolveAndObjectLogOverHTTP` |
 | V-05 | W1 | 未知 Workspace | `DATASET_INVALID` | 已定位 | consume_flow |
 | V-06 | W4 | `search --dataset` | 各仓在**这次 pin** 上 SearchAt，不回绕 live | 已定位 | consume_flow / `TestSearchAtDoesNotRewindLive` |
@@ -683,7 +684,7 @@ R0 出口要求规格与实际断言映射完整，已有红例保留并进入 R
 | `USAGE_INVALID` | 缺 flag、未知命令、空 changeset、search/stream 形状、未挂载仓/流、无 code 的 `fmt.Errorf` 归一 | 已定位 CLI |
 | `PRECONDITION_FAILED` | IfAbsent / DERIVATION / digest / stale cursor / dirty worktree | 已定位 |
 | `NON_FAST_FORWARD` | 过期 expected / merge 时目标分支已分叉 | 已定位 |
-| `OBJECT_ID_CONFLICT` | 重复 Address / blob+aspect 混 | 已定位 |
+| `OBJECT_ID_CONFLICT` | 重复 Address / blob+aspect 混；同一方面来自范围内两仓（跨仓读取、Dataset 发布） | 已定位 |
 | `IDEMPOTENCY_CONFLICT` | 同 command_id 异 digest | 已定位 |
 | `EVENT_ID_CONFLICT` | 同 eventId 异 payload | 已定位 |
 | `POSITION_REGRESSION` | 声明 `MONOTONIC_PER_PARTITION` 的实现才可达；Base profile=`NONE` | frozen |
@@ -760,7 +761,7 @@ kc writer commit --command-id u1 --repo kr://acme/public/core --dir ./drafts
 kc dataset define --dataset agent --revision 1 \
   --source kr://acme/public/core
 kc operations projection sync --repo kr://acme/public/core
-kc read 'urn:kc:object:kr%3A%2F%2Facme%2Fpublic%2Fcore:runbooks%2Foncall' --dataset agent
+kc read 'urn:kc:object:runbooks/oncall' --dataset agent
 kc resolve --dataset agent --object runbooks/oncall
 kc operations access-spec describe --dataset agent                # 治理/运维诊断，不是消费命令
 ```

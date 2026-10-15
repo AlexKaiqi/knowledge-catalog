@@ -20,13 +20,13 @@ func relationChangeSet(t *testing.T, repository string) string {
 		"operations": []any{map[string]any{
 			"op": "PUT",
 			"address": map[string]any{
-				"kind": "Relation", "objectId": "relation:owned",
+				"kind": "Relation", "objectId": "relation/owned",
 			},
 			"value": map[string]any{
-				"relationId": "relation:owned", "relationType": "owned-by", "direction": "DIRECTED",
+				"relationId": "relation/owned", "relationType": "owned-by", "direction": "DIRECTED",
 				"endpoints": []any{
-					map[string]any{"role": "subject", "objectRef": map[string]any{"repository": repository, "object": "Table:orders"}},
-					map[string]any{"role": "owner", "objectRef": map[string]any{"repository": repository, "object": "Team:finance"}},
+					map[string]any{"role": "subject", "object": "table/orders"},
+					map[string]any{"role": "owner", "object": "team/finance"},
 				},
 			},
 		}},
@@ -64,9 +64,9 @@ func TestRelationsWithoutIndexNeverFallsBackToAuthorityScan(t *testing.T) {
 	seedRelation(t, home, repository)
 
 	// The lakeFS authority stays Canonical and exact object reads still work.
-	body(t, kc(home, "read", testObjectReference(t, repository, "relation:owned", "")))
+	body(t, kc(home, "read", testObjectReference(t, repository, "relation/owned", ""), "--repo", repository))
 	// Candidate discovery has no authority fallback when the local profile has index:none.
-	expectCode(t, kc(home, "relations", "--repo", repository, "--object", "Table:orders"), "CAPABILITY_UNSATISFIED")
+	expectCode(t, kc(home, "relations", "--repo", repository, "--object", "table/orders"), "CAPABILITY_UNSATISFIED")
 	events, err := observability.NewFileStore(home).Retrieval(observability.RetrievalQuery{
 		Operator: observability.RetrievalOperatorRelation, Outcome: "ERROR",
 	})
@@ -93,21 +93,21 @@ func TestRelationRepositoryWorkspaceAndHTTPUseOneExactBasisExecutor(t *testing.T
 	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", repository+"=refs/heads/main@"))
 	syncIndexes(t, home, repository)
 
-	repositoryResult := body(t, kc(home, "relations", "--repo", repository, "--object", "Table:orders",
+	repositoryResult := body(t, kc(home, "relations", "--repo", repository, "--object", "table/orders",
 		"--relation-type", "owned-by", "--role", "subject", "--direction", "DIRECTED"))
 	// Contract lock: relation hits carry the Relation object's own coordinates;
 	// neighbor objects live only inside the relation endpoints, never at the
-	// hit top level. Neighbor here is Team:finance.
-	if id := relationHitID(t, repositoryResult); id != "relation:owned" {
+	// hit top level. Neighbor here is team/finance.
+	if id := relationHitID(t, repositoryResult); id != "relation/owned" {
 		t.Fatalf("relations hits must carry the relation object coordinate, got %q", id)
 	}
-	zeroLimit := body(t, kc(home, "relations", "--repo", repository, "--object", "Table:orders",
+	zeroLimit := body(t, kc(home, "relations", "--repo", repository, "--object", "table/orders",
 		"--relation-type", "owned-by", "--role", "subject", "--direction", "DIRECTED", "--limit", "0"))
 	if relationHitID(t, zeroLimit) != relationHitID(t, repositoryResult) {
 		t.Fatalf("relations --limit 0 must mean the default page")
 	}
-	expectCode(t, kc(home, "relations", "--repo", repository, "--object", "Table:orders", "--limit", "1001"), "USAGE_INVALID")
-	workspaceResult := body(t, kc(home, "relations", "--dataset", "agent", "--object", "kc://acme/public/core/Table:orders",
+	expectCode(t, kc(home, "relations", "--repo", repository, "--object", "table/orders", "--limit", "1001"), "USAGE_INVALID")
+	workspaceResult := body(t, kc(home, "relations", "--dataset", "agent", "--object", "table/orders",
 		"--relation-type", "owned-by", "--role", "subject", "--direction", "DIRECTED"))
 	if repositoryID, setID := relationHitID(t, repositoryResult), relationHitID(t, workspaceResult); repositoryID != setID {
 		t.Fatalf("repository/workspace relation executor drift: %q != %q", repositoryID, setID)
@@ -123,7 +123,7 @@ func TestRelationRepositoryWorkspaceAndHTTPUseOneExactBasisExecutor(t *testing.T
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	httpResult := postAny(t, server.URL, "/object/v1/relations:query", map[string]any{
-		"dataset": "agent", "endpoint": "kc://acme/public/core/Table:orders",
+		"dataset": "agent", "endpoint": "table/orders",
 		"relationType": "owned-by", "role": "subject", "direction": "DIRECTED",
 	})
 	if httpID, cliID := relationHitID(t, httpResult), relationHitID(t, workspaceResult); httpID != cliID {

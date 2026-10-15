@@ -207,7 +207,7 @@ func TestIndexControlColdStateRecoveryUsesAcceptedDeclarationAfterHeadChanges(t 
 		TargetRepository: source.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: a, ExpectedTargetCommit: a,
 		Operations: []objectmodel.Operation{
 			{Op: objectmodel.OpRemove, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.runtime"}},
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Job:control", AspectName: "definition"}, SchemaRef: "schema/job.definition", Value: map[string]any{"owner": "b-owner"}},
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/control", AspectName: "definition"}, SchemaRef: "schema/job.definition", Value: map[string]any{"owner": "b-owner"}},
 		},
 	})
 	if err != nil || b.Result.NewCommit == a {
@@ -234,7 +234,7 @@ func TestIndexControlColdStateRecoveryUsesAcceptedDeclarationAfterHeadChanges(t 
 		t.Error("accepted fixed State declaration was not observed during cold maintenance")
 	}
 	for _, request := range lookup.requests[beforeCalls:] {
-		if request.Binding.Repository != source.RepositoryID || request.Binding.DeclarationCommit != a || request.Binding.Address != (objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Job:control", AspectName: "runtime"}) || request.Binding.DeclarationDigest == "" || request.SchemaRef != "schema/job.runtime" || request.Origin != "https://old-state.example" || request.Identity.Principal != "index-control-worker" || request.RequestID != "index-control-recovery" {
+		if request.Binding.Repository != source.RepositoryID || request.Binding.DeclarationCommit != a || request.Binding.Address != (objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/control", AspectName: "runtime"}) || request.Binding.DeclarationDigest == "" || request.SchemaRef != "schema/job.runtime" || request.Origin != "https://old-state.example" || request.Identity.Principal != "index-control-worker" || request.RequestID != "index-control-recovery" {
 			t.Errorf("cold maintenance changed fixed Binding or independent background identity: %#v", request)
 		}
 	}
@@ -246,13 +246,13 @@ func controlBoundJob(t *testing.T, f *controlRecoveryFixture) (kernel.CommitID, 
 	t.Helper()
 	source := f.base.setups[0]
 	base := testkit.MustHead(t, source.Repo, snapshot.DefaultRef)
-	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Job:control", AspectName: "runtime"}
+	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/control", AspectName: "runtime"}
 	receipt, err := source.Writer.Commit("control-state-declaration-a", objectmodel.CommitChangeSet{
 		TargetRepository: source.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: base, ExpectedTargetCommit: base,
 		Operations: []objectmodel.Operation{
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.definition"}, Value: map[string]any{"entity": "Job", "aspect": "definition", "fields": map[string]any{"owner": map[string]any{"type": "string", "access": []any{"filter"}}}}},
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.runtime"}, Value: map[string]any{"entity": "Job", "aspect": "runtime", "origin": "https://old-state.example", "fields": map[string]any{"status": map[string]any{"type": "string", "access": []any{"filter"}}}}},
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Job:control", AspectName: "definition"}, SchemaRef: "schema/job.definition", Value: map[string]any{"owner": "a-owner"}},
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/control", AspectName: "definition"}, SchemaRef: "schema/job.definition", Value: map[string]any{"owner": "a-owner"}},
 		},
 	})
 	if err != nil {
@@ -287,7 +287,7 @@ func assertControlState(t *testing.T, f *controlRecoveryFixture, runtime *contro
 		return
 	}
 	hit := result.Hits[0]
-	canonical, err := repo.Read("Job:control", at)
+	canonical, err := repo.Read("job/control", at)
 	if err != nil {
 		t.Fatal(err)
 	}

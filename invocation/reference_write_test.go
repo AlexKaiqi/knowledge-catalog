@@ -103,7 +103,7 @@ func TestBasicReferenceWritesPreserveSchemaCASAndOriginalReceipts(t *testing.T) 
 	}
 	ws := &home.Home{Store: s.Store, Writer: s.Writer, Reader: s.Reader}
 	call := func(run func(*Invocation) (any, error), command string, extra map[string]invoke.FlagValue) (objectmodel.CommitReceipt, error) {
-		flags := map[string]invoke.FlagValue{"reference": ref, "command-id": command}
+		flags := map[string]invoke.FlagValue{"reference": ref, "repo": string(s.RepositoryID), "command-id": command}
 		for key, value := range extra {
 			flags[key] = value
 		}

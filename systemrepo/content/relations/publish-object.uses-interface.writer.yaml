@@ -9,10 +9,6 @@ relationType: uses_interface
 direction: DIRECTED
 endpoints:
   - role: from
-    objectRef:
-      repository: kr://kc/system
-      object: kc/capability/publish-object
+    object: kc/capability/publish-object
   - role: to
-    objectRef:
-      repository: kr://kc/system
-      object: kc/interface/writer
+    object: kc/interface/writer

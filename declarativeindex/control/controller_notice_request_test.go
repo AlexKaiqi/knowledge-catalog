@@ -46,7 +46,7 @@ func noticeRequestFixture(t *testing.T, origins ...string) (*Controller, *query.
 	}
 	repos := []objectmodel.Repository{}
 	commits := map[kernel.RepositoryID]kernel.CommitID{}
-	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Job:request-notice", AspectName: "runtime"}
+	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/request-notice", AspectName: "runtime"}
 	for _, id := range []string{"kr://notice/request-a", "kr://notice/request-b"} {
 		s := testkit.NewSetup(t, id)
 		at, err := s.Repo.ApplyObjectCommit(objectmodel.ChangeSet{TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID, Operations: []objectmodel.Operation{

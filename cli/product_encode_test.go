@@ -17,7 +17,7 @@ func TestShapeCLIProductDelegatesModuleViews(t *testing.T) {
 		value map[string]any
 		shape func(string, any) any
 	}{
-		{"read", map[string]any{"repository": "r", "commit": "c1", "reference": "urn:kc:object:r:note%2Fhello", "address": map[string]any{"objectId": "note/hello"}, "digest": "unit-digest", "value": "body"}, objectcli.Shape},
+		{"read", map[string]any{"repository": "r", "commit": "c1", "reference": "urn:kc:object:note/hello", "address": map[string]any{"objectId": "note/hello"}, "digest": "unit-digest", "value": "body"}, objectcli.Shape},
 		{"relations", map[string]any{"searchView": "internal", "hits": []any{}}, discoverycli.Shape},
 		{"operations projection describe", map[string]any{"repository": "r", "status": "READY"}, declarativeindexcli.Shape},
 		{"access", map[string]any{"observations": []any{map[string]any{"value": "observed"}}}, accesscli.Shape},

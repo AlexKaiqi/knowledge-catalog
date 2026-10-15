@@ -20,7 +20,7 @@ func TestDatasetExecutorsAuthorizeBeforeResolution(t *testing.T) {
 			return v, nil
 		},
 	}
-	if _, err := read.Execute(context.Background(), DatasetReadRequest{Reference: objectmodel.Reference{Repository: "kr://app/read", Object: "one"}}); kernel.CodeOf(err) != kernel.ErrForbidden {
+	if _, err := read.Execute(context.Background(), DatasetReadRequest{Reference: objectmodel.Reference{Repository: "kr://app/read", Object: "fixture/one"}}); kernel.CodeOf(err) != kernel.ErrForbidden {
 		t.Fatal(err)
 	}
 }

@@ -42,8 +42,8 @@ func TestLiveOpenSearchNamespacesIsolateSameRepositoryAndContinuations(t *testin
 	for _, id := range []string{"relation/a", "relation/b"} {
 		ops = append(ops, objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindRelation, ObjectID: objectmodel.ObjectID(id)}, Value: map[string]any{
 			"relationId": id, "relationType": "related", "direction": "DIRECTED", "endpoints": []any{
-				map[string]any{"role": "subject", "objectRef": map[string]any{"repository": string(repo.ID()), "object": "article/a"}},
-				map[string]any{"role": "target", "objectRef": map[string]any{"repository": string(repo.ID()), "object": "article/b"}},
+				map[string]any{"role": "subject", "object": "article/a"},
+				map[string]any{"role": "target", "object": "article/b"},
 			},
 		}})
 	}
@@ -93,7 +93,7 @@ func TestLiveOpenSearchNamespacesIsolateSameRepositoryAndContinuations(t *testin
 		t.Errorf("another namespace accepted this instance's continuation: %v", err)
 	}
 	relationQuery := retrieval.RelationPageRequest{Limit: 1, Query: retrieval.RelationQuery{
-		Endpoint: objectmodel.ObjectRef{Repository: repo.ID(), Object: "article/a"}, RelationType: "related", Role: "subject",
+		Endpoint: "article/a", RelationType: "related", Role: "subject",
 	}}
 	firstRelation, err := left.RelationsAt(repo, a, relationQuery)
 	if err != nil || len(firstRelation.Hits) != 1 || firstRelation.Continuation == "" {

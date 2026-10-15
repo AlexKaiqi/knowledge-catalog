@@ -24,11 +24,11 @@ type remoteDispatchRouteCase struct {
 }
 
 var remoteDispatchRoutes = []remoteDispatchRouteCase{
-	{path: "read", method: http.MethodPost, target: "/object/v1/objects:read", flags: map[string]FlagValue{"commit": "commit-A"}, operands: []string{"urn:kc:object:repo-A:policy%2FA#/body/en"}},
+	{path: "read", method: http.MethodPost, target: "/object/v1/objects:read", flags: map[string]FlagValue{"commit": "commit-A"}, operands: []string{"urn:kc:object:policy/A#/body/en"}},
 	{path: "resolve", method: http.MethodPost, target: "/object/v1/objects:resolve", flags: map[string]FlagValue{"repo": "repo-A", "object": "policy/A", "aspect": "body", "member": "en", "commit": "commit-A"}},
 	{path: "search", method: http.MethodPost, target: "/object/v1/search", flags: map[string]FlagValue{"dataset": "agent", "query": "runbook", "limit": "2"}},
-	{path: "relations", method: http.MethodPost, target: "/object/v1/relations:query", flags: map[string]FlagValue{"dataset": "agent", "object": "kc://repo-A/policy/A", "limit": "2"}},
-	{path: "traverse", method: http.MethodPost, target: "/object/v1/traverse:query", flags: map[string]FlagValue{"dataset": "agent", "object": "kc://repo-A/policy/A", "max-hops": "2", "limit": "2"}},
+	{path: "relations", method: http.MethodPost, target: "/object/v1/relations:query", flags: map[string]FlagValue{"dataset": "agent", "object": "policy/A", "limit": "2"}},
+	{path: "traverse", method: http.MethodPost, target: "/object/v1/traverse:query", flags: map[string]FlagValue{"dataset": "agent", "object": "policy/A", "max-hops": "2", "limit": "2"}},
 	{path: "provenance", method: http.MethodPost, target: "/object/v1/provenance:describe", flags: map[string]FlagValue{"repo": "repo-A", "object": "policy/A", "commit": "commit-A"}},
 	{path: "log", method: http.MethodPost, target: "/object/v1/log:query", flags: map[string]FlagValue{"repo": "repo-A", "object": "policy/A", "commit": "commit-A", "limit": "2"}},
 	{path: "schema describe", method: http.MethodPost, target: "/object/v1/schemas:describe", flags: map[string]FlagValue{"repo": "repo-A", "object": "policy/A", "commit": "commit-A"}},
@@ -45,7 +45,7 @@ var remoteDispatchRoutes = []remoteDispatchRouteCase{
 	{path: "dataset retire", method: http.MethodPost, target: "/snapshot/v1/datasets/agent/retire"},
 	{path: "pin", method: http.MethodPost, target: "/snapshot/v1/datasets/agent/resolve"},
 	{path: "pin check", method: http.MethodPost, target: "/snapshot/v1/datasets/agent/check"},
-	{path: "writer put", method: http.MethodPost, target: "/object/v1/objects:put", flags: map[string]FlagValue{"kind": "Member", "command-id": "command-A", "value": `{"body":"runbook"}`, "ref": "refs/heads/main", "message": "useful"}, operands: []string{"urn:kc:object:repo-A:policy%2FA#/body/en"}},
+	{path: "writer put", method: http.MethodPost, target: "/object/v1/objects:put", flags: map[string]FlagValue{"kind": "Member", "command-id": "command-A", "value": `{"body":"runbook"}`, "ref": "refs/heads/main", "message": "useful"}, operands: []string{"urn:kc:object:policy/A#/body/en"}},
 	{path: "writer head", method: http.MethodGet, target: "/writer/v1/repositories/repo-A/head?ref=refs%2Fheads%2Fmain"},
 	{path: "writer receipt", method: http.MethodGet, target: "/writer/v1/receipts/command-A"},
 	{path: "writer branch", method: http.MethodPost, target: "/writer/v1/repositories/repo-A/branches", flags: map[string]FlagValue{"repo": "repo-A", "name": "review/policy-a"}},

@@ -13,11 +13,12 @@ const (
 	RelationUndirected RelationDirection = "UNDIRECTED"
 )
 
-// RelationEndpoint is one typed role in a Canonical Relation. ObjectRef is a
-// repository-qualified, path-independent ObjectRef.
+// RelationEndpoint is one typed role in a Canonical Relation. Object is the
+// endpoint's object ID only: an endpoint never names the Repository that holds
+// it, so the same ID resolves to the same object in every request scope.
 type RelationEndpoint struct {
-	Role      string    `json:"role"`
-	ObjectRef ObjectRef `json:"objectRef"`
+	Role   string   `json:"role"`
+	Object ObjectID `json:"object"`
 }
 
 // CanonicalRelation is the common envelope shared by domain relation types.
@@ -67,13 +68,19 @@ func DecodeRelation(address Address, value any) (CanonicalRelation, error) {
 		if !ok {
 			return CanonicalRelation{}, kernel.Fail(kernel.ErrUsageInvalid, "relation %s endpoint %d must be an object", address.ObjectID, i)
 		}
-		role, roleOK := relationField(item, "role")
-		objectRef, refOK := relationObjectRef(item["objectRef"])
-		endpoint := RelationEndpoint{Role: role, ObjectRef: objectRef}
-		if !roleOK || !refOK || endpoint.Role == "" {
-			return CanonicalRelation{}, kernel.Fail(kernel.ErrUsageInvalid, "relation %s endpoint %d requires role and objectRef", address.ObjectID, i)
+		if len(item) != 2 {
+			return CanonicalRelation{}, kernel.Fail(kernel.ErrUsageInvalid, "relation %s endpoint %d permits role and object only", address.ObjectID, i)
 		}
-		key := endpoint.Role + "\x00" + string(endpoint.ObjectRef.Repository) + "\x00" + string(endpoint.ObjectRef.Object)
+		role, roleOK := relationField(item, "role")
+		object, objectOK := relationField(item, "object")
+		endpoint := RelationEndpoint{Role: role, Object: ObjectID(object)}
+		if !roleOK || !objectOK || endpoint.Role == "" {
+			return CanonicalRelation{}, kernel.Fail(kernel.ErrUsageInvalid, "relation %s endpoint %d requires role and object", address.ObjectID, i)
+		}
+		if err := ValidateObjectID(endpoint.Object); err != nil {
+			return CanonicalRelation{}, kernel.Fail(kernel.ErrUsageInvalid, "relation %s endpoint %d object: %v", address.ObjectID, i, err)
+		}
+		key := endpoint.Role + "\x00" + string(endpoint.Object)
 		if _, duplicate := seen[key]; duplicate {
 			return CanonicalRelation{}, kernel.Fail(kernel.ErrUsageInvalid, "relation %s repeats endpoint %s", address.ObjectID, key)
 		}
@@ -103,17 +110,4 @@ func DecodeRelation(address Address, value any) (CanonicalRelation, error) {
 func relationField(body map[string]any, field string) (string, bool) {
 	text, ok := body[field].(string)
 	return strings.TrimSpace(text), ok
-}
-
-func relationObjectRef(raw any) (ObjectRef, bool) {
-	body, ok := raw.(map[string]any)
-	if !ok {
-		return ObjectRef{}, false
-	}
-	repository, repositoryOK := relationField(body, "repository")
-	object, objectOK := relationField(body, "object")
-	if !repositoryOK || !objectOK || repository == "" || object == "" {
-		return ObjectRef{}, false
-	}
-	return ObjectRef{Repository: kernel.RepositoryID(repository), Object: ObjectID(object)}, true
 }

@@ -28,7 +28,7 @@ func (r descriptorPinRepository) ResolveAddress(addr objectmodel.Address, commit
 func TestResolveDescriptorBindingAtPinnedCommit(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	repo := descriptorPinRepository{Repository: s.Repo}
-	addr := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Service:orders", AspectName: "health"}
+	addr := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "service/orders", AspectName: "health"}
 	old, err := liveaccess.ResolveRepoBinding(repo, "old-runtime", addr)
 	if err != nil {
 		t.Fatal(err)

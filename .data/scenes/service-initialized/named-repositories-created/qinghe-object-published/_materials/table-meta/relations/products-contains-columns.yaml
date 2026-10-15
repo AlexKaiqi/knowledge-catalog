@@ -8,22 +8,12 @@ relationType: contains
 direction: DIRECTED
 endpoints:
 - role: container
-  objectRef:
-    repository: table-meta
-    object: table/shop.products
+  object: table/shop.products
 - role: member
-  objectRef:
-    repository: table-meta
-    object: column/shop.products.product_id
+  object: column/shop.products.product_id
 - role: member
-  objectRef:
-    repository: table-meta
-    object: column/shop.products.category_id
+  object: column/shop.products.category_id
 - role: member
-  objectRef:
-    repository: table-meta
-    object: column/shop.products.name
+  object: column/shop.products.name
 - role: member
-  objectRef:
-    repository: table-meta
-    object: column/shop.products.list_price
+  object: column/shop.products.list_price

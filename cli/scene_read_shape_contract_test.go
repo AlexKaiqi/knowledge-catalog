@@ -82,7 +82,7 @@ func isSceneReadScalarCoordinate(field string) bool {
 }
 
 func TestSceneReadAssertionShapeGuardPreservesArrayContracts(t *testing.T) {
-	const read = "When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:note%2Fhello --dataset scene-notes`\n"
+	const read = "When I run `kc read urn:kc:object:note/hello --dataset scene-notes`\n"
 	for _, tc := range []struct {
 		name, steps string
 		reject      bool

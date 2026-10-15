@@ -9,10 +9,6 @@ relationType: uses
 direction: DIRECTED
 endpoints:
   - role: from
-    objectRef:
-      repository: kr://kc/system
-      object: kc/guide/share-a-dataset
+    object: kc/guide/share-a-dataset
   - role: to
-    objectRef:
-      repository: kr://kc/system
-      object: kc/capability/datasets
+    object: kc/capability/datasets

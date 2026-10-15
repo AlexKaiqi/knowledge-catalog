@@ -59,7 +59,7 @@ func TestHTTPCachedReadRechecksRevocationAndKeepsOldBasis(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		body, err := json.Marshal(map[string]any{"reference": reference, "commit": basis})
+		body, err := json.Marshal(map[string]any{"reference": reference, "repository": string(repo.ID()), "commit": basis})
 		if err != nil {
 			t.Fatal(err)
 		}

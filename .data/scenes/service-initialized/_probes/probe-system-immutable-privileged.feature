@@ -5,5 +5,5 @@
 Feature: probe system immutable privileged
 
   Scenario: privileged writer cannot mutate system
-    When I run `kc writer put urn:kc:object:kr%3A%2F%2Fkc%2Fsystem:schema%2Fevil --command-id mutate-system-admin --value '{"entity":"Evil"}'`
+    When I run `kc writer put urn:kc:object:schema/evil --repo kr://kc/system --command-id mutate-system-admin --value '{"entity":"Evil"}'`
     Then error FORBIDDEN

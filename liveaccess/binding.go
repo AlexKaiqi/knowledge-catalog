@@ -188,6 +188,21 @@ func resolveLegacyDeclaration(repo objectmodel.Repository, commit kernel.CommitI
 	return out, nil
 }
 
+// BoundAspectUnits is the holding view of BoundAspectDeclarations: the Aspect
+// addresses a Repository's Schemas bind for an object, which count toward
+// that Repository's holding in identity conflict checks.
+func BoundAspectUnits(repo objectmodel.Repository, commit kernel.CommitID, objectID objectmodel.ObjectID) ([]objectmodel.Address, error) {
+	declarations, err := BoundAspectDeclarations(repo, commit, objectID, nil)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]objectmodel.Address, 0, len(declarations))
+	for _, declaration := range declarations {
+		out = append(out, declaration.Address)
+	}
+	return out, nil
+}
+
 // BoundAspectDeclarations returns State handles implied by Domain Schema
 // origin for one existing object, excluding Aspects already stored as units.
 func BoundAspectDeclarations(repo objectmodel.Repository, commit kernel.CommitID, objectID objectmodel.ObjectID, existing []objectmodel.UnitDeclaration) ([]objectmodel.UnitDeclaration, error) {

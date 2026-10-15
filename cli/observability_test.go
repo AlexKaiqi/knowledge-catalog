@@ -34,8 +34,8 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 
 	body(t, kc(home, "init"))
 	seedRepo(t, home, repoID)
-	body(t, kc(home, "put", testObjectReference(t, repoID, "schema/metric.definition", ""), "--command-id", "schema", "--value", `{"entity":"Metric","pattern":"record","fields":{"description":{"type":"string","access":["text"]}}}`))
-	body(t, kc(home, "put", testObjectReference(t, repoID, "Metric:gmv", ""), "--command-id", "metric", "--value", `{"description":"governed gross merchandise value"}`))
+	body(t, kc(home, "put", testObjectReference(t, repoID, "schema/metric.definition", ""), "--repo", repoID, "--command-id", "schema", "--value", `{"entity":"Metric","pattern":"record","fields":{"description":{"type":"string","access":["text"]}}}`))
+	body(t, kc(home, "put", testObjectReference(t, repoID, "metric/gmv", ""), "--repo", repoID, "--command-id", "metric", "--value", `{"description":"governed gross merchandise value"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", setID, "--revision", "1",
 		"--source", repoID+"=refs/heads/main"))
 	body(t, kc(home, "allow", "--principal", agent, "--cmd", "read-workspace", "--dataset", setID))
@@ -44,9 +44,9 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 	body(t, kc(home, "allow", "--principal", agent, "--cmd", "feedback.write", "--dataset", setID))
 	identity := []string{"--as", agent, "--on-behalf-of", user, "--request-id", "req-42",
 		"--trace-id", "trace-42"}
-	readArgs := append([]string{"read", testObjectReference(t, repoID, "Metric:gmv", ""), "--dataset", setID, "--span-id", "span-read"}, identity...)
+	readArgs := append([]string{"read", testObjectReference(t, repoID, "metric/gmv", ""), "--dataset", setID, "--span-id", "span-read"}, identity...)
 	readValues := asMap(t, body(t, kc(home, readArgs...)))
-	if readValues["reference"] != testObjectReference(t, repoID, "Metric:gmv", "") {
+	if readValues["reference"] != testObjectReference(t, repoID, "metric/gmv", "") {
 		t.Fatal(readValues)
 	}
 	returnedCommit, _ := readValues["commit"].(string)
@@ -92,7 +92,7 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 			t.Fatalf("versioned target missing: %#v", event)
 		}
 		ref := asMap(t, asMap(t, object[0])["objectRef"])
-		if ref["repository"] != repoID || ref["object"] != "Metric:gmv" || ref["commit"] != returnedCommit {
+		if ref["repository"] != repoID || ref["object"] != "metric/gmv" || ref["commit"] != returnedCommit {
 			t.Fatalf("wrong pinned object ref: %#v", ref)
 		}
 	}
@@ -109,7 +109,7 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 	if len(traceEntries) != 4 || asMap(t, traceEntries[2])["kind"] != "retrieval" || asMap(t, traceEntries[3])["kind"] != "feedback" {
 		t.Fatalf("trace must contain read, search access, retrieval and feedback: %#v", traceEntries)
 	}
-	hitmap := asMap(t, body(t, kc(home, "hitmap", "--object", "Metric:gmv")))
+	hitmap := asMap(t, body(t, kc(home, "hitmap", "--object", "metric/gmv")))
 	hits := hitmap["hits"].([]any)
 	if len(hits) != 1 {
 		t.Fatal(hits)
@@ -118,14 +118,14 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 	if hit["hits"] != float64(2) || asMap(t, hit["principals"])[agent] != float64(2) || asMap(t, hit["onBehalfOf"])[user] != float64(2) {
 		t.Fatalf("hitmap %#v", hit)
 	}
-	zeroHitmap := asMap(t, body(t, kc(home, "hitmap", "--object", "Metric:gmv", "--limit", "0")))
+	zeroHitmap := asMap(t, body(t, kc(home, "hitmap", "--object", "metric/gmv", "--limit", "0")))
 	if len(zeroHitmap["hits"].([]any)) != len(hits) {
 		t.Fatalf("--limit 0 must mean the default hitmap page: %#v vs %#v", zeroHitmap, hitmap)
 	}
 	expectCode(t, kc(home, "hitmap", "--limit", "201"), "USAGE_INVALID")
 
 	blocked := "agent:blocked"
-	expectCode(t, kc(home, "read", testObjectReference(t, repoID, "Metric:gmv", ""), "--dataset", setID, "--as", blocked, "--on-behalf-of", user, "--trace-id", "trace-denied"), "FORBIDDEN")
+	expectCode(t, kc(home, "read", testObjectReference(t, repoID, "metric/gmv", ""), "--dataset", setID, "--as", blocked, "--on-behalf-of", user, "--trace-id", "trace-denied"), "FORBIDDEN")
 	denied := asMap(t, body(t, kc(home, "access-log", "--filter-principal", blocked)))
 	deniedEntries := denied["entries"].([]any)
 	if len(deniedEntries) != 1 || asMap(t, deniedEntries[0])["decision"] != "DENY" {
@@ -140,12 +140,12 @@ func TestObjectReadFailsClosedWhenAccessEvidenceCannotPersist(t *testing.T) {
 	repoID := "kr://acme/public/audited"
 	body(t, kc(home, "init"))
 	seedRepo(t, home, repoID)
-	body(t, kc(home, "put", testObjectReference(t, repoID, "Policy:audit", ""), "--command-id", "seed", "--value", `{"body":"must be observed"}`))
+	body(t, kc(home, "put", testObjectReference(t, repoID, "policy/audit", ""), "--repo", repoID, "--command-id", "seed", "--value", `{"body":"must be observed"}`))
 	if err := os.Mkdir(filepath.Join(home, "access.jsonl"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	poisonEvidenceStream(t, home, "access")
-	result := kc(home, "read", testObjectReference(t, repoID, "Policy:audit", ""), "--ref", "refs/heads/main")
+	result := kc(home, "read", testObjectReference(t, repoID, "policy/audit", ""), "--repo", repoID, "--ref", "refs/heads/main")
 	if result.Status == 0 {
 		t.Fatal("a successful facade response must not escape without durable access evidence")
 	}
@@ -156,8 +156,8 @@ func TestObjectSearchFailsClosedWhenRetrievalEvidenceCannotPersist(t *testing.T)
 	repoID := "kr://acme/public/retrieval-audited"
 	body(t, kc(home, "init"))
 	seedRepo(t, home, repoID)
-	body(t, kc(home, "put", testObjectReference(t, repoID, "schema/runbook.search", ""), "--command-id", "schema", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
-	body(t, kc(home, "put", testObjectReference(t, repoID, "runbook/refund", ""), "--command-id", "seed", "--schema-ref", "schema/runbook.search", "--value", `{"body":"refund timeout"}`))
+	body(t, kc(home, "put", testObjectReference(t, repoID, "schema/runbook.search", ""), "--repo", repoID, "--command-id", "schema", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+	body(t, kc(home, "put", testObjectReference(t, repoID, "runbook/refund", ""), "--repo", repoID, "--command-id", "seed", "--schema-ref", "schema/runbook.search", "--value", `{"body":"refund timeout"}`))
 	syncIndexes(t, home, repoID)
 	if err := os.Mkdir(filepath.Join(home, "retrieval.jsonl"), 0o755); err != nil {
 		t.Fatal(err)
@@ -176,7 +176,7 @@ func TestHTTPPassesAbstractDelegationAndTraceContext(t *testing.T) {
 	agent, user := "agent:http", "user:delegator"
 	body(t, kc(home, "init"))
 	seedRepo(t, home, repoID)
-	body(t, kc(home, "put", testObjectReference(t, repoID, "Policy:http", ""), "--command-id", "seed", "--value", `{"body":"observable"}`))
+	body(t, kc(home, "put", testObjectReference(t, repoID, "policy/http", ""), "--repo", repoID, "--command-id", "seed", "--value", `{"body":"observable"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", setID, "--revision", "1",
 		"--source", repoID+"=refs/heads/main"))
 	body(t, kc(home, "allow", "--principal", agent, "--cmd", "read-workspace", "--dataset", setID))
@@ -185,7 +185,7 @@ func TestHTTPPassesAbstractDelegationAndTraceContext(t *testing.T) {
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{Authenticator: staticHTTPAuthenticator{identity: inv.HTTPIdentity{Principal: agent, OnBehalfOf: user, Provider: "test", Subject: agent}}})
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
-	payload, _ := json.Marshal(map[string]any{"dataset": setID, "reference": testObjectReference(t, repoID, "Policy:http", "")})
+	payload, _ := json.Marshal(map[string]any{"dataset": setID, "reference": testObjectReference(t, repoID, "policy/http", "")})
 	req, err := http.NewRequest(http.MethodPost, server.URL+"/object/v1/objects:read", bytes.NewReader(payload))
 	if err != nil {
 		t.Fatal(err)

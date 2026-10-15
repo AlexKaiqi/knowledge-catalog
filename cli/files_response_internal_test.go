@@ -60,7 +60,7 @@ func TestSnapshotConsumerInputRejectsInvalidCoordinatesBeforeTransport(t *testin
 		{"dataset", "show", "d", "--revision", "0"},
 		{"dataset", "show", "d", "--revision", "abc"},
 		{"dataset", "show", "d", "--limit", "201"},
-		{"read", "urn:kc:object:r:o", "--offset", "1"},
+		{"read", "urn:kc:object:o", "--offset", "1"},
 	} {
 		result := Run(append(args, "--server", server.URL, "--as", "consumer"))
 		if result.Status == 0 || !strings.Contains(result.Stdout, "USAGE_INVALID") {

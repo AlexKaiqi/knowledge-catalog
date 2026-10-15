@@ -12,7 +12,7 @@ import (
 
 func TestResolveBindingReadsSchemaOrigin(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Service:orders", AspectName: "health"}
+	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "service/orders", AspectName: "health"}
 	head, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
@@ -21,7 +21,7 @@ func TestResolveBindingReadsSchemaOrigin(t *testing.T) {
 				"entity": "Service", "aspect": "health", "origin": "https://stats.example",
 				"fields": map[string]any{"status": map[string]any{"type": "string", "access": []any{"filter"}}},
 			}},
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Service:orders", AspectName: "properties"}, Value: map[string]any{"name": "orders"}},
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "service/orders", AspectName: "properties"}, Value: map[string]any{"name": "orders"}},
 		},
 	})
 	if err != nil {
@@ -68,7 +68,7 @@ func TestResolveBindingFromSchemaWithoutInstanceFile(t *testing.T) {
 
 func TestApplyObjectCommitRejectsInstanceBinding(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Service:orders", AspectName: "health"}
+	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "service/orders", AspectName: "health"}
 	_, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
@@ -86,7 +86,7 @@ func TestApplyObjectCommitRejectsInstanceBinding(t *testing.T) {
 
 func TestResolveBindingWithoutBoundSchemaIsUnsatisfied(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Service:orders", AspectName: "health"}
+	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "service/orders", AspectName: "health"}
 	head, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,

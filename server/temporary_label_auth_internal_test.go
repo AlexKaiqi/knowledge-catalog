@@ -30,7 +30,7 @@ func TestE2EReadPayloadHoistsDefinitionBeforeAuthorize(t *testing.T) {
 		"repositories": map[string]any{repositoryID: "fixed"},
 		"definition":   definition,
 	}
-	reference, err := objectmodel.FormatReference(objectmodel.Reference{Repository: kernel.RepositoryID(repositoryID), Object: "Policy:label"})
+	reference, err := objectmodel.FormatReference(objectmodel.Reference{Repository: kernel.RepositoryID(repositoryID), Object: "policy/label"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestHTTPObjectReadFlagsExtractTemporaryDefinition(t *testing.T) {
 			"sources": []map[string]any{{"repository": repositoryID, "selector": snapshot.DefaultRef}},
 		},
 	}
-	reference, err := objectmodel.FormatReference(objectmodel.Reference{Repository: kernel.RepositoryID(repositoryID), Object: "Policy:label"})
+	reference, err := objectmodel.FormatReference(objectmodel.Reference{Repository: kernel.RepositoryID(repositoryID), Object: "policy/label"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,15 +111,15 @@ func TestNamedReaderPublishedWorkspaceConsumeOnlyAdmitsComposition(t *testing.T)
 	if err := inv.WriteAllow(home, inv.AllowFile{Rules: rules}); err != nil {
 		t.Fatal(err)
 	}
-	flags := map[string]FlagValue{"as": namedReader, "object": "Policy:label", "dataset": label}
+	flags := map[string]FlagValue{"as": namedReader, "object": "policy/label", "dataset": label}
 	if err := inv.Authorize(home, "object.read", flags, nil); err != nil {
 		t.Fatalf("consume must admit the composition gate: %v", err)
 	}
-	if !inv.AllowedRepoRead(home, flags, repositoryID, "Policy:label") {
+	if !inv.AllowedRepoRead(home, flags, repositoryID, "policy/label") {
 		t.Fatal("dataset file.read must deliver listed-file bodies")
 	}
-	repoFlags := map[string]FlagValue{"as": namedReader, "object": "Policy:label", "repo": repositoryID}
-	if inv.AllowedRepoRead(home, repoFlags, repositoryID, "Policy:label") {
+	repoFlags := map[string]FlagValue{"as": namedReader, "object": "policy/label", "repo": repositoryID}
+	if inv.AllowedRepoRead(home, repoFlags, repositoryID, "policy/label") {
 		t.Fatal("dataset file.read must not admit --repo object.read")
 	}
 }
@@ -150,7 +150,7 @@ func TestNamedReaderCannotUseTemporaryPinWithDefinition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	flags := map[string]FlagValue{"as": namedReader, "object": "Policy:label", "pin": string(rawPin)}
+	flags := map[string]FlagValue{"as": namedReader, "object": "policy/label", "pin": string(rawPin)}
 	if err := inv.PrepareObjectPinContext(flags); err != nil {
 		t.Fatalf("prepare: %v", err)
 	}

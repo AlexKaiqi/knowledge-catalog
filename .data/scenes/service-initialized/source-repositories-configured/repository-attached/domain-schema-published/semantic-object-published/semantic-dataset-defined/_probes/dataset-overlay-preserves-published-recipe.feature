@@ -16,5 +16,5 @@ Feature: 个人配方合成不发布或改变共享 Dataset
       | datasets[].revision | 1 |
       | repositories[].id | kr://scene/object |
       | repositories[].id | kr://scene/graph |
-    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv --dataset personal-task`
+    When I run `kc read urn:kc:object:metric/gmv --dataset personal-task`
     Then error DATASET_INVALID

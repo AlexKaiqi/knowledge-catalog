@@ -167,7 +167,7 @@ func TestRelationTimeBudgetReturnsResumableBoundary(t *testing.T) {
 	defer idx.Close()
 	ctx, cancel := ports.WithSearchBudget(context.Background(), ports.SearchBudget{Timeout: 10 * time.Millisecond})
 	defer cancel()
-	got, err := idx.RelationsAtContext(ctx, repo, commit, relationRequest(repo.ID()))
+	got, err := idx.RelationsAtContext(ctx, repo, commit, relationRequest())
 	if err != nil || got.Exhausted || got.Continuation == "" || len(got.Claims) == 0 || engine.calls != 1 {
 		t.Fatalf("relation budget: %#v calls=%d %v", got, engine.calls, err)
 	}

@@ -13,10 +13,20 @@ import (
 
 type relationTestRepository struct {
 	objectmodel.Repository
-	id kernel.RepositoryID
+	id    kernel.RepositoryID
+	holds map[objectmodel.ObjectID]bool
 }
 
 func (r relationTestRepository) ID() kernel.RepositoryID { return r.id }
+
+// ObjectUnitPaths makes the fixture a UnitLocator: the Repository holds
+// exactly the IDs listed in holds.
+func (r relationTestRepository) ObjectUnitPaths(id objectmodel.ObjectID, _ kernel.CommitID) ([]string, error) {
+	if !r.holds[id] {
+		return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "object %s is not held", id)
+	}
+	return []string{"objects/" + string(id) + ".yaml"}, nil
+}
 
 type relationTestLookup map[kernel.RepositoryID]objectmodel.Repository
 
@@ -34,11 +44,11 @@ type relationTestProjection struct {
 
 func (p *relationTestProjection) RelationsAtContext(_ context.Context, repo objectmodel.Repository, at kernel.CommitID, req retrieval.RelationPageRequest) (retrieval.RelationPage, error) {
 	p.calls = append(p.calls, repo.ID())
-	if at != kernel.CommitID(string(repo.ID())+"-fixed") || req.Query.Endpoint.Repository != "kr://a/entities" {
+	if at != kernel.CommitID(string(repo.ID())+"-fixed") || req.Query.Endpoint != "object/a" {
 		p.t.Fatalf("storage and endpoint bases were conflated: %s %s %#v", repo.ID(), at, req.Query)
 	}
 	page := retrieval.RelationPage{Exhausted: true}
-	if repo.ID() != req.Query.Endpoint.Repository {
+	if repo.ID() != "kr://a/entities" {
 		page.Hits = []retrieval.RelationHit{{Repository: repo.ID(), Commit: at, ObjectID: "relation/one"}}
 	}
 	return page, nil
@@ -51,13 +61,14 @@ func TestDatasetRelationsQueryAllMembersAndBindContinuationToScope(t *testing.T)
 		repos[id] = relationTestRepository{id: id}
 		pin.Repositories[id] = kernel.CommitID(string(id) + "-fixed")
 	}
+	repos["kr://a/entities"] = relationTestRepository{id: "kr://a/entities", holds: map[objectmodel.ObjectID]bool{"object/a": true}}
 	pin.Items = reader.WholeRepositoryItems(pin.Repositories)
 	lookup := func(id kernel.RepositoryID) (objectmodel.Repository, error) {
 		return repos.Require(id, kernel.ErrObjectRefUnresolved)
 	}
 	projection := &relationTestProjection{t: t}
 	executor := DatasetRelationsExecutor{Serving: reader.Open(lookup, pin), Repositories: repos, Projection: projection}
-	req := retrieval.RelationPageRequest{Query: retrieval.RelationQuery{Endpoint: objectmodel.ObjectRef{Repository: "kr://a/entities", Object: "object/a"}}, Limit: 1}
+	req := retrieval.RelationPageRequest{Query: retrieval.RelationQuery{Endpoint: "object/a"}, Limit: 1}
 	first, err := executor.Execute(context.Background(), req)
 	if err != nil || len(first.Hits) != 1 || first.Hits[0].Repository != "kr://b/graph" || first.Continuation == "" || first.Exhausted {
 		t.Fatalf("first cross-repository page: %#v %v", first, err)

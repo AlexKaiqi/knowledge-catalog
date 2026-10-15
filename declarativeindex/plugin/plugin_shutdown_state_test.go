@@ -37,7 +37,7 @@ func TestIndexPluginsCloseCancelsBackgroundStateBeforeDrainingCatchUp(t *testing
 		TargetRepository: source.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: base, ExpectedTargetCommit: base,
 		Operations: []objectmodel.Operation{
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "Job:shutdown"}, Value: map[string]any{"name": "shutdown"}},
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "job/shutdown"}, Value: map[string]any{"name": "shutdown"}},
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.runtime"}, Value: map[string]any{
 				"entity": "Job", "aspect": "runtime", "origin": "https://scheduler.example",
 				"fields": map[string]any{"status": map[string]any{"type": "string", "access": []any{"filter"}}},
@@ -109,7 +109,7 @@ func TestIndexPluginsCloseCancelsBackgroundStateBeforeDrainingCatchUp(t *testing
 	case <-time.After(5 * time.Second):
 		t.Fatal("actual Controller startup did not reach the Bound State source")
 	}
-	if observation.Binding.Repository != repo.ID() || observation.Binding.DeclarationCommit != commit.Result.NewCommit || observation.Binding.Address.ObjectID != "Job:shutdown" || observation.Binding.Address.AspectName != "runtime" || observation.Binding.Mode != objectmodel.BindingState || observation.Binding.DeclarationDigest == "" || observation.SchemaRef != "schema/job.runtime" || observation.Origin != "https://scheduler.example" || observation.Identity.Principal != "shutdown-worker" || observation.RequestID != "shutdown-worker-request" {
+	if observation.Binding.Repository != repo.ID() || observation.Binding.DeclarationCommit != commit.Result.NewCommit || observation.Binding.Address.ObjectID != "job/shutdown" || observation.Binding.Address.AspectName != "runtime" || observation.Binding.Mode != objectmodel.BindingState || observation.Binding.DeclarationDigest == "" || observation.SchemaRef != "schema/job.runtime" || observation.Origin != "https://scheduler.example" || observation.Identity.Principal != "shutdown-worker" || observation.RequestID != "shutdown-worker-request" {
 		t.Fatalf("background observation lost its actual fixed Binding or identity: %#v", observation)
 	}
 	finished := make(chan error, 1)
@@ -141,7 +141,7 @@ func TestIndexPluginsCloseCancelsBackgroundStateBeforeDrainingCatchUp(t *testing
 		t.Fatal("accepted foreground CatchUp did not publish the actual State projection")
 	}
 	result, err := queries.SearchStateAtRevisionContext(context.Background(), repo, commit.Result.NewCommit, revision, query)
-	if err != nil || len(result.Hits) != 1 || result.Hits[0].Object.Address.ObjectID != "Job:shutdown" || result.Hits[0].Object.Commit != commit.Result.NewCommit || len(result.Hits[0].Version.Observations) != 1 {
+	if err != nil || len(result.Hits) != 1 || result.Hits[0].Object.Address.ObjectID != "job/shutdown" || result.Hits[0].Object.Commit != commit.Result.NewCommit || len(result.Hits[0].Version.Observations) != 1 {
 		t.Fatalf("draining task did not preserve the real fixed State query: %#v %v", result, err)
 	}
 	value := result.Hits[0].Object.Value.(map[string]any)

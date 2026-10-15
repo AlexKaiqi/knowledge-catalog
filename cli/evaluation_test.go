@@ -13,12 +13,12 @@ func TestCLIEvaluationDailyJourneyProductStdout(t *testing.T) {
 	repo := "kr://acme/public/core"
 	body(t, kc(home, "init"))
 	seedRepo(t, home, repo)
-	body(t, kc(home, "put", testObjectReference(t, repo, "schema/runbook.body", ""), "--command-id", "schema-1", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
-	body(t, kc(home, "put", testObjectReference(t, repo, "runbook/payment", ""), "--command-id", "source-1", "--schema-ref", "schema/runbook.body", "--value", `{"body":"切换支付流量前先检查冻结窗口"}`))
+	body(t, kc(home, "put", testObjectReference(t, repo, "schema/runbook.body", ""), "--repo", repo, "--command-id", "schema-1", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+	body(t, kc(home, "put", testObjectReference(t, repo, "runbook/payment", ""), "--repo", repo, "--command-id", "source-1", "--schema-ref", "schema/runbook.body", "--value", `{"body":"切换支付流量前先检查冻结窗口"}`))
 	body(t, kc(home, "grant", "add", "--principal", "bot", "--action", "inventory.read"))
 	body(t, kc(home, "grant", "add", "--principal", "bot", "--action", "object.read", "--repo", repo))
 
-	read := asMap(t, body(t, kc(home, "read", testObjectReference(t, repo, "runbook/payment", ""))))
+	read := asMap(t, body(t, kc(home, "read", testObjectReference(t, repo, "runbook/payment", ""), "--repo", repo)))
 	if read["objectId"] != "runbook/payment" || read["repository"] != repo {
 		t.Fatalf("read identity: %#v", read)
 	}

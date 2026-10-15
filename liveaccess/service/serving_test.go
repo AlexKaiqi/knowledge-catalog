@@ -30,7 +30,7 @@ func (s *stateLookup) LookupState(_ context.Context, request serving.StateLookup
 func setupServing(t *testing.T) (*reader.Serving, kernel.RepositoryID, kernel.CommitID, objectmodel.Address) {
 	t.Helper()
 	s := testkit.NewSetup(t, "")
-	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Job:orders", AspectName: "runtime"}
+	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/orders", AspectName: "runtime"}
 	commit, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,

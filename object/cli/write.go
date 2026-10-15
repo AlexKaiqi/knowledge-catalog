@@ -44,7 +44,7 @@ func (e *executor) write(ctx context.Context, path string, flags map[string]any,
 	if wait == 0 {
 		wait = ReceiptWaitBudget()
 	}
-	request := client.MaintenanceRequest{Reference: reference, CommandID: flagString(flags, "command-id"), Ref: flagString(flags, "ref"), Base: flagString(flags, "base"), Expected: flagString(flags, "expected"), Value: value, Kind: flagString(flags, "kind"), SchemaRef: flagString(flags, "schema-ref"), PathHint: flagString(flags, "path-hint"), IfAbsent: flagBool(flags, "if-absent"), IfDigest: flagString(flags, "if-digest"), Message: flagString(flags, "message"), Provenance: provenance(flags), ValueSource: source}
+	request := client.MaintenanceRequest{Reference: reference, Repository: flagString(flags, "repo"), CommandID: flagString(flags, "command-id"), Ref: flagString(flags, "ref"), Base: flagString(flags, "base"), Expected: flagString(flags, "expected"), Value: value, Kind: flagString(flags, "kind"), SchemaRef: flagString(flags, "schema-ref"), PathHint: flagString(flags, "path-hint"), IfAbsent: flagBool(flags, "if-absent"), IfDigest: flagString(flags, "if-digest"), Message: flagString(flags, "message"), Provenance: provenance(flags), ValueSource: source}
 	return client.MaintainWithReceiptRecovery(ctx, e.client, path == "writer remove", request, options, wait)
 }
 

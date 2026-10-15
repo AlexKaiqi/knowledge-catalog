@@ -765,7 +765,7 @@ func TestReadmeAspectIsMarkdownBody(t *testing.T) {
 		Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: objectmodel.CoreReadmeSchemaV1},
 		Value: schemaValue,
 	}
-	instanceAddr := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "payments", AspectName: objectmodel.ReadmeAspect}
+	instanceAddr := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "fixture/payments", AspectName: objectmodel.ReadmeAspect}
 	valid := map[string]any{"body": "# Payments warehouse\n\nPublished metrics and tables for payments."}
 
 	drifted := readmeSchemaValue(t)
@@ -784,7 +784,7 @@ func TestReadmeAspectIsMarkdownBody(t *testing.T) {
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: []objectmodel.Operation{schemaOp, {
-			Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "payments"},
+			Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "fixture/payments"},
 			SchemaRef: string(objectmodel.CoreReadmeSchemaV1), Value: valid,
 		}},
 	})
@@ -821,7 +821,7 @@ func TestReadmeAspectIsMarkdownBody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.Repo.Read("payments", receipt.Result.CommitID)
+	got, err := s.Repo.Read("fixture/payments", receipt.Result.CommitID)
 	if err != nil {
 		t.Fatal(err)
 	}

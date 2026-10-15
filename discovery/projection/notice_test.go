@@ -20,10 +20,10 @@ func TestChangeNoticeAcceptsRepoRefOnly(t *testing.T) {
 func TestChangeNoticeAcceptsOptionalAddressAndRevisionHint(t *testing.T) {
 	notice, err := ParseChangeNotice([]byte(`{
 		"repository":"kr://acme/public/core",
-		"address":{"kind":"Aspect","objectId":"Job:orders","aspectName":"runtime"},
+		"address":{"kind":"Aspect","objectId":"job/orders","aspectName":"runtime"},
 		"sourceRevision":"r2"
 	}`))
-	if err != nil || notice.Address == nil || notice.Address.ObjectID != "Job:orders" || notice.SourceRevision != "r2" {
+	if err != nil || notice.Address == nil || notice.Address.ObjectID != "job/orders" || notice.SourceRevision != "r2" {
 		t.Fatalf("notice = %#v %v", notice, err)
 	}
 }

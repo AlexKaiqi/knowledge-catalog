@@ -46,7 +46,7 @@ func TestRepositoryConnectionOnLakeFS(t *testing.T) {
 	if connected["managementURL"] != base+"/"+name || connected["head"] == "" {
 		t.Fatalf("connection %#v", connected)
 	}
-	receipt := asMap(t, body(t, invoke("writer", "put", testObjectReference(t, repo, "note/connection", ""), "--command-id", "connected-publish", "--value", `{"body":"connected through the actual lakeFS authority"}`)))
+	receipt := asMap(t, body(t, invoke("writer", "put", testObjectReference(t, repo, "note/connection", ""), "--repo", repo, "--command-id", "connected-publish", "--value", `{"body":"connected through the actual lakeFS authority"}`)))
 	commit := publishedCommit(t, receipt)
 	repositoryConnectionRotate(t, server.URL, "kaiqidong", repo, credential)
 	closeServer()
@@ -54,7 +54,7 @@ func TestRepositoryConnectionOnLakeFS(t *testing.T) {
 	writeDeployment(t, config, cfg)
 	server, handler = start()
 	repositoryConnectionCheck(t, server.URL, "kaiqidong", repo)
-	row := asMap(t, body(t, invoke("read", testObjectReference(t, repo, "note/connection", ""), "--commit", commit)))
+	row := asMap(t, body(t, invoke("read", testObjectReference(t, repo, "note/connection", ""), "--repo", repo, "--commit", commit)))
 	if row["commit"] != commit || asMap(t, row["value"])["body"] != "connected through the actual lakeFS authority" {
 		t.Fatalf("fixed publication lost %#v", row)
 	}

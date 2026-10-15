@@ -81,7 +81,7 @@ func TestServerLiveAccessCredentialBoundariesPreserveSiblingsAndSafeEvidence(t *
 	}
 	assertFailure := func(t *testing.T, requestID string, code kernel.ErrorCode) {
 		t.Helper()
-		row, err := f.read(t, "alice", requestID, kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR1, ""), Commit: string(f.commits[acceptanceR1])})
+		row, err := f.read(t, "alice", requestID, kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR1, ""), Repository: string(acceptanceR1), Commit: string(f.commits[acceptanceR1])})
 		if err != nil {
 			t.Fatalf("source boundary rejected unrelated siblings: %#v %v", row, err)
 		}
@@ -102,7 +102,7 @@ func TestServerLiveAccessCredentialBoundariesPreserveSiblingsAndSafeEvidence(t *
 	changeOrigin(other.URL)
 	assertFailure(t, "credential-initial-target", kernel.ErrForbidden)
 	changeOrigin(source.URL)
-	row, err := f.read(t, "alice", "credential-appropriate-target", kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR1, ""), Commit: string(f.commits[acceptanceR1])})
+	row, err := f.read(t, "alice", "credential-appropriate-target", kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR1, ""), Repository: string(acceptanceR1), Commit: string(f.commits[acceptanceR1])})
 	if err != nil || len(row.Failures) != 0 || len(row.Observations) != 4 {
 		t.Fatalf("applicable target did not adopt actual result: %#v %v", row, err)
 	}

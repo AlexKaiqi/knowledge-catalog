@@ -16,8 +16,8 @@ func TestDatasetRegressionHTTPDatasetPinCannotBroadenScope(t *testing.T) {
 	repoDSN := lakeFSRepoDSN(t)
 	body(t, kc(home, "local", "repository", "attach", "--repo", repo, "--dsn", repoDSN))
 	body(t, kc(home, "attach", "--repo", repo, "--dsn", repoDSN))
-	body(t, kc(home, "writer", "put", testObjectReference(t, repo, "public", ""), "--command-id", "public", "--path-hint", "public/a.yaml", "--value", `{"body":"public"}`))
-	body(t, kc(home, "writer", "put", testObjectReference(t, repo, "secret", ""), "--command-id", "private", "--path-hint", "private/a.yaml", "--value", `{"body":"OUTSIDE_DATASET"}`))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repo, "fixture/public", ""), "--repo", repo, "--command-id", "public", "--path-hint", "public/a.yaml", "--value", `{"body":"public"}`))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repo, "fixture/secret", ""), "--repo", repo, "--command-id", "private", "--path-hint", "private/a.yaml", "--value", `{"body":"OUTSIDE_DATASET"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", "public-only", "--revision", "1", "--source", repo+"=refs/heads/main@docs@public"))
 	body(t, kc(home, "grant", "add", "--principal", principal, "--action", "dataset.resolve,file.read", "--dataset", "public-only"))
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
@@ -31,18 +31,18 @@ func TestDatasetRegressionHTTPDatasetPinCannotBroadenScope(t *testing.T) {
 		t.Fatalf("setup resolve %d %#v", status, resolved)
 	}
 	pin := asMap(t, asMap(t, resolved)["pin"])
-	status, result, _ := httpSurfaceRequest(t, server, http.MethodPost, "/object/v1/objects:read", map[string]any{"dataset": "public-only", "pin": pin, "reference": testObjectReference(t, repo, "public", "")}, principal)
+	status, result, _ := httpSurfaceRequest(t, server, http.MethodPost, "/object/v1/objects:read", map[string]any{"dataset": "public-only", "pin": pin, "reference": testObjectReference(t, repo, "fixture/public", "")}, principal)
 	if status != http.StatusOK {
 		t.Fatalf("valid published object was not readable: HTTP %d %#v", status, result)
 	}
 	row := asMap(t, result)
-	if row["reference"] != testObjectReference(t, repo, "public", "") || asMap(t, row["address"])["objectId"] != "public" || row["repository"] != repo ||
+	if row["reference"] != testObjectReference(t, repo, "fixture/public", "") || asMap(t, row["address"])["objectId"] != "fixture/public" || row["repository"] != repo ||
 		row["commit"] != asMap(t, pin["repositories"])[repo] || asMap(t, row["value"])["body"] != "public" {
 		t.Fatalf("valid pin lost its published object, body or source basis: %#v", result)
 	}
 	items := pin["items"].([]any)
 	asMap(t, items[0])["prefix"] = ""
-	status, result, _ = httpSurfaceRequest(t, server, http.MethodPost, "/object/v1/objects:read", map[string]any{"dataset": "public-only", "pin": pin, "reference": testObjectReference(t, repo, "secret", "")}, principal)
+	status, result, _ = httpSurfaceRequest(t, server, http.MethodPost, "/object/v1/objects:read", map[string]any{"dataset": "public-only", "pin": pin, "reference": testObjectReference(t, repo, "fixture/secret", "")}, principal)
 	if status != http.StatusBadRequest || asMap(t, asMap(t, result)["error"])["code"] != string(kernel.ErrDatasetInvalid) {
 		t.Fatalf("forged Dataset pin did not fail its scope contract: HTTP %d %#v", status, result)
 	}

@@ -100,7 +100,7 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 	assertInventoryJSON(t, home, head)
 
 	providerObject := "runbook/payment-oncall"
-	direct := asMap(t, body(t, asProvider("read", testObjectReference(t, repositoryID, providerObject, ""))))
+	direct := asMap(t, body(t, asProvider("read", testObjectReference(t, repositoryID, providerObject, ""), "--repo", repositoryID)))
 	if direct["commit"] != commit || asMap(t, direct["value"])["body"] != "切换支付流量前先检查冻结窗口" {
 		t.Fatalf("provider could not read back over the product Client: %#v", direct)
 	}
@@ -113,7 +113,7 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 	if providerResolved["status"] != "RESOLVED" || providerResolved["commit"] != commit {
 		t.Fatalf("provider resolve: %#v", providerResolved)
 	}
-	published2 := asMap(t, body(t, asProvider("writer", "put", testObjectReference(t, repositoryID, providerObject, ""), "--command-id", "source-2", "--schema-ref", "schema/runbook.body", "--value", `{"body":"切换支付流量前先检查冻结窗口，并核对灰度"}`)))
+	published2 := asMap(t, body(t, asProvider("writer", "put", testObjectReference(t, repositoryID, providerObject, ""), "--repo", repositoryID, "--command-id", "source-2", "--schema-ref", "schema/runbook.body", "--value", `{"body":"切换支付流量前先检查冻结窗口，并核对灰度"}`)))
 	commit = publishedCommit(t, published2)
 	expectCode(t, asProvider("dataset", "define", "--dataset", setID,
 		"--revision", "1", "--source", repositoryID), "FORBIDDEN")
@@ -142,7 +142,7 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 	if consumerWho["principal"] != consumer {
 		t.Fatalf("consumer whoami: %#v", consumerWho)
 	}
-	expectCode(t, asConsumer("writer", "put", testObjectReference(t, repositoryID, "guessed/object", ""), "--command-id", "consumer-write", "--value", `{"body":"tamper"}`), "FORBIDDEN")
+	expectCode(t, asConsumer("writer", "put", testObjectReference(t, repositoryID, "guessed/object", ""), "--repo", repositoryID, "--command-id", "consumer-write", "--value", `{"body":"tamper"}`), "FORBIDDEN")
 
 	expectCode(t, asConsumer("catalog", "list"), "USAGE_INVALID")
 	state := asMap(t, body(t, asConsumer("show")))
@@ -236,7 +236,7 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 	}
 
 	// A Repository READ returns one value; only Dataset reads return a union.
-	value := asMap(t, body(t, asConsumer("read", testObjectReference(t, discoveredRepo, providerObject, ""), "--commit", commit)))
+	value := asMap(t, body(t, asConsumer("read", testObjectReference(t, discoveredRepo, providerObject, ""), "--repo", discoveredRepo, "--commit", commit)))
 	if value["commit"] != commit || asMap(t, value["value"])["body"] != "切换支付流量前先检查冻结窗口，并核对灰度" {
 		t.Fatalf("exact --repo --commit replay cannot be consumed: %#v", value)
 	}

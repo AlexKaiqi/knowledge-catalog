@@ -22,9 +22,9 @@ func TestWriterPutPathHintIsStored(t *testing.T) {
 	coreDSN := internalLakeFSRepoDSN(t)
 	run("local", "repository", "attach", "--repo", core, "--dsn", coreDSN)
 	run("attach", "--repo", core, "--dsn", coreDSN)
-	run("writer", "put", "urn:kc:object:kr%3A%2F%2Facme%2Fpublic%2Fcore:schema%2Fpolicy.body", "--command-id", "schema-body",
+	run("writer", "put", "urn:kc:object:schema/policy.body", "--repo", core, "--command-id", "schema-body",
 		"--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`)
-	run("writer", "put", "urn:kc:object:kr%3A%2F%2Facme%2Fpublic%2Fcore:listed", "--command-id", "listed",
+	run("writer", "put", "urn:kc:object:policy/listed", "--repo", core, "--command-id", "listed",
 		"--schema-ref", "schema/policy.body", "--path-hint", "policies/listed.yaml",
 		"--value", `{"body":"listed"}`)
 	ws, err := apphome.Open(dir)
@@ -48,7 +48,7 @@ func TestWriterPutPathHintIsStored(t *testing.T) {
 	if !ok {
 		t.Fatalf("repository %T cannot locate unit paths", krepo)
 	}
-	paths, err := locator.ObjectUnitPaths("listed", head)
+	paths, err := locator.ObjectUnitPaths("policy/listed", head)
 	if err != nil {
 		t.Fatal(err)
 	}

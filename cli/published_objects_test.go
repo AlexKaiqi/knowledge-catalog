@@ -20,17 +20,17 @@ func TestPublishedImageDiscoveryKeepsBusinessIdentity(t *testing.T) {
 	}
 	f.verifyResourceFile(t, f.resourceStore, f.resourceCommit, "media/tea-tin.png")
 
-	before := asMap(t, body(t, f.consume(t, "read", testObjectReference(t, f.repository, "image/tea-tin", ""), "--commit", commit)))
+	before := asMap(t, body(t, f.consume(t, "read", testObjectReference(t, f.repository, "image/tea-tin", ""), "--repo", f.repository, "--commit", commit)))
 	raw, err := json.Marshal(definition)
 	if err != nil {
 		t.Fatal(err)
 	}
-	moved := publishedCommit(t, asMap(t, body(t, f.provide(t, "writer", "put", testObjectReference(t, f.repository, "image/tea-tin", "/definition"), "--command-id", "image-description-move", "--schema-ref", "schema/published-object.definition/v1", "--path-hint", "moved/image-description.yaml", "--value", string(raw)))))
+	moved := publishedCommit(t, asMap(t, body(t, f.provide(t, "writer", "put", testObjectReference(t, f.repository, "image/tea-tin", "/definition"), "--repo", f.repository, "--command-id", "image-description-move", "--schema-ref", "schema/published-object.definition/v1", "--path-hint", "moved/image-description.yaml", "--value", string(raw)))))
 	if moved == commit {
 		t.Fatal("moving the representation must create a new Snapshot version")
 	}
 	for _, version := range []string{commit, moved} {
-		read := asMap(t, body(t, f.consume(t, "read", testObjectReference(t, f.repository, "image/tea-tin", ""), "--commit", version)))
+		read := asMap(t, body(t, f.consume(t, "read", testObjectReference(t, f.repository, "image/tea-tin", ""), "--repo", f.repository, "--commit", version)))
 		if read["commit"] != version || !reflect.DeepEqual(read["value"], before["value"]) {
 			t.Fatalf("representation path changed object identity or pinned value: %#v", read)
 		}
@@ -71,7 +71,7 @@ func TestPublishedModuleDiscoveryKeepsDispersedResourceReferences(t *testing.T) 
 		}
 		f.verifyResourceFile(t, store, version, path)
 	}
-	expectCode(t, f.consume(t, "read", testObjectReference(t, f.otherRepository, "private/policy", "")), "FORBIDDEN")
+	expectCode(t, f.consume(t, "read", testObjectReference(t, f.otherRepository, "private/policy", ""), "--repo", f.otherRepository), "FORBIDDEN")
 	if after := f.head(t, f.otherRepository); after != f.otherHead {
 		t.Fatalf("publishing/reading module references wrote to the other repository: %s -> %s", f.otherHead, after)
 	}
@@ -93,7 +93,7 @@ func TestPublishedExternalTableDiscoveryDoesNotContactOfflineSource(t *testing.T
 func TestObjectPublicationDoesNotRequireIndexOrInstalledHandler(t *testing.T) {
 	f := newPublishedObjectFixture(t, false)
 	commit, definition := f.publish(t, "table")
-	read := asMap(t, body(t, f.consume(t, "read", testObjectReference(t, f.repository, "table/external-orders", ""), "--commit", commit)))
+	read := asMap(t, body(t, f.consume(t, "read", testObjectReference(t, f.repository, "table/external-orders", ""), "--repo", f.repository, "--commit", commit)))
 	if !reflect.DeepEqual(asMap(t, read["value"])["definition"], definition) {
 		t.Fatalf("missing capabilities blocked fixed object read: %#v", read)
 	}

@@ -14,10 +14,10 @@ func TestFileStoreTraceAndVersionedHitmap(t *testing.T) {
 	store := datedFileStore(t)
 	identity := observability.IdentityContext{Principal: "agent:finance", OnBehalfOf: "user:kai"}
 	trace := observability.TraceContext{TraceID: "trace-1", SpanID: "span-1"}
-	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Metric:gmv", AspectName: "definition"}
+	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "metric/gmv", AspectName: "definition"}
 	target := observability.ObjectAccess{
 		ObjectRef: objectmodel.PinnedObjectRef{
-			ObjectRef: objectmodel.ObjectRef{Repository: "kr://acme/semantics", Object: "Metric:gmv"},
+			ObjectRef: objectmodel.ObjectRef{Repository: "kr://acme/semantics", Object: "metric/gmv"},
 			Commit:    "commit-v1",
 		},
 		Address: &address,
@@ -42,7 +42,7 @@ func TestFileStoreTraceAndVersionedHitmap(t *testing.T) {
 	if err != nil || len(view.Entries) != 3 || view.Entries[2].Kind != "feedback" {
 		t.Fatalf("trace %#v %v", view, err)
 	}
-	hits, err := store.Hitmap(observability.AccessQuery{Object: "Metric:gmv"})
+	hits, err := store.Hitmap(observability.AccessQuery{Object: "metric/gmv"})
 	if err != nil || len(hits) != 1 {
 		t.Fatalf("hits %#v %v", hits, err)
 	}
@@ -58,7 +58,7 @@ func TestFileStoreTraceAndVersionedHitmap(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	hits, err = store.Hitmap(observability.AccessQuery{Object: "Metric:gmv"})
+	hits, err = store.Hitmap(observability.AccessQuery{Object: "metric/gmv"})
 	if err != nil || len(hits) != 2 {
 		t.Fatalf("versioned hits %#v %v", hits, err)
 	}
@@ -115,7 +115,7 @@ func TestAccessReceiptIsGeneratedOnlyAfterDurableAppend(t *testing.T) {
 func TestFileStoreAccessQueryByTimeRepositoryPrincipalAndContinuation(t *testing.T) {
 	store := datedFileStore(t)
 	repoA := objectmodel.PinnedObjectRef{
-		ObjectRef: objectmodel.ObjectRef{Repository: "kr://acme/semantics", Object: "Metric:gmv"},
+		ObjectRef: objectmodel.ObjectRef{Repository: "kr://acme/semantics", Object: "metric/gmv"},
 		Commit:    "c1",
 	}
 	repoB := objectmodel.PinnedObjectRef{

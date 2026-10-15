@@ -11,39 +11,39 @@ Feature: qinghe-object-published
     Then the output has:
       | result.repositoryId | table-meta |
       | result.newCommit    | nonempty |
-    When I run `kc read urn:kc:object:sales-semantic:semantic-model%2Fshop.sales#/properties`
+    When I run `kc read urn:kc:object:semantic-model/shop.sales#/properties`
     Then the output has:
       | objectId   | semantic-model/shop.sales |
       | value.name | Qinghe sales mart metric view |
-    When I run `kc read urn:kc:object:sales-semantic:semantic-model%2Fshop.sales#/dimensions/order-status`
+    When I run `kc read urn:kc:object:semantic-model/shop.sales#/dimensions/order-status`
     Then the output has:
       | objectId   | semantic-model/shop.sales |
       | value.name | Order status |
-    When I run `kc read urn:kc:object:sales-semantic:semantic-model%2Fshop.sales#/measures/gmv`
+    When I run `kc read urn:kc:object:semantic-model/shop.sales#/measures/gmv`
     Then the output has:
       | objectId   | semantic-model/shop.sales |
       | value.name | Gross merchandise value |
-    When I run `kc read urn:kc:object:sales-semantic:metric%2Fshop.gmv#/definition`
+    When I run `kc read urn:kc:object:metric/shop.gmv#/definition`
     Then the output has:
       | objectId   | metric/shop.gmv |
       | value.name | Gross merchandise value |
       | value.measureKey | unit-price |
-    When I run `kc read urn:kc:object:table-meta:table%2Fshop.orders#/properties`
+    When I run `kc read urn:kc:object:table/shop.orders#/properties`
     Then the output has:
       | objectId   | table/shop.orders |
       | value.name | orders |
-    When I run `kc read urn:kc:object:table-meta:column%2Fshop.orders.order_id#/properties`
+    When I run `kc read urn:kc:object:column/shop.orders.order_id#/properties`
     Then the output has:
       | objectId   | column/shop.orders.order_id |
       | value.name | order_id |
-    When I run `kc read urn:kc:object:table-meta:table%2Fshop.order_items#/schema`
+    When I run `kc read urn:kc:object:table/shop.order_items#/schema`
     Then the output has:
       | value.columnCount | 6 |
-    When I run `kc read urn:kc:object:table-meta:data-job%2Fshop.refresh_sales_mart#/properties`
+    When I run `kc read urn:kc:object:data-job/shop.refresh_sales_mart#/properties`
     Then the output has:
       | objectId   | data-job/shop.refresh_sales_mart |
       | value.name | refresh_sales_mart |
-    When I run `kc read urn:kc:object:table-meta:rel%2Fproduces%2Frefresh_sales_mart-sales_mart`
+    When I run `kc read urn:kc:object:rel/produces/refresh_sales_mart-sales_mart`
     Then the output has:
       | value.relationType | produces |
     When I run `kc binding show --repo table-meta --object table/shop.orders --aspect stats`

@@ -23,8 +23,8 @@ func TestProviderImplementationRootsStayOutOfMain(t *testing.T) {
 func TestRuntimeHasNoBundledDataWarehouseStory(t *testing.T) {
 	root := moduleRoot(t)
 	markers := []string{
-		"Table:dwd.trade_order",
-		"Metric:gmv",
+		"table/dwd.trade_order",
+		"metric/gmv",
 		"GMV 不含 7 日内退货",
 		"schema/table.structure",
 	}

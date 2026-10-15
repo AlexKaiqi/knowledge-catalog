@@ -23,20 +23,20 @@ Feature: publish scoped Dataset and read admitted members
       | datasets[].revision | 1 |
       | repositories[].id | table-meta |
       | repositories[].id | sales-semantic |
-    When I run `kc read urn:kc:object:table-meta:table%2Fshop.orders --dataset qinghe-sales`
+    When I run `kc read urn:kc:object:table/shop.orders --dataset qinghe-sales`
     Then the output has:
       | objectId | table/shop.orders |
       | repository | table-meta |
       | commit | nonempty |
-    When I run `kc read urn:kc:object:sales-semantic:semantic-model%2Fshop.sales --dataset qinghe-sales`
+    When I run `kc read urn:kc:object:semantic-model/shop.sales --dataset qinghe-sales`
     Then the output has:
       | objectId | semantic-model/shop.sales |
       | repository | sales-semantic |
       | commit | nonempty |
-    When I run `kc read urn:kc:object:sales-semantic:metric%2Fshop.gmv --dataset qinghe-sales`
+    When I run `kc read urn:kc:object:metric/shop.gmv --dataset qinghe-sales`
     Then the output has:
       | objectId | metric/shop.gmv |
       | repository | sales-semantic |
       | commit | nonempty |
-    When I run `kc read urn:kc:object:table-meta:data-job%2Fshop.refresh_sales_mart --dataset qinghe-sales`
+    When I run `kc read urn:kc:object:data-job/shop.refresh_sales_mart --dataset qinghe-sales`
     Then error FORBIDDEN

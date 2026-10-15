@@ -52,13 +52,13 @@ func TestDatasetStatePlanningUsesPublishedSchemaScope(t *testing.T) {
 func TestDatasetStateObservationRequiresPublishedDeclaration(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	commit, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID, Operations: []objectmodel.Operation{
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "Job:one"}, PathHint: "public/job.yaml", Value: map[string]any{"name": "one"}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "job/one"}, PathHint: "public/job.yaml", Value: map[string]any{"name": "one"}},
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/runtime"}, PathHint: "private/runtime.yaml", Value: map[string]any{"entity": "Job", "aspect": "runtime", "origin": "https://scheduler.example", "fields": map[string]any{"status": map[string]any{"type": "string", "access": []any{"filter"}}}}},
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Job:one", AspectName: "runtime"}
+	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/one", AspectName: "runtime"}
 	binding, err := liveaccess.ResolveRepoBinding(s.Repo, commit, address)
 	if err != nil {
 		t.Fatal(err)

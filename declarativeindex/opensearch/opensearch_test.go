@@ -34,14 +34,14 @@ func TestOpenSearchOperators(t *testing.T) {
 				"when":     map[string]any{"type": "string", "access": []any{"sort"}},
 			},
 		}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:a", AspectName: "structure"}, Value: map[string]any{"db": "tl", "note": "user events", "n": 2, "when": "2024-01-02"}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:b", AspectName: "structure"}, Value: map[string]any{"db": "dw", "note": "billing events", "n": 10, "when": "2024-01-01"}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:c", AspectName: "structure"}, Value: map[string]any{"db": "tl", "note": "other", "n": 5, "when": "2024-01-03"}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindRelation, ObjectID: "relation:owned"}, Value: map[string]any{
-			"relationId": "relation:owned", "relationType": "owned-by", "direction": "DIRECTED",
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/a", AspectName: "structure"}, Value: map[string]any{"db": "tl", "note": "user events", "n": 2, "when": "2024-01-02"}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/b", AspectName: "structure"}, Value: map[string]any{"db": "dw", "note": "billing events", "n": 10, "when": "2024-01-01"}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/c", AspectName: "structure"}, Value: map[string]any{"db": "tl", "note": "other", "n": 5, "when": "2024-01-03"}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindRelation, ObjectID: "relation/owned"}, Value: map[string]any{
+			"relationId": "relation/owned", "relationType": "owned-by", "direction": "DIRECTED",
 			"endpoints": []any{
-				map[string]any{"role": "subject", "objectRef": map[string]any{"repository": string(repo.ID()), "object": "Table:a"}},
-				map[string]any{"role": "owner", "objectRef": map[string]any{"repository": string(repo.ID()), "object": "Team:finance"}},
+				map[string]any{"role": "subject", "object": "table/a"},
+				map[string]any{"role": "owner", "object": "team/finance"},
 			},
 		}},
 	})
@@ -68,7 +68,7 @@ func TestOpenSearchOperators(t *testing.T) {
 		t.Fatalf("OpenSearch MATCH modes are implemented exactly: %#v", match)
 	}
 	eq, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchEQ("db", "dw")))
-	if err != nil || len(eq.Hits) != 1 || string(eq.Hits[0].Object.Address.ObjectID) != "Table:b" {
+	if err != nil || len(eq.Hits) != 1 || string(eq.Hits[0].Object.Address.ObjectID) != "table/b" {
 		t.Fatalf("EQ: %#v %v", objectIDs(eq), err)
 	}
 	in, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchIN("db", "tl", "xx")))
@@ -92,7 +92,7 @@ func TestOpenSearchOperators(t *testing.T) {
 		t.Fatalf("CONTAINS substring: %d %v", len(contains.Hits), err)
 	}
 	containsOne, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchCONTAINS("db", "w")))
-	if err != nil || len(containsOne.Hits) != 1 || containsOne.Hits[0].Object.Address.ObjectID != "Table:b" {
+	if err != nil || len(containsOne.Hits) != 1 || containsOne.Hits[0].Object.Address.ObjectID != "table/b" {
 		t.Fatalf("CONTAINS distinguished from PREFIX: %#v %v", objectIDs(containsOne), err)
 	}
 	phrase, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchMATCHMode("billing events", retrieval.MatchPhrase)))
@@ -111,21 +111,21 @@ func TestOpenSearchOperators(t *testing.T) {
 		t.Fatalf("PIT second page: first=%#v second=%#v err=%v", objectIDs(firstPage), objectIDs(secondPage), err)
 	}
 	ranged, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchRange(retrieval.OpGT, "n", "5")))
-	if err != nil || len(ranged.Hits) != 1 || ranged.Hits[0].Object.Address.ObjectID != "Table:b" {
+	if err != nil || len(ranged.Hits) != 1 || ranged.Hits[0].Object.Address.ObjectID != "table/b" {
 		t.Fatalf("typed GT: %#v %v", objectIDs(ranged), err)
 	}
 	neq, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchEXISTS("db"), retrieval.SearchNEQ("db", "tl")))
-	if err != nil || len(neq.Hits) != 1 || neq.Hits[0].Object.Address.ObjectID != "Table:b" {
+	if err != nil || len(neq.Hits) != 1 || neq.Hits[0].Object.Address.ObjectID != "table/b" {
 		t.Fatalf("NEQ: %#v %v", objectIDs(neq), err)
 	}
 	sorted, err := idx.SearchAt(servingRepo, head, retrieval.SearchOf(retrieval.SearchEXISTS("db"), retrieval.SearchSORT("when", "desc")))
-	if err != nil || fmt.Sprint(objectIDs(sorted)) != "[Table:c Table:a Table:b]" {
+	if err != nil || fmt.Sprint(objectIDs(sorted)) != "[table/c table/a table/b]" {
 		t.Fatalf("SORT desc: %#v %v", objectIDs(sorted), err)
 	}
 	relations, err := idx.RelationsAt(servingRepo, head, retrieval.RelationPageRequest{Query: retrieval.RelationQuery{
-		Endpoint: objectmodel.ObjectRef{Repository: servingRepo.ID(), Object: "Table:a"}, RelationType: "owned-by", Role: "subject",
+		Endpoint: "table/a", RelationType: "owned-by", Role: "subject",
 	}})
-	if err != nil || len(relations.Hits) != 1 || relations.Hits[0].ObjectID != "relation:owned" || len(relations.Hits[0].MatchedRoles) != 1 {
+	if err != nil || len(relations.Hits) != 1 || relations.Hits[0].ObjectID != "relation/owned" || len(relations.Hits[0].MatchedRoles) != 1 {
 		t.Fatalf("relation lookup: %#v %v", relations, err)
 	}
 }

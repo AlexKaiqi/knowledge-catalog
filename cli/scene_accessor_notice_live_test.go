@@ -38,8 +38,8 @@ func TestSceneAccessorNoticeUpdatesSearchIndex(t *testing.T) {
 	body(t, kc(home, "store-set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repositoryID)
 	adoptLiveAccessFixture(t, home, repositoryID)
-	body(t, kc(home, "put", testObjectReference(t, repositoryID, "schema/service.health", ""), "--command-id", "state-schema", "--value", `{"entity":"Service","aspect":"health","origin":"`+runtimeURL+`","fields":{"status":{"type":"string","access":["text","filter"]}}}`))
-	body(t, kc(home, "put", testObjectReference(t, repositoryID, "Service:orders", "/properties"), "--command-id", "state-entity", "--value", `{"name":"orders"}`))
+	body(t, kc(home, "put", testObjectReference(t, repositoryID, "schema/service.health", ""), "--repo", repositoryID, "--command-id", "state-schema", "--value", `{"entity":"Service","aspect":"health","origin":"`+runtimeURL+`","fields":{"status":{"type":"string","access":["text","filter"]}}}`))
+	body(t, kc(home, "put", testObjectReference(t, repositoryID, "service/orders", "/properties"), "--repo", repositoryID, "--command-id", "state-entity", "--value", `{"name":"orders"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", repositoryID+"=refs/heads/main@"))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--dataset", "agent"))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read,search", "--repo", repositoryID))
@@ -57,7 +57,7 @@ func TestSceneAccessorNoticeUpdatesSearchIndex(t *testing.T) {
 
 	first := asMap(t, postAny(t, server.URL, "/operations/v1/projections:notice", map[string]any{
 		"repository":     repositoryID,
-		"address":        map[string]any{"kind": "Aspect", "objectId": "Service:orders", "aspectName": "health"},
+		"address":        map[string]any{"kind": "Aspect", "objectId": "service/orders", "aspectName": "health"},
 		"sourceRevision": "docker-health-1",
 	}))
 	if first["revision"] == "" || first["basisCommit"] != before {
@@ -74,7 +74,7 @@ func TestSceneAccessorNoticeUpdatesSearchIndex(t *testing.T) {
   "revision": "docker-health-2",
   "generation": "docker-runtime-v1",
   "entities": {
-    "Service:orders": {
+    "service/orders": {
       "status": "degraded",
       "runtime": "docker"
     }
@@ -86,7 +86,7 @@ func TestSceneAccessorNoticeUpdatesSearchIndex(t *testing.T) {
 
 	second := asMap(t, postAs(t, server.URL, "/operations/v1/projections:notice", "agent:observer", map[string]any{
 		"repository":     repositoryID,
-		"address":        map[string]any{"kind": "Aspect", "objectId": "Service:orders", "aspectName": "health"},
+		"address":        map[string]any{"kind": "Aspect", "objectId": "service/orders", "aspectName": "health"},
 		"sourceRevision": "docker-health-2",
 	}))
 	if second["revision"] == "" || second["revision"] == first["revision"] || second["basisCommit"] != before {

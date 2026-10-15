@@ -8,10 +8,6 @@ relationType: defines
 direction: DIRECTED
 endpoints:
 - role: model
-  objectRef:
-    repository: sales-semantic
-    object: semantic-model/shop.order-items
+  object: semantic-model/shop.order-items
 - role: metric
-  objectRef:
-    repository: sales-semantic
-    object: metric/shop.gmv
+  object: metric/shop.gmv

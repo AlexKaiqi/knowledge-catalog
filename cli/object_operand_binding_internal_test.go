@@ -10,7 +10,7 @@ import (
 	"kc/invoke"
 )
 
-const objectOperandTestReference = "urn:kc:object:kr%3A%2F%2Fsource%2Fa:table%2Forders#/columns/id"
+const objectOperandTestReference = "urn:kc:object:table/orders#/columns/id"
 
 func TestObjectPositionalsUseModuleBindingBeforeValidation(t *testing.T) {
 	for _, argv := range [][]string{

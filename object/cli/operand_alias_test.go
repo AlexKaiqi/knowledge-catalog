@@ -38,7 +38,7 @@ func TestBasicObjectReferenceFlagAliasCannotReachTransport(t *testing.T) {
 
 func TestBasicObjectOperandBindingRejectsDuplicateTarget(t *testing.T) {
 	for _, path := range []string{"read", "writer put", "writer remove"} {
-		for _, alias := range []any{testReference, "urn:kc:object:other:one", "", true, []string{testReference, testReference}} {
+		for _, alias := range []any{testReference, "urn:kc:object:one", "", true, []string{testReference, testReference}} {
 			remote := &fakeClient{}
 			flags := map[string]any{"reference": alias}
 			err := BindOperands(path, flags, []string{testReference})

@@ -211,16 +211,13 @@ kc login
 REPOSITORY="$(kc create --name public-core | jq -r '.repositoryId')"
 kc attach --repo "$REPOSITORY"
 
-# 接入方：构造对象引用，提交完整内容，再用同一引用读回。
-REFERENCE_REPO="$(printf '%s' "$REPOSITORY" | jq -sRr @uri)"
-SCHEMA_REFERENCE="urn:kc:object:${REFERENCE_REPO}:schema%2Frunbook.body"
-RUNBOOK_REFERENCE="urn:kc:object:${REFERENCE_REPO}:runbook%2Fpayment-oncall"
-kc writer put "$SCHEMA_REFERENCE" --command-id schema-1 \
+# 接入方：对象 URN 只含对象 ID；写入用 --repo 指定写到哪个仓，读取在请求范围内按 ID 解析。
+kc writer put urn:kc:object:schema/runbook.body --repo "$REPOSITORY" --command-id schema-1 \
   --value '{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}'
-kc writer put "$RUNBOOK_REFERENCE" --command-id sync-1 --schema-ref schema/runbook.body \
+kc writer put urn:kc:object:runbook/payment-oncall --repo "$REPOSITORY" --command-id sync-1 --schema-ref schema/runbook.body \
   --value '{"body":"切换支付流量前先检查冻结窗口"}' \
   --origin-kind SOURCE --source-ref file:///source/runbooks/payment-oncall.md
-kc read "$RUNBOOK_REFERENCE"
+kc read urn:kc:object:runbook/payment-oncall
 
 # 治理方：命名 Dataset、发权。serve 追 live 投影；sync 用于历史 EnsureAt / 强制重建 / 排障。
 kc dataset define agent --revision 1 --source "$REPOSITORY"

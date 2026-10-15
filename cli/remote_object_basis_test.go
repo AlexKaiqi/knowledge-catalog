@@ -48,7 +48,7 @@ func TestProductCLIRejectsPinOnEveryObjectCommand(t *testing.T) {
 	t.Setenv("KC_AUTH_TOKEN", "")
 	raw := `{"setId":"","revision":1,"repositories":{"kr://acme/source":"fixed"},"pinId":"pin-id","definition":{"setId":"","revision":1,"sources":[{"repository":"kr://acme/source","selector":"refs/heads/main"}]}}`
 	for _, args := range [][]string{
-		{"read", "urn:kc:object:kr%3A%2F%2Facme%2Fsource:note%2Fone"}, {"resolve", "--object", "note/one"},
+		{"read", "urn:kc:object:note/one"}, {"resolve", "--object", "note/one"},
 		{"search", "--query", "note"}, {"relations", "--object", "note/one"},
 		{"provenance", "--object", "note/one"}, {"log", "--object", "note/one"},
 		{"schema", "describe", "--object", "schema/note"},
@@ -89,7 +89,7 @@ func TestProductObjectRejectsMixedTemporaryAndRepositoryBasis(t *testing.T) {
 	}))
 	defer server.Close()
 	for _, flag := range []string{"pin", "dataset-file"} {
-		result := Run([]string{"--server", server.URL, "--as", "agent:reader", "read", "urn:kc:object:kr%3A%2F%2Facme%2Fsource:note%2Fone", "--" + flag, "explicit-task.json"})
+		result := Run([]string{"--server", server.URL, "--as", "agent:reader", "read", "urn:kc:object:note/one", "--" + flag, "explicit-task.json"})
 		if result.Status == 0 || !strings.Contains(result.Stdout, "USAGE_INVALID") {
 			t.Errorf("explicit --%s was silently discarded: %s", flag, result.Stdout)
 		}
@@ -105,14 +105,14 @@ func TestHTTPObjectRejectsMixedPinAndRepositoryBasis(t *testing.T) {
 		t.Cleanup(func() { _ = closer.Close() })
 	}
 	for _, route := range []string{"/object/v1/objects:read", "/object/v1/search"} {
-		request := httptest.NewRequest(http.MethodPost, route, strings.NewReader(`{"reference":"urn:kc:object:kr%3A%2F%2Facme%2Fsource:note%2Fone","repository":"kr://acme/source","pin":{"setId":"","revision":1,"repositories":{"kr://acme/source":"fixed"}}}`))
+		request := httptest.NewRequest(http.MethodPost, route, strings.NewReader(`{"reference":"urn:kc:object:note/one","repository":"kr://acme/source","pin":{"setId":"","revision":1,"repositories":{"kr://acme/source":"fixed"}}}`))
 		if route == "/object/v1/search" {
 			request = httptest.NewRequest(http.MethodPost, route, strings.NewReader(`{"repository":"kr://acme/source","pin":{"setId":"","revision":1,"repositories":{"kr://acme/source":"fixed"}},"query":"note"}`))
 		}
 		request.Header.Set("X-Kc-As", "agent:reader")
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, request)
-		if !strings.Contains(response.Body.String(), "USAGE_INVALID") || (route == "/object/v1/search" && !strings.Contains(response.Body.String(), "do not mix")) || (route == "/object/v1/objects:read" && !strings.Contains(response.Body.String(), `unknown field \"repository\"`)) {
+		if !strings.Contains(response.Body.String(), "USAGE_INVALID") || (route == "/object/v1/search" && !strings.Contains(response.Body.String(), "do not mix")) || (route == "/object/v1/objects:read" && !strings.Contains(response.Body.String(), "choose one scope")) {
 			t.Errorf("mixed HTTP basis reached repository path: %s", response.Body.String())
 		}
 	}

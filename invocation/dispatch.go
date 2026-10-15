@@ -61,6 +61,9 @@ func ExecuteApplicationOperation(ctx context.Context, name, action string, cmd C
 		defer ws.Close()
 	}
 	cx.WS = ws
+	if err := bindReferenceScope(cx, action); err != nil {
+		return nil, err
+	}
 	if err := prepareReferenceAuthorization(cx, action); err != nil {
 		return nil, err
 	}

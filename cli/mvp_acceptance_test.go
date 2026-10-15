@@ -14,11 +14,11 @@ func TestMVPProviderConsumerJourney(t *testing.T) {
 	repo := "kr://acme/public/core"
 	body(t, kc(home, "init"))
 	seedRepo(t, home, repo)
-	body(t, kc(home, "put", testObjectReference(t, repo, "schema/runbook.body", ""), "--command-id", "schema-1", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
-	receipt := asMap(t, asMap(t, body(t, kc(home, "put", testObjectReference(t, repo, "runbook/payment-oncall", ""), "--command-id", "source-1", "--schema-ref", "schema/runbook.body", "--value", `{"body":"切换支付流量前先检查冻结窗口"}`, "--origin-kind", "SOURCE", "--source-ref", "file:///source/runbooks/payment-oncall.md")))["result"])
+	body(t, kc(home, "put", testObjectReference(t, repo, "schema/runbook.body", ""), "--repo", repo, "--command-id", "schema-1", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+	receipt := asMap(t, asMap(t, body(t, kc(home, "put", testObjectReference(t, repo, "runbook/payment-oncall", ""), "--repo", repo, "--command-id", "source-1", "--schema-ref", "schema/runbook.body", "--value", `{"body":"切换支付流量前先检查冻结窗口"}`, "--origin-kind", "SOURCE", "--source-ref", "file:///source/runbooks/payment-oncall.md")))["result"])
 	commit := receipt["newCommit"].(string)
 
-	direct := asMap(t, body(t, kc(home, "read", testObjectReference(t, repo, "runbook/payment-oncall", ""))))
+	direct := asMap(t, body(t, kc(home, "read", testObjectReference(t, repo, "runbook/payment-oncall", ""), "--repo", repo)))
 	if direct["commit"] != commit || asMap(t, direct["value"])["body"] != "切换支付流量前先检查冻结窗口" {
 		t.Fatalf("provider could not read back the published value: %#v", direct)
 	}

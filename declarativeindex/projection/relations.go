@@ -62,8 +62,8 @@ func (idx *Index) RelationsAt(repo objectmodel.Repository, commit kernel.CommitI
 func (idx *Index) RelationsAtContext(ctx context.Context, repo objectmodel.Repository, commit kernel.CommitID, request retrieval.RelationPageRequest) (retrieval.RelationPage, error) {
 	ctx, cancel := ports.WithSearchBudget(ctx, ports.SearchBudget{})
 	defer cancel()
-	if request.Query.Endpoint.Repository == "" || request.Query.Endpoint.Object == "" {
-		return retrieval.RelationPage{}, kernel.Fail(kernel.ErrUsageInvalid, "relation lookup requires a repository-qualified endpoint")
+	if err := objectmodel.ValidateObjectID(request.Query.Endpoint); err != nil {
+		return retrieval.RelationPage{}, kernel.Fail(kernel.ErrUsageInvalid, "relation lookup endpoint: %v", err)
 	}
 	limit, err := relationLimit(request.Limit)
 	if err != nil {
@@ -247,7 +247,7 @@ func relationHitAt(repository kernel.RepositoryID, commit kernel.CommitID, query
 	}
 	roles := make([]string, 0, len(relation.Endpoints))
 	for _, endpoint := range relation.Endpoints {
-		if endpoint.ObjectRef == query.Endpoint && (query.Role == "" || endpoint.Role == query.Role) {
+		if endpoint.Object == query.Endpoint && (query.Role == "" || endpoint.Role == query.Role) {
 			roles = append(roles, endpoint.Role)
 		}
 	}

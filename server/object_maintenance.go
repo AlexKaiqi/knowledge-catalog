@@ -14,6 +14,7 @@ import (
 // service resolves its scope after the shared current authorization boundary.
 type objectMaintenanceRequest struct {
 	Reference   string                          `json:"reference"`
+	Repository  string                          `json:"repository"`
 	CommandID   string                          `json:"commandId"`
 	Ref         string                          `json:"ref,omitempty"`
 	Base        string                          `json:"base,omitempty"`
@@ -31,7 +32,7 @@ type objectMaintenanceRequest struct {
 
 func (request objectMaintenanceRequest) flags() map[string]FlagValue {
 	flags := compactFlags(map[string]FlagValue{
-		"reference": request.Reference, "command-id": request.CommandID,
+		"reference": request.Reference, "repo": request.Repository, "command-id": request.CommandID,
 		"ref": request.Ref, "base": request.Base, "expected": request.Expected,
 		"kind": request.Kind, "schema-ref": request.SchemaRef, "path-hint": request.PathHint,
 		"if-digest": request.IfDigest, "message": request.Message,

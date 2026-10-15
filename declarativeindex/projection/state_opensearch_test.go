@@ -32,7 +32,7 @@ func (s *liveStateLookup) LookupState(context.Context, objectserving.StateLookup
 func TestLiveOpenSearchStateProjectionRefreshAndSameBasisHydrate(t *testing.T) {
 	repo := testfixture.MakeIndexRepository(t, "kr://acme/state")
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
-	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Job:orders", AspectName: "runtime"}
+	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/orders", AspectName: "runtime"}
 	commit := testfixture.PutAt(t, repo, root, []objectmodel.Operation{
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.definition"}, Value: map[string]any{
 			"entity": "Job", "aspect": "definition", "fields": map[string]any{

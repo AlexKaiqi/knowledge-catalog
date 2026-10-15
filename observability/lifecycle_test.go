@@ -49,7 +49,7 @@ func TestFileStoreDatePartitionHotDeleteAndQuota(t *testing.T) {
 		id, err := store.RecordAccessReceipt(observability.AccessEvent{
 			OccurredAt: at, Identity: identity, Action: "read", Decision: "ALLOW", Result: "RESOLVED",
 			Object: []observability.ObjectAccess{{ObjectRef: objectmodel.PinnedObjectRef{
-				ObjectRef: objectmodel.ObjectRef{Repository: "kr://acme/semantics", Object: "Metric:gmv"},
+				ObjectRef: objectmodel.ObjectRef{Repository: "kr://acme/semantics", Object: "metric/gmv"},
 				Commit:    "c1",
 			}}},
 		})

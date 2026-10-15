@@ -93,7 +93,7 @@ func provenanceJSON(t *testing.T, value *objectmodel.ProvenanceEnvelope) any {
 }
 
 func TestRecordedProvenanceDoesNotChangeSchemaDeclarationDigest(t *testing.T) {
-	unit := objectmodel.Unit{ObjectID: "a", Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "a", AspectName: "x"}, SchemaRef: "schema/example@fixed", Value: "same"}
+	unit := objectmodel.Unit{ObjectID: "fixture/a", Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "fixture/a", AspectName: "x"}, SchemaRef: "schema/example@fixed", Value: "same"}
 	before := objectmodel.DeclareUnits([]objectmodel.Unit{unit})[0]
 	unit.Provenance = &objectmodel.ProvenanceEnvelope{OriginKind: objectmodel.OriginSource, SourceRefs: []string{"source/one"}}
 	after := objectmodel.DeclareUnits([]objectmodel.Unit{unit})[0]

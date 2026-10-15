@@ -3,12 +3,12 @@
 Feature: semantic-object-published
 
   Scenario: construct
-    When I run `kc writer put urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv#/definition --command-id publish-metric-gmv --schema-ref schema/metric.definition --file $materials/metric.gmv.json`
+    When I run `kc writer put urn:kc:object:metric/gmv#/definition --repo kr://scene/object --command-id publish-metric-gmv --schema-ref schema/metric.definition --file $materials/metric.gmv.json`
     Then the output has:
       | disposition         | APPLIED |
       | result.repositoryId | kr://scene/object |
       | result.newCommit    | nonempty |
-    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv#/definition`
+    When I run `kc read urn:kc:object:metric/gmv#/definition`
     Then the output has:
       | objectId | metric/gmv |
       | repository          | kr://scene/object |
@@ -16,16 +16,16 @@ Feature: semantic-object-published
       | value.expression    | SUM(l_extendedprice * (1 - l_discount)) |
       | value.unit          | CNY |
       | value.measureKey    | unique-measure-token-zz9 |
-    When I run `kc writer put urn:kc:object:kr%3A%2F%2Fscene%2Fgraph:rel%2Fdefines%2Fgmv --command-id publish-rel-defines-gmv --kind Relation --schema-ref schema/core/relation/v1 --file $materials/rel.defines.gmv.json`
+    When I run `kc writer put urn:kc:object:rel/defines/gmv --repo kr://scene/graph --command-id publish-rel-defines-gmv --kind Relation --schema-ref schema/core/relation/v1 --file $materials/rel.defines.gmv.json`
     Then the output has:
       | disposition         | APPLIED |
       | result.repositoryId | kr://scene/graph |
       | result.newCommit    | nonempty |
-    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fgraph:rel%2Fdefines%2Fgmv`
+    When I run `kc read urn:kc:object:rel/defines/gmv`
     Then the output has:
       | objectId | rel/defines/gmv |
       | repository          | kr://scene/graph |
       | value.relationType  | defines |
       | schemaRef           | schema/core/relation/v1 |
-      | value.endpoints.0.objectRef.repository | kr://scene/object |
-      | value.endpoints.1.objectRef.object | schema/metric.definition |
+      | value.endpoints.0.object | metric/gmv |
+      | value.endpoints.1.object | schema/metric.definition |

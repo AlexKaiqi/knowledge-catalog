@@ -56,10 +56,10 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 	t.Run("rejects stale ref preconditions", func(t *testing.T) {
 		repo := openRepository(t, create, "kr://conformance/cas")
 		root := MustHead(t, repo, "refs/heads/main")
-		if _, err := repo.ApplyObjectCommit(CommitChange(repo.ID(), root, "a", 1, "")); err != nil {
+		if _, err := repo.ApplyObjectCommit(CommitChange(repo.ID(), root, "fixture/a", 1, "")); err != nil {
 			t.Fatal(err)
 		}
-		_, err := repo.ApplyObjectCommit(CommitChange(repo.ID(), root, "b", 2, ""))
+		_, err := repo.ApplyObjectCommit(CommitChange(repo.ID(), root, "fixture/b", 2, ""))
 		ExpectCode(t, err, kernel.ErrNonFastForward)
 	})
 
@@ -297,7 +297,7 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 		candidate, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 			TargetRepository: repo.ID(), TargetRef: "refs/heads/candidate",
 			BaseCommit: root, ExpectedTargetCommit: root,
-			Operations: PutEntity("from-candidate", map[string]any{"v": 1}, ""),
+			Operations: PutEntity("fixture/from-candidate", map[string]any{"v": 1}, ""),
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -309,7 +309,7 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 		if MustHead(t, repo, "refs/heads/main") != candidate {
 			t.Fatal("main did not fast-forward")
 		}
-		got, err := repo.Read("from-candidate", candidate)
+		got, err := repo.Read("fixture/from-candidate", candidate)
 		if err != nil || asInt(got.Value.(map[string]any)["v"]) != 1 {
 			t.Fatalf("%#v %v", got, err)
 		}
@@ -322,7 +322,7 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 		side, err := diverged.ApplyObjectCommit(objectmodel.CommitChangeSet{
 			TargetRepository: diverged.ID(), TargetRef: "refs/heads/candidate",
 			BaseCommit: base, ExpectedTargetCommit: base,
-			Operations: PutEntity("candidate", 1, ""),
+			Operations: PutEntity("fixture/candidate", 1, ""),
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -330,7 +330,7 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 		main, err := diverged.ApplyObjectCommit(objectmodel.CommitChangeSet{
 			TargetRepository: diverged.ID(), TargetRef: "refs/heads/main",
 			BaseCommit: base, ExpectedTargetCommit: base,
-			Operations: PutEntity("main", 2, ""),
+			Operations: PutEntity("fixture/main", 2, ""),
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -346,7 +346,7 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 		staleSide, err := stale.ApplyObjectCommit(objectmodel.CommitChangeSet{
 			TargetRepository: stale.ID(), TargetRef: "refs/heads/candidate",
 			BaseCommit: staleBase, ExpectedTargetCommit: staleBase,
-			Operations: PutEntity("candidate", 1, ""),
+			Operations: PutEntity("fixture/candidate", 1, ""),
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -354,7 +354,7 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 		if _, err := stale.ApplyObjectCommit(objectmodel.CommitChangeSet{
 			TargetRepository: stale.ID(), TargetRef: "refs/heads/main",
 			BaseCommit: staleBase, ExpectedTargetCommit: staleBase,
-			Operations: PutEntity("main", 2, ""),
+			Operations: PutEntity("fixture/main", 2, ""),
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -386,7 +386,7 @@ func RepositoryContract[R snapshot.Store](t *testing.T, create func(t *testing.T
 		if !repo.Archived() {
 			t.Fatal("archive did not stick")
 		}
-		_, err := repo.ApplyObjectCommit(CommitChange(repo.ID(), root, "after", 1, ""))
+		_, err := repo.ApplyObjectCommit(CommitChange(repo.ID(), root, "fixture/after", 1, ""))
 		ExpectCode(t, err, kernel.ErrRepositoryArchived)
 		err = repo.CreateRef("refs/heads/later", root)
 		ExpectCode(t, err, kernel.ErrRepositoryArchived)

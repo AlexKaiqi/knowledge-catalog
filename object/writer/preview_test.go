@@ -141,7 +141,7 @@ func TestIngestSchemaOriginFrontmatter(t *testing.T) {
 
 func TestIngestRejectsInstanceBinding(t *testing.T) {
 	dir := testkit.TempDir(t)
-	body := "---\nobject_id: Table:orders\naspect_name: profile\nschema_ref: schema/table.profile\nvalue_source: {\"kind\":\"binding\",\"binding\":{\"mode\":\"state\",\"descriptorRef\":\"resource/mysql\"}}\n---\nnull\n"
+	body := "---\nobject_id: table/orders\naspect_name: profile\nschema_ref: schema/table.profile\nvalue_source: {\"kind\":\"binding\",\"binding\":{\"mode\":\"state\",\"descriptorRef\":\"resource/mysql\"}}\n---\nnull\n"
 	if err := os.WriteFile(filepath.Join(dir, "profile.yaml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}

@@ -2,6 +2,7 @@ package invocation
 
 import (
 	discoveryservice "kc/discovery/service"
+	kchome "kc/home"
 	objectserving "kc/liveaccess"
 
 	index "kc/discovery/projection"
@@ -166,7 +167,7 @@ func VerbDescribeAccess(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	pin := DatasetPin(resolved)
+	pin := kchome.DatasetPin(resolved)
 	if err := RequireCompleteWorkspaceRead(cx.Home, cx.Flags, pin, ""); err != nil {
 		return nil, err
 	}

@@ -10,7 +10,6 @@ import (
 	retrieval "kc/discovery"
 	index "kc/discovery/projection"
 	"kc/kernel"
-	objectmodel "kc/object"
 	"kc/object/reader"
 )
 
@@ -79,7 +78,7 @@ func TestOpenSearchContinuationRejectsOtherNamespaceBeforePIT(t *testing.T) {
 					request.Continuation = encodePITContinuation(page)
 					_, err = engine.Retrieve(request)
 				} else {
-					request := retrieval.RelationRetrieveRequest{Repository: repository, Basis: "c1", Query: retrieval.RelationQuery{Endpoint: objectmodel.ObjectRef{Repository: repository, Object: "article/a"}}}
+					request := retrieval.RelationRetrieveRequest{Repository: repository, Basis: "c1", Query: retrieval.RelationQuery{Endpoint: "article/a"}}
 					page.Query = string(retrieval.RelationQueryDigest(request.Query))
 					request.Continuation = encodePITContinuation(page)
 					_, err = engine.RetrieveRelations(request)

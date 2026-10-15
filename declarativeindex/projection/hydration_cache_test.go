@@ -64,7 +64,7 @@ func TestRelationsReuseSameBasisHydrationCache(t *testing.T) {
 	repo, commit := testfixture.RelationFixture(t)
 	calls := []string{}
 	engine := &relationEngine{meta: ports.Meta{State: ports.ProjectionStateReady, Basis: commit}, calls: &calls,
-		pages: [][]retrieval.RelationCandidate{{{Repository: repo.ID(), Basis: commit, ObjectID: "relation:owned"}}}}
+		pages: [][]retrieval.RelationCandidate{{{Repository: repo.ID(), Basis: commit, ObjectID: "relation/owned"}}}}
 	idx := index.NewIndexEngine("", func(string, kernel.RepositoryID) (ports.Engine, error) { return engine, nil })
 	defer idx.Close()
 	cache, err := readcache.New(readcache.Config{})
@@ -75,7 +75,7 @@ func TestRelationsReuseSameBasisHydrationCache(t *testing.T) {
 	idx.SetHydrator(cache)
 	wrapped := &batchCountingRepository{Repository: repo}
 	for i := 0; i < 2; i++ {
-		out, err := idx.RelationsAt(wrapped, commit, relationRequest(repo.ID()))
+		out, err := idx.RelationsAt(wrapped, commit, relationRequest())
 		if err != nil || len(out.Hits) != 1 {
 			t.Fatalf("relation cache: %+v %v", out, err)
 		}

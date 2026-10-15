@@ -26,10 +26,10 @@ func TestOpenSearchExactTemporalAndIntegerPagination(t *testing.T) {
 		id, when string
 		n        int64
 	}{
-		{"Event:z", "0000-01-01T00:00:00Z", math.MinInt64},
-		{"Event:y", "2026-01-01T00:00:00.000000001Z", 9007199254740992},
-		{"Event:a", "2026-01-01T00:00:00.000000002Z", 9007199254740993},
-		{"Event:b", "9999-12-31T23:59:59.999999999Z", math.MaxInt64},
+		{"event/z", "0000-01-01T00:00:00Z", math.MinInt64},
+		{"event/y", "2026-01-01T00:00:00.000000001Z", 9007199254740992},
+		{"event/a", "2026-01-01T00:00:00.000000002Z", 9007199254740993},
+		{"event/b", "9999-12-31T23:59:59.999999999Z", math.MaxInt64},
 	} {
 		ops = append(ops, objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: objectmodel.ObjectID(item.id), AspectName: "precision"}, Value: map[string]any{"when": item.when, "n": item.n}})
 	}
@@ -56,9 +56,9 @@ func TestOpenSearchExactTemporalAndIntegerPagination(t *testing.T) {
 					}
 					req.Continuation = result.Continuation
 				}
-				want := "[Event:z Event:y Event:a Event:b]"
+				want := "[event/z event/y event/a event/b]"
 				if order == "desc" {
-					want = "[Event:b Event:a Event:y Event:z]"
+					want = "[event/b event/a event/y event/z]"
 				}
 				if fmt.Sprint(got) != want {
 					t.Fatalf("precision-safe pagination: got=%v want=%s", got, want)
@@ -71,10 +71,10 @@ func TestOpenSearchExactTemporalAndIntegerPagination(t *testing.T) {
 		clauses []retrieval.SearchClause
 		want    string
 	}{
-		{"nanosecond EQ", []retrieval.SearchClause{retrieval.SearchEQ("when", "2026-01-01T00:00:00.000000001Z")}, "[Event:y]"},
-		{"timezone equivalent", []retrieval.SearchClause{retrieval.SearchEQ("when", "2026-01-01T08:00:00.000000001+08:00")}, "[Event:y]"},
-		{"nanosecond range", []retrieval.SearchClause{retrieval.SearchRange(retrieval.OpGT, "when", "2026-01-01T00:00:00.000000001Z"), retrieval.SearchRange(retrieval.OpLT, "when", "2026-01-02T00:00:00Z")}, "[Event:a]"},
-		{"integer EQ", []retrieval.SearchClause{retrieval.SearchEQ("n", "9007199254740993")}, "[Event:a]"},
+		{"nanosecond EQ", []retrieval.SearchClause{retrieval.SearchEQ("when", "2026-01-01T00:00:00.000000001Z")}, "[event/y]"},
+		{"timezone equivalent", []retrieval.SearchClause{retrieval.SearchEQ("when", "2026-01-01T08:00:00.000000001+08:00")}, "[event/y]"},
+		{"nanosecond range", []retrieval.SearchClause{retrieval.SearchRange(retrieval.OpGT, "when", "2026-01-01T00:00:00.000000001Z"), retrieval.SearchRange(retrieval.OpLT, "when", "2026-01-02T00:00:00Z")}, "[event/a]"},
+		{"integer EQ", []retrieval.SearchClause{retrieval.SearchEQ("n", "9007199254740993")}, "[event/a]"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := idx.SearchAt(repo, head, retrieval.SearchOf(tc.clauses...))

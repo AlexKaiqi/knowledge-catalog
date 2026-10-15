@@ -98,8 +98,8 @@ func TestRerankEvidenceFeedbackAndTrainingSampleJourney(t *testing.T) {
 	user := "user:kai"
 	body(t, kc(home, "init"))
 	seedRepo(t, home, repository)
-	body(t, kc(home, "put", testObjectReference(t, repository, "runbook/deploy", ""), "--command-id", "training-p1", "--value", `{"body":"deployment checklist","secret":"never-record"}`))
-	body(t, kc(home, "put", testObjectReference(t, repository, "runbook/refund", ""), "--command-id", "training-p2", "--value", `{"body":"refund timeout diagnosis","secret":"never-record"}`))
+	body(t, kc(home, "put", testObjectReference(t, repository, "runbook/deploy", ""), "--repo", repository, "--command-id", "training-p1", "--value", `{"body":"deployment checklist","secret":"never-record"}`))
+	body(t, kc(home, "put", testObjectReference(t, repository, "runbook/refund", ""), "--repo", repository, "--command-id", "training-p2", "--value", `{"body":"refund timeout diagnosis","secret":"never-record"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "1", "--source", repository+"=refs/heads/main@"))
 	for _, principal := range []string{agent, user} {
 		body(t, kc(home, "allow", "--principal", principal, "--cmd", "read-workspace", "--dataset", workspace))
@@ -235,9 +235,9 @@ func TestHTTPSearchRerankPreservesRetrievalEvidenceAndUsesOneFixedView(t *testin
 	body(t, kc(home, "store-set", "--index", "opensearch"))
 	body(t, kc(home, "store-set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repository)
-	body(t, kc(home, "put", testObjectReference(t, repository, "schema/runbook.search-rerank", ""), "--command-id", "search-rerank-schema", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
-	body(t, kc(home, "put", testObjectReference(t, repository, "runbook/deploy", ""), "--command-id", "search-rerank-p1", "--schema-ref", "schema/runbook.search-rerank", "--value", `{"body":"refund deployment checklist","secret":"one"}`))
-	body(t, kc(home, "put", testObjectReference(t, repository, "runbook/timeout", ""), "--command-id", "search-rerank-p2", "--schema-ref", "schema/runbook.search-rerank", "--value", `{"body":"refund timeout diagnosis","secret":"two"}`))
+	body(t, kc(home, "put", testObjectReference(t, repository, "schema/runbook.search-rerank", ""), "--repo", repository, "--command-id", "search-rerank-schema", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+	body(t, kc(home, "put", testObjectReference(t, repository, "runbook/deploy", ""), "--repo", repository, "--command-id", "search-rerank-p1", "--schema-ref", "schema/runbook.search-rerank", "--value", `{"body":"refund deployment checklist","secret":"one"}`))
+	body(t, kc(home, "put", testObjectReference(t, repository, "runbook/timeout", ""), "--repo", repository, "--command-id", "search-rerank-p2", "--schema-ref", "schema/runbook.search-rerank", "--value", `{"body":"refund timeout diagnosis","secret":"two"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "1", "--source", repository+"=refs/heads/main@"))
 	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--cmd", "read-workspace", "--dataset", workspace))
 	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--action", "object.read,object.search,object.rerank", "--repo", repository))
@@ -320,13 +320,13 @@ func TestLiveHTTPSearchRerankWithLuna(t *testing.T) {
 	body(t, kc(home, "store-set", "--index", "opensearch"))
 	body(t, kc(home, "store-set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repository)
-	body(t, kc(home, "put", testObjectReference(t, repository, "schema/runbook.live-rerank", ""), "--command-id", "live-rerank-schema", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+	body(t, kc(home, "put", testObjectReference(t, repository, "schema/runbook.live-rerank", ""), "--repo", repository, "--command-id", "live-rerank-schema", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
 	for _, item := range []struct{ id, body string }{
 		{"runbook/deployment", "Support procedure for a Kubernetes deployment rollout"},
 		{"runbook/refund", "Support procedure: inspect payment gateway timeout logs and refund idempotency status before retrying"},
 		{"runbook/visitor", "Support procedure for office visitor registration"},
 	} {
-		body(t, kc(home, "put", testObjectReference(t, repository, item.id, ""), "--command-id", "live-rerank-"+strings.TrimPrefix(item.id, "runbook/"), "--schema-ref", "schema/runbook.live-rerank", "--value", `{"body":`+string(mustJSON(t, item.body))+`,"secret":"must-not-leak"}`))
+		body(t, kc(home, "put", testObjectReference(t, repository, item.id, ""), "--repo", repository, "--command-id", "live-rerank-"+strings.TrimPrefix(item.id, "runbook/"), "--schema-ref", "schema/runbook.live-rerank", "--value", `{"body":`+string(mustJSON(t, item.body))+`,"secret":"must-not-leak"}`))
 	}
 	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "1", "--source", repository+"=refs/heads/main@"))
 	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--cmd", "read-workspace", "--dataset", workspace))
@@ -378,8 +378,8 @@ func TestHTTPRerankReadsAuthorizedCanonicalCandidatesAndProjectsModelFields(t *t
 	workspace := "agent"
 	body(t, kc(home, "init"))
 	seedRepo(t, home, repository)
-	body(t, kc(home, "put", testObjectReference(t, repository, "runbook/p1", ""), "--command-id", "rerank-p1", "--value", `{"body":"deployment checklist","secret":"one"}`))
-	body(t, kc(home, "put", testObjectReference(t, repository, "runbook/p2", ""), "--command-id", "rerank-p2", "--value", `{"body":"refund timeout diagnosis","secret":"two"}`))
+	body(t, kc(home, "put", testObjectReference(t, repository, "runbook/p1", ""), "--repo", repository, "--command-id", "rerank-p1", "--value", `{"body":"deployment checklist","secret":"one"}`))
+	body(t, kc(home, "put", testObjectReference(t, repository, "runbook/p2", ""), "--repo", repository, "--command-id", "rerank-p2", "--value", `{"body":"refund timeout diagnosis","secret":"two"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "1", "--source", repository+"=refs/heads/main@"))
 	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--cmd", "read-workspace", "--dataset", workspace))
 	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--action", "object.read,object.rerank", "--repo", repository))

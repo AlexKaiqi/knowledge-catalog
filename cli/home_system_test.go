@@ -28,7 +28,7 @@ func TestLocalInitPublishesReadableImmutableSystemRepository(t *testing.T) {
 	if len(report["schemas"].([]any)) != 1 {
 		t.Fatalf("public System Schema read failed: %#v", report)
 	}
-	expectCode(t, kc(home, "put", testObjectReference(t, string(objectmodel.SystemRepositoryID), "schema/evil", ""), "--as", "admin", "--command-id", "mutate-system", "--value", `{"entity":"Evil"}`), "FORBIDDEN")
+	expectCode(t, kc(home, "put", testObjectReference(t, string(objectmodel.SystemRepositoryID), "schema/evil", ""), "--repo", string(objectmodel.SystemRepositoryID), "--as", "admin", "--command-id", "mutate-system", "--value", `{"entity":"Evil"}`), "FORBIDDEN")
 }
 
 func TestLocalSystemPublishSeedsLakeFSAuthority(t *testing.T) {

@@ -9,10 +9,6 @@ relationType: uses_concept
 direction: DIRECTED
 endpoints:
   - role: from
-    objectRef:
-      repository: kr://kc/system
-      object: kc/capability/explore-relations
+    object: kc/capability/explore-relations
   - role: to
-    objectRef:
-      repository: kr://kc/system
-      object: kc/concept/relation
+    object: kc/concept/relation

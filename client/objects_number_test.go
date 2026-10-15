@@ -28,7 +28,7 @@ func TestObjectClientReadPreservesLargeIntegerValues(t *testing.T) {
 		t.Fatal(err)
 	}
 	var value objectmodel.ObjectValue
-	if err := c.Objects().Read(context.Background(), client.ObjectReadRequest{Reference: "urn:kc:object:kr%3A%2F%2Facme%2Fpublic%2Fcore:sample%2FA", Commit: "fixed"}, client.RequestOptions{}, &value); err != nil {
+	if err := c.Objects().Read(context.Background(), client.ObjectReadRequest{Reference: "urn:kc:object:sample/A", Commit: "fixed"}, client.RequestOptions{}, &value); err != nil {
 		t.Fatal(err)
 	}
 	encoded, err := json.Marshal(value.Value)

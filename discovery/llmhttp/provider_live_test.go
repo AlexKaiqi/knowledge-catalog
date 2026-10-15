@@ -30,9 +30,9 @@ func TestLiveLunaListwiseRerank(t *testing.T) {
 			OutputContract:       retrieval.OutputContract{AllowUnjudged: false},
 		},
 		Candidates: []retrieval.Candidate{
-			{Ref: objectmodel.ObjectRef{Repository: "kr://live/synthetic", Object: "deployment"}, Value: map[string]any{"body": "Kubernetes deployment rollout checklist", "secret": "must-not-leak"}},
-			{Ref: objectmodel.ObjectRef{Repository: "kr://live/synthetic", Object: "refund-timeout"}, Value: map[string]any{"body": "Check payment gateway timeout logs, refund idempotency key, and retry status before resubmitting", "secret": "must-not-leak"}},
-			{Ref: objectmodel.ObjectRef{Repository: "kr://live/synthetic", Object: "office"}, Value: map[string]any{"body": "Office visitor registration process", "secret": "must-not-leak"}},
+			{Ref: objectmodel.ObjectRef{Repository: "kr://live/synthetic", Object: "fixture/deployment"}, Value: map[string]any{"body": "Kubernetes deployment rollout checklist", "secret": "must-not-leak"}},
+			{Ref: objectmodel.ObjectRef{Repository: "kr://live/synthetic", Object: "fixture/refund-timeout"}, Value: map[string]any{"body": "Check payment gateway timeout logs, refund idempotency key, and retry status before resubmitting", "secret": "must-not-leak"}},
+			{Ref: objectmodel.ObjectRef{Repository: "kr://live/synthetic", Object: "fixture/office"}, Value: map[string]any{"body": "Office visitor registration process", "secret": "must-not-leak"}},
 		},
 	}
 	result, err := retrieval.ExecuteRerank(context.Background(), provider, request)

@@ -5,17 +5,11 @@
   "endpoints": [
     {
       "role": "metric",
-      "objectRef": {
-        "repository": "kr://scene/object",
-        "object": "metric/gmv"
-      }
+      "object": "metric/gmv"
     },
     {
       "role": "definition",
-      "objectRef": {
-        "repository": "kr://scene/object",
-        "object": "schema/metric.definition"
-      }
+      "object": "schema/metric.definition"
     }
   ]
 }

@@ -71,7 +71,7 @@ func newPublishedObjectFixture(t *testing.T, indexed bool) *publishedObjectFixtu
 	} {
 		body(t, f.govern(t, "grant", "add", "--principal", role.principal, "--repo", f.repository, "--action", role.actions))
 	}
-	body(t, f.govern(t, "writer", "put", testObjectReference(t, f.otherRepository, "private/policy", ""), "--command-id", "other-private-policy", "--value", `{"message":"private resource owner"}`))
+	body(t, f.govern(t, "writer", "put", testObjectReference(t, f.otherRepository, "private/policy", ""), "--repo", f.otherRepository, "--command-id", "other-private-policy", "--value", `{"message":"private resource owner"}`))
 	f.otherHead = f.head(t, f.otherRepository)
 	offline := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.offlineCalls.Add(1)
@@ -190,7 +190,7 @@ func (f *publishedObjectFixture) publish(t *testing.T, kind string) (string, map
 
 func (f *publishedObjectFixture) verifyDiscovery(t *testing.T, kind, object, keyword, commit string, definition map[string]any) {
 	t.Helper()
-	schema := asMap(t, body(t, f.consume(t, "read", testObjectReference(t, f.repository, "schema/published-object.definition/v1", ""), "--commit", commit)))
+	schema := asMap(t, body(t, f.consume(t, "read", testObjectReference(t, f.repository, "schema/published-object.definition/v1", ""), "--repo", f.repository, "--commit", commit)))
 	schemaValue := asMap(t, schema["value"])
 	fields, ok := schemaValue["fields"].(map[string]any)
 	if !ok {
@@ -230,7 +230,7 @@ func (f *publishedObjectFixture) verifyDiscovery(t *testing.T, kind, object, key
 			string(fixed.Version.ObjectID) != object || string(fixed.Version.DeclarationCommit) != commit {
 			t.Fatalf("typed discovery lost object identity or fixed version: %#v", fixed)
 		}
-		read := asMap(t, body(t, f.consume(t, "read", testObjectReference(t, f.repository, object, ""), "--commit", commit)))
+		read := asMap(t, body(t, f.consume(t, "read", testObjectReference(t, f.repository, object, ""), "--repo", f.repository, "--commit", commit)))
 		if !reflect.DeepEqual(read["value"], fixed.Object.Value) || !reflect.DeepEqual(asMap(t, read["value"])["definition"], definition) {
 			t.Fatalf("hit and authoritative same-version read diverged: hit=%#v read=%#v", fixed, read)
 		}

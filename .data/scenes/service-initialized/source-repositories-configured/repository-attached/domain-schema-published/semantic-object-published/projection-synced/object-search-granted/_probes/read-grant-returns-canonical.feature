@@ -19,5 +19,5 @@ Feature: 独立授予仓读权后 SEARCH 与 READ 返回 Canonical
 
     When I run `kc search --as searcher --repo kr://scene/object --query merchandise`
     Then 1 hit metric/gmv
-    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv --as searcher`
+    When I run `kc read urn:kc:object:metric/gmv --as searcher`
     Then READ body is full canonical

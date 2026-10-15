@@ -19,10 +19,6 @@ type PinnedObjectRef struct {
 	Commit kernel.CommitID `json:"commit"`
 }
 
-func FormatObjectRef(repository kernel.RepositoryID, object ObjectID) string {
-	return "kc://" + shortRepository(repository) + "/" + string(object)
-}
-
 func FormatPinnedRef(repository kernel.RepositoryID, commit kernel.CommitID, object ObjectID) string {
 	return "kc://" + shortRepository(repository) + "@" + string(commit) + "/" + string(object)
 }

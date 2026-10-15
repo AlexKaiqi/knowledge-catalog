@@ -8,10 +8,6 @@ relationType: produces
 direction: DIRECTED
 endpoints:
 - role: job
-  objectRef:
-    repository: table-meta
-    object: data-job/shop.refresh_sales_mart
+  object: data-job/shop.refresh_sales_mart
 - role: output
-  objectRef:
-    repository: table-meta
-    object: table/shop.sales_mart
+  object: table/shop.sales_mart

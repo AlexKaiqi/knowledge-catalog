@@ -116,7 +116,7 @@ Given existing repository kr://scene/object
 When I run `+"`kc attach --repo kr://scene/object`"+`
 Then the output has:
   | repositoryId | kr://scene/object |
-When I run `+"`kc writer put urn:kc:object:kr%3A%2F%2Fscene%2Fobject:note%2Fhello --command-id baseline --file $materials/baseline.json`"+`
+When I run `+"`kc writer put urn:kc:object:note/hello --repo kr://scene/object --command-id baseline --file $materials/baseline.json`"+`
 Then the output has:
   | disposition | APPLIED |
 When I run `+"`kc grant add --principal reader --action inventory.read`"+`
@@ -124,10 +124,10 @@ Then the output has:
   | principal | reader |
 `, map[string]string{
 				"mutate": `
-When I run ` + "`kc writer put urn:kc:object:kr%3A%2F%2Fscene%2Fobject:note%2Fhello --command-id change --file $materials/changed.json`" + `
+When I run ` + "`kc writer put urn:kc:object:note/hello --repo kr://scene/object --command-id change --file $materials/changed.json`" + `
 Then the output has:
   | disposition | APPLIED |
-When I run ` + "`kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:note%2Fhello`" + `
+When I run ` + "`kc read urn:kc:object:note/hello`" + `
 Then the output has:
   | value.text | changed |
 When I run ` + "`kc grant list`" + `
@@ -161,7 +161,7 @@ Then error FORBIDDEN
 }
 
 const sceneIsolationObserve = `
-When I run ` + "`kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:note%2Fhello`" + `
+When I run ` + "`kc read urn:kc:object:note/hello`" + `
 Then the output has:
   | value.text | baseline |
 When I run ` + "`kc show --as reader`" + `
@@ -252,14 +252,14 @@ func TestSceneProjectionProbesRestoreSharedBaseline(t *testing.T) {
 			observe := `
 When I run ` + "`kc search --repo kr://scene/object --query merchandise`" + `
 Then 1 hit metric/gmv
-When I run ` + "`kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv#/definition`" + `
+When I run ` + "`kc read urn:kc:object:metric/gmv#/definition`" + `
 Then the output has:
   | value.name | Gross merchandise value |
 `
 			probes := map[string]string{
 				"observe": observe,
 				"mutate": `
-When I run ` + "`kc writer put urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv#/definition --command-id changed-projection --schema-ref schema/metric.definition --file $materials/changed.json`" + `
+When I run ` + "`kc writer put urn:kc:object:metric/gmv#/definition --repo kr://scene/object --command-id changed-projection --schema-ref schema/metric.definition --file $materials/changed.json`" + `
 Then the output has:
   | disposition | APPLIED |
 When I run ` + "`kc operations projection sync --repo kr://scene/object`" + `
@@ -268,7 +268,7 @@ Then the output has:
   | basisCommit | nonempty |
 When I run ` + "`kc search --repo kr://scene/object --query merchandise`" + `
 Then 0 hits
-When I run ` + "`kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv#/definition`" + `
+When I run ` + "`kc read urn:kc:object:metric/gmv#/definition`" + `
 Then the output has:
   | value.name | Changed total |
 `,

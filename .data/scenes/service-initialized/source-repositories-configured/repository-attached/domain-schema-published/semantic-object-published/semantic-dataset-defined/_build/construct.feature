@@ -26,7 +26,7 @@ Feature: semantic-dataset-defined
       | datasets[].revision | 1 |
       | repositories[].id | kr://scene/object |
       | repositories[].id | kr://scene/graph |
-    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv --dataset scene-set`
+    When I run `kc read urn:kc:object:metric/gmv --dataset scene-set`
     Then the output has:
       | objectId | metric/gmv |
       | repository | kr://scene/object |

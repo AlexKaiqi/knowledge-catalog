@@ -37,7 +37,7 @@ func TestUserJourneyManageAgentAccess(t *testing.T) {
 	setID := "oncall-agent"
 	body(t, kc(h, "init"))
 	seedRepo(t, h, repoID)
-	body(t, kc(h, "put", testObjectReference(t, repoID, "runbook/payments", ""), "--command-id", "seed", "--value", `{"text":"freeze traffic"}`))
+	body(t, kc(h, "put", testObjectReference(t, repoID, "runbook/payments", ""), "--repo", repoID, "--command-id", "seed", "--value", `{"text":"freeze traffic"}`))
 	body(t, kc(h, "dataset", "define", "--dataset", setID, "--revision", "1",
 		"--source", repoID+"=refs/heads/main"))
 
@@ -83,35 +83,35 @@ func TestUserJourneyObjectGrantDoesNotAuthorizeAccess(t *testing.T) {
 	repoID := "kr://acme/public/warehouse"
 	body(t, kc(h, "init"))
 	seedRepo(t, h, repoID)
-	body(t, kc(h, "put", testObjectReference(t, repoID, "Table:payments", "/structure"), "--command-id", "structure", "--value", `{"columns":["id"]}`))
-	body(t, kc(h, "put", testObjectReference(t, repoID, "Table:payments", "/permissions/user:bob"), "--command-id", "source-grant", "--value", `{"privileges":["SELECT"]}`, "--kind", "Member"))
+	body(t, kc(h, "put", testObjectReference(t, repoID, "table/payments", "/structure"), "--repo", repoID, "--command-id", "structure", "--value", `{"columns":["id"]}`))
+	body(t, kc(h, "put", testObjectReference(t, repoID, "table/payments", "/permissions/user:bob"), "--repo", repoID, "--command-id", "source-grant", "--value", `{"privileges":["SELECT"]}`, "--kind", "Member"))
 	body(t, kc(h, "dataset", "define", "--dataset", "warehouse", "--revision", "1",
 		"--source", repoID+"=refs/heads/main"))
 	// A source-system permissions Aspect still grants no kc read access.
-	expectCode(t, kc(h, "read", testObjectReference(t, repoID, "Table:payments", ""), "--as", "bob", "--dataset", "warehouse"), "FORBIDDEN")
+	expectCode(t, kc(h, "read", testObjectReference(t, repoID, "table/payments", ""), "--as", "bob", "--dataset", "warehouse"), "FORBIDDEN")
 	expectCode(t, kc(h, "allowed", "--principal", "bob", "--cmd", "read", "--repo", repoID), "FORBIDDEN")
 
 	body(t, kc(h, "allow", "--principal", "bob", "--cmd", "read-workspace", "--dataset", "warehouse"))
-	values := asMap(t, body(t, kc(h, "read", testObjectReference(t, repoID, "Table:payments", ""), "--as", "bob", "--dataset", "warehouse")))
-	if values["reference"] != testObjectReference(t, repoID, "Table:payments", "") {
+	values := asMap(t, body(t, kc(h, "read", testObjectReference(t, repoID, "table/payments", ""), "--as", "bob", "--dataset", "warehouse")))
+	if values["reference"] != testObjectReference(t, repoID, "table/payments", "") {
 		t.Fatalf("dataset file.read must deliver listed files: %#v", values)
 	}
-	expectCode(t, kc(h, "read", testObjectReference(t, repoID, "Table:payments", ""), "--as", "bob"), "FORBIDDEN")
+	expectCode(t, kc(h, "read", testObjectReference(t, repoID, "table/payments", ""), "--repo", repoID, "--as", "bob"), "FORBIDDEN")
 	expectCode(t, kc(h, "allowed", "--principal", "bob", "--cmd", "read", "--repo", repoID), "FORBIDDEN")
 
 	body(t, kc(h, "allow", "--principal", "bob", "--cmd", "read", "--repo", repoID))
-	values = asMap(t, body(t, kc(h, "read", testObjectReference(t, repoID, "Table:payments", ""), "--as", "bob", "--dataset", "warehouse")))
-	if values["reference"] != testObjectReference(t, repoID, "Table:payments", "") {
+	values = asMap(t, body(t, kc(h, "read", testObjectReference(t, repoID, "table/payments", ""), "--as", "bob", "--dataset", "warehouse")))
+	if values["reference"] != testObjectReference(t, repoID, "table/payments", "") {
 		t.Fatalf("repository grant must not drop dataset consume: %#v", values)
 	}
 	memberResolved := body(t, kc(h, "resolve", "--as", "bob", "--dataset", "warehouse",
-		"--object", "Table:payments", "--aspect", "permissions", "--member", "user:bob")).([]any)
+		"--object", "table/payments", "--aspect", "permissions", "--member", "user:bob")).([]any)
 	if len(memberResolved) != 1 || asMap(t, memberResolved[0])["status"] != "RESOLVED" ||
 		asMap(t, memberResolved[0])["memberKey"] != "user:bob" {
 		t.Fatalf("resolve --aspect --member: %#v", memberResolved)
 	}
 	expectCode(t, kc(h, "resolve", "--as", "bob", "--dataset", "warehouse",
-		"--object", "Table:payments", "--member", "user:bob"), "USAGE_INVALID")
+		"--object", "table/payments", "--member", "user:bob"), "USAGE_INVALID")
 }
 
 // TestUserJourneyUpstreamUpdateDoesNotRewriteReferencingRepository proves the
@@ -125,8 +125,8 @@ func TestUserJourneyUpstreamUpdateDoesNotRewriteReferencingRepository(t *testing
 	body(t, kc(h, "init"))
 	seedRepo(t, h, upstream)
 	seedRepo(t, h, personal)
-	upV1 := asMap(t, asMap(t, body(t, kc(h, "put", testObjectReference(t, upstream, "policy/oncall", ""), "--command-id", "up-v1", "--value", `{"version":1}`)))["result"])
-	asMap(t, asMap(t, body(t, kc(h, "put", testObjectReference(t, personal, "notes/oncall", ""), "--command-id", "note-v1", "--value", `{"text":"my checklist"}`, "--origin-kind", "ASSERTION", "--source-ref", "kc://acme/public/handbook@"+upV1["newCommit"].(string)+"/policy/oncall")))["result"])
+	upV1 := asMap(t, asMap(t, body(t, kc(h, "put", testObjectReference(t, upstream, "policy/oncall", ""), "--repo", upstream, "--command-id", "up-v1", "--value", `{"version":1}`)))["result"])
+	asMap(t, asMap(t, body(t, kc(h, "put", testObjectReference(t, personal, "notes/oncall", ""), "--repo", personal, "--command-id", "note-v1", "--value", `{"text":"my checklist"}`, "--origin-kind", "ASSERTION", "--source-ref", "kc://acme/public/handbook@"+upV1["newCommit"].(string)+"/policy/oncall")))["result"])
 	body(t, kc(h, "dataset", "define", "--dataset", "desk", "--revision", "1",
 		"--source", personal+"=refs/heads/main@",
 		"--source", upstream+"=refs/heads/main@refs/handbook"))
@@ -138,7 +138,7 @@ func TestUserJourneyUpstreamUpdateDoesNotRewriteReferencingRepository(t *testing
 	}
 	personalCommit := asMap(t, beforePersonal)["commit"]
 
-	upV2 := asMap(t, asMap(t, body(t, kc(h, "put", testObjectReference(t, upstream, "policy/oncall", ""), "--command-id", "up-v2", "--value", `{"version":2}`)))["result"])
+	upV2 := asMap(t, asMap(t, body(t, kc(h, "put", testObjectReference(t, upstream, "policy/oncall", ""), "--repo", upstream, "--command-id", "up-v2", "--value", `{"version":2}`)))["result"])
 	frozen := asMap(t, body(t, kc(h, "read", testObjectReference(t, upstream, "policy/oncall", ""), "--dataset", "desk")))
 	if frozen["reference"] != testObjectReference(t, upstream, "policy/oncall", "") || asMap(t, asMap(t, frozen)["value"])["version"] != float64(1) {
 		t.Fatalf("published dataset must stay frozen until republish: %#v", frozen)

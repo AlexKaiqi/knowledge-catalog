@@ -8,10 +8,6 @@ relationType: contains
 direction: DIRECTED
 endpoints:
 - role: container
-  objectRef:
-    repository: table-meta
-    object: dbschema/shop
+  object: dbschema/shop
 - role: member
-  objectRef:
-    repository: table-meta
-    object: table/shop.order_items
+  object: table/shop.order_items

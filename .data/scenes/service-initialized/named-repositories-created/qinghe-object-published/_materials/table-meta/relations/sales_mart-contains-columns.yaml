@@ -8,34 +8,18 @@ relationType: contains
 direction: DIRECTED
 endpoints:
 - role: container
-  objectRef:
-    repository: table-meta
-    object: table/shop.sales_mart
+  object: table/shop.sales_mart
 - role: member
-  objectRef:
-    repository: table-meta
-    object: column/shop.sales_mart.order_date
+  object: column/shop.sales_mart.order_date
 - role: member
-  objectRef:
-    repository: table-meta
-    object: column/shop.sales_mart.order_status
+  object: column/shop.sales_mart.order_status
 - role: member
-  objectRef:
-    repository: table-meta
-    object: column/shop.sales_mart.city
+  object: column/shop.sales_mart.city
 - role: member
-  objectRef:
-    repository: table-meta
-    object: column/shop.sales_mart.category_name
+  object: column/shop.sales_mart.category_name
 - role: member
-  objectRef:
-    repository: table-meta
-    object: column/shop.sales_mart.gmv
+  object: column/shop.sales_mart.gmv
 - role: member
-  objectRef:
-    repository: table-meta
-    object: column/shop.sales_mart.order_count
+  object: column/shop.sales_mart.order_count
 - role: member
-  objectRef:
-    repository: table-meta
-    object: column/shop.sales_mart.item_count
+  object: column/shop.sales_mart.item_count

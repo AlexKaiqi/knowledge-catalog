@@ -236,7 +236,7 @@ func TestRemovedCommandsAreRejected(t *testing.T) {
 		}
 	}
 	for _, argv := range [][]string{
-		{"read", "urn:kc:object:kr%3A%2F%2Facme%2Fsource:policy%2FA", "--kset", "agent"},
+		{"read", "urn:kc:object:policy/A", "--kset", "agent"},
 		{"dataset", "define", "--kset", "docs", "--revision", "1", "--source", "kr://acme/core"},
 	} {
 		result := Run(argv)
@@ -244,7 +244,7 @@ func TestRemovedCommandsAreRejected(t *testing.T) {
 			t.Fatalf("%v must reject --kset: %s", argv, result.Stdout)
 		}
 	}
-	pinFlag := Run([]string{"read", "urn:kc:object:kr%3A%2F%2Facme%2Fsource:policy%2FA", "--pin", `{"setId":"agent"}`})
+	pinFlag := Run([]string{"read", "urn:kc:object:policy/A", "--pin", `{"setId":"agent"}`})
 	if pinFlag.Status == 0 || !strings.Contains(pinFlag.Stdout, "rejects --pin") {
 		t.Fatalf("read --pin must be rejected: %s", pinFlag.Stdout)
 	}

@@ -33,23 +33,23 @@ func TestDiscoveryCLIRepeatedScalarFlagsKeepLastValue(t *testing.T) {
 		{
 			path: "relations",
 			flags: map[string]any{
-				"repo": []string{"old-repo", "r"}, "object": []string{"old-object", "Table:orders"},
+				"repo": []string{"old-repo", "r"}, "object": []string{"old-object", "table/orders"},
 				"direction": []string{"old-direction", "DIRECTED"}, "limit": []string{"invalid-old-limit", "7"},
 				"continuation": []string{"old-cursor", "current-cursor"},
 			},
 			request: client.RelationsRequest{
-				ObjectScope: client.ObjectScope{Repository: "r"}, Endpoint: "Table:orders", Direction: "DIRECTED", Limit: 7, Continuation: "current-cursor",
+				ObjectScope: client.ObjectScope{Repository: "r"}, Endpoint: "table/orders", Direction: "DIRECTED", Limit: 7, Continuation: "current-cursor",
 			},
 		},
 		{
 			path: "traverse",
 			flags: map[string]any{
-				"dataset": []string{"old-set", "d"}, "object": []string{"old-object", "Table:orders"},
+				"dataset": []string{"old-set", "d"}, "object": []string{"old-object", "table/orders"},
 				"max-hops": []string{"invalid-old-max", "2"}, "min-hops": []string{"invalid-old-min", "1"},
 				"limit": []string{"invalid-old-limit", "7"}, "continuation": []string{"old-cursor", "current-cursor"},
 			},
 			request: client.TraverseRequest{
-				ObjectScope: client.ObjectScope{Dataset: "d"}, Endpoint: "Table:orders", MinHops: 1, MaxHops: 2, Limit: 7, Continuation: "current-cursor",
+				ObjectScope: client.ObjectScope{Dataset: "d"}, Endpoint: "table/orders", MinHops: 1, MaxHops: 2, Limit: 7, Continuation: "current-cursor",
 			},
 		},
 		{

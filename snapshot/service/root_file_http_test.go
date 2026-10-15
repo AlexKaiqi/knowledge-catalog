@@ -40,7 +40,7 @@ func TestSnapshotRootPrefixReadsDeliveredAndMountRelativeFiles(t *testing.T) {
 			request[key] = value
 		}
 		read := datasetHTTPCall(t, handler, http.MethodPost, "/snapshot/v1/files/file:read", request, http.StatusOK)
-		if rootFileRead(t, read) != `{"object_id":"Business:old","value":1}` || read["mount"].(map[string]any)["commit"] != "c1" {
+		if rootFileRead(t, read) != `{"object_id":"business/old","value":1}` || read["mount"].(map[string]any)["commit"] != "c1" {
 			t.Fatalf("root prefix did not map into its fixed source subtree: %#v", read)
 		}
 	}
@@ -62,10 +62,10 @@ func TestSnapshotRootPrefixKeepsHistoricalBasisAndCurrentPermission(t *testing.T
 	read := func(pin map[string]any, file string, want int) map[string]any {
 		return datasetHTTPCall(t, handler, http.MethodPost, "/snapshot/v1/files/file:read", map[string]any{"dataset": "root", "pin": pin, "path": file}, want)
 	}
-	if value := rootFileRead(t, read(old, "a.json", http.StatusOK)); value != `{"object_id":"Business:old","value":1}` {
+	if value := rootFileRead(t, read(old, "a.json", http.StatusOK)); value != `{"object_id":"business/old","value":1}` {
 		t.Fatalf("source advance changed the historical root bytes: %s", value)
 	}
-	if value := rootFileRead(t, read(current, "renamed.json", http.StatusOK)); value != `{"object_id":"Business:old","value":2}` {
+	if value := rootFileRead(t, read(current, "renamed.json", http.StatusOK)); value != `{"object_id":"business/old","value":2}` {
 		t.Fatalf("new root release did not select its own commit: %s", value)
 	}
 	read(current, "a.json", http.StatusNotFound)

@@ -9,10 +9,6 @@ relationType: uses_mechanism
 direction: DIRECTED
 endpoints:
   - role: from
-    objectRef:
-      repository: kr://kc/system
-      object: kc/capability/resource-access
+    object: kc/capability/resource-access
   - role: to
-    objectRef:
-      repository: kr://kc/system
-      object: kc/mechanism/dynamic-access
+    object: kc/mechanism/dynamic-access

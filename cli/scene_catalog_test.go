@@ -258,7 +258,7 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 			"probe-revoke-catalog-read-denied.feature":    {"kc grant remove", "Then error FORBIDDEN"},
 		},
 		"repository-attached": {
-			"probe-publish-permissions-keeps-read-denied.feature": {"kc writer put", "urn:kc:object:kr%3A%2F%2Fscene%2Fobject:Table%3Aorders#/permissions/user:bob", "Then error FORBIDDEN"},
+			"probe-publish-permissions-keeps-read-denied.feature": {"kc writer put", "urn:kc:object:table/orders#/permissions/user:bob", "Then error FORBIDDEN"},
 			"probe-detach-keeps-head-readable.feature":            {"kc detach", "kc writer head", "| commit     | nonempty |"},
 			"probe-archive-rejects-dataset-definition.feature":    {"kc catalog archive", "kc dataset define", "USAGE_INVALID"},
 			"probe-writer-grant-isolates-principals.feature":      {"--action writer.commit", "Then error FORBIDDEN", "kc writer put"},
@@ -422,7 +422,7 @@ func TestSceneRepositoryVerificationCasesStayOnAttachedState(t *testing.T) {
 		"kc show --as inventory-reader": {
 			"catalogId": "absent", "repositories[].id": "kr://scene/object",
 		},
-		"kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:missing --as inventory-reader": {"error": "FORBIDDEN"},
+		"kc read urn:kc:object:note/missing --repo kr://scene/object --as inventory-reader": {"error": "FORBIDDEN"},
 	}
 	for command, fields := range wantObservations {
 		for field, want := range fields {
@@ -752,10 +752,10 @@ func TestSceneFeaturesCoverHelpShortestPaths(t *testing.T) {
 		"kc writer commit",
 		"kc writer put",
 		"kc writer head",
-		"kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:note%2Fhello",
+		"kc read urn:kc:object:note/hello",
 		"kc search --as agent:copilot --dataset",
-		"kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv#/definition --as agent:copilot --dataset",
-		"kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv --dataset",
+		"kc read urn:kc:object:metric/gmv#/definition --as agent:copilot --dataset",
+		"kc read urn:kc:object:metric/gmv --dataset",
 		"kc login --server",
 		"kc admission show",
 		"kc show",
@@ -802,7 +802,7 @@ func TestSceneConsumeJourneyIsOneFeature(t *testing.T) {
 		"kc show",
 		"kc schema list --repo",
 		"kc search --as agent:copilot --dataset",
-		"kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv#/definition --as agent:copilot --dataset",
+		"kc read urn:kc:object:metric/gmv#/definition --as agent:copilot --dataset",
 	}
 	found := ""
 	err := filepath.WalkDir(scenesRoot(), func(path string, d os.DirEntry, walkErr error) error {
@@ -1504,7 +1504,7 @@ func TestSceneWalkLeafIsTwoNamedRepositories(t *testing.T) {
 		t.Fatal(err)
 	}
 	datasetText := string(datasetBody)
-	for _, needle := range []string{"kc dataset define --dataset qinghe-sales", "--source table-meta=", "--source sales-semantic=", "@tables@tables", "@semantic-models@semantic-models", "@metrics@metrics", "kc read urn:kc:object:table-meta:table%2Fshop.orders --dataset qinghe-sales", "kc read urn:kc:object:sales-semantic:metric%2Fshop.gmv --dataset qinghe-sales", "| objectId | table/shop.orders |", "| objectId | metric/shop.gmv |", "kc read urn:kc:object:table-meta:data-job%2Fshop.refresh_sales_mart --dataset qinghe-sales"} {
+	for _, needle := range []string{"kc dataset define --dataset qinghe-sales", "--source table-meta=", "--source sales-semantic=", "@tables@tables", "@semantic-models@semantic-models", "@metrics@metrics", "kc read urn:kc:object:table/shop.orders --dataset qinghe-sales", "kc read urn:kc:object:metric/shop.gmv --dataset qinghe-sales", "| objectId | table/shop.orders |", "| objectId | metric/shop.gmv |", "kc read urn:kc:object:data-job/shop.refresh_sales_mart --dataset qinghe-sales"} {
 		if !strings.Contains(datasetText, needle) {
 			t.Errorf("sales-dataset-defined missing %s", needle)
 		}

@@ -48,7 +48,7 @@ func exerciseHTTPPluginShutdown(t *testing.T, beginThenDrain bool) {
 		TargetRepository: source.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: source.RootCommitID, ExpectedTargetCommit: source.RootCommitID,
 		Operations: []objectmodel.Operation{
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "Job:shutdown"}, Value: map[string]any{"name": "shutdown"}},
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "job/shutdown"}, Value: map[string]any{"name": "shutdown"}},
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.runtime"}, Value: map[string]any{
 				"entity": "Job", "aspect": "runtime", "origin": "https://scheduler.example",
 				"fields": map[string]any{"status": map[string]any{"type": "string", "access": []any{"filter"}}},
@@ -109,7 +109,7 @@ func exerciseHTTPPluginShutdown(t *testing.T, beginThenDrain bool) {
 	}
 	select {
 	case observed := <-lookup.entered:
-		if observed.Binding.DeclarationCommit != commit.Result.NewCommit || observed.Binding.Repository != source.RepositoryID || observed.Binding.Address.ObjectID != "Job:shutdown" || observed.Binding.Address.AspectName != "runtime" || observed.Identity.Principal != "http-shutdown-worker" {
+		if observed.Binding.DeclarationCommit != commit.Result.NewCommit || observed.Binding.Repository != source.RepositoryID || observed.Binding.Address.ObjectID != "job/shutdown" || observed.Binding.Address.AspectName != "runtime" || observed.Identity.Principal != "http-shutdown-worker" {
 			t.Fatalf("background did not use the actual fixed Binding: %#v", observed)
 		}
 	case <-time.After(5 * time.Second):
@@ -251,7 +251,7 @@ func exerciseHTTPPluginShutdown(t *testing.T, beginThenDrain bool) {
 		t.Fatal("accepted HTTP sync did not publish its actual State view")
 	}
 	result, err := plugins.SearchStateAtRevisionContext(context.Background(), repo, commit.Result.NewCommit, revision, query)
-	if err != nil || len(result.Hits) != 1 || result.Hits[0].Object.Commit != commit.Result.NewCommit || result.Hits[0].Object.Address.ObjectID != "Job:shutdown" || len(result.Hits[0].Version.Observations) != 1 || result.Hits[0].Object.Value.(map[string]any)["runtime"].(map[string]any)["status"] != "running" {
+	if err != nil || len(result.Hits) != 1 || result.Hits[0].Object.Commit != commit.Result.NewCommit || result.Hits[0].Object.Address.ObjectID != "job/shutdown" || len(result.Hits[0].Version.Observations) != 1 || result.Hits[0].Object.Value.(map[string]any)["runtime"].(map[string]any)["status"] != "running" {
 		t.Fatalf("draining HTTP work lost its fixed canonical State query: %#v %v", result, err)
 	}
 	foreground.releaseOnce.Do(func() { close(foreground.release) })

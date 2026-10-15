@@ -34,13 +34,13 @@ func TestSystemObjectCanBeReadThroughAuthenticatedServer(t *testing.T) {
 		{"kc/mechanism/dynamic-access", "definition", "观察（Observation）"},
 		{"kc/guide/first-publication", "guide", "成功证据"},
 	} {
-		read := asMap(t, body(t, kcRemote(t, server.URL, "agent:reader", "read", testObjectReference(t, string(objectmodel.SystemRepositoryID), tc.object, testObjectLocator(tc.aspect)))))
+		read := asMap(t, body(t, kcRemote(t, server.URL, "agent:reader", "read", testObjectReference(t, string(objectmodel.SystemRepositoryID), tc.object, testObjectLocator(tc.aspect)), "--repo", string(objectmodel.SystemRepositoryID))))
 		value := asMap(t, read["value"])
 		if read["commit"] == "" || !strings.Contains(value["body"].(string), tc.needle) {
 			t.Fatalf("system object not delivered with a fixed basis: %#v", read)
 		}
 	}
-	read := asMap(t, body(t, kcRemote(t, server.URL, "agent:reader", "read", testObjectReference(t, string(objectmodel.SystemRepositoryID), "kc/capability/read-object", ""))))
+	read := asMap(t, body(t, kcRemote(t, server.URL, "agent:reader", "read", testObjectReference(t, string(objectmodel.SystemRepositoryID), "kc/capability/read-object", ""), "--repo", string(objectmodel.SystemRepositoryID))))
 	value := asMap(t, read["value"])
 	for _, aspect := range []string{"definition", "usage", "entrypoints"} {
 		if value[aspect] == nil {

@@ -9,10 +9,6 @@ relationType: uses
 direction: DIRECTED
 endpoints:
   - role: from
-    objectRef:
-      repository: kr://kc/system
-      object: kc/guide/use-dynamic-values
+    object: kc/guide/use-dynamic-values
   - role: to
-    objectRef:
-      repository: kr://kc/system
-      object: kc/capability/schemas
+    object: kc/capability/schemas

@@ -7,7 +7,7 @@ Feature: probe repo read
     Then the output has:
       | repository | kr://scene/object |
       | commit     | nonempty |
-    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:note%2Fhello`
+    When I run `kc read urn:kc:object:note/hello`
     Then the output has:
       | objectId | note/hello |
       | repository          | kr://scene/object |

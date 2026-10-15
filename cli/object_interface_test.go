@@ -39,7 +39,7 @@ func TestPublicInvokeLiveAccessUsesPublishedContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body(t, kc(homeDir, "put", testObjectReference(t, repositoryID, "table/orders", "/interfaces/live"), "--command-id", "live-implementation", "--schema-ref", string(liveaccesscontract.LiveAccessImplementationSchemaV1), "--value", string(implementation), "--kind", "Member"))
+	body(t, kc(homeDir, "put", testObjectReference(t, repositoryID, "table/orders", "/interfaces/live"), "--repo", repositoryID, "--command-id", "live-implementation", "--schema-ref", string(liveaccesscontract.LiveAccessImplementationSchemaV1), "--value", string(implementation), "--kind", "Member"))
 	serverHandler := serv.HTTPHandlerWithOptions(homeDir, serv.HTTPServerOptions{})
 	if closer, ok := serverHandler.(interface{ Close() error }); ok {
 		defer closer.Close()
@@ -79,7 +79,7 @@ func publishLiveAccessDefinitions(t *testing.T, homeDir, repositoryID string) {
 					locator = testObjectLocator(operation.Address.AspectName, operation.Address.MemberKey)
 				}
 			}
-			args := []string{"put", testObjectReference(t, repositoryID, string(id), locator), "--command-id", "live-publish-" + string(id), "--value", string(raw), "--kind", string(operation.Address.Kind)}
+			args := []string{"put", testObjectReference(t, repositoryID, string(id), locator), "--repo", repositoryID, "--command-id", "live-publish-" + string(id), "--value", string(raw), "--kind", string(operation.Address.Kind)}
 			if operation.SchemaRef != "" {
 				args = append(args, "--schema-ref", operation.SchemaRef)
 			}
@@ -120,10 +120,10 @@ func TestPublicInvokeRefusesContractsNoPluginHandles(t *testing.T) {
 		{"interface/echo/v1", `{"name":"Echo","meaning":"A contract without an installed plugin.","operations":{"read":{"effect":"read","inputSchemaRef":"schema/echo-input/v1","resultSchemaRef":"schema/echo-input/v1"}}}`},
 	}
 	for n, value := range values {
-		body(t, kc(homeDir, "put", testObjectReference(t, repositoryID, value.object, ""), "--command-id", "echo-schema-"+string(rune('a'+n)), "--value", value.value))
+		body(t, kc(homeDir, "put", testObjectReference(t, repositoryID, value.object, ""), "--repo", repositoryID, "--command-id", "echo-schema-"+string(rune('a'+n)), "--value", value.value))
 	}
-	body(t, kc(homeDir, "put", testObjectReference(t, repositoryID, "object/message", "/interfaces/echo"), "--command-id", "echo-implementation", "--schema-ref", "schema/echo-implementation/v1", "--value", `{"interfaceRef":"interface/echo/v1","prefix":"Old "}`, "--kind", "Member"))
-	pinned := asMap(t, body(t, kc(homeDir, "read", testObjectReference(t, repositoryID, "object/message", ""))))["commit"].(string)
+	body(t, kc(homeDir, "put", testObjectReference(t, repositoryID, "object/message", "/interfaces/echo"), "--repo", repositoryID, "--command-id", "echo-implementation", "--schema-ref", "schema/echo-implementation/v1", "--value", `{"interfaceRef":"interface/echo/v1","prefix":"Old "}`, "--kind", "Member"))
+	pinned := asMap(t, body(t, kc(homeDir, "read", testObjectReference(t, repositoryID, "object/message", ""), "--repo", repositoryID)))["commit"].(string)
 	publishLiveAccessDefinitions(t, homeDir, repositoryID)
 	var liveCalls int
 	runtime := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -135,7 +135,7 @@ func TestPublicInvokeRefusesContractsNoPluginHandles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body(t, kc(homeDir, "put", testObjectReference(t, repositoryID, "table/orders", "/interfaces/live"), "--command-id", "shared-live-implementation", "--schema-ref", string(liveaccesscontract.LiveAccessImplementationSchemaV1), "--value", string(live), "--kind", "Member"))
+	body(t, kc(homeDir, "put", testObjectReference(t, repositoryID, "table/orders", "/interfaces/live"), "--repo", repositoryID, "--command-id", "shared-live-implementation", "--schema-ref", string(liveaccesscontract.LiveAccessImplementationSchemaV1), "--value", string(live), "--kind", "Member"))
 	serverHandler := serv.HTTPHandlerWithOptions(homeDir, serv.HTTPServerOptions{})
 	if closer, ok := serverHandler.(interface{ Close() error }); ok {
 		defer closer.Close()

@@ -28,7 +28,7 @@ class AccessError(ValueError):
 def object_id_of(request: dict[str, Any]) -> str:
     binding = request.get("binding") or {}
     address = binding.get("address") or {}
-    return str(address.get("objectId") or "Service:orders")
+    return str(address.get("objectId") or "service/orders")
 
 
 def mysql_configured() -> bool:

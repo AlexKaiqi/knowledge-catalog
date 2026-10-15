@@ -107,7 +107,7 @@ func TestHTTPOnlyServiceRoutesReturnSuccessfulProtocolResponses(t *testing.T) {
 	repositoryDSN := lakeFSRepoDSN(t)
 	body(t, kc(home, "local", "repository", "attach", "--repo", repositoryID, "--dsn", repositoryDSN))
 	body(t, kc(home, "attach", "--repo", repositoryID, "--dsn", repositoryDSN))
-	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "Policy:http-only", ""), "--command-id", "http-only-seed", "--value", `{"body":"http-only"}`))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "policy/http-only", ""), "--repo", repositoryID, "--command-id", "http-only-seed", "--value", `{"body":"http-only"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1",
 		"--source", repositoryID+"=refs/heads/main@object"))
 	body(t, kc(home, "grant", "add", "--principal", principal,

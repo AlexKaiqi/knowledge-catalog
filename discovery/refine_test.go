@@ -18,9 +18,9 @@ func (f rerankerFunc) Rerank(ctx context.Context, request retrieval.RerankReques
 
 func candidates() []retrieval.Candidate {
 	return []retrieval.Candidate{
-		{Ref: objectmodel.ObjectRef{Repository: "kr://acme/public/core", Object: "p1"}, Value: map[string]any{"body": "refund timeout diagnosis"}},
-		{Ref: objectmodel.ObjectRef{Repository: "kr://acme/public/core", Object: "p2"}, Value: map[string]any{"body": "deployment checklist"}},
-		{Ref: objectmodel.ObjectRef{Repository: "kr://acme/public/core", Object: "p3"}, Value: map[string]any{"body": "refund SLA and timeout policy"}},
+		{Ref: objectmodel.ObjectRef{Repository: "kr://acme/public/core", Object: "fixture/p1"}, Value: map[string]any{"body": "refund timeout diagnosis"}},
+		{Ref: objectmodel.ObjectRef{Repository: "kr://acme/public/core", Object: "fixture/p2"}, Value: map[string]any{"body": "deployment checklist"}},
+		{Ref: objectmodel.ObjectRef{Repository: "kr://acme/public/core", Object: "fixture/p3"}, Value: map[string]any{"body": "refund SLA and timeout policy"}},
 	}
 }
 
@@ -39,10 +39,10 @@ func TestT10Filter(t *testing.T) {
 	for _, r := range result.Matched {
 		got[string(r.Object)] = true
 	}
-	if !got["p1"] || !got["p3"] || len(result.Matched) != 2 {
+	if !got["fixture/p1"] || !got["fixture/p3"] || len(result.Matched) != 2 {
 		t.Fatal(objects(result.Matched))
 	}
-	if len(result.Rejected) != 1 || result.Rejected[0].Object != "p2" {
+	if len(result.Rejected) != 1 || result.Rejected[0].Object != "fixture/p2" {
 		t.Fatal(objects(result.Rejected))
 	}
 	if !result.Complete {
@@ -54,13 +54,13 @@ func TestT10UnknownAndBudget(t *testing.T) {
 	refine := retrieval.Refine{}
 	budget := 2
 	judge := func(c retrieval.Candidate, _ string) retrieval.FilterJudgment {
-		if c.Ref.Object == "p2" {
+		if c.Ref.Object == "fixture/p2" {
 			return retrieval.JudgmentUnknown
 		}
 		return retrieval.JudgmentMatch
 	}
 	result := refine.Filter(candidates(), "x", judge, &budget)
-	if objects(result.Matched)[0] != "p1" || objects(result.Unknown)[0] != "p2" || objects(result.Unjudged)[0] != "p3" {
+	if objects(result.Matched)[0] != "fixture/p1" || objects(result.Unknown)[0] != "fixture/p2" || objects(result.Unjudged)[0] != "fixture/p3" {
 		t.Fatalf("%v %v %v", objects(result.Matched), objects(result.Unknown), objects(result.Unjudged))
 	}
 	if result.Complete || result.TruncationReason != "CANDIDATE_BUDGET" {
@@ -75,10 +75,10 @@ func TestT10RerankTies(t *testing.T) {
 	for _, r := range result.Groups[0].Refs {
 		got[string(r.Object)] = true
 	}
-	if !got["p1"] || !got["p3"] || result.Groups[0].Rank != 1 {
+	if !got["fixture/p1"] || !got["fixture/p3"] || result.Groups[0].Rank != 1 {
 		t.Fatal(result.Groups[0])
 	}
-	if result.Groups[1].Refs[0].Object != "p2" || !result.Complete {
+	if result.Groups[1].Refs[0].Object != "fixture/p2" || !result.Complete {
 		t.Fatal(result.Groups[1])
 	}
 }
@@ -121,7 +121,7 @@ func TestT10FrozenSpec(t *testing.T) {
 			kept[string(r.Object)] = true
 		}
 	}
-	if !kept["p1"] || !kept["p3"] || len(result.NotSelected) != 1 || result.NotSelected[0].Object != "p2" || !result.Complete {
+	if !kept["fixture/p1"] || !kept["fixture/p3"] || len(result.NotSelected) != 1 || result.NotSelected[0].Object != "fixture/p2" || !result.Complete {
 		t.Fatal(result)
 	}
 }
@@ -156,9 +156,9 @@ func TestExecuteRerankProjectsFieldsPreservesRefsAndKeepsBoundaryTies(t *testing
 			OutputContract: retrieval.OutputContract{TopK: &topK, AllowTies: true},
 		},
 		Candidates: []retrieval.Candidate{
-			{Ref: objectmodel.ObjectRef{Repository: "kr://acme/public/core", Object: "p1"}, Value: map[string]any{"body": "refund", "secret": "hidden"}, OriginalRank: 1, RetrievalEvidence: []retrieval.LaneEvidence{{Provider: "opensearch", Lane: "lexical", LocalRank: 1}}},
-			{Ref: objectmodel.ObjectRef{Repository: "kr://acme/public/core", Object: "p2"}, Value: map[string]any{"body": "refund timeout", "secret": "hidden"}},
-			{Ref: objectmodel.ObjectRef{Repository: "kr://acme/public/core", Object: "p3"}, Value: map[string]any{"body": "deploy", "secret": "hidden"}},
+			{Ref: objectmodel.ObjectRef{Repository: "kr://acme/public/core", Object: "fixture/p1"}, Value: map[string]any{"body": "refund", "secret": "hidden"}, OriginalRank: 1, RetrievalEvidence: []retrieval.LaneEvidence{{Provider: "opensearch", Lane: "lexical", LocalRank: 1}}},
+			{Ref: objectmodel.ObjectRef{Repository: "kr://acme/public/core", Object: "fixture/p2"}, Value: map[string]any{"body": "refund timeout", "secret": "hidden"}},
+			{Ref: objectmodel.ObjectRef{Repository: "kr://acme/public/core", Object: "fixture/p3"}, Value: map[string]any{"body": "deploy", "secret": "hidden"}},
 		},
 	}
 	provider := rerankerFunc(func(_ context.Context, got retrieval.RerankRequest) (retrieval.RerankProviderResult, error) {
@@ -203,7 +203,7 @@ func TestExecuteRerankRejectsOversizedModelVisibleInputBeforeProvider(t *testing
 			Criterion: "relevance", OutputContract: retrieval.OutputContract{},
 		},
 		Candidates: []retrieval.Candidate{{
-			Ref:   objectmodel.ObjectRef{Repository: "kr://acme/public/core", Object: "oversized"},
+			Ref:   objectmodel.ObjectRef{Repository: "kr://acme/public/core", Object: "fixture/oversized"},
 			Value: map[string]any{"body": strings.Repeat("x", retrieval.MaxRerankCandidateBytes+1)},
 		}},
 	}
@@ -229,7 +229,7 @@ func TestExecuteRerankRejectsOversizedAggregateWindowBeforeProvider(t *testing.T
 	}
 	for i := 0; i < 5; i++ {
 		request.Candidates = append(request.Candidates, retrieval.Candidate{
-			Ref:   objectmodel.ObjectRef{Repository: "kr://acme/public/core", Object: objectmodel.ObjectID("large-" + string(rune('a'+i)))},
+			Ref:   objectmodel.ObjectRef{Repository: "kr://acme/public/core", Object: objectmodel.ObjectID("fixture/large-" + string(rune('a'+i)))},
 			Value: map[string]any{"body": strings.Repeat("x", 30<<10)},
 		})
 	}
@@ -251,7 +251,7 @@ func TestExecuteRerankRejectsDishonestOrIncompleteProviderOutput(t *testing.T) {
 		Candidates: candidates(),
 	}
 	for name, groups := range map[string][]retrieval.RankGroup{
-		"unknown":   {{Rank: 1, Refs: []objectmodel.ObjectRef{{Repository: "kr://acme/public/core", Object: "other"}}}},
+		"unknown":   {{Rank: 1, Refs: []objectmodel.ObjectRef{{Repository: "kr://acme/public/core", Object: "fixture/other"}}}},
 		"omitted":   {{Rank: 1, Refs: []objectmodel.ObjectRef{request.Candidates[0].Ref, request.Candidates[1].Ref}}},
 		"duplicate": {{Rank: 1, Refs: []objectmodel.ObjectRef{request.Candidates[0].Ref, request.Candidates[0].Ref, request.Candidates[1].Ref, request.Candidates[2].Ref}}},
 	} {
@@ -310,7 +310,7 @@ func TestExecuteRerankExplicitEmptyProjectionExposesNoValueOrObservationFields(t
 		},
 		Candidates: candidates(),
 	}
-	request.Candidates[0].Observations = []objectmodel.UnitObservation{{Address: objectmodel.Address{ObjectID: "p1"}}}
+	request.Candidates[0].Observations = []objectmodel.UnitObservation{{Address: objectmodel.Address{ObjectID: "fixture/p1"}}}
 	provider := rerankerFunc(func(_ context.Context, got retrieval.RerankRequest) (retrieval.RerankProviderResult, error) {
 		refs := make([]objectmodel.ObjectRef, len(got.Candidates))
 		for i, candidate := range got.Candidates {

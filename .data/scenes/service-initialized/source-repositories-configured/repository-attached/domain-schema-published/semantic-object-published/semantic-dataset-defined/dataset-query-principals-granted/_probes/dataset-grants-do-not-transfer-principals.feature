@@ -16,10 +16,10 @@ Feature: Dataset 授权按人隔离且不扩成仓级读权
 
     When HTTP POST /object/v1/objects:read as taihu:alice:
       | dataset | scene-set |
-      | reference | urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv |
+      | reference | urn:kc:object:metric/gmv |
     Then READ body is full canonical
 
-    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv --as taihu:alice`
+    When I run `kc read urn:kc:object:metric/gmv --as taihu:alice`
     Then error FORBIDDEN
 
     When HTTP POST /object/v1/search as agent:copilot:
@@ -29,7 +29,7 @@ Feature: Dataset 授权按人隔离且不扩成仓级读权
 
     When HTTP POST /object/v1/objects:read as agent:copilot:
       | dataset | scene-set |
-      | reference | urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv |
+      | reference | urn:kc:object:metric/gmv |
     Then READ body is full canonical
 
     When HTTP POST /object/v1/search as service:etl:
@@ -39,7 +39,7 @@ Feature: Dataset 授权按人隔离且不扩成仓级读权
 
     When HTTP POST /object/v1/objects:read as service:etl:
       | dataset | scene-set |
-      | reference | urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv |
+      | reference | urn:kc:object:metric/gmv |
     Then error FORBIDDEN
 
     When I run `kc grant add --principal service:etl --action file.read --dataset scene-set`
@@ -54,8 +54,8 @@ Feature: Dataset 授权按人隔离且不扩成仓级读权
 
     When HTTP POST /object/v1/objects:read as service:etl:
       | dataset | scene-set |
-      | reference | urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv |
+      | reference | urn:kc:object:metric/gmv |
     Then READ body is full canonical
 
-    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv --as service:etl`
+    When I run `kc read urn:kc:object:metric/gmv --as service:etl`
     Then error FORBIDDEN

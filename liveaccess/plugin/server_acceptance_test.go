@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"strings"
 	"testing"
 
 	kcclient "kc/client"
@@ -73,7 +74,7 @@ func TestServerLiveAccessRepoSelectionMixedValuesAndDataset(t *testing.T) {
 	}{{"source", kernel.ErrTemporaryUnavailable}, {"basis", kernel.ErrCapabilityUnsatisfied}, {"schema", kernel.ErrSchemaInstanceInvalid}} {
 		t.Run(test.mode, func(t *testing.T) {
 			one.mode.Store(test.mode)
-			row, err := f.read(t, "reader", "mixed-"+test.mode, kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR1, ""), Commit: string(f.commits[acceptanceR1])})
+			row, err := f.read(t, "reader", "mixed-"+test.mode, kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR1, ""), Repository: string(acceptanceR1), Commit: string(f.commits[acceptanceR1])})
 			if err != nil {
 				t.Fatalf("one value failed the entire public object read: %#v %v", row, err)
 			}
@@ -82,33 +83,52 @@ func TestServerLiveAccessRepoSelectionMixedValuesAndDataset(t *testing.T) {
 	}
 	one.mode.Store("source")
 	var published any
-	err := f.client(t, "operator").SnapshotService().DefineDataset(context.Background(), snapshotclient.DatasetRequest{Dataset: "both", Revision: 1, Sources: []dataset.DatasetSource{{Repository: acceptanceR1, Selector: snapshot.DefaultRef}, {Repository: acceptanceR2, Selector: snapshot.DefaultRef}}}, snapshotclient.RequestOptions{}, &published)
-	if err != nil {
-		t.Fatal(err)
+	define := func(name string, repos ...kernel.RepositoryID) {
+		t.Helper()
+		sources := []dataset.DatasetSource{}
+		for _, repo := range repos {
+			sources = append(sources, dataset.DatasetSource{Repository: repo, Selector: snapshot.DefaultRef})
+		}
+		if err := f.client(t, "operator").SnapshotService().DefineDataset(context.Background(), snapshotclient.DatasetRequest{Dataset: name, Revision: 1, Sources: sources}, snapshotclient.RequestOptions{}, &published); err != nil {
+			t.Fatal(err)
+		}
+	}
+	define("first", acceptanceR1)
+	define("second", acceptanceR2)
+	// G3: the same Aspect of one object ID held by two Repositories is a
+	// conflict reported at Dataset publication, never a silent pick.
+	sources := []dataset.DatasetSource{{Repository: acceptanceR1, Selector: snapshot.DefaultRef}, {Repository: acceptanceR2, Selector: snapshot.DefaultRef}}
+	err := f.client(t, "operator").SnapshotService().DefineDataset(context.Background(), snapshotclient.DatasetRequest{Dataset: "both", Revision: 1, Sources: sources}, snapshotclient.RequestOptions{}, &published)
+	if kernel.CodeOf(err) != kernel.ErrObjectIDConflict || !strings.Contains(err.Error(), string(acceptanceObject)) || !strings.Contains(err.Error(), string(acceptanceR1)) || !strings.Contains(err.Error(), string(acceptanceR2)) {
+		t.Fatalf("publication with the same Aspect from two Repositories must conflict and name object and both sources: %v", err)
+	}
+	// Without a Dataset the reader's readable Repositories are the scope; the
+	// same conflict is reported on read.
+	if _, err := f.read(t, "reader", "mixed-unscoped-conflict", kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR1, "")}); kernel.CodeOf(err) != kernel.ErrObjectIDConflict || !strings.Contains(err.Error(), string(acceptanceR1)) || !strings.Contains(err.Error(), string(acceptanceR2)) {
+		t.Fatalf("unscoped read with the same Aspect from two Repositories must conflict and name both: %v", err)
 	}
 	for _, test := range []struct {
 		mode string
 		code kernel.ErrorCode
 	}{{"source", kernel.ErrTemporaryUnavailable}, {"basis", kernel.ErrCapabilityUnsatisfied}, {"schema", kernel.ErrSchemaInstanceInvalid}} {
 		one.mode.Store(test.mode)
-		for i, repo := range []kernel.RepositoryID{acceptanceR1, acceptanceR2} {
-			request := kcclient.ObjectReadRequest{ObjectDatasetIdentity: kcclient.ObjectDatasetIdentity{Dataset: "both"}, Reference: acceptanceReference(t, repo, "")}
+		for i, scope := range []struct {
+			set  string
+			repo kernel.RepositoryID
+			want int64
+			code kernel.ErrorCode
+		}{{"first", acceptanceR1, 31, test.code}, {"second", acceptanceR2, 22, kernel.ErrTemporaryUnavailable}} {
+			request := kcclient.ObjectReadRequest{ObjectDatasetIdentity: kcclient.ObjectDatasetIdentity{Dataset: scope.set}, Reference: acceptanceReference(t, scope.repo, "")}
 			row, err := f.read(t, "reader", fmt.Sprintf("mixed-dataset-%s-%d", test.mode, i+1), request)
-			if err != nil || row.Repository != repo || row.Commit != f.commits[repo] {
-				t.Fatalf("combination Dataset changed explicit source or fixed version: source=%s row=%#v %v", repo, row, err)
+			if err != nil || row.Repository != scope.repo || row.Commit != f.commits[scope.repo] {
+				t.Fatalf("Dataset changed its only holder or fixed version: source=%s row=%#v %v", scope.repo, row, err)
 			}
-			want, code := int64(31), test.code
-			if row.Repository == acceptanceR2 {
-				want, code = 22, kernel.ErrTemporaryUnavailable
-			} else if row.Repository != acceptanceR1 {
-				t.Fatalf("Dataset invented a source: %#v", row)
-			}
-			assertAcceptanceMixed(t, *row, want, code)
+			assertAcceptanceMixed(t, *row, scope.want, scope.code)
 		}
 	}
 	one.mode.Store("source")
 	request := accessclient.BindingRequest{ObjectScope: kcclient.ObjectScope{Repository: string(acceptanceR1), Commit: string(f.commits[acceptanceR1])}, Object: string(acceptanceObject), Aspect: "good"}
-	readRequest := kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR1, ""), Commit: string(f.commits[acceptanceR1])}
+	readRequest := kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR1, ""), Repository: string(acceptanceR1), Commit: string(f.commits[acceptanceR1])}
 	var before, after liveaccess.ResolvedBinding
 	if err := f.client(t, "reader").LiveAccessService().ResolveBinding(context.Background(), request, accessclient.RequestOptions{}, &before); kernel.CodeOf(err) != kernel.ErrForbidden {
 		t.Fatalf("read permission silently included binding resolve: %v", err)
@@ -145,7 +165,7 @@ func TestServerLiveAccessRepoSelectionMixedValuesAndDataset(t *testing.T) {
 			t.Fatalf("missing plugin erased static siblings or invented observations: %#v %v", row, err)
 		}
 		assertAcceptanceUnavailable(t, *row)
-		row, err = f.read(t, "reader", "independent-"+selection.name+"-"+selection.instance, kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR2, ""), Commit: string(f.commits[acceptanceR2])})
+		row, err = f.read(t, "reader", "independent-"+selection.name+"-"+selection.instance, kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR2, ""), Repository: string(acceptanceR2), Commit: string(f.commits[acceptanceR2])})
 		if err != nil {
 			t.Fatalf("missing R1 plugin blocked R2: %#v %v", row, err)
 		}

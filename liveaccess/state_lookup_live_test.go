@@ -33,7 +33,7 @@ func TestLiveHTTPStateRuntimeContainer(t *testing.T) {
 	result, err := lookup.LookupState(context.Background(), serving.StateLookupRequest{
 		Binding: serving.ResolvedBinding{
 			Repository: "kr://acme/core", DeclarationCommit: "commit-live-1",
-			Address:           objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Service:orders", AspectName: "health"},
+			Address:           objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "service/orders", AspectName: "health"},
 			DeclarationDigest: "decl-live-1", Mode: objectmodel.BindingState,
 			Runtime: "health", Protocol: "resource-access/v1",
 			Operations: map[string]objectmodel.BindingOperation{"lookup": {Call: "health.lookup"}},
@@ -61,7 +61,7 @@ func TestLiveHTTPRuntimeBuildsOpenSearchStateProjection(t *testing.T) {
 	}
 	lookup := serving.NewHTTPStateLookup(nil)
 	setup := testkit.NewSetup(t, "")
-	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Service:orders", AspectName: "health"}
+	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "service/orders", AspectName: "health"}
 	commit, err := setup.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: setup.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: setup.RootCommitID, ExpectedTargetCommit: setup.RootCommitID,

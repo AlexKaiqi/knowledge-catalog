@@ -29,19 +29,16 @@ func TestSearchRerankRecordsCompletedRetrievalWhenOnlyRefineFails(t *testing.T) 
 	}
 }
 
-func TestTraverseRecordsRetrievalEvidenceWithPinnedNodes(t *testing.T) {
+func TestTraverseRecordsRetrievalEvidenceWithPinnedEdges(t *testing.T) {
 	flags := map[string]invoke.FlagValue{
-		"as": "agent:test", "trace-id": "trace-traverse", "dataset": "agent", "object": "kc://scene/object/metric/gmv",
+		"as": "agent:test", "trace-id": "trace-traverse", "dataset": "agent", "object": "metric/gmv",
 		"max-hops": "2", "min-hops": "1", "relation-type": "defines", "direction": "DIRECTED",
 	}
 	page := retrieval.TraversePage{
 		SearchView: retrieval.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{
 			"kr://scene/object": "c1", "kr://scene/graph": "c2",
 		}},
-		Nodes: []retrieval.TraverseNode{
-			{Repository: "kr://scene/object", ObjectID: "schema/metric.definition", Depth: 1},
-			{Repository: "kr://scene/object", ObjectID: "metric/gmv", Depth: 0},
-		},
+		Nodes: []retrieval.TraverseNode{{ObjectID: "schema/metric.definition", Depth: 1}},
 		Edges: []retrieval.TraverseEdge{{
 			Repository: "kr://scene/graph", Commit: "c2", ObjectID: "rel/defines/gmv",
 		}},
@@ -54,12 +51,14 @@ func TestTraverseRecordsRetrievalEvidenceWithPinnedNodes(t *testing.T) {
 	if event.Operator != observability.RetrievalOperatorTraverse || event.Completeness != "complete" {
 		t.Fatalf("traverse event = operator %s completeness %s", event.Operator, event.Completeness)
 	}
-	// Window = nodes (identity digests) then edges (relation body digests).
-	if len(event.Candidates) != 3 || event.Candidates[0].ObjectRef.Commit != "c1" || event.Candidates[0].Rank != 1 {
-		t.Fatalf("candidates must be pinned at snapshot basis: %#v", event.Candidates)
+	// Nodes are object IDs, not stored values at one commit; the citable
+	// candidates are the edges, each pinned at its own storage commit.
+	if event.Execution.Candidates != 2 || len(event.Candidates) != 1 {
+		t.Fatalf("traverse window = %d candidates %#v", event.Execution.Candidates, event.Candidates)
 	}
-	if event.Candidates[2].ObjectRef.Object != "rel/defines/gmv" || event.Candidates[2].ValueDigest == "" {
-		t.Fatalf("edge candidate must carry its own commit and relation digest: %#v", event.Candidates[2])
+	edge := event.Candidates[0]
+	if edge.ObjectRef.Repository != "kr://scene/graph" || edge.ObjectRef.Commit != "c2" || edge.ObjectRef.Object != "rel/defines/gmv" || edge.Rank != 1 || edge.ValueDigest == "" {
+		t.Fatalf("edge candidate must carry its own commit and relation digest: %#v", edge)
 	}
 	// The recorder stamps identity and schema version at persist time.
 	event.SchemaVersion = 1

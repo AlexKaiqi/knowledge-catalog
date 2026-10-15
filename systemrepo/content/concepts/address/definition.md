@@ -8,7 +8,7 @@ path_hint: concepts/address/definition.md
 
 完整访问引用由对象 URN 与内容 locator 表达。URN 指认来源 Repository 与 object_id，JSON Pointer 从对象内容根选择节点，不指向文件路径或交付信封；版本及 Repo、Dataset 访问语境作为读取依据另行固定。READ、PUT、REMOVE 接受同一种引用，调用方不必拆成仓、对象、切面、成员参数。
 
-例如，`urn:kc:object:kr%3A%2F%2Fscene%2Fobject:table%2Forders#/columns/order_id` 定位一个列 Member；再加 `/constraints/nullable` 可读取其中的数据。空 locator 指向对象根，`/` 选择空名称字段；键名中的 `/` 与 `~` 分别用 `~1` 与 `~0` 转义。不存在的节点与合法空值分别报告。
+例如，`urn:kc:object:table/orders#/columns/order_id` 定位一个列 Member；再加 `/constraints/nullable` 可读取其中的数据。空 locator 指向对象根，`/` 选择空名称字段；键名中的 `/` 与 `~` 分别用 `~1` 与 `~0` 转义。不存在的节点与合法空值分别报告。
 
 现行 Go Address 保留内部维护坐标，由对象标识与可选切面名、成员键表达；种类包括 Entity、Aspect、Relation、Member，历史文件也可能使用 Record。服务依据对象表示将统一引用映射为完整维护单元，不能按 locator 深度猜写入粒度。
 

@@ -43,8 +43,8 @@ func TestConsumerUsesActualServerContract(t *testing.T) {
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	invoke := func(args ...string) kcRunResult { return kcRemote(t, server.URL, admin, args...) }
-	body(t, invoke("writer", "put", testObjectReference(t, repo, "schema/note", ""), "--command-id", "schema-probe", "--value", `{"entity":"Note","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
-	body(t, invoke("writer", "put", testObjectReference(t, repo, "note/one", ""), "--command-id", "note-probe", "--schema-ref", "schema/note", "--value", `{"body":"consumed through the actual Server"}`))
+	body(t, invoke("writer", "put", testObjectReference(t, repo, "schema/note", ""), "--repo", repo, "--command-id", "schema-probe", "--value", `{"entity":"Note","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+	body(t, invoke("writer", "put", testObjectReference(t, repo, "note/one", ""), "--repo", repo, "--command-id", "note-probe", "--schema-ref", "schema/note", "--value", `{"body":"consumed through the actual Server"}`))
 	body(t, invoke("dataset", "define", "--dataset", "named", "--revision", "1", "--source", repo))
 	body(t, invoke("grant", "add", "--principal", principal, "--action", "inventory.read,dataset.resolve"))
 	readGrant := asMap(t, body(t, invoke("grant", "add", "--principal", principal, "--action", "file.read")))
@@ -119,7 +119,7 @@ func TestConsumerUsesActualServerContract(t *testing.T) {
 		return raw
 	}
 	fixed := client.ObjectReadRequest{ObjectDatasetIdentity: client.ObjectDatasetIdentity{Definition: &definition, Pin: marshalPin(selected)}, Reference: testObjectReference(t, repo, "note/one", "")}
-	body(t, invoke("writer", "put", testObjectReference(t, repo, "note/one", ""), "--command-id", "note-moved", "--schema-ref", "schema/note", "--value", `{"body":"new branch body after pin"}`))
+	body(t, invoke("writer", "put", testObjectReference(t, repo, "note/one", ""), "--repo", repo, "--command-id", "note-moved", "--schema-ref", "schema/note", "--value", `{"body":"new branch body after pin"}`))
 	assertRead := func(request client.ObjectReadRequest, commit kernel.CommitID, want string) {
 		t.Helper()
 		var value map[string]any

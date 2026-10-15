@@ -60,7 +60,7 @@ func TestT2CommitCAS(t *testing.T) {
 		TargetRef:            "refs/heads/main",
 		BaseCommit:           s.RootCommitID,
 		ExpectedTargetCommit: s.RootCommitID,
-		Operations:           testkit.PutEntity("a", 1, ""),
+		Operations:           testkit.PutEntity("fixture/a", 1, ""),
 	}
 	accepted, err := s.Writer.Commit("cmd-1", first)
 	if err != nil {
@@ -71,16 +71,16 @@ func TestT2CommitCAS(t *testing.T) {
 		t.Fatal("accepted commit has no durable Writer receipt")
 	}
 	stale := first
-	stale.Operations = testkit.PutEntity("b", 2, "")
+	stale.Operations = testkit.PutEntity("fixture/b", 2, "")
 	rejected, err := s.Writer.Commit("cmd-2", stale)
 	testkit.ExpectCode(t, err, kernel.ErrNonFastForward)
 	if head := testkit.MustHead(t, s.Repo, "refs/heads/main"); head != accepted.Result.CommitID {
 		t.Fatalf("rejected CAS advanced Ref: got %s, want %s", head, accepted.Result.CommitID)
 	}
-	if _, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: "b"}, accepted.Result.CommitID, nil); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
+	if _, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: "fixture/b"}, accepted.Result.CommitID, nil); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		t.Fatalf("rejected CAS published b: %v", err)
 	}
-	original, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: "a"}, accepted.Result.CommitID, nil)
+	original, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: "fixture/a"}, accepted.Result.CommitID, nil)
 	if err != nil || kernel.CanonicalDigest(original.Value) != kernel.CanonicalDigest(1) {
 		t.Fatalf("rejected CAS changed a: %#v, %v", original, err)
 	}
@@ -102,7 +102,7 @@ func TestT3Atomicity(t *testing.T) {
 		TargetRef:            "refs/heads/main",
 		BaseCommit:           s.RootCommitID,
 		ExpectedTargetCommit: s.RootCommitID,
-		Operations:           testkit.PutEntity("a", 1, ""),
+		Operations:           testkit.PutEntity("fixture/a", 1, ""),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -113,8 +113,8 @@ func TestT3Atomicity(t *testing.T) {
 		BaseCommit:           c1.Result.CommitID,
 		ExpectedTargetCommit: c1.Result.CommitID,
 		Operations: []objectmodel.Operation{
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "b"}, Value: 2},
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "a"}, Value: 3, Precondition: &objectmodel.Precondition{Type: objectmodel.IfAbsent}},
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "fixture/b"}, Value: 2},
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "fixture/a"}, Value: 3, Precondition: &objectmodel.Precondition{Type: objectmodel.IfAbsent}},
 		},
 	})
 	testkit.ExpectCode(t, err, kernel.ErrPreconditionFailed)
@@ -134,7 +134,7 @@ func TestT3Atomicity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(page.Values) != 1 || page.Values[0].Address.ObjectID != "a" {
+	if len(page.Values) != 1 || page.Values[0].Address.ObjectID != "fixture/a" {
 		t.Fatalf("partial commit leaked: %#v", page.Values)
 	}
 }
@@ -146,7 +146,7 @@ func TestT4CommandIdempotency(t *testing.T) {
 		TargetRef:            "refs/heads/main",
 		BaseCommit:           s.RootCommitID,
 		ExpectedTargetCommit: s.RootCommitID,
-		Operations:           testkit.PutEntity("a", 1, ""),
+		Operations:           testkit.PutEntity("fixture/a", 1, ""),
 	}
 	r1, err := s.Writer.Commit("cmd-1", cs)
 	if err != nil {
@@ -163,7 +163,7 @@ func TestT4CommandIdempotency(t *testing.T) {
 		t.Fatal("replay changed commit")
 	}
 	different := cs
-	different.Operations = testkit.PutEntity("a", 2, "")
+	different.Operations = testkit.PutEntity("fixture/a", 2, "")
 	_, err = s.Writer.Commit("cmd-1", different)
 	testkit.ExpectCode(t, err, kernel.ErrIdempotencyConflict)
 }
@@ -177,7 +177,7 @@ func TestBranchCommitSurface(t *testing.T) {
 	intent := writer.CommitIntent{
 		TargetRepository: s.RepositoryID,
 		TargetRef:        "refs/heads/review/PR-1",
-		Operations:       testkit.PutEntity("a", 1, ""),
+		Operations:       testkit.PutEntity("fixture/a", 1, ""),
 	}
 	receipt, err := s.Writer.CommitIntent("pr-1", intent)
 	if err != nil {

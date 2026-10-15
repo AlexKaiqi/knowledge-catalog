@@ -70,7 +70,7 @@ func TestClientCoordinatesIgnoreRetiredHostContext(t *testing.T) {
 				if err := os.WriteFile(filepath.Join(contextDir, "context.json"), context, 0600); err != nil {
 					t.Fatal(err)
 				}
-				args := []string{"read", "urn:kc:object:kr%3A%2F%2Facme%2Fsource:note%2Fcurrent", "--dataset", "current"}
+				args := []string{"read", "urn:kc:object:note/current", "--dataset", "current"}
 				switch mode {
 				case "argv":
 					args = append(args, "--server", server.URL, "--as", "agent:consumer")
@@ -78,7 +78,7 @@ func TestClientCoordinatesIgnoreRetiredHostContext(t *testing.T) {
 					t.Setenv("KC_SERVER_URL", server.URL)
 					t.Setenv("KC_AS", "agent:consumer")
 				case "no-server":
-					args = []string{"read", "urn:kc:object:kr%3A%2F%2Facme%2Fsource:note%2Fcurrent"}
+					args = []string{"read", "urn:kc:object:note/current"}
 				}
 				result := Run(args)
 				if mode == "no-server" {
@@ -95,7 +95,7 @@ func TestClientCoordinatesIgnoreRetiredHostContext(t *testing.T) {
 					default:
 						t.Fatal("client did not call the configured typed API")
 					}
-					if request["dataset"] != "current" || request["reference"] != "urn:kc:object:kr%3A%2F%2Facme%2Fsource:note%2Fcurrent" {
+					if request["dataset"] != "current" || request["reference"] != "urn:kc:object:note/current" {
 						t.Fatalf("client object coordinates changed: %#v", request)
 					}
 					for _, key := range []string{"catalog", "pin", "definition"} {

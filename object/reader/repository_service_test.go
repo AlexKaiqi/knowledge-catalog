@@ -233,8 +233,8 @@ func TestTreeRepositoryResolvePreservesRelationAddress(t *testing.T) {
 			Value: map[string]any{
 				"relationId": "relation/contains", "relationType": "contains", "direction": "DIRECTED",
 				"endpoints": []any{
-					map[string]any{"role": "container", "objectRef": map[string]any{"repository": string(setup.RepositoryID), "object": "dataset/A"}},
-					map[string]any{"role": "member", "objectRef": map[string]any{"repository": string(setup.RepositoryID), "object": "dataset/B"}},
+					map[string]any{"role": "container", "object": "dataset/A"},
+					map[string]any{"role": "member", "object": "dataset/B"},
 				},
 			},
 		}},

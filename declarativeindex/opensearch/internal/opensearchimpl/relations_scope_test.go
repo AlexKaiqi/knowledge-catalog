@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	retrieval "kc/discovery"
-	objectmodel "kc/object"
 )
 
 func TestRelationStorageRepositoryIsIndependentOfEndpoint(t *testing.T) {
@@ -25,8 +24,8 @@ func TestRelationStorageRepositoryIsIndependentOfEndpoint(t *testing.T) {
 				t.Error(err)
 			}
 			body, _ := json.Marshal(query)
-			if !strings.Contains(string(body), `"relation_endpoints.repository":"kr://source/entities"`) || !strings.Contains(string(body), `"relation_endpoints.object_id":"metric/gmv"`) {
-				t.Errorf("endpoint predicate lost its own repository: %s", body)
+			if strings.Contains(string(body), `relation_endpoints.repository`) || !strings.Contains(string(body), `"relation_endpoints.object_id":"metric/gmv"`) {
+				t.Errorf("endpoint predicate must match the object ID only: %s", body)
 			}
 			fmt.Fprint(w, `{"timed_out":false,"_shards":{"total":1,"successful":1,"failed":0},"hits":{"hits":[{"_source":{"object_id":"relation/defines"},"sort":["relation/defines"]}]}}`)
 		default:
@@ -37,7 +36,7 @@ func TestRelationStorageRepositoryIsIndependentOfEndpoint(t *testing.T) {
 	engine := &openSearchEngine{base: server.URL, http: server.Client()}
 	page, err := engine.RetrieveRelations(retrieval.RelationRetrieveRequest{
 		Repository: "kr://source/graph", Basis: "graph-c1", Limit: 2,
-		Query: retrieval.RelationQuery{Endpoint: objectmodel.ObjectRef{Repository: "kr://source/entities", Object: "metric/gmv"}},
+		Query: retrieval.RelationQuery{Endpoint: "metric/gmv"},
 	})
 	if err != nil || len(page.Candidates) != 1 || !page.Exhausted {
 		t.Fatalf("cross-repository relation discovery: %#v %v", page, err)

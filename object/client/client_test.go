@@ -22,7 +22,7 @@ func response(body string) *http.Response {
 }
 
 func TestReferenceFragmentTravelsAsJSONAndNullIsExplicit(t *testing.T) {
-	reference := "urn:kc:object:kr%3A%2F%2Fx:table%2Forders#/columns/order_id/constraints/nullable"
+	reference := "urn:kc:object:table/orders#/columns/order_id/constraints/nullable"
 	var paths []string
 	remote, err := New(Config{BaseURL: "https://example.test/api", Transport: transportFunc(func(_ context.Context, audience string, r *http.Request) (*http.Response, error) {
 		if audience != "https://example.test/api" || r.Header.Get("X-Kc-Request-Id") != "request-1" || r.URL.Fragment != "" {

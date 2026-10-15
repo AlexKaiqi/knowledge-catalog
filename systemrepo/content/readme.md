@@ -13,13 +13,13 @@ path_hint: README.md
 业务调用使用已配置的 kc 客户端，经 Server 认证。读取本导读：
 
 ```sh
-kc read 'urn:kc:object:kr%3A%2F%2Fkc%2Fsystem:kc%2Fsystem#/readme'
+kc read 'urn:kc:object:kc/system#/readme'
 ```
 
 已知对象身份时可以直接读取；例如读取对象概念：
 
 ```sh
-kc read 'urn:kc:object:kr%3A%2F%2Fkc%2Fsystem:kc%2Fconcept%2Fobject#/definition'
+kc read 'urn:kc:object:kc/concept/object#/definition'
 ```
 
 第一次使用，先阅读 [第一次读取对象](guides/first-read/guide.md)。准备建模时从 [对象](concepts/object/definition.md)、[切面](concepts/aspect/definition.md)、[关系](concepts/relation/definition.md)、[Schema](concepts/schema/definition.md)和 [声明式索引](concepts/index-declaration/definition.md) 开始。做具体工作时直接选择下方使用指南。

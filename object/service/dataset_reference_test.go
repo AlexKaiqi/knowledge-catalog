@@ -11,7 +11,7 @@ import (
 )
 
 func TestDatasetReferenceReadKeepsSourceAndAuthorizationOrder(t *testing.T) {
-	ref := objectmodel.Reference{Repository: "kr://app/read", Object: "one", Locator: "/columns/id/type"}
+	ref := objectmodel.Reference{Repository: "kr://app/read", Object: "fixture/one", Locator: "/columns/id/type"}
 	want := []objectmodel.ObservedValue{{FederatedValue: objectmodel.FederatedValue{
 		Repository: ref.Repository, Commit: "accepted", ObjectID: ref.Object, Locator: ref.Locator, Value: "string",
 	}}}
@@ -37,7 +37,7 @@ func TestDatasetReferenceReadKeepsSourceAndAuthorizationOrder(t *testing.T) {
 }
 
 func TestDatasetReferenceReadRequiresCompleteServicesBeforeAccess(t *testing.T) {
-	ref := objectmodel.Reference{Repository: "kr://app/read", Object: "one"}
+	ref := objectmodel.Reference{Repository: "kr://app/read", Object: "fixture/one"}
 	for _, missing := range []string{"authorize", "read", "deliver"} {
 		t.Run(missing, func(t *testing.T) {
 			calls := 0
@@ -68,8 +68,28 @@ func TestDatasetReferenceReadRequiresCompleteServicesBeforeAccess(t *testing.T) 
 	}
 }
 
+func TestDatasetReferenceReadSelectsHoldersForUnboundReference(t *testing.T) {
+	var seen objectmodel.Reference
+	executor := DatasetReadExecutor{
+		Authorize: func(context.Context) error { return nil },
+		ReferenceRead: func(_ context.Context, ref objectmodel.Reference) ([]objectmodel.ObservedValue, error) {
+			seen = ref
+			return nil, nil
+		},
+		Deliver: func(_ context.Context, values []objectmodel.ObservedValue) ([]objectmodel.ObservedValue, error) {
+			return values, nil
+		},
+	}
+	if _, err := executor.Execute(context.Background(), DatasetReadRequest{Reference: objectmodel.Reference{Object: "fixture/one"}}); err != nil {
+		t.Fatal(err)
+	}
+	if seen.Object != "fixture/one" || seen.Repository != "" {
+		t.Fatalf("dataset read must resolve holders inside the pin, not guess a Repository: %#v", seen)
+	}
+}
+
 func TestDatasetReferenceReadRejectsMissingIdentityWithoutIO(t *testing.T) {
-	for _, ref := range []objectmodel.Reference{{}, {Repository: "kr://app/read"}, {Object: "one"}, {Repository: "kr://app/read", Object: "one", Locator: "/~3bad"}} {
+	for _, ref := range []objectmodel.Reference{{}, {Repository: "kr://app/read"}, {Repository: "kr://app/read", Object: "fixture/one", Locator: "/~3bad"}} {
 		calls := 0
 		executor := DatasetReadExecutor{
 			Authorize: func(context.Context) error { calls++; return nil },
@@ -103,7 +123,7 @@ func TestDatasetReferenceReadFailureCannotReachDelivery(t *testing.T) {
 			return values, nil
 		},
 	}
-	_, err := executor.Execute(context.Background(), DatasetReadRequest{Reference: objectmodel.Reference{Repository: "kr://app/read", Object: "one"}})
+	_, err := executor.Execute(context.Background(), DatasetReadRequest{Reference: objectmodel.Reference{Repository: "kr://app/read", Object: "fixture/one"}})
 	if !errors.Is(err, failure) || reads != 1 || deliveries != 0 {
 		t.Fatalf("failed source was delivered or error changed: %v reads=%d deliveries=%d", err, reads, deliveries)
 	}

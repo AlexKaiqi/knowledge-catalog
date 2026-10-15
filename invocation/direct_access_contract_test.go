@@ -94,7 +94,7 @@ func assertDirectAccessNoProof(t *testing.T, raw []byte) {
 func directAccessFixture(t *testing.T) (*home.Home, map[string]invoke.FlagValue, liveaccess.ResolvedBinding) {
 	t.Helper()
 	s := testkit.NewSetup(t, "kr://regression/direct-access")
-	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Service:orders", AspectName: "health"}
+	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "service/orders", AspectName: "health"}
 	receipt, err := s.Writer.Commit("direct-access-declaration", objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,

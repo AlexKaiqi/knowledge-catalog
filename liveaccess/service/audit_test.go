@@ -22,9 +22,9 @@ func auditFixture() (evidence.Record, observability.AccessEvent) {
 		RequestID: "request",
 	}
 	target := observability.ObjectAccess{ObjectRef: objectmodel.PinnedObjectRef{
-		ObjectRef: objectmodel.ObjectRef{Repository: "kr://audit/source", Object: "sensor"}, Commit: "fixed"}}
+		ObjectRef: objectmodel.ObjectRef{Repository: "kr://audit/source", Object: "fixture/sensor"}, Commit: "fixed"}}
 	for _, name := range []string{"good", "null", "failed"} {
-		address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "sensor", AspectName: name}
+		address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "fixture/sensor", AspectName: name}
 		sample := evidence.Sample{Repository: target.ObjectRef.Repository, Commit: target.ObjectRef.Commit,
 			Address: address, Declaration: objectmodel.UnitDeclaration{Address: address, DeclarationDigest: kernel.Digest("declaration-" + name)}}
 		if name == "failed" {
@@ -76,7 +76,7 @@ func retainAuditFixture(t *testing.T, home string, record evidence.Record, event
 
 func TestAuditEntriesRestoreOriginalMixedResultsAfterRestart(t *testing.T) {
 	record, event := auditFixture()
-	event.Object[0].Address = &objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "sensor"}
+	event.Object[0].Address = &objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "fixture/sensor"}
 	store, persisted := retainAuditFixture(t, t.TempDir(), record, event)
 	rows := liveservice.AuditEntries(context.Background(), store, []observability.AccessEvent{persisted})
 	if len(rows) != 1 || rows[0].ResultFailure != nil || rows[0].Results == nil ||
@@ -95,9 +95,9 @@ func TestAuditEntriesMatchAdoptedUnitsInsideSelectedObjectPosition(t *testing.T)
 			target := &event.Object[0]
 			switch kind {
 			case "object":
-				target.Address = &objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "sensor"}
+				target.Address = &objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "fixture/sensor"}
 			case "aspect-collection":
-				target.Address = &objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "sensor", AspectName: "readings"}
+				target.Address = &objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "fixture/sensor", AspectName: "readings"}
 				target.Locator = "/readings"
 			case "member-leaf":
 				record.Units = record.Units[:1]
@@ -119,7 +119,7 @@ func auditMemberFixture() (evidence.Record, observability.AccessEvent) {
 	record, event := auditFixture()
 	for i := range record.Units {
 		unit := &record.Units[i]
-		unit.Address = objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: "sensor", AspectName: "readings", MemberKey: unit.Address.AspectName}
+		unit.Address = objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: "fixture/sensor", AspectName: "readings", MemberKey: unit.Address.AspectName}
 		unit.Declaration.Address = unit.Address
 		if unit.Observation != nil {
 			unit.Observation.Address = unit.Address
@@ -132,13 +132,13 @@ func auditMemberFixture() (evidence.Record, observability.AccessEvent) {
 func TestAuditEntriesRejectUnrelatedSelectedPositions(t *testing.T) {
 	for name, mutate := range map[string]func(*observability.ObjectAccess){
 		"other-object": func(target *observability.ObjectAccess) {
-			target.Address = &objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "other"}
+			target.Address = &objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "fixture/other"}
 		},
 		"other-aspect": func(target *observability.ObjectAccess) {
-			target.Address = &objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "sensor", AspectName: "other"}
+			target.Address = &objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "fixture/sensor", AspectName: "other"}
 		},
 		"other-member": func(target *observability.ObjectAccess) {
-			target.Address = &objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: "sensor", AspectName: "readings", MemberKey: "other"}
+			target.Address = &objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: "fixture/sensor", AspectName: "readings", MemberKey: "other"}
 		},
 		"other-locator-aspect": func(target *observability.ObjectAccess) { target.Locator = "/other/good/reading" },
 		"other-locator-member": func(target *observability.ObjectAccess) { target.Locator = "/readings/other/reading" },
@@ -179,7 +179,7 @@ func TestAuditEntriesRejectMismatchedOriginalAccess(t *testing.T) {
 			}
 		},
 		"explicit-position": func(_ *evidence.Record, e *observability.AccessEvent) {
-			e.Object[0].Address = &objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "sensor", AspectName: "unread"}
+			e.Object[0].Address = &objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "fixture/sensor", AspectName: "unread"}
 		},
 		"original-declaration": func(_ *evidence.Record, e *observability.AccessEvent) {
 			e.Object[0].Observations[0].DeclarationDigest = "other-declaration"

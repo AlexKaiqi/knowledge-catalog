@@ -237,23 +237,38 @@ func VerbRead(cx *Invocation) (any, error) {
 		}
 		return values[0], nil
 	}
-	_, commitID, err := PinCommit(cx.WS, cx.Flags)
-	if err != nil {
-		return nil, err
+	selection, scoped := cx.Flags[referenceHoldingsFlag].(objectmodel.HoldingSelection)
+	if !scoped {
+		_, commitID, err := PinCommit(cx.WS, cx.Flags)
+		if err != nil {
+			return nil, err
+		}
+		selection = objectmodel.HoldingSelection{Selected: []objectmodel.Holding{{Repository: reference.Repository, Commit: commitID}}}
 	}
-	observed, err := readRepositoryObserved(cx, objectservice.ReadRequest{
-		Reference: *reference, Commit: commitID,
-	})
-	if err != nil {
-		return nil, err
+	reads := make([]objectmodel.ObservedValue, 0, len(selection.Selected))
+	for _, holding := range selection.Selected {
+		member := *reference
+		member.Repository = holding.Repository
+		observed, err := readRepositoryObserved(cx, objectservice.ReadRequest{Reference: member, Commit: holding.Commit})
+		if err != nil {
+			return nil, err
+		}
+		if scoped {
+			observed.Sources = []objectmodel.SourceBasis{{Repository: holding.Repository, Commit: holding.Commit, Aspects: holding.Aspects}}
+		}
+		reads = append(reads, observed)
 	}
+	observed := reads[0]
+	if len(reads) > 1 {
+		composed, err := composeObserved(*reference, reads)
+		if err != nil {
+			return nil, err
+		}
+		observed = composed
+	}
+	observed.Withheld = selection.Withheld
 	if len(observed.Observations) == 0 && len(observed.Failures) == 0 {
-		return objectmodel.ObjectValue{
-			Reference: observed.Reference, Locator: observed.Locator, Digest: observed.Digest,
-			ObjectRef: observed.ObjectRef, Repository: observed.Repository, Commit: observed.Commit,
-			Address: observed.Address, Value: observed.Value, Provenance: observed.Provenance,
-			Units: observed.Units, Declarations: observed.Declarations,
-		}, nil
+		return observedObject(observed), nil
 	}
 	return observed, nil
 }
@@ -306,22 +321,16 @@ func VerbRelations(cx *Invocation) (any, error) {
 	if direction != "" && direction != objectmodel.RelationDirected && direction != objectmodel.RelationUndirected {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "--direction must be DIRECTED or UNDIRECTED")
 	}
+	endpoint, err := RelationEndpointFlag(object)
+	if err != nil {
+		return nil, err
+	}
 	if ServingWorkspace(cx.Flags) {
-		serving, _, err := OpenCompleteServing(cx, "")
+		serving, _, err := OpenCompleteServing(cx, string(endpoint))
 		if err != nil {
 			return nil, err
-		}
-		endpoint, err := WorkspaceRelationEndpoint(object, serving.Pin())
-		if err != nil {
-			return nil, err
-		}
-		if !AllowedRepoRead(cx.Home, cx.Flags, string(endpoint.Repository), string(endpoint.Object)) {
-			return nil, kernel.Fail(kernel.ErrForbidden, "relation endpoint repository is not authorized")
 		}
 		return (discoveryservice.DatasetRelationsExecutor{Serving: serving, Repositories: cx.WS.Reader, Projection: cx.WS.Index}).Execute(cx.Context, RelationPageRequest(endpoint, cx, limit, direction))
-	}
-	if strings.HasPrefix(object, "kc://") {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "repository relations requires a bare --object ObjectID")
 	}
 	repositoryID, commitID, err := PinCommit(cx.WS, cx.Flags)
 	if err != nil {
@@ -331,11 +340,10 @@ func VerbRelations(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	endpoint := objectmodel.ObjectRef{Repository: repositoryID, Object: objectmodel.ObjectID(object)}
 	return cx.WS.Index.RelationsAtContext(cx.Context, repo, commitID, RelationPageRequest(endpoint, cx, limit, direction))
 }
 
-func RelationPageRequest(endpoint objectmodel.ObjectRef, cx *Invocation, limit int, direction objectmodel.RelationDirection) retrieval.RelationPageRequest {
+func RelationPageRequest(endpoint objectmodel.ObjectID, cx *Invocation, limit int, direction objectmodel.RelationDirection) retrieval.RelationPageRequest {
 	return retrieval.RelationPageRequest{
 		Query: retrieval.RelationQuery{
 			Endpoint: endpoint, RelationType: cx.Flag("relation-type"), Role: cx.Flag("role"), Direction: direction,
@@ -378,51 +386,34 @@ func VerbTraverse(cx *Invocation) (any, error) {
 		Query: retrieval.TraverseQuery{Step: step, MinHops: minHops, MaxHops: maxHops},
 		Limit: limit, Continuation: cx.Flag("continuation"),
 	}
-	if ServingWorkspace(cx.Flags) {
-		serving, _, err := OpenCompleteServing(cx, "")
-		if err != nil {
-			return nil, err
-		}
-		endpoint, err := WorkspaceRelationEndpoint(object, serving.Pin())
-		if err != nil {
-			return nil, err
-		}
-		if !AllowedRepoRead(cx.Home, cx.Flags, string(endpoint.Repository), string(endpoint.Object)) {
-			return nil, kernel.Fail(kernel.ErrForbidden, "traverse start repository is not authorized")
-		}
-		request.Query.Start = endpoint
-		return (discoveryservice.DatasetTraverseExecutor{Serving: serving, Repositories: cx.WS.Reader, Projection: cx.WS.Index}).Execute(cx.Context, request)
+	start, err := RelationEndpointFlag(object)
+	if err != nil {
+		return nil, err
 	}
-	if strings.HasPrefix(object, "kc://") {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "repository traverse requires a bare --object ObjectID")
+	request.Query.Start = start
+	if ServingWorkspace(cx.Flags) {
+		serving, _, err := OpenCompleteServing(cx, string(start))
+		if err != nil {
+			return nil, err
+		}
+		return (discoveryservice.DatasetTraverseExecutor{Serving: serving, Repositories: cx.WS.Reader, Projection: cx.WS.Index}).Execute(cx.Context, request)
 	}
 	repositoryID, commitID, err := PinCommit(cx.WS, cx.Flags)
 	if err != nil {
 		return nil, err
 	}
-	request.Query.Start = objectmodel.ObjectRef{Repository: repositoryID, Object: objectmodel.ObjectID(object)}
 	return (discoveryservice.RepoTraverseExecutor{Repositories: cx.WS.Reader, Projection: cx.WS.Index}).Execute(cx.Context, request, repositoryID, commitID)
 }
 
-func WorkspaceRelationEndpoint(raw string, pin reader.DatasetPin) (objectmodel.ObjectRef, error) {
-	if !strings.HasPrefix(raw, "kc://") {
-		return objectmodel.ObjectRef{}, kernel.Fail(kernel.ErrUsageInvalid,
-			"workspace relations requires an unpinned kc:// repository/object reference")
+// RelationEndpointFlag reads --object for relations and traverse: an object
+// ID, the same identity a Relation endpoint stores. It never names a
+// Repository; the request scope decides where relations are looked up.
+func RelationEndpointFlag(raw string) (objectmodel.ObjectID, error) {
+	id := objectmodel.ObjectID(raw)
+	if err := objectmodel.ValidateObjectID(id); err != nil || strings.Contains(raw, "://") || strings.HasPrefix(raw, "urn:") {
+		return "", kernel.Fail(kernel.ErrUsageInvalid, "--object takes an object ID <namespace>/<name>, not a URN or repository-qualified reference")
 	}
-	var match objectmodel.ObjectRef
-	matchedPrefix := 0
-	for repository := range pin.Repositories {
-		prefix := objectmodel.FormatObjectRef(repository, "")
-		if len(prefix) > matchedPrefix && strings.HasPrefix(raw, prefix) && len(raw) > len(prefix) {
-			match = objectmodel.ObjectRef{Repository: repository, Object: objectmodel.ObjectID(raw[len(prefix):])}
-			matchedPrefix = len(prefix)
-		}
-	}
-	if match.Repository == "" {
-		return objectmodel.ObjectRef{}, kernel.Fail(kernel.ErrUsageInvalid,
-			"relation endpoint repository is not a member of the resolved Workspace")
-	}
-	return match, nil
+	return id, nil
 }
 
 // VerbDescribeSchema reports the AccessHints a schema declares, which is what

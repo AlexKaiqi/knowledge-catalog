@@ -35,7 +35,7 @@ func TestReadmeGitCommitWithoutWriterLocators(t *testing.T) {
 		t.Fatal("tree store")
 	}
 	root := testkit.MustHead(t, raw, snapshot.DefaultRef)
-	content := "---\nentity: payments\naspect: readme\nschema_ref: schema/core/readme/v1\n---\n# Payments warehouse\n\nPublished metrics.\n"
+	content := "---\nentity: fixture/payments\naspect: readme\nschema_ref: schema/core/readme/v1\n---\n# Payments warehouse\n\nPublished metrics.\n"
 	commit, err := tree.ApplyTreeCommit(snapshot.TreeChangeSet{
 		TargetRepository:     raw.ID(),
 		TargetRef:            snapshot.DefaultRef,
@@ -51,7 +51,7 @@ func TestReadmeGitCommitWithoutWriterLocators(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	value, err := repo.Read("payments", commit)
+	value, err := repo.Read("fixture/payments", commit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,18 +63,18 @@ func TestReadmeGitCommitWithoutWriterLocators(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(changed) != 1 || changed[0].ObjectID != "payments" || len(changed[0].ToPaths) != 1 {
+	if len(changed) != 1 || changed[0].ObjectID != "fixture/payments" || len(changed[0].ToPaths) != 1 {
 		t.Fatalf("changed %#v", changed)
 	}
 	hydrated, err := repo.(objectmodel.UnitPathsHydrator).ReadManyAtPaths(
-		[]objectmodel.ObjectID{"payments"}, commit, map[objectmodel.ObjectID][]string{"payments": changed[0].ToPaths})
+		[]objectmodel.ObjectID{"fixture/payments"}, commit, map[objectmodel.ObjectID][]string{"fixture/payments": changed[0].ToPaths})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := objectmodel.ReadmeBody(hydrated["payments"].Value); !ok {
+	if _, ok := objectmodel.ReadmeBody(hydrated["fixture/payments"].Value); !ok {
 		t.Fatalf("hydrate %#v", hydrated)
 	}
-	resolved, err := repo.Resolve("payments", commit)
+	resolved, err := repo.Resolve("fixture/payments", commit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestReadmeGitCommitWithoutWriterLocators(t *testing.T) {
 	}
 	found := false
 	for _, id := range page.ObjectIDs {
-		if id == "payments" {
+		if id == "fixture/payments" {
 			found = true
 			break
 		}
@@ -100,7 +100,7 @@ func TestReadmeGitCommitWithoutWriterLocators(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "payments", AspectName: objectmodel.ReadmeAspect}
+	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "fixture/payments", AspectName: objectmodel.ReadmeAspect}
 	selected, err := repo.ReadAddress(address, commit)
 	if err != nil || selected.Address != address || len(selected.Declarations) != 1 || selected.Declarations[0].SchemaRef != string(objectmodel.CoreReadmeSchemaV1) {
 		t.Fatalf("git README lost its exact fixed declaration: %#v %v", selected, err)
@@ -156,10 +156,10 @@ func TestPlainMarkdownReadmeIsNotObject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := repo.Read("payments", commit); err == nil {
+	if _, err := repo.Read("fixture/payments", commit); err == nil {
 		t.Fatal("plain markdown must not be readable as object")
 	}
-	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "payments", AspectName: objectmodel.ReadmeAspect}
+	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "fixture/payments", AspectName: objectmodel.ReadmeAspect}
 	if _, err := repo.ReadAddress(address, commit); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		t.Fatalf("plain markdown became an exact object unit: %v", err)
 	}

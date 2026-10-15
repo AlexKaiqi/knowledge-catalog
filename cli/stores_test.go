@@ -132,11 +132,11 @@ func TestLocalProfileHasNoSearchProjection(t *testing.T) {
 	repo := "kr://acme/public/local-only"
 	body(t, kc(h, "init"))
 	seedRepo(t, h, repo)
-	body(t, kc(h, "put", testObjectReference(t, repo, "runbook/local", ""), "--command-id", "local-1", "--value", `{"body":"exact read stays available"}`))
+	body(t, kc(h, "put", testObjectReference(t, repo, "runbook/local", ""), "--repo", repo, "--command-id", "local-1", "--value", `{"body":"exact read stays available"}`))
 	body(t, kc(h, "dataset", "define", "--dataset", "local", "--revision", "1",
 		"--source", repo+"=refs/heads/main@"))
 
-	row := asMap(t, body(t, kc(h, "read", testObjectReference(t, repo, "runbook/local", ""))))
+	row := asMap(t, body(t, kc(h, "read", testObjectReference(t, repo, "runbook/local", ""), "--repo", repo)))
 	if asMap(t, row["value"])["body"] != "exact read stays available" {
 		t.Fatalf("local exact read failed: %#v", row)
 	}

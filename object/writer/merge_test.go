@@ -135,7 +135,7 @@ func TestMergeRejectsTargetDrift(t *testing.T) {
 	drift, err := s.Writer.Commit("drift", objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: main, ExpectedTargetCommit: main,
-		Operations: testkit.PutEntity("other", 1, ""),
+		Operations: testkit.PutEntity("fixture/other", 1, ""),
 	})
 	if err != nil {
 		t.Fatal(err)

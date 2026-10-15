@@ -283,17 +283,6 @@ func DecodeReplayPin(def dataset.Dataset, pinPath string) (dataset.ResolvedDatas
 	return dataset.ReplayDefinition(def, pin)
 }
 
-func DatasetPin(resolved dataset.ResolvedDataset) reader.DatasetPin {
-	items := make([]reader.DatasetItem, 0, len(resolved.Items))
-	for _, item := range resolved.Items {
-		items = append(items, reader.DatasetItem{
-			Target: item.Target, Repository: item.Repository, Commit: item.Commit,
-			Kind: item.Kind, Prefix: item.Prefix, File: item.File,
-		})
-	}
-	return reader.DatasetPin{SetID: resolved.SetID, Revision: resolved.Revision, Repositories: resolved.Repositories, Items: items}
-}
-
 func AllowedDatasetFileRead(home string, flags map[string]invoke.FlagValue) bool {
 	return allowedDatasetFileRead(home, flags, "")
 }
@@ -374,7 +363,7 @@ func SemanticProjectionFor(store snapshot.Store, repo objectmodel.Repository, pi
 
 func BuildSemanticProjection(store snapshot.Store, repo objectmodel.Repository, pin dataset.ResolvedDataset) (*SemanticProjection, error) {
 	commit := pin.Repositories[repo.ID()]
-	scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return repo, nil }, DatasetPin(pin))
+	scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return repo, nil }, kchome.DatasetPin(pin))
 	values := []objectmodel.ObjectValue{}
 	var prefixes, files []string
 	for _, item := range pin.Items {

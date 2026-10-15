@@ -26,7 +26,7 @@ func TestWriteCheckoutPinsAssembledObjects(t *testing.T) {
 	values := []objectmodel.FederatedValue{
 		{Repository: "kr://acme/public/core", Commit: "c-public", ObjectID: "policy/P-103", Value: map[string]any{"body": "public"}},
 		{Repository: "kr://acme/groups/payments", Commit: "c-group", ObjectID: "policy/P-103", Value: map[string]any{"body": "group"}},
-		{Repository: "kr://acme/public/core", Commit: "c-public", ObjectID: "ETLTask:job-1", Value: map[string]any{"io": map[string]any{"in": []any{"a"}}}},
+		{Repository: "kr://acme/public/core", Commit: "c-public", ObjectID: "etl-task/job-1", Value: map[string]any{"io": map[string]any{"in": []any{"a"}}}},
 		{Repository: "kr://acme/public/core", Commit: "c-public", ObjectID: "runbooks/oncall", Value: map[string]any{"text": "freeze"}},
 	}
 	got, err := reader.WriteCheckout(root, pin, values)
@@ -57,7 +57,7 @@ func TestWriteCheckoutPinsAssembledObjects(t *testing.T) {
 	if readJSON(t, public)["body"] != "public" || readJSON(t, group)["body"] != "group" {
 		t.Fatal("federated values must not override")
 	}
-	if _, err := os.Stat(filepath.Join(root, "kr_acme_public_core", "ETLTask:job-1.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(root, "kr_acme_public_core", "etl-task/job-1.json")); err != nil {
 		t.Fatal(err)
 	}
 	if readJSON(t, filepath.Join(root, "kr_acme_public_core", "runbooks", "oncall.json"))["text"] != "freeze" {

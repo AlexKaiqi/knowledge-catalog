@@ -215,18 +215,10 @@ func populateTraverseRetrievalEvent(event *observability.RetrievalEvent, result 
 	}
 	event.Claims = append([]string(nil), result.Claims...)
 	event.Execution = observability.RetrievalExecution{Candidates: len(result.Nodes) + len(result.Edges)}
+	// Nodes are object IDs reached through relation endpoints; they are not
+	// stored values read at one Repository commit. The retrieved, citable
+	// candidates are the relation edges, each with its own storage basis.
 	rank := 0
-	for _, node := range result.Nodes {
-		rank++
-		event.Candidates = append(event.Candidates, observability.RetrievalCandidate{
-			ObjectRef: objectmodel.PinnedObjectRef{
-				ObjectRef: objectmodel.ObjectRef{Repository: node.Repository, Object: node.ObjectID},
-				Commit:    result.SearchView.Snapshots[node.Repository],
-			},
-			Rank:        rank,
-			ValueDigest: kernel.CanonicalDigest(node),
-		})
-	}
 	for _, edge := range result.Edges {
 		rank++
 		event.Candidates = append(event.Candidates, observability.RetrievalCandidate{

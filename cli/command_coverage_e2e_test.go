@@ -20,10 +20,10 @@ func TestCatalogViewsChecksAndObjectResolve(t *testing.T) {
 	body(t, kc(home, "local", "init"))
 	seedRepo(t, home, repositoryID)
 	adoptLiveAccessFixture(t, home, repositoryID)
-	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "schema/policy.body", ""), "--command-id", "coverage-schema", "--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
-	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "policy/coverage", ""), "--command-id", "coverage-object", "--schema-ref", "schema/policy.body", "--value", `{"body":"coverage"}`))
-	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "Service:coverage", "/properties"), "--command-id", "coverage-service", "--value", `{"name":"coverage"}`))
-	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "resource/coverage", ""), "--command-id", "coverage-resource", "--value", `{"kind":"ResourceDescriptor","runtime":"sql","protocol":"resource-access/v1","access":{"query":{"call":"sql.query"}}}`))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "schema/policy.body", ""), "--repo", repositoryID, "--command-id", "coverage-schema", "--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "policy/coverage", ""), "--repo", repositoryID, "--command-id", "coverage-object", "--schema-ref", "schema/policy.body", "--value", `{"body":"coverage"}`))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "service/coverage", "/properties"), "--repo", repositoryID, "--command-id", "coverage-service", "--value", `{"name":"coverage"}`))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "resource/coverage", ""), "--repo", repositoryID, "--command-id", "coverage-resource", "--value", `{"kind":"ResourceDescriptor","runtime":"sql","protocol":"resource-access/v1","access":{"query":{"call":"sql.query"}}}`))
 	head := asMap(t, body(t, kc(home, "writer", "head", "--repo", repositoryID)))
 	if head["repository"] != repositoryID || head["commit"] == "" {
 		t.Fatalf("writer head must expose a fixed Connector/preview base: %#v", head)
@@ -127,10 +127,10 @@ func TestCatalogViewsChecksAndObjectResolve(t *testing.T) {
 		})
 	}))
 	t.Cleanup(runtime.Close)
-	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "schema/service.health", ""), "--command-id", "coverage-health-schema", "--value", `{"entity":"Service","aspect":"health","origin":"`+runtime.URL+`","fields":{"status":{"type":"string","access":["filter"]}}}`))
-	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "resource/coverage", ""), "--command-id", "coverage-resource-origin", "--value", `{"kind":"ResourceDescriptor","runtime":"sql","protocol":"resource-access/v1","origin":"`+runtime.URL+`","access":{"query":{"call":"sql.query"}}}`))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "schema/service.health", ""), "--repo", repositoryID, "--command-id", "coverage-health-schema", "--value", `{"entity":"Service","aspect":"health","origin":"`+runtime.URL+`","fields":{"status":{"type":"string","access":["filter"]}}}`))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "resource/coverage", ""), "--repo", repositoryID, "--command-id", "coverage-resource-origin", "--value", `{"kind":"ResourceDescriptor","runtime":"sql","protocol":"resource-access/v1","origin":"`+runtime.URL+`","access":{"query":{"call":"sql.query"}}}`))
 	resource := asMap(t, body(t, kc(home, "access", "--repo", repositoryID,
-		"--object", "Service:coverage", "--aspect", "health")))
+		"--object", "service/coverage", "--aspect", "health")))
 	if asMap(t, resource["value"])["status"] != "healthy" {
 		t.Fatalf("resource access must return the Aspect: %#v", resource)
 	}
@@ -153,13 +153,13 @@ func TestCatalogViewsChecksAndObjectResolve(t *testing.T) {
 	expectCode(t, kc(home, "access", "--dataset", "coverage",
 		"--object", "resource/coverage", "--operation", "query", "--input", `{}`), "USAGE_INVALID")
 	expectCode(t, kc(home, "invoke", "--repo", repositoryID,
-		"--object", "Service:coverage", "--aspect", "health"), "USAGE_INVALID")
+		"--object", "service/coverage", "--aspect", "health"), "USAGE_INVALID")
 
 	resolved := body(t, kc(home, "resolve", "--dataset", "coverage", "--object", "policy/coverage")).([]any)
 	if len(resolved) != 1 || asMap(t, resolved[0])["status"] != "RESOLVED" {
 		t.Fatalf("resolve must report object status at the Workspace pin: %#v", resolved)
 	}
-	entityResolved := body(t, kc(home, "resolve", "--dataset", "coverage", "--object", "Service:coverage")).([]any)
+	entityResolved := body(t, kc(home, "resolve", "--dataset", "coverage", "--object", "service/coverage")).([]any)
 	if len(entityResolved) != 1 || asMap(t, entityResolved[0])["status"] != "RESOLVED" {
 		t.Fatalf("resolve must report the entity at the Workspace pin: %#v", entityResolved)
 	}

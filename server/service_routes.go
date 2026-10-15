@@ -120,9 +120,10 @@ type objectScope struct {
 
 type objectReadRequest struct {
 	objectDatasetIdentity
-	Reference string `json:"reference"`
-	Commit    string `json:"commit,omitempty"`
-	Ref       string `json:"ref,omitempty"`
+	Reference  string `json:"reference"`
+	Repository string `json:"repository,omitempty"`
+	Commit     string `json:"commit,omitempty"`
+	Ref        string `json:"ref,omitempty"`
 }
 
 type ObjectSearchRequest struct {
@@ -287,7 +288,7 @@ func objectCoordinateFlags(workspace, repository, commit, ref string, pin json.R
 }
 
 func (request objectReadRequest) Flags() map[string]FlagValue {
-	flags := objectCoordinateFlags(request.Dataset, "", request.Commit, request.Ref, request.Pin, request.Definition)
+	flags := objectCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
 	flags["reference"] = request.Reference
 	return flags
 }

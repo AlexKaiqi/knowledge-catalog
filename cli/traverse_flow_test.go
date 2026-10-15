@@ -17,39 +17,44 @@ import (
 // traverseChangeSet seeds a two-hop chain plus one edge that points outside
 // every traversal scope: orders -> finance -> me, and orders -> guest in a
 // repository that is never attached to the dataset.
-func traverseChangeSet(t *testing.T, repository, host string) string {
+func traverseChangeSet(t *testing.T, repository string) string {
 	t.Helper()
 	payload := map[string]any{
 		"targetRepository": repository,
 		"targetRef":        "refs/heads/main",
 		"operations": []any{
+			// The scope holds these three IDs; team/guest is only a relation
+			// endpoint, so reaching it is a boundary, not a node.
+			map[string]any{"op": "PUT", "address": map[string]any{"kind": "Entity", "objectId": "table/orders"}, "value": map[string]any{"name": "orders"}},
+			map[string]any{"op": "PUT", "address": map[string]any{"kind": "Entity", "objectId": "team/finance"}, "value": map[string]any{"name": "finance"}},
+			map[string]any{"op": "PUT", "address": map[string]any{"kind": "Entity", "objectId": "person/me"}, "value": map[string]any{"name": "me"}},
 			map[string]any{
-				"op": "PUT", "address": map[string]any{"kind": "Relation", "objectId": "relation:owned"},
+				"op": "PUT", "address": map[string]any{"kind": "Relation", "objectId": "relation/owned"},
 				"value": map[string]any{
-					"relationId": "relation:owned", "relationType": "owned-by", "direction": "DIRECTED",
+					"relationId": "relation/owned", "relationType": "owned-by", "direction": "DIRECTED",
 					"endpoints": []any{
-						map[string]any{"role": "subject", "objectRef": map[string]any{"repository": repository, "object": "Table:orders"}},
-						map[string]any{"role": "owner", "objectRef": map[string]any{"repository": repository, "object": "Team:finance"}},
+						map[string]any{"role": "subject", "object": "table/orders"},
+						map[string]any{"role": "owner", "object": "team/finance"},
 					},
 				},
 			},
 			map[string]any{
-				"op": "PUT", "address": map[string]any{"kind": "Relation", "objectId": "relation:reported"},
+				"op": "PUT", "address": map[string]any{"kind": "Relation", "objectId": "relation/reported"},
 				"value": map[string]any{
-					"relationId": "relation:reported", "relationType": "owned-by", "direction": "DIRECTED",
+					"relationId": "relation/reported", "relationType": "owned-by", "direction": "DIRECTED",
 					"endpoints": []any{
-						map[string]any{"role": "subject", "objectRef": map[string]any{"repository": repository, "object": "Team:finance"}},
-						map[string]any{"role": "owner", "objectRef": map[string]any{"repository": repository, "object": "Person:me"}},
+						map[string]any{"role": "subject", "object": "team/finance"},
+						map[string]any{"role": "owner", "object": "person/me"},
 					},
 				},
 			},
 			map[string]any{
-				"op": "PUT", "address": map[string]any{"kind": "Relation", "objectId": "relation:shared"},
+				"op": "PUT", "address": map[string]any{"kind": "Relation", "objectId": "relation/shared"},
 				"value": map[string]any{
-					"relationId": "relation:shared", "relationType": "owned-by", "direction": "DIRECTED",
+					"relationId": "relation/shared", "relationType": "owned-by", "direction": "DIRECTED",
 					"endpoints": []any{
-						map[string]any{"role": "subject", "objectRef": map[string]any{"repository": repository, "object": "Table:orders"}},
-						map[string]any{"role": "owner", "objectRef": map[string]any{"repository": host, "object": "Team:guest"}},
+						map[string]any{"role": "subject", "object": "table/orders"},
+						map[string]any{"role": "owner", "object": "team/guest"},
 					},
 				},
 			},
@@ -116,41 +121,40 @@ func TestTraverseNeighborhoodClosureAcrossChannels(t *testing.T) {
 	}
 	home := testkit.TempDir(t)
 	repository := "kr://acme/public/core"
-	host := "kr://acme/partner"
 	body(t, kc(home, "init"))
 	body(t, kc(home, "store-set", "--index", "opensearch"))
 	body(t, kc(home, "store-set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repository)
-	body(t, kc(home, "commit", "--command-id", "relation-chain", "--payload", traverseChangeSet(t, repository, host)))
+	body(t, kc(home, "commit", "--command-id", "relation-chain", "--payload", traverseChangeSet(t, repository)))
 	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", repository+"=refs/heads/main@"))
 	syncIndexes(t, home, repository)
 
-	repositoryFull := body(t, kc(home, "traverse", "--repo", repository, "--object", "Table:orders",
+	repositoryFull := body(t, kc(home, "traverse", "--repo", repository, "--object", "table/orders",
 		"--max-hops", "2", "--limit", "100", "--relation-type", "owned-by", "--direction", "DIRECTED"))
 	// The closure is a deduplicated neighborhood: the start is never a node,
 	// depth-2 nodes only appear when the hop ceiling allows a second hop, and
 	// the out-of-scope endpoint is an explicit boundary, not a node.
 	nodes := traverseNodes(t, repositoryFull)
-	if len(nodes) != 2 || nodes["Team:finance"] != 1 || nodes["Person:me"] != 2 {
+	if len(nodes) != 2 || nodes["team/finance"] != 1 || nodes["person/me"] != 2 {
 		t.Fatalf("repository closure nodes: %#v", nodes)
 	}
-	if got := traverseEdgeIDs(t, repositoryFull); len(got) != 3 || strings.Join(got, ",") != "relation:owned,relation:reported,relation:shared" {
+	if got := traverseEdgeIDs(t, repositoryFull); len(got) != 3 || strings.Join(got, ",") != "relation/owned,relation/reported,relation/shared" {
 		t.Fatalf("repository closure edges: %#v", got)
 	}
-	if got := traverseBoundary(t, repositoryFull); len(got) != 1 || got[0] != "Team:guest" {
+	if got := traverseBoundary(t, repositoryFull); len(got) != 1 || got[0] != "team/guest" {
 		t.Fatalf("out-of-scope frontier must be a boundary: %#v", got)
 	}
 
-	repositoryOneHop := body(t, kc(home, "traverse", "--repo", repository, "--object", "Table:orders",
+	repositoryOneHop := body(t, kc(home, "traverse", "--repo", repository, "--object", "table/orders",
 		"--max-hops", "1", "--relation-type", "owned-by", "--direction", "DIRECTED"))
-	if nodes := traverseNodes(t, repositoryOneHop); len(nodes) != 1 || nodes["Team:finance"] != 1 {
+	if nodes := traverseNodes(t, repositoryOneHop); len(nodes) != 1 || nodes["team/finance"] != 1 {
 		t.Fatalf("one-hop ceiling: %#v", nodes)
 	}
-	expectCode(t, kc(home, "traverse", "--repo", repository, "--object", "Table:orders", "--max-hops", "0"), "USAGE_INVALID")
-	expectCode(t, kc(home, "traverse", "--repo", repository, "--object", "Table:orders", "--max-hops", "9"), "USAGE_INVALID")
-	expectCode(t, kc(home, "traverse", "--repo", repository, "--object", "Table:orders"), "USAGE_INVALID")
+	expectCode(t, kc(home, "traverse", "--repo", repository, "--object", "table/orders", "--max-hops", "0"), "USAGE_INVALID")
+	expectCode(t, kc(home, "traverse", "--repo", repository, "--object", "table/orders", "--max-hops", "9"), "USAGE_INVALID")
+	expectCode(t, kc(home, "traverse", "--repo", repository, "--object", "table/orders"), "USAGE_INVALID")
 
-	datasetFull := body(t, kc(home, "traverse", "--dataset", "agent", "--object", "kc://acme/public/core/Table:orders",
+	datasetFull := body(t, kc(home, "traverse", "--dataset", "agent", "--object", "table/orders",
 		"--max-hops", "2", "--relation-type", "owned-by", "--direction", "DIRECTED"))
 	datasetNodes := traverseNodes(t, datasetFull)
 	if len(datasetNodes) != len(nodes) {
@@ -158,7 +162,7 @@ func TestTraverseNeighborhoodClosureAcrossChannels(t *testing.T) {
 	}
 
 	// Delta paging: --limit 1 yields disjoint pages whose union is the closure.
-	request := []string{"traverse", "--dataset", "agent", "--object", "kc://acme/public/core/Table:orders",
+	request := []string{"traverse", "--dataset", "agent", "--object", "table/orders",
 		"--max-hops", "2", "--limit", "1", "--relation-type", "owned-by", "--direction", "DIRECTED"}
 	union := map[string]float64{}
 	pages := 0
@@ -184,7 +188,7 @@ func TestTraverseNeighborhoodClosureAcrossChannels(t *testing.T) {
 		}
 		request = append(request, "--continuation", cursor)
 	}
-	if pages < 3 || len(union) != 2 || union["Team:finance"] != 1 || union["Person:me"] != 2 {
+	if pages < 3 || len(union) != 2 || union["team/finance"] != 1 || union["person/me"] != 2 {
 		t.Fatalf("paged closure union: pages=%d %#v", pages, union)
 	}
 
@@ -198,11 +202,11 @@ func TestTraverseNeighborhoodClosureAcrossChannels(t *testing.T) {
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	httpResult := postAny(t, server.URL, "/object/v1/traverse:query", map[string]any{
-		"dataset": "agent", "endpoint": "kc://acme/public/core/Table:orders",
+		"dataset": "agent", "endpoint": "table/orders",
 		"maxHops": 2, "relationType": "owned-by", "direction": "DIRECTED",
 	})
 	httpNodes := traverseNodes(t, httpResult)
-	if len(httpNodes) != 2 || httpNodes["Team:finance"] != 1 || httpNodes["Person:me"] != 2 {
+	if len(httpNodes) != 2 || httpNodes["team/finance"] != 1 || httpNodes["person/me"] != 2 {
 		t.Fatalf("HTTP closure nodes: %#v", httpNodes)
 	}
 	page, err := observability.NewFileStore(home).Access(context.Background(), observability.AccessQuery{

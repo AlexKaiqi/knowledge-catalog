@@ -368,7 +368,7 @@ func TestDatasetHTTPPreparationFailureKeepsServingVersion(t *testing.T) {
 func TestDatasetHTTPRejectsInvalidWireAndHistoryQueries(t *testing.T) {
 	f := newDatasetHTTPFixture(t)
 	base := "/snapshot/v1/datasets"
-	for _, body := range []any{map[string]any{"dataset": "files", "revision": 1, "sources": []any{map[string]any{"objectId": "Entity:a"}}}, map[string]any{"dataset": "files", "revision": 1, "sources": []any{}}, map[string]any{"dataset": "files", "revision": 1, "sources": []any{}, "extra": true}} {
+	for _, body := range []any{map[string]any{"dataset": "files", "revision": 1, "sources": []any{map[string]any{"objectId": "fixture/a"}}}, map[string]any{"dataset": "files", "revision": 1, "sources": []any{}}, map[string]any{"dataset": "files", "revision": 1, "sources": []any{}, "extra": true}} {
 		datasetHTTPCall(t, f.handler(), "POST", base, body, 400)
 	}
 	datasetHTTPCall(t, f.handler(), "POST", base, datasetHTTPDefinition(1, f.source.ID()), 200)

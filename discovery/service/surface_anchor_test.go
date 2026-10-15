@@ -47,6 +47,7 @@ var surfaceAnchor = surfaceAnchorSuite{
 	"SearchRequest",
 	"SemanticWindowProjection",
 	"TraverseCore",
+	"TraverseHop",
 	"TraverseProjection",
 	"TraverseScope",
 }

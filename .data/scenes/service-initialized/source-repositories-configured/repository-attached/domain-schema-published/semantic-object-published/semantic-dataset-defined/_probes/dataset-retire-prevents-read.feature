@@ -13,5 +13,5 @@ Feature: 退役独立 Dataset 后其清单不可再读取
     Then the output includes:
       | datasets[].id | scene-retire-probe |
       | datasets[].retired     | true |
-    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv --dataset scene-retire-probe`
+    When I run `kc read urn:kc:object:metric/gmv --dataset scene-retire-probe`
     Then error DATASET_INVALID

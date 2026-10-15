@@ -8,14 +8,14 @@ Feature: review-branch-written
       | repositoryId | kr://scene/object |
       | ref          | refs/heads/review/scene |
       | commitId     | nonempty |
-    When I run `kc writer put urn:kc:object:kr%3A%2F%2Fscene%2Fobject:note%2Fhello --command-id scene-review --ref refs/heads/review/scene --value '{"text":"proposed"}'`
+    When I run `kc writer put urn:kc:object:note/hello --repo kr://scene/object --command-id scene-review --ref refs/heads/review/scene --value '{"text":"proposed"}'`
     Then the output has:
       | disposition      | APPLIED |
       | result.targetRef | refs/heads/review/scene |
       | result.newCommit | nonempty |
-    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:note%2Fhello`
+    When I run `kc read urn:kc:object:note/hello`
     Then the output has:
       | value.text | hi |
-    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:note%2Fhello --ref refs/heads/review/scene`
+    When I run `kc read urn:kc:object:note/hello --ref refs/heads/review/scene`
     Then the output has:
       | value.text | proposed |

@@ -9,10 +9,6 @@ relationType: uses_concept
 direction: DIRECTED
 endpoints:
   - role: from
-    objectRef:
-      repository: kr://kc/system
-      object: kc/capability/permissions
+    object: kc/capability/permissions
   - role: to
-    objectRef:
-      repository: kr://kc/system
-      object: kc/concept/pin
+    object: kc/concept/pin

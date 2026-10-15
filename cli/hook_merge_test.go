@@ -23,7 +23,7 @@ func writeHookScript(t *testing.T, home, name, body string) {
 // putOnRef writes one object on ref and returns the new branch commit.
 func putOnRef(t *testing.T, home, repo, ref, object, commandID, value string) string {
 	t.Helper()
-	put := asMap(t, body(t, kc(home, "put", testObjectReference(t, repo, object, ""),
+	put := asMap(t, body(t, kc(home, "put", testObjectReference(t, repo, object, ""), "--repo", repo,
 		"--command-id", commandID, "--ref", ref, "--value", value)))
 	commit, _ := asMap(t, put["result"])["newCommit"].(string)
 	if put["disposition"] != "APPLIED" || commit == "" {
@@ -48,8 +48,8 @@ func TestPrePutDeniedLeavesNoCommit(t *testing.T) {
 	seedRepo(t, h, "kr://acme/public/core")
 	writeHookScript(t, h, "deny.sh", "#!/bin/sh\nexit 1\n")
 	body(t, kc(h, "hook-add", "--on", "put", "--phase", "pre", "--repo", "kr://acme/public/core", "--run", "deny.sh"))
-	expectCode(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/A", ""), "--command-id", "x", "--value", `{"v":1}`), "HOOK_DENIED")
-	expectCode(t, kc(h, "read", testObjectReference(t, "kr://acme/public/core", "policy/A", ""), "--ref", "refs/heads/main"), "OBJECT_REF_UNRESOLVED")
+	expectCode(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/A", ""), "--repo", "kr://acme/public/core", "--command-id", "x", "--value", `{"v":1}`), "HOOK_DENIED")
+	expectCode(t, kc(h, "read", testObjectReference(t, "kr://acme/public/core", "policy/A", ""), "--repo", "kr://acme/public/core", "--ref", "refs/heads/main"), "OBJECT_REF_UNRESOLVED")
 }
 
 func TestReplayedSkipsHook(t *testing.T) {
@@ -58,11 +58,11 @@ func TestReplayedSkipsHook(t *testing.T) {
 	seedRepo(t, h, "kr://acme/public/core")
 	writeHookScript(t, h, "count.sh", "#!/bin/sh\necho x >> count.txt\n")
 	body(t, kc(h, "hook-add", "--on", "put", "--phase", "pre", "--repo", "kr://acme/public/core", "--run", "count.sh"))
-	put := asMap(t, body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/A", ""), "--command-id", "sync-1", "--value", `{"v":1}`)))
+	put := asMap(t, body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/A", ""), "--repo", "kr://acme/public/core", "--command-id", "sync-1", "--value", `{"v":1}`)))
 	if put["disposition"] != "APPLIED" {
 		t.Fatal(put)
 	}
-	replay := asMap(t, body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/A", ""), "--command-id", "sync-1", "--value", `{"v":1}`)))
+	replay := asMap(t, body(t, kc(h, "put", testObjectReference(t, "kr://acme/public/core", "policy/A", ""), "--repo", "kr://acme/public/core", "--command-id", "sync-1", "--value", `{"v":1}`)))
 	if replay["disposition"] != "REPLAYED" {
 		t.Fatal(replay)
 	}
@@ -83,7 +83,7 @@ func TestMergePublishesOnlyTheReviewedBranchCommit(t *testing.T) {
 	core := "kr://acme/public/core"
 	kc(h, "init")
 	seedRepo(t, h, core)
-	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-103", ""), "--command-id", "seed", "--value", `{"v":1}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-103", ""), "--repo", core, "--command-id", "seed", "--value", `{"v":1}`))
 	published := mainHead(t, h, core)
 
 	branch := asMap(t, body(t, kc(h, "branch", "--repo", core, "--name", "review/PR-1")))
@@ -113,7 +113,7 @@ func TestMergePublishesOnlyTheReviewedBranchCommit(t *testing.T) {
 	if replay["disposition"] != "REPLAYED" || asMap(t, replay["result"])["commitId"] != moved {
 		t.Fatal(replay)
 	}
-	read := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "policy/P-103", ""), "--ref", "refs/heads/main")))
+	read := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "policy/P-103", ""), "--repo", core, "--ref", "refs/heads/main")))
 	if !strings.Contains(string(mustJSON(t, read)), `"v":3`) {
 		t.Fatal("main must serve the merged branch body", read)
 	}
@@ -124,10 +124,10 @@ func TestMergeRefusesDivergedTarget(t *testing.T) {
 	core := "kr://acme/public/core"
 	kc(h, "init")
 	seedRepo(t, h, core)
-	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-1", ""), "--command-id", "seed", "--value", `{"v":1}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-1", ""), "--repo", core, "--command-id", "seed", "--value", `{"v":1}`))
 	body(t, kc(h, "branch", "--repo", core, "--name", "review/diverged"))
 	putOnRef(t, h, core, "refs/heads/review/diverged", "policy/P-1", "branch-v2", `{"v":2}`)
-	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-2", ""), "--command-id", "main-v1", "--value", `{"v":1}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-2", ""), "--repo", core, "--command-id", "main-v1", "--value", `{"v":1}`))
 	advanced := mainHead(t, h, core)
 
 	expectCode(t, kc(h, "merge", "--command-id", "merge-diverged", "--repo", core, "--from", "review/diverged"), "NON_FAST_FORWARD")
@@ -141,7 +141,7 @@ func TestMergeAuthorizationDerivesTargetRefFromInto(t *testing.T) {
 	core := "kr://acme/public/core"
 	kc(h, "init")
 	seedRepo(t, h, core)
-	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-1", ""), "--command-id", "seed", "--value", `{"v":1}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-1", ""), "--repo", core, "--command-id", "seed", "--value", `{"v":1}`))
 	body(t, kc(h, "branch", "--repo", core, "--name", "review/auth"))
 	putOnRef(t, h, core, "refs/heads/review/auth", "policy/P-1", "auth-v2", `{"v":2}`)
 
@@ -161,7 +161,7 @@ func TestBranchAuthorizationDerivesRefFromName(t *testing.T) {
 	core := "kr://acme/public/core"
 	kc(h, "init")
 	seedRepo(t, h, core)
-	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-1", ""), "--command-id", "seed", "--value", `{"v":1}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-1", ""), "--repo", core, "--command-id", "seed", "--value", `{"v":1}`))
 	body(t, kc(h, "allow", "--principal", "drafter", "--cmd", "branch", "--repo", core, "--ref", "refs/heads/review/a"))
 
 	created := asMap(t, body(t, kc(h, "branch", "--as", "drafter", "--repo", core, "--name", "review/a")))
@@ -177,7 +177,7 @@ func TestPostDefineDatasetPointersOnlyAndFailureDoesNotRollback(t *testing.T) {
 	core := "kr://acme/public/core"
 	kc(h, "init")
 	seedRepo(t, h, core)
-	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-1", ""), "--command-id", "seed", "--value", `{"secret":true}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-1", ""), "--repo", core, "--command-id", "seed", "--value", `{"secret":true}`))
 
 	var got []byte
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -245,7 +245,7 @@ func TestPreMergeHookVetoesMerge(t *testing.T) {
 	core := "kr://acme/public/core"
 	kc(h, "init")
 	seedRepo(t, h, core)
-	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-1", ""), "--command-id", "seed", "--value", `{"v":1}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-1", ""), "--repo", core, "--command-id", "seed", "--value", `{"v":1}`))
 	published := mainHead(t, h, core)
 	body(t, kc(h, "branch", "--repo", core, "--name", "review/veto"))
 	putOnRef(t, h, core, "refs/heads/review/veto", "policy/P-1", "veto-v2", `{"v":2}`)
@@ -275,8 +275,8 @@ func TestReadPathAndPutIgnoreMergeHooks(t *testing.T) {
 	writeHookScript(t, h, "merge.sh", "#!/bin/sh\necho m >> merge.txt\n")
 	body(t, kc(h, "hook-add", "--on", "put", "--phase", "pre", "--repo", core, "--run", "count.sh"))
 	body(t, kc(h, "hook-add", "--on", "merge", "--phase", "pre", "--repo", core, "--run", "merge.sh"))
-	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-1", ""), "--command-id", "seed", "--value", `{"v":1}`))
-	body(t, kc(h, "read", testObjectReference(t, core, "policy/P-1", ""), "--ref", "refs/heads/main"))
+	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-1", ""), "--repo", core, "--command-id", "seed", "--value", `{"v":1}`))
+	body(t, kc(h, "read", testObjectReference(t, core, "policy/P-1", ""), "--repo", core, "--ref", "refs/heads/main"))
 	raw, err := os.ReadFile(filepath.Join(h, "count.txt"))
 	if err != nil {
 		t.Fatal(err)
@@ -294,7 +294,7 @@ func TestOtherRepositoryMergeHookDoesNotBlock(t *testing.T) {
 	core := "kr://acme/public/core"
 	kc(h, "init")
 	seedRepo(t, h, core)
-	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-1", ""), "--command-id", "seed", "--value", `{"v":1}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "policy/P-1", ""), "--repo", core, "--command-id", "seed", "--value", `{"v":1}`))
 	writeHookScript(t, h, "deny.sh", "#!/bin/sh\nexit 1\n")
 	body(t, kc(h, "hook-add", "--on", "merge", "--phase", "pre", "--repo", "kr://acme/semantic", "--run", "deny.sh"))
 	body(t, kc(h, "branch", "--repo", core, "--name", "review/other"))
@@ -317,7 +317,7 @@ func TestPostPutPointersOnly(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	body(t, kc(h, "hook-add", "--on", "put", "--phase", "post", "--repo", core, "--url", srv.URL))
-	put := asMap(t, body(t, kc(h, "put", testObjectReference(t, core, "policy/P-1", ""), "--command-id", "seed", "--value", `{"secret":true}`)))
+	put := asMap(t, body(t, kc(h, "put", testObjectReference(t, core, "policy/P-1", ""), "--repo", core, "--command-id", "seed", "--value", `{"secret":true}`)))
 	var event map[string]any
 	if err := json.Unmarshal(got, &event); err != nil {
 		t.Fatal(err, string(got))

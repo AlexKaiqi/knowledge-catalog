@@ -9,10 +9,6 @@ relationType: uses_mechanism
 direction: DIRECTED
 endpoints:
   - role: from
-    objectRef:
-      repository: kr://kc/system
-      object: kc/capability/deployment
+    object: kc/capability/deployment
   - role: to
-    objectRef:
-      repository: kr://kc/system
-      object: kc/mechanism/authorization
+    object: kc/mechanism/authorization

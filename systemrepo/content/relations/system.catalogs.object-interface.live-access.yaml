@@ -11,17 +11,11 @@ path_hint: relations/system.catalogs.object-interface.live-access.yaml
   "endpoints": [
     {
       "role": "from",
-      "objectRef": {
-        "repository": "kr://kc/system",
-        "object": "kc/system"
-      }
+      "object":"kc/system"
     },
     {
       "role": "to",
-      "objectRef": {
-        "repository": "kr://kc/system",
-        "object": "interface/live-access/v1"
-      }
+      "object":"interface/live-access/v1"
     }
   ]
 }

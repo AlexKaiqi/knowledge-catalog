@@ -58,8 +58,8 @@ func RelationFixture(t *testing.T) (*testkit.ObjectRepository, kernel.CommitID) 
 		TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef,
 		BaseCommit: root, ExpectedTargetCommit: root,
 		Operations: []objectmodel.Operation{
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindRelation, ObjectID: "relation:owned"}, Value: RelationBody(repo.ID(), "relation:owned", "Table:a")},
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindRelation, ObjectID: "relation:false-positive"}, Value: RelationBody(repo.ID(), "relation:false-positive", "Table:other")},
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindRelation, ObjectID: "relation/owned"}, Value: RelationBody("relation/owned", "table/a")},
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindRelation, ObjectID: "relation/false-positive"}, Value: RelationBody("relation/false-positive", "table/other")},
 		},
 	})
 	if err != nil {
@@ -68,12 +68,12 @@ func RelationFixture(t *testing.T) (*testkit.ObjectRepository, kernel.CommitID) 
 	return repo, commit
 }
 
-func RelationBody(repository kernel.RepositoryID, id, endpoint string) map[string]any {
+func RelationBody(id, endpoint string) map[string]any {
 	return map[string]any{
 		"relationId": id, "relationType": "owned-by", "direction": "DIRECTED",
 		"endpoints": []any{
-			map[string]any{"role": "subject", "objectRef": map[string]any{"repository": string(repository), "object": endpoint}},
-			map[string]any{"role": "owner", "objectRef": map[string]any{"repository": string(repository), "object": "Team:finance"}},
+			map[string]any{"role": "subject", "object": endpoint},
+			map[string]any{"role": "owner", "object": "team/finance"},
 		},
 	}
 }

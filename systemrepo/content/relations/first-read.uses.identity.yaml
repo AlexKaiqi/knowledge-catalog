@@ -9,10 +9,6 @@ relationType: uses
 direction: DIRECTED
 endpoints:
   - role: from
-    objectRef:
-      repository: kr://kc/system
-      object: kc/guide/first-read
+    object: kc/guide/first-read
   - role: to
-    objectRef:
-      repository: kr://kc/system
-      object: kc/capability/identity
+    object: kc/capability/identity

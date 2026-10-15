@@ -25,7 +25,7 @@ func TestProductCLIRejectsRetiredCatalogBeforeModuleValidation(t *testing.T) {
 	t.Setenv("KC_AUTH_TOKEN", "")
 	for _, args := range [][]string{
 		{"log", "--repo", "kr://acme/source", "--object", "note/one"},
-		{"read", "urn:kc:object:kr%3A%2F%2Facme%2Fsource:note%2Fone"},
+		{"read", "urn:kc:object:note/one"},
 		{"search", "--query", "note"},
 		{"operations", "projection", "sync", "--repo", "kr://acme/source"},
 		{"access", "--repo", "kr://acme/source", "--object", "note/one", "--aspect", "preview"},

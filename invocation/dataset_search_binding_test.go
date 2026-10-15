@@ -28,7 +28,7 @@ func (searchStateLookup) LookupState(_ context.Context, _ objectserving.StateLoo
 
 func TestWorkspaceSearchHitUsesLogicalStateHydration(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	objectID := objectmodel.ObjectID("Service:orders")
+	objectID := objectmodel.ObjectID("service/orders")
 	commit, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,

@@ -13,10 +13,10 @@ func TestRelationsDailyProductView(t *testing.T) {
 			map[string]any{
 				"repository":   "kr://x",
 				"commit":       "c1",
-				"objectId":     "Team:finance",
-				"objectRef":    map[string]any{"object": "Team:finance"},
+				"objectId":     "team/finance",
+				"objectRef":    map[string]any{"object": "team/finance"},
 				"matchedRoles": []any{"owner"},
-				"relation":     map[string]any{"relationType": "owned-by", "relationId": "relation:owned"},
+				"relation":     map[string]any{"relationType": "owned-by", "relationId": "relation/owned"},
 				"evidence":     []any{map[string]any{"lane": "graph"}},
 			},
 		},
@@ -33,7 +33,7 @@ func TestRelationsDailyProductView(t *testing.T) {
 		t.Fatalf("relations hits: %#v", relations)
 	}
 	relHit, _ := relHits[0].(map[string]any)
-	if relHit["objectId"] != "Team:finance" || relHit["relationType"] != "owned-by" {
+	if relHit["objectId"] != "team/finance" || relHit["relationType"] != "owned-by" {
 		t.Fatalf("relations neighbor: %#v", relHit)
 	}
 	if _, ok := relHit["relation"]; ok {

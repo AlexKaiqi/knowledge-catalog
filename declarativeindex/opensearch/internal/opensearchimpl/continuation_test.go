@@ -9,7 +9,7 @@ import (
 func TestPITContinuationRejectsTampering(t *testing.T) {
 	token := encodePITContinuation(pitContinuation{
 		PIT: "pit-1", Basis: kernel.CommitID("commit-1"), Repository: kernel.RepositoryID("kr://acme/public/core"),
-		Query: "query-1", Generation: "generation-1", Sort: []any{"relation:one"}, Rank: 1,
+		Query: "query-1", Generation: "generation-1", Sort: []any{"relation/one"}, Rank: 1,
 	})
 	position := len(token) / 2
 	replacement := "A"

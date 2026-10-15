@@ -88,12 +88,12 @@ func TestWorkspaceReadHydratesStateBindingThroughTypedObjectAPI(t *testing.T) {
 		})
 	}))
 	defer stateRuntime.Close()
-	body(t, kc(home, "put", testObjectReference(t, repositoryID, "schema/service.health", ""), "--command-id", "binding-schema", "--value", `{"entity":"Service","aspect":"health","origin":"`+stateRuntime.URL+`","fields":{"status":{"type":"string","access":["filter"]}}}`))
-	body(t, kc(home, "put", testObjectReference(t, repositoryID, "Service:orders", "/properties"), "--command-id", "binding-entity", "--value", `{"name":"orders"}`))
+	body(t, kc(home, "put", testObjectReference(t, repositoryID, "schema/service.health", ""), "--repo", repositoryID, "--command-id", "binding-schema", "--value", `{"entity":"Service","aspect":"health","origin":"`+stateRuntime.URL+`","fields":{"status":{"type":"string","access":["filter"]}}}`))
+	body(t, kc(home, "put", testObjectReference(t, repositoryID, "service/orders", "/properties"), "--repo", repositoryID, "--command-id", "binding-entity", "--value", `{"name":"orders"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", repositoryID+"=refs/heads/main@"))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--dataset", "agent"))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read", "--repo", repositoryID))
-	commit := asMap(t, body(t, kc(home, "read", testObjectReference(t, repositoryID, "Service:orders", "/properties"), "--dataset", "agent")))["commit"].(string)
+	commit := asMap(t, body(t, kc(home, "read", testObjectReference(t, repositoryID, "service/orders", "/properties"), "--dataset", "agent")))["commit"].(string)
 
 	lookup := serv.NewHTTPStateLookup(stateRuntime.Client())
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{StateLookup: lookup})
@@ -104,7 +104,7 @@ func TestWorkspaceReadHydratesStateBindingThroughTypedObjectAPI(t *testing.T) {
 	defer server.Close()
 
 	read := postAny(t, server.URL, "/object/v1/objects:read", map[string]any{
-		"dataset": "agent", "reference": testObjectReference(t, repositoryID, "Service:orders", "/health"),
+		"dataset": "agent", "reference": testObjectReference(t, repositoryID, "service/orders", "/health"),
 	})
 	result := asMap(t, read)
 	if asMap(t, result["value"])["status"] != "healthy" || result["commit"] != commit {
@@ -167,8 +167,8 @@ func TestTypedObjectReadForwardsTaihuCallerAuthentication(t *testing.T) {
 		})
 	}))
 	defer stateRuntime.Close()
-	body(t, kc(home, "put", testObjectReference(t, repositoryID, "schema/service.health", ""), "--command-id", "binding-schema", "--value", `{"entity":"Service","aspect":"health","origin":"`+stateRuntime.URL+`","fields":{"status":{"type":"string","access":["filter"]}}}`))
-	body(t, kc(home, "put", testObjectReference(t, repositoryID, "Service:orders", "/properties"), "--command-id", "binding-entity", "--value", `{"name":"orders"}`))
+	body(t, kc(home, "put", testObjectReference(t, repositoryID, "schema/service.health", ""), "--repo", repositoryID, "--command-id", "binding-schema", "--value", `{"entity":"Service","aspect":"health","origin":"`+stateRuntime.URL+`","fields":{"status":{"type":"string","access":["filter"]}}}`))
+	body(t, kc(home, "put", testObjectReference(t, repositoryID, "service/orders", "/properties"), "--repo", repositoryID, "--command-id", "binding-entity", "--value", `{"name":"orders"}`))
 	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", repositoryID+"=refs/heads/main@"))
 	body(t, kc(home, "allow", "--principal", "alice", "--cmd", "read-workspace", "--dataset", "agent"))
 	body(t, kc(home, "allow", "--principal", "alice", "--cmd", "read", "--repo", repositoryID))
@@ -188,7 +188,7 @@ func TestTypedObjectReadForwardsTaihuCallerAuthentication(t *testing.T) {
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
-	raw, err := json.Marshal(map[string]any{"dataset": "agent", "reference": testObjectReference(t, repositoryID, "Service:orders", "/health")})
+	raw, err := json.Marshal(map[string]any{"dataset": "agent", "reference": testObjectReference(t, repositoryID, "service/orders", "/health")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +212,7 @@ func TestTypedObjectReadForwardsTaihuCallerAuthentication(t *testing.T) {
 		t.Fatalf("Taihu hydrated read: status %d body %#v", resp.StatusCode, payload)
 	}
 	read := asMap(t, payload)
-	if read["reference"] != testObjectReference(t, repositoryID, "Service:orders", "/health") || asMap(t, read["value"])["status"] != "healthy" {
+	if read["reference"] != testObjectReference(t, repositoryID, "service/orders", "/health") || asMap(t, read["value"])["status"] != "healthy" {
 		t.Fatalf("Taihu hydrated read: %#v", payload)
 	}
 }

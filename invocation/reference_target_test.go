@@ -8,20 +8,27 @@ import (
 )
 
 func TestReferenceCoordinatesAreBoundBeforeAuthorization(t *testing.T) {
-	const ref = "urn:kc:object:kr%3A%2F%2Fsource%2Fa:table%2Forders#/columns/id"
-	flags := map[string]invoke.FlagValue{"reference": ref}
-	if err := NormalizeReferenceFlags(flags); err != nil || invoke.FlagString(flags, "repo") != "kr://source/a" || invoke.FlagString(flags, "object") != "table/orders" {
-		t.Fatalf("authorization must use the actual source coordinates: %#v %v", flags, err)
+	const ref = "urn:kc:object:table/orders#/columns/id"
+	scoped := map[string]invoke.FlagValue{"reference": ref, "repo": "kr://source/a"}
+	if err := NormalizeReferenceFlags(scoped); err != nil || invoke.FlagString(scoped, "repo") != "kr://source/a" || invoke.FlagString(scoped, "object") != "table/orders" {
+		t.Fatalf("authorization must use the named Repository scope: %#v %v", scoped, err)
+	}
+	if bound, _ := referenceFromFlags(scoped); bound == nil || bound.Repository != "kr://source/a" || bound.Locator != "/columns/id" {
+		t.Fatalf("bound reference lost its scope: %#v", bound)
+	}
+	unscoped := map[string]invoke.FlagValue{"reference": ref}
+	if err := NormalizeReferenceFlags(unscoped); err != nil || invoke.FlagString(unscoped, "repo") != "" || invoke.FlagString(unscoped, "object") != "table/orders" {
+		t.Fatalf("an unscoped URN must stay unresolved until the request scope is searched: %#v %v", unscoped, err)
 	}
 	for _, conflict := range []map[string]invoke.FlagValue{
-		{"reference": ref, "repo": "kr://source/a"},
 		{"reference": ref, "object": "table/orders"},
-		{"reference": ref, "repo": "kr://source/b"},
 		{"reference": ref, "object": "table/other"},
 		{"reference": ref, "aspect": "private"},
 		{"reference": ref, "include": []string{"private"}},
 		{"reference": ref, "exclude": []string{"private"}},
 		{"reference": ref, "member": "id"},
+		{"reference": ref, "commit": "c1"},
+		{"reference": ref, "dataset": "ks://published/orders", "repo": "kr://source/a"},
 		{"reference": ref, "repo": "kr://source/a", referenceBindingFlag: true},
 		{"reference": ref, "object": "table/orders", referenceBindingFlag: ref},
 		{"reference": ref, "object": "table/orders", referenceBindingFlag: map[string]any{"reference": ref}},

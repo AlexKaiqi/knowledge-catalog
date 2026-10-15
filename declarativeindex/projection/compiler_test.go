@@ -30,13 +30,13 @@ func TestProjectionCompilerRequiresObservationForBindingEligibility(t *testing.T
 		FieldRef: retrieval.FieldRef{Schema: "schema/live", Aspect: "status", Path: "owner"},
 		Type:     "string", Access: []reader.AccessHint{reader.HintFilter},
 	}
-	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:orders", AspectName: "status"}
+	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/orders", AspectName: "status"}
 	declarationDigest := objectmodel.DeclarationDigest("schema/live", &objectmodel.ValueSource{
 		Kind:    objectmodel.ValueSourceBinding,
 		Binding: &objectmodel.BindingDeclaration{Mode: objectmodel.BindingState, Runtime: "fixture", Protocol: "resource-access/v1", Operations: map[string]objectmodel.BindingOperation{"lookup": {Call: "status"}}},
 	})
 	value := objectmodel.ObjectValue{
-		Commit: "c1", Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "Table:orders"},
+		Commit: "c1", Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "table/orders"},
 		Value: map[string]any{"status": nil},
 		Declarations: []objectmodel.UnitDeclaration{{
 			Address: address, SchemaRef: "schema/live", DeclarationDigest: declarationDigest,
@@ -76,14 +76,14 @@ func TestProjectionCompilerTreatsMembersAsMaintenanceUnits(t *testing.T) {
 		Type:     "string", Access: []reader.AccessHint{reader.HintFilter, reader.HintText},
 	}}}
 	value := objectmodel.ObjectValue{
-		Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "Table:orders"},
+		Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "table/orders"},
 		Value: map[string]any{"tags": map[string]any{
 			"owner": map[string]any{"label": "finance"},
 			"tier":  map[string]any{"label": "gold"},
 		}},
 		Declarations: []objectmodel.UnitDeclaration{
-			{Address: objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: "Table:orders", AspectName: "tags", MemberKey: "owner"}, SchemaRef: "schema/tag"},
-			{Address: objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: "Table:orders", AspectName: "tags", MemberKey: "tier"}, SchemaRef: "schema/tag"},
+			{Address: objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: "table/orders", AspectName: "tags", MemberKey: "owner"}, SchemaRef: "schema/tag"},
+			{Address: objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: "table/orders", AspectName: "tags", MemberKey: "tier"}, SchemaRef: "schema/tag"},
 		},
 	}
 	doc, err := compileProjectionDocument(nil, value, spec)
@@ -104,10 +104,10 @@ func TestProjectionCompilerPreservesMissingApplicability(t *testing.T) {
 		Type:     "string", Access: []reader.AccessHint{reader.HintFilter},
 	}
 	value := objectmodel.ObjectValue{
-		Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "Table:orders"},
+		Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "table/orders"},
 		Value:   map[string]any{"structure": map[string]any{"name": "orders"}},
 		Declarations: []objectmodel.UnitDeclaration{{
-			Address:   objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:orders", AspectName: "structure"},
+			Address:   objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/orders", AspectName: "structure"},
 			SchemaRef: "schema/table",
 		}},
 	}
@@ -122,12 +122,12 @@ func TestProjectionCompilerPreservesMissingApplicability(t *testing.T) {
 
 func TestProjectionCompilerEmitsRelationCore(t *testing.T) {
 	value := objectmodel.ObjectValue{
-		Address: objectmodel.Address{Kind: objectmodel.KindRelation, ObjectID: "relation:owned"},
+		Address: objectmodel.Address{Kind: objectmodel.KindRelation, ObjectID: "relation/owned"},
 		Value: map[string]any{
-			"relationId": "relation:owned", "relationType": "owned-by", "direction": "DIRECTED",
+			"relationId": "relation/owned", "relationType": "owned-by", "direction": "DIRECTED",
 			"endpoints": []any{
-				map[string]any{"role": "subject", "objectRef": map[string]any{"repository": "kr://acme/core", "object": "Table:orders"}},
-				map[string]any{"role": "owner", "objectRef": map[string]any{"repository": "kr://acme/core", "object": "Team:finance"}},
+				map[string]any{"role": "subject", "object": "table/orders"},
+				map[string]any{"role": "owner", "object": "team/finance"},
 			},
 		},
 	}
@@ -142,9 +142,9 @@ func TestProjectionCompilerEmitsRelationCore(t *testing.T) {
 
 func TestProjectionCompilerRejectsInvalidTypedValue(t *testing.T) {
 	value := objectmodel.ObjectValue{
-		Address:      objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "Policy:P-1"},
+		Address:      objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "policy/P-1"},
 		Value:        map[string]any{"score": "not-a-number"},
-		Declarations: []objectmodel.UnitDeclaration{{Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "Policy:P-1"}, SchemaRef: "schema/policy"}},
+		Declarations: []objectmodel.UnitDeclaration{{Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "policy/P-1"}, SchemaRef: "schema/policy"}},
 	}
 	_, err := compileProjectionDocument(nil, value, retrieval.AccessSpec{Fields: []retrieval.AccessField{{
 		FieldRef: retrieval.FieldRef{Schema: "schema/policy", Path: "score"}, Type: "number", Access: []reader.AccessHint{reader.HintFilter},
@@ -160,10 +160,10 @@ func TestProjectionCompilerIndexesObjectReferenceAsKeyword(t *testing.T) {
 		Type:     "object_ref", Access: []reader.AccessHint{reader.HintFilter},
 	}
 	value := objectmodel.ObjectValue{
-		Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "Table:orders"},
-		Value:   map[string]any{"properties": map[string]any{"platformRef": "Platform:warehouse"}},
+		Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "table/orders"},
+		Value:   map[string]any{"properties": map[string]any{"platformRef": "platform/warehouse"}},
 		Declarations: []objectmodel.UnitDeclaration{{
-			Address:   objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Table:orders", AspectName: "properties"},
+			Address:   objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/orders", AspectName: "properties"},
 			SchemaRef: "schema/table",
 		}},
 	}
@@ -171,7 +171,7 @@ func TestProjectionCompilerIndexesObjectReferenceAsKeyword(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(doc.Cells) != 1 || doc.Cells[0].StringValue == nil || *doc.Cells[0].StringValue != "Platform:warehouse" {
+	if len(doc.Cells) != 1 || doc.Cells[0].StringValue == nil || *doc.Cells[0].StringValue != "platform/warehouse" {
 		t.Fatalf("object reference cell: %#v", doc.Cells)
 	}
 }
@@ -183,10 +183,10 @@ func TestProjectionCompilerIndexesReadmeBodyAsText(t *testing.T) {
 	}
 	body := "# Payments warehouse\n\nPublished metrics."
 	value := objectmodel.ObjectValue{
-		Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "payments"},
+		Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "fixture/payments"},
 		Value:   map[string]any{objectmodel.ReadmeAspect: map[string]any{"body": body}},
 		Declarations: []objectmodel.UnitDeclaration{{
-			Address:   objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "payments", AspectName: objectmodel.ReadmeAspect},
+			Address:   objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "fixture/payments", AspectName: objectmodel.ReadmeAspect},
 			SchemaRef: string(objectmodel.CoreReadmeSchemaV1),
 		}},
 	}
@@ -207,13 +207,13 @@ func TestProjectionCompilerSkipsStreamBindingUnits(t *testing.T) {
 		FieldRef: retrieval.FieldRef{Schema: "schema/live", Aspect: "events", Path: "last"},
 		Type:     "string", Access: []reader.AccessHint{reader.HintFilter},
 	}
-	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Job:orders", AspectName: "events"}
+	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/orders", AspectName: "events"}
 	declarationDigest := objectmodel.DeclarationDigest("schema/live", &objectmodel.ValueSource{
 		Kind:    objectmodel.ValueSourceBinding,
 		Binding: &objectmodel.BindingDeclaration{Mode: objectmodel.BindingStream, Runtime: "fixture", Protocol: "resource-access/v1", Operations: map[string]objectmodel.BindingOperation{"read": {Call: "events"}}},
 	})
 	value := objectmodel.ObjectValue{
-		Commit: "c1", Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "Job:orders"},
+		Commit: "c1", Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "job/orders"},
 		Value: map[string]any{"events": map[string]any{"last": "should-not-index"}},
 		Declarations: []objectmodel.UnitDeclaration{{
 			Address: address, SchemaRef: "schema/live", DeclarationDigest: declarationDigest,

@@ -20,8 +20,8 @@ func (e *openSearchEngine) RetrieveRelationsContext(ctx context.Context, req ret
 		return retrieval.RelationCandidatePage{}, err
 	}
 	defer e.mu.RUnlock()
-	if req.Repository == "" || req.Basis == "" || req.Query.Endpoint.Repository == "" || req.Query.Endpoint.Object == "" {
-		return retrieval.RelationCandidatePage{}, kernel.Fail(kernel.ErrUsageInvalid, "relation lookup requires repository, basis, and endpoint ObjectRef")
+	if req.Repository == "" || req.Basis == "" || req.Query.Endpoint == "" {
+		return retrieval.RelationCandidatePage{}, kernel.Fail(kernel.ErrUsageInvalid, "relation lookup requires repository, basis, and endpoint object ID")
 	}
 	size := req.Limit
 	if size <= 0 {
@@ -85,8 +85,7 @@ func (e *openSearchEngine) searchRelationsPIT(state pitContinuation, req retriev
 
 func (e *openSearchEngine) searchRelationsPITContext(ctx context.Context, state pitContinuation, req retrieval.RelationRetrieveRequest, size int) ([]objectmodel.ObjectID, []any, string, error) {
 	endpointMust := []map[string]any{
-		{"term": map[string]any{"relation_endpoints.repository": string(req.Query.Endpoint.Repository)}},
-		{"term": map[string]any{"relation_endpoints.object_id": string(req.Query.Endpoint.Object)}},
+		{"term": map[string]any{"relation_endpoints.object_id": string(req.Query.Endpoint)}},
 	}
 	if req.Query.Role != "" {
 		endpointMust = append(endpointMust, map[string]any{"term": map[string]any{"relation_endpoints.role": req.Query.Role}})

@@ -13,6 +13,7 @@
 | `cli_root_boundary_test.go` | 根 CLI 的生产/测试边界：禁止无符号壳、恒 nil registry、私有跨 owner 原样转发与嵌入执行；保护已有公开类型，模块单元断言归 owner，允许真实宿主装配与集成 |
 | `liveaccess_module_test.go` | LiveAccess 实现、CLI 叶、明确分层与消费者依赖方向；正反夹具保留 Object core 无反向依赖守卫 |
 | `plugin_adoption_test.go` | 共同采用事实仅在低层定义一次，旧插件入口与模块说明只作别名；阻止共同合同和 LiveAccess 回流索引登记运行时 |
+| `object_identity_shape_test.go` | 对象身份只用 `urn:kc:object:<namespace>/<name>`、关系端点只写 ID；代码、夹具、`.data` 场景素材与 `doc/` 中不得回流仓限定 URN 或 `objectRef` 端点 |
 
 Snapshot 对外只允许 `kc/snapshot` 与具名的 `dataset`、`access`、`service`、`console`、`client`、`cli` 一级包。
 守卫同时检查参数、结果、字段、嵌入类型和别名；本包私有类型也不能借公开签名泄漏。

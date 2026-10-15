@@ -170,7 +170,7 @@ func managedHumanJourney(t *testing.T) {
 	if len(items) != 1 || asMap(t, items[0])["managementURL"] != management {
 		t.Fatalf("own inventory lost management URL: %#v", mine)
 	}
-	put := []string{"writer", "put", testObjectReference(t, repository, "note/one", ""), "--command-id", "human-first-publication", "--if-absent", "--value", `{"text":"published by kaiqidong"}`}
+	put := []string{"writer", "put", testObjectReference(t, repository, "note/one", ""), "--repo", repository, "--command-id", "human-first-publication", "--if-absent", "--value", `{"text":"published by kaiqidong"}`}
 	commit := publishedCommit(t, asMap(t, body(t, run(put...))))
 	detail := ownedRepository(t, providerClient, repository)
 	readiness := asMap(t, detail["readiness"])
@@ -208,11 +208,11 @@ func managedHumanJourney(t *testing.T) {
 	expectRepositoryShareCode(consumerClient, repository, "another-reader", "object.read", "FORBIDDEN")
 	expectRepositorySharesCode(consumerClient, repository, "FORBIDDEN")
 	expectRepositoryShareRevokeCode(consumerClient, repository, shareID, "FORBIDDEN")
-	read := asMap(t, body(t, run("read", testObjectReference(t, repository, "note/one", ""), "--commit", commit)))
+	read := asMap(t, body(t, run("read", testObjectReference(t, repository, "note/one", ""), "--repo", repository, "--commit", commit)))
 	if read["commit"] != commit {
 		t.Fatal("consumer did not read the published basis")
 	}
-	body(t, run("read", testObjectReference(t, repository, "note/one", "")))
+	body(t, run("read", testObjectReference(t, repository, "note/one", ""), "--repo", repository))
 	expectCode(t, run("writer", "receipt", "--command-id", "human-first-publication"), "FORBIDDEN")
 	t.Setenv("KC_CONFIG_DIR", providerConfig)
 	expectRepositorySharesCode(providerClient, "kr://another-owner/unrelated", "FORBIDDEN")
@@ -232,7 +232,7 @@ func managedHumanJourney(t *testing.T) {
 	}
 	body(t, run("writer", "receipt", "--command-id", "human-first-publication"))
 	t.Setenv("KC_CONFIG_DIR", consumerConfig)
-	expectCode(t, run("read", testObjectReference(t, repository, "note/one", "")), "FORBIDDEN")
+	expectCode(t, run("read", testObjectReference(t, repository, "note/one", ""), "--repo", repository), "FORBIDDEN")
 	// Optional local visual inspection keeps this exact verified service alive.
 	if marker := os.Getenv("KC_PRODUCT_UI_MARKER"); marker != "" {
 		raw, _ := json.Marshal(map[string]string{"url": management, "server": server.URL, "repository": repository, "username": "kaiqidong"})

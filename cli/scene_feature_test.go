@@ -1673,7 +1673,7 @@ func (w *sceneWorld) publishSchema(spec *sceneSchemaSpec) {
 	if err != nil {
 		w.t.Fatal(err)
 	}
-	body(w.t, kc(w.home, "writer", "put", testObjectReference(w.t, spec.repo, spec.object, ""), "--command-id", w.nextCommandID("schema"), "--value", string(value)))
+	body(w.t, kc(w.home, "writer", "put", testObjectReference(w.t, spec.repo, spec.object, ""), "--repo", spec.repo, "--command-id", w.nextCommandID("schema"), "--value", string(value)))
 }
 
 func (w *sceneWorld) publishInstance(spec *sceneInstanceSpec) {
@@ -1688,7 +1688,7 @@ func (w *sceneWorld) publishInstance(spec *sceneInstanceSpec) {
 		locator = testObjectLocator(spec.aspect)
 	}
 	body(w.t, kc(w.home, "writer", "put",
-		testObjectReference(w.t, spec.repo, spec.object, locator), "--command-id", w.nextCommandID("instance"),
+		testObjectReference(w.t, spec.repo, spec.object, locator), "--repo", spec.repo, "--command-id", w.nextCommandID("instance"),
 		"--schema-ref", spec.schemaRef,
 		"--value", string(value)))
 }
@@ -1753,7 +1753,7 @@ func (w *sceneWorld) publishMaterial(step sceneStep) {
 				locator = testObjectLocator(aspect, member)
 			}
 		}
-		args := []string{"writer", "put", testObjectReference(w.t, yamlString(doc, "repo"), yamlString(doc, "object"), locator), "--command-id", w.nextCommandID("put"), "--value", string(value)}
+		args := []string{"writer", "put", testObjectReference(w.t, yamlString(doc, "repo"), yamlString(doc, "object"), locator), "--repo", yamlString(doc, "repo"), "--command-id", w.nextCommandID("put"), "--value", string(value)}
 		if member != "" {
 			args = append(args, "--kind", "Member")
 		}

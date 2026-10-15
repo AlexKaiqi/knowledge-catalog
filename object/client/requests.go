@@ -29,9 +29,10 @@ type ObjectScope struct {
 
 type ReadRequest struct {
 	ObjectDatasetIdentity
-	Reference string `json:"reference"`
-	Commit    string `json:"commit,omitempty"`
-	Ref       string `json:"ref,omitempty"`
+	Reference  string `json:"reference"`
+	Repository string `json:"repository,omitempty"`
+	Commit     string `json:"commit,omitempty"`
+	Ref        string `json:"ref,omitempty"`
 }
 
 type ObjectRequest struct {
@@ -68,6 +69,7 @@ type CommitRequest struct {
 // maintenance-unit resolution. The SDK never infers write scope from depth.
 type MaintenanceRequest struct {
 	Reference   string                          `json:"reference"`
+	Repository  string                          `json:"repository"`
 	CommandID   string                          `json:"commandId"`
 	Ref         string                          `json:"ref,omitempty"`
 	Base        string                          `json:"base,omitempty"`

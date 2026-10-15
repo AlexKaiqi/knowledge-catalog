@@ -37,7 +37,7 @@ func TestReferenceMaintenanceUsesActualUnitModelAndPreservesSiblings(t *testing.
 		t.Fatal(err)
 	}
 	updated, err := e.Execute(context.Background(), objectmodel.OpPut, service.MaintenanceRequest{
-		Reference: ref, CommandID: "replace", Base: seed.Result.NewCommit,
+		Reference: ref, Repository: s.RepositoryID, CommandID: "replace", Base: seed.Result.NewCommit,
 		Value: map[string]any{"type": "string"}, IfDigest: read.Declarations[0].Digest,
 	})
 	if err != nil {
@@ -50,12 +50,12 @@ func TestReferenceMaintenanceUsesActualUnitModelAndPreservesSiblings(t *testing.
 	}
 	for _, locator := range []string{"/columns", "/description/nested", "/columns/id/type"} {
 		bad, _ := objectmodel.FormatReference(objectmodel.Reference{Repository: s.RepositoryID, Object: "table/orders", Locator: locator})
-		_, err := e.Execute(context.Background(), objectmodel.OpRemove, service.MaintenanceRequest{Reference: bad, CommandID: "reject-" + locator})
+		_, err := e.Execute(context.Background(), objectmodel.OpRemove, service.MaintenanceRequest{Reference: bad, Repository: s.RepositoryID, CommandID: "reject-" + locator})
 		if kernel.CodeOf(err) != kernel.ErrUsageInvalid || testkit.MustHead(t, s.Repo, snapshot.DefaultRef) != updated.Result.NewCommit {
 			t.Fatalf("non-maintenance locator %s must refuse without publishing: %v", locator, err)
 		}
 	}
-	removed, err := e.Execute(context.Background(), objectmodel.OpRemove, service.MaintenanceRequest{Reference: ref, CommandID: "remove-member", Base: updated.Result.NewCommit})
+	removed, err := e.Execute(context.Background(), objectmodel.OpRemove, service.MaintenanceRequest{Reference: ref, Repository: s.RepositoryID, CommandID: "remove-member", Base: updated.Result.NewCommit})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,11 +63,11 @@ func TestReferenceMaintenanceUsesActualUnitModelAndPreservesSiblings(t *testing.
 	if err != nil || !reflect.DeepEqual(value.Value, map[string]any{"columns": map[string]any{"status": "kept"}, "description": map[string]any{"nested": "whole aspect"}}) {
 		t.Fatalf("same reference REMOVE lost siblings: %#v %v", value, err)
 	}
-	replayed, err := e.Execute(context.Background(), objectmodel.OpRemove, service.MaintenanceRequest{Reference: ref, CommandID: "remove-member"})
+	replayed, err := e.Execute(context.Background(), objectmodel.OpRemove, service.MaintenanceRequest{Reference: ref, Repository: s.RepositoryID, CommandID: "remove-member"})
 	if err != nil || replayed.Result.NewCommit != removed.Result.NewCommit || testkit.MustHead(t, s.Repo, snapshot.DefaultRef) != removed.Result.NewCommit {
 		t.Fatalf("same REMOVE must recover its original basis after the unit is gone: %#v %v", replayed, err)
 	}
-	_, err = e.Execute(context.Background(), objectmodel.OpPut, service.MaintenanceRequest{Reference: ref, CommandID: "replace", Value: "different"})
+	_, err = e.Execute(context.Background(), objectmodel.OpPut, service.MaintenanceRequest{Reference: ref, Repository: s.RepositoryID, CommandID: "replace", Value: "different"})
 	if kernel.CodeOf(err) != kernel.ErrIdempotencyConflict || testkit.MustHead(t, s.Repo, snapshot.DefaultRef) != removed.Result.NewCommit {
 		t.Fatalf("same command with changed content must refuse without publication: %v", err)
 	}
@@ -79,11 +79,11 @@ func TestReferenceMaintenanceRequiresAnExplicitNewMemberModel(t *testing.T) {
 		return s.Reader.Require(id, kernel.ErrObjectRefUnresolved)
 	}}
 	ref, _ := objectmodel.FormatReference(objectmodel.Reference{Repository: s.RepositoryID, Object: "table/new", Locator: "/columns/id"})
-	_, err := e.Execute(context.Background(), objectmodel.OpPut, service.MaintenanceRequest{Reference: ref, CommandID: "ambiguous", Value: nil})
+	_, err := e.Execute(context.Background(), objectmodel.OpPut, service.MaintenanceRequest{Reference: ref, Repository: s.RepositoryID, CommandID: "ambiguous", Value: nil})
 	if kernel.CodeOf(err) != kernel.ErrUsageInvalid || testkit.MustHead(t, s.Repo, snapshot.DefaultRef) != s.RootCommitID {
 		t.Fatalf("new collection model cannot be guessed from depth: %v", err)
 	}
-	receipt, err := e.Execute(context.Background(), objectmodel.OpPut, service.MaintenanceRequest{Reference: ref, CommandID: "create-member", Kind: objectmodel.KindMember, Value: nil, IfAbsent: true})
+	receipt, err := e.Execute(context.Background(), objectmodel.OpPut, service.MaintenanceRequest{Reference: ref, Repository: s.RepositoryID, CommandID: "create-member", Kind: objectmodel.KindMember, Value: nil, IfAbsent: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,18 +120,18 @@ func TestReferenceMaintenanceExpectedAloneKeepsCASAndDoesNotPublish(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := e.Execute(context.Background(), objectmodel.OpPut, service.MaintenanceRequest{Reference: ref, CommandID: "seed", Value: "original"})
+	first, err := e.Execute(context.Background(), objectmodel.OpPut, service.MaintenanceRequest{Reference: ref, Repository: id, CommandID: "seed", Value: "original"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	advanced, err := e.Execute(context.Background(), objectmodel.OpPut, service.MaintenanceRequest{Reference: ref, CommandID: "advance", Value: "kept"})
+	advanced, err := e.Execute(context.Background(), objectmodel.OpPut, service.MaintenanceRequest{Reference: ref, Repository: id, CommandID: "advance", Value: "kept"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, operation := range []objectmodel.OpKind{objectmodel.OpPut, objectmodel.OpRemove} {
 		t.Run(string(operation), func(t *testing.T) {
 			_, err := e.Execute(context.Background(), operation, service.MaintenanceRequest{
-				Reference: ref, CommandID: "stale-" + string(operation), Expected: first.Result.NewCommit, Value: "rejected",
+				Reference: ref, Repository: id, CommandID: "stale-" + string(operation), Expected: first.Result.NewCommit, Value: "rejected",
 			})
 			if kernel.CodeOf(err) != kernel.ErrNonFastForward {
 				t.Fatalf("stale expected commit must retain its CAS failure: %v", err)
@@ -154,14 +154,14 @@ func TestReferenceMaintenancePreservesExistingRelationKind(t *testing.T) {
 	}}
 	ref, _ := objectmodel.FormatReference(objectmodel.Reference{Repository: s.RepositoryID, Object: "relation/owns"})
 	value := map[string]any{"relationId": "relation/owns", "relationType": "owns", "direction": "DIRECTED", "endpoints": []any{
-		map[string]any{"role": "owner", "objectRef": map[string]any{"repository": string(s.RepositoryID), "object": "team/a"}},
-		map[string]any{"role": "owned", "objectRef": map[string]any{"repository": string(s.RepositoryID), "object": "table/orders"}},
+		map[string]any{"role": "owner", "object": "team/a"},
+		map[string]any{"role": "owned", "object": "table/orders"},
 	}}
-	_, err := e.Execute(context.Background(), objectmodel.OpPut, service.MaintenanceRequest{Reference: ref, CommandID: "create-relation", Kind: objectmodel.KindRelation, Value: value})
+	_, err := e.Execute(context.Background(), objectmodel.OpPut, service.MaintenanceRequest{Reference: ref, Repository: s.RepositoryID, CommandID: "create-relation", Kind: objectmodel.KindRelation, Value: value})
 	if err != nil {
 		t.Fatal(err)
 	}
-	updated, err := e.Execute(context.Background(), objectmodel.OpPut, service.MaintenanceRequest{Reference: ref, CommandID: "replace-relation", Value: value})
+	updated, err := e.Execute(context.Background(), objectmodel.OpPut, service.MaintenanceRequest{Reference: ref, Repository: s.RepositoryID, CommandID: "replace-relation", Value: value})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,11 +169,11 @@ func TestReferenceMaintenancePreservesExistingRelationKind(t *testing.T) {
 	if err != nil || resolution.Address.Kind != objectmodel.KindRelation {
 		t.Fatalf("root URI replaced the existing maintenance kind: %#v %v", resolution, err)
 	}
-	_, err = e.Execute(context.Background(), objectmodel.OpPut, service.MaintenanceRequest{Reference: ref, CommandID: "invalid-relation", Value: map[string]any{"body": "not a relation"}})
+	_, err = e.Execute(context.Background(), objectmodel.OpPut, service.MaintenanceRequest{Reference: ref, Repository: s.RepositoryID, CommandID: "invalid-relation", Value: map[string]any{"body": "not a relation"}})
 	if err == nil || testkit.MustHead(t, s.Repo, snapshot.DefaultRef) != updated.Result.NewCommit {
 		t.Fatalf("omitted kind bypassed Relation validation: %v", err)
 	}
-	_, err = e.Execute(context.Background(), objectmodel.OpPut, service.MaintenanceRequest{Reference: ref, CommandID: "reinterpret-relation", Kind: objectmodel.KindEntity, Value: value})
+	_, err = e.Execute(context.Background(), objectmodel.OpPut, service.MaintenanceRequest{Reference: ref, Repository: s.RepositoryID, CommandID: "reinterpret-relation", Kind: objectmodel.KindEntity, Value: value})
 	if kernel.CodeOf(err) != kernel.ErrUsageInvalid || testkit.MustHead(t, s.Repo, snapshot.DefaultRef) != updated.Result.NewCommit {
 		t.Fatalf("explicit kind reinterpreted an existing Relation: %v", err)
 	}

@@ -8,16 +8,16 @@ import (
 
 // RelationQuery is the layer ③ one-hop discovery request.
 type RelationQuery struct {
-	Endpoint     objectmodel.ObjectRef         `json:"endpoint"`
+	Endpoint     objectmodel.ObjectID          `json:"endpoint"`
 	RelationType string                        `json:"relationType,omitempty"`
 	Role         string                        `json:"role,omitempty"`
 	Direction    objectmodel.RelationDirection `json:"direction,omitempty"`
 }
 
 type RelationRetrieveRequest struct {
-	// Repository/Basis locate the stored relations, independently of the
-	// endpoint ObjectRef in Query. Cross-repository references do not
-	// change the authority used for candidate hydration.
+	// Repository/Basis locate the stored relations. The endpoint in Query is
+	// an object ID only, so the stored relation and its endpoints never have
+	// to share a Repository.
 	Repository   kernel.RepositoryID `json:"repository"`
 	Basis        kernel.CommitID     `json:"basis"`
 	Query        RelationQuery       `json:"query"`

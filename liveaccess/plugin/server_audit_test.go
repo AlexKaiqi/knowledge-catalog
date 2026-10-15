@@ -36,7 +36,7 @@ func TestServerLiveAccessAuditRestoresOriginalReadAndRechecksSeparatePermission(
 	f := newAcceptanceFixture(t, server.HTTPServerOptions{LiveAccessPlugins: acceptanceEntries(t, map[string]*acceptanceRuntime{"one": one, "two": two})})
 	f.publish(t, acceptanceR1, "http://logical-source.invalid")
 	oldCommit := f.commits[acceptanceR1]
-	request := kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR1, ""), Commit: string(oldCommit)}
+	request := kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR1, ""), Repository: string(acceptanceR1), Commit: string(oldCommit)}
 	row, err := f.read(t, "reader", "audit-original", request)
 	if err != nil {
 		t.Fatal(err)
@@ -51,7 +51,7 @@ func TestServerLiveAccessAuditRestoresOriginalReadAndRechecksSeparatePermission(
 	}
 	one.value.Store(37)
 	f.commit(t, acceptanceR1, []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: acceptanceObject, AspectName: "definition"}, Value: map[string]any{"owner": "advanced"}}})
-	newRow, err := f.read(t, "reader", "audit-new", kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR1, ""), Commit: string(f.commits[acceptanceR1])})
+	newRow, err := f.read(t, "reader", "audit-new", kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR1, ""), Repository: string(acceptanceR1), Commit: string(f.commits[acceptanceR1])})
 	if err != nil || fmt.Sprint(newRow.Value.(map[string]any)["good"].(map[string]any)["value"]) != "37" || newRow.Value.(map[string]any)["definition"].(map[string]any)["owner"] != "advanced" || newRow.Commit == oldCommit {
 		t.Fatalf("source/Snapshot update did not advance actual read: %#v %v", newRow, err)
 	}
@@ -60,7 +60,7 @@ func TestServerLiveAccessAuditRestoresOriginalReadAndRechecksSeparatePermission(
 	f.start(t)
 	sourceCalls, sourceAttempts := one.calls.Load(), one.attempts.Load()
 	var fixed objectmodel.ObservedValue
-	err = f.client(t, "reader").Objects().Read(context.Background(), kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR1, "/definition"), Commit: string(oldCommit)}, kcclient.RequestOptions{RequestID: "audit-fixed-snapshot"}, &fixed)
+	err = f.client(t, "reader").Objects().Read(context.Background(), kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR1, "/definition"), Repository: string(acceptanceR1), Commit: string(oldCommit)}, kcclient.RequestOptions{RequestID: "audit-fixed-snapshot"}, &fixed)
 	if err != nil || fixed.Commit != oldCommit || fixed.Value.(map[string]any)["owner"] != "fixed" || one.attempts.Load() != sourceAttempts {
 		t.Fatalf("original Snapshot position changed or called offline source: %#v %v", fixed, err)
 	}
@@ -153,7 +153,7 @@ func TestServerLiveAccessPersistenceFailuresPreventSuccessfulDelivery(t *testing
 			if err := os.WriteFile(blocked, []byte("actual filesystem blocker"), 0600); err != nil {
 				t.Fatal(err)
 			}
-			row, err := f.read(t, "reader", "unpersisted-"+target, kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR1, ""), Commit: string(f.commits[acceptanceR1])})
+			row, err := f.read(t, "reader", "unpersisted-"+target, kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR1, ""), Repository: string(acceptanceR1), Commit: string(f.commits[acceptanceR1])})
 			if kernel.CodeOf(err) != kernel.ErrTemporaryUnavailable || row != nil || one.calls.Load() == 0 {
 				t.Fatalf("failed %s persistence delivered source result: %#v %v calls=%d", target, row, err, one.calls.Load())
 			}
@@ -171,7 +171,7 @@ func TestServerLiveAccessAuditDistinguishesCorruptionLossAndExpiry(t *testing.T)
 	one, two := newAcceptanceRuntime(t, 31), newAcceptanceRuntime(t, 22)
 	f := newAcceptanceFixture(t, server.HTTPServerOptions{LiveAccessPlugins: acceptanceEntries(t, map[string]*acceptanceRuntime{"one": one, "two": two})})
 	f.publish(t, acceptanceR1, "http://logical-source.invalid")
-	if _, err := f.read(t, "reader", "lifecycle-original", kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR1, ""), Commit: string(f.commits[acceptanceR1])}); err != nil {
+	if _, err := f.read(t, "reader", "lifecycle-original", kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR1, ""), Repository: string(acceptanceR1), Commit: string(f.commits[acceptanceR1])}); err != nil {
 		t.Fatal(err)
 	}
 	entries, err := f.audit(t, "auditor", "lifecycle-original")

@@ -10,6 +10,6 @@ Feature: 合并审阅过的分支后从主分支读回新值
       | result.repositoryId | kr://scene/object |
       | result.targetRef    | refs/heads/main |
       | result.newCommit    | nonempty |
-    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:note%2Fhello`
+    When I run `kc read urn:kc:object:note/hello`
     Then the output has:
       | value.text | proposed |

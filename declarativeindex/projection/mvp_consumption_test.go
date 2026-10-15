@@ -109,8 +109,8 @@ func TestControlledVocabularyAndProgressiveReadingUseFixedObjectBasis(t *testing
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "guide/exception"}, Value: map[string]any{"body": "退款例外需提供原始凭据。"}},
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindRelation, ObjectID: "relation/refund-exception"}, Value: map[string]any{
 			"relationId": "relation/refund-exception", "relationType": "explained-by", "direction": "DIRECTED", "endpoints": []any{
-				map[string]any{"role": "subject", "objectRef": map[string]any{"repository": string(repo.ID()), "object": "guide/refund"}},
-				map[string]any{"role": "detail", "objectRef": map[string]any{"repository": string(repo.ID()), "object": "guide/exception"}},
+				map[string]any{"role": "subject", "object": "guide/refund"},
+				map[string]any{"role": "detail", "object": "guide/exception"},
 			},
 		}},
 	})
@@ -127,23 +127,23 @@ func TestControlledVocabularyAndProgressiveReadingUseFixedObjectBasis(t *testing
 	if err != nil || !reflect.DeepEqual(mvpHitIDs(guides), []string{"guide/refund"}) {
 		t.Fatalf("mapped concept lookup: %v %v", mvpHitIDs(guides), err)
 	}
-	relations, err := idx.RelationsAt(repo, head, retrieval.RelationPageRequest{Query: retrieval.RelationQuery{Endpoint: objectmodel.ObjectRef{Repository: repo.ID(), Object: "guide/refund"}, RelationType: "explained-by", Role: "subject"}})
+	relations, err := idx.RelationsAt(repo, head, retrieval.RelationPageRequest{Query: retrieval.RelationQuery{Endpoint: "guide/refund", RelationType: "explained-by", Role: "subject"}})
 	if err != nil || len(relations.Hits) != 1 {
 		t.Fatalf("progressive relation lookup: %+v %v", relations, err)
 	}
-	var detail objectmodel.ObjectRef
+	var detail objectmodel.ObjectID
 	for _, endpoint := range relations.Hits[0].Relation.Endpoints {
 		if endpoint.Role == "detail" {
-			detail = endpoint.ObjectRef
+			detail = endpoint.Object
 		}
 	}
-	if detail.Object != "guide/exception" || detail.Repository != repo.ID() {
+	if detail != "guide/exception" {
 		t.Fatalf("lost evidence identity: %+v", detail)
 	}
 	// Advance HEAD after locating the next material. Reading the fixed basis
 	// must still return the evidence used by this exploration.
-	testfixture.PutAt(t, repo, head, []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: detail.Object}, Value: map[string]any{"body": "新版本说明"}}})
-	value, err := repo.Read(detail.Object, head)
+	testfixture.PutAt(t, repo, head, []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: detail}, Value: map[string]any{"body": "新版本说明"}}})
+	value, err := repo.Read(detail, head)
 	if err != nil || value.Commit != head || value.Value.(map[string]any)["body"] != "退款例外需提供原始凭据。" {
 		t.Fatalf("progressive read mixed versions: %+v %v", value, err)
 	}

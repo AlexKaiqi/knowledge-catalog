@@ -11,7 +11,7 @@ import (
 func TestObjectEnvelopeRejectsInvalidDatasetMetadata(t *testing.T) {
 	for _, metadata := range []string{`null`, `{"x":null}`, `{"x":1}`, `{"x":[]}`, `{"x":"a","x":"b"}`} {
 		var request objectReadRequest
-		r := httptest.NewRequest(http.MethodPost, "/object/v1/read", strings.NewReader(`{"reference":"urn:kc:object:kr%3A%2F%2Fsource%2Fa:object","definition":{"revision":1,"sources":[],"metadata":`+metadata+`}}`))
+		r := httptest.NewRequest(http.MethodPost, "/object/v1/read", strings.NewReader(`{"reference":"urn:kc:object:object","definition":{"revision":1,"sources":[],"metadata":`+metadata+`}}`))
 		response := httptest.NewRecorder()
 		if decodeServiceRequest(response, r, &request) || response.Code != http.StatusBadRequest {
 			t.Fatalf("invalid inline metadata was accepted: %s HTTP %d", metadata, response.Code)

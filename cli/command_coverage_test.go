@@ -114,8 +114,8 @@ func TestCommandSpecificUsageBoundaries(t *testing.T) {
 		{"writer branch rejects both a ref and a commit basis", []string{"writer", "branch", "--repo", repositoryID, "--name", "review/x", "--from", "main", "--commit", "c1"}},
 		{"writer merge requires a source branch", []string{"writer", "merge", "--repo", repositoryID, "--command-id", "merge-x"}},
 		{"writer merge requires a command id", []string{"writer", "merge", "--repo", repositoryID, "--from", "review/x"}},
-		{"binding resolve requires an aspect", []string{"binding", "show", "--repo", repositoryID, "--object", "Service:x"}},
-		{"read rejects pin", []string{"read", testObjectReference(t, repositoryID, "policy/x", ""), "--pin", `{}`}},
+		{"binding resolve requires an aspect", []string{"binding", "show", "--repo", repositoryID, "--object", "service/x"}},
+		{"read rejects pin", []string{"read", testObjectReference(t, repositoryID, "policy/x", ""), "--repo", repositoryID, "--pin", `{}`}},
 		{"resolve requires an object", []string{"resolve", "--repo", repositoryID}},
 		{"resolve rejects a member without an aspect", []string{"resolve", "--repo", repositoryID, "--object", "policy/x", "--member", "user:bob"}},
 		{"read rejects retired split coordinates", []string{"read", "--repo", repositoryID, "--object", "policy/x", "--member", "user:bob"}},
@@ -129,7 +129,7 @@ func TestCommandSpecificUsageBoundaries(t *testing.T) {
 		{"hitmap rejects an oversized page", []string{"operations", "audit", "hitmap", "--limit", "201"}},
 		{"access log rejects an oversized page", []string{"operations", "audit", "access", "--limit", "201"}},
 		{"schema browse rejects an oversized page", []string{"schema", "list", "--repo", repositoryID, "--limit", "201"}},
-		{"relations rejects an oversized page", []string{"relations", "--repo", repositoryID, "--object", "Table:x", "--limit", "1001"}},
+		{"relations rejects an oversized page", []string{"relations", "--repo", repositoryID, "--object", "table/x", "--limit", "1001"}},
 		{"provenance requires an object", []string{"provenance", "--repo", repositoryID}},
 		{"schema describe requires a target", []string{"schema", "describe"}},
 		{"schema browse requires a repository", []string{"schema", "list"}},
@@ -286,7 +286,7 @@ func TestMutatingCommandsRejectInvalidStateTargetsAndAuthorization(t *testing.T)
 		{"writer commit requires a directory", []string{"writer", "commit", "--command-id", "missing-changeset"}, "USAGE_INVALID"},
 		{"writer head rejects an unknown repository", []string{"writer", "head", "--repo", "kr://missing/repository"}, "USAGE_INVALID"},
 		{"diff rejects an unknown repository", []string{"diff", "--repo", "kr://missing/repository", "--dir", t.TempDir()}, "USAGE_INVALID"},
-		{"writer remove rejects an unknown repository", []string{"writer", "remove", testObjectReference(t, "kr://missing/repository", "Policy:x", ""), "--command-id", "remove-missing"}, "USAGE_INVALID"},
+		{"writer remove rejects an unknown repository", []string{"writer", "remove", testObjectReference(t, "kr://missing/repository", "policy/x", ""), "--repo", "kr://missing/repository", "--command-id", "remove-missing"}, "USAGE_INVALID"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			expectCode(t, kc(home, tc.args...), tc.code)

@@ -19,8 +19,8 @@ func TestLocalCLISearchDoesNotCatchUpProjection(t *testing.T) {
 	// export KC_TEST_OPENSEARCH_URL, so pin index:none explicitly.
 	body(t, kc(h, "store-set", "--index", "none"))
 	seedRepo(t, h, core)
-	body(t, kc(h, "put", testObjectReference(t, core, "schema/policy.body", ""), "--command-id", "schema-body", "--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`))
-	body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--command-id", "i1", "--value", `{"body":"needs a runbook"}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "schema/policy.body", ""), "--repo", core, "--command-id", "schema-body", "--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--repo", core, "--command-id", "i1", "--value", `{"body":"needs a runbook"}`))
 	expectCode(t, kc(h, "search", "--repo", core, "--query", "runbook"), "CAPABILITY_UNSATISFIED")
 }
 

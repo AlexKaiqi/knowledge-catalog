@@ -50,14 +50,14 @@ func TestCollectionProductViewKeepsEachUnitsOwnSource(t *testing.T) {
 		map[string]any{"address": map[string]any{"objectId": "table/orders", "aspectName": "columns", "memberKey": "id"}, "provenance": map[string]any{"originKind": "SOURCE", "sourceRefs": []any{"source/one"}}},
 		map[string]any{"address": map[string]any{"objectId": "table/orders", "aspectName": "columns", "memberKey": "status"}, "provenance": map[string]any{"originKind": "DERIVATION", "sourceRefs": []any{"source/two"}, "inputWorkspaceVersionRef": "fixed-input", "algorithm": map[string]any{"codeHash": "v1"}}},
 	}
-	got := Shape("read", map[string]any{"reference": "urn:kc:object:r:table%2Forders#/columns", "repository": "r", "objectId": "table/orders", "commit": "fixed", "locator": "/columns", "value": map[string]any{"id": "one", "status": "two"}, "declarations": declarations}).(map[string]any)
+	got := Shape("read", map[string]any{"reference": "urn:kc:object:table/orders#/columns", "repository": "r", "objectId": "table/orders", "commit": "fixed", "locator": "/columns", "value": map[string]any{"id": "one", "status": "two"}, "declarations": declarations}).(map[string]any)
 	if !reflect.DeepEqual(got["declarations"], declarations) {
 		t.Fatalf("CLI dropped or combined distinct recorded origins: %#v", got)
 	}
 }
 
 func TestReferenceReadKeepsItsMaintenanceAndSourceEvidence(t *testing.T) {
-	reference := "urn:kc:object:r:note%2Fhello#/readme"
+	reference := "urn:kc:object:note/hello#/readme"
 	address := map[string]any{"objectId": "note/hello", "aspectName": "readme", "kind": "Aspect"}
 	declarations := []any{map[string]any{"schemaRef": "schema/readme"}}
 	provenance := map[string]any{"sourceRefs": []any{"source/hello"}}
@@ -70,7 +70,7 @@ func TestReferenceReadKeepsItsMaintenanceAndSourceEvidence(t *testing.T) {
 
 func TestReadProductViewPreservesLogicalObservationBasis(t *testing.T) {
 	observations := []any{map[string]any{"address": map[string]any{"objectId": "table/orders", "aspectName": "stats"}, "declarationCommit": "fixed", "declarationDigest": "schema-generation", "basis": map[string]any{"sourceRevision": "source-v2", "observedAt": "2026-10-13T02:00:00Z"}}}
-	got := Shape("read", map[string]any{"reference": "urn:kc:object:r:table%2Forders#/stats", "locator": "/stats", "repository": "r", "commit": "fixed", "objectId": "table/orders", "value": map[string]any{"rowCount": 12}, "observations": observations}).(map[string]any)
+	got := Shape("read", map[string]any{"reference": "urn:kc:object:table/orders#/stats", "locator": "/stats", "repository": "r", "commit": "fixed", "objectId": "table/orders", "value": map[string]any{"rowCount": 12}, "observations": observations}).(map[string]any)
 	if !reflect.DeepEqual(got["observations"], observations) {
 		t.Fatalf("logical value lost the basis distinguishing source observation from fixed declaration: %#v", got)
 	}

@@ -18,26 +18,26 @@ func TestLoomPublishedDatasetFreezesUntilRepublish(t *testing.T) {
 	core := "kr://acme/public/core"
 	body(t, kc(h, "init"))
 	seedRepo(t, h, core)
-	body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--command-id", "v1", "--value", `{"body":"first"}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--repo", core, "--command-id", "v1", "--value", `{"body":"first"}`))
 	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", core+"=refs/heads/main"))
 	first := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--dataset", "agent")))
 	c1 := first["commit"].(string)
-	body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--command-id", "v2", "--value", `{"body":"later"}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--repo", core, "--command-id", "v2", "--value", `{"body":"later"}`))
 	namedRead := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--dataset", "agent")))
 	if asMap(t, asMap(t, namedRead)["value"])["body"] != "first" {
 		t.Fatalf("named dataset latest must stay frozen until republish: %#v", namedRead)
 	}
-	frozen := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--commit", c1)))
+	frozen := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--repo", core, "--commit", c1)))
 	if asMap(t, frozen["value"])["body"] != "first" {
 		t.Fatalf("exact --repo --commit replay must not follow the live branch: %#v", frozen)
 	}
-	expectMsg(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--pin", "{}"), "rejects --pin")
+	expectMsg(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--repo", core, "--pin", "{}"), "rejects --pin")
 	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "2", "--source", core+"=refs/heads/main"))
 	live := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--dataset", "agent")))
 	if asMap(t, asMap(t, live)["value"])["body"] != "later" {
 		t.Fatal(live)
 	}
-	replayed := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--commit", c1)))
+	replayed := asMap(t, body(t, kc(h, "read", testObjectReference(t, core, "policy/A", ""), "--repo", core, "--commit", c1)))
 	if asMap(t, replayed["value"])["body"] != "first" {
 		t.Fatalf("historical --repo --commit must keep the earlier Snapshot: %#v", replayed)
 	}
@@ -50,7 +50,7 @@ func TestCatalogInventoryDoesNotHideReposWithoutObjectRead(t *testing.T) {
 	body(t, kc(h, "init"))
 	seedRepo(t, h, pub)
 	seedRepo(t, h, secret)
-	body(t, kc(h, "put", testObjectReference(t, secret, "policy/secret", ""), "--command-id", "secret-body", "--value", `{"body":"classified"}`))
+	body(t, kc(h, "put", testObjectReference(t, secret, "policy/secret", ""), "--repo", secret, "--command-id", "secret-body", "--value", `{"body":"classified"}`))
 	body(t, kc(h, "dataset", "define", "--dataset", "company", "--revision", "1", "--source", pub+"=refs/heads/main"))
 	body(t, kc(h, "dataset", "define", "--dataset", "classif", "--revision", "1", "--source", secret+"=refs/heads/main"))
 	body(t, kc(h, "allow", "--principal", "bot", "--action", "inventory.read"))
@@ -71,7 +71,7 @@ func TestCatalogInventoryDoesNotHideReposWithoutObjectRead(t *testing.T) {
 	if !setIDs["company"] || !setIDs["classif"] {
 		t.Fatalf("inventory.read must list named datasets: %#v", state)
 	}
-	expectCode(t, kc(h, "read", testObjectReference(t, secret, "policy/secret", ""), "--as", "bot"), "FORBIDDEN")
+	expectCode(t, kc(h, "read", testObjectReference(t, secret, "policy/secret", ""), "--repo", secret, "--as", "bot"), "FORBIDDEN")
 }
 
 func TestLoomRecipeTravelsWithAuthoritySnapshot(t *testing.T) {
@@ -82,7 +82,7 @@ func TestLoomRecipeTravelsWithAuthoritySnapshot(t *testing.T) {
 	aliceDSN := lakeFSRepoDSN(t)
 	seedRepo(t, h, alice, "--dsn", aliceDSN)
 	seedRepo(t, h, semantic)
-	body(t, kc(h, "put", testObjectReference(t, alice, "note/x", ""), "--command-id", "alice-note", "--value", `{"text":"seed"}`))
+	body(t, kc(h, "put", testObjectReference(t, alice, "note/x", ""), "--repo", alice, "--command-id", "alice-note", "--value", `{"text":"seed"}`))
 	defined := asMap(t, body(t, kc(h, "dataset", "define", "--dataset", "notes", "--revision", "1",
 		"--source", alice+"=refs/heads/main@",
 		"--source", semantic+"=refs/heads/main@refs/semantic",
@@ -146,7 +146,7 @@ func TestLoomDefineDatasetFromFile(t *testing.T) {
 	alice := "kr://acme/personals/alice"
 	body(t, kc(h, "init"))
 	seedRepo(t, h, alice)
-	body(t, kc(h, "put", testObjectReference(t, alice, "note/x", ""), "--command-id", "alice-note", "--value", `{"text":"seed"}`))
+	body(t, kc(h, "put", testObjectReference(t, alice, "note/x", ""), "--repo", alice, "--command-id", "alice-note", "--value", `{"text":"seed"}`))
 	file := filepath.Join(t.TempDir(), ".kc-dataset.yaml")
 	if err := os.WriteFile(file, []byte("name: notes\nmounts:\n  - repository: "+alice+"\n    selector: refs/heads/main\n    path: \"\"\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -180,8 +180,8 @@ func TestLoomOverlayAndBaseRev(t *testing.T) {
 	seedRepo(t, h, alice)
 	seedRepo(t, h, semantic)
 	seedRepo(t, h, scratch)
-	body(t, kc(h, "put", testObjectReference(t, alice, "note/x", ""), "--command-id", "alice-note", "--value", `{"text":"seed"}`))
-	body(t, kc(h, "put", testObjectReference(t, scratch, "note/scratch", ""), "--command-id", "scratch-note", "--value", `{"text":"overlay"}`))
+	body(t, kc(h, "put", testObjectReference(t, alice, "note/x", ""), "--repo", alice, "--command-id", "alice-note", "--value", `{"text":"seed"}`))
+	body(t, kc(h, "put", testObjectReference(t, scratch, "note/scratch", ""), "--repo", scratch, "--command-id", "scratch-note", "--value", `{"text":"overlay"}`))
 	body(t, kc(h, "dataset", "define", "--dataset", "notes", "--revision", "1",
 		"--source", alice+"=refs/heads/main@",
 		"--source", semantic+"=refs/heads/main@refs/semantic",
@@ -243,7 +243,7 @@ mounts:
 	if aliceFrozen == "" {
 		t.Fatalf("republish must freeze a commit: %#v", republished)
 	}
-	body(t, kc(h, "put", testObjectReference(t, alice, "note/x", ""), "--command-id", "move-alice", "--value", `{"text":"moved"}`))
+	body(t, kc(h, "put", testObjectReference(t, alice, "note/x", ""), "--repo", alice, "--command-id", "move-alice", "--value", `{"text":"moved"}`))
 	stillFrozen := asMap(t, body(t, kc(h, "read", testObjectReference(t, alice, "note/x", ""), "--dataset", "notes")))
 	if stillFrozen["commit"] != aliceFrozen || asMap(t, stillFrozen["value"])["text"] != "seed" {
 		t.Fatalf("published dataset must keep the frozen commit: %#v", stillFrozen)

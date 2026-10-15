@@ -9,7 +9,7 @@ import (
 )
 
 func TestBulkFlagRejectedOnSingleOperationWrites(t *testing.T) {
-	_, err := VerbRemove(&Invocation{Flags: map[string]invoke.FlagValue{"reference": "urn:kc:object:kr%3A%2F%2Fsource%2Fa:metric%2Fgmv", "command-id": "reject-bulk", "bulk": true}})
+	_, err := VerbRemove(&Invocation{Flags: map[string]invoke.FlagValue{"reference": "urn:kc:object:metric/gmv", "command-id": "reject-bulk", "bulk": true}})
 	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
 	if !strings.Contains(err.Error(), "single object maintenance") {
 		t.Fatalf("bulk refusal was masked by a missing input: %v", err)

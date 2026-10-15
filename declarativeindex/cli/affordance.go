@@ -22,8 +22,8 @@ func Affordance() PluginAffordance {
 用法：
   kc search --repo kr://scene/object --query runbook
   kc search --dataset scene-set --eq amount=100 --sort amount:asc
-  kc relations --repo kr://scene/object --object metric/gmv
-  kc traverse --repo kr://scene/object --object metric/gmv --max-hops 2
+  kc relations --repo kr://scene/object --object example/report
+  kc traverse --repo kr://scene/object --object example/report --max-hops 2
 条件与保证：
   Repo 配置插件；Dataset 使用本次来源仓的贡献及固定范围，不另安装插件。
   先验证声明资格、提供方组合能力、固定版本就绪及当前授权；声明本身不证明能够执行。

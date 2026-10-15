@@ -273,7 +273,7 @@ func TestTypedHTTPCollectsApplicationMetricsAndChildSpan(t *testing.T) {
 	t.Cleanup(func() { _ = facade.closeReadHome() })
 
 	request := httptest.NewRequest(http.MethodPost, "/object/v1/objects:read",
-		bytes.NewBufferString(`{"dataset":"missing","reference":"urn:kc:object:kr%3A%2F%2Facme%2Ftelemetry:Policy%3Amissing"}`))
+		bytes.NewBufferString(`{"dataset":"missing","reference":"urn:kc:object:policy/missing"}`))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("X-Kc-As", "agent:telemetry-test")
 	response := httptest.NewRecorder()

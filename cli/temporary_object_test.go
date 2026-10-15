@@ -35,14 +35,14 @@ func TestProductRepoCommitFreezesObjectAndCurrentPermissions(t *testing.T) {
 	govern := func(args ...string) kcRunResult { return invoke(admin, args...) }
 	body(t, govern("grant", "add", "--principal", consumer, "--action", "inventory.read,dataset.resolve,file.read"))
 	grant := asMap(t, body(t, govern("grant", "add", "--principal", consumer, "--action", "object.read,object.provenance,object.history.read,object.search", "--repo", repo)))
-	body(t, govern("writer", "put", testObjectReference(t, repo, "schema/note", ""), "--command-id", "temp-schema", "--value", `{"entity":"Note","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
-	first := publishedCommit(t, asMap(t, body(t, govern("writer", "put", testObjectReference(t, repo, "note/one", ""), "--command-id", "temp-first", "--schema-ref", "schema/note", "--value", `{"body":"first"}`))))
+	body(t, govern("writer", "put", testObjectReference(t, repo, "schema/note", ""), "--repo", repo, "--command-id", "temp-schema", "--value", `{"entity":"Note","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+	first := publishedCommit(t, asMap(t, body(t, govern("writer", "put", testObjectReference(t, repo, "note/one", ""), "--repo", repo, "--command-id", "temp-first", "--schema-ref", "schema/note", "--value", `{"body":"first"}`))))
 	searchAvailable := os.Getenv("KC_TEST_OPENSEARCH_URL") != ""
 	if searchAvailable {
 		body(t, govern("operations", "projection", "sync", "--repo", repo))
 	}
 	before := asMap(t, body(t, govern("show")))
-	body(t, govern("writer", "put", testObjectReference(t, repo, "note/one", ""), "--command-id", "temp-second", "--schema-ref", "schema/note", "--value", `{"body":"second"}`))
+	body(t, govern("writer", "put", testObjectReference(t, repo, "note/one", ""), "--repo", repo, "--command-id", "temp-second", "--schema-ref", "schema/note", "--value", `{"body":"second"}`))
 	if searchAvailable {
 		body(t, govern("operations", "projection", "sync", "--repo", repo))
 		for _, args := range [][]string{
@@ -67,7 +67,7 @@ func TestProductRepoCommitFreezesObjectAndCurrentPermissions(t *testing.T) {
 		}
 	}
 	reference := testObjectReference(t, repo, "note/one", "")
-	read := asMap(t, body(t, invoke(consumer, "read", reference, "--commit", first)))
+	read := asMap(t, body(t, invoke(consumer, "read", reference, "--repo", repo, "--commit", first)))
 	if read["reference"] != reference || read["repository"] != repo || read["commit"] != first ||
 		asMap(t, read["address"])["objectId"] != "note/one" || asMap(t, read["value"])["body"] != "first" {
 		t.Fatalf("historical read latest: %#v", read)
@@ -79,6 +79,6 @@ func TestProductRepoCommitFreezesObjectAndCurrentPermissions(t *testing.T) {
 		t.Fatalf("repo --commit consume published a Dataset: %s -> %s", a, b)
 	}
 	body(t, govern("grant", "remove", "--id", grant["id"].(string)))
-	expectCode(t, invoke(consumer, "read", testObjectReference(t, repo, "note/one", ""), "--commit", first), "FORBIDDEN")
-	expectCode(t, invoke(consumer, "read", testObjectReference(t, repo, "note/one", "")), "FORBIDDEN")
+	expectCode(t, invoke(consumer, "read", testObjectReference(t, repo, "note/one", ""), "--repo", repo, "--commit", first), "FORBIDDEN")
+	expectCode(t, invoke(consumer, "read", testObjectReference(t, repo, "note/one", ""), "--repo", repo), "FORBIDDEN")
 }

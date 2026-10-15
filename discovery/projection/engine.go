@@ -25,8 +25,8 @@ type ProjectionCell struct {
 }
 
 type ProjectionRelationEndpoint struct {
-	Role      string                `json:"role"`
-	ObjectRef objectmodel.ObjectRef `json:"objectRef"`
+	Role   string               `json:"role"`
+	Object objectmodel.ObjectID `json:"object"`
 }
 
 type ProjectionRelation struct {

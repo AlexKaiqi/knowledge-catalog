@@ -69,7 +69,7 @@ func leafHelpEntries() map[string]helpEntry {
 用途：
   找到把指定对象作为端点的关系对象，供读取关系或继续有界遍历。
 用法与参数：
-  单仓 --object 是对象 id；Dataset 必须是范围内完整 kc://<repository>/<object> 引用，不能只写同名对象 id。
+  --object 是对象 ID（<namespace>/<name>），单仓和 Dataset 写法相同；端点不带仓，查的是范围内存放的关系。
   可按 --relation-type、--role 筛选；--direction 是关系的方向类型，不是 in/out。
   --limit 默认 100、最大 1000；用 --continuation 续页。单仓可用 --commit 或 --ref 固定依据。
 条件：
@@ -85,11 +85,11 @@ func leafHelpEntries() map[string]helpEntry {
   高连接度对象会产生多页；结果受固定范围、权限和投影覆盖约束，不能当作所有来源的完整关系图。
   关系查询不等于有向入边/出边查询，也不证明关系声明反映了外部源的当前事实。
 失败恢复：
-  无投影时查 operations projection describe；Dataset 端点被拒绝时核对完整引用是否属于当前范围。
+  无投影时查 operations projection describe；--object 被拒绝时核对它是 <namespace>/<name> 形式的对象 ID。
   续页保持端点、过滤和固定依据；游标失效时重新查询，单仓可复用返回的 commit，勿拼接不同版本的页。
 示例：
-  例：kc relations --repo kr://scene/object --object metric/gmv --direction DIRECTED
-  例：kc relations --dataset scene-set --object kc://scene/object/metric/gmv --direction DIRECTED`,
+  例：kc relations --repo kr://scene/object --object example/report --direction DIRECTED
+  例：kc relations --dataset scene-set --object example/report --direction DIRECTED`,
 		},
 		"traverse": {
 			Description: "在固定范围内沿关系做有界邻域遍历，不是图查询语言",
@@ -98,15 +98,15 @@ func leafHelpEntries() map[string]helpEntry {
 用途：
   从一个对象出发，沿获准的关系得到限定跳数的邻域闭包。
 用法与参数：
-  单仓 --object 用对象 id；Dataset 用完整 kc://<repository>/<object> 引用。
+  --object 是起点对象 ID，单仓和 Dataset 写法相同。
   --max-hops 必填且为 1-8；--min-hops 默认 0，须不大于 max-hops。类型、角色和方向可限制关系。
   --limit 默认 100、最大 1000；续页须复用过滤与范围。单仓 --commit/--ref 固定来源版本。
 条件：
   已认证；单仓需 object.traverse，命名 Dataset 以其 file.read 准入，不另要求来源仓 object.traverse。
  Dataset 须通过整份选择范围的完整读取检查，单个起点放行不能替代；另行解析 pin 需 dataset.resolve。
-  起点在已解析范围内，所需固定版本的关系投影可用。
+  范围内有仓持有起点 ID，所需固定版本的关系投影可用。
 结果：
-  nodes 按仓/对象去重并给最小跳深；edges 给关系坐标及完整端点，boundary 表示越界处停止。
+  nodes 按对象 ID 去重并给最小跳深；edges 给关系坐标及完整端点；boundary 是范围内无仓持有的端点 ID，在此停止。
   游标返回闭包增量；完整性与未完成原因须一起检查，不枚举全部路径，也不承诺最短路径查询。
 后果：
   在请求固定的范围查询关系，不创建对象或关系，不追读范围外对象。
@@ -117,8 +117,8 @@ func leafHelpEntries() map[string]helpEntry {
   投影不可用时请维护者核对就绪版本；预算或高扇出时缩小跳数、关系类型或角色后重新遍历。
   游标拒绝时核对固定依据，不混接不同版本的增量；临时失败可重试同一页，合并时按身份去重。
 示例：
-  例：kc traverse --dataset scene-set --object kc://acme/public/core/Table:orders --max-hops 3
-  例：kc traverse --repo kr://scene/object --object Table:orders --max-hops 2 --relation-type owned-by`,
+  例：kc traverse --dataset scene-set --object table/orders --max-hops 3
+  例：kc traverse --repo kr://scene/object --object table/orders --max-hops 2 --relation-type owned-by`,
 		},
 
 		"operations access-spec describe": {

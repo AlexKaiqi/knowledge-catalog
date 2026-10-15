@@ -24,7 +24,7 @@ func WriterContract[R snapshot.Store](t *testing.T, create func(t *testing.T, id
 		cs := objectmodel.CommitChangeSet{
 			TargetRepository: repo.ID(), TargetRef: "refs/heads/main",
 			BaseCommit: root, ExpectedTargetCommit: root,
-			Operations: PutEntity("a", 1, ""),
+			Operations: PutEntity("fixture/a", 1, ""),
 		}
 		r1, err := w.Commit("cmd-1", cs)
 		if err != nil {
@@ -41,7 +41,7 @@ func WriterContract[R snapshot.Store](t *testing.T, create func(t *testing.T, id
 			t.Fatal("replay changed commit")
 		}
 		different := cs
-		different.Operations = PutEntity("a", 2, "")
+		different.Operations = PutEntity("fixture/a", 2, "")
 		_, err = w.Commit("cmd-1", different)
 		ExpectCode(t, err, kernel.ErrIdempotencyConflict)
 	})
@@ -80,7 +80,7 @@ func WriterContract[R snapshot.Store](t *testing.T, create func(t *testing.T, id
 		receipt, err := w.CommitIntent("pr-1", writer.CommitIntent{
 			TargetRepository: repo.ID(),
 			TargetRef:        branch,
-			Operations:       PutEntity("a", 1, ""),
+			Operations:       PutEntity("fixture/a", 1, ""),
 		})
 		if err != nil {
 			t.Fatal(err)

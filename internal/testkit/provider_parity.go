@@ -63,8 +63,8 @@ func ProviderParityContract(
 				Value: map[string]any{
 					"relationId": "relation/contains", "relationType": "contains", "direction": "DIRECTED",
 					"endpoints": []any{
-						map[string]any{"role": "container", "objectRef": map[string]any{"repository": repositoryID, "object": "dataset/T"}},
-						map[string]any{"role": "member", "objectRef": map[string]any{"repository": repositoryID, "object": "policy/A"}},
+						map[string]any{"role": "container", "object": "dataset/T"},
+						map[string]any{"role": "member", "object": "policy/A"},
 					},
 				},
 			}},
@@ -76,8 +76,8 @@ func ProviderParityContract(
 				Value: map[string]any{
 					"relationId": "relation/contains", "relationType": "contains", "direction": "DIRECTED",
 					"endpoints": []any{
-						map[string]any{"role": "container", "objectRef": map[string]any{"repository": repositoryID, "object": "dataset/T"}},
-						map[string]any{"role": "member", "objectRef": map[string]any{"repository": "kr://external/unattached", "object": "policy/A"}},
+						map[string]any{"role": "container", "object": "dataset/T"},
+						map[string]any{"role": "member", "object": "policy/A"},
 					},
 				},
 			}},
@@ -167,7 +167,7 @@ func (s *paritySide) staleWriteCode() kernel.ErrorCode {
 	_, err := s.writer.Commit("parity-stale", objectmodel.ChangeSet{
 		TargetRepository: s.repo.ID(), TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.commits[0], ExpectedTargetCommit: s.commits[0],
-		Operations: PutEntity("stale", 1, ""),
+		Operations: PutEntity("fixture/stale", 1, ""),
 	})
 	return kernel.CodeOf(err)
 }

@@ -20,8 +20,8 @@ func providerRequest() retrieval.RerankRequest {
 			Criterion: "refund timeout relevance", OutputContract: retrieval.OutputContract{},
 		},
 		Candidates: []retrieval.Candidate{
-			{Ref: objectmodel.ObjectRef{Repository: "kr://acme/core", Object: "p1"}, Value: map[string]any{"body": "deploy"}},
-			{Ref: objectmodel.ObjectRef{Repository: "kr://acme/core", Object: "p2"}, Value: map[string]any{"body": "refund timeout"}},
+			{Ref: objectmodel.ObjectRef{Repository: "kr://acme/core", Object: "fixture/p1"}, Value: map[string]any{"body": "deploy"}},
+			{Ref: objectmodel.ObjectRef{Repository: "kr://acme/core", Object: "fixture/p2"}, Value: map[string]any{"body": "refund timeout"}},
 		},
 	}
 }
@@ -59,7 +59,7 @@ func TestProviderUsesOneNonReasoningStructuredResponsesCall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if calls != 1 || result.Groups[0].Refs[0].Object != "p2" || result.Provider != "llm-native" || result.ModelRevision != "gpt-5.6-luna" {
+	if calls != 1 || result.Groups[0].Refs[0].Object != "fixture/p2" || result.Provider != "llm-native" || result.ModelRevision != "gpt-5.6-luna" {
 		t.Fatalf("calls=%d result=%#v", calls, result)
 	}
 }

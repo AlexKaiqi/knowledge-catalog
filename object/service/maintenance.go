@@ -10,10 +10,13 @@ import (
 	"kc/snapshot"
 )
 
-// MaintenanceRequest uses the same reference as READ. Kind only declares a
-// new maintenance model; it cannot reinterpret an existing unit or a field.
+// MaintenanceRequest uses the same reference as READ plus the Repository the
+// write targets: the URN names the object, never where its Aspect is stored.
+// Kind only declares a new maintenance model; it cannot reinterpret an
+// existing unit or a field.
 type MaintenanceRequest struct {
 	Reference   string
+	Repository  kernel.RepositoryID
 	CommandID   string
 	Ref         string
 	Base        kernel.CommitID
@@ -48,6 +51,10 @@ func (e MaintenanceExecutor) Execute(ctx context.Context, operation objectmodel.
 	if err != nil {
 		return writer.CommitReceipt{}, err
 	}
+	if request.Repository == "" {
+		return writer.CommitReceipt{}, kernel.Fail(kernel.ErrUsageInvalid, "object maintenance writes one Repository; name it")
+	}
+	ref.Repository = request.Repository
 	repo, err := e.Repository(ref.Repository)
 	if err != nil {
 		return writer.CommitReceipt{}, err

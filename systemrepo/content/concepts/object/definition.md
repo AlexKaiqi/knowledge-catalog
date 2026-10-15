@@ -15,7 +15,7 @@ path_hint: concepts/object/definition.md
 例如，以下入口读取订单列的 nullable 字段：
 
 ```text
-kc read 'urn:kc:object:kr%3A%2F%2Fscene%2Fobject:table%2Forders#/columns/order_id/constraints/nullable'
+kc read 'urn:kc:object:table/orders#/columns/order_id/constraints/nullable'
 ```
 
 READ、PUT、REMOVE 共用对象 URN 与 locator。Writer 创建、替换或删除所指的完整维护单元；替换不会合并旧字段。整体值、完整 Aspect、Member 是维护粒度，深字段读取不产生任意字段 PATCH，按 Aspects 或 Members 组合的对象不能用组装结果整体覆盖。

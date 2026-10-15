@@ -16,8 +16,7 @@ import (
 
 func TestCrossRepositoryRelationsHydrateOnlyScopedStorageCandidates(t *testing.T) {
 	repo, base := testfixture.RelationFixture(t)
-	foreign := kernel.RepositoryID("kr://external/unattached")
-	commit, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: base, ExpectedTargetCommit: base, Operations: []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindRelation, ObjectID: "relation/cross"}, Value: testfixture.RelationBody(foreign, "relation/cross", "Table:a")}}})
+	commit, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: base, ExpectedTargetCommit: base, Operations: []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindRelation, ObjectID: "relation/cross"}, Value: testfixture.RelationBody("relation/cross", "table/a")}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +33,7 @@ func TestCrossRepositoryRelationsHydrateOnlyScopedStorageCandidates(t *testing.T
 				}
 				return allowed, nil
 			})
-			page, err := idx.RelationsAtContext(ctx, poison, commit, relationRequest(foreign))
+			page, err := idx.RelationsAtContext(ctx, poison, commit, relationRequest())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -42,7 +41,7 @@ func TestCrossRepositoryRelationsHydrateOnlyScopedStorageCandidates(t *testing.T
 				if len(page.Hits) != 0 || fmt.Sprint(calls) != "[retrieve]" {
 					t.Fatalf("out-of-scope relation was hydrated: %#v %v", page, calls)
 				}
-			} else if len(page.Hits) != 1 || page.Hits[0].Repository != repo.ID() || page.Hits[0].Commit != commit || page.Hits[0].Relation.Endpoints[0].ObjectRef.Repository != foreign || fmt.Sprint(calls) != "[retrieve read-many]" {
+			} else if len(page.Hits) != 1 || page.Hits[0].Repository != repo.ID() || page.Hits[0].Commit != commit || page.Hits[0].Relation.Endpoints[0].Object != "table/a" || fmt.Sprint(calls) != "[retrieve read-many]" {
 				t.Fatalf("cross-reference changed hydrate authority: %#v %v", page, calls)
 			}
 		})

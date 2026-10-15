@@ -16,9 +16,19 @@ type Preparation struct {
 	Enabled  bool
 	Lookup   func(kernel.RepositoryID) (objectmodel.Repository, error)
 	Provider BasisPreparer
+	// Conflicts proves that the frozen candidate takes no Aspect of one object
+	// from two source Repositories. It is required once a candidate has two
+	// sources and does not depend on any plugin being configured.
+	Conflicts func(dataset.ResolvedDataset) error
 }
 
+// Execute rejects a candidate whose range takes one Aspect of one object from
+// two source Repositories, then prepares derived capabilities. The conflict
+// check does not depend on any plugin being configured.
 func (p Preparation) Execute(ctx context.Context, def dataset.Dataset) error {
+	if err := p.checkHoldingConflicts(def); err != nil {
+		return err
+	}
 	if !p.Enabled || p.Provider == nil {
 		return nil
 	}
@@ -46,6 +56,22 @@ func (p Preparation) Execute(ctx context.Context, def dataset.Dataset) error {
 		}
 	}
 	return nil
+}
+
+// checkHoldingConflicts hands the frozen candidate to the object conflict
+// check. Object conflicts need at least two source Repositories.
+func (p Preparation) checkHoldingConflicts(def dataset.Dataset) error {
+	repositories := map[kernel.RepositoryID]kernel.CommitID{}
+	for _, source := range def.Sources {
+		repositories[source.Repository] = source.Commit
+	}
+	if len(repositories) < 2 {
+		return nil
+	}
+	if p.Conflicts == nil {
+		return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "dataset publication cannot check object conflicts without a conflict check")
+	}
+	return p.Conflicts(dataset.ResolvedDataset{SetID: def.SetID, Revision: def.Revision, Repositories: repositories, Items: def.Items})
 }
 
 // ServingBasisDemand reads current accepted Dataset releases independently of

@@ -23,17 +23,12 @@ func (e DatasetRelationsExecutor) Execute(ctx context.Context, request retrieval
 	if e.Serving == nil || e.Repositories == nil || e.Projection == nil {
 		return retrieval.RelationPage{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "dataset relation services are incomplete")
 	}
-	if request.Query.Endpoint.Repository == "" || request.Query.Endpoint.Object == "" || request.Limit < 0 || request.Limit > 1000 {
-		return retrieval.RelationPage{}, kernel.Fail(kernel.ErrUsageInvalid, "relations require a qualified endpoint and a limit between 1 and 1000")
+	if objectmodel.ValidateObjectID(request.Query.Endpoint) != nil || request.Limit < 0 || request.Limit > 1000 {
+		return retrieval.RelationPage{}, kernel.Fail(kernel.ErrUsageInvalid, "relations require an endpoint object ID and a limit between 1 and 1000")
 	}
+	// The endpoint is an object ID; it need not be held in the Dataset. The
+	// scope applies to the stored relations, checked per candidate below.
 	pin := e.Serving.Pin()
-	allowed, err := e.Serving.Contains(request.Query.Endpoint.Repository, request.Query.Endpoint.Object)
-	if err != nil {
-		return retrieval.RelationPage{}, err
-	}
-	if !allowed {
-		return retrieval.RelationPage{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "relation endpoint is outside dataset")
-	}
 	ctx, cancel := index.WithSearchBudget(ctx, index.SearchBudget{})
 	defer cancel()
 	ctx = index.WithCandidateScope(ctx, kernel.CanonicalDigest(pin.Items), func(id kernel.RepositoryID, at kernel.CommitID, object objectmodel.ObjectID) (bool, error) {

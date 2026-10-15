@@ -51,7 +51,7 @@ func noticeBackgroundFixture(t *testing.T) (objectmodel.Repository, kernel.Commi
 		TargetRepository: setup.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: setup.RootCommitID, ExpectedTargetCommit: setup.RootCommitID,
 		Operations: []objectmodel.Operation{
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "Job:notice"}, Value: map[string]any{"name": "notice"}},
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "job/notice"}, Value: map[string]any{"name": "notice"}},
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.runtime"}, Value: map[string]any{
 				"entity": "Job", "aspect": "runtime", "origin": "https://scheduler.example",
 				"fields": map[string]any{"status": map[string]any{"type": "string", "access": []any{"filter"}}},
@@ -76,7 +76,7 @@ func assertNoticeBackgroundSource(t *testing.T, checkpoint string, controller *c
 	t.Helper()
 	// Exercise the retained source through the real observation bridge, so this
 	// verifies the runtime and execution identity used by later background work.
-	value, err := repo.Read("Job:notice", commit)
+	value, err := repo.Read("job/notice", commit)
 	if err != nil {
 		t.Fatal(err)
 	}

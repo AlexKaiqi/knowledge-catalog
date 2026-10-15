@@ -82,8 +82,8 @@ func newFileHTTPFixture(t *testing.T) (*datasetHTTPFixture, *fileHTTPSource) {
 	t.Helper()
 	fixture := newDatasetHTTPFixture(t)
 	source := &fileHTTPSource{datasetHTTPSource: fixture.source, files: map[kernel.CommitID]map[string][]byte{
-		"c1": {"reference/a.json": []byte(`{"object_id":"Business:old","value":1}`), "reference/b.txt": []byte("old bytes"), "private/hidden.txt": []byte("must stay outside")},
-		"c2": {"reference/renamed.json": []byte(`{"object_id":"Business:old","value":2}`)},
+		"c1": {"reference/a.json": []byte(`{"object_id":"business/old","value":1}`), "reference/b.txt": []byte("old bytes"), "private/hidden.txt": []byte("must stay outside")},
+		"c2": {"reference/renamed.json": []byte(`{"object_id":"business/old","value":2}`)},
 	}}
 	registry := fixture.resources.Sources.(snapshot.Registry)
 	registry.Delete(source.ID())
@@ -109,11 +109,11 @@ func TestSnapshotFileHTTPUsesLiteralCoordinateAndFixedPublishedCommit(t *testing
 	if err := json.Unmarshal(raw, &result); err != nil {
 		t.Fatal(err)
 	}
-	if string(result.Content) != `{"object_id":"Business:old","value":1}` || result.Item.File != "reference/a.json" || result.Item.Commit != "c1" {
+	if string(result.Content) != `{"object_id":"business/old","value":1}` || result.Item.File != "reference/a.json" || result.Item.Commit != "c1" {
 		t.Fatalf("file identity drifted: %s", raw)
 	}
 	before := source.reads
-	datasetHTTPCall(t, handler, http.MethodPost, "/snapshot/v1/files/file:read", map[string]any{"dataset": "files", "pin": pin, "path": "Business:old"}, http.StatusForbidden)
+	datasetHTTPCall(t, handler, http.MethodPost, "/snapshot/v1/files/file:read", map[string]any{"dataset": "files", "pin": pin, "path": "business/old"}, http.StatusForbidden)
 	if source.reads != before {
 		t.Fatal("a body object_id was used to locate a file")
 	}
@@ -147,7 +147,7 @@ func TestSnapshotFileHTTPRechecksRevocationAndRejectsForgedFileList(t *testing.T
 	datasetHTTPCall(t, handler, http.MethodPost, "/snapshot/v1/datasets", map[string]any{"dataset": "files", "revision": 1, "sources": []any{map[string]any{"repository": source.id, "selector": snapshot.DefaultRef, "file": "reference/a.json", "target": "public.json"}}}, http.StatusOK)
 	pin := datasetHTTPCall(t, handler, http.MethodPost, "/snapshot/v1/datasets/files/resolve", map[string]any{}, http.StatusOK)
 	read := datasetHTTPCall(t, handler, http.MethodPost, "/snapshot/v1/files/file:read", map[string]any{"dataset": "files", "pin": pin, "path": "public.json"}, http.StatusOK)
-	if rootFileRead(t, read) != `{"object_id":"Business:old","value":1}` {
+	if rootFileRead(t, read) != `{"object_id":"business/old","value":1}` {
 		t.Fatalf("valid accepted file did not remain readable: %#v", read)
 	}
 	forged := map[string]any{}
@@ -172,7 +172,7 @@ func TestSnapshotFileHTTPRechecksRevocationAndRejectsForgedFileList(t *testing.T
 }
 func TestSnapshotFileHTTPDoesNotInterpretObjectIdentifiersOrRequireExternalViews(t *testing.T) {
 	fixture, source := newFileHTTPFixture(t)
-	response := datasetHTTPCall(t, fixture.handler(), http.MethodPost, "/snapshot/v1/datasets", map[string]any{"dataset": "bad", "revision": 1, "sources": []any{map[string]any{"repository": source.id, "selector": snapshot.DefaultRef, "object_id": "Business:old"}}}, http.StatusBadRequest)
+	response := datasetHTTPCall(t, fixture.handler(), http.MethodPost, "/snapshot/v1/datasets", map[string]any{"dataset": "bad", "revision": 1, "sources": []any{map[string]any{"repository": source.id, "selector": snapshot.DefaultRef, "object_id": "business/old"}}}, http.StatusBadRequest)
 	if response["error"].(map[string]any)["code"] != string(kernel.ErrUsageInvalid) {
 		t.Fatalf("object identity entered file declaration: %v", response)
 	}

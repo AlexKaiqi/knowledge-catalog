@@ -10,24 +10,36 @@ import (
 )
 
 func TestObjectReferenceKeepsIdentitySeparateFromPointer(t *testing.T) {
-	for _, ref := range []object.Reference{
-		{Repository: "kr://scene/object", Object: "table/orders"},
-		{Repository: "kr://仓/100%:a?b#c", Object: "table/订单:%?#/空 格", Locator: "/columns/order_id/constraints/nullable"},
-		{Repository: "kr://scene/object", Object: "table/a+b", Locator: "/display name/中文/~01"},
+	for _, tc := range []struct {
+		ref  object.Reference
+		want string
+	}{
+		{object.Reference{Object: "table/orders"}, "urn:kc:object:table/orders"},
+		{object.Reference{Object: "table/订单:%?#/空 格", Locator: "/columns/order_id/constraints/nullable"}, ""},
+		{object.Reference{Object: "table/a+b", Locator: "/display name/中文/~01"}, ""},
+		{object.Reference{Object: "kc/concept/object", Locator: "/definition"}, "urn:kc:object:kc/concept/object#/definition"},
 	} {
-		raw, err := object.FormatReference(ref)
+		raw, err := object.FormatReference(tc.ref)
 		if err != nil {
 			t.Fatal(err)
 		}
+		if tc.want != "" && raw != tc.want {
+			t.Fatalf("canonical reference: got %s want %s", raw, tc.want)
+		}
 		got, err := object.ParseReference(raw)
-		if err != nil || got != ref {
-			t.Fatalf("reference round trip: raw=%s got=%#v want=%#v error=%v", raw, got, ref, err)
+		if err != nil || got != tc.ref {
+			t.Fatalf("reference round trip: raw=%s got=%#v want=%#v error=%v", raw, got, tc.ref, err)
 		}
 	}
-	base := "urn:kc:object:kr%3A%2F%2Fscene%2Fobject:table%2Forders"
+	// The bound repository is request scope, never URN text.
+	raw, err := object.FormatReference(object.Reference{Repository: "kr://scene/object", Object: "table/orders"})
+	if err != nil || raw != "urn:kc:object:table/orders" {
+		t.Fatalf("repository leaked into the URN: %s %v", raw, err)
+	}
+	base := "urn:kc:object:table/orders"
 	for _, raw := range []string{base, base + "#"} {
 		got, err := object.ParseReference(raw)
-		if err != nil || got.Locator != "" || got.Repository != "kr://scene/object" || got.Object != "table/orders" {
+		if err != nil || got.Locator != "" || got.Repository != "" || got.Object != "table/orders" {
 			t.Fatalf("root reference: %#v %v", got, err)
 		}
 	}
@@ -36,14 +48,44 @@ func TestObjectReferenceKeepsIdentitySeparateFromPointer(t *testing.T) {
 		t.Fatalf("URI decoding must precede pointer decoding: %#v %v", got, err)
 	}
 	for _, raw := range []string{
-		"", "kc://scene/object/table/orders", "urn:kc:object::orders",
-		"urn:kc:object:kr%3A%2F%2Fscene%2Fobject:", base + ":ambiguous",
-		"urn:kc:object:kr%ZZ:orders", "urn:kc:object:kr%00:orders",
+		"", "kc://scene/object/table/orders", "urn:kc:object:", "urn:kc:object:orders",
+		"urn:kc:object:/orders", "urn:kc:object:table/", "urn:kc:object:table//orders",
+		"urn:kc:object:table%2Forders", base + ":ambiguous",
+		"urn:kc:object:kr%ZZ/orders", "urn:kc:object:kr%00/orders",
 		base + "?query", base + "#not-a-pointer", base + "#/bad~2",
 		base + "#/bad~", base + "#/bad%ZZ", base + "#/a#b",
 	} {
 		if _, err := object.ParseReference(raw); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
 			t.Errorf("invalid reference %q: %v", raw, err)
+		}
+	}
+}
+
+func TestRepositoryQualifiedURNIsRejected(t *testing.T) {
+	legacy := "urn:kc:object:" + "kr%3A%2F%2Fscene%2Fobject" + ":"
+	for _, raw := range []string{
+		legacy + "table%2Forders",
+		legacy + "table%2Forders#/columns/id",
+	} {
+		_, err := object.ParseReference(raw)
+		if kernel.CodeOf(err) != kernel.ErrUsageInvalid || !strings.Contains(err.Error(), "retired") {
+			t.Fatalf("retired repository-qualified URN must be refused explicitly: %q %v", raw, err)
+		}
+	}
+}
+
+func TestObjectIDRequiresNamespace(t *testing.T) {
+	for _, id := range []object.ObjectID{"trade/order-service", "dw.ods/orders", "kc/concept/object"} {
+		if err := object.ValidateObjectID(id); err != nil {
+			t.Fatalf("namespaced id %s rejected: %v", id, err)
+		}
+	}
+	if object.Namespace("dw.ods/orders") != "dw.ods" {
+		t.Fatal("namespace is the first segment")
+	}
+	for _, id := range []object.ObjectID{"", "orders", "/orders", "trade/", "trade//x", " /x"} {
+		if err := object.ValidateObjectID(id); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
+			t.Fatalf("id %q must be refused: %v", id, err)
 		}
 	}
 }
@@ -80,8 +122,8 @@ func TestPointerSelectionDistinguishesKeysArraysAndMissingValues(t *testing.T) {
 }
 
 func TestReferenceURNPrefixIsCaseInsensitiveWithoutChangingIdentity(t *testing.T) {
-	ref, err := object.ParseReference("URN:KC:object:kr%3A%2F%2FScene%2FObject:Table%2FOrders#/Column/Id")
-	if err != nil || ref.Repository != "kr://Scene/Object" || ref.Object != "Table/Orders" || ref.Locator != "/Column/Id" {
+	ref, err := object.ParseReference("URN:KC:object:Table/Orders#/Column/Id")
+	if err != nil || ref.Object != "Table/Orders" || ref.Locator != "/Column/Id" {
 		t.Fatalf("URN prefix casing changed namespace-specific identity: %#v %v", ref, err)
 	}
 	raw, err := object.FormatReference(ref)

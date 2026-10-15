@@ -357,7 +357,7 @@ func OpenServingAt(cx *Invocation, ws *kchome.Home, flags map[string]invoke.Flag
 	if err != nil {
 		return nil, nil, err
 	}
-	serving := reader.Open(ws.Reader.Lookup(cat.Require), DatasetPin(resolved))
+	serving := reader.Open(ws.Reader.Lookup(cat.Require), kchome.DatasetPin(resolved))
 	serving.SetHydrator(ws.Hydrator)
 	return serving, cat, nil
 }
@@ -414,6 +414,12 @@ func stateRequestContextFrom(cx *Invocation) (objectmodel.RequestContext, error)
 }
 
 func AllowedRepoRead(home string, flags map[string]invoke.FlagValue, repo, object string) bool {
+	return AllowedRepoAspectRead(home, flags, repo, object, "")
+}
+
+// AllowedRepoAspectRead is AllowedRepoRead narrowed to one Aspect, so a grant
+// scoped to that Aspect counts when only that Aspect is read.
+func AllowedRepoAspectRead(home string, flags map[string]invoke.FlagValue, repo, object, aspect string) bool {
 	if OwnerBypass(flags) {
 		return true
 	}
@@ -431,7 +437,7 @@ func AllowedRepoRead(home string, flags map[string]invoke.FlagValue, repo, objec
 		// secondary per-repository check could not be evaluated.
 		return false
 	}
-	_, ok := MatchAllow(file.Rules, AllowQuery{Principal: as, Action: "object.read", Repo: repo, Object: object})
+	_, ok := MatchAllow(file.Rules, AllowQuery{Principal: as, Action: "object.read", Repo: repo, Object: object, Aspect: aspect})
 	return ok
 }
 

@@ -10,6 +10,7 @@ import (
 
 	"kc/internal/journal"
 	"kc/kernel"
+	"kc/liveaccess"
 	liveservice "kc/liveaccess/service"
 	objectmodel "kc/object"
 	readcache "kc/object/cache"
@@ -156,9 +157,11 @@ func assemble(home string, file HomeFile, stores StoresFile, store snapshot.Regi
 			}
 		}
 	}
-	ws.DatasetPreparation = discoverydatasets.Preparation{Enabled: ws.Plugins.Configured(), Provider: ws.Plugins, Lookup: func(id kernel.RepositoryID) (objectmodel.Repository, error) {
+	lookup := func(id kernel.RepositoryID) (objectmodel.Repository, error) {
 		return ws.Reader.Require(id, kernel.ErrCapabilityUnsatisfied)
-	}}
+	}
+	ws.DatasetPreparation = discoverydatasets.Preparation{Enabled: ws.Plugins.Configured(), Provider: ws.Plugins, Lookup: lookup,
+		Conflicts: publicationConflicts(lookup, liveaccess.BoundAspectUnits)}
 	ws.wireSidecars()
 	return ws, nil
 }

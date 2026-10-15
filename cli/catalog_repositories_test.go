@@ -46,8 +46,8 @@ func TestCatalogShowRepositoriesStayIdentityAndReadmeIsObject(t *testing.T) {
 		t.Fatalf("System Repository schemaCount: %#v", system)
 	}
 
-	body(t, kc(home, "writer", "put", testObjectReference(t, repo, string(objectmodel.CoreReadmeSchemaV1), ""), "--command-id", "readme-schema", "--value", readmeSchemaJSON(t)))
-	body(t, kc(home, "writer", "put", testObjectReference(t, repo, "payments", testObjectLocator(objectmodel.ReadmeAspect)), "--command-id", "readme",
+	body(t, kc(home, "writer", "put", testObjectReference(t, repo, string(objectmodel.CoreReadmeSchemaV1), ""), "--repo", repo, "--command-id", "readme-schema", "--value", readmeSchemaJSON(t)))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repo, "fixture/payments", testObjectLocator(objectmodel.ReadmeAspect)), "--repo", repo, "--command-id", "readme",
 		"--schema-ref", string(objectmodel.CoreReadmeSchemaV1),
 		"--value", `{"body":"# Payments warehouse\n\nPublished metrics and tables for payments."}`))
 
@@ -57,7 +57,7 @@ func TestCatalogShowRepositoriesStayIdentityAndReadmeIsObject(t *testing.T) {
 	if present["schemaCount"] != float64(1) {
 		t.Fatalf("schemaCount must count schema/*: %#v", present)
 	}
-	readme := asMap(t, body(t, kc(home, "read", testObjectReference(t, repo, "payments", testObjectLocator(objectmodel.ReadmeAspect)))))
+	readme := asMap(t, body(t, kc(home, "read", testObjectReference(t, repo, "fixture/payments", testObjectLocator(objectmodel.ReadmeAspect)), "--repo", repo)))
 	if asMap(t, readme["value"])["body"] != "# Payments warehouse\n\nPublished metrics and tables for payments." {
 		t.Fatalf("README is an object: %#v", readme)
 	}

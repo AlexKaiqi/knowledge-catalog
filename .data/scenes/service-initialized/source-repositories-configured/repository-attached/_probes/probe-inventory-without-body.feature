@@ -20,5 +20,5 @@ Feature: inventory discovery keeps repository body authorization separate
       | catalogId | absent |
     Then the output includes:
       | repositories[].id | kr://scene/object |
-    When I run `kc read urn:kc:object:kr%3A%2F%2Fscene%2Fobject:missing --as inventory-reader`
+    When I run `kc read urn:kc:object:note/missing --repo kr://scene/object --as inventory-reader`
     Then error FORBIDDEN

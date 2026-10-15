@@ -11,7 +11,7 @@ import (
 // a bounded, typed neighborhood closure over stored Relation objects. The
 // scope (dataset manifest pin or single-repository pin) is fixed before
 // execution; traversal never widens it. Results are a closure, not an
-// enumeration of paths: nodes are deduplicated by identity and every selected
+// enumeration of paths: nodes are deduplicated by object ID and every selected
 // edge keeps its own repository/commit. Unbounded traversal, exhaustive path
 // enumeration, shortest-path promises, and any graph query language are
 // deliberately out of contract.
@@ -43,10 +43,10 @@ type TraverseStep struct {
 // node set by minimum depth; edges stay complete. The scope is supplied by
 // the executing channel and is deliberately not part of the query digest.
 type TraverseQuery struct {
-	Start   objectmodel.ObjectRef `json:"start"`
-	Step    TraverseStep          `json:"step,omitempty"`
-	MinHops int                   `json:"minHops,omitempty"`
-	MaxHops int                   `json:"maxHops"`
+	Start   objectmodel.ObjectID `json:"start"`
+	Step    TraverseStep         `json:"step,omitempty"`
+	MinHops int                  `json:"minHops,omitempty"`
+	MaxHops int                  `json:"maxHops"`
 }
 
 func TraverseQueryDigest(query TraverseQuery) kernel.Digest {
@@ -60,12 +60,11 @@ type TraverseRequest struct {
 }
 
 // TraverseNode is one reached in-scope object. Nodes are deduplicated by
-// (repository, object) across the whole traversal; Depth is the minimum hop
-// count from Start. Start itself is never a node.
+// object ID across the whole traversal; Depth is the minimum hop count from
+// Start. Start itself is never a node.
 type TraverseNode struct {
-	Repository kernel.RepositoryID  `json:"repository"`
-	ObjectID   objectmodel.ObjectID `json:"objectId"`
-	Depth      int                  `json:"depth"`
+	ObjectID objectmodel.ObjectID `json:"objectId"`
+	Depth    int                  `json:"depth"`
 }
 
 // TraverseEdge is one selected relation with its own storage identity. Edges
@@ -81,12 +80,11 @@ type TraverseEdge struct {
 }
 
 // TraverseBoundary marks a frontier endpoint that was not expanded because
-// its repository is outside the fixed scope. The reference is already visible
-// in the authorized relation body, so the marker discloses nothing new.
+// no Repository in the fixed scope holds it. The ID is already visible in the
+// authorized relation body, so the marker discloses nothing new.
 type TraverseBoundary struct {
-	Repository kernel.RepositoryID  `json:"repository"`
-	ObjectID   objectmodel.ObjectID `json:"objectId"`
-	Reason     string               `json:"reason"`
+	ObjectID objectmodel.ObjectID `json:"objectId"`
+	Reason   string               `json:"reason"`
 }
 
 // BoundaryOutsideScope is the only boundary reason in the first contract.
@@ -110,9 +108,8 @@ type TraversePage struct {
 
 // TraverseFrontierEntry is one pending expansion node in the saved position.
 type TraverseFrontierEntry struct {
-	Repository kernel.RepositoryID  `json:"repository"`
-	Object     objectmodel.ObjectID `json:"object"`
-	Depth      int                  `json:"depth"`
+	Object objectmodel.ObjectID `json:"object"`
+	Depth  int                  `json:"depth"`
 }
 
 // EdgeCoordinate identifies one already-selected relation.
@@ -128,7 +125,7 @@ type EdgeCoordinate struct {
 type TraversePosition struct {
 	Depth     int                     `json:"depth"`
 	Frontier  []TraverseFrontierEntry `json:"frontier"`
-	Visited   []objectmodel.ObjectRef `json:"visited"`
+	Visited   []objectmodel.ObjectID  `json:"visited"`
 	Edges     []EdgeCoordinate        `json:"edges"`
 	Boundary  []TraverseBoundary      `json:"boundary,omitempty"`
 	Claims    []string                `json:"claims,omitempty"`
@@ -137,8 +134,8 @@ type TraversePosition struct {
 
 // TraversePositionKey is the per-node relation lane continuation key used in
 // TraversePosition.Positions.
-func TraversePositionKey(repository kernel.RepositoryID, object objectmodel.ObjectID) string {
-	return string(repository) + "\x1f" + string(object)
+func TraversePositionKey(object objectmodel.ObjectID) string {
+	return string(object)
 }
 
 // EncodeTraversePosition binds the expansion state to the traversal query,
@@ -189,9 +186,9 @@ func DecodeTraversePosition(token string, query TraverseQuery, view SearchView, 
 }
 
 func (p *TraversePosition) normalize() {
-	sortRefs := func(refs []objectmodel.ObjectRef) {
+	sortRefs := func(refs []objectmodel.ObjectID) {
 		for i := 1; i < len(refs); i++ {
-			for j := i; j > 0 && refLess(refs[j], refs[j-1]); j-- {
+			for j := i; j > 0 && refs[j] < refs[j-1]; j-- {
 				refs[j], refs[j-1] = refs[j-1], refs[j]
 			}
 		}
@@ -224,17 +221,7 @@ func sortBoundaries(boundaries []TraverseBoundary) {
 	}
 }
 
-func refLess(left, right objectmodel.ObjectRef) bool {
-	if left.Repository != right.Repository {
-		return left.Repository < right.Repository
-	}
-	return left.Object < right.Object
-}
-
 func frontierLess(left, right TraverseFrontierEntry) bool {
-	if left.Repository != right.Repository {
-		return left.Repository < right.Repository
-	}
 	if left.Object != right.Object {
 		return left.Object < right.Object
 	}
@@ -249,21 +236,18 @@ func edgeLess(left, right EdgeCoordinate) bool {
 }
 
 func boundaryLess(left, right TraverseBoundary) bool {
-	if left.Repository != right.Repository {
-		return left.Repository < right.Repository
-	}
 	if left.ObjectID != right.ObjectID {
 		return left.ObjectID < right.ObjectID
 	}
 	return left.Reason < right.Reason
 }
 
-// ValidateTraverseRequest enforces the bounded-shape contract: a qualified
-// start, explicit hop ceiling within MaxTraverseHops, and a page limit inside
+// ValidateTraverseRequest enforces the bounded-shape contract: a valid start
+// object ID, explicit hop ceiling within MaxTraverseHops, and a page limit inside
 // the relation page bounds.
 func ValidateTraverseRequest(request TraverseRequest) (TraverseRequest, error) {
-	if request.Query.Start.Repository == "" || request.Query.Start.Object == "" {
-		return TraverseRequest{}, kernel.Fail(kernel.ErrUsageInvalid, "traverse requires a qualified start reference")
+	if err := objectmodel.ValidateObjectID(request.Query.Start); err != nil {
+		return TraverseRequest{}, kernel.Fail(kernel.ErrUsageInvalid, "traverse start: %v", err)
 	}
 	if request.Query.MaxHops < 1 || request.Query.MaxHops > MaxTraverseHops {
 		return TraverseRequest{}, kernel.Fail(kernel.ErrUsageInvalid, "traverse requires maxHops between 1 and %d", MaxTraverseHops)

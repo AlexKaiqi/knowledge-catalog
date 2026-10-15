@@ -180,9 +180,8 @@ func (e *openSearchEngine) projectionMapping() map[string]any {
 		"relation_endpoints": map[string]any{
 			"type": "nested",
 			"properties": map[string]any{
-				"role":       map[string]any{"type": "keyword"},
-				"repository": map[string]any{"type": "keyword"},
-				"object_id":  map[string]any{"type": "keyword"},
+				"role":      map[string]any{"type": "keyword"},
+				"object_id": map[string]any{"type": "keyword"},
 			},
 		},
 	}

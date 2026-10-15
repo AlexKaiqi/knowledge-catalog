@@ -38,7 +38,7 @@ func compileProjectionDocumentObserved(repo objectmodel.Repository, value object
 		}
 		doc.Relation = &ports.ProjectionRelation{Type: relation.RelationType, Direction: relation.Direction}
 		for _, endpoint := range relation.Endpoints {
-			doc.Relation.Endpoints = append(doc.Relation.Endpoints, ports.ProjectionRelationEndpoint{Role: endpoint.Role, ObjectRef: endpoint.ObjectRef})
+			doc.Relation.Endpoints = append(doc.Relation.Endpoints, ports.ProjectionRelationEndpoint{Role: endpoint.Role, Object: endpoint.Object})
 		}
 	}
 	doc.ObjectDigest = kernel.CanonicalDigest(map[string]any{

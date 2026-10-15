@@ -5,9 +5,11 @@
 本包直接拥有 `ObjectID`、`Address`、`ObjectRef`、Schema ref 与 provenance 类型；它们不是为了少一个 import 而放进 `kernel/` 的“共享类型”。这让 ⓪ Snapshot 和 ① Dataset 服务 在类型层面也无法携带对象语义。
 
 `Reference` 是统一外部访问目标。`FormatReference` / `ParseReference` 选定形状为
-`urn:kc:object:<encoded-repo>:<encoded-object>#<pointer>`：Repo 和 object_id 各自进行 URI
-百分号编码，冒号只分隔这两个身份分量；fragment 是 JSON Pointer 的 URI 表示。例：
-`urn:kc:object:kr%3A%2F%2Fscene%2Fobject:table%2Forders#/columns/order_id/constraints/nullable`。
+`urn:kc:object:<namespace>/<name>#<pointer>`：URN 只含对象 ID，不含仓；fragment 是 JSON Pointer
+的 URI 表示。例：`urn:kc:object:table/orders#/columns/order_id/constraints/nullable`。
+旧的仓限定形式直接拒绝。同一 ID 在请求范围（`--repo`、Dataset 或全部可见仓）内解析为同一对象：
+`SelectHoldings` 组合各仓持有的不相交方面，同一方面两处持有报 `OBJECT_ID_CONFLICT`，
+无读权的持有仓标为 withheld，结果带各来源版本（Sources）。关系端点也只写对象 ID。
 fragment 缺省或为空表示整个对象；`~0` 与 `~1` 分别选择键中的 `~` 与 `/`，百分号先解码一次，
 Pointer 再解码一次。`PointerTokens` / `SelectPointer` 区分缺失与 JSON null，数组索引仅用于读取。
 语法错误返回 `USAGE_INVALID`，不存在的选值返回 `OBJECT_REF_UNRESOLVED`。

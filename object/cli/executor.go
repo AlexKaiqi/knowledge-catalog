@@ -54,7 +54,7 @@ func (e *executor) read(ctx context.Context, path string, flags map[string]any, 
 	scope := e.scope(flags)
 	switch path {
 	case "read":
-		err = e.client.Read(ctx, client.ReadRequest{ObjectDatasetIdentity: client.ObjectDatasetIdentity{Dataset: flagString(flags, "dataset")}, Reference: flagString(flags, "reference"), Commit: flagString(flags, "commit"), Ref: flagString(flags, "ref")}, options, &output)
+		err = e.client.Read(ctx, client.ReadRequest{ObjectDatasetIdentity: client.ObjectDatasetIdentity{Dataset: flagString(flags, "dataset")}, Reference: flagString(flags, "reference"), Repository: flagString(flags, "repo"), Commit: flagString(flags, "commit"), Ref: flagString(flags, "ref")}, options, &output)
 	case "resolve":
 		err = e.client.Resolve(ctx, client.ResolveRequest{ObjectScope: scope, Object: flagString(flags, "object"), Aspect: flagString(flags, "aspect"), Member: flagString(flags, "member")}, options, &output)
 	case "provenance":

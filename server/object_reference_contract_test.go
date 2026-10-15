@@ -9,7 +9,7 @@ import (
 )
 
 func TestObjectReadWriteHTTPRejectsSeparateContentCoordinates(t *testing.T) {
-	const reference = "urn:kc:object:kr%3A%2F%2Fsource%2Fa:table%2Forders#/columns/id"
+	const reference = "urn:kc:object:table/orders#/columns/id"
 	facade := &httpFacade{}
 	for _, route := range []struct {
 		name string
@@ -20,7 +20,7 @@ func TestObjectReadWriteHTTPRejectsSeparateContentCoordinates(t *testing.T) {
 		{"remove", facade.objectRemove},
 	} {
 		for key, value := range map[string]any{
-			"repository": "kr://source/a", "object": "table/orders",
+			"object": "table/orders",
 			"aspect": "columns", "member": "id", "include": []string{"columns"}, "exclude": []string{"private"},
 		} {
 			t.Run(route.name+"/"+key, func(t *testing.T) {

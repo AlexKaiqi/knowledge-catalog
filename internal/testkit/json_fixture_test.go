@@ -9,7 +9,7 @@ import (
 )
 
 func TestJSONFixturesKeepPublicObjectInputContracts(t *testing.T) {
-	const reference = "urn:kc:object:kr%3A%2F%2Fscene%2Fobject:metric%2Fgmv"
+	const reference = "urn:kc:object:metric/gmv"
 	for _, tc := range []struct {
 		name, task string
 		payload    map[string]any

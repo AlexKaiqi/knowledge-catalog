@@ -278,7 +278,7 @@ func (f *acceptanceFixture) read(t *testing.T, principal, requestID string, requ
 	if err != nil {
 		t.Fatal(err)
 	}
-	if row.Reference != request.Reference || row.Repository != selected.Repository || row.ObjectID != selected.Object || row.Locator != selected.Locator || row.Commit == "" || request.Commit != "" && string(row.Commit) != request.Commit {
+	if row.Reference != request.Reference || row.Repository == "" || request.Repository != "" && string(row.Repository) != request.Repository || row.ObjectID != selected.Object || row.Locator != selected.Locator || row.Commit == "" || request.Commit != "" && string(row.Commit) != request.Commit {
 		t.Fatalf("public READ changed explicit object identity or fixed version: request=%#v row=%#v", request, row)
 	}
 	return &row, nil

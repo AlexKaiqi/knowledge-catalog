@@ -12,7 +12,7 @@ func TestApplyRejectsPathHintThatSnapshotReaderCannotDiscover(t *testing.T) {
 	idx := NewTree()
 	op := objectmodel.Operation{
 		Op:       objectmodel.OpPut,
-		Address:  objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Service:payment-api", AspectName: "observed"},
+		Address:  objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "service/payment-api", AspectName: "observed"},
 		Value:    map[string]any{"status": "healthy"},
 		PathHint: "service",
 	}
@@ -126,8 +126,8 @@ func splitCanonical(encoded string) (frontmatter, body string, ok bool) {
 
 func TestIngestRejectsMalformedOrInvalidValueSource(t *testing.T) {
 	contents := []string{
-		"---\nobject_id: Service:orders\naspect_name: health\nkind: ASPECT\nvalue_source: {bad-json}\n---\nnull\n",
-		"---\nobject_id: Service:orders\naspect_name: health\nkind: ASPECT\nvalue_source: {\"kind\":\"binding\",\"binding\":{\"mode\":\"state\"}}\n---\nnull\n",
+		"---\nobject_id: service/orders\naspect_name: health\nkind: ASPECT\nvalue_source: {bad-json}\n---\nnull\n",
+		"---\nobject_id: service/orders\naspect_name: health\nkind: ASPECT\nvalue_source: {\"kind\":\"binding\",\"binding\":{\"mode\":\"state\"}}\n---\nnull\n",
 	}
 	for _, content := range contents {
 		idx := NewTree()

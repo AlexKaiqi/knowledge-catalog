@@ -8,7 +8,7 @@ import (
 func TestReadDailyProductView(t *testing.T) {
 	t.Parallel()
 	read := Shape("read", map[string]any{
-		"reference":    "urn:kc:object:kr%3A%2F%2Fx:note%2Fhello#/readme",
+		"reference":    "urn:kc:object:note/hello#/readme",
 		"locator":      "/readme",
 		"objectRef":    map[string]any{"object": "note/hello", "repository": "kr://x"},
 		"repository":   "kr://x",
@@ -19,7 +19,7 @@ func TestReadDailyProductView(t *testing.T) {
 		"declarations": []any{map[string]any{"schemaRef": "schema/core/readme/v1"}},
 	})
 	wantRead := map[string]any{
-		"reference":    "urn:kc:object:kr%3A%2F%2Fx:note%2Fhello#/readme",
+		"reference":    "urn:kc:object:note/hello#/readme",
 		"locator":      "/readme",
 		"address":      map[string]any{"objectId": "note/hello", "aspectName": "readme", "kind": "Aspect"},
 		"declarations": []any{map[string]any{"schemaRef": "schema/core/readme/v1"}},

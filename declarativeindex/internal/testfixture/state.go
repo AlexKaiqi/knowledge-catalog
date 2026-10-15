@@ -104,7 +104,7 @@ func (s *StateLookup) LookupState(context.Context, objectserving.StateLookupRequ
 func StateProjection(t *testing.T) (objectmodel.Repository, kernel.CommitID, objectmodel.Address) {
 	t.Helper()
 	setup := testkit.NewSetup(t, "")
-	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Job:orders", AspectName: "runtime"}
+	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/orders", AspectName: "runtime"}
 	commit, err := setup.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: setup.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: setup.RootCommitID, ExpectedTargetCommit: setup.RootCommitID,

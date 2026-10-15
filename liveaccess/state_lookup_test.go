@@ -40,7 +40,7 @@ func TestHTTPStateLookupCallsIndependentResourceRuntime(t *testing.T) {
 	}))
 	defer runtime.Close()
 	lookup := NewHTTPStateLookup(runtime.Client())
-	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Service:orders", AspectName: "health"}
+	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "service/orders", AspectName: "health"}
 	result, err := lookup.LookupState(context.Background(), StateLookupRequest{
 		Binding: ResolvedBinding{
 			Repository: "kr://acme/core", DeclarationCommit: "c1", Address: address,
@@ -72,7 +72,7 @@ func TestHTTPStateLookupCallsIndependentResourceRuntime(t *testing.T) {
 func TestHTTPStateLookupRejectsUnsupportedAndDishonestRuntime(t *testing.T) {
 	lookup := NewHTTPStateLookup(&http.Client{})
 	_, err := lookup.LookupState(context.Background(), StateLookupRequest{Binding: ResolvedBinding{
-		Address:    objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Service:x", AspectName: "health"},
+		Address:    objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "service/x", AspectName: "health"},
 		Operations: map[string]objectmodel.BindingOperation{"window": {Call: "health.window"}},
 		Origin:     "https://runtime.example/base",
 	}})
@@ -87,7 +87,7 @@ func TestHTTPStateLookupRejectsUnsupportedAndDishonestRuntime(t *testing.T) {
 	lookup = NewHTTPStateLookup(runtime.Client())
 	_, err = lookup.LookupState(context.Background(), StateLookupRequest{
 		Binding: ResolvedBinding{
-			Address:    objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Service:x", AspectName: "health"},
+			Address:    objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "service/x", AspectName: "health"},
 			Operations: map[string]objectmodel.BindingOperation{"read": {Call: "health.read"}},
 			Origin:     runtime.URL,
 		},
@@ -126,7 +126,7 @@ func TestHTTPStateLookupForwardsCallerAuthentication(t *testing.T) {
 	ctx := ContextWithCallerCredentials(context.Background(), callerCredentials{
 		Authorization: "Bearer taihu-token", TaiIdentity: "signed.identity",
 	})
-	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Service:orders", AspectName: "health"}
+	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "service/orders", AspectName: "health"}
 	if _, err := lookup.LookupState(ctx, StateLookupRequest{
 		Binding: ResolvedBinding{
 			Repository: "kr://acme/core", DeclarationCommit: "c1", Address: address,
@@ -176,7 +176,7 @@ func TestHTTPStateLookupRequiresCallerPrincipal(t *testing.T) {
 	lookup := NewHTTPStateLookup(runtime.Client())
 	_, err := lookup.LookupState(context.Background(), StateLookupRequest{
 		Binding: ResolvedBinding{
-			Address:    objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Service:x", AspectName: "health"},
+			Address:    objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "service/x", AspectName: "health"},
 			Operations: map[string]objectmodel.BindingOperation{"lookup": {Call: "health.lookup"}},
 			Origin:     runtime.URL,
 		},
@@ -190,7 +190,7 @@ func TestHTTPStateLookupRequiresCallerPrincipal(t *testing.T) {
 func TestHTTPStateLookupRequiresSchemaOrigin(t *testing.T) {
 	lookup := NewHTTPStateLookup(nil)
 	_, err := lookup.LookupState(context.Background(), StateLookupRequest{Binding: ResolvedBinding{
-		Address:    objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "Service:x", AspectName: "health"},
+		Address:    objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "service/x", AspectName: "health"},
 		Operations: map[string]objectmodel.BindingOperation{"lookup": {Call: "health.lookup"}},
 	}})
 	if kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {

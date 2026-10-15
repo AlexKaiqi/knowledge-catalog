@@ -35,8 +35,8 @@ func TestPrefixDatasetItemsExcludeSiblingPaths(t *testing.T) {
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: append(
-			testkit.PutEntity("listed", map[string]any{"body": "listed payment"}, "policies/listed.yaml"),
-			testkit.PutEntity("secret", map[string]any{"body": "secret payment"}, "notes/secret.yaml")...,
+			testkit.PutEntity("fixture/listed", map[string]any{"body": "listed payment"}, "policies/listed.yaml"),
+			testkit.PutEntity("fixture/secret", map[string]any{"body": "secret payment"}, "notes/secret.yaml")...,
 		),
 	})
 	if err != nil {
@@ -52,11 +52,11 @@ func TestPrefixDatasetItemsExcludeSiblingPaths(t *testing.T) {
 	serving := reader.Open(func(id kernel.RepositoryID) (objectmodel.Repository, error) {
 		return s.Repo, nil
 	}, pin)
-	listed, err := serving.Read("listed", nil)
+	listed, err := serving.Read("fixture/listed", nil)
 	if err != nil || len(listed) != 1 {
 		t.Fatalf("prefix dataset must read listed files: %#v %v", listed, err)
 	}
-	secret, err := serving.Read("secret", nil)
+	secret, err := serving.Read("fixture/secret", nil)
 	if err != nil || len(secret) != 0 {
 		t.Fatalf("prefix dataset must not read sibling paths: %#v %v", secret, err)
 	}
