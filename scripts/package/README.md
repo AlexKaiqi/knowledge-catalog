@@ -8,14 +8,14 @@
 
 构建机需要仓库要求的 Go、Git、Python 3.11+（使用 `.venv`）；只用 Python 标准库。
 没有 `.venv` 时可先执行 `python3 -m venv .venv`，无需安装 Python 包。
-生成 macOS `.pkg` 还需要 macOS 自带的 `pkgbuild`；Linux 安装包可从任一支持的构建机交叉构建。
+四个目标统一产 `.tar.gz` 解压安装包，可从任一支持的构建机交叉构建，无需平台打包工具。
 
 ```bash
 make build                                      # 本机架构二进制
 make build TARGET=linux/amd64                    # 交叉编译二进制
 make package VERSION=0.1.0                       # 本机架构安装包
 make package TARGET=linux/arm64 VERSION=0.1.0     # 单个 Linux 安装包
-make package-all VERSION=0.1.0                   # 四目标；需要 macOS 构建机
+make package-all VERSION=0.1.0                   # 四目标
 make test-package                               # 不启动服务的打包与安装回归
 ```
 
@@ -27,8 +27,7 @@ revision 和 dirty 状态进一步辨认，不把任意 Git 描述直接当系�
 | 入口 | 产物 |
 |---|---|
 | `make build` | `dist/bin/<os>_<arch>/kc`、`build-info.json` |
-| macOS 安装包 | `dist/kc_<version>_darwin_<arch>.pkg` |
-| Linux 安装包 | `dist/kc_<version>_linux_<arch>.tar.gz` |
+| 安装包 | `dist/kc_client_<os>_<arch>.tar.gz` |
 | 打包校验 | `dist/SHA256SUMS`，列出本次成功打包的所有安装包 |
 
 二进制关闭 CGO、移除源码绝对路径，保持 amd64 v1 / arm64 v8.0 基线。安装端无需 Go 或 Python。
@@ -40,25 +39,11 @@ revision 和 dirty 状态进一步辨认，不把任意 Git 描述直接当系�
 
 先在产物目录校验，再选择与系统、CPU 相符的包：macOS 用 `shasum -a 256 -c SHA256SUMS`，
 Linux 用 `sha256sum -c SHA256SUMS`。包没有签名；SHA-256 用于核对本地交付文件，不提供发布者认证。
-
-macOS 双击 `.pkg`，或使用系统 Installer：
-
-```bash
-sudo installer -pkg dist/kc_client_darwin_arm64.pkg -target /
-kc help
-sudo sh /usr/local/share/kc/uninstall.sh
-```
-
-macOS 安装到 `/usr/local/bin/kc`，元数据与卸载脚本位于 `/usr/local/share/kc/`。
-包使用固定标识 `io.knowledge-catalog.kc`，后续同标识包覆盖升级；安装前检查系统架构，
-只接受当前系统卷。卸载脚本只删除安装文件，系统的包收据可用
-`sudo pkgutil --forget io.knowledge-catalog.kc` 单独移除。
-
-Linux 解压后执行安装脚本；脚本默认安装到 `/usr/local`，需要写入权限：
+macOS 与 Linux 安装方式一致：解压后执行安装脚本；脚本默认安装到 `/usr/local`，需要写入权限：
 
 ```bash
 mkdir kc-install
-tar -xzf dist/kc_client_linux_amd64.tar.gz -C kc-install
+tar -xzf dist/kc_client_darwin_arm64.tar.gz -C kc-install
 sudo sh kc-install/install.sh
 kc help
 sudo sh /usr/local/share/kc/uninstall.sh
@@ -72,6 +57,7 @@ PREFIX="$HOME/.local" sh kc-install/install.sh
 PREFIX="$HOME/.local" sh "$HOME/.local/share/kc/uninstall.sh"
 ```
 
+安装到 `/usr/local/bin/kc`，元数据与卸载脚本位于 `<PREFIX>/share/kc/`。
 `PREFIX` 必须是非空绝对路径，安装前检查系统与架构。安装支持覆盖升级，`kc` 用同目录临时文件替换；
 脚本不自动执行 sudo，不修改 PATH 或 shell 配置。按需把所选前缀的 `bin` 目录加入 PATH。
 安装与卸载保留 KC 连接配置和登录会话；登录操作见 `kc help login`。

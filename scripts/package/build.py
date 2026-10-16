@@ -9,7 +9,6 @@ import os
 import pathlib
 import platform
 import re
-import shutil
 import subprocess
 import sys
 import tarfile
@@ -19,7 +18,6 @@ import tempfile
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 TEMPLATES = pathlib.Path(__file__).resolve().parent
 TARGETS = ("darwin/arm64", "darwin/amd64", "linux/arm64", "linux/amd64")
-IDENTIFIER = "io.knowledge-catalog.kc"
 
 
 def run(command, **kwargs):
@@ -61,9 +59,6 @@ def arguments(argv):
     args.targets = TARGETS if args.all else (args.target or host_target(),)
     if any(target not in TARGETS for target in args.targets):
         parser.error("unsupported host; select --target explicitly")
-    if args.action == "package" and any(t.startswith("darwin/") for t in args.targets):
-        if platform.system() != "Darwin" or not shutil.which("pkgbuild"):
-            parser.error("macOS .pkg creation requires a macOS host with pkgbuild; Linux packages can be cross-built")
     args.output = args.output.resolve()
     return args
 
@@ -100,7 +95,7 @@ def template(name, target):
     return (TEMPLATES / name).read_text().replace("@KC_OS@", system).replace("@KC_ARCH@", arch)
 
 
-def linux_package(payload, archive, target):
+def package_payload(payload, archive, target):
     for name in ("install.sh", "uninstall.sh"):
         (payload / name).write_text(template(name, target))
         (payload / name).chmod(0o755)
@@ -125,27 +120,6 @@ def linux_package(payload, archive, target):
                     tar.addfile(entry, content)
 
 
-def macos_package(payload, package, target, version, stage):
-    root = stage / "root"
-    binary_dir = root / "usr/local/bin"
-    metadata_dir = root / "usr/local/share/kc"
-    binary_dir.mkdir(parents=True)
-    metadata_dir.mkdir(parents=True)
-    root.chmod(0o755)
-    for directory in root.rglob("*"):
-        directory.chmod(0o755)
-    shutil.copy2(payload / "kc", binary_dir / "kc")
-    shutil.copy2(payload / "build-info.json", metadata_dir / "build-info.json")
-    (metadata_dir / "uninstall.sh").write_text(template("uninstall.sh", target))
-    (metadata_dir / "uninstall.sh").chmod(0o755)
-    scripts = stage / "scripts"
-    scripts.mkdir()
-    (scripts / "preinstall").write_text(template("preinstall.sh", target))
-    (scripts / "preinstall").chmod(0o755)
-    run(["pkgbuild", "--root", str(root), "--identifier", IDENTIFIER, "--version", version,
-         "--install-location", "/", "--ownership", "recommended", "--scripts", str(scripts), str(package)])
-
-
 def build(args):
     go = os.environ.get("GO", "go")
     info = build_info(args.version, go)
@@ -155,8 +129,7 @@ def build(args):
         artifacts = []
         for target in args.targets:
             slug = target.replace("/", "_")
-            stage = work / slug
-            payload = stage / "payload"
+            payload = work / slug / "payload"
             print(f"Building kc {args.version} for {target}", flush=True)
             build_binary(payload, target, go, info)
             if args.action == "build":
@@ -166,12 +139,8 @@ def build(args):
                     os.replace(payload / name, destination / name)
                 print(destination / "kc")
                 continue
-            suffix = ".pkg" if target.startswith("darwin/") else ".tar.gz"
-            package = work / f"kc_client_{slug}{suffix}"
-            if suffix == ".pkg":
-                macos_package(payload, package, target, args.version, stage)
-            else:
-                linux_package(payload, package, target)
+            package = work / f"kc_client_{slug}.tar.gz"
+            package_payload(payload, package, target)
             artifacts.append(package)
         # Publish local files only after every requested target was built and packaged.
         if artifacts:
