@@ -9,6 +9,7 @@
 
 - [对象写入](../../doc/design/object.md)：单仓 Writer、Schema、并发与幂等边界。
 - [Snapshot](../../doc/design/snapshot.md)：固定 commit、目录读取和介质能力。
+- [服务](../../doc/design/service.md)：本地服务替换后恢复原登记、授权与写回执。
 - [Writer 合同](../../object/writer/README.md)：目录输入与 bulk 条件提交。
 - [质量闭环](../../doc/engineering/quality.md)：增量回归和门禁。
 
@@ -52,3 +53,14 @@
 - 真实 lakeFS 16 项通过：128 实例加 1 Schema 首次 bulk，Resolve=0、旧基点 GET=0、根目录探测=2、bulk POST=263、staging=0；非空增量、普通上传对照、回读、Schema 拒绝、重放和 CAS 均通过。最终临时容器、仓、state/cache 及两轮专属 S3 前缀均已复核清理。
 - 本机 client 已正式安装到用户目录并调整新终端优先级；ttyd 仅重建 client 服务到唯一新镜像，实际 binary/metadata 一致，配置和会话指纹保留。
 - 并行任务只改动仓内记录也会改变完整验收源码指纹；在独立工作树固定 `8b762331` 并加入本轮两份回归，1448 个 Go/module 输入与主工作区逐字节相同，完整 contracts 在此冻结候选执行，证据直接保存在主证据目录。
+
+## 本轮交付与验证范围
+
+- 目录输入自动构造 ChangeSet，`--bulk` 经 CLI/HTTP 传到 Writer；默认首次上传按同一固定 commit 的可靠空树证明省去逐对象旧值查询。未知能力、非空仓与显式历史基点保留原差异语义。
+- 零变化目录重放仍经过原请求摘要核对；Schema、路径冲突、条件提交和幂等边界保留。新增缺失 APPLIED 元数据的六项拒绝回归先红后绿。
+- 受影响 CLI、invocation、Writer、snapshot 专项与 race、client/HTTP 传输回归、`make test`、`make quality`、`make check-docs`、surface 检查与 16 项打包测试通过。真实 lakeFS 的两条目录上传路径共 16 项无跳过通过；观测窗口由同进程确认并独立复算，临时仓及存储前缀清理已核验。
+- 主机新终端默认 client 与 ttyd 持久镜像均更新；安装二进制与实测二进制 SHA256 一致，原连接配置与会话保留。
+- 完整 contracts 在冻结候选执行结束：4940 项通过、0 失败、11 项外部 live 用例跳过，报告状态为 `passed-with-skips`，源码未漂移；全部 54 个公开命令的成功与风险边界覆盖通过。另一个显式 build-tag 测试和一个 benchmark 未被此入口选择，未计为通过。最终主工作区全部 1449 份 Go 和模块输入与冻结候选相同。
+- 完整合同报告：`.validation/runs/20261016-writer-upload-resumed/frozen/20261016T090945Z-b0103150116a/report.json`。依任务规则，本条仍留在 `doing/`，不把上述广域合同结果写成全量无跳过验收。
+- 另将广域入口未绑定环境的 `TestLiveBulkApplyAgainstRealLakeFS` 在现有部署网络单独补跑：原测试上传、回读、删除和陈旧基点 CAS 全部通过，1 项通过、0 跳过，源码未漂移；自有仓已核验 404，独有 S3 前缀与一次性测试进程均已清理。证据：`.validation/runs/20261016-writer-upload-resumed/live-native-bulk/summary.json`。首轮宿主无法解析 MinIO 内网地址的环境失败保留为独立尝试，不计为通过；不改写原广域报告的 11 项跳过。
+- 本轮未上传整理后的真实业务仓，未验证其全量容量或耗时。
