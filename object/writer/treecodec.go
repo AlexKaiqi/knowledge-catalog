@@ -85,6 +85,7 @@ func applyObjectCommit(commandID string, target snapshot.Store, cs objectmodel.C
 	for path, content := range toWrite {
 		changes = append(changes, snapshot.TreeChange{Path: path, Content: []byte(content)})
 	}
+	changes = dropUnchangedWrites(basis, cs.BaseCommit, changes)
 	sort.Slice(changes, func(i, j int) bool { return changes[i].Path < changes[j].Path })
 
 	if cs.BulkIngest {

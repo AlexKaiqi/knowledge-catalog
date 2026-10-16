@@ -138,6 +138,7 @@ type schemaResolver struct {
 	at          kernel.CommitID
 	before      map[string]objectmodel.Unit
 	final       map[string]objectmodel.Unit
+	finalByID   map[objectmodel.ObjectID][]objectmodel.Unit
 	definitions map[string]objectmodel.SchemaDefinition
 }
 

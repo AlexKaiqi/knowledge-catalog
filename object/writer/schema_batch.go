@@ -23,6 +23,7 @@ func (r *schemaResolver) prepareFinalUnits(cs objectmodel.ChangeSet) error {
 		return err
 	}
 	r.final = schemaPlanningUnits(idx)
+	r.finalByID = nil
 	return nil
 }
 
@@ -85,14 +86,16 @@ func (r *schemaResolver) finalSchemaChanges(drafts map[objectmodel.ObjectID]obje
 	return nil
 }
 
+// finalObjectUnits answers per-object lookups from an index built once over
+// the final plan; the plan is fixed after prepareFinalUnits, which resets it.
 func (r *schemaResolver) finalObjectUnits(id objectmodel.ObjectID) []objectmodel.Unit {
-	var units []objectmodel.Unit
-	for _, unit := range r.final {
-		if unit.ObjectID == id {
-			units = append(units, unit)
+	if r.finalByID == nil {
+		r.finalByID = make(map[objectmodel.ObjectID][]objectmodel.Unit, len(r.final))
+		for _, unit := range r.final {
+			r.finalByID[unit.ObjectID] = append(r.finalByID[unit.ObjectID], unit)
 		}
 	}
-	return units
+	return r.finalByID[id]
 }
 
 func (r *schemaResolver) prepareNativeFinalUnits(cs objectmodel.ChangeSet) error {
@@ -115,7 +118,7 @@ func (r *schemaResolver) prepareNativeFinalUnits(cs objectmodel.ChangeSet) error
 	if err != nil {
 		return err
 	}
-	r.before, r.final = map[string]objectmodel.Unit{}, map[string]objectmodel.Unit{}
+	r.before, r.final, r.finalByID = map[string]objectmodel.Unit{}, map[string]objectmodel.Unit{}, nil
 	for _, unit := range existing {
 		r.before[objectmodel.AddressKey(unit.Address)] = unit
 	}

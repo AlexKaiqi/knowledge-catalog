@@ -105,8 +105,32 @@ func UnitSetDeclarationDigest(units []Unit) kernel.Digest {
 // for object IDs touched by operations; no repository-wide tree is required.
 func ApplyUnits(existing []Unit, operations []Operation, provenance *ProvenanceEnvelope) (final []Unit, deleted []Address, err error) {
 	units := map[string]Unit{}
+	// byID indexes unit keys per object so sibling lookups stay O(siblings)
+	// instead of scanning every unit of the batch for every operation.
+	byID := map[ObjectID]map[string]struct{}{}
+	track := func(key string, id ObjectID) {
+		keys := byID[id]
+		if keys == nil {
+			keys = map[string]struct{}{}
+			byID[id] = keys
+		}
+		keys[key] = struct{}{}
+	}
+	untrack := func(key string, id ObjectID) {
+		if keys := byID[id]; keys != nil {
+			delete(keys, key)
+			if len(keys) == 0 {
+				delete(byID, id)
+			}
+		}
+	}
 	for _, unit := range existing {
-		units[AddressKey(unit.Address)] = unit
+		key := AddressKey(unit.Address)
+		if previous, ok := units[key]; ok {
+			untrack(key, previous.ObjectID)
+		}
+		units[key] = unit
+		track(key, unit.ObjectID)
 	}
 	for _, operation := range operations {
 		if operation.Op != OpPut && operation.Op != OpRemove {
@@ -117,19 +141,18 @@ func ApplyUnits(existing []Unit, operations []Operation, provenance *ProvenanceE
 		}
 		key := AddressKey(operation.Address)
 		current, exists := units[key]
-		siblings := make([]Unit, 0)
-		for _, unit := range units {
-			if unit.ObjectID == operation.Address.ObjectID {
-				siblings = append(siblings, unit)
-			}
-		}
 		if operation.Op == OpRemove {
 			if IsEntityBlob(operation.Address) {
-				if len(siblings) == 0 {
+				siblingKeys := byID[operation.Address.ObjectID]
+				if len(siblingKeys) == 0 {
 					return nil, nil, kernel.Fail(kernel.ErrPreconditionFailed,
 						"object %s does not exist", operation.Address.ObjectID)
 				}
 				if operation.Precondition != nil && operation.Precondition.Digest != "" {
+					siblings := make([]Unit, 0, len(siblingKeys))
+					for siblingKey := range siblingKeys {
+						siblings = append(siblings, units[siblingKey])
+					}
 					digest, err := UnitSetMaintenanceDigest(siblings)
 					if err != nil {
 						return nil, nil, err
@@ -139,12 +162,11 @@ func ApplyUnits(existing []Unit, operations []Operation, provenance *ProvenanceE
 							"digest mismatch for %s", operation.Address.ObjectID)
 					}
 				}
-				for siblingKey, sibling := range units {
-					if sibling.ObjectID == operation.Address.ObjectID {
-						deleted = append(deleted, sibling.Address)
-						delete(units, siblingKey)
-					}
+				for siblingKey := range siblingKeys {
+					deleted = append(deleted, units[siblingKey].Address)
+					delete(units, siblingKey)
 				}
+				delete(byID, operation.Address.ObjectID)
 				continue
 			}
 			if !exists {
@@ -158,6 +180,7 @@ func ApplyUnits(existing []Unit, operations []Operation, provenance *ProvenanceE
 			}
 			deleted = append(deleted, current.Address)
 			delete(units, key)
+			untrack(key, current.ObjectID)
 			continue
 		}
 		if operation.Precondition != nil {
@@ -195,12 +218,16 @@ func ApplyUnits(existing []Unit, operations []Operation, provenance *ProvenanceE
 		if envelope == nil && exists {
 			envelope = current.Provenance
 		}
+		if exists {
+			untrack(key, current.ObjectID)
+		}
 		units[key] = Unit{
 			ObjectID: operation.Address.ObjectID, Address: operation.Address,
 			PathHint: pathHint, SchemaRef: schemaRef, ValueSource: source,
 			Provenance: envelope, Value: operation.Value,
 			Digest: kernel.CanonicalDigest(operation.Value),
 		}
+		track(key, operation.Address.ObjectID)
 	}
 	byObject := map[ObjectID][]Unit{}
 	for _, unit := range units {

@@ -1,6 +1,7 @@
 package writer
 
 import (
+	"bytes"
 	"sync"
 	"sync/atomic"
 
@@ -135,6 +136,37 @@ func prefetchBasis(tree snapshot.TreeReader, paths []string, at kernel.CommitID)
 	if warm, ok := tree.(basisPrefetcher); ok {
 		warm.prefetch(paths, at)
 	}
+}
+
+// dropUnchangedWrites removes writes whose bytes equal the basis file the
+// planning view already holds. Rewriting an identical file yields the same
+// tree, so the transport round trip is pure waste; locators and completion
+// markers of an update are the common case. Only already-cached coordinates
+// are compared, so no extra reads are issued. When every write is unchanged
+// the original set is kept, preserving the authority's empty-change contract.
+func dropUnchangedWrites(basis snapshot.TreeReader, at kernel.CommitID, changes []snapshot.TreeChange) []snapshot.TreeChange {
+	cache, ok := basis.(*basisReadCache)
+	if !ok || at == "" {
+		return changes
+	}
+	kept := make([]snapshot.TreeChange, 0, len(changes))
+	for _, change := range changes {
+		if !change.Remove && cache.holds(change.Path, at, change.Content) {
+			continue
+		}
+		kept = append(kept, change)
+	}
+	if len(kept) == 0 {
+		return changes
+	}
+	return kept
+}
+
+func (c *basisReadCache) holds(path string, at kernel.CommitID, content []byte) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	hit, ok := c.files[basisCoordinate{commit: at, path: path}]
+	return ok && hit.err == nil && bytes.Equal(hit.content, content)
 }
 
 func cloneBytes(raw []byte) []byte {

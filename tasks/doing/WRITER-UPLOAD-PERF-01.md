@@ -43,3 +43,23 @@
   未计为通过。
 - `make test` 未执行：执行时另一条线正占用共享 OpenSearch 跑 `make test-contracts`。
 - 证据：`.validation/runs/20261016-upload-perf/`。真实 lakeFS 与业务大仓耗时未测。
+
+### 第二轮：大仓规划线性化与未变文件不重写
+
+- 先红（真实 lakeFS 1.86 + MinIO，容器网络内，1 万对象）：首传 16.6s、全量更新 21.0s；
+  Writer CPU 18.6s，热点为 `CanonicalDigest` 整体拼串、`ApplyUnits` 删除实体时全表扫兄弟、
+  `finalObjectUnits` 每对象全表过滤（均为平方级）；只改值的更新仍重发全部文件。
+  同环境 lakeFS 自身 apply 约 2000–3400 文件/s。
+- 实现：`kernel/digest.go` 流式写入哈希（字节形式与旧实现逐字节一致）；`object/units.go`
+  按对象 ID 建 unit 索引；`object/writer/schema_batch.go` 惰性按对象分组最终 unit；
+  `object/writer/basis_cache.go` `dropUnchangedWrites` 剔除与已读基点字节相同的写入
+  （全部未变保留原集合）；`cli/desired.go` 预检并发 16→32 与服务端对齐。
+- 后绿：`TestStreamedCanonicalFormMatchesLegacy`、`TestCanonicalDigestLargeArrayIsLinear`、
+  `TestApplyUnitsScalesLinearly`、`TestApplyUnitsRemoveEntityDropsAllSiblingsOnly`、
+  `TestUpdateSkipsByteIdenticalFiles`、`TestWriterUpdateScalesLinearly` 通过；1 万对象首传 7.7s、
+  更新 7.3s，Writer CPU 1.5s；`KC_LAKEFS_STAGE_CONCURRENCY=64` 再快约 20%，默认值不变。
+- 门禁：基于 HEAD 仅含本轮文件的独立 worktree 中 `make check-docs`、`make quality`、`make test` 全绿；
+  主工作区 `make check-docs` 通过。
+- 未做：import 零拷贝（LAKEFS-02 否决）、跨请求缓存（CA-01）、presign 数据面（I-53）；
+  批量 Resolve、Writer/CLI 共用对照计划、locator 合并登记在 `DEBT-WRITER-UPLOAD-SCALE-01`。
+- 证据：`.validation/runs/20261016-write-perf/`。

@@ -42,6 +42,8 @@ ChangeSet 无需声明“首次上传”，服务端不信任客户端的空树�
 非空基点同样不重复付费：一次命令内 Schema 规划、tree codec 与路径准入共用同一不可变
 基点读取视图，每个 `(commit, path)` 至多读 authority 一次（缺失结果同样复用，传输失败不缓存）；
 相互独立的 locator、unit 与目标路径点读以有界并发预取，消费仍按原顺序进行，错误语义与串行一致。
+写入集合中与基点字节完全相同的文件（典型为更新时不变的 locator 与完成标记）不再发送给 authority；
+全部未变时保留原写入集合，空变更语义不变。
 
 幂等规则：同 command_id 同 digest 返回原 Receipt（REPLAYED）；同 id 异 digest 是 `IDEMPOTENCY_CONFLICT`。Snapshot CAS 过期是 `NON_FAST_FORWARD`。带 `schema_ref` 的 PUT 必须在 target commit 可解析。DERIVATION 必须携带固定 inputWorkspaceVersionRef 和 algorithm。
 
