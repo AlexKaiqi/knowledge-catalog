@@ -238,3 +238,12 @@ probe。通过一个独立的验收入口，在本机已部署的真实测试栈
 - 验证：同一场景树 16 个节点、63 条 probe 保留，DFS 97.33 秒，构造 16 段、初始化 1 次；17 个通过事件、0 失败，原有两条独立走查仍由 `goto.py` 执行。最终受影响场景及检查点回归 28 个通过事件、无 skip；夹具及 CLI 边界 5 项通过，质量与文档门禁通过。部署后仅把物理默认分支的字面值改为从 `snapshot.DefaultRef` 推导，行为值相同，随后定向 4 项及质量门禁再次通过。
 - 环境：使用调用拥有的专属 OpenSearch 与已有真实 lakeFS/MinIO/PostgreSQL；923 个原有仓的命名空间清单前后相同，无新增或删除仓残留，专属搜索和测试容器已移除。本轮没有降低容量上限、删减断言、增加 skip、安装依赖或提交。
 - 实现与逐入口证据见本轮记录（`.validation/runs/20261016-scene-checkpoints/summary.json`）。计时来自不同候选及编译器的两轮运行，作为实际等待时间记录，不作为严格同工具链压测。该交付只覆盖执行器优化，本任务其它规格缺口和验收要求仍保留。
+
+## doing 统一补验（2026-10-16）
+
+- 真实执行确认 117 条中有 37 条可执行、80 条没有 probe。首轮 32 pass / 5 fail / 80 error；5 个实际读取失败均因辅助 Schema 被夹具的 `drafts/` 路径提示移出 Dataset 所选 Schema 树。辅助 Schema 草稿改用 Writer 的规范落盘路径；`--source` 的交付目录/来源子目录顺序按公开帮助保持，原材料与规格不变。新增目录回归。
+- 最终候选全量为 36 pass / 1 fail / 80 error：5 个读取问题已消失。最后一条是依赖 Descriptor 在 Dataset 外时仍期待 `FORBIDDEN` 的旧 Oracle；既有 Reader/LiveAccess 合同将其视为未交付对象，严格改验 `OBJECT_REF_UNRESOLVED`，并新增 value/declarations/observations 均缺席的反例。该条在同一真实服务上定向复验 1 pass / 0 fail / 0 error，保留独立 Oracle 摘要，不改写全量原报告。现有 37 条全部通过，80 条仍为 missing-probe/not_started，不充当能力红或通过。
+- 另一条旧离线夹具仍模拟 control 的 `_mget`，已改为实际只读 `_search` 查询；控制记录写入可见、新代可见、外部代变化无关、故障传播及拒绝伪造归属的断言保持。部署执行器最终 41 项离线回归通过，能力检查、信号、搜索清理及夹具生命周期专项另列证据。
+- 公共门禁：最新候选 component 2888 pass / 0 fail / 6 个显式 live skip，boundary 680 pass / 0 fail / 0 skip，普通场景 18 pass / 0 fail / 0 skip，真实 State 专项 3 pass / 0 fail / 0 skip，质量和文档通过，源码稳定；此前完整合同三段与真实 DFS、真实 Snapshot 专项分别保留各自候选证明。
+- 验收使用独占搜索及独立 Server/CLI；已有部署后续写入与登录改动未被回退。原 80 条缺 probe、两条残缺规格原文、控制时钟/部署变体，以及并入的 `DEBT-TEST-OPENSEARCH-TIMING-01` 原因调查继续保留；本轮生命周期及完整 boundary 未复现该超时，不宣称根因已修复。任务保持 doing。
+- 汇总及逐规格、资源清理和原部署观察记录见 `.validation/runs/20261016-doing-validation/summary.json`。未提交、未安装依赖；没有删规格、加 skip 或降低分片上限。
