@@ -33,6 +33,7 @@ func requireAvailableUnitPaths(tree snapshot.TreeReader, base kernel.CommitID, f
 		paths = append(paths, path)
 	}
 	sort.Strings(paths)
+	prefetchBasis(tree, paths, base)
 	for _, path := range paths {
 		if err := requireAvailableUnitPath(tree, base, path, owners[path], removed); err != nil {
 			return err

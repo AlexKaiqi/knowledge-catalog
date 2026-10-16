@@ -2,6 +2,7 @@ package writer_test
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 
 	"kc/internal/testkit"
@@ -14,6 +15,7 @@ import (
 type countingTreeAuthority struct {
 	snapshot.Store
 	snapshot.TreeStore
+	mu        sync.Mutex
 	reads     int
 	readBytes int
 	lists     int
@@ -21,6 +23,8 @@ type countingTreeAuthority struct {
 
 func (s *countingTreeAuthority) ReadFile(path string, commit kernel.CommitID) ([]byte, error) {
 	raw, err := s.TreeStore.ReadFile(path, commit)
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if err == nil {
 		s.readBytes += len(raw)
 	}

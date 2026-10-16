@@ -161,6 +161,7 @@ func (w *Writer) applySnapshot(commandID string, surface objectmodel.Surface, cs
 		if err != nil {
 			return nil, snapshot.WriteNotApplied(err)
 		}
+		basis = cachedReadBasis(basis)
 		if err := validateSchemaRefs(w.store, basis, cs); err != nil {
 			return nil, snapshot.WriteNotApplied(err)
 		}

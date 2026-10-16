@@ -2,6 +2,7 @@ package writer_test
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 
 	"kc/internal/testkit"
@@ -20,6 +21,7 @@ type initialUploadStore struct {
 	directory snapshot.DirectoryReader
 	bulk      snapshot.BulkTreeIngester
 	basis     kernel.CommitID
+	mu        sync.Mutex
 	reads     int
 	oldReads  int
 	lists     int
@@ -29,11 +31,13 @@ type initialUploadStore struct {
 }
 
 func (s *initialUploadStore) ReadFile(path string, at kernel.CommitID) ([]byte, error) {
+	s.mu.Lock()
 	if at == s.basis {
 		s.reads++
 	} else {
 		s.oldReads++
 	}
+	s.mu.Unlock()
 	return s.TreeStore.ReadFile(path, at)
 }
 

@@ -165,8 +165,10 @@ func changedObjectIDs(operations []objectmodel.Operation) []objectmodel.ObjectID
 }
 
 func readChangedObjects(tree snapshot.TreeStore, commit kernel.CommitID, operations []objectmodel.Operation) (*repofile.Tree, error) {
+	ids := changedObjectIDs(operations)
+	prefetchChangedObjects(tree, commit, ids)
 	idx := repofile.NewTree()
-	for _, objectID := range changedObjectIDs(operations) {
+	for _, objectID := range ids {
 		units, err := readObject(tree, objectID, commit)
 		if err != nil {
 			return nil, err
@@ -179,6 +181,30 @@ func readChangedObjects(tree snapshot.TreeStore, commit kernel.CommitID, operati
 		}
 	}
 	return idx, nil
+}
+
+// prefetchChangedObjects warms the planning view in two bounded fan-outs:
+// first every changed object's locator, then every unit path those locators
+// name. The serial read in readChangedObjects then consumes cached
+// coordinates in order and reports failures exactly as before.
+func prefetchChangedObjects(tree snapshot.TreeReader, commit kernel.CommitID, ids []objectmodel.ObjectID) {
+	if _, ok := tree.(basisPrefetcher); !ok || len(ids) < 2 {
+		return
+	}
+	locators := make([]string, 0, len(ids))
+	for _, id := range ids {
+		locators = append(locators, repofile.ObjectLocatorPath(id))
+	}
+	prefetchBasis(tree, locators, commit)
+	units := []string{}
+	for _, id := range ids {
+		paths, err := repofile.ReadObjectLocator(tree, id, commit)
+		if err != nil {
+			return
+		}
+		units = append(units, paths...)
+	}
+	prefetchBasis(tree, units, commit)
 }
 
 func readObject(tree snapshot.TreeReader, objectID objectmodel.ObjectID, commit kernel.CommitID) ([]repofile.Unit, error) {

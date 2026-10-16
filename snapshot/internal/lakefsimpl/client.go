@@ -79,11 +79,31 @@ func newAPIClient(endpoint Endpoint, credential string) (*apiClient, error) {
 		accessKey:  accessKey,
 		secretKey:  secretKey,
 		http: &http.Client{
+			Transport:     pooledTransport(),
 			Timeout:       60 * time.Second,
 			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
-		direct: &http.Client{Timeout: 5 * time.Minute},
+		direct: &http.Client{Transport: pooledTransport(), Timeout: 5 * time.Minute},
 	}, nil
+}
+
+// minIdleConnsPerHost keeps headroom over the default staging fan-out.
+const minIdleConnsPerHost = 64
+
+// pooledTransport sizes the idle pool to the adapter's own fan-out. Go's
+// default keeps only two idle connections per host, so concurrent staging and
+// planning reads would reopen a TCP connection on almost every request.
+func pooledTransport() *http.Transport {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	perHost := stageConcurrency() * 2
+	if perHost < minIdleConnsPerHost {
+		perHost = minIdleConnsPerHost
+	}
+	transport.MaxIdleConnsPerHost = perHost
+	if transport.MaxIdleConns < perHost*2 {
+		transport.MaxIdleConns = perHost * 2
+	}
+	return transport
 }
 
 func (c *apiClient) repositoryPath(suffix string) string {
