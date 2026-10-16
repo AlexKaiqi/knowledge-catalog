@@ -87,7 +87,7 @@ class PackageBuildTest(unittest.TestCase):
             root = pathlib.Path(temporary) / "packages with spaces"
             status, stdout, stderr, tools = self.invoke(root, ["package", "--all", "--version", VERSION])
             self.assertEqual(status, 0, stdout + stderr)
-            expected = {f"kc_{VERSION}_{target}{suffix}" for target, suffix in (
+            expected = {f"kc_client_{target}{suffix}" for target, suffix in (
                 ("darwin_arm64", ".pkg"), ("darwin_amd64", ".pkg"),
                 ("linux_arm64", ".tar.gz"), ("linux_amd64", ".tar.gz"))}
             self.assertEqual({path.name for path in root.iterdir()}, expected | {"SHA256SUMS"})
@@ -132,7 +132,7 @@ class PackageBuildTest(unittest.TestCase):
             status, stdout, stderr, _ = self.invoke(root, ["package", "--target", "linux/amd64", "--version", VERSION],
                                                     system="Linux", pkgbuild=None)
             self.assertEqual(status, 0, stdout + stderr)
-            archive = root / f"kc_{VERSION}_linux_amd64.tar.gz"
+            archive = root / "kc_client_linux_amd64.tar.gz"
             with tarfile.open(archive) as tar:
                 self.assertEqual(set(tar.getnames()), {"kc", "build-info.json", "install.sh", "uninstall.sh", "README.txt"})
                 for entry in tar.getmembers():
@@ -239,7 +239,7 @@ class PackageBuildTest(unittest.TestCase):
         for target, tool in (("darwin/amd64", "pkgbuild"), ("linux/amd64", "go")):
             with self.subTest(target=target, tool=tool), tempfile.TemporaryDirectory() as temporary:
                 root = pathlib.Path(temporary)
-                previous = {f"kc_{VERSION}_{name}{suffix}": b"previous " + name.encode()
+                previous = {f"kc_client_{name}{suffix}": b"previous " + name.encode()
                             for name, suffix in (("darwin_arm64", ".pkg"), ("darwin_amd64", ".pkg"),
                                                  ("linux_arm64", ".tar.gz"), ("linux_amd64", ".tar.gz"))}
                 previous["SHA256SUMS"] = b"previous complete checksum table\n"

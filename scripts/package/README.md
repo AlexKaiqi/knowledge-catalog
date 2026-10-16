@@ -44,7 +44,7 @@ Linux 用 `sha256sum -c SHA256SUMS`。包没有签名；SHA-256 用于核对本�
 macOS 双击 `.pkg`，或使用系统 Installer：
 
 ```bash
-sudo installer -pkg dist/kc_0.1.0_darwin_arm64.pkg -target /
+sudo installer -pkg dist/kc_client_darwin_arm64.pkg -target /
 kc help
 sudo sh /usr/local/share/kc/uninstall.sh
 ```
@@ -58,7 +58,7 @@ Linux 解压后执行安装脚本；脚本默认安装到 `/usr/local`，需要�
 
 ```bash
 mkdir kc-install
-tar -xzf dist/kc_0.1.0_linux_amd64.tar.gz -C kc-install
+tar -xzf dist/kc_client_linux_amd64.tar.gz -C kc-install
 sudo sh kc-install/install.sh
 kc help
 sudo sh /usr/local/share/kc/uninstall.sh

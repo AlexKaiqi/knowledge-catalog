@@ -167,7 +167,7 @@ def build(args):
                 print(destination / "kc")
                 continue
             suffix = ".pkg" if target.startswith("darwin/") else ".tar.gz"
-            package = work / f"kc_{args.version}_{slug}{suffix}"
+            package = work / f"kc_client_{slug}{suffix}"
             if suffix == ".pkg":
                 macos_package(payload, package, target, args.version, stage)
             else:
