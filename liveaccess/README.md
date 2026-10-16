@@ -80,9 +80,9 @@ scheme、host、port 精确比较（缺省端口按 scheme 补齐，host 大小�
 
 ## 已声明操作与说明
 
-已有 `binding show`、`access`、`invoke` 保持公开任务与 wire。LiveAccess 实现由所选 Repo
-实例匹配固定合同及实现 Schema；其他合同没有已安装插件处理，调用明确拒绝。
+已有 `binding show`、`access`、`invoke` 保持公开任务与 wire。LiveAccess 实现按固定声明中的
+`runtime` + `protocol` 匹配部署实例，并核验固定合同及实现 Schema；其他合同没有已安装插件处理，调用明确拒绝。
 处理器合同与调用任务是本插件的内部机制，见 [handler](handler/README.md) 与 [dispatch](dispatch/README.md)。
 
 `kc plugin liveaccess help` 返回 [CLI 同源说明](cli/README.md)，不读取仓配置或调用来源。
-说明不是当前目标已启用或来源可用的证明。
+说明不是匹配实例已部署或来源可用的证明。

@@ -9,14 +9,14 @@ func leafHelpEntries() map[string]helpEntry {
 			Usage: `kc binding show (--repo <id> | --dataset <id>) --object <object-id> --aspect <name>
 
 用途：
-  核对对象 Aspect 的 binding 单元声明，确定其固定取值描述（origin、mode、descriptorRef）与绑定依据。
+  核对对象 Aspect 或成员的 valueSource，解析 descriptorRef 指向的固定取值描述（origin、mode）与绑定依据。
 用法与参数：
   --object 与 --aspect 必填；集合成员可加 --member <key>。
   单仓可用 --commit 或 --ref；Dataset 从本次固定选择范围解析绑定，不接受任意源 URL。
 条件：
   已认证；单仓需 object.binding.resolve，命名 Dataset 以其 file.read 准入，不另要求来源仓 object.binding.resolve。
  Dataset 须通过所需对象与选择范围的完整读取检查，声明及 Schema 须在合法清单内；另行解析 pin 需 dataset.resolve。
-  所选 Aspect 或成员须有可解析的 Bound State origin。
+  所选 Aspect 或成员须声明 binding 取值来源，且 descriptorRef 指向可解析的取值描述。
 结果：
   JSON 返回解析的 Binding，包含对象 Address、schemaRef、origin 和声明的固定版本依据；Dataset 可返回多个绑定。
 后果：
@@ -25,7 +25,8 @@ func leafHelpEntries() map[string]helpEntry {
   需要回读对象与 Schema，成本随来源数量增长；绑定解析成功不证明源在线、调用已获源授权或运行时已部署。
   相同对象 id 在多个仓仍是不同绑定，不能任取一个当作其它来源的替身。
 失败恢复：
-  无绑定时用 schema describe 核对 origin 与 Aspect 类型；缺对象时先 resolve/read 核对声明版本。
+  无绑定时核对所选 Aspect/成员的 valueSource 与 descriptorRef；取值描述提供 origin，schema describe 只核对值结构。
+  缺对象时先 resolve/read 核对声明版本。
   需当前值时另行 access；运行时问题应由源维护者处理，不能靠改客户端目标绕过绑定。
 示例：
   例：kc binding show --repo kr://scene/object --object table/orders --aspect stats
@@ -44,7 +45,7 @@ func leafHelpEntries() map[string]helpEntry {
   已认证并有目标范围的 resource.access；Dataset file.read 不蕴含此访问权，单仓不另要求 object.binding.resolve。
   命名 Dataset 还须通过选择范围的完整读取检查，整范围 file.read 可满足，不另要求来源仓 object.read。
   另行解析 Dataset pin 需 dataset.resolve；绑定声明须可解析，源运行时须可用并按其授权规则允许访问。
-  origin 来自所选 Domain Schema，服务将请求身份和追踪上下文传给运行时，不由此命令另选访问地址。
+  origin 来自所选单元引用的固定取值描述，服务将请求身份和追踪上下文传给运行时，不由此命令另选访问地址。
 结果：
   JSON 展示当前 value、basis 及适用的 schemaRef/对象/切面坐标；basis 用于核对观察时间与源版本等依据。
   当前 CLI 多绑定结果只展示首条观察；要完整核对多来源需使用 typed API，或明确指定单仓。

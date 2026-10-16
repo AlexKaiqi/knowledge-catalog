@@ -74,6 +74,23 @@ func TestLiveAccessCLIHelpIsStaticAndOwnedDeclarationsAreIndependent(t *testing.
 	}
 }
 
+func TestLiveAccessCLIHelpUsesDeploymentAndUnitDeclarations(t *testing.T) {
+	usage := accesscli.Affordance().Usage
+	for _, expected := range []string{"部署装配", "不绑定仓或 Dataset", "方面或成员", "读到相应单元时生效", "descriptorRef", "runtime", "protocol", "仅 identity 为 shared", "按索引声明", "按查询条件补判"} {
+		if !strings.Contains(usage, expected) {
+			t.Errorf("plugin help omits declaration model %q", expected)
+		}
+	}
+	for _, entry := range accesscli.Commands() {
+		usage += "\n" + entry.Usage
+	}
+	for _, retired := range []string{"来源 Repo 配置本插件", "Dataset 复用来源配置", "origin 来自所选 Domain Schema", "schema describe 核对 origin"} {
+		if strings.Contains(usage, retired) {
+			t.Errorf("LiveAccess help retains retired model %q", retired)
+		}
+	}
+}
+
 func TestLiveAccessCLIRejectsInvalidRequestsBeforeTransport(t *testing.T) {
 	remote := &recordingClient{}
 	executor := accesscli.New(remote, accesscli.Context{})

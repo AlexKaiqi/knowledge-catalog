@@ -245,15 +245,15 @@ kc login</code></pre></div>
         <p>Taihu 登录若返回授权链接，先在浏览器完成授权，再按返回提示执行 <code>kc login --wait</code>。登录完成后用 <code>kc whoami</code> 核对身份；登录成功不等于已获业务权限。</p>
       </div>
       <div class="step"><span class="step-no">2</span><h3>选一份交付，固定修订再读</h3>
-        <p>用库存了解有哪些交付及其用途，再核对所选 Dataset 的消费权。下面以部署已公开的 <code>store-oncall</code> 第 1 版为例；实际使用时选定修订后，后续读取沿用同一个修订。</p>
+        <p>用库存了解有哪些交付及其用途，再核对所选 Dataset 的消费权。下面以部署已公开的 <code>store-oncall</code> 第 2 版为例，其中已交付更新后的手册与活动首日提示；选定修订后，后续读取沿用同一个修订。</p>
         <div class="code"><div class="code-head"><span>消费方 · 读取同一版</span><button class="copy" type="button">复制</button></div><pre><code>kc help consume
 kc show
-kc dataset show store-oncall --revision 1
-kc files list --dataset store-oncall --revision 1 --path services
-kc read 'urn:kc:object:service/qinghe.order-service#/runbook' --dataset store-oncall --revision 1
-kc read 'urn:kc:object:campaign/qinghe.autumn-2026' --dataset store-oncall --revision 1</code></pre></div>
+kc dataset show store-oncall --revision 2
+kc files list --dataset store-oncall --revision 2 --path services
+kc read 'urn:kc:object:service/qinghe.order-service#/runbook' --dataset store-oncall --revision 2
+kc read 'urn:kc:object:campaign/qinghe.autumn-2026' --dataset store-oncall --revision 2</code></pre></div>
         <p>已知对象可以直接读；想查看原始文件，沿 <code>kc files list</code> 返回的路径使用 <code>kc files read</code>。搜索需要另外确认该 Dataset 的索引能力与就绪状态，见<a href="#v4">按需扩展</a>。</p>
-        <p class="get"><b>核对结果</b>读到所选修订里的手册和活动说明，并保留返回的对象、来源与版本。无权、版本不可用或缺少能力时先处理原因，不把它当成空内容。</p>
+        <p class="get"><b>核对结果</b>读到第 2 版手册和活动说明：先核对首日流量、适用延迟阈值和错误率，不能仅因延迟升高就重启。保留返回的对象、来源与版本；无权、版本不可用或缺少能力时先处理原因，不把它当成空内容。</p>
       </div>
       <div class="step"><span class="step-no">3</span><h3>核对答案与实际读取依据</h3>
         <p>回到告警问题，检查回答是否引用了刚读取的手册与活动说明，并区分静态快照和当前运行数据。交给 Agent 执行时，可使用上一节的<a href="#agent">起始说明</a>；检查标准仍是实际读到的内容与依据。</p>
