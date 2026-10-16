@@ -29,3 +29,16 @@
 ## 不做
 
 不改变 list 行的公开形状，不改续页游标与修订绑定。
+
+## 交付（2026-10-16）
+
+### 实现范围
+
+- `invocation/schema_dataset.go` 拆出 `describeDatasetSchemasWithReadiness(cx, serving, objectID, readiness)`：`schema describe` 保留逐成员 `CheckSearchProjectionAt` 就绪报告；`browseDatasetSchemas`（即 `schema list --dataset` 与续页）改传 `readiness=false`，不再发起就绪检查。合同读取、`AccessSpecAt` 声明编译与 `entity/aspect/description/fields/uses` 摘要来源不变，公开形状与续页游标不变。
+- 新增回归 `invocation/schema_list_readiness_test.go` 的 `TestSchemaListDoesNotAskIndexReadiness`：就绪检查必失败的计数插件上，list 首页与续页零次就绪调用且摘要行完整；describe 仍逐成员报告失败的就绪状态。
+
+### 验证范围
+
+- 先红后绿：临时还原旧实现（list 直接调 describe）时新回归以“1 calls readiness”失败，恢复后通过。
+- `make check-docs` 通过；`make quality`（含耦合基线 13.97% 持平）通过；`make check-validation` 通过；`make test` 全绿；受影响 `go test ./invocation/ ./object/...` 11 包全绿；真实 OpenSearch 上的 `TestDatasetSearchFollowsExplicitRevisionPublication` 经独占临时实例补跑通过（此前无 `KC_TEST_OPENSEARCH_URL` 时的失败为环境缺失，非本改动引入）。
+- 无 skip，无断言放宽。
