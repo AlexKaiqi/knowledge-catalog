@@ -9,7 +9,5 @@ pattern: record
 fields:
   principal:
     type: string
-    access: [filter]
   privilege:
     type: string
-    access: [filter]

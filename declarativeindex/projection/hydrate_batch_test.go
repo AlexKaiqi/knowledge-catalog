@@ -68,8 +68,9 @@ func TestSearchHydratesCandidatePageThroughObjectBatchReader(t *testing.T) {
 		Operations: []objectmodel.Operation{
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/policy.body"}, Value: map[string]any{
 				"entity": "Policy", "pattern": "record",
-				"fields": map[string]any{"body": map[string]any{"access": []any{"text"}}},
+				"fields": map[string]any{"body": map[string]any{}},
 			}},
+			testkit.IndexText("schema/policy.body", "body"),
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "policy/a"}, Value: map[string]any{"body": "runbook alpha"}, SchemaRef: "schema/policy.body"},
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "policy/b"}, Value: map[string]any{"body": "runbook beta"}, SchemaRef: "schema/policy.body"},
 		},
@@ -109,8 +110,9 @@ func TestSearchRejectsWrongCandidateCoordinatesBeforeAuthorityHydrate(t *testing
 		BaseCommit: root, ExpectedTargetCommit: root,
 		Operations: []objectmodel.Operation{
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/policy.body"}, Value: map[string]any{
-				"entity": "Policy", "fields": map[string]any{"body": map[string]any{"type": "string", "access": []any{"text"}}},
+				"entity": "Policy", "fields": map[string]any{"body": map[string]any{"type": "string"}},
 			}},
+			testkit.IndexText("schema/policy.body", "body"),
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "policy/a"},
 				Value: map[string]any{"body": "runbook"}, SchemaRef: "schema/policy.body"},
 		},
@@ -160,8 +162,9 @@ func TestSearchAtNeverFollowsHeadAfterBasisIsFixed(t *testing.T) {
 		BaseCommit: root, ExpectedTargetCommit: root,
 		Operations: []objectmodel.Operation{
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/policy.body"}, Value: map[string]any{
-				"entity": "Policy", "fields": map[string]any{"body": map[string]any{"type": "string", "access": []any{"text"}}},
+				"entity": "Policy", "fields": map[string]any{"body": map[string]any{"type": "string"}},
 			}},
+			testkit.IndexText("schema/policy.body", "body"),
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "policy/a"},
 				Value: map[string]any{"body": "runbook"}, SchemaRef: "schema/policy.body"},
 		},

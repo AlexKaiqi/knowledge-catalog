@@ -1,0 +1,51 @@
+# 插件重构验收：使用记录。夹具见 _materials/acceptance/README.md；用例树见同文件“用例树”一节。
+# 每条从本节点前态独立开始，由 probe 显式创建所需仓与夹具，不传递其他用例的后态。
+
+- id: accept-search-usage-chain
+  title: 查询、回读、采纳按成员串成可归因链路
+  claims: ["discovery#U9"]
+  given:
+    - Dataset sales-analysis 就绪；reader 有消费权。
+  when:
+    - reader 搜索 "discount"，回读命中的 metric/shop.gmv，再对该回读提交采纳反馈；另做一次只搜索不回读。
+  then:
+    - 查询证据列出 metric-text 及其角色与声明版本；回读证据关联该查询；反馈关联该回读。
+    - 按成员汇总的数据中 metric-text 的候选、回读、采纳计数分别为 2、1、1；没有反馈的那次不计为不采纳。
+  risk: 链路断开后无法回答“某条声明到底有没有用”，或把沉默当成否定。
+
+- id: accept-search-usage-data-only
+  title: 使用数据只公开，不写任何分支
+  claims: ["discovery#U9"]
+  given:
+    - 已产生使用记录；记录 sales-analysis 仓所有分支与 HEAD。
+  when:
+    - Dataset 维护者读取按成员汇总的使用数据与成本；另一个无访问证据读权的主体读取同一数据。
+  then:
+    - 维护者看到各成员计数、缺失需求、索引体积与维护延迟；样本只给访问引用。
+    - 无权主体看不到他无权的原访问内容。
+    - sales-analysis 仓分支与 HEAD 不变，声明不因汇总改变。
+  risk: 插件越权改写声明，或汇总泄露他人的访问内容。
+
+- id: accept-usage-feedback-boundaries
+  title: 反馈只能针对自己经搜索得到的回读
+  claims: ["discovery#U9"]
+  given:
+    - alice 搜索 "discount" 并回读命中 r1；alice 另直接读取 metric/shop.gmv 得到 r2（不经搜索）。
+  when:
+    - bob 对 r1 提交采纳；alice 对 r2 提交采纳；alice 对 r1 连续提交两次采纳。
+  then:
+    - bob 的反馈被拒绝；对 r2 的反馈被拒绝并说明没有关联的命中。
+    - alice 对 r1 的重复采纳只计一次。
+  risk: 他人或无关回读的反馈污染计数，或重复提交放大采纳数。
+
+- id: accept-usage-filter-vs-score
+  title: 过滤与打分的贡献分开统计
+  claims: ["discovery#U9"]
+  given:
+    - 默认搜索世界就绪。
+  when:
+    - 搜索文本 "orders" 并按 rowCount 大于等于 5 过滤，回读并采纳命中。
+  then:
+    - 依据标出 table-row-count 为过滤、table-name 为全文打分。
+    - 使用数据中 table-row-count 计入过滤类必要条件，table-name 计入打分贡献，两者不混在同一计数里。
+  risk: 过滤成员和打分成员被同等计功，维护者误判哪条声明真正起作用。

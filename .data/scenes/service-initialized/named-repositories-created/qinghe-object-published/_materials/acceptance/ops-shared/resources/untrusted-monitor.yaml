@@ -1,0 +1,13 @@
+---
+object_id: ops/untrusted-monitor
+---
+kind: ResourceDescriptor
+name: Untrusted monitor
+description: Same protocol on an origin the deployment does not trust for credentials.
+origin: http://untrusted-origin:7401
+mode: state
+runtime: http
+protocol: resource-access/v1
+access:
+  lookup:
+    call: lookup

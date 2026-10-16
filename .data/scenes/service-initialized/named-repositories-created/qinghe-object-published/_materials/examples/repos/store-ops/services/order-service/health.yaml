@@ -1,0 +1,11 @@
+---
+object_id: service/qinghe.order-service
+aspect_name: health
+kind: Aspect
+schema_ref: schema/service.health
+---
+status: DEGRADED
+p99LatencyMs: 920
+errorRate: 0.004
+observedAt: "2026-09-15T10:05:00+08:00"
+note: 公开例子里是一次观察的静态快照。接入方部署取值服务后，这个方面改为外部取值，每次读取拿当时的值。

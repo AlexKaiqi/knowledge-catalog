@@ -14,9 +14,10 @@ evidence:
       - "publication"
       - "consumption"
     tests:
-      - "TestHistoricalDatasetPinSearchHasNoIndependentProjection"
+      - "TestHistoricalDatasetReadStaysOnPublishedCommit"
+      - "TestDatasetSearchKeepsReleaseWhenPublicationAdvancesBeforeObjectRead"
     id: "historical-dataset-search-requires-real-projection"
-    title: "历史 Dataset pin 搜索不伪造独立投影"
+    title: "历史 Dataset 读取保持发布 commit，查询与回读在并发发布中不切换版本"
 probes:
   - file: "dataset-search-follows-published-revision.feature"
     source: "projection.index"
@@ -44,4 +45,9 @@ probes:
       - "access-control"
       - "consumption"
     title: "Dataset 授权按人隔离且不扩成仓级读权"
-fixture: "两仓发表版本的投影已同步；alice、copilot 与未获权 etl 的 Dataset 与仓权限已分别确定。"
+  - file: "dataset-consumer-fixes-revision.feature"
+    source: "projection.index"
+    views:
+      - "consumption"
+    title: "消费者沿同一 Dataset 修订发现可检索字段、检索并回读"
+fixture: "Dataset 修订的选入范围投影已准备；alice、copilot 与未获权 etl 的 Dataset 与仓权限已分别确定。"

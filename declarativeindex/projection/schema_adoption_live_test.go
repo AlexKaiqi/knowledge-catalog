@@ -36,26 +36,41 @@ func TestPinnedSchemaDiscoveryRetainsVerifiedAccessAfterProjectionReopen(t *test
 		}
 		return at
 	}
-	schema := func(access ...string) objectmodel.Operation {
+	schema := func(fields ...string) objectmodel.Operation {
+		shape := map[string]any{}
+		for _, field := range fields {
+			shape[field] = map[string]any{"type": "string"}
+		}
 		return objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/asset"},
-			Value: map[string]any{"entity": "Asset", "fields": map[string]any{"title": map[string]any{"type": "string", "access": access}}}}
+			Value: map[string]any{"entity": "Asset", "fields": shape}}
 	}
-	old := commit(schema("text"))
+	old := commit(schema("title"))
+	current := commit(schema("title", "note"))
 	item := func(id, ref string, value any) objectmodel.Operation {
 		return objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: objectmodel.ObjectID(id)}, SchemaRef: ref, Value: value}
 	}
-	head := commit(schema("filter", "sort"),
-		item("asset/old", "schema/asset@"+string(old), map[string]any{"title": "oldtoken"}),
-		item("asset/old-missing", "schema/asset@"+string(old), map[string]any{}),
-		item("asset/current", "schema/asset", map[string]any{"title": "current"}),
-		item("asset/current-missing", "schema/asset", map[string]any{}))
+	oldRef, currentRef := "schema/asset@"+string(old), "schema/asset@"+string(current)
+	head := commit(
+		testkit.IndexMember("asset-old-title", "text", []string{objectmodel.IndexUseText}, oldRef+"#/fields/title"),
+		testkit.IndexMember("asset-current-title", "keyword", []string{objectmodel.IndexUseFilter, objectmodel.IndexUseSort}, currentRef+"#/fields/title"),
+		item("asset/old", oldRef, map[string]any{"title": "oldtoken"}),
+		item("asset/old-missing", oldRef, map[string]any{}),
+		item("asset/current", currentRef, map[string]any{"title": "current"}),
+		item("asset/current-missing", currentRef, map[string]any{}))
 	idx := liveIndex(t)
 	if _, err := idx.EnsureAt(repo, head); err != nil {
 		t.Fatal(err)
 	}
 	meta, err := idx.CheckSearchProjectionAt(repo, head)
-	if err != nil || len(meta.SchemaAdoptions) != 1 || meta.SchemaAdoptions[0].SchemaRef != "schema/asset@"+string(old) {
-		t.Fatalf("maintenance did not retain the actual fixed Schema adoption: %#v %v", meta, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	retained := map[string]bool{}
+	for _, adoption := range meta.SchemaAdoptions {
+		retained[adoption.SchemaRef] = len(adoption.Witnesses) > 0
+	}
+	if len(retained) != 3 || !retained[oldRef] || !retained[currentRef] || !retained[string(objectmodel.IndexDeclarationSchemaV1)] {
+		t.Fatalf("maintenance did not retain the actual fixed Schema adoptions and declaration members: %#v", meta.SchemaAdoptions)
 	}
 	if err := idx.Close(); err != nil {
 		t.Fatal(err)

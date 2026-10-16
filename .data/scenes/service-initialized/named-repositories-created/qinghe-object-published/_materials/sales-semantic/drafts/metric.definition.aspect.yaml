@@ -8,9 +8,6 @@ fields:
   name:
     type: string
     required: true
-    access:
-    - text
-    - filter
   semanticModelRef:
     type: object_ref
     required: true
@@ -22,9 +19,5 @@ fields:
   expression:
     type: string
     required: true
-    access:
-    - text
   unit:
     type: string
-    access:
-    - filter

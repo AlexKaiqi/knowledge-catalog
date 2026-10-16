@@ -102,7 +102,8 @@ func TestIncrementalProjectionSkipsUnchangedDocumentsAndMatchesRebuild(t *testin
 	}
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
 	first := commit(root,
-		objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/article"}, Value: map[string]any{"entity": "Article", "fields": map[string]any{"body": map[string]any{"type": "string", "access": []any{"text"}}}}},
+		objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/article"}, Value: map[string]any{"entity": "Article", "fields": map[string]any{"body": map[string]any{"type": "string"}}}},
+		testkit.IndexText("schema/article", "body"),
 		put("article/a", "alpha", "first"), put("article/b", "beta", "first"), put("article/c", "gamma", "first"),
 	)
 	engine := &projectionDeltaEngine{}
@@ -120,7 +121,7 @@ func TestIncrementalProjectionSkipsUnchangedDocumentsAndMatchesRebuild(t *testin
 		t.Fatalf("unchanged projection must only advance Basis: sync=%+v upserts=%d deletes=%d meta=%+v", result, engine.upserts, engine.deletes, engine.Meta)
 	}
 	third := commit(second, put("article/a", "delta", "second"), objectmodel.Operation{Op: objectmodel.OpRemove, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "article/b"}})
-	spec, err := specAtCommit(repo, third)
+	spec, err := (&Index{}).specAtCommit(repo, third)
 	if err != nil {
 		t.Fatal(err)
 	}

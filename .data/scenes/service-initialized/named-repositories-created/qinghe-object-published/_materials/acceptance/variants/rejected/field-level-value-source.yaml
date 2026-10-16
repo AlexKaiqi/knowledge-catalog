@@ -1,0 +1,15 @@
+---
+object_id: table/shop.orders
+aspect_name: runtime
+member_key: error-rate
+kind: Member
+schema_ref: schema/table.runtime
+---
+metric: error_rate
+value:
+  valueSource:
+    kind: binding
+    binding:
+      descriptorRef: ops/warehouse-stats
+unit: ratio
+status: ok

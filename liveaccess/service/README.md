@@ -24,7 +24,10 @@ StateLookup；调用前先解析单元采纳的 Schema，Schema 不可用时本�
 不借来源仓补齐未发布的 Schema，也不让固定声明版本冒充外部观察版本。
 
 `ReadReference(ctx, object.Reference)` 保留 URN 指定的单一来源仓及 Dataset 固定版本。
-对象根沿既有 `Hydrate` 执行；非根位置先经 `ReferenceUnitsReader` 取得完整选中单元，
+完整来源的对象根沿既有 `Hydrate` 执行；Dataset 只选入部分单元时，逻辑根先从该 Member
+的固定元数据计划选入地址，再逐单元执行相同的逻辑引用读取并组装，保留每份声明、观察与失败。
+此根集合没有单一维护摘要；Reader 的完整对象及其缓存仍要求全部单元均在发表范围内。
+非根位置先经 `ReferenceUnitsReader` 取得完整选中单元，
 采用相同的 State/Stream 核验，再以根 Object 的 JSON Pointer 选取内容。
 binding 单元没有固定 leaf，目标 leaf 在观察采用后选取；没有维护单元的方面明确失败，
 不按 Schema 合成虚拟方面。选中单元的 Schema／取值描述解释仍由 LiveAccess 同一核心算法采用，

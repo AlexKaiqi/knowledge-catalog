@@ -1,0 +1,17 @@
+---
+object_id: media-asset/autumn-launch.cut-15s
+aspect_name: definition
+kind: Aspect
+schema_ref: schema/media-asset.definition
+---
+name: 桂花乌龙秋季上新 15 秒竖版成片
+kind: video
+file: assets/autumn-launch/cut-15s.mp4
+format: video/mp4 H.264 360x640
+durationSeconds: 15
+aspectRatio: "9:16"
+cover: assets/autumn-launch/cover.png
+subtitles: assets/autumn-launch/subtitles.zh.vtt
+subtitleRevision: "1"
+productRef: product/qinghe.osmanthus-oolong
+owner: 内容组 Wu

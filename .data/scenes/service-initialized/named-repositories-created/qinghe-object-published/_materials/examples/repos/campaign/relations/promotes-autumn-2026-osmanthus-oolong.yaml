@@ -1,0 +1,13 @@
+---
+object_id: rel/promotes/autumn-2026-osmanthus-oolong
+kind: Relation
+schema_ref: schema/relation.canonical
+---
+relationId: rel/promotes/autumn-2026-osmanthus-oolong
+relationType: promotes
+direction: DIRECTED
+endpoints:
+- role: campaign
+  object: campaign/qinghe.autumn-2026
+- role: product
+  object: product/qinghe.osmanthus-oolong

@@ -11,6 +11,7 @@ func hostWriterHelpEntries() map[string]helpEntry {
     --dir 是期望正文。对照当前发布版本列出 add / update，不写仓。
     --repo 是一个对象 Repository，不能用 Dataset；可用 --ref 选择目标引用、--base 固定对照 commit。
     默认 ref 为 refs/heads/main，未给 --base 时读取该引用的当前 HEAD。
+    目录文件采用 kc help writer commit 的同一合同；不是 writer put --file 的纯 JSON 值。
   条件：
     目录可读且对象文件可解析；当前主体可读取基点和解析目录涉及的 Address。
   结果：
@@ -36,20 +37,42 @@ func hostWriterHelpEntries() map[string]helpEntry {
   用法与参数：
     --dir 是期望正文。Client 对照当前版本求差后提交。--command-id 由你本次提供，Client 不代填。
     --ref 默认 refs/heads/main；可用 --base 固定基点，省略时读取当前 HEAD；隐藏文件/目录不参与。
+    首次上传到空仓时自动省去逐对象旧值查询；目录直接生成提交，无需手写 ChangeSet。
     也可用 --changeset <file> 提交明确 ChangeSet，与 --dir 互斥；目标、操作和前置条件来自该文件。
     --bulk 一次性接入大量文件时走介质批量通路；介质不支持时整条拒绝，不带时行为不变。
+  目录文件格式：
+    一个文件声明一个完整对象单元；文件首行和头部结尾各为 ---，头部给身份与 Schema，后面是正文。
+    YAML/JSON 正文的文件用 object_id；方面加 aspect_name 与 kind: Aspect，成员再加 member_key 与 kind: Member。
+    schema_ref 采用已发布或同批 Schema 的 object_id；Schema 文件本身的 object_id 使用 schema/ 命名空间。
+    Schema 原始 fields 是按字段名组织的对象映射；schema describe 的 fields 数组是规范化展示，不能作为输入。
+    优先从公开 Dataset 下载已有 Schema 与对象文件复用格式，入口见 kc help write。
+    path_hint 是仓内相对路径，不是对象身份；普通单元省略时采用目录中的相对路径，目录名不替代文件头。
+    Schema 固定放入 _schemas/ 规范路径，readme 方面固定放入仓根 README.md，不由 path_hint 改址。
+    Markdown 说明方面用 entity / aspect，正文直接写 Markdown，不包 JSON；以下是 drafts/README.md 的完整内容，复制时去掉四格缩进。
+    该示例复用系统 schema/core/readme/v1；准备自己的说明时换 entity，引用的 Schema 必须可解析。
+    ---
+    entity: example/notes
+    aspect: readme
+    schema_ref: schema/core/readme/v1
+    path_hint: README.md
+    ---
+    # 资料说明
+    这里记录资料的用途、来源和维护人。
+  输入区别：
+    writer put --file 只接收一个纯 JSON 值，不接收以上 frontmatter 文件；身份与 Schema 由 put 的参数提供。
+    目录中的 JSON/YAML 正文必须符合所引用的 Schema；原始 SQL、CSV 等资料需按对象模型整理后再提交。
   条件：
     目录/ChangeSet 可读且解析合法，只有一个对象 Repository 目标，当前主体有相应读取与写入权限。
     所有操作须通过 Writer 的 Schema、来源与并发校验；不能写 Dataset、登记权威或 system 仓。
   结果：
     一次 Commit 的耐久回执及 oldCommit/newCommit；同 command-id 同摘要返回原回执。
-    目录正文完全相同时，不创建空提交；若该 id 已有回执则返回该回执，否则报告已与当前版本一致。
+    目录正文完全相同时，不创建空提交；已有 id 先按原基点重建请求核对摘要，一致才返回原回执。
   后果：
     仅发布目录里实际不同的单元，目录外已有对象保留；删除须显式 writer remove 或 ChangeSet REMOVE。
     一次请求不自动拆批，--bulk 仅改变介质传输方式，CAS 与单次 commit 语义不变。
     手工分成多次发布时各命令独立，前批成功不会因后批失败撤销；投影维护也不回滚已接受提交。
   风险与成本：
-    目录全量读取、逐 Address 对照、校验和远端写入，时间与内存随参与内容增长。
+    目录全量读取、校验和远端写入，时间与内存随参与内容增长；非空基点仍逐 Address 对照。
     网络中断后客户端只轮询原回执，默认最多十分钟；同 id 异摘要为 IDEMPOTENCY_CONFLICT。
   失败恢复：
     先按原 command-id 查询回执；等待结束或 PENDING 不能解释为未提交，保留原请求供对账。

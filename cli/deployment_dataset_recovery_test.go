@@ -171,10 +171,15 @@ func TestDatasetPublishingRecoveryKeepsAcceptedVersion(t *testing.T) {
 		t.Fatal("grants lost on replacement")
 	}
 
-	// 同一 pin 继续服务；重投递 v1 被版本单调守卫拒绝（dataset U5 回滚守卫），版本保持 v1。
+	// 同一 pin 继续服务；重投递同一份 v1 定义是响应丢失后的重试，返回幂等确认（REPLAYED），
+	// 不产生新修订；配方不同的同修订号仍被版本单调守卫拒绝（dataset U5 回滚守卫）。
 	recovered := readerClient()
 	assertDelivered(recovered, accepted, "notes/recover.md", "durable")
-	expectCode(t, call("dataset", "define", "incident", "--revision", "1", "--source", "kr://recover/source@notes@note"), "NON_FAST_FORWARD")
+	replayed := asMap(t, body(t, call("dataset", "define", "incident", "--revision", "1", "--source", "kr://recover/source@notes@note")))
+	if replayed["disposition"] != "REPLAYED" || replayed["revision"] != float64(1) {
+		t.Fatalf("retrying the accepted v1 definition must replay it: %#v", replayed)
+	}
+	expectCode(t, call("dataset", "define", "incident", "--revision", "1", "--source", "kr://recover/source@moved@note"), "NON_FAST_FORWARD")
 	{
 		var mounts snapshotclient.WorkspaceFileMountsResponse
 		if err := recovered.WorkspaceFilesService().Mounts(context.Background(), snapshotclient.WorkspaceFileMountsRequest{

@@ -1,0 +1,86 @@
+# 零知识用例的封存答案。只给判定者，不放进 Agent 可见的任何仓、Dataset 或提示。
+# 数字由 mysql/verify.sh 在两套世界上实测得到；改世界脚本后必须重跑并同步本文件。
+# 答案只写证据能支撑的结论；证据不足以区分的原因，写成“允许的说法”，不写成唯一事实。
+
+today: "2026-09-14"   # 随提问对 Agent 可见；周一，“上周”= 2026-09-07..09-13，“前一周”= 2026-08-31..09-06。自然周与“最近 7 天”在这天重合。
+
+capability_map:   # zk-env-capability-map。每项写作“用途｜前提｜入口”，三者都对才算覆盖
+  must_cover:
+    身份与已有权限: "我是谁、能用哪些仓和 Dataset｜已登录｜kc show"
+    发现可用范围: "不知道名字时找到自己能用的 Dataset｜消费权｜kc show，再 kc dataset show 核对修订与来源"
+    对象类型: "有哪些类型、各有哪些字段｜可读的仓｜kc schema list / kc schema describe"
+    搜索: "按含义或字段找对象｜消费权且 Dataset 选入了索引声明、部署装了检索｜kc search --dataset <id> --query ..."
+    读取: "读对象正文或某个字段｜读权｜kc read [--dataset <id>] <URN[#/locator]>"
+    关系浏览: "一个对象连着什么｜读权｜kc relations / kc traverse"
+    来源与历史: "这份内容来自哪个仓、哪次提交、怎么变过｜读权｜kc provenance / kc log / kc resolve"
+    当前值: "外部系统里的此刻状态（如行数）｜部署有取值能力且外部系统授权调用者｜kc read 读外部单元，或 kc access"
+  should_cover:
+    发布: "把目录里的对象写进仓｜写权｜kc help write"
+    组合 Dataset: "固定一组来源版本给消费方｜组合与发权权限｜kc help dataset"
+    插件操作: "对象声明的外部操作｜插件已部署｜kc plugin <名称> help / kc invoke"
+    文件视图: "按文件消费 Dataset 交付树｜Dataset 文件消费权｜kc help files（files list / files read / dataset clone），或 kcfs"
+    反馈: "对用过的内容提出问题，供维护者修订｜feedback.write、Dataset 读权与原访问 trace｜kc operations feedback record --trace-id <id> --dataset <id> --outcome ... --message ..."
+  fail_if: 把搜索当读取；把固定修订里的内容当当前值；列出环境里不存在的能力
+
+concepts:   # zk-env-concepts 的判断题，只用于归因，答案为真或假，Agent 必须给出环境内的依据
+  - q: 能消费一个 Dataset，就能读它的来源仓。
+    a: false
+  - q: 对象身份里带着仓名，换仓就换了身份。
+    a: false
+  - q: 同一个对象可以由两个仓分别提供不同方面。
+    a: true
+  - q: 搜索能命中，就一定能读到正文。
+    a: false
+  - q: 没有装检索插件时，搜索返回零命中。
+    a: false
+  - q: Dataset 修订固定了来源提交，来源分支后来变化不影响该修订的读取。
+    a: true
+
+business:
+  zk-biz-two-gmv:
+    shop.gmv: 按订单明细行计算 SUM(qty * unit_price * (1 - discount))，来自 semantic-model/shop.order-items，不依赖汇总表。
+    shop.sales.gmv: 对 sales_mart.gmv 求和，来自 semantic-model/shop.sales；sales_mart 由 data-job/shop.refresh_sales_mart 从底表汇总。
+    relation: 两者算法相同，差别在后者经过一次汇总作业，新鲜度取决于该作业。
+    choice: 用哪个是人的用途选择；Agent 向人确认属于合法澄清，不计缺口。
+  zk-biz-mart-lineage:
+    produced_by: data-job/shop.refresh_sales_mart
+    inputs: [orders, order_items, customers, products, categories]
+    schedule: 每天一次
+    enabled_declared: 作业定义里写着 enabled false；Agent 应如实引用这一声明。
+    enabled_runtime: 环境没有作业运行记录。实际运行情况只能从数据观察（基础种子下无法判断，零知识世界里 sales_mart 是否覆盖到最近日期可作旁证）；不得仅凭声明断定“已停更”，也不得断定“正常”。
+  zk-biz-map-to-physical:
+    physical: mysql-qinghe 平台上 shop 库的 orders 表（qualifiedName shop.orders）
+    row_count: 基础种子下为 6（实测）；经 stats 当前观察或 mysql 计数取得都合法，必须带观察依据或 SQL 与查询时间
+  zk-biz-live-value-states:
+    A_no_capability: 说明部署没有取值能力；不是 0，不是取值失败，不归因于 Dataset 未选取值描述
+    B_fetch_failed: 说明这次取值失败及原因；不是 0，不是没有取值能力
+    fallback: 两个变体都可改用 mysql 计数得到 6，并说明这绕开了 KC 取值
+  zk-biz-unpaid-in-gmv:
+    computed_behavior: 两个 GMV 都不按状态过滤（sales_mart 按状态分组但汇总时不剔除，shop.gmv 表达式不含状态条件），UNPAID 实际被计入。
+    external_definition: 环境没有写明对外 GMV 是否排除 UNPAID 或 CANCELLED；正确回答要说“环境没写”，并给出该向谁或经哪条反馈路径确认。
+
+tasks:
+  zk-task-real-drop:   # world-real-drop
+    shop.gmv: {previous_week: 2625.00, last_week: 1745.00}
+    shop.sales.gmv: {previous_week: 2625.00, last_week: 1745.00}
+    by_city: Hangzhou 1232.00 → 352.00；Shanghai 1078.00 与 Shenzhen 315.00 两周不变。
+    by_category: Tea 2310.00 → 1430.00，降幅 880.00 与 Hangzhou 相等（Hangzhou 唯一客户只买 Longjing，属于 Tea）；Ware 315.00 不变。
+    acceptable: 按城市、品类或二者交叉拆分，只要数字与数据一致；最完整的说法是“下降全部来自 Hangzhou，表现为 Tea 减少；其他城市的 Tea 不变”。
+    must_not: 给出数据里不存在的业务因果（如促销结束、竞品、季节、Tea 需求普遍下滑）。
+  zk-task-stale-mart:   # world-stale-mart
+    shop.gmv: {previous_week: 2625.00, last_week: 2625.00}
+    shop.sales.gmv: {previous_week: 2625.00, last_week: 1125.00}
+    observed: sales_mart 只覆盖到 2026-09-09，09-10 之后与底表不一致；底表口径没有下降，下降来自汇总覆盖不完整。
+    cause_allowed: 汇总作业没运行、运行失败、或数据被删除都可能；环境没有运行记录，不能定为其中一种。Agent 应说明需到作业运行记录或数据平台核实。
+    kc_evidence: 人说的 GMV 可对应到 metric/shop.sales.gmv（汇总口径），它来自 sales_mart，由 data-job/shop.refresh_sales_mart 每天汇总；这两条只在 KC 里，结论中缺了它们即依据不全，即使数字对。
+    must_not: 给出任何业务下降原因；把“作业此后没有运行”说成已证实的事实。
+  zk-task-layered-denial:   # world-real-drop + kc_zk_limited
+    denied_layer: MySQL 账号对 shop.sales_mart 无 SELECT（ERROR 1142），不是 KC 授权
+    acceptable: 改用底表口径（shop.gmv）得出 zk-task-real-drop 的结论，并说明没能核对 shop.sales.gmv
+  zk-task-supplier-onboarding:    # 消费方在接入方交付上回答；按语义判，对象名不必与此相同
+    two_gmv: 同 zk-biz-two-gmv 的语义，并能引用口径说明第 1 条“对外用明细口径”
+    unpaid: 按 gmv-caliber.v1 第 2 条，UNPAID 不计入对外 GMV；计算本身不过滤状态，对外口径需额外按状态过滤
+    owner: 分析组 Lin
+  zk-task-feedback-revision:    # 修订后
+    unpaid: 按 gmv-caliber.v2 第 2 条，UNPAID 计入，只有 CANCELLED 不计
+    previous: 修订 N 下的旧回答仍是“UNPAID 不计入”，依据可按修订 N 复核

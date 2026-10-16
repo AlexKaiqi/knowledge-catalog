@@ -34,8 +34,9 @@ func TestLiveOpenSearchNamespacesIsolateSameRepositoryAndContinuations(t *testin
 	repo := testkit.MakeRepository(t, "kr://regression/"+name)
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
 	ops := []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/article"}, Value: map[string]any{
-		"entity": "Article", "fields": map[string]any{"body": map[string]any{"type": "string", "access": []any{"text"}}},
+		"entity": "Article", "fields": map[string]any{"body": map[string]any{"type": "string"}},
 	}}}
+	ops = append(ops, testkit.IndexText("schema/article", "body"))
 	for _, id := range []string{"article/a", "article/b", "article/c"} {
 		ops = append(ops, objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: objectmodel.ObjectID(id)}, SchemaRef: "schema/article", Value: map[string]any{"body": "runbook"}})
 	}
@@ -131,7 +132,9 @@ func TestLiveOpenSearchNamespacesIsolateSameRepositoryAndContinuations(t *testin
 		idx   *index.Index
 		basis kernel.CommitID
 		count int
-	}{{left, b, 6}, {right, a, 5}} {
+		// The ordinary declaration object joins the three articles and two
+		// relations; only the left instance has the fourth article.
+	}{{left, b, 7}, {right, a, 6}} {
 		desc, err := state.idx.Describe(repo)
 		if err != nil || desc.BasisCommit != state.basis || desc.ObjectCount != state.count {
 			t.Errorf("instance physical progress leaked: descriptor=%#v error=%v want basis=%s count=%d", desc, err, state.basis, state.count)

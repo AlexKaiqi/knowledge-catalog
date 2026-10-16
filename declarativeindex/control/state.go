@@ -27,7 +27,7 @@ func (c *Controller) stateBases(id kernel.RepositoryID, heads map[kernel.Reposit
 	return bases
 }
 
-func (c *Controller) catchUpState(ctx context.Context, heads map[kernel.RepositoryID]repositoryHead) error {
+func (c *Controller) catchUpState(ctx context.Context, heads map[kernel.RepositoryID]repositoryHead, only kernel.RepositoryID) error {
 	source := c.stateRuntime()
 	if source == nil || c.lookup == nil {
 		return nil
@@ -35,8 +35,8 @@ func (c *Controller) catchUpState(ctx context.Context, heads map[kernel.Reposito
 	ctx = workerObservationContext{ctx}
 	// Apply queued changes before cold recovery: a cold notice already pulls
 	// the full declaration basis, so the readiness pass need not observe twice.
-	joined := c.applyStateNotices(ctx, heads, source)
-	for _, id := range c.demandRepositories() {
+	joined := c.applyStateNotices(ctx, heads, source, only)
+	for _, id := range c.demandRepositories(only) {
 		repo, err := c.repository(id)
 		if err != nil {
 			joined = errors.Join(joined, err)
@@ -69,7 +69,7 @@ func (c *Controller) catchUpState(ctx context.Context, heads map[kernel.Reposito
 	return joined
 }
 
-func (c *Controller) applyStateNotices(ctx context.Context, heads map[kernel.RepositoryID]repositoryHead, source index.ObservationSource) error {
+func (c *Controller) applyStateNotices(ctx context.Context, heads map[kernel.RepositoryID]repositoryHead, source index.ObservationSource, only kernel.RepositoryID) error {
 	notices, err := c.store.pendingNotices()
 	if err != nil {
 		return err
@@ -79,6 +79,9 @@ func (c *Controller) applyStateNotices(ctx context.Context, heads map[kernel.Rep
 		notice := record.ChangeNotice
 		if err := ctx.Err(); err != nil {
 			return errors.Join(joined, err)
+		}
+		if only != "" && notice.Repository != only {
+			continue
 		}
 		if _, active := c.demands[notice.Repository]; !active {
 			joined = errors.Join(joined, c.store.finishNotice(record, nil))

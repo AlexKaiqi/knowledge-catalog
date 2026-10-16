@@ -1,0 +1,7 @@
+---
+object_id: table/shop.orders
+aspect_name: index
+kind: Aspect
+schema_ref: schema/table.index
+---
+physicalIndexes: idx_orders_customer_id, idx_orders_created_at

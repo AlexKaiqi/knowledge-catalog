@@ -1,0 +1,15 @@
+name: autumn-launch-kit
+metadata:
+  title: 桂花乌龙秋季上新交接包
+  question: 秋季上新的视频素材能在哪些渠道用？
+  owner: 内容组 Wu
+mounts:
+- {repository: media, selector: refs/heads/main, path: assets/autumn-launch, subPath: assets/autumn-launch}
+- {repository: campaign, selector: refs/heads/main, path: campaigns, subPath: campaigns}
+- {repository: campaign, selector: refs/heads/main, path: relations-campaign, subPath: relations}
+- {repository: product, selector: refs/heads/main, path: products, subPath: products}
+- {repository: media, selector: refs/heads/main, path: _schemas, subPath: _schemas}
+files:
+- {repository: campaign, selector: refs/heads/main, file: _schemas/campaign.definition.aspect.yaml, target: _schemas/campaign.definition.aspect.yaml}
+- {repository: campaign, selector: refs/heads/main, file: _schemas/relation.canonical.aspect.yaml, target: _schemas/relation.canonical.aspect.yaml}
+- {repository: product, selector: refs/heads/main, file: _schemas/product.definition.aspect.yaml, target: _schemas/product.definition.aspect.yaml}

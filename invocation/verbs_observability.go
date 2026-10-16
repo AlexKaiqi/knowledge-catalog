@@ -354,7 +354,7 @@ func PrincipalKind(principal string) string {
 		return "agent"
 	case strings.HasPrefix(principal, "service:") || strings.Contains(principal, ":service:"):
 		return "service"
-	case strings.HasPrefix(principal, "user:"), strings.HasPrefix(principal, "gitea:"), strings.HasPrefix(principal, "oidc:"), strings.HasPrefix(principal, "taihu:"):
+	case strings.HasPrefix(principal, "user:"), strings.HasPrefix(principal, "oidc:"), strings.HasPrefix(principal, "taihu:"):
 		return "user"
 	default:
 		if _, err := identity.CanonicalUsername(principal); err == nil {

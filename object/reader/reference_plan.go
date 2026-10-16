@@ -55,6 +55,12 @@ func validateReferencePlan(ref objectmodel.Reference, addresses []objectmodel.Ad
 }
 
 func (r *treeRepository) PlanReference(ref objectmodel.Reference, commit kernel.CommitID) ([]objectmodel.Address, error) {
+	return r.planReferencePaths(ref, commit, nil)
+}
+
+// planReferencePaths filters maintenance metadata before holder selection. A nil
+// path list is unrestricted; an empty list contributes no published coordinates.
+func (r *treeRepository) planReferencePaths(ref objectmodel.Reference, commit kernel.CommitID, paths []string) ([]objectmodel.Address, error) {
 	if _, err := objectmodel.FormatReference(ref); err != nil {
 		return nil, err
 	}
@@ -71,6 +77,9 @@ func (r *treeRepository) PlanReference(ref objectmodel.Reference, commit kernel.
 	}
 	addresses := make([]objectmodel.Address, 0, len(locations))
 	for _, location := range locations {
+		if paths != nil && !containsPath(paths, location.Path) {
+			continue
+		}
 		prefix := unitTokens(location.Address)
 		if tokenPrefix(prefix, tokens) || tokenPrefix(tokens, prefix) {
 			addresses = append(addresses, location.Address)
@@ -84,10 +93,28 @@ func (r *nativeReadRepository) PlanReference(ref objectmodel.Reference, commit k
 }
 
 func (r *datasetRepository) PlanReference(ref objectmodel.Reference, commit kernel.CommitID) ([]objectmodel.Address, error) {
+	if _, err := objectmodel.FormatReference(ref); err != nil {
+		return nil, err
+	}
 	if ref.Repository != r.ID() || commit != r.commit {
 		return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "reference planning is outside Dataset source basis")
 	}
-	// Metadata describes coordinates only. The actual read still requires all
-	// selected body paths to be present in this accepted publication.
-	return planRepositoryReference(r.Repository, ref, commit)
+	if err := r.check(ref.Object, commit); err == nil {
+		return planRepositoryReference(r.Repository, ref, commit)
+	} else if kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
+		return nil, err
+	}
+	paths, err := r.referenceAllowedPaths(ref.Object, commit)
+	if err != nil || len(paths) == 0 {
+		return []objectmodel.Address{}, err
+	}
+	// This private port requires Reader-owned unit/path metadata. A native
+	// planner without those coordinates cannot safely plan a partial file slice.
+	planner, ok := r.Repository.(interface {
+		planReferencePaths(objectmodel.Reference, kernel.CommitID, []string) ([]objectmodel.Address, error)
+	})
+	if !ok {
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "repository cannot plan reference coordinates within dataset file paths")
+	}
+	return planner.planReferencePaths(ref, commit, paths)
 }

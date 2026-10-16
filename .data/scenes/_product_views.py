@@ -236,14 +236,14 @@ def build_product(root: Path, registrations, states: list[dict], load_yaml_file)
             if case["verifies"] and case["surface"] == "feature" and not state["executable"]:
                 errors.append(f"{case['id']}: probe verifies requires an executable scene fixture; reference-only features are not evidence")
                 case["verifies"] = []
-            if case["verifies"] and case["surface"] == "go-test":
+            if case["surface"] == "go-test":
                 if tests is None:
                     tests = named_go_tests(repo)
                 refs = case["evidence"]
                 bad = [ref for ref in refs if not isinstance(ref, str) or not re.fullmatch(r"Test[A-Za-z0-9_]+", ref)]
                 absent = [ref for ref in refs if isinstance(ref, str) and ref.startswith("Test") and ref not in tests]
                 if not refs or bad:
-                    errors.append(f"{case['id']}: product evidence requires named Go tests, not file placeholders: {bad}")
+                    errors.append(f"{case['id']}: Go evidence requires named Go tests, not file placeholders: {bad}")
                 if absent:
                     errors.append(f"{case['id']}: named Go test declarations not found: {', '.join(absent)}")
                 if not refs or bad or absent:

@@ -1,0 +1,12 @@
+---
+object_id: table/shop.orders
+aspect_name: runtime
+member_key: error-rate
+kind: Member
+path_hint: tables/orders.runtime/error-rate.yaml
+schema_ref: schema/table.runtime
+valueSource:
+  kind: binding
+  binding:
+    descriptorRef: ops/warehouse-stats
+---

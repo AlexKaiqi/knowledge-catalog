@@ -14,7 +14,13 @@ import (
 type FieldValue struct {
 	Field AccessField
 	Value string
+	// Member is the interpreting declaration's identity, never query input.
+	Member string
+	form   string
 }
+
+// Key identifies one member's physical realization of a Schema field.
+func (v FieldValue) Key() string { return memberFieldKey(v.Field.FieldRef, v.Member) }
 
 // FieldSet records applicability separately from value presence. An unobserved
 // Binding does not promise MISSING; an observed null can establish applicability.
@@ -23,11 +29,20 @@ type FieldSet struct {
 	EligibleFields []string
 	Values         []FieldValue
 	Text           string
+	Semantic       []SemanticField
+	applicable     map[string]bool
+}
+
+// SemanticField is one explicit vector member's input text and registered model.
+type SemanticField struct {
+	Member string `json:"member"`
+	Model  string `json:"model"`
+	Text   string `json:"text"`
 }
 
 // ExtractFields interprets the actual adopted Schema of each maintained unit.
 func ExtractFields(repo objectmodel.Repository, value objectmodel.ObjectValue, observations []objectmodel.UnitObservation, spec AccessSpec) (FieldSet, error) {
-	doc := FieldSet{Kind: fieldObjectKind(value)}
+	doc := FieldSet{Kind: fieldObjectKind(value), applicable: map[string]bool{}}
 	eligible := map[string]struct{}{}
 	seenCells := map[string]struct{}{}
 	textParts := []string{}
@@ -37,6 +52,9 @@ func ExtractFields(repo objectmodel.Repository, value objectmodel.ObjectValue, o
 	}
 
 	for _, unit := range fieldUnits(repo, value) {
+		if !spec.hasDeclarationNamespace(unit.SchemaRef) {
+			continue
+		}
 		unitObserved := false
 		if isBindingUnit(unit) {
 			observation, ok := observed[objectmodel.AddressKey(unit.Address)]
@@ -45,7 +63,7 @@ func ExtractFields(repo objectmodel.Repository, value objectmodel.ObjectValue, o
 			}
 			// Hydrated declarations already carry the observed declaration
 			// version (unit plus ResourceDescriptor digest).
-			if observation.DeclarationCommit != value.Commit || observation.DeclarationDigest != unit.DeclarationDigest {
+			if observation.DeclarationCommit == "" || observation.DeclarationCommit != observationDeclarationCommit(value, unit) || observation.DeclarationDigest != unit.DeclarationDigest {
 				return FieldSet{}, kernel.Fail(kernel.ErrPreconditionFailed,
 					"observation basis does not match Binding declaration at %s", objectmodel.AddressKey(unit.Address))
 			}
@@ -69,6 +87,8 @@ func ExtractFields(repo objectmodel.Repository, value objectmodel.ObjectValue, o
 				continue
 			}
 			key := field.FieldRef.Key()
+			form := fieldSchemaForm(unit.SchemaRef, field.Schema, observationDeclarationCommit(value, unit))
+			doc.applicable[declaredFieldKey(form, field.Path)] = true
 			if field.Has(reader.HintFilter) {
 				eligible[key] = struct{}{}
 			}
@@ -82,11 +102,11 @@ func ExtractFields(repo objectmodel.Repository, value objectmodel.ObjectValue, o
 				if !valid {
 					err = fmt.Errorf("value %v is not a valid %s scalar", item, field.Type)
 				}
-				cell := FieldValue{Field: field, Value: normalized}
+				cell := FieldValue{Field: field, Value: normalized, form: form}
 				if err != nil {
 					return FieldSet{}, kernel.Fail(kernel.ErrUsageInvalid, "projection %s unit %s field %s: %v", value.Address.ObjectID, objectmodel.AddressKey(unit.Address), key, err)
 				}
-				identity := cell.Field.FieldRef.Key() + "\x00" + cell.Value + "\x00" + fmt.Sprint(cell.Field.Access)
+				identity := cell.Field.FieldRef.Key() + "\x00" + form + "\x00" + cell.Value + "\x00" + fmt.Sprint(cell.Field.Access)
 				if _, duplicate := seenCells[identity]; duplicate {
 					continue
 				}
@@ -114,7 +134,48 @@ func ExtractFields(repo objectmodel.Repository, value objectmodel.ObjectValue, o
 		return fmt.Sprint(a.Field.Access) < fmt.Sprint(b.Field.Access)
 	})
 	doc.Text = strings.Join(textParts, " ")
+	if len(spec.builds) > 0 {
+		return constructDeclaredFields(doc, spec)
+	}
 	return doc, nil
+}
+
+// A frozen object's structural Schema may be only a READ dependency. It does
+// not enter retrieval unless the selected namespace or declarations name it.
+// Selected Schema releases and selected declaration inputs stay strict.
+func (s AccessSpec) hasDeclarationNamespace(raw string) bool {
+	if s.schemaForms == nil || raw == "" {
+		return true
+	}
+	ref, valid := objectmodel.ParseSchemaRef(raw)
+	if !valid {
+		return true // FieldsForDeclaration reports the malformed reference.
+	}
+	_, current := s.schemaForms[string(ref.Object)]
+	_, adopted := s.schemaForms[schemaFormKey(ref)]
+	return current || adopted || s.declarationSchemas[ref.Object]
+}
+
+func fieldSchemaForm(raw string, schema objectmodel.ObjectID, commit kernel.CommitID) string {
+	ref, valid := objectmodel.ParseSchemaRef(raw)
+	if !valid || ref.Commit == commit {
+		return string(schema)
+	}
+	return schemaFormKey(ref)
+}
+
+func observationDeclarationCommit(value objectmodel.ObjectValue, unit objectmodel.UnitDeclaration) kernel.CommitID {
+	if len(value.Sources) == 0 {
+		return value.Commit
+	}
+	for _, source := range value.Sources {
+		for _, aspect := range source.Aspects {
+			if aspect == unit.Address.AspectName {
+				return source.Commit
+			}
+		}
+	}
+	return ""
 }
 
 // A binding unit contributes only through an observation; stream bindings

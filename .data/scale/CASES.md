@@ -68,7 +68,7 @@ environment-bound/                        # 环境配置绑定 + readiness（根
 | KC-PERF-09 | 在线全量 rebuild | `projection-synced/probe-index-rebuild-curve` |
 | KC-PERF-10 | 历史老化与幂等账本 | `history-aged/probe-history-degradation-curve`（gap：生成器历史未实现） |
 | KC-PERF-11 | 负载下 crash/retry | `steady-soaked/probe-failure-recovery` |
-| KC-PERF-12 | Generation rollover 与归档恢复 | gap：待 REVIEW-01 选定代际方案后补状态，不预先建目录 |
+| KC-PERF-12 | Generation rollover 与归档恢复 | 撤销：单仓容量上限与换代是未实测假设，lakeFS 下无换代需求；历史深度影响归 KC-PERF-10 |
 
 行为正确性归 `.data/scenes` 与共享合同，压测只保留停止条件与结果可信度门禁。
 

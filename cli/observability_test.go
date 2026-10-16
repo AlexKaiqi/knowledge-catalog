@@ -2,10 +2,10 @@ package cli_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"io"
-	inv "kc/invocation"
+	kcidentity "kc/identity"
+	"kc/identity/identitytest"
 	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
@@ -17,13 +17,6 @@ import (
 	"kc/internal/testkit"
 )
 
-type staticHTTPAuthenticator struct{ identity inv.HTTPIdentity }
-
-func (a staticHTTPAuthenticator) Name() string { return "test" }
-func (a staticHTTPAuthenticator) Authenticate(context.Context, http.Header) (inv.HTTPIdentity, error) {
-	return a.identity, nil
-}
-
 func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 	home := testkit.TempDir(t)
 	repoID := "kr://acme/public/semantics"
@@ -34,13 +27,13 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 
 	body(t, kc(home, "init"))
 	seedRepo(t, home, repoID)
-	body(t, kc(home, "put", testObjectReference(t, repoID, "schema/metric.definition", ""), "--repo", repoID, "--command-id", "schema", "--value", `{"entity":"Metric","pattern":"record","fields":{"description":{"type":"string","access":["text"]}}}`))
-	body(t, kc(home, "put", testObjectReference(t, repoID, "metric/gmv", ""), "--repo", repoID, "--command-id", "metric", "--value", `{"description":"governed gross merchandise value"}`))
+	body(t, kc(home, "put", testObjectReference(t, repoID, "schema/metric.definition", ""), "--repo", repoID, "--command-id", "schema", "--value", `{"entity":"Metric","pattern":"record","fields":{"description":{"type":"string"}}}`))
+	body(t, kc(home, "put", testObjectReference(t, repoID, "metric/gmv", ""), "--repo", repoID, "--command-id", "metric", "--schema-ref", "schema/metric.definition", "--value", `{"description":"governed gross merchandise value"}`))
+	seedTextDeclaration(t, home, repoID, "index/metric-search", "schema/metric.definition", "description")
 	body(t, kc(home, "dataset", "define", "--dataset", setID, "--revision", "1",
 		"--source", repoID+"=refs/heads/main"))
 	body(t, kc(home, "allow", "--principal", agent, "--cmd", "read-workspace", "--dataset", setID))
 	body(t, kc(home, "allow", "--principal", agent, "--cmd", "read", "--repo", repoID))
-	body(t, kc(home, "allow", "--principal", agent, "--action", "object.search", "--dataset", setID))
 	body(t, kc(home, "allow", "--principal", agent, "--cmd", "feedback.write", "--dataset", setID))
 	identity := []string{"--as", agent, "--on-behalf-of", user, "--request-id", "req-42",
 		"--trace-id", "trace-42"}
@@ -53,7 +46,7 @@ func TestAgentDelegatedAccessTraceFeedbackAndHitmap(t *testing.T) {
 	if returnedCommit == "" {
 		t.Fatal("read response must identify the object version", readValues)
 	}
-	syncIndexes(t, home, repoID)
+	syncIndexes(t, home, setID)
 	searchArgs := append([]string{"search", "--dataset", setID, "--query", "merchandise", "--span-id", "span-search", "--parent-span-id", "span-read"}, identity...)
 	searchResult := asMap(t, body(t, kc(home, searchArgs...)))
 	if evidenceID, _ := searchResult["retrievalEvidenceId"].(string); !strings.HasPrefix(evidenceID, "rt_") {
@@ -156,14 +149,23 @@ func TestObjectSearchFailsClosedWhenRetrievalEvidenceCannotPersist(t *testing.T)
 	repoID := "kr://acme/public/retrieval-audited"
 	body(t, kc(home, "init"))
 	seedRepo(t, home, repoID)
-	body(t, kc(home, "put", testObjectReference(t, repoID, "schema/runbook.search", ""), "--repo", repoID, "--command-id", "schema", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+	body(t, kc(home, "put", testObjectReference(t, repoID, "schema/runbook.search", ""), "--repo", repoID, "--command-id", "schema", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string"}}}`))
+	seedTextDeclaration(t, home, repoID, "index/audited-search", "schema/runbook.search", "body")
 	body(t, kc(home, "put", testObjectReference(t, repoID, "runbook/refund", ""), "--repo", repoID, "--command-id", "seed", "--schema-ref", "schema/runbook.search", "--value", `{"body":"refund timeout"}`))
-	syncIndexes(t, home, repoID)
+	body(t, kc(home, "dataset", "define", "--dataset", "audited", "--revision", "1", "--source", repoID+"=refs/heads/main@"))
+	syncIndexes(t, home, "audited")
+	before := asMap(t, body(t, kc(home, "search", "--dataset", "audited", "--query", "refund")))
+	if len(before["hits"].([]any)) != 1 || searchHitObjectID(t, before) != "runbook/refund" {
+		t.Fatalf("evidence failure fixture must have a real ready candidate: %#v", before)
+	}
 	if err := os.Mkdir(filepath.Join(home, "retrieval.jsonl"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.RemoveAll(filepath.Join(home, "retrieval")); err != nil {
+		t.Fatal(err)
+	}
 	poisonEvidenceStream(t, home, "retrieval")
-	result := kc(home, "search", "--repo", repoID, "--query", "refund")
+	result := kc(home, "search", "--dataset", "audited", "--query", "refund")
 	if result.Status == 0 {
 		t.Fatal("a successful SEARCH response must not escape without durable retrieval evidence")
 	}
@@ -182,7 +184,7 @@ func TestHTTPPassesAbstractDelegationAndTraceContext(t *testing.T) {
 	body(t, kc(home, "allow", "--principal", agent, "--cmd", "read-workspace", "--dataset", setID))
 	body(t, kc(home, "allow", "--principal", agent, "--cmd", "read", "--repo", repoID))
 
-	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{Authenticator: staticHTTPAuthenticator{identity: inv.HTTPIdentity{Principal: agent, OnBehalfOf: user, Provider: "test", Subject: agent}}})
+	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{Authenticator: identitytest.Static("test", kcidentity.HTTPIdentity{Principal: agent, OnBehalfOf: user, Provider: "test", Subject: agent})})
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	payload, _ := json.Marshal(map[string]any{"dataset": setID, "reference": testObjectReference(t, repoID, "policy/http", "")})

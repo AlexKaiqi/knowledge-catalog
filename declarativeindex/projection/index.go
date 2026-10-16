@@ -1,6 +1,7 @@
 package projection
 
 import (
+	retrieval "kc/discovery"
 	ports "kc/discovery/projection"
 	"regexp"
 	"sync"
@@ -18,12 +19,21 @@ type Index struct {
 	mu   sync.Mutex
 	// stateBuildMu serializes refresh publishers without blocking searches while
 	// a new warm generation is compiled.
-	stateBuildMu sync.Mutex
-	fixedBuildMu sync.Mutex
-	stateMu      sync.RWMutex
-	engs         map[engineKey]ports.Engine
-	states       map[engineKey]*stateProjection
-	hydrator     objectmodel.Hydrator
+	stateBuildMu           sync.Mutex
+	fixedBuildMu           sync.Mutex
+	stateMu                sync.RWMutex
+	engs                   map[engineKey]ports.Engine
+	states                 map[engineKey]*stateProjection
+	hydrator               objectmodel.Hydrator
+	check                  retrieval.DeclarationCheck
+	manifestDigest         kernel.Digest
+	currentDatasetRevision func(string) (int, error)
+}
+
+// SetDatasetRevisionLookup supplies the publication authority for observation
+// refresh. Retained revisions remain queryable, but only current is refreshed.
+func (idx *Index) SetDatasetRevisionLookup(current func(string) (int, error)) {
+	idx.currentDatasetRevision = current
 }
 
 // NewIndexEngine builds one working projection using the supplied physical engine.

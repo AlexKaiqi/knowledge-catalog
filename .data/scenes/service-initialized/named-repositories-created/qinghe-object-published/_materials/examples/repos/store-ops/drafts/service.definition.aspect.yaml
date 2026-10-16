@@ -1,0 +1,22 @@
+---
+object_id: schema/service.definition
+---
+entity: Service
+aspect: definition
+pattern: record
+fields:
+  name:
+    type: string
+    required: true
+  purpose:
+    type: string
+    required: true
+  owner:
+    type: string
+    required: true
+  oncall:
+    type: string
+  endpoint:
+    type: string
+  dependsOn:
+    type: array

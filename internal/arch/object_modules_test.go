@@ -62,8 +62,8 @@ func TestObjectCapabilityPublicDepth(t *testing.T) {
 	root := moduleRoot(t)
 	public := map[string]map[string]bool{
 		"object":           {"reader": true, "writer": true, "service": true, "format": true, "semanticview": true, "cache": true, "maintenance": true, "client": true, "cli": true},
-		"discovery":        {"adoption": true, "service": true, "plugin": true, "projection": true, "datasets": true, "llmhttp": true, "client": true, "cli": true},
-		"declarativeindex": {"client": true, "cli": true, "plugin": true, "projection": true, "control": true, "opensearch": true},
+		"discovery":        {"adoption": true, "space": true, "service": true, "plugin": true, "projection": true, "datasets": true, "llmhttp": true, "client": true, "cli": true},
+		"declarativeindex": {"client": true, "cli": true, "capability": true, "plugin": true, "projection": true, "control": true, "opensearch": true},
 		"liveaccess":       {"contract": true, "service": true, "discovery": true, "cli": true, "client": true, "evidence": true, "plugin": true, "fixture": true, "handler": true, "dispatch": true},
 		"systemrepo":       {},
 	}

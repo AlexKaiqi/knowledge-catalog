@@ -27,13 +27,18 @@ func TestOpenSearchOperators(t *testing.T) {
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/dw.table.structure"}, Value: map[string]any{
 			"entity": "Table", "aspect": "structure", "pattern": "record",
 			"fields": map[string]any{
-				"db":       map[string]any{"type": "string", "access": []any{"filter"}},
-				"note":     map[string]any{"access": []any{"text"}},
-				"n":        map[string]any{"type": "number", "access": []any{"filter"}},
-				"optional": map[string]any{"type": "string", "access": []any{"filter"}},
-				"when":     map[string]any{"type": "string", "access": []any{"sort"}},
+				"db":       map[string]any{"type": "string"},
+				"note":     map[string]any{},
+				"n":        map[string]any{"type": "number"},
+				"optional": map[string]any{"type": "string"},
+				"when":     map[string]any{"type": "string"},
 			},
 		}},
+		testkit.IndexField("schema/dw.table.structure", "db", "keyword"),
+		testkit.IndexText("schema/dw.table.structure", "note"),
+		testkit.IndexField("schema/dw.table.structure", "n", "number"),
+		testkit.IndexField("schema/dw.table.structure", "optional", "keyword"),
+		testkit.IndexField("schema/dw.table.structure", "when", "keyword", "sort"),
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/a", AspectName: "structure"}, Value: map[string]any{"db": "tl", "note": "user events", "n": 2, "when": "2024-01-02"}},
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/b", AspectName: "structure"}, Value: map[string]any{"db": "dw", "note": "billing events", "n": 10, "when": "2024-01-01"}},
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/c", AspectName: "structure"}, Value: map[string]any{"db": "tl", "note": "other", "n": 5, "when": "2024-01-03"}},
@@ -135,8 +140,14 @@ func TestOpenSearchIncrementalAndSchemaRebuild(t *testing.T) {
 	repo := testkit.MakeRepository(t, uniqueESRepo(t, "incr"))
 	root := testkit.MustHead(t, repo, "refs/heads/main")
 	c1 := testfixture.PutAt(t, repo, root, []objectmodel.Operation{
-		testfixture.PolicyBodySchema(),
-		testkit.PutEntity("policy/P-1", map[string]any{"body": "needs a runbook"}, "")[0],
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/policy.body"}, Value: map[string]any{
+			"entity": "Policy", "pattern": "record", "fields": map[string]any{
+				"body": map[string]any{"type": "string"},
+				"tag":  map[string]any{"type": "string"},
+			},
+		}},
+		testfixture.PolicyBodyIndex(),
+		testkit.PutEntity("policy/P-1", map[string]any{"body": "needs a runbook", "tag": "ops"}, "")[0],
 	})
 	first, err := idx.Apply(repo, root, c1, []objectmodel.ObjectID{"policy/P-1"})
 	if err != nil || first.Mode != ports.IndexModeRebuild {
@@ -151,6 +162,11 @@ func TestOpenSearchIncrementalAndSchemaRebuild(t *testing.T) {
 	if err != nil || len(hits.Hits) != 2 {
 		t.Fatalf("after incremental %d %v", len(hits.Hits), err)
 	}
+	for _, hit := range hits.Hits {
+		if hit.Object.Repository != repo.ID() || hit.Object.Commit != c2 {
+			t.Fatalf("unchanged and new objects must be read at the advanced basis: %#v", hit.Object)
+		}
+	}
 	c3 := testfixture.PutAt(t, repo, c2, []objectmodel.Operation{{
 		Op: objectmodel.OpRemove, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "policy/P-2"},
 	}})
@@ -163,18 +179,28 @@ func TestOpenSearchIncrementalAndSchemaRebuild(t *testing.T) {
 		t.Fatalf("after remove %d %v", len(hits.Hits), err)
 	}
 
-	c4 := testfixture.PutAt(t, repo, c3, []objectmodel.Operation{
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/policy.body"}, Value: map[string]any{
-			"entity": "Policy", "pattern": "record",
-			"fields": map[string]any{
-				"body": map[string]any{"access": []any{"text"}},
-				"tag":  map[string]any{"access": []any{"filter"}},
-			},
-		}},
+	breaking := testfixture.PolicyBodySchema()
+	breakingFields := breaking.Value.(map[string]any)["fields"].(map[string]any)
+	breakingFields["body"] = map[string]any{"type": "number"}
+	breakingFields["tag"] = map[string]any{"type": "string"}
+	_, err = repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
+		TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef,
+		BaseCommit: c3, ExpectedTargetCommit: c3, Operations: []objectmodel.Operation{breaking},
 	})
-	rebuilt, err := idx.Apply(repo, c3, c4, []objectmodel.ObjectID{"schema/policy.body"})
+	testkit.ExpectCode(t, err, kernel.ErrSchemaIncompatible)
+
+	// The value structure stays fixed; a new declaration changes the query
+	// contract and must rebuild rather than treating it as a content update.
+	c4 := testfixture.PutAt(t, repo, c3, []objectmodel.Operation{
+		testkit.IndexField("schema/policy.body", "tag", "keyword"),
+	})
+	rebuilt, err := idx.Apply(repo, c3, c4, []objectmodel.ObjectID{testkit.IndexDeclarationObject})
 	if err != nil || rebuilt.Mode != ports.IndexModeRebuild || rebuilt.Cause != ports.IndexCauseSchema {
-		t.Fatalf("schema rebuild %#v %v", rebuilt, err)
+		t.Fatalf("declaration rebuild %#v %v", rebuilt, err)
+	}
+	hits, err = idx.SearchAt(repo, c4, retrieval.SearchOf(retrieval.SearchEQ("tag", "ops")))
+	if err != nil || len(hits.Hits) != 1 || hits.Hits[0].Object.Address.ObjectID != "policy/P-1" {
+		t.Fatalf("rebuilt declaration must expose the existing tag: %#v %v", objectIDs(hits), err)
 	}
 }
 

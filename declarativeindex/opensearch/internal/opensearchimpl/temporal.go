@@ -56,7 +56,7 @@ func logicalSortValue(req retrieval.SearchRequest, spec retrieval.AccessSpec, va
 	if !ok || clause.Field == nil {
 		return value, nil
 	}
-	field, err := spec.ResolveField(*clause.Field)
+	field, err := spec.ResolveClauseField(clause)
 	if err != nil {
 		return nil, err
 	}

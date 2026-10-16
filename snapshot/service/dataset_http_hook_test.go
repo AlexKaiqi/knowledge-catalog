@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	localauth "kc/identity/local"
 	"reflect"
 	"testing"
 
@@ -18,7 +19,7 @@ func TestDatasetHTTPPublicationHooksObserveOneAuthoritativeSwitch(t *testing.T) 
 		f.source.head = "c2"
 		return definition, nil, nil
 	}
-	f.resources.PreparePublication = func(_ context.Context, _ identity.HTTPIdentity, definition dataset.Dataset) error {
+	f.resources.PreparePublication = func(_ context.Context, _ identity.HTTPIdentity, definition dataset.Dataset) (dataset.Dataset, error) {
 		events = append(events, "ready")
 		if _, err := f.catalog.Set("files"); err == nil {
 			t.Fatal("current pointer advanced before capability preparation")
@@ -26,10 +27,10 @@ func TestDatasetHTTPPublicationHooksObserveOneAuthoritativeSwitch(t *testing.T) 
 		if definition.Sources[0].Commit != "c2" {
 			t.Fatal("preparation did not inherit the portable-recipe source version")
 		}
-		return nil
+		return definition, nil
 	}
 	h := service.NewHandler(service.Config{
-		Identity: service.IdentityOptions{Mode: "local", Local: true},
+		Identity: service.IdentityOptions{Mode: "local", Authenticator: localauth.New()},
 		Acquire: func(context.Context, identity.HTTPIdentity, string) (service.Resources, func(), error) {
 			return f.resources, func() {}, nil
 		},
@@ -68,7 +69,7 @@ func TestDatasetHTTPPreHookRevocationPrecedesPreparationAndRetirement(t *testing
 				return definition, nil, nil
 			}
 			handler := service.NewHandler(service.Config{
-				Identity: service.IdentityOptions{Local: true},
+				Identity: service.IdentityOptions{Authenticator: localauth.New()},
 				Acquire: func(context.Context, identity.HTTPIdentity, string) (service.Resources, func(), error) {
 					return fixture.resources, func() {}, nil
 				},

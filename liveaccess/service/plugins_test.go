@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	common "kc/discovery/plugin"
@@ -11,23 +12,33 @@ import (
 	"kc/liveaccess"
 )
 
+const testProtocol = "resource-access/v1"
+
 type pluginLookupFunc func(context.Context, liveaccess.StateLookupRequest) (liveaccess.StateObservation, error)
 
 func (f pluginLookupFunc) LookupState(ctx context.Context, request liveaccess.StateLookupRequest) (liveaccess.StateObservation, error) {
 	return f(ctx, request)
 }
 
-func pluginConfigs(selections map[kernel.RepositoryID]string) common.RepositoryPluginConfigs {
-	configs := common.RepositoryPluginConfigs{Repositories: map[kernel.RepositoryID]common.RepositoryPluginConfig{}}
-	for repo, instance := range selections {
-		configs.Repositories[repo] = common.RepositoryPluginConfig{Version: 1, Plugins: []common.PluginSelection{{Name: "liveaccess", Instance: instance}}}
-	}
-	return configs
+// pluginConfigs deploys LiveAccess instances keyed by instance name.
+func pluginConfigs(instances map[string]common.PluginInstanceConfig) common.PluginsConfig {
+	return common.PluginsConfig{"liveaccess": {Instances: instances}}
 }
 
-func TestAccessPluginsSelectRepoInstanceAndPreserveRequest(t *testing.T) {
-	configs := pluginConfigs(map[kernel.RepositoryID]string{"repo-a": "one", "repo-b": "two"})
-	configs.Repositories["unknown"] = common.RepositoryPluginConfig{Version: 1, Plugins: []common.PluginSelection{{Name: "absent", Instance: "one"}}}
+// mainPlugin is one protocol-wide instance.
+func mainPlugin() common.PluginsConfig {
+	return pluginConfigs(map[string]common.PluginInstanceConfig{"main": {Protocol: testProtocol}})
+}
+
+func lookupRequest(runtime string) liveaccess.StateLookupRequest {
+	return liveaccess.StateLookupRequest{Binding: liveaccess.ResolvedBinding{Repository: "repo", Runtime: runtime, Protocol: testProtocol}}
+}
+
+func TestAccessPluginsRouteByRuntimeAndProtocolAndPreserveRequest(t *testing.T) {
+	configs := pluginConfigs(map[string]common.PluginInstanceConfig{
+		"warehouse": {Protocol: testProtocol, Runtimes: []string{"mysql-shop"}},
+		"default":   {Protocol: testProtocol, Runtimes: []string{"http"}},
+	})
 	opened := map[string][]kernel.RepositoryID{}
 	var got liveaccess.StateLookupRequest
 	entry := PluginEntry{Open: func(scope common.PluginScope) (PluginContribution, error) {
@@ -37,26 +48,51 @@ func TestAccessPluginsSelectRepoInstanceAndPreserveRequest(t *testing.T) {
 			return liveaccess.StateObservation{Value: scope.Instance}, nil
 		})}, nil
 	}}
-	plugins, err := OpenPlugins(configs, map[string]PluginEntry{"liveaccess": entry})
+	plugins, err := OpenPlugins(configs, []kernel.RepositoryID{"repo-b", "repo-a"}, map[string]PluginEntry{"liveaccess": entry})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer plugins.Close()
-	if !reflect.DeepEqual(opened, map[string][]kernel.RepositoryID{"one": {"repo-a"}, "two": {"repo-b"}}) {
-		t.Fatalf("instance scopes: %#v", opened)
+	all := []kernel.RepositoryID{"repo-a", "repo-b"}
+	if !reflect.DeepEqual(opened, map[string][]kernel.RepositoryID{"default": all, "warehouse": all}) {
+		t.Fatalf("instances were scoped by Repository: %#v", opened)
 	}
-	request := liveaccess.StateLookupRequest{Binding: liveaccess.ResolvedBinding{Repository: "repo-b", DeclarationCommit: "pinned", DeclarationDigest: "declaration"}, SchemaRef: "schema/status", Origin: "https://source.example", Identity: kernel.IdentityContext{Principal: "reader", OnBehalfOf: "alice"}, Trace: kernel.TraceContext{TraceID: "trace", SpanID: "span"}, RequestID: "request"}
+	request := liveaccess.StateLookupRequest{Binding: liveaccess.ResolvedBinding{Repository: "repo-b", DeclarationCommit: "pinned", DeclarationDigest: "declaration", Runtime: "mysql-shop", Protocol: testProtocol}, SchemaRef: "schema/status", Origin: "https://source.example", Identity: kernel.IdentityContext{Principal: "reader", OnBehalfOf: "alice"}, Trace: kernel.TraceContext{TraceID: "trace", SpanID: "span"}, RequestID: "request"}
 	result, err := plugins.LookupState(context.Background(), request)
-	if err != nil || result.Value != "two" || !reflect.DeepEqual(got, request) {
-		t.Fatalf("request or selected result changed: %#v %#v %v", got, result, err)
+	if err != nil || result.Value != "warehouse" || !reflect.DeepEqual(got, request) {
+		t.Fatalf("request or routed result changed: %#v %#v %v", got, result, err)
 	}
-	for _, repo := range []kernel.RepositoryID{"unknown", "not-configured"} {
-		if _, err := plugins.LookupState(context.Background(), liveaccess.StateLookupRequest{Binding: liveaccess.ResolvedBinding{Repository: repo}}); kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
-			t.Fatalf("%s fell through selection: %v", repo, err)
+	if result, err := plugins.LookupState(context.Background(), lookupRequest("http")); err != nil || result.Value != "default" {
+		t.Fatalf("runtime was not routed to its own instance: %#v %v", result, err)
+	}
+	if _, err := plugins.LookupState(context.Background(), lookupRequest("unlisted")); kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
+		t.Fatalf("an unlisted runtime borrowed a listed instance: %v", err)
+	}
+	unmapped := liveaccess.StateLookupRequest{Binding: liveaccess.ResolvedBinding{Repository: "repo-a", Runtime: "http", Protocol: "resource-access/v2"}}
+	if _, err := plugins.LookupState(context.Background(), unmapped); kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied || !strings.Contains(err.Error(), "resource-access/v2") {
+		t.Fatalf("unmapped protocol fell through to another instance: %v", err)
+	}
+	if _, err := plugins.AccessResource(context.Background(), liveaccess.ResourceOperationRequest{Runtime: "http", Protocol: testProtocol}); kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
+		t.Fatalf("lookup-only plugin acquired an undeclared operation port: %v", err)
+	}
+}
+
+func TestAccessPluginsRefuseOverlappingCatalogs(t *testing.T) {
+	entries := map[string]PluginEntry{"liveaccess": {}}
+	for name, instances := range map[string]map[string]common.PluginInstanceConfig{
+		"same runtime":      {"a": {Protocol: testProtocol, Runtimes: []string{"http"}}, "b": {Protocol: testProtocol, Runtimes: []string{"http"}}},
+		"two protocol-wide": {"a": {Protocol: testProtocol}, "b": {Protocol: testProtocol}},
+		"wide and listed":   {"a": {Protocol: testProtocol}, "b": {Protocol: testProtocol, Runtimes: []string{"http"}}},
+	} {
+		_, err := OpenPlugins(pluginConfigs(instances), nil, entries)
+		if kernel.CodeOf(err) != kernel.ErrPreconditionFailed || !strings.Contains(err.Error(), "liveaccess/a") || !strings.Contains(err.Error(), "liveaccess/b") {
+			t.Fatalf("%s was served by assembly order: %v", name, err)
 		}
 	}
-	if _, err := plugins.AccessResource(context.Background(), liveaccess.ResourceOperationRequest{Descriptor: liveaccess.ResourceDescriptorCoordinate{Repository: "repo-b"}}); kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
-		t.Fatalf("lookup-only plugin acquired an undeclared operation port: %v", err)
+	for name, instance := range map[string]common.PluginInstanceConfig{"missing protocol": {}, "index shape": {Protocol: testProtocol, Catalog: "declarative-index/opensearch@2026-10"}} {
+		if _, err := OpenPlugins(pluginConfigs(map[string]common.PluginInstanceConfig{"main": instance}), nil, entries); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
+			t.Fatalf("%s opened an access instance: %v", name, err)
+		}
 	}
 }
 
@@ -73,17 +109,21 @@ func TestAccessPluginConstructionFailureIsLocalAndReleasesPartialResources(t *te
 			return liveaccess.StateObservation{Value: "independent"}, nil
 		})}, nil
 	}}
-	plugins, err := OpenPlugins(pluginConfigs(map[kernel.RepositoryID]string{"repo-bad": "bad", "repo-good": "good"}), map[string]PluginEntry{"liveaccess": entry})
+	configs := pluginConfigs(map[string]common.PluginInstanceConfig{
+		"bad":  {Protocol: testProtocol, Runtimes: []string{"broken"}},
+		"good": {Protocol: testProtocol, Runtimes: []string{"http"}},
+	})
+	plugins, err := OpenPlugins(configs, []kernel.RepositoryID{"repo"}, map[string]PluginEntry{"liveaccess": entry})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(closed, []string{"bad/second", "bad/first"}) {
 		t.Fatalf("partial resources not released immediately in reverse order: %v", closed)
 	}
-	if _, err := plugins.LookupState(context.Background(), liveaccess.StateLookupRequest{Binding: liveaccess.ResolvedBinding{Repository: "repo-bad"}}); !errors.Is(err, failure) {
-		t.Fatalf("selected construction failure lost: %v", err)
+	if _, err := plugins.LookupState(context.Background(), lookupRequest("broken")); !errors.Is(err, failure) {
+		t.Fatalf("instance construction failure lost: %v", err)
 	}
-	value, err := plugins.LookupState(context.Background(), liveaccess.StateLookupRequest{Binding: liveaccess.ResolvedBinding{Repository: "repo-good"}})
+	value, err := plugins.LookupState(context.Background(), lookupRequest("http"))
 	if err != nil || value.Value != "independent" {
 		t.Fatalf("independent instance blocked: %#v %v", value, err)
 	}
@@ -98,32 +138,30 @@ func TestAccessPluginConstructionFailureIsLocalAndReleasesPartialResources(t *te
 	}
 }
 
-func TestAccessPluginsIncompleteEntryAndUnavailableConfigFailExplicitly(t *testing.T) {
+func TestAccessPluginsIncompleteEntryAndAbsenceFailExplicitly(t *testing.T) {
 	for _, entry := range []PluginEntry{{}, {Open: func(common.PluginScope) (PluginContribution, error) {
 		var lookup *nilPluginLookup
 		return PluginContribution{Lookup: lookup}, nil
 	}}} {
-		plugins, err := OpenPlugins(pluginConfigs(map[kernel.RepositoryID]string{"repo": "main"}), map[string]PluginEntry{"liveaccess": entry})
+		plugins, err := OpenPlugins(mainPlugin(), []kernel.RepositoryID{"repo"}, map[string]PluginEntry{"liveaccess": entry})
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, err = plugins.LookupState(context.Background(), liveaccess.StateLookupRequest{Binding: liveaccess.ResolvedBinding{Repository: "repo"}})
-		if kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
+		if _, err = plugins.LookupState(context.Background(), lookupRequest("http")); kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
 			t.Fatalf("incomplete contribution accepted: %v", err)
 		}
 		_ = plugins.Close()
 	}
-	failure := errors.New("Repo metadata unavailable")
-	plugins, err := OpenPlugins(common.RepositoryPluginConfigs{Unavailable: map[kernel.RepositoryID]error{"repo": failure}}, nil)
+	plugins, err := OpenPlugins(common.PluginsConfig{}, []kernel.RepositoryID{"repo"}, map[string]PluginEntry{"liveaccess": {}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer plugins.Close()
-	if _, err := plugins.LookupState(context.Background(), liveaccess.StateLookupRequest{Binding: liveaccess.ResolvedBinding{Repository: "repo"}}); !errors.Is(err, failure) {
-		t.Fatalf("metadata failure became no configuration: %v", err)
+	if plugins.Configured() {
+		t.Fatal("an absent plugin was reported as installed")
 	}
-	if _, err := OpenPlugins(common.RepositoryPluginConfigs{Unavailable: map[kernel.RepositoryID]error{"repo": nil}}, nil); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
-		t.Fatalf("invalid global setup accepted: %v", err)
+	if _, err := plugins.LookupState(context.Background(), lookupRequest("http")); kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
+		t.Fatalf("absent LiveAccess did not report a missing capability: %v", err)
 	}
 }
 

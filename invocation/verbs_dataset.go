@@ -119,6 +119,9 @@ func VerbDefineDataset(cx *Invocation) (any, error) {
 	if err := Authorize(cx.Home, "dataset.manage", cx.Flags, nil); err != nil {
 		return nil, err
 	}
+	if accepted, ok := dataset.ReplayedDefinition(cat, setID, revision, sources, metadata); ok {
+		return datasetDefineResult(accepted, dataset.DefineReplayed, nil), nil
+	}
 	// Reject an invalid publication before writing its portable recipe. The
 	// final freeze and publish recheck the revision after that independent write.
 	if _, err := cat.PrepareDataset(setID, revision, sources); err != nil {
@@ -145,10 +148,15 @@ func VerbDefineDataset(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	return datasetDefineResult(def, dataset.DefineApplied, published), nil
+}
+
+func datasetDefineResult(def dataset.Dataset, disposition string, published *RecipePublish) map[string]any {
 	out := map[string]any{
-		"setId":    def.SetID,
-		"revision": def.Revision,
-		"sources":  def.Sources,
+		"setId":       def.SetID,
+		"revision":    def.Revision,
+		"sources":     def.Sources,
+		"disposition": disposition,
 	}
 	if len(def.Metadata) > 0 {
 		out["metadata"] = def.Metadata
@@ -170,7 +178,7 @@ func VerbDefineDataset(cx *Invocation) (any, error) {
 			out["recipeSkipped"] = published.Skipped
 		}
 	}
-	return out, nil
+	return out
 }
 
 func VerbRegister(cx *Invocation) (any, error) {
@@ -531,13 +539,21 @@ func RemoteServerURL(flags map[string]invoke.FlagValue) string {
 	return SavedClientServer()
 }
 
-// VerbBrowseSchemas names the entities published at one Repository basis.
+// VerbBrowseSchemas names the Schemas a Dataset revision delivers, or the
+// entities published at one Repository basis.
 func VerbBrowseSchemas(cx *Invocation) (any, error) {
-	repositoryID, commitID, err := PinCommit(cx.WS, cx.Flags)
+	limit, err := PageLimit(cx.Flags, DefaultSchemaPageSize, MaxSchemaPageSize)
 	if err != nil {
 		return nil, err
 	}
-	limit, err := PageLimit(cx.Flags, DefaultSchemaPageSize, MaxSchemaPageSize)
+	if ServingWorkspace(cx.Flags) {
+		serving, _, err := OpenCompleteServing(cx, "")
+		if err != nil {
+			return nil, err
+		}
+		return browseDatasetSchemas(cx, serving, limit)
+	}
+	repositoryID, commitID, err := PinCommit(cx.WS, cx.Flags)
 	if err != nil {
 		return nil, err
 	}

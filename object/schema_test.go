@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"kc/kernel"
@@ -150,17 +151,19 @@ func TestSystemRepositoryHistory(t *testing.T) {
 	}
 }
 
-func TestSchemaCompatibilitySeparatesAccessFromValueStructure(t *testing.T) {
-	previous := objectmodel.SchemaDefinition{ObjectID: "schema/article", Entity: "Article", Pattern: "record", Fields: []objectmodel.SchemaFieldDefinition{{Path: "body", Type: "string", Access: []string{"text", "filter"}}}}
-	for _, access := range [][]string{{"filter"}, {}} {
-		next := previous
-		next.Fields = []objectmodel.SchemaFieldDefinition{{Path: "body", Type: "string", Access: access}}
-		if changes := objectmodel.BreakingSchemaChanges(previous, next); len(changes) > 0 {
-			t.Fatalf("access-only change is not a value break: %v", changes)
-		}
-		next.Fields[0].Type = "integer"
-		if changes := objectmodel.BreakingSchemaChanges(previous, next); len(changes) == 0 {
-			t.Fatal("removing query access must not permit a value type change")
-		}
+func TestSchemaCompatibilityJudgesValueStructureOnly(t *testing.T) {
+	previous := objectmodel.SchemaDefinition{ObjectID: "schema/article", Entity: "Article", Pattern: "record", Fields: []objectmodel.SchemaFieldDefinition{{Path: "body", Type: "string"}}}
+	next := previous
+	next.Fields = []objectmodel.SchemaFieldDefinition{{Path: "body", Type: "integer"}}
+	if changes := objectmodel.BreakingSchemaChanges(previous, next); len(changes) == 0 {
+		t.Fatal("a value type change must be a break")
+	}
+}
+
+func TestSchemaFieldAccessIsRejected(t *testing.T) {
+	value := map[string]any{"entity": "Article", "pattern": "record", "fields": map[string]any{"body": map[string]any{"type": "string", "access": []any{"text"}}}}
+	_, err := objectmodel.ParseSchemaDefinition("schema/article", value)
+	if kernel.CodeOf(err) == "" || !strings.Contains(err.Error(), "index declaration") {
+		t.Fatalf("Schema field access must be rejected and point to an index declaration: %v", err)
 	}
 }

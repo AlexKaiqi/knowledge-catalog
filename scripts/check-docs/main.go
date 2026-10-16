@@ -4,6 +4,7 @@
 // doc/README.md, starts with a title instead of frontmatter, and only links to
 // local files that exist. Root, task and package documents get the same link
 // check so that moving or deleting a design document cannot leave dead links.
+// The task board under tasks/ is checked for layout (see tasks.go) and links.
 package main
 
 import (
@@ -24,7 +25,7 @@ const (
 var (
 	mdLink = regexp.MustCompile(`\]\(([^)#\s]+)`)
 	// rootMarkdown is the closed set of Markdown files allowed at the repository root.
-	rootMarkdown = map[string]struct{}{"README.md": {}, "AGENTS.md": {}, "TASK.md": {}}
+	rootMarkdown = map[string]struct{}{"README.md": {}, "AGENTS.md": {}}
 	// maintainedMarkdown lists tracked notes outside doc/ that are not README files.
 	maintainedMarkdown = []string{"cli/SURFACE.md"}
 	skippedDirectories = map[string]struct{}{
@@ -62,7 +63,11 @@ func checkDocumentation(root string) (int, error) {
 	if err := validateReachable(root, docs); err != nil {
 		return 0, err
 	}
-	files, err := markdownLinkFiles(root, docs)
+	tasks, err := taskDocuments(root)
+	if err != nil {
+		return 0, err
+	}
+	files, err := markdownLinkFiles(root, append(append([]string{}, docs...), tasks...))
 	if err != nil {
 		return 0, err
 	}
@@ -121,7 +126,7 @@ func validateRootMarkdown(root string) error {
 			continue
 		}
 		if _, ok := rootMarkdown[entry.Name()]; !ok {
-			return fmt.Errorf("root Markdown %s is not allowed; design documents belong under %s/", entry.Name(), docRoot)
+			return fmt.Errorf("root Markdown %s is not allowed; design documents belong under %s/, tasks under %s/", entry.Name(), docRoot, taskRoot)
 		}
 	}
 	return nil
@@ -225,6 +230,10 @@ func validateMarkdownLinks(root string, files []string) error {
 			resolved := target
 			if !strings.HasPrefix(target, "/") {
 				resolved = filepath.Join(root, filepath.Dir(filepath.FromSlash(rel)), filepath.FromSlash(target))
+			}
+			if local, err := filepath.Rel(root, resolved); err == nil && strings.HasPrefix(filepath.ToSlash(local), ".validation/") {
+				broken = append(broken, fmt.Sprintf("%s -> %s (local validation evidence is not checked in; use a code path)", rel, target))
+				continue
 			}
 			if _, err := os.Stat(resolved); err != nil {
 				broken = append(broken, fmt.Sprintf("%s -> %s", rel, target))

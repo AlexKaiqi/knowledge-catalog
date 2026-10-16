@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"kc/kernel"
 	"kc/snapshot"
 	"kc/snapshot/dataset"
 )
@@ -31,8 +32,12 @@ type FileDirectoryRequest struct {
 
 type FileReadRequest struct {
 	FileCoordinate
-	MountPath string `json:"mountPath"`
-	File      string `json:"file"`
+	// Repository+Commit address a fixed raw file, exclusively of Dataset,
+	// pin, view and mount-relative coordinates. Path is then a repository path.
+	Repository string `json:"repository,omitempty"`
+	Commit     string `json:"commit,omitempty"`
+	MountPath  string `json:"mountPath"`
+	File       string `json:"file"`
 	// Path addresses one delivered file in the composed tree (see
 	// FileDirectoryRequest). MountPath+File remain the mount shape.
 	Path   string `json:"path,omitempty"`
@@ -65,4 +70,16 @@ type FileReadResponse struct {
 	TotalBytes int64                `json:"totalBytes"`
 	EOF        bool                 `json:"eof"`
 	Content    []byte               `json:"content"`
+}
+
+// RepositoryFileReadResponse reports immutable source coordinates without a
+// Dataset publication. Authorization is checked again for each request.
+type RepositoryFileReadResponse struct {
+	Repository kernel.RepositoryID `json:"repository"`
+	Commit     kernel.CommitID     `json:"commit"`
+	Path       string              `json:"path"`
+	Offset     int64               `json:"offset"`
+	TotalBytes int64               `json:"totalBytes"`
+	EOF        bool                `json:"eof"`
+	Content    []byte              `json:"content"`
 }

@@ -5,4 +5,3 @@ requires: [history-generation, checkpoint-resume]
 metrics: [cap.startup_time, read.log.latency, read.diff.latency]
 gaps:
   - "生成器尚未生成真实 H0–H4 变更历史（history-generation 能力），本状态当前不可构建"
-  - "代际 rollover 与归档恢复（旧 KC-PERF-12）待 REVIEW-01 选定方案后补状态，不预先建目录"

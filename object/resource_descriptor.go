@@ -21,15 +21,29 @@ type ResourceDescriptor struct {
 	Mode     BindingMode                 `json:"mode"`
 	Runtime  string                      `json:"runtime"`
 	Protocol string                      `json:"protocol"`
+	Identity ResultIdentity              `json:"identity"`
 	Access   map[string]BindingOperation `json:"access"`
 }
+
+// ResultIdentity states whether an external result depends on the caller.
+// It is the external system team's promise, not a credential setting.
+type ResultIdentity string
+
+const (
+	// IdentityPerCaller is the default: the external system authorizes each
+	// caller, so different callers may see different results or be refused.
+	IdentityPerCaller ResultIdentity = "per-caller"
+	// IdentityShared promises a caller-independent result (for example a
+	// table's row count); only such values may feed a shared index.
+	IdentityShared ResultIdentity = "shared"
+)
 
 // resourceDescriptorFields is the closed descriptor shape. Anything else
 // (headers, tokens, nested definitions) is rejected so a descriptor cannot
 // smuggle credentials or a second access description.
 var resourceDescriptorFields = map[string]struct{}{
 	"kind": {}, "name": {}, "description": {}, "origin": {}, "mode": {},
-	"runtime": {}, "protocol": {}, "access": {},
+	"runtime": {}, "protocol": {}, "identity": {}, "access": {},
 }
 
 // IsResourceDescriptorValue reports whether an entity body declares itself a
@@ -95,6 +109,18 @@ func ParseResourceDescriptor(id ObjectID, value any) (ResourceDescriptor, error)
 	out.Mode = BindingMode(mode)
 	if out.Mode != BindingState && out.Mode != BindingStream {
 		return ResourceDescriptor{}, kernel.Fail(kernel.ErrUsageInvalid, "ResourceDescriptor %s mode must be state or stream", id)
+	}
+	identity, err := text("identity")
+	if err != nil {
+		return ResourceDescriptor{}, err
+	}
+	switch out.Identity = ResultIdentity(identity); out.Identity {
+	case "":
+		out.Identity = IdentityPerCaller
+	case IdentityPerCaller, IdentityShared:
+	default:
+		return ResourceDescriptor{}, kernel.Fail(kernel.ErrUsageInvalid,
+			"ResourceDescriptor %s identity must be per-caller or shared", id)
 	}
 	access, ok := body["access"].(map[string]any)
 	if !ok || len(access) == 0 {

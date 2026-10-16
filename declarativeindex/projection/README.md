@@ -2,6 +2,49 @@
 
 声明式索引插件的查询与物理投影：Repository/Binding 之上的规划、候选定位与可丢投影。它不拥有对象正文，不进入 Writer/Dataset 服务 核心；命中后必须由独立 hydrator 在计划声明的 basis 上读取完整对象与版本。
 
+## Dataset 修订检索空间
+
+`PrepareDataset` 从固定 `DatasetPin` 的选入单位构建一个 corpus，`SearchDataset` 在该 corpus
+中执行一次物理查询，跨来源使用同一套打分。编译命名空间通过
+[`discovery/space`](../../discovery/space/README.md) 汇总所选 Schema 与索引成员；范围外的方面
+不参与构建或候选回读。同一对象的不同方面由既有 `ComposeHoldingValues` 组合，保留真实
+`Sources` 版本向量，不把 Dataset 的派生索引摘要当作某个来源仓的提交。
+
+`DatasetMember` 只创建同一固定范围的声明视图，供实例登记委派；它不打开引擎或准备投影。
+
+`DatasetAccessSpec`、`CheckDatasetProjection` 和 `DescribeDataset` 读取同一个准备依据。
+Query 只核验就绪与投影保留的精确声明地址；未就绪、失效、不支持与未声明均拒绝，查询
+不构建索引或扫描来源。候选的范围和依据先于正文读取验证；同 corpus 中不存在或未选入
+的对象坐标失败关闭。查询、语义窗口和构建在预取消时不打开引擎或读取权威，元数据读取
+沿上下文端口传播取消。
+
+冻结对象的结构 Schema 可以只是 READ 依赖，没有选入检索声明或 Schema 时不参与
+字段构建，也不阻止合法 Dataset 准备。选入声明引用的 Schema 或已选 Schema 的精确
+采用释放仍须固定可解；不能通过跳过解释掩盖损坏的声明依据。
+
+`RefreshDatasetState` 为当前修订发布独立观察空间，取值描述在 Dataset 固定依赖中解析，
+只允许 `shared` 值进入它。刷新入口及接受前拒绝已成为保留修订的请求；观察期间发布新
+修订会拒绝本次刷新，原观察仍可查。消费方经通用候选补判
+接缝按本次 READ 的观察重核条件，淘汰候选后继续翻页；命中同时保留索引原观察及 READ
+新观察。取消或准备失败不切换已发布的观察代。
+
+OpenSearch 对新观察值的 MATCH 补判使用已发布物理字段的分析器，按 token 和位置核对
+全文、任一词及短语；分析请求只读并沿本次搜索上下文取消。缺失、无效或无法证明的
+分析响应明确报错，不改成零命中，也不以子串比较代替分析语义。
+
+`SemanticDatasetWindow` 只从显式向量成员形成的同一 corpus 召回，返回近似窗口；全文成员
+不自行产生向量。命中依据按声明成员、来源版本和角色归因，调用者不传成员键。
+
+`RelationsDataset` 使用该 corpus 的关系候选与代际续页，在选入的固定来源中回读完整
+Relation。正式 Dataset 一跳查询只执行一次物理关系查询，遍历的每一跳复用该有界分页
+执行器；命中保留 Relation 自身的真实来源仓与提交，端点不扩大候选范围。底层
+`RelationsAtContext` 接到 Dataset scope 时转入此端口，其余提供方合同仍在固定来源上执行。
+
+下述按来源的 `SearchAt`、`EnsureAt` 等仍是提供方和维护合同的底层端口；正式消费命令只
+走 Dataset 修订检索空间。成员增量准备、外部失败单元单独说明、丢失 corpus 的自动恢复，
+以及最后一次当前修订校验与 Dataset 发布之间的原子条件边界
+尚由 `INDEX-SEARCH-SPACE-01` 继续收口，本段不表示这些验收已经通过。
+
 ## 目标边界
 
 ```text
@@ -17,8 +60,9 @@ declarativeindex/control   Controller / TargetStore / published HEAD 对账与 w
   →                       通过维护端口调用 Index，不进入查询执行路径
 ```
 
-Schema 字段统一声明逻辑类型与 `access: text/filter/sort` 查询能力，这是索引声明的唯一来源。
-查询能力变化单独判断索引影响，不自动构成对象值结构不兼容；固定旧版本按当时字段声明解释。
+Schema 只声明逻辑类型与结构。采用 `kc/index-declaration` 的成员是查询能力的唯一来源；
+Writer 校验形状与 Schema 字段定位符，实例按其能力清单逐成员判断支持。
+声明变化单独判断索引影响，不自动构成对象值结构不兼容；固定旧版本按当时声明解释。
 编译分三步：
 
 ```text
@@ -27,7 +71,11 @@ ProjectionSpec 某 provider 对 AccessSpec 的可重建物理实现
 RetrievalPlan  某次 SearchRequest 的 provider fragments、residual、combine、hydrate、claims
 ```
 
-Schema 与索引声明都不写 provider、index name、analyzer、`stored/summary/key` 或查询算子。`AccessDigest` 与 `PhysicalDigest` 分开，允许 analyzer/provider revision 改变时在 Schema 不变的情况下重建。
+Schema 不写索引能力；索引声明可以从实例清单选择 analyzer 等构建参数，不携带 provider、
+index name 或原始 mapping/settings。`SetDeclarationManifest(check, digest)` 同时安装实例检查和
+清单摘要；`PhysicalDigest` 合成 driver 与清单摘要，清单变化使旧物理依据失效。
+`AccessDigest` 仍是逻辑声明摘要；Snapshot、Serving State、关系与查询就绪沿同一物理判断，
+不能用支持结果恰好相同的旧投影冒充当前清单。
 
 Provider 端口必须分开：
 

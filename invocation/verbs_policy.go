@@ -113,7 +113,7 @@ func VerbCheckDataset(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	resolved, err := ResolveOrReplay(cx.WS, cx.Home, cat, setID, cx.Flags)
+	resolved, err := ResolveAtRevision(cx.WS, cx.Home, cat, setID, cx.Flags)
 	if err != nil {
 		return nil, err
 	}

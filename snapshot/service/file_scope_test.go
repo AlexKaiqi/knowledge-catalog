@@ -79,6 +79,7 @@ func TestSnapshotFileRechecksCurrentAuthorizationBeforeBytes(t *testing.T) {
 		want := access.Query{Principal: "alice", Action: request.Query.Action, Dataset: "files"}
 		if request.Query.Action == "file.read" {
 			want.Repo = string(source.id)
+			want.Ref = "c1"
 		}
 		if request.Caller.Principal != "alice" || !reflect.DeepEqual(request.Query, want) || request.NativeRepository || request.InventoryDiscovery || request.Definition != nil {
 			t.Fatalf("file authorization lost its verified Dataset caller: %#v", request)

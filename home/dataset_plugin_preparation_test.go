@@ -2,32 +2,29 @@ package home
 
 import (
 	"context"
-	"net/http"
 	"reflect"
 	"testing"
 
 	retrieval "kc/discovery"
 	discoverydatasets "kc/discovery/datasets"
+	consumerplugin "kc/discovery/plugin"
 	index "kc/discovery/projection"
 	"kc/kernel"
-	"kc/snapshot/dataset"
+	objectmodel "kc/object"
 )
 
-func TestDatasetPublicationPreparesOnlyConfiguredSourceContributions(t *testing.T) {
-	ws, plain, indexed := newDatasetPreparationHome(t, "declarative-index", 0)
-	plainRepo, err := ws.Reader.Require(plain.id, kernel.ErrObjectRefUnresolved)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := ws.Plugins.PrepareServingBasis(context.Background(), plainRepo, plain.at); kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
-		t.Fatalf("direct unconfigured preparation stopped rejecting a missing contribution: %v", err)
-	}
-	indexedRepo, err := ws.Reader.Require(indexed.id, kernel.ErrObjectRefUnresolved)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := ws.Index.CheckSearchProjectionAt(indexedRepo, indexed.at); err == nil {
-		t.Fatal("fixture already had a ready indexed basis before Dataset preparation")
+// The deployed instance interprets every source of the deployment, so each
+// Dataset publication prepares the fixed basis of each source it selects.
+func TestDatasetPublicationPreparesSelectedSourcesThroughDeployedInstance(t *testing.T) {
+	ws, plain, indexed := newDatasetPreparationHome(t, nil)
+	for _, source := range []datasetPreparationSource{plain, indexed} {
+		repo, err := ws.Reader.Require(source.id, kernel.ErrObjectRefUnresolved)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ws.Index.CheckSearchProjectionAt(repo, source.at); err == nil {
+			t.Fatalf("fixture already had a ready basis for %s before Dataset preparation", source.id)
+		}
 	}
 	for _, row := range []struct {
 		name    string
@@ -44,70 +41,72 @@ func TestDatasetPublicationPreparesOnlyConfiguredSourceContributions(t *testing.
 			}
 			def, err := datasetPreparationPublisher(ws).Execute(context.Background(), request)
 			if err != nil {
-				t.Fatalf("System's independent index required an unconfigured Dataset source to provide an index: %v", err)
+				t.Fatalf("Dataset publication failed to prepare its selected sources: %v", err)
 			}
 			assertDatasetPreparationReads(t, ws, def, row.sources...)
-			if row.name != "plain-only" {
-				meta, err := ws.Index.CheckSearchProjectionAt(indexedRepo, indexed.at)
-				if err != nil || meta.Basis != indexed.at || meta.State != index.ProjectionStateReady {
-					t.Fatalf("configured Dataset source skipped actual index preparation: meta=%#v error=%v", meta, err)
+			resolved, err := ws.Datasets.ResolveDataset(def.SetID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			pin := DatasetPin(resolved)
+			lookup := func(id kernel.RepositoryID) (objectmodel.Repository, error) {
+				return ws.Reader.Require(id, kernel.ErrObjectRefUnresolved)
+			}
+			for _, source := range row.sources {
+				repo, err := ws.Plugins.DatasetMember(lookup, pin, source.id)
+				if err != nil {
+					t.Fatal(err)
 				}
-				result, err := ws.Index.SearchAtContext(context.Background(), indexedRepo, indexed.at, retrieval.SearchOf(retrieval.SearchMATCH("runbook")))
-				if err != nil || result.Completeness != retrieval.CompletenessComplete || len(result.Hits) != 1 || !reflect.DeepEqual(result.Hits[0].Object, indexed.canonical) ||
-					!reflect.DeepEqual(result.Hits[0].Version, retrieval.VersionOf(indexed.canonical)) {
-					t.Fatalf("configured source did not query its actual fixed canonical projection: result=%#v error=%v", result, err)
+				meta, err := ws.Index.CheckSearchProjectionAt(repo, source.at)
+				if err != nil || meta.Basis == "" || meta.State != index.ProjectionStateReady {
+					t.Fatalf("selected source %s skipped actual index preparation: meta=%#v error=%v", source.id, meta, err)
+				}
+			}
+			result, err := ws.Plugins.SearchDataset(context.Background(), lookup, pin, retrieval.SearchOf(retrieval.SearchMATCH("runbook")))
+			if err != nil || result.Completeness != retrieval.CompletenessComplete || len(result.Hits) != len(row.sources) || result.Dataset.ID != def.SetID || result.Dataset.Revision != def.Revision {
+				t.Fatalf("published Dataset did not query one complete fixed corpus: %#v %v", result, err)
+			}
+			for _, source := range row.sources {
+				found := false
+				for _, hit := range result.Hits {
+					if hit.Object.Repository == source.id {
+						found = kernel.CanonicalDigest(hit.Object) == kernel.CanonicalDigest(source.canonical) && reflect.DeepEqual(hit.Version, retrieval.VersionOf(source.canonical))
+					}
+				}
+				if !found {
+					t.Fatalf("Dataset lost exact canonical source %s: %#v", source.id, result)
 				}
 			}
 		})
 	}
 }
 
-func TestDatasetPublicationKeepsConfigurationFailuresRequired(t *testing.T) {
-	for _, row := range []struct {
-		name   string
-		plugin string
-		status int
-		code   kernel.ErrorCode
-	}{
-		{"unknown-entry", "missing-index", 0, kernel.ErrCapabilityUnsatisfied},
-		{"metadata-unavailable", "declarative-index", http.StatusServiceUnavailable, kernel.ErrTemporaryUnavailable},
-	} {
-		t.Run(row.name, func(t *testing.T) {
-			ws, plain, failed := newDatasetPreparationHome(t, row.plugin, row.status)
-			old, err := ws.Datasets.DefineDataset("reading", 1, []dataset.DatasetSource{plain.mapping()})
-			if err != nil {
-				t.Fatal(err)
-			}
-			before := dataset.NormalizeState(ws.Datasets.DumpState())
-			head, err := ws.Registry.Head()
-			if err != nil {
-				t.Fatal(err)
-			}
-			repo, err := ws.Reader.Require(failed.id, kernel.ErrObjectRefUnresolved)
-			if err != nil {
-				t.Fatal(err)
-			}
-			fault := ws.Plugins.PrepareServingBasis(context.Background(), repo, failed.at)
-			if kernel.CodeOf(fault) != row.code {
-				t.Fatalf("fixture lost the real source configuration failure: %v", fault)
-			}
-			_, err = datasetPreparationPublisher(ws).Execute(context.Background(), discoverydatasets.DatasetPublication{
-				Dataset: "reading", Revision: 2, Sources: []dataset.DatasetSource{failed.mapping(), plain.mapping()},
-			})
-			if err == nil || err.Error() != fault.Error() {
-				t.Fatalf("Dataset publication skipped a failed source as if it were unconfigured: %v", err)
-			}
-			if current := dataset.NormalizeState(ws.Datasets.DumpState()); !reflect.DeepEqual(current, before) {
-				t.Fatalf("failed required preparation changed Dataset serving state: %#v", current)
-			}
-			persisted, err := ws.Registry.Load()
-			if err != nil || !reflect.DeepEqual(dataset.NormalizeState(persisted), before) {
-				t.Fatalf("failed required preparation changed accepted Registry records: state=%#v error=%v", persisted, err)
-			}
-			if after, err := ws.Registry.Head(); err != nil || after != head {
-				t.Fatalf("failed required preparation advanced accepted Registry HEAD: head=%s error=%v", after, err)
-			}
-			assertDatasetPreparationReads(t, ws, old, plain)
-		})
+// Without an installed index instance a Dataset still publishes and reads its
+// declarations as ordinary content; search explains the missing capability.
+func TestDatasetPublicationWithoutIndexInstanceKeepsDeclarationsReadable(t *testing.T) {
+	ws, plain, indexed := newDatasetPreparationHome(t, &consumerplugin.PluginsConfig{})
+	request := discoverydatasets.DatasetPublication{Dataset: "reading", Revision: 1}
+	for _, source := range []datasetPreparationSource{plain, indexed} {
+		request.Sources = append(request.Sources, source.mapping())
+	}
+	def, err := datasetPreparationPublisher(ws).Execute(context.Background(), request)
+	if err != nil {
+		t.Fatalf("publication required an interpreter that is not installed: %v", err)
+	}
+	assertDatasetPreparationReads(t, ws, def, plain, indexed)
+	repo, err := ws.Reader.Require(indexed.id, kernel.ErrObjectRefUnresolved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = repo
+	resolved, err := ws.Datasets.ResolveDataset(def.SetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := ws.Plugins.SearchDataset(context.Background(), func(id kernel.RepositoryID) (objectmodel.Repository, error) {
+		return ws.Reader.Require(id, kernel.ErrObjectRefUnresolved)
+	}, DatasetPin(resolved), retrieval.SearchOf(retrieval.SearchMATCH("runbook")))
+	if kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied || len(result.Hits) != 0 {
+		t.Fatalf("search without an installed index instance did not fail closed: result=%#v error=%v", result, err)
 	}
 }

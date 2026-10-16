@@ -9,32 +9,20 @@ import (
 	"testing"
 
 	"kc/identity"
+	"kc/identity/identitytest"
+	localauth "kc/identity/local"
 	"kc/kernel"
 )
-
-type transportVerifier struct {
-	mode   string
-	caller identity.HTTPIdentity
-	err    error
-	calls  int
-}
-
-func (v *transportVerifier) Name() string { return v.mode }
-
-func (v *transportVerifier) Authenticate(context.Context, http.Header) (identity.HTTPIdentity, error) {
-	v.calls++
-	return v.caller, v.err
-}
 
 func TestSnapshotIdentityRequiresExplicitLocalAndRejectsForgedDelegation(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/identity/v1/whoami", nil)
 	request.Header.Set("X-Kc-As", "alice")
-	for _, options := range []IdentityOptions{{}, {Mode: "local"}, {Mode: "lakefs", Local: true}} {
+	for _, options := range []IdentityOptions{{}, {Mode: "local"}, {Mode: "taihu"}} {
 		if _, err := AuthenticateRequest(request, options); kernel.CodeOf(err) != kernel.ErrUnauthenticated {
 			t.Fatalf("missing verifier implicitly accepted local identity: %#v %v", options, err)
 		}
 	}
-	local := IdentityOptions{Local: true}
+	local := IdentityOptions{Authenticator: localauth.New()}
 	if caller, err := AuthenticateRequest(request, local); err != nil || caller.Principal != "alice" {
 		t.Fatalf("explicit fixture identity: %#v %v", caller, err)
 	}
@@ -47,15 +35,15 @@ func TestSnapshotIdentityRequiresExplicitLocalAndRejectsForgedDelegation(t *test
 	if _, err := AuthenticateRequest(request, local); kernel.CodeOf(err) != kernel.ErrUnauthenticated {
 		t.Fatalf("local mode accepted transport credentials: %v", err)
 	}
-	verifier := &transportVerifier{mode: "verified", caller: identity.HTTPIdentity{Principal: "alice", OnBehalfOf: "trusted-user"}}
+	verifier := &identitytest.Recorder{Mode: "verified", Caller: identity.HTTPIdentity{Principal: "alice", OnBehalfOf: "trusted-user"}}
 	options := IdentityOptions{Authenticator: verifier}
-	if _, err := AuthenticateRequest(request, options); kernel.CodeOf(err) != kernel.ErrForbidden || verifier.calls != 0 {
-		t.Fatalf("forged principal reached the binding verifier: %v %d", err, verifier.calls)
+	if _, err := AuthenticateRequest(request, options); kernel.CodeOf(err) != kernel.ErrForbidden || verifier.Calls != 0 {
+		t.Fatalf("forged principal reached the binding verifier: %v %d", err, verifier.Calls)
 	}
 	request.Header.Del("X-Kc-As")
 	request.Header.Set("X-Kc-On-Behalf-Of", "bob")
-	if _, err := AuthenticateRequest(request, options); kernel.CodeOf(err) != kernel.ErrForbidden || verifier.calls != 0 {
-		t.Fatalf("forged delegation reached the binding verifier: %v %d", err, verifier.calls)
+	if _, err := AuthenticateRequest(request, options); kernel.CodeOf(err) != kernel.ErrForbidden || verifier.Calls != 0 {
+		t.Fatalf("forged delegation reached the binding verifier: %v %d", err, verifier.Calls)
 	}
 	request.Header.Del("X-Kc-On-Behalf-Of")
 	if caller, err := AuthenticateRequest(request, options); err != nil || caller.OnBehalfOf != "trusted-user" {
@@ -64,7 +52,7 @@ func TestSnapshotIdentityRequiresExplicitLocalAndRejectsForgedDelegation(t *test
 }
 
 func TestSnapshotWhoAmIAndDiscoveryDoNotBorrowResourcesOrExposeProviderIdentity(t *testing.T) {
-	verifier := &transportVerifier{mode: "lakefs", caller: identity.HTTPIdentity{Principal: "alice", Login: "alice", Provider: "lakefs", Subject: "immutable-subject", Admin: true}}
+	verifier := &identitytest.Recorder{Mode: "taihu", Caller: identity.HTTPIdentity{Principal: "alice", Login: "alice", Provider: "taihu", Subject: "immutable-subject", Admin: true}}
 	observed := 0
 	handler := newHandler(Config{
 		Identity: IdentityOptions{Authenticator: verifier, BrowserLogin: map[string]string{"provider": "external"}},
@@ -91,8 +79,8 @@ func TestSnapshotWhoAmIAndDiscoveryDoNotBorrowResourcesOrExposeProviderIdentity(
 	if err := json.Unmarshal(w.Body.Bytes(), &discovery); err != nil {
 		t.Fatal(err)
 	}
-	if discovery["mode"] != "lakefs" || discovery["localAssertion"] != false || !reflect.DeepEqual(discovery["accepts"], []any{"Cookie", "Authorization"}) || discovery["browserLogin"] == nil || verifier.calls != 0 {
-		t.Fatalf("unauthenticated pairing metadata changed: %#v calls=%d", discovery, verifier.calls)
+	if discovery["mode"] != "taihu" || discovery["localAssertion"] != false || !reflect.DeepEqual(discovery["accepts"], []any{"Authorization"}) || discovery["browserLogin"] == nil || verifier.Calls != 0 {
+		t.Fatalf("unauthenticated pairing metadata changed: %#v calls=%d", discovery, verifier.Calls)
 	}
 	r = httptest.NewRequest(http.MethodGet, "/identity/v1/whoami", nil)
 	r.Header.Set("Authorization", "Bearer proof")
@@ -107,8 +95,23 @@ func TestSnapshotWhoAmIAndDiscoveryDoNotBorrowResourcesOrExposeProviderIdentity(
 	}
 }
 
-func TestSnapshotLakeFSCookieMutationsRejectBeforeVerifierSideEffects(t *testing.T) {
-	verifier := &transportVerifier{mode: "lakefs", caller: identity.HTTPIdentity{Principal: "alice"}}
+func TestSnapshotLocalDiscoveryAdvertisesSelfAssertion(t *testing.T) {
+	handler := newHandler(Config{Identity: IdentityOptions{Authenticator: localauth.New()}})
+	w := httptest.NewRecorder()
+	handler.identityAuth(w, httptest.NewRequest(http.MethodGet, "/identity/v1/auth", nil))
+	var discovery map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &discovery); err != nil {
+		t.Fatal(err)
+	}
+	if discovery["mode"] != "local" || discovery["localAssertion"] != true || !reflect.DeepEqual(discovery["accepts"], []any{"X-Kc-As"}) {
+		t.Fatalf("local pairing metadata: %#v", discovery)
+	}
+}
+
+// The browser request check belongs to the service, not to one authenticator:
+// any verifying pairing sees ambient cookie mutations rejected first.
+func TestSnapshotBrowserCookieMutationsRejectBeforeVerifierSideEffects(t *testing.T) {
+	verifier := &identitytest.Recorder{Mode: "verified", Caller: identity.HTTPIdentity{Principal: "alice"}}
 	options := IdentityOptions{Authenticator: verifier}
 	request := httptest.NewRequest(http.MethodPost, "/admin/v1/grants", nil)
 	request.Header.Set("Cookie", "internal_auth_session=proof")
@@ -125,8 +128,8 @@ func TestSnapshotLakeFSCookieMutationsRejectBeforeVerifierSideEffects(t *testing
 		for name, values := range headers {
 			request.Header[name] = values
 		}
-		if _, err := AuthenticateRequest(request, options); kernel.CodeOf(err) != kernel.ErrForbidden || verifier.calls != 0 {
-			t.Fatalf("unsafe cookie mutation reached verifier: %v calls=%d", err, verifier.calls)
+		if _, err := AuthenticateRequest(request, options); kernel.CodeOf(err) != kernel.ErrForbidden || verifier.Calls != 0 {
+			t.Fatalf("unsafe cookie mutation reached verifier: %v calls=%d", err, verifier.Calls)
 		}
 	}
 }

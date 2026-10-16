@@ -18,10 +18,13 @@ func TestOpenSearchExactTemporalAndIntegerPagination(t *testing.T) {
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
 	ops := []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/event.precision"}, Value: map[string]any{
 		"entity": "Event", "aspect": "precision", "pattern": "record", "fields": map[string]any{
-			"when": map[string]any{"type": "timestamp", "access": []any{"filter", "sort"}},
-			"n":    map[string]any{"type": "integer", "access": []any{"filter", "sort"}},
+			"when": map[string]any{"type": "timestamp"},
+			"n":    map[string]any{"type": "integer"},
 		},
-	}}}
+	}},
+		testkit.IndexField("schema/event.precision", "when", "date", "filter", "sort"),
+		testkit.IndexField("schema/event.precision", "n", "number", "filter", "sort"),
+	}
 	for _, item := range []struct {
 		id, when string
 		n        int64

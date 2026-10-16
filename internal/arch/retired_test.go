@@ -16,8 +16,12 @@ var retiredPaths = []string{
 	"connector", "integrationruntime", "cmd/kc-integration",
 	"snapshot/gitea", "snapshot/filegit", "snapshot/lakefs", "snapshot/treewriter",
 	"snapshot/commandlog", "snapshot/stamp", "snapshot/internal/giteaimpl",
-	"scripts/system-gitea.sh", "identity/legacy.go", "cli/identity_migration.go",
+	"scripts/system-gitea.sh", "server/auth_gitea.go", "server/auth_verifier.go", "internal/testkit/gitea.go", "scripts/e2e-service-roles.sh",
+	"identity/legacy.go", "cli/identity_migration.go",
 	"controlplane", "gate", "cli/help_governance.go", "invocation/verbs_control.go", "object/writer/propose.go",
+	"server/auth.go", "server/auth_taihu.go", "server/auth_service.go", "server/auth_binding.go", "server/auth_lakefs.go", "server/auth_lakefs_internal_test.go",
+	"invocation/auth_registry.go", "snapshot/service/auth_lakefs.go", "snapshot/service/auth_gateway_origin_test.go",
+	"identity/taihu_token.go", "cli/remote_login_lakefs_internal_test.go", "home/deployment_auth_lakefs_test.go",
 }
 
 func TestRetiredPathsStayAbsent(t *testing.T) {

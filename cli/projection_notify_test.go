@@ -8,13 +8,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
+	"kc/internal/bindingfixture"
 	"kc/internal/testkit"
 )
 
-func TestProjectionNotifyHTTPRejectsObservationBody(t *testing.T) {
+func TestRetiredProjectionNotifyHTTPHasNoMutationRoute(t *testing.T) {
 	home := testkit.TempDir(t)
 	body(t, kc(home, "local", "init"))
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
@@ -45,19 +47,13 @@ func TestProjectionNotifyHTTPRejectsObservationBody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if response.StatusCode != http.StatusBadRequest {
+	if response.StatusCode != http.StatusNotFound {
 		t.Fatalf("notify with observation body status=%d payload=%s", response.StatusCode, payload)
 	}
-	var decoded map[string]any
-	if err := json.Unmarshal(payload, &decoded); err != nil {
-		t.Fatal(err, string(payload))
-	}
-	if asMap(t, decoded["error"])["code"] != "USAGE_INVALID" {
-		t.Fatalf("notify with observation body must be USAGE_INVALID: %#v", decoded)
-	}
+
 }
 
-func TestProjectionNotifyPullsBoundStateWithoutChangingHEAD(t *testing.T) {
+func TestDatasetProjectionSyncRefreshesStateWithoutChangingHEAD(t *testing.T) {
 	opensearchURL := strings.TrimSpace(os.Getenv("KC_TEST_OPENSEARCH_URL"))
 	if opensearchURL == "" {
 		if os.Getenv("KC_REQUIRE_LIVE_ADAPTERS") == "1" {
@@ -71,7 +67,6 @@ func TestProjectionNotifyPullsBoundStateWithoutChangingHEAD(t *testing.T) {
 	body(t, kc(home, "local", "store", "set", "--index", "opensearch"))
 	body(t, kc(home, "local", "store", "set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repositoryID)
-	adoptLiveAccessFixture(t, home, repositoryID)
 	status := "running"
 	runtime := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/v1/access" {
@@ -90,30 +85,73 @@ func TestProjectionNotifyPullsBoundStateWithoutChangingHEAD(t *testing.T) {
 		})
 	}))
 	t.Cleanup(runtime.Close)
-	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "schema/job.runtime", ""), "--repo", repositoryID, "--command-id", "notify-schema", "--value", `{"entity":"Job","aspect":"runtime","fields":{"status":{"type":"string","access":["text","filter"]}}}`))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "schema/job.runtime", ""), "--repo", repositoryID, "--command-id", "notify-schema", "--value", `{"entity":"Job","aspect":"runtime","fields":{"status":{"type":"string"}}}`))
 	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "job/orders", "/properties"), "--repo", repositoryID, "--command-id", "notify-entity", "--value", `{"name":"orders"}`))
-	putStateBinding(t, home, repositoryID, "job/orders", "runtime", "schema/job.runtime", runtime.URL)
+	descriptor := putStateBinding(t, home, repositoryID, "job/orders", "runtime", "schema/job.runtime", runtime.URL)
+	shared := bindingfixture.Descriptor(runtime.URL)
+	shared["identity"] = "shared"
+	rawDescriptor, err := json.Marshal(shared)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body(t, kc(home, "writer", "put", "urn:kc:object:"+descriptor, "--repo", repositoryID, "--command-id", "shared-descriptor", "--value", string(rawDescriptor)))
+	seedTextDeclaration(t, home, repositoryID, "index/job-state", "schema/job.runtime", "status")
+	seedIndexDeclaration(t, home, repositoryID, "index/job-state", "status-filter", map[string]any{
+		"catalog": "declarative-index/opensearch@2026-10",
+		"inputs":  []any{map[string]any{"from": "schema/job.runtime#/fields/status"}},
+		"build":   map[string]any{"kind": "keyword"}, "uses": []any{"filter"},
+	})
+	body(t, kc(home, "dataset", "define", "--dataset", "jobs", "--revision", "1", "--source", repositoryID))
 	head := asMap(t, body(t, kc(home, "writer", "head", "--repo", repositoryID)))
-	before := head["commit"]
+	before := head["commit"].(string)
+	properties := asMap(t, body(t, kc(home, "read", "urn:kc:object:job/orders#/properties", "--repo", repositoryID, "--commit", before)))
+	stateOf := func(report any) map[string]any {
+		t.Helper()
+		receipt := asMap(t, report)
+		members, ok := receipt["members"].([]any)
+		if receipt["dataset"] != "jobs" || receipt["revision"] != float64(1) || !ok || len(members) != 1 || asMap(t, members[0])["repository"] != repositoryID || asMap(t, members[0])["commit"] != before {
+			t.Fatalf("Dataset sync lost its accepted revision or fixed source vector: %#v", receipt)
+		}
+		state := datasetProjectionState(t, report, repositoryID)
+		revision, _ := state["revision"].(string)
+		digest, _ := state["observationDigest"].(string)
+		if state["mode"] != "rebuild" || revision == "" || digest == "" {
+			t.Fatalf("Dataset sync omitted its published observation facts: %#v", state)
+		}
+		return state
+	}
+	assertObserved := func(report any, expected string) {
+		t.Helper()
+		read := asMap(t, report)
+		observations, ok := read["observations"].([]any)
+		if read["repository"] != repositoryID || read["commit"] != before || asMap(t, read["value"])["status"] != expected || !ok || len(observations) != 1 {
+			t.Fatalf("State read lost its fixed declaration or current value: %#v", read)
+		}
+		observation := asMap(t, observations[0])
+		declarationDigest, _ := observation["declarationDigest"].(string)
+		if observation["declarationCommit"] != before || declarationDigest == "" || asMap(t, observation["basis"])["sourceRevision"] != expected {
+			t.Fatalf("State read lost its new observation basis: %#v", observation)
+		}
+	}
 
-	notified := asMap(t, body(t, kc(home, "operations", "projection", "notice",
-		"--repo", repositoryID, "--object", "job/orders", "--aspect", "runtime")))
-	if notified["repository"] != repositoryID || notified["basisCommit"] != before || notified["revision"] == "" {
-		t.Fatalf("notify must publish State at the unchanged HEAD: %#v want commit %v", notified, before)
-	}
+	notified := stateOf(body(t, kc(home, "operations", "projection", "sync", "--dataset", "jobs", "--revision", "1")))
+	assertObserved(body(t, kc(home, "read", "urn:kc:object:job/orders#/runtime", "--dataset", "jobs", "--revision", "1")), "running")
 	status = "stopped"
-	again := asMap(t, body(t, kc(home, "operations", "projection", "notice",
-		"--repo", repositoryID, "--object", "job/orders", "--aspect", "runtime", "--source-revision", "r2")))
-	if again["revision"] == "" || again["revision"] == notified["revision"] || again["basisCommit"] != before {
-		t.Fatalf("second notice must publish a new observation on the same commit: %#v vs %#v", again, notified)
+	again := stateOf(body(t, kc(home, "operations", "projection", "sync", "--dataset", "jobs", "--revision", "1")))
+	if again["revision"] == notified["revision"] || again["observationDigest"] == notified["observationDigest"] {
+		t.Fatalf("second refresh must publish a new observation on the same commit: %#v vs %#v", again, notified)
 	}
+	assertObserved(body(t, kc(home, "read", "urn:kc:object:job/orders#/runtime", "--dataset", "jobs", "--revision", "1")), "stopped")
 	after := asMap(t, body(t, kc(home, "writer", "head", "--repo", repositoryID)))
 	if after["commit"] != before {
-		t.Fatalf("notify moved Repository HEAD: %#v", after)
+		t.Fatalf("Dataset sync moved Repository HEAD: %#v", after)
+	}
+	if current := asMap(t, body(t, kc(home, "read", "urn:kc:object:job/orders#/properties", "--repo", repositoryID, "--commit", before))); !reflect.DeepEqual(current["value"], properties["value"]) {
+		t.Fatalf("State refresh changed stored Snapshot content: before=%#v after=%#v", properties, current)
 	}
 
 	// Exercise actual HTTP assembly with no background runtime installed. The
-	// explicit notice request may observe its source without configuring a worker.
+	// explicit refresh request may observe its source without configuring a worker.
 	body(t, kc(home, "local", "grant", "bootstrap", "--principal", "operator"))
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
@@ -122,12 +160,21 @@ func TestProjectionNotifyPullsBoundStateWithoutChangingHEAD(t *testing.T) {
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	status = "archived"
-	remote := asMap(t, body(t, kcRemote(t, server.URL, "operator", "operations", "projection", "notice",
-		"--repo", repositoryID, "--object", "job/orders", "--aspect", "runtime")))
-	if remote["basisCommit"] != before || remote["revision"] == "" || remote["revision"] == again["revision"] {
-		t.Fatalf("HTTP notice without a worker runtime lost its local source or fixed basis: %#v", remote)
+	remote := stateOf(body(t, kcRemote(t, server.URL, "operator", "operations", "projection", "sync", "--dataset", "jobs", "--revision", "1")))
+	if remote["revision"] == again["revision"] || remote["observationDigest"] == again["observationDigest"] {
+		t.Fatalf("HTTP refresh without a worker runtime lost its local source or fixed basis: %#v", remote)
+	}
+	assertObserved(body(t, kcRemote(t, server.URL, "operator", "read", "urn:kc:object:job/orders#/runtime", "--dataset", "jobs", "--revision", "1")), "archived")
+	search := asMap(t, postAs(t, server.URL, "/object/v1/search", "operator", map[string]any{"dataset": "jobs", "revision": 1, "equal": []string{"status=archived"}}))
+	hits, ok := search["hits"].([]any)
+	view := asMap(t, search["searchView"])
+	if !ok || len(hits) != 1 || asMap(t, view["snapshots"])[repositoryID] != before || asMap(t, view["projectionRevisions"])[repositoryID] != remote["revision"] {
+		t.Fatalf("search did not use the refreshed observation on the fixed source vector: %#v", search)
 	}
 	if actual := asMap(t, body(t, kcRemote(t, server.URL, "operator", "writer", "head", "--repo", repositoryID))); actual["commit"] != before {
-		t.Fatalf("HTTP notice mutated Snapshot HEAD: %#v", actual)
+		t.Fatalf("HTTP refresh mutated Snapshot HEAD: %#v", actual)
+	}
+	if current := asMap(t, body(t, kcRemote(t, server.URL, "operator", "read", "urn:kc:object:job/orders#/properties", "--repo", repositoryID, "--commit", before))); !reflect.DeepEqual(current["value"], properties["value"]) {
+		t.Fatalf("HTTP State refresh changed stored Snapshot content: before=%#v after=%#v", properties, current)
 	}
 }

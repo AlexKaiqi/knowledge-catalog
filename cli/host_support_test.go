@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	localauth "kc/identity/local"
 	"net/http"
 	"net/http/httptest"
 
@@ -40,7 +41,7 @@ func admissionOverview(cx *inv.Invocation) (snapshotclient.AdmissionResult, erro
 		requestURL = cx.WS.Deployment.Admission.RequestURL
 	}
 	handler := snapshotservice.NewHandler(snapshotservice.Config{
-		Identity: snapshotservice.IdentityOptions{Mode: "local", Local: true},
+		Identity: snapshotservice.IdentityOptions{Mode: "local", Authenticator: localauth.New()},
 		Acquire: func(context.Context, identity.HTTPIdentity, string) (snapshotservice.Resources, func(), error) {
 			return snapshotservice.Resources{Access: access.NewService(admissionRuleStore{home: cx.Home}), RequestURL: requestURL}, func() {}, nil
 		},

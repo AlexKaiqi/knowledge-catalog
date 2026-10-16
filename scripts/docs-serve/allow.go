@@ -5,15 +5,18 @@ import (
 	"strings"
 )
 
-// allowedRel is the closed set docs-serve renders: the repository README and
-// the Markdown under doc/, plus SVG/PNG images under doc/assets/.
+// allowedRel is the closed set docs-serve serves: documentation Markdown,
+// published system Markdown, the product book, and documentation images.
 func allowedRel(rel string) bool {
 	rel = filepath.ToSlash(rel)
 	if rel == "" || strings.Contains(rel, "..") || strings.HasPrefix(rel, "/") {
 		return false
 	}
-	if rel == "README.md" {
+	if rel == "README.md" || rel == "doc/product.html" {
 		return true
+	}
+	if strings.HasPrefix(rel, "systemrepo/content/") {
+		return strings.EqualFold(filepath.Ext(rel), ".md")
 	}
 	if !strings.HasPrefix(rel, "doc/") {
 		return false

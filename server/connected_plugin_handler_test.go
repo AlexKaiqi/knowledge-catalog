@@ -4,9 +4,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"sync/atomic"
 	"testing"
-
-	consumerplugin "kc/discovery/plugin"
 )
 
 func TestConnectedPluginHandlerColdConstructionAndExplanationDoNotProbe(t *testing.T) {
@@ -31,35 +30,39 @@ func TestConnectedPluginHandlerColdConstructionAndExplanationDoNotProbe(t *testi
 func TestConnectedPluginHandlerExplicitStartUsesOneFixedRuntime(t *testing.T) {
 	f := newConnectedHandlerFixture(t)
 	handler := f.handler(t)
-	activation, ok := handler.(interface{ Start() error })
+	activation, ok := handler.(*ManagedHTTPHandler)
 	if !ok {
 		t.Fatal("actual managed handler does not expose explicit runtime activation")
 	}
+	var activations atomic.Int64
+	activate := activation.activate
+	activation.activate = func() error { activations.Add(1); return activate() }
 	metadataBefore := f.metadataReads.Load()
 	if err := activation.Start(); err != nil {
 		t.Fatal(err)
 	}
-	if f.metadataReads.Load() != metadataBefore+1 {
-		t.Fatal("explicit Start did not verify the native connected Repository plugin configuration once")
+	if f.metadataReads.Load() != metadataBefore {
+		t.Fatal("explicit Start read Repository metadata to choose plugins; the deployment installs them")
 	}
-	f.waitForStartedProjection(t, handler)
 	response := fileGatewayRequest(t, handler, f.principal, "/operations/v1/projections:sync", map[string]any{
-		"repository": f.canonical.Repository, "commit": f.canonical.Commit,
+		"dataset": "connected-articles", "revision": 1,
 	})
 	if response.Code != http.StatusOK {
 		t.Fatalf("actual configured plugin preparation failed: status=%d body=%s", response.Code, response.Body.String())
 	}
+	f.waitForStartedProjection(t, handler)
 	first := f.query(t, handler)
 	if f.engineWrites.Load() == 0 {
 		t.Fatal("actual fixed preparation did not publish to the real engine")
 	}
-	f.writeConfig(t, []consumerplugin.PluginSelection{})
-	metadataBefore, writesBefore := f.metadataReads.Load(), f.engineWrites.Load()
+	// Background maintenance is allowed to finish unrelated work here.
+	// Attribute repeated-Start I/O to activation, rather than elapsed counters.
+	activationsBefore := activations.Load()
 	if err := activation.Start(); err != nil {
 		t.Fatal(err)
 	}
-	if f.metadataReads.Load() != metadataBefore || f.engineWrites.Load() != writesBefore {
-		t.Fatal("repeated Start reread Repository configuration or rebuilt the actual projection")
+	if activations.Load() != activationsBefore {
+		t.Fatal("repeated Start reentered runtime activation")
 	}
 	second := f.query(t, handler)
 	if !reflect.DeepEqual(first.SearchView, second.SearchView) || !reflect.DeepEqual(first.Hits, second.Hits) {
@@ -68,7 +71,8 @@ func TestConnectedPluginHandlerExplicitStartUsesOneFixedRuntime(t *testing.T) {
 	if err := handler.(interface{ Close() error }).Close(); err != nil {
 		t.Fatal(err)
 	}
-	metadataBefore, writesBefore = f.metadataReads.Load(), f.engineWrites.Load()
+	metadataBefore = f.metadataReads.Load()
+	writesBefore := f.engineWrites.Load()
 	if err := activation.Start(); err == nil {
 		t.Fatal("closed handler accepted runtime activation")
 	}

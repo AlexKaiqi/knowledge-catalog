@@ -22,7 +22,8 @@ test('original setup forms preserve the fixed console marker with explicit heade
 });
 
 test('public login configuration survives an expired Dataset identity without keeping caller proof', async () => {
-    userProof.set({mode: 'gitea', accessToken: 'previous-user-proof'});
+    userProof.bind({mode: 'taihu', localAssertion: false, accepts: ['Authorization']});
+    userProof.set({mode: 'taihu', accessToken: 'previous-user-proof'});
     let complete!: (response: Response) => void;
     const fetcher = vi.fn(() => new Promise<Response>(resolve => {complete = resolve;}));
     vi.stubGlobal('fetch', fetcher);

@@ -3,6 +3,7 @@ package liveaccess
 import (
 	"context"
 	"kc/kernel"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -44,14 +45,44 @@ func credentialOrigin(target string) (string, error) {
 	if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
 		return "", kernel.Fail(kernel.ErrUsageInvalid, "LiveAccess credential target requires an HTTP origin")
 	}
-	return strings.ToLower(u.Scheme + "://" + u.Host), nil
+	origin, ok := canonicalOrigin(u)
+	if !ok {
+		return "", kernel.Fail(kernel.ErrUsageInvalid, "LiveAccess credential target requires an HTTP origin")
+	}
+	return origin, nil
 }
 
+// canonicalOrigin is the exact comparison key: scheme, host and port, with the
+// scheme's default port filled in. No wildcard, suffix or scheme upgrade.
+func canonicalOrigin(u *url.URL) (string, bool) {
+	if u == nil {
+		return "", false
+	}
+	scheme, host, port := strings.ToLower(u.Scheme), strings.ToLower(u.Hostname()), u.Port()
+	if host == "" {
+		return "", false
+	}
+	if port == "" {
+		switch scheme {
+		case "http":
+			port = "80"
+		case "https":
+			port = "443"
+		default:
+			return "", false
+		}
+	}
+	return scheme + "://" + net.JoinHostPort(host, port), true
+}
+
+// perform sends caller proof only to an exactly trusted origin. Any other
+// origin is still called, without proof: a descriptor can name its source but
+// cannot widen the deployment's proof audience.
 func (h *HTTPStateLookup) perform(ctx context.Context, request *http.Request) (*http.Response, error) {
 	creds := callerCredentialsFromContext(ctx)
-	origin := strings.ToLower(request.URL.Scheme + "://" + request.URL.Host)
-	if (creds.Authorization != "" || creds.TaiIdentity != "") && !h.credentialOrigins[origin] {
-		return nil, kernel.Fail(kernel.ErrForbidden, "LiveAccess target has no applicable trusted authentication")
+	origin, ok := canonicalOrigin(request.URL)
+	if !ok {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "LiveAccess target requires an HTTP origin")
 	}
 	if h.credentialOrigins[origin] {
 		applyCallerCredentials(request, creds)
@@ -61,7 +92,8 @@ func (h *HTTPStateLookup) perform(ctx context.Context, request *http.Request) (*
 	previous := client.CheckRedirect
 	client.CheckRedirect = func(next *http.Request, via []*http.Request) error {
 		validTarget := func() bool {
-			return next.URL != nil && next.URL.User == nil && (next.Host == "" || strings.EqualFold(next.Host, authority)) && strings.ToLower(next.URL.Scheme+"://"+next.URL.Host) == origin
+			target, ok := canonicalOrigin(next.URL)
+			return ok && next.URL.User == nil && (next.Host == "" || strings.EqualFold(next.Host, authority)) && target == origin
 		}
 		if !validTarget() {
 			return kernel.Fail(kernel.ErrForbidden, "LiveAccess redirect changes the authentication target")

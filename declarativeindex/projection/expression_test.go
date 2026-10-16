@@ -23,10 +23,12 @@ func TestSupersetResidualEvaluatesNestedAllAnyExpression(t *testing.T) {
 	head := testfixture.PutAt(t, repo, root, []objectmodel.Operation{
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/table.structure"}, Value: map[string]any{
 			"entity": "Table", "aspect": "structure", "fields": map[string]any{
-				"db":    map[string]any{"type": "string", "access": []any{"filter"}},
-				"owner": map[string]any{"type": "string", "access": []any{"filter"}},
+				"db":    map[string]any{"type": "string"},
+				"owner": map[string]any{"type": "string"},
 			},
 		}},
+		testkit.IndexField("schema/table.structure", "db", "keyword"),
+		testkit.IndexField("schema/table.structure", "owner", "keyword"),
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/no", AspectName: "structure"}, Value: map[string]any{"db": "other", "owner": "alice"}},
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/a", AspectName: "structure"}, Value: map[string]any{"db": "tl", "owner": "alice"}},
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/b", AspectName: "structure"}, Value: map[string]any{"db": "prod", "owner": "bob"}},
@@ -59,9 +61,10 @@ func TestSupersetResidualContainsKeepsSubstringHits(t *testing.T) {
 	head := testfixture.PutAt(t, repo, root, []objectmodel.Operation{
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/table.structure"}, Value: map[string]any{
 			"entity": "Table", "aspect": "structure", "fields": map[string]any{
-				"db": map[string]any{"type": "string", "access": []any{"filter"}},
+				"db": map[string]any{"type": "string"},
 			},
 		}},
+		testkit.IndexField("schema/table.structure", "db", "keyword"),
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/a", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/b", AspectName: "structure"}, Value: map[string]any{"db": "dw"}},
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/c", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
@@ -94,9 +97,10 @@ func TestSupersetResidualContainsTreatsWildcardMetaAsLiteral(t *testing.T) {
 	head := testfixture.PutAt(t, repo, root, []objectmodel.Operation{
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/table.structure"}, Value: map[string]any{
 			"entity": "Table", "aspect": "structure", "fields": map[string]any{
-				"db": map[string]any{"type": "string", "access": []any{"filter"}},
+				"db": map[string]any{"type": "string"},
 			},
 		}},
+		testkit.IndexField("schema/table.structure", "db", "keyword"),
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/star", AspectName: "structure"}, Value: map[string]any{"db": "prod*east"}},
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/dash", AspectName: "structure"}, Value: map[string]any{"db": "prod-east"}},
 	})
@@ -122,9 +126,10 @@ func TestExpressionSearchFailsClosedWithoutCompositionProof(t *testing.T) {
 	head := testfixture.PutAt(t, repo, root, []objectmodel.Operation{
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/table.structure"}, Value: map[string]any{
 			"entity": "Table", "aspect": "structure", "fields": map[string]any{
-				"db": map[string]any{"type": "string", "access": []any{"filter"}},
+				"db": map[string]any{"type": "string"},
 			},
 		}},
+		testkit.IndexField("schema/table.structure", "db", "keyword"),
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/a", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
 	})
 	engine := &staleCandidateEngine{}

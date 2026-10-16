@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,22 +10,16 @@ import (
 
 	apphome "kc/home"
 	"kc/identity"
+	"kc/identity/identitytest"
 	"kc/internal/testkit"
 	inv "kc/invocation"
-	"kc/kernel"
 	"kc/snapshot"
 	"kc/snapshot/access"
 )
 
-type nativeLocalTestIdentity struct{ origin string }
-
-func (a nativeLocalTestIdentity) Name() string { return "lakefs" }
-func (a nativeLocalTestIdentity) Authenticate(_ context.Context, h http.Header) (identity.HTTPIdentity, error) {
-	if h.Get("Authorization") != "Bearer native-caller-proof" {
-		return identity.HTTPIdentity{}, kernel.Fail(kernel.ErrUnauthenticated, "missing native caller proof")
-	}
-	return identity.HTTPIdentity{Principal: "alice", User: &identity.VerifiedUser{Username: "alice", Provider: "lakefs", Issuer: a.origin, Subject: "alice"}}, nil
-}
+// verifiedCallerTestIdentity stands in for an external identity provider that
+// accepts the caller's own credential.
+var verifiedCallerTestIdentity = identitytest.Bearer("verified", map[string]identity.HTTPIdentity{"Bearer caller-proof": {Principal: "alice"}})
 
 func localNativeFacadeForTest(t *testing.T, mode, credential string, granted bool, upstream http.Handler) (*httpFacade, *atomic.Int32) {
 	t.Helper()
@@ -83,7 +76,9 @@ func TestLocalNativeFacadeRejectsMissingIdentityCredentialAndRepositoryGrant(t *
 		{"missing-storage-proof", "local", "", "alice", true, http.StatusServiceUnavailable},
 		{"repository-denied", "local", "storage-key:private-test-secret", "alice", false, http.StatusForbidden},
 		{"unconfigured", "unconfigured", "storage-key:private-test-secret", "alice", true, http.StatusUnauthorized},
-		{"implicit-test-seam", "", "storage-key:private-test-secret", "alice", true, http.StatusForbidden},
+		// The implicit seam has no private storage credential and never
+		// falls back to caller proof.
+		{"implicit-test-seam", "", "storage-key:private-test-secret", "alice", true, http.StatusServiceUnavailable},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			facade, calls := localNativeFacadeForTest(t, tc.mode, tc.credential, tc.grant, http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Error("rejected native request reached private storage") }))
@@ -132,23 +127,31 @@ func TestExplicitLocalNativeStartupUsesServiceIdentityWithoutVendorSetup(t *test
 	}
 }
 
-func TestLegacyLakeFSNativeFacadeKeepsCallerProof(t *testing.T) {
-	facade, calls := localNativeFacadeForTest(t, "lakefs", "storage-key:private-test-secret", true, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer native-caller-proof" {
-			t.Error("legacy lakeFS caller proof was replaced with service proof")
+// lakeFS is storage, not an identity provider: a verified caller's own
+// credential (or a lakeFS session cookie) is never forwarded to it.
+func TestVerifiedCallerProofIsNeverForwardedToStorage(t *testing.T) {
+	facade, calls := localNativeFacadeForTest(t, "verified", "storage-key:private-test-secret", true, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		key, secret, ok := r.BasicAuth()
+		if !ok || key != "storage-key" || secret != "private-test-secret" || r.Header.Get("Cookie") != "" {
+			t.Errorf("storage received caller proof: Authorization=%q Cookie=%q", r.Header.Get("Authorization"), r.Header.Get("Cookie"))
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"id": "published"})
 	}))
-	facade.options.Authenticator = nativeLocalTestIdentity{origin: facade.options.NativeAPIOrigin}
-	if facade.snapshotNativeCredential() != nil {
-		t.Fatal("legacy native identity acquired a service credential")
-	}
+	facade.options.Authenticator = verifiedCallerTestIdentity
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/repositories/alpha/branches/main/commits", strings.NewReader(`{}`))
-	request.Header.Set("Authorization", "Bearer native-caller-proof")
+	request.Header.Set("Authorization", "Bearer caller-proof")
+	request.Header.Set("Cookie", "internal_auth_session=caller-lakefs-session")
 	response := httptest.NewRecorder()
 	facade.snapshotStoreService().ServeHTTP(response, request)
 	if response.Code != http.StatusOK || calls.Load() != 1 {
-		t.Fatalf("legacy native proof changed: HTTP %d calls=%d", response.Code, calls.Load())
+		t.Fatalf("verified caller write: HTTP %d calls=%d %s", response.Code, calls.Load(), response.Body.String())
+	}
+	facade.options.AuthMode = ""
+	t.Setenv(snapshot.LakeFSCredentialEnv, "")
+	response = httptest.NewRecorder()
+	facade.snapshotStoreService().ServeHTTP(response, request)
+	if response.Code != http.StatusServiceUnavailable || calls.Load() != 1 {
+		t.Fatalf("missing service credential fell back to caller proof: HTTP %d calls=%d", response.Code, calls.Load())
 	}
 }

@@ -1,0 +1,45 @@
+services:
+  gateway:
+    image: python:3.12-slim
+    entrypoint: ["python3", "/opt/gateway.py"]
+    environment:
+      ZK_PRINCIPAL: ${ZK_PRINCIPAL:?ZK_PRINCIPAL}
+      KC_ZK_UPSTREAM_URL: http://kc-upstream:7380
+      ZK_MODEL_BASE_URL: ${ZK_MODEL_BASE_URL:?ZK_MODEL_BASE_URL}
+      ZK_MODEL_API_KEY: ${ZK_MODEL_API_KEY:?ZK_MODEL_API_KEY}
+    volumes:
+      - ./gateway.py:/opt/gateway.py:ro
+    networks:
+      sealed:
+        aliases: [kc-server]
+      walk: {}
+      egress: {}
+    read_only: true
+    user: "65534:65534"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+  agent:
+    image: ${KC_ZK_AGENT_IMAGE:-kc-zk-agent:local}
+    depends_on: [gateway]
+    networks: [sealed]
+    environment:
+      ZK_PRINCIPAL: ${ZK_PRINCIPAL:?ZK_PRINCIPAL}
+      ZK_MODEL_BASE_URL: http://gateway:8080
+      ZK_MODEL_ID: ${ZK_MODEL_ID:-deepseek-v4.1-flash}
+    volumes:
+      - ${ZK_RUN_DIR:?ZK_RUN_DIR}/sessions:/runs/sessions
+      - ${ZK_RUN_DIR}/work:/work
+      - ${ZK_RUN_DIR}/input:/work/materials:ro
+    tmpfs:
+      - /tmp:uid=1000,gid=1000,mode=1777
+      - /home/node:uid=1000,gid=1000,mode=0700
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+networks:
+  sealed:
+    internal: true
+  walk:
+    external: true
+    name: ${KC_ZK_NETWORK:-kc-zk-snapshot_default}
+  egress: {}

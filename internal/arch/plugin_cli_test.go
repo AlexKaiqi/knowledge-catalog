@@ -6,7 +6,7 @@ import "testing"
 // service or plugin runtime into independently adopted module CLIs.
 func TestPluginCLIHasNoRuntimeImplementationDependencies(t *testing.T) {
 	graph := loadGraph(t)
-	for _, owner := range []string{"discovery/cli", "declarativeindex/cli"} {
+	for _, owner := range []string{"discovery/cli", "declarativeindex/cli", "declarativeindex/capability"} {
 		reachable := graph.reachable(owner)
 		for _, denied := range []string{
 			"home", "invocation", "server", "discovery/service", "discovery/plugin", "discovery/projection",

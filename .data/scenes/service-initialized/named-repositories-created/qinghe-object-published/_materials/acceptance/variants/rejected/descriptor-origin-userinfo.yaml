@@ -1,0 +1,12 @@
+---
+object_id: ops/userinfo-monitor
+---
+kind: ResourceDescriptor
+name: Monitor with credentials in origin
+origin: http://scene:acceptance-secret@live-origin:7400
+mode: state
+runtime: http
+protocol: resource-access/v1
+access:
+  lookup:
+    call: lookup

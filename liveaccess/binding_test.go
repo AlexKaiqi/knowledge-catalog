@@ -19,8 +19,9 @@ func publishHealthBinding(t *testing.T, s testkit.Setup, origin string) kernel.C
 		Operations: []objectmodel.Operation{
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/service.health"}, Value: map[string]any{
 				"entity": "Service", "aspect": "health",
-				"fields": map[string]any{"status": map[string]any{"type": "string", "access": []any{"filter"}}},
+				"fields": map[string]any{"status": map[string]any{"type": "string"}},
 			}},
+			testkit.IndexField("schema/service.health", "status", "keyword"),
 			bindingfixture.PutDescriptor("resource/health", bindingfixture.Descriptor(origin)),
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "service/orders", AspectName: "properties"}, Value: map[string]any{"name": "orders"}},
 			bindingfixture.PutAspect("service/orders", "health", "schema/service.health", "resource/health"),

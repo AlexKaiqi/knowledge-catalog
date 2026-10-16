@@ -1,0 +1,16 @@
+# Dataset 定义：sales-semantic 显式手动，其余默认跟随。
+dataset: sales-analysis
+sources:
+  - repository: table-meta
+    selector: refs/heads/main
+    path: tables
+    subPath: tables
+  - repository: sales-semantic
+    selector: refs/heads/main
+    path: metrics
+    subPath: metrics
+    follow: manual
+  - repository: sales-analysis
+    selector: refs/heads/main
+    path: indexes
+    subPath: indexes

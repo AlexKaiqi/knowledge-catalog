@@ -29,6 +29,23 @@ func (e DatasetRelationsExecutor) Execute(ctx context.Context, request retrieval
 	// The endpoint is an object ID; it need not be held in the Dataset. The
 	// scope applies to the stored relations, checked per candidate below.
 	pin := e.Serving.Pin()
+	if scoped, ok := e.Projection.(datasetProjectionScope); ok {
+		ids := make([]kernel.RepositoryID, 0, len(pin.Repositories))
+		for id := range pin.Repositories {
+			ids = append(ids, id)
+		}
+		sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+		if len(ids) == 0 {
+			return retrieval.RelationPage{}, kernel.Fail(kernel.ErrUsageInvalid, "Dataset has no relation sources")
+		}
+		repo, err := scoped.DatasetMember(func(id kernel.RepositoryID) (objectmodel.Repository, error) {
+			return e.Repositories.Require(id, kernel.ErrCapabilityUnsatisfied)
+		}, pin, ids[0])
+		if err != nil {
+			return retrieval.RelationPage{}, err
+		}
+		return e.Projection.RelationsAtContext(ctx, repo, pin.Repositories[ids[0]], request)
+	}
 	ctx, cancel := index.WithSearchBudget(ctx, index.SearchBudget{})
 	defer cancel()
 	ctx = index.WithCandidateScope(ctx, kernel.CanonicalDigest(pin.Items), func(id kernel.RepositoryID, at kernel.CommitID, object objectmodel.ObjectID) (bool, error) {
@@ -72,7 +89,9 @@ func (e DatasetRelationsExecutor) Execute(ctx context.Context, request retrieval
 		if len(out.Hits) >= limit {
 			break
 		}
-		repo, err := e.Repositories.Require(id, kernel.ErrCapabilityUnsatisfied)
+		repo, err := datasetMember(e.Projection, func(id kernel.RepositoryID) (objectmodel.Repository, error) {
+			return e.Repositories.Require(id, kernel.ErrCapabilityUnsatisfied)
+		}, e.Serving, id)
 		if err != nil {
 			return retrieval.RelationPage{}, err
 		}

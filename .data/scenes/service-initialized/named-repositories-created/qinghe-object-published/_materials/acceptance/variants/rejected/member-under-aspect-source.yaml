@@ -1,0 +1,9 @@
+---
+object_id: table/shop.orders
+aspect_name: live-stats
+member_key: note
+kind: Member
+schema_ref: schema/table.live-stats
+---
+table: shop.orders
+rowCount: 0

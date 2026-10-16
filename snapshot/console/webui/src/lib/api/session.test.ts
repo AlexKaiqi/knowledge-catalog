@@ -3,7 +3,7 @@ import { Discovery, session } from './session';
 import { kc } from './kc';
 import { auth, AuthenticationError } from './index';
 
-const discovery: Discovery = { mode: 'lakefs', localAssertion: false, accepts: ['Cookie'] };
+const discovery: Discovery = { mode: 'taihu', localAssertion: false, accepts: ['Authorization'] };
 const response = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
 const key = () => `kc.ui.session.v1:${window.location.origin}`;
 afterEach(() => { session.logout(); window.localStorage.clear(); window.sessionStorage.clear(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
@@ -13,7 +13,7 @@ test('entering Dataset verifies the original cookie without storing or forwardin
     vi.stubGlobal('fetch', fetcher);
     window.localStorage.setItem('user', JSON.stringify({id: 'previous-user'}));
     await session.restore(discovery);
-    expect(session.get()).toEqual({mode: 'lakefs', principal: 'alice'});
+    expect(session.get()).toEqual({mode: 'taihu', principal: 'alice'});
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(fetcher.mock.calls[0][0]).toBe('/identity/v1/whoami');
     expect(fetcher.mock.calls[0][1]).toMatchObject({credentials: 'same-origin', redirect: 'error', cache: 'no-store'});
@@ -112,8 +112,10 @@ test('an active authentication refusal clears the console identity', async () =>
 
 test.each([
     {mode: 'local', localAssertion: true, accepts: ['X-Kc-As']},
-    {mode: 'lakefs', localAssertion: false, accepts: ['Authorization']},
-])('a $mode deployment without the native cookie bridge reports configuration failure', async mismatch => {
+    {mode: 'lakefs', localAssertion: false, accepts: ['Cookie']},
+    {mode: 'external', localAssertion: false, accepts: []},
+    {mode: 'taihu', localAssertion: true, accepts: ['Authorization']},
+])('a $mode deployment without a verifying shared login reports configuration failure', async mismatch => {
     const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher);
     await expect(session.restore(mismatch)).rejects.toMatchObject({code: 'PRECONDITION_FAILED'});
     expect(fetcher).not.toHaveBeenCalled();
@@ -191,7 +193,7 @@ test('a native profile arriving after logout cannot restore the cleared identity
     expect(fetcher).toHaveBeenCalledTimes(2);
 });
 
-test.each(['taihu', 'gitea'])('a %s console reuses existing user proof and still verifies whoami', async mode => {
+test.each(['taihu'])('a %s console reuses existing user proof and still verifies whoami', async mode => {
     const fetcher = vi.fn(async (_path: string, options?: RequestInit) => response(options?.headers && new Headers(options.headers).get('Authorization') === 'Bearer issued-user-token' ? {principal: 'alice'} : {error: {code: 'UNAUTHENTICATED'}}, options?.headers && new Headers(options.headers).get('Authorization') ? 200 : 401));
     vi.stubGlobal('fetch', fetcher);
     const configured = {mode, localAssertion: false, accepts: ['Authorization']};

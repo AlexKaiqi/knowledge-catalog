@@ -13,11 +13,9 @@ fields:
   relationType:
     type: string
     required: true
-    access: [text, filter]
   direction:
     type: string
     required: true
-    access: [filter]
   endpoints:
     type: relation_endpoint_list
     required: true

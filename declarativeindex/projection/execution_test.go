@@ -22,8 +22,9 @@ func TestSearchBudgetStopsResidualPagesAndCanResume(t *testing.T) {
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
 	head := testfixture.PutAt(t, repo, root, []objectmodel.Operation{
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/item"}, Value: map[string]any{
-			"entity": "Item", "fields": map[string]any{"status": map[string]any{"type": "string", "access": []any{"filter"}}},
+			"entity": "Item", "fields": map[string]any{"status": map[string]any{"type": "string"}},
 		}},
+		testkit.IndexField("schema/item", "status", "keyword"),
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "item/a"}, Value: map[string]any{"status": "no"}, SchemaRef: "schema/item"},
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "item/b"}, Value: map[string]any{"status": "no"}, SchemaRef: "schema/item"},
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "item/c"}, Value: map[string]any{"status": "yes"}, SchemaRef: "schema/item"},
@@ -63,7 +64,7 @@ func (e *cancellableEngine) RetrieveContext(ctx context.Context, _ ports.Retriev
 func TestSearchPropagatesCancellationToContextProvider(t *testing.T) {
 	repo := testfixture.MakeIndexRepository(t, "kr://acme/public/cancel-search")
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
-	head := testfixture.PutAt(t, repo, root, []objectmodel.Operation{testfixture.PolicyBodySchema()})
+	head := testfixture.PutAt(t, repo, root, []objectmodel.Operation{testfixture.PolicyBodySchema(), testfixture.PolicyBodyIndex()})
 	engine := &cancellableEngine{}
 	idx := index.NewIndexEngine("", func(string, kernel.RepositoryID) (ports.Engine, error) { return engine, nil })
 	t.Cleanup(func() { _ = idx.Close() })
@@ -81,7 +82,7 @@ func TestSearchPropagatesCancellationToContextProvider(t *testing.T) {
 func TestSearchTimeBudgetReturnsResumablePartial(t *testing.T) {
 	repo := testfixture.MakeIndexRepository(t, "kr://acme/public/deadline-search")
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
-	head := testfixture.PutAt(t, repo, root, []objectmodel.Operation{testfixture.PolicyBodySchema()})
+	head := testfixture.PutAt(t, repo, root, []objectmodel.Operation{testfixture.PolicyBodySchema(), testfixture.PolicyBodyIndex()})
 	engine := &cancellableEngine{}
 	idx := index.NewIndexEngine("", func(string, kernel.RepositoryID) (ports.Engine, error) { return engine, nil })
 	t.Cleanup(func() { _ = idx.Close() })
@@ -105,7 +106,7 @@ func (*unverifiedExpressionEngine) ProbeExpression(retrieval.SearchExpr, retriev
 func TestSupersetMatchWithoutAnalysisProofFailsClosed(t *testing.T) {
 	repo := testfixture.MakeIndexRepository(t, "kr://acme/public/residual-analysis")
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
-	head := testfixture.PutAt(t, repo, root, []objectmodel.Operation{testfixture.PolicyBodySchema()})
+	head := testfixture.PutAt(t, repo, root, []objectmodel.Operation{testfixture.PolicyBodySchema(), testfixture.PolicyBodyIndex()})
 	engine := &unverifiedExpressionEngine{&supersetEngine{}}
 	idx := index.NewIndexEngine("", func(string, kernel.RepositoryID) (ports.Engine, error) { return engine, nil })
 	t.Cleanup(func() { _ = idx.Close() })
@@ -134,7 +135,7 @@ func (e *cancellableMetaEngine) LoadMetaContext(ctx context.Context) (ports.Meta
 func TestSearchCancellationIncludesMetadataRead(t *testing.T) {
 	repo := testfixture.MakeIndexRepository(t, "kr://acme/public/cancel-meta")
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
-	commit := testfixture.PutAt(t, repo, root, []objectmodel.Operation{testfixture.PolicyBodySchema()})
+	commit := testfixture.PutAt(t, repo, root, []objectmodel.Operation{testfixture.PolicyBodySchema(), testfixture.PolicyBodyIndex()})
 	engine := &cancellableMetaEngine{}
 	idx := index.NewIndexEngine("", func(string, kernel.RepositoryID) (ports.Engine, error) { return engine, nil })
 	defer idx.Close()
@@ -176,7 +177,7 @@ func TestRelationTimeBudgetReturnsResumableBoundary(t *testing.T) {
 func TestSearchPreparationTimeoutIsTemporaryUnavailable(t *testing.T) {
 	repo := testfixture.MakeIndexRepository(t, "kr://acme/public/timeout-meta")
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
-	commit := testfixture.PutAt(t, repo, root, []objectmodel.Operation{testfixture.PolicyBodySchema()})
+	commit := testfixture.PutAt(t, repo, root, []objectmodel.Operation{testfixture.PolicyBodySchema(), testfixture.PolicyBodyIndex()})
 	engine := &cancellableMetaEngine{}
 	idx := index.NewIndexEngine("", func(string, kernel.RepositoryID) (ports.Engine, error) { return engine, nil })
 	defer idx.Close()

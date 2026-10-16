@@ -52,12 +52,11 @@ func TestSearchKeepsCandidateBasisWhenWriterAdvancesBeforeObjectRead(t *testing.
 	s := testkit.NewSetup(t, "kr://regression/search-fixed-basis")
 	schemaAddress := objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/article"}
 	article := objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "article/original"}
-	schema := func(access string) map[string]any {
-		return map[string]any{"entity": "Article", "fields": map[string]any{
-			"body":  map[string]any{"type": "string", "access": []any{access}},
-			"stage": map[string]any{"type": "string"},
-		}}
-	}
+	schema := map[string]any{"entity": "Article", "fields": map[string]any{
+		"body":  map[string]any{"type": "string"},
+		"stage": map[string]any{"type": "string"},
+	}}
+	bodyText, bodyFilter := testkit.IndexText("schema/article", "body"), testkit.IndexField("schema/article", "body", "keyword")
 	commit := func(command string, base kernel.CommitID, operations ...objectmodel.Operation) kernel.CommitID {
 		t.Helper()
 		receipt, err := s.Writer.Commit(command, objectmodel.CommitChangeSet{
@@ -71,7 +70,7 @@ func TestSearchKeepsCandidateBasisWhenWriterAdvancesBeforeObjectRead(t *testing.
 	}
 	originalValue := map[string]any{"body": "runbook original", "stage": "a"}
 	a := commit("publish-search-a", s.RootCommitID,
-		objectmodel.Operation{Op: objectmodel.OpPut, Address: schemaAddress, Value: schema("text")},
+		objectmodel.Operation{Op: objectmodel.OpPut, Address: schemaAddress, Value: schema}, bodyText,
 		objectmodel.Operation{Op: objectmodel.OpPut, Address: article, SchemaRef: string(schemaAddress.ObjectID), Value: originalValue},
 	)
 	engine := &advancingCandidateEngine{staleCandidateEngine: staleCandidateEngine{
@@ -95,7 +94,7 @@ func TestSearchKeepsCandidateBasisWhenWriterAdvancesBeforeObjectRead(t *testing.
 		}
 		order = append(order, "candidate:a")
 		b = commit("advance-during-search-b", a,
-			objectmodel.Operation{Op: objectmodel.OpPut, Address: schemaAddress, Value: schema("filter")},
+			objectmodel.Operation{Op: objectmodel.OpRemove, Address: bodyText.Address}, bodyFilter,
 			objectmodel.Operation{Op: objectmodel.OpPut, Address: article, SchemaRef: string(schemaAddress.ObjectID), Value: map[string]any{"body": "retired content", "stage": "b"}},
 			objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "article/new"}, SchemaRef: string(schemaAddress.ObjectID), Value: map[string]any{"body": "runbook new", "stage": "b"}},
 		)
@@ -124,18 +123,17 @@ func TestSearchKeepsCandidateBasisWhenWriterAdvancesBeforeObjectRead(t *testing.
 		t.Fatalf("candidate a was combined with later content or version: %#v", hit)
 	}
 	// Prove the concurrent Writer change was material: HEAD, object value,
-	// Schema access and object membership all differ at b.
+	// index declaration and object membership all differ at b.
 	latest, err := s.Repo.Read(article.ObjectID, b)
 	if err != nil || latest.Value.(map[string]any)["stage"] != "b" || reflect.DeepEqual(latest.Value, originalValue) {
 		t.Fatalf("b did not replace the object: %#v %v", latest, err)
 	}
-	latestSchema, err := s.Repo.Read(schemaAddress.ObjectID, b)
-	if err != nil || !reflect.DeepEqual(latestSchema.Value, schema("filter")) {
-		t.Fatalf("b did not replace the Schema: %#v %v", latestSchema, err)
+	if _, err := s.Repo.ReadAddress(bodyText.Address, b); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
+		t.Fatalf("b did not retire the text declaration member: %v", err)
 	}
-	specB, err := retrieval.AccessSpecFromAdoptions(s.Repo, b, nil)
+	specB, err := retrieval.AccessSpecForRepository(s.Repo, b)
 	if err != nil || specB.AccessDigest == specA.AccessDigest {
-		t.Fatalf("Schema change did not alter the query contract: old=%#v new=%#v error=%v", specA, specB, err)
+		t.Fatalf("declaration change did not alter the query contract: old=%#v new=%#v error=%v", specA, specB, err)
 	}
 	added, err := s.Repo.Read("article/new", b)
 	if err != nil || added.Value.(map[string]any)["body"] != "runbook new" {

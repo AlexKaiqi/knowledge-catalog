@@ -92,11 +92,7 @@ func runRemoteDesiredCommit(ctx context.Context, client *kcclient.Client, flags 
 	}
 	changeSet, _ := writer.OmitUnchanged(preview.ChangeSet, current)
 	if len(changeSet.Operations) == 0 {
-		if receipt, ok, _ := remoteReceipt(ctx, client, commandID, options); ok {
-			receipt.Disposition = writer.DispositionReplayed
-			return receipt, nil
-		}
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "desired state already matches the current version")
+		return replayRemoteDesired(ctx, client, flags, commandID, preview.ChangeSet, options)
 	}
 	return remoteCommitWithReceiptRecovery(ctx, client, repository,
 		kcclient.CommitRequest{CommandID: commandID, ChangeSet: changeSet}, options, objectcli.ReceiptWaitBudget())

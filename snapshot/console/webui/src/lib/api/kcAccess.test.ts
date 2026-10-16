@@ -5,7 +5,7 @@ import {session} from './session';
 afterEach(() => {session.logout(); localStorage.clear(); vi.unstubAllGlobals();});
 async function reply(value: unknown, status = 200) {
     vi.stubGlobal('fetch', vi.fn(async (path: string) => new Response(JSON.stringify(path === '/identity/v1/whoami' ? {principal: 'alice'} : value), {status: path === '/identity/v1/whoami' ? 200 : status})));
-    await session.restore({mode: 'lakefs', localAssertion: false, accepts: ['Cookie']});
+    await session.restore({mode: 'taihu', localAssertion: false, accepts: ['Authorization']});
 }
 
 test.each([
@@ -35,6 +35,6 @@ test('the public legacy grant shape may omit actions without becoming an unrestr
 
 test.each(['catalog', 'Catalog', 'CATALOG'])('retired %s grant qualifiers cannot become service-wide rules', async key => {
     vi.stubGlobal('fetch', vi.fn(async (path: string) => new Response(JSON.stringify(path === '/identity/v1/whoami' ? {principal: 'alice'} : {rules: [{id: 'old', principal: 'alice', actions: ['file.read'], [key]: 'retired'}]}), {status: 200})));
-    await session.restore({mode: 'lakefs', localAssertion: false, accepts: ['Cookie']});
+    await session.restore({mode: 'taihu', localAssertion: false, accepts: ['Authorization']});
     await expect(kc.grants()).rejects.toMatchObject({status: 502});
 });

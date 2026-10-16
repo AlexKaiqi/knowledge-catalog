@@ -1,0 +1,10 @@
+---
+object_id: schema/table.index
+---
+entity: Table
+aspect: index
+pattern: record
+fields:
+  physicalIndexes:
+    type: string
+    required: true

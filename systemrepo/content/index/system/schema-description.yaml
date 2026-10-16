@@ -1,0 +1,22 @@
+---
+object_id: index/system
+aspect_name: index
+member_key: schema-description
+kind: Member
+path_hint: index/system/schema-description.yaml
+schema_ref: schema/core/index-declaration/v1
+---
+{
+  "catalog": "declarative-index/opensearch@2026-10",
+  "inputs": [
+    {
+      "from": "schema/meta/schema-definition/v1#/fields/description"
+    }
+  ],
+  "build": {
+    "kind": "text"
+  },
+  "uses": [
+    "text"
+  ]
+}

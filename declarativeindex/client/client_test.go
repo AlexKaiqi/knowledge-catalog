@@ -15,7 +15,7 @@ func (f transportFunc) Do(ctx context.Context, audience string, r *http.Request)
 	return f(ctx, audience, r)
 }
 
-func TestMaintenanceTransportPreservesFixedBasisAndNoticeCoordinates(t *testing.T) {
+func TestMaintenanceTransportPreservesFixedDatasetRevision(t *testing.T) {
 	paths := []string{}
 	remote, err := New(Config{BaseURL: "https://example.test", Transport: transportFunc(func(_ context.Context, audience string, r *http.Request) (*http.Response, error) {
 		if audience != "https://example.test" || r.Method != "POST" || r.Header.Get("X-Kc-Request-Id") != "maintenance" {
@@ -26,16 +26,8 @@ func TestMaintenanceTransportPreservesFixedBasisAndNoticeCoordinates(t *testing.
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Fatal(err)
 		}
-		if body["repository"] != "kr://chosen" || body["dataset"] != nil {
-			t.Fatalf("maintenance source changed: %#v", body)
-		}
-		if strings.HasSuffix(r.URL.Path, ":notice") {
-			address := body["address"].(map[string]any)
-			if address["kind"] != "Aspect" || address["objectId"] != "job/orders" || address["aspectName"] != "runtime" || body["sourceRevision"] != "rev-2" || body["value"] != nil {
-				t.Fatalf("notice coordinates/payload changed: %#v", body)
-			}
-		} else if body["commit"] != "old" || body["ref"] != nil {
-			t.Fatalf("fixed basis changed: %#v", body)
+		if body["dataset"] != "chosen" || body["revision"] != float64(2) || body["repository"] != nil || body["commit"] != nil || body["ref"] != nil {
+			t.Fatalf("Dataset maintenance scope changed: %#v", body)
 		}
 		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(`{"basisCommit":"old","state":{"revision":"rev-2"}}`))}, nil
 	})})
@@ -44,16 +36,13 @@ func TestMaintenanceTransportPreservesFixedBasisAndNoticeCoordinates(t *testing.
 	}
 	var output any
 	o := RequestOptions{RequestID: "maintenance"}
-	if err := remote.DescribeProjection(context.Background(), ProjectionRequest{Repository: "kr://chosen", Commit: "old"}, o, &output); err != nil {
+	if err := remote.DescribeProjection(context.Background(), ProjectionRequest{Dataset: "chosen", Revision: 2}, o, &output); err != nil {
 		t.Fatal(err)
 	}
-	if err := remote.SyncProjection(context.Background(), ProjectionRequest{Repository: "kr://chosen", Commit: "old"}, o, &output); err != nil {
+	if err := remote.SyncProjection(context.Background(), ProjectionRequest{Dataset: "chosen", Revision: 2}, o, &output); err != nil {
 		t.Fatal(err)
 	}
-	if err := remote.NotifyProjection(context.Background(), ProjectionNotifyRequest{Repository: "kr://chosen", Address: &ProjectionNoticeAddress{Kind: "Aspect", ObjectID: "job/orders", AspectName: "runtime"}, SourceRevision: "rev-2"}, o, &output); err != nil {
-		t.Fatal(err)
-	}
-	if strings.Join(paths, ",") != "/operations/v1/projections:describe,/operations/v1/projections:sync,/operations/v1/projections:notice" {
+	if strings.Join(paths, ",") != "/operations/v1/projections:describe,/operations/v1/projections:sync" {
 		t.Fatal(paths)
 	}
 	if output.(map[string]any)["state"].(map[string]any)["revision"] != "rev-2" {

@@ -128,12 +128,12 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 	body(t, governor("grant", "add", "--principal", consumer,
 		"--action", "inventory.read,dataset.resolve,file.read"))
 	body(t, governor("grant", "add", "--principal", consumer,
-		"--action", "object.read,object.provenance,object.search,object.schema.read,object.history.read",
+		"--action", "object.read,object.provenance,object.schema.read,object.history.read",
 		"--repo", repositoryID))
 	body(t, governor("dataset", "define", "--dataset", setID, "--revision", "1",
 		"--source", repositoryID))
 	if strings.TrimSpace(os.Getenv("KC_TEST_OPENSEARCH_URL")) != "" {
-		body(t, governor("operations", "projection", "sync", "--repo", repositoryID))
+		body(t, governor("operations", "projection", "sync", "--dataset", setID))
 	}
 
 	// 4. Consumer discovers the composed set, freezes it, then searches or
@@ -246,7 +246,7 @@ func writeProviderDrafts(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	schema := "---\nobject_id: schema/runbook.body\n---\n" +
-		`{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}` + "\n"
+		`{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string"}}}` + "\n"
 	object := "---\nobject_id: runbook/payment-oncall\nschema_ref: schema/runbook.body\nkind: Entity\n" +
 		`provenance: {"originKind":"SOURCE","sourceRefs":["file:///source/runbooks/payment-oncall.md"]}` +
 		"\n---\n{\"body\":\"切换支付流量前先检查冻结窗口\"}\n"
@@ -254,6 +254,11 @@ func writeProviderDrafts(t *testing.T) string {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "runbook.json"), []byte(object), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	declaration := "---\nobject_id: index/runbook-search\naspect_name: index\nmember_key: body\nkind: Member\nschema_ref: schema/core/index-declaration/v1\n---\n" +
+		`{"catalog":"declarative-index/opensearch@2026-10","inputs":[{"from":"schema/runbook.body#/fields/body"}],"build":{"kind":"text"},"uses":["text"]}` + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "index.yaml"), []byte(declaration), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return dir

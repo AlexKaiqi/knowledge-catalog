@@ -1,0 +1,18 @@
+---
+object_id: schema/concept.definition
+---
+entity: BusinessConcept
+aspect: definition
+pattern: record
+fields:
+  name:
+    type: string
+    required: true
+  meaning:
+    type: string
+    required: true
+  contexts:
+    type: array
+    required: true
+  owner:
+    type: string

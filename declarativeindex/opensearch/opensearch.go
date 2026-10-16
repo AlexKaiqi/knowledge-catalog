@@ -20,6 +20,7 @@ const (
 )
 
 var (
-	Check = opensearchimpl.Check
-	Open  = opensearchimpl.Open
+	Check                     = opensearchimpl.Check
+	Open                      = opensearchimpl.Open
+	ConfiguredEmbeddingModels = opensearchimpl.ConfiguredEmbeddingModels
 )

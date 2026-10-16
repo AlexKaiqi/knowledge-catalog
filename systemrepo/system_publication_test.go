@@ -52,7 +52,7 @@ func TestSystemPublicationMatchesCanonicalFilesAndSchemas(t *testing.T) {
 			sourcePath = "readme.md"
 		}
 		authored := filepath.Join(sourceDir, sourcePath)
-		if sourcePath == "_schemas/schema-definition.v1.aspect.yaml" || sourcePath == "_schemas/readme.v1.aspect.yaml" {
+		if sourcePath == "_schemas/schema-definition.v1.aspect.yaml" || sourcePath == "_schemas/readme.v1.aspect.yaml" || sourcePath == "_schemas/index-declaration.v1.aspect.yaml" {
 			authored = filepath.Join(filepath.Dir(sourceDir), "..", "object", "trusted", filepath.Base(sourcePath))
 		}
 		if sourcePath == "object-interfaces/live-access/definition.yaml" || sourcePath == "_schemas/implements.live-access.v1.aspect.yaml" || sourcePath == "_schemas/resource-descriptor.v1.aspect.yaml" {
@@ -131,14 +131,31 @@ func TestSystemPublicationNavigationIsClosed(t *testing.T) {
 	}
 }
 
-func TestSystemPublicationUsesSchemaAccessAsOnlyIndexDeclarationForm(t *testing.T) {
+// The system publication's only retrieval declaration form is the index
+// declaration aspect: Schemas carry structure only (the parser rejects field
+// access), and every self-description body is searchable through an explicit
+// text member over that Schema's body.
+func TestSystemPublicationUsesIndexDeclarationsAsOnlyRetrievalForm(t *testing.T) {
 	operations := systemrepo.SystemPublicationOperations()
 	schemas := map[objectmodel.ObjectID]objectmodel.SchemaDefinition{}
+	textBodies := map[objectmodel.ObjectID]bool{}
 	var live interfaces.InterfaceDefinition
 	for _, operation := range operations {
 		id := operation.Address.ObjectID
-		if strings.HasPrefix(string(id), "index/") || id == "schema/core/index-declaration/v1" {
-			t.Errorf("%s introduces a second index declaration form", operation.PathHint)
+		if objectmodel.IsIndexDeclarationRef(operation.SchemaRef) {
+			declaration, err := objectmodel.ParseIndexDeclaration(operation.Address, operation.Value)
+			if err != nil {
+				t.Fatalf("%s: %v", operation.PathHint, err)
+			}
+			for _, input := range declaration.Inputs {
+				if input.Locator.Path == "body" && len(declaration.Uses) == 1 && declaration.Uses[0] == objectmodel.IndexUseText {
+					textBodies[input.Locator.Schema.Object] = true
+				}
+			}
+			continue
+		}
+		if operation.Address.AspectName == "index" || strings.HasPrefix(string(id), "index/") {
+			t.Errorf("%s holds retrieval configuration outside the index declaration Schema", operation.PathHint)
 		}
 		var err error
 		switch {
@@ -150,6 +167,9 @@ func TestSystemPublicationUsesSchemaAccessAsOnlyIndexDeclarationForm(t *testing.
 		if err != nil {
 			t.Fatalf("%s: %v", operation.PathHint, err)
 		}
+	}
+	if _, published := schemas[objectmodel.IndexDeclarationSchemaV1]; !published {
+		t.Fatal("system publication must publish the trusted index declaration Schema it explains")
 	}
 	if live.Operations["read"].Effect != "read" || live.Operations["invoke"].Effect != "write" {
 		t.Fatalf("LiveAccess must distinguish current-state reading from authorized operations: %#v", live)
@@ -166,13 +186,16 @@ func TestSystemPublicationUsesSchemaAccessAsOnlyIndexDeclarationForm(t *testing.
 		for _, field := range definition.Fields {
 			if field.Path == "body" {
 				found = true
-				if field.Type != "string" || len(field.Access) != 1 || field.Access[0] != "text" {
-					t.Errorf("%s body must retain string structure and explicitly declared text discovery: %#v", id, field)
+				if field.Type != "string" {
+					t.Errorf("%s body must retain string structure: %#v", id, field)
 				}
 			}
 		}
 		if !found {
-			t.Errorf("%s lacks body structure and access declaration", id)
+			t.Errorf("%s lacks body structure", id)
+		}
+		if !textBodies[id] {
+			t.Errorf("%s body lacks an explicitly declared text index member", id)
 		}
 	}
 }

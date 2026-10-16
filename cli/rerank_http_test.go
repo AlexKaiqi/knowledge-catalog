@@ -235,13 +235,14 @@ func TestHTTPSearchRerankPreservesRetrievalEvidenceAndUsesOneFixedView(t *testin
 	body(t, kc(home, "store-set", "--index", "opensearch"))
 	body(t, kc(home, "store-set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repository)
-	body(t, kc(home, "put", testObjectReference(t, repository, "schema/runbook.search-rerank", ""), "--repo", repository, "--command-id", "search-rerank-schema", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+	body(t, kc(home, "put", testObjectReference(t, repository, "schema/runbook.search-rerank", ""), "--repo", repository, "--command-id", "search-rerank-schema", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string"}}}`))
 	body(t, kc(home, "put", testObjectReference(t, repository, "runbook/deploy", ""), "--repo", repository, "--command-id", "search-rerank-p1", "--schema-ref", "schema/runbook.search-rerank", "--value", `{"body":"refund deployment checklist","secret":"one"}`))
 	body(t, kc(home, "put", testObjectReference(t, repository, "runbook/timeout", ""), "--repo", repository, "--command-id", "search-rerank-p2", "--schema-ref", "schema/runbook.search-rerank", "--value", `{"body":"refund timeout diagnosis","secret":"two"}`))
+	seedTextDeclaration(t, home, repository, "index/runbook-search-rerank", "schema/runbook.search-rerank", "body")
 	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "1", "--source", repository+"=refs/heads/main@"))
 	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--cmd", "read-workspace", "--dataset", workspace))
-	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--action", "object.read,object.search,object.rerank", "--repo", repository))
-	syncIndexes(t, home, repository)
+	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--action", "object.rerank", "--dataset", workspace))
+	syncIndexes(t, home, workspace)
 
 	provider := &recordingReranker{}
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{Reranker: provider})
@@ -320,7 +321,7 @@ func TestLiveHTTPSearchRerankWithLuna(t *testing.T) {
 	body(t, kc(home, "store-set", "--index", "opensearch"))
 	body(t, kc(home, "store-set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repository)
-	body(t, kc(home, "put", testObjectReference(t, repository, "schema/runbook.live-rerank", ""), "--repo", repository, "--command-id", "live-rerank-schema", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+	body(t, kc(home, "put", testObjectReference(t, repository, "schema/runbook.live-rerank", ""), "--repo", repository, "--command-id", "live-rerank-schema", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string"}}}`))
 	for _, item := range []struct{ id, body string }{
 		{"runbook/deployment", "Support procedure for a Kubernetes deployment rollout"},
 		{"runbook/refund", "Support procedure: inspect payment gateway timeout logs and refund idempotency status before retrying"},
@@ -328,10 +329,11 @@ func TestLiveHTTPSearchRerankWithLuna(t *testing.T) {
 	} {
 		body(t, kc(home, "put", testObjectReference(t, repository, item.id, ""), "--repo", repository, "--command-id", "live-rerank-"+strings.TrimPrefix(item.id, "runbook/"), "--schema-ref", "schema/runbook.live-rerank", "--value", `{"body":`+string(mustJSON(t, item.body))+`,"secret":"must-not-leak"}`))
 	}
+	seedTextDeclaration(t, home, repository, "index/runbook-live-rerank", "schema/runbook.live-rerank", "body")
 	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "1", "--source", repository+"=refs/heads/main@"))
 	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--cmd", "read-workspace", "--dataset", workspace))
-	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--action", "object.read,object.search,object.rerank", "--repo", repository))
-	syncIndexes(t, home, repository)
+	body(t, kc(home, "allow", "--principal", "agent:rerank-test", "--action", "object.rerank", "--dataset", workspace))
+	syncIndexes(t, home, workspace)
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{Reranker: provider})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })

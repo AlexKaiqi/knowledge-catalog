@@ -1,0 +1,75 @@
+# 零知识验证：理解业务。夹具与判定见 _materials/zero-knowledge/README.md，答案封存在同目录 answers.yaml。
+# 每条从本节点前态加零知识世界独立开始，使用基础种子；Agent 只拿到 kc、服务地址、消费身份、mysql 连接串与人的原话。
+
+- id: zk-biz-dataset-overview
+  title: 说得出一个 Dataset 里有什么、来自哪里
+  claims: ["dataset#U1", "object#U7"]
+  given:
+    - 零知识世界就绪。
+  when:
+    - 人问：“这个 Dataset 里都有什么？”
+  then:
+    - Agent 列出对象类型（表、列、库与平台、作业、语义模型、指标、关系、索引声明）及各自来源仓。
+    - Agent 说明 Dataset 只是来源仓里选入的部分，不把它当作来源仓的全部内容，不补读范围外的文件。
+  risk: 没有概览 Dataset 的路径，或 Agent 把 Dataset 当成来源仓的全部内容。
+
+- id: zk-biz-two-gmv
+  title: 分清两个 GMV 的来历
+  claims: ["object#U6", "object#U18"]
+  given:
+    - 零知识世界就绪。
+  when:
+    - 人问：“shop.gmv 和 shop.sales.gmv 有什么区别，该用哪个？”
+  then:
+    - 回答与 answers.yaml 的 zk-biz-two-gmv 一致：沿指标、语义模型、表与作业的关系走到底表，并附上对象所在仓与修订。
+    - 技术差别由 Agent 从环境推出；“该用哪个”是人的用途选择，Agent 说明新鲜度差别后向人确认目的，属于合法澄清，不自行指定。
+  risk: 两个同名指标并存时，Agent 只能读到名字和表达式，说不清差别或随便选一个。
+
+- id: zk-biz-mart-lineage
+  title: 说得出汇总表从哪来、多久更新
+  claims: ["object#U6", "object#U11"]
+  given:
+    - 零知识世界就绪；MySQL 账号没有 EVENT 权限，作业定义只能从 KC 获得。
+  when:
+    - 人问：“sales_mart 从哪来，多久更新一次？”
+  then:
+    - 回答与 answers.yaml 的 zk-biz-mart-lineage 一致：找到生成它的作业、五张输入表与按天调度。
+    - 对 enabled false 分开回答“声明写了什么”与“实际运行如何”：前者引用作业定义；后者只能从数据（如 sales_mart 最新日期）观察，环境没有运行记录时如实说明，不断定“已停更”或“正常”。
+  risk: 血缘只在 SQL 文本里，Agent 走不到；或把声明当成运行事实。
+
+- id: zk-biz-map-to-physical
+  title: 把 KC 里的表对象落到 MySQL 上的物理表
+  claims: ["object#U11", "liveaccess#U2"]
+  given:
+    - 零知识世界就绪，取值能力已部署；Agent 只知道 mysql 客户端与连接串，不知道库与表名的对应。
+  when:
+    - 人问：“orders 这张表在哪个库，现在多少行？”
+  then:
+    - Agent 从 table/shop.orders 的 qualifiedName、platformRef 与平台、库对象推出它是 mysql-qinghe 平台 shop 库的 orders 表，并说明依据。
+    - 行数经 stats 当前观察或 mysql 计数取得，两条都是合法路径；给出观察依据或 SQL 与查询时间。两者都用时，差异要能用观察时间解释。
+  risk: KC 的元数据与实际数据库之间缺少可学习的对应，Agent 只能靠表名碰运气。
+
+- id: zk-biz-live-value-states
+  title: 取值失败、没有取值能力与业务值能分开
+  claims: ["liveaccess#U2", "affordance#U5"]
+  given:
+    - 两个独立变体各自从前态开始：A 部署没有取值能力（不启动 resource-access）；B 取值能力已部署，但 resource-access 的 KC_MYSQL_HOST 指向不可达地址（Agent 直连 MySQL 不受影响）。
+    - Dataset 选入与正常世界相同，都不选 table-meta/resources；按设计这不影响 stats 按引用版本取值，所以两个变体的差别只来自部署。
+  when:
+    - 人在每个变体里都问：“orders 现在有多少行？”
+  then:
+    - A 说明部署没有取值能力；B 说明这次取值失败及原因；两者都不把结果说成 0 或空，也不说成 Dataset 没选取值描述所致。
+    - 两个变体里 Agent 都可以改用 mysql 计数完成任务，并说明这是绕开了 KC 取值，不是 KC 取值恢复了。
+  risk: 设计要求三种情况可区分，但反馈形状让陌生使用者分不出，或把能力缺失误归到 Dataset 组合。
+
+- id: zk-biz-unpaid-in-gmv
+  title: 计算行为与对外口径分开回答
+  claims: ["object#U18", "object#U8"]
+  given:
+    - 零知识世界就绪；材料里没有负责人关系，也没有对外 GMV 的口径说明。
+  when:
+    - 人问：“UNPAID 的订单算不算进 GMV？”
+  then:
+    - 计算行为：Agent 从作业 SQL 与指标表达式推出两个 GMV 都不按状态过滤，UNPAID 实际被计入，并给出依据。
+    - 对外口径：Agent 明说环境里没写，指出该向谁确认或经哪条反馈路径提出；不用常识补出一个口径。
+  risk: Agent 把计算行为当成业务口径，或用常识补出口径冒充环境答案。

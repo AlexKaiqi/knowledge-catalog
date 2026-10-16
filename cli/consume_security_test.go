@@ -23,7 +23,7 @@ func TestWriterPutPathHintIsStored(t *testing.T) {
 	run("local", "repository", "attach", "--repo", core, "--dsn", coreDSN)
 	run("attach", "--repo", core, "--dsn", coreDSN)
 	run("writer", "put", "urn:kc:object:schema/policy.body", "--repo", core, "--command-id", "schema-body",
-		"--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`)
+		"--value", `{"entity":"Policy","pattern":"record","fields":{"body":{}}}`)
 	run("writer", "put", "urn:kc:object:policy/listed", "--repo", core, "--command-id", "listed",
 		"--schema-ref", "schema/policy.body", "--path-hint", "policies/listed.yaml",
 		"--value", `{"body":"listed"}`)

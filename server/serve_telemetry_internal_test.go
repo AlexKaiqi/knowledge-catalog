@@ -18,6 +18,8 @@ import (
 
 	retrieval "kc/discovery"
 	apphome "kc/home"
+	kcidentity "kc/identity"
+	"kc/identity/identitytest"
 	"kc/internal/telemetry"
 	"kc/internal/testkit"
 	inv "kc/invocation"
@@ -32,12 +34,7 @@ type capturedLogExporter struct {
 	records []sdklog.Record
 }
 
-type telemetryAuthenticator struct{}
-
-func (telemetryAuthenticator) Name() string { return "gitea" }
-func (telemetryAuthenticator) Authenticate(context.Context, http.Header) (inv.HTTPIdentity, error) {
-	return inv.HTTPIdentity{Principal: "gitea:42", Provider: "gitea", Subject: "42"}, nil
-}
+var telemetryAuthenticator = identitytest.Static("taihu", kcidentity.HTTPIdentity{Principal: "kaiqidong", Provider: "taihu", Subject: "42"})
 
 type telemetryStateLookup struct{}
 
@@ -61,9 +58,9 @@ func TestAuthenticationAndBindingBoundariesExportMetricsAndChildSpans(t *testing
 	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
 
 	ctx, root, started := runtime.StartOperation(context.Background(), "object", "object-read")
-	authenticator := observeHTTPAuthenticator(telemetryAuthenticator{}, runtime)
+	authenticator := observeHTTPAuthenticator(telemetryAuthenticator, runtime)
 	identity, err := authenticator.Authenticate(ctx, http.Header{"Authorization": []string{"Bearer redacted"}})
-	if err != nil || identity.Principal != "gitea:42" {
+	if err != nil || identity.Principal != "kaiqidong" {
 		t.Fatalf("authentication = %#v, %v", identity, err)
 	}
 	runtime.RecordIdentity(ctx, identity.Provider, inv.PrincipalKind(identity.Principal), false)
@@ -94,7 +91,7 @@ func TestAuthenticationAndBindingBoundariesExportMetricsAndChildSpans(t *testing
 	body, _ := io.ReadAll(metrics.Result().Body)
 	text := string(body)
 	for _, want := range []string{
-		"kc_authentication_attempts_total", `kc_identity_provider="gitea"`,
+		"kc_authentication_attempts_total", `kc_identity_provider="taihu"`,
 		"kc_identity_requests_total", `kc_principal_kind="user"`,
 		"kc_binding_lookups_total", "kc_binding_lookup_duration_seconds", "kc_binding_observation_age_seconds",
 	} {

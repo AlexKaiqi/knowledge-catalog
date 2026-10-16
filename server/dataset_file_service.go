@@ -21,7 +21,7 @@ type workspaceFileMountsResponse = files.FileMountsResponse
 type workspaceFileDirectoryResponse = files.FileDirectoryResponse
 type workspaceFileReadResponse = files.FileReadResponse
 
-func (f *httpFacade) snapshotSemanticView(ctx context.Context, opened *Home, caller identity.HTTPIdentity, coordinate files.FileCoordinate, cat dataset.Service, definition dataset.Dataset, pin dataset.ResolvedDataset) (files.FileView, error) {
+func (f *httpFacade) snapshotSemanticView(ctx context.Context, opened *Home, caller identity.HTTPIdentity, coordinate files.FileCoordinate, cat dataset.Service, definition dataset.Dataset, pin dataset.ResolvedDataset, record func(files.FileReadEvidence) error) (files.FileView, error) {
 	if coordinate.View != inv.SemanticFileViewV1 && coordinate.View != "semantic" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "view must be repository or semantic")
 	}
@@ -65,24 +65,28 @@ func (f *httpFacade) snapshotSemanticView(ctx context.Context, opened *Home, cal
 		Read: func(mount dataset.VirtualMount, file string) ([]byte, error) {
 			return projections[mount.Repository].Read(file)
 		},
-		Record: func(evidence files.FileReadEvidence) error {
-			return f.snapshotRecordFileRead(ctx, opened, caller, evidence)
-		},
+		Record: record,
 	}), nil
 }
 
 func (f *httpFacade) snapshotRecordFileRead(ctx context.Context, opened *Home, caller identity.HTTPIdentity, evidence files.FileReadEvidence) error {
 	flags := snapshotRequestFlags(ctx, caller, access.Query{Action: "file.read", Dataset: evidence.Pin.SetID, Repo: string(evidence.Repository)})
 	flags["home"], flags["path"] = opened.Dir, evidence.Path
-	raw, err := json.Marshal(evidence.Pin)
-	if err != nil {
-		return err
+	if evidence.Pin.SetID != "" {
+		raw, err := json.Marshal(evidence.Pin)
+		if err != nil {
+			return err
+		}
+		flags["pin"] = string(raw)
+		flags[inv.ResolvedPinFlag] = evidence.Pin.PinID
+	} else {
+		flags["commit"] = string(evidence.Commit)
+		flags["ref"] = string(evidence.Commit)
 	}
-	flags["pin"] = string(raw)
 	result := map[string]any{"path": evidence.Path, "repository": evidence.Repository, "commit": evidence.Commit, "bytes": evidence.Bytes}
 	if evidence.File != "" {
 		result = map[string]any{"mountPath": evidence.MountPath, "file": evidence.File, "repository": evidence.Repository, "commit": evidence.Commit}
 	}
-	_, _, err = inv.RecordObjectAccess(opened.Dir, "file-read", flags, result, evidence.Err)
+	_, _, err := inv.RecordObjectAccess(opened.Dir, "file-read", flags, result, evidence.Err)
 	return err
 }

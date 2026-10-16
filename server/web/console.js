@@ -292,7 +292,7 @@
       if (row.entity) {
         const ent = document.createElement("span");
         ent.className = "muted";
-        ent.textContent = "  " + row.entity + (row.description ? "  " + row.description : "");
+        ent.textContent = "  " + row.entity + (row.aspect ? "." + row.aspect : "") + (row.description ? "  " + row.description : "");
         grow.appendChild(ent);
       }
       li.appendChild(grow);

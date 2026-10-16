@@ -20,7 +20,7 @@ Feature: System Schema discovery and read
       | schemas[].entity   | ResourceDescriptor |
       | schemas[].entity   | Relation |
       | schemas[].entity   | Readme |
-      | schemas[].description | 仓的自描述 Markdown；frontmatter 承载 Address，正文可搜。 |
+      | schemas[].description | 仓的自描述 Markdown；frontmatter 承载 Address，正文为 Markdown；检索能力由索引声明提供。 |
     When I run `kc read urn:kc:object:schema/meta/schema-definition/v1`
     Then the output has:
       | objectId | schema/meta/schema-definition/v1 |

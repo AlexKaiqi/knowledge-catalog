@@ -4,31 +4,19 @@ import (
 	apphome "kc/home"
 	"kc/invoke"
 	"kc/kernel"
-	"strings"
 	"testing"
 )
 
-func TestInventoryDiscoveryContextRequiresExactPublishedWorkspaceAndAction(t *testing.T) {
+func TestRetiredInventoryDiscoveryNeverCreatesAnAuthorizationContext(t *testing.T) {
 	ws := &apphome.Home{Deployment: &apphome.DeploymentConfig{Registry: apphome.RegistryBinding{DiscoverySetID: "published"}}}
-	flags := map[string]invoke.FlagValue{"dataset": "published", "pin": "{}", InventoryDiscoveryFlag: true}
-	if err := PrepareInventoryDiscovery(ws, "object.search", flags); err != nil {
-		t.Fatal(err)
-	}
-	if !IsInventoryDiscovery(flags) {
-		t.Fatal("validated context not established")
-	}
-	for _, action := range []string{"object.read", "object.rerank", "file.read", "dataset.manage"} {
-		if err := PrepareInventoryDiscovery(ws, action, flags); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
-			t.Errorf("discovery context bypassed %s: %v", action, err)
+	for _, action := range []string{"object.search", "file.read", "dataset.resolve", "object.read", "object.rerank", "dataset.manage"} {
+		flags := map[string]invoke.FlagValue{"dataset": "published", "pin": "{}", InventoryDiscoveryFlag: true, VerifiedInventoryDiscoveryFlag: InventoryDiscoveryContext{"published"}}
+		if err := PrepareInventoryDiscovery(ws, action, flags); kernel.CodeOf(err) != kernel.ErrUsageInvalid || IsInventoryDiscovery(flags) {
+			t.Fatalf("retired inventory context bypassed %s: flags=%#v err=%v", action, flags, err)
 		}
 	}
-	flags["dataset"] = "private"
-	if err := PrepareInventoryDiscovery(ws, "object.search", flags); kernel.CodeOf(err) != kernel.ErrForbidden {
-		t.Fatalf("unconfigured Workspace accepted %v", err)
-	}
-	flags["dataset"] = "published"
-	delete(flags, "pin")
-	if err := PrepareInventoryDiscovery(ws, "object.search", flags); err == nil || !strings.Contains(err.Error(), "pin") {
-		t.Fatalf("search without fixed pin accepted %v", err)
+	flags := map[string]invoke.FlagValue{"dataset": "published"}
+	if err := PrepareInventoryDiscovery(ws, "file.read", flags); err != nil || IsInventoryDiscovery(flags) {
+		t.Fatalf("ordinary Dataset request changed: %v", err)
 	}
 }

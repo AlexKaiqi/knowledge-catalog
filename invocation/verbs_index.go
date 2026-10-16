@@ -10,82 +10,135 @@ import (
 	"kc/kernel"
 	objectmodel "kc/object"
 
-	retrieval "kc/discovery"
-	"kc/snapshot"
-	"kc/snapshot/dataset"
+	"encoding/json"
+	"sort"
 )
 
 func VerbSearch(cx *Invocation) (any, error) {
-	// The HTTP server passes its request-time embedding provider through the
-	// internal _embedder stamp (like _search-request). Model providers live
-	// only in the server; the plain CLI leaves the stamp unset and semantic
-	// recall fails closed there.
-	embedder, _ := cx.Flags["_embedder"].(retrieval.Embedder)
-	if ServingWorkspace(cx.Flags) {
-		return SearchWorkspace(cx)
-	}
-	repositoryID, commitID, err := PinCommit(cx.WS, cx.Flags)
-	if err != nil {
+	if err := RequireDatasetDiscoveryScope(cx.Flags); err != nil {
 		return nil, err
 	}
-	req, err := SearchRequestFromFlags(cx.Flags)
-	if err != nil {
-		return nil, err
+	return SearchWorkspace(cx)
+}
+
+// RequireDatasetDiscoveryScope is shared by the typed request and embedded
+// task paths: a pin is a version coordinate, never an implicit search scope.
+func RequireDatasetDiscoveryScope(flags map[string]invoke.FlagValue) error {
+	if flags[InventoryDiscoveryFlag] == true {
+		return kernel.Fail(kernel.ErrUsageInvalid, "inventoryDiscovery is retired; select a Dataset and use its consumption permission")
 	}
-	out, err := (discoveryservice.SearchExecutor{
-		Repositories: cx.WS.Reader,
-		Projection:   cx.WS.Index,
-		Embedder:     embedder,
-	}).Execute(cx.Context, discoveryservice.SearchRequest{
-		Repository: repositoryID, Commit: commitID, Query: req,
-	})
-	if err != nil {
-		return nil, err
+	if invoke.FlagString(flags, "repo") != "" || invoke.FlagString(flags, "commit") != "" || invoke.FlagString(flags, "ref") != "" {
+		return kernel.Fail(kernel.ErrUsageInvalid, "search, relations and traverse require --dataset; repository search is retired")
 	}
-	return DeliverSearchResult(cx.Home, cx.Flags, out)
+	if invoke.DatasetOf(flags) == "" || SuppliedDataset(flags) != nil {
+		return kernel.Fail(kernel.ErrUsageInvalid, "select a named --dataset and its published revision")
+	}
+	return nil
 }
 
 func VerbDescribeIndex(cx *Invocation) (any, error) {
-	repoID, commitID, err := PinCommit(cx.WS, cx.Flags)
-	if err != nil {
-		return nil, err
-	}
-	return (discoveryservice.ProjectionDescribeExecutor{
-		Repositories: cx.WS.Reader,
-		Projection:   cx.WS.Index,
-	}).Execute(cx.Context, discoveryservice.ProjectionDescribeRequest{
-		Repository: repoID,
-		Commit:     commitID,
-	})
+	return datasetProjectionOperation(cx, false)
 }
 
 func VerbIndexSync(cx *Invocation) (any, error) {
-	repositoryID, commitID, err := PinCommit(cx.WS, cx.Flags)
+	return datasetProjectionOperation(cx, true)
+}
+
+// A selected member preserves the Dataset declaration namespace while the
+// operation service uses its existing fixed-source projection contract.
+type datasetProjectionMember struct{ repo objectmodel.Repository }
+
+func (m datasetProjectionMember) Require(id kernel.RepositoryID, _ kernel.ErrorCode) (objectmodel.Repository, error) {
+	if m.repo.ID() != id {
+		return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "Repository is outside this Dataset member")
+	}
+	return m.repo, nil
+}
+
+func datasetProjectionOperation(cx *Invocation, sync bool) (any, error) {
+	if err := RequireDatasetDiscoveryScope(cx.Flags); err != nil {
+		return nil, err
+	}
+	serving, cat, err := OpenServingAt(cx, cx.WS, cx.Flags)
 	if err != nil {
 		return nil, err
 	}
-	result, err := (discoveryservice.ProjectionSyncExecutor{
-		Repositories: cx.WS.Reader,
-		Projection:   cx.WS.Index,
-		Controller:   cx.WS.Plugins,
-		Observe: func() func() {
-			return ObserveProjectionExecution(cx)
-		},
-	}).Execute(cx.Context, discoveryservice.ProjectionSyncRequest{
-		Repository: repositoryID,
-		Commit:     commitID,
-		State:      cx.State,
-		StateRequest: func() (objectmodel.RequestContext, error) {
-			return stateRequestContextFrom(cx)
-		},
-	})
+	pin := serving.Pin()
+	if !sync {
+		if err := RequireCompleteWorkspaceRead(cx.Home, cx.Flags, pin, ""); err != nil {
+			return nil, err
+		}
+	}
+	if cx.WS.Plugins == nil || !cx.WS.Plugins.Configured() {
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Dataset index plugin is not configured")
+	}
+	ids := make([]kernel.RepositoryID, 0, len(pin.Repositories))
+	for id := range pin.Repositories {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	members := make([]map[string]any, 0, len(ids))
+	for _, id := range ids {
+		members = append(members, map[string]any{"repository": id, "commit": pin.Repositories[id]})
+	}
+	if len(ids) == 0 {
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Dataset has no selected index sources")
+	}
+	repo, err := cx.WS.Plugins.DatasetMember(cx.WS.Reader.Lookup(cat.Require), pin, ids[0])
 	if err != nil {
 		return nil, err
 	}
-	if result.State == nil {
-		return result.Snapshot, nil
+	out := map[string]any{"dataset": pin.SetID, "revision": pin.Revision, "members": members}
+	lookup := datasetProjectionMember{repo: repo}
+	if !sync {
+		description, err := (discoveryservice.ProjectionDescribeExecutor{Repositories: lookup, Projection: cx.WS.Index}).Execute(cx.Context, discoveryservice.ProjectionDescribeRequest{Repository: ids[0], Commit: pin.Repositories[ids[0]]})
+		if err != nil {
+			return nil, err
+		}
+		out["snapshot"], err = datasetProjectionFacts(description)
+		return out, err
 	}
-	return map[string]any{"snapshot": result.Snapshot, "state": *result.State}, nil
+	current, err := cat.Set(string(pin.SetID))
+	if err != nil {
+		return nil, err
+	}
+	var state objectserving.StateLookup
+	if current.Revision == pin.Revision {
+		state, err = ResourceLookup(cx)
+		if err != nil {
+			return nil, err
+		}
+	}
+	result, err := (discoveryservice.ProjectionSyncExecutor{Repositories: lookup, Projection: cx.WS.Index, Observe: func() func() { return ObserveProjectionExecution(cx) }}).Execute(cx.Context, discoveryservice.ProjectionSyncRequest{Repository: ids[0], Commit: pin.Repositories[ids[0]], State: state, StateRequest: func() (objectmodel.RequestContext, error) { return stateRequestContextFrom(cx) }})
+	if err != nil {
+		return nil, err
+	}
+	out["snapshot"], err = datasetProjectionFacts(result.Snapshot)
+	if err != nil {
+		return nil, err
+	}
+	if result.State != nil {
+		out["state"], err = datasetProjectionFacts(result.State)
+	}
+	return out, err
+}
+
+// The Dataset pin is the public authority basis. Provider corpus coordinates
+// are derived identities, so diagnostics report facts without pseudo-Repos.
+func datasetProjectionFacts(value any) (map[string]any, error) {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	var facts map[string]any
+	if err := json.Unmarshal(raw, &facts); err != nil {
+		return nil, err
+	}
+	for _, key := range []string{"repository", "basisRepository", "basisCommit", "headCommit", "lagBehindHead"} {
+		delete(facts, key)
+	}
+	return facts, nil
+
 }
 
 func VerbIndexNotify(cx *Invocation) (any, error) {
@@ -147,23 +200,18 @@ func ChangeNoticeFromFlags(flags map[string]invoke.FlagValue) (index.ChangeNotic
 // VerbDescribeAccess reports one logical AccessSpec per pinned member, or the
 // single AccessSpec of one Repository's published basis.
 func VerbDescribeAccess(cx *Invocation) (any, error) {
+	if err := RequireDatasetDiscoveryScope(cx.Flags); err != nil {
+		return nil, err
+	}
 	cat, err := PickDatasets(cx.WS, cx.Flags)
 	if err != nil {
 		return nil, err
 	}
-	var resolved dataset.ResolvedDataset
-	if repository := invoke.FlagString(cx.Flags, "repo"); repository != "" && invoke.FlagString(cx.Flags, "dataset") == "" {
-		resolved, err = cat.ResolveDefinition(dataset.Dataset{
-			Revision: 1,
-			Sources:  []dataset.DatasetSource{{Repository: kernel.RepositoryID(repository), Selector: snapshot.DefaultRef}},
-		})
-	} else {
-		setID, workspaceErr := cx.SetID()
-		if workspaceErr != nil {
-			return nil, workspaceErr
-		}
-		resolved, err = ResolveOrReplay(cx.WS, cx.Home, cat, setID, cx.Flags)
+	setID, err := cx.SetID()
+	if err != nil {
+		return nil, err
 	}
+	resolved, err := ResolveAtRevision(cx.WS, cx.Home, cat, setID, cx.Flags)
 	if err != nil {
 		return nil, err
 	}

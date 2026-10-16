@@ -42,7 +42,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT.parent / "scenes"))
 from perf_tree import check_target, load_yaml  # 受限 YAML 子集解析器，与 scenes 工具同源
-from smoke import Client, quantile, quantiles_ms, rate
+from smoke import Client, bench_index_declarations, quantile, quantiles_ms, rate
 
 DEFAULT_TRANSPORTS = ["staging", "bulk"]
 PROM_SERIES = [
@@ -409,11 +409,11 @@ class LadderRun:
 
     def put_schema(self):
         schema_value = {"entity": "BenchDoc", "pattern": "record",
-                        "fields": {"title": {"type": "string", "required": True, "access": ["filter"]},
-                                   "body": {"type": "string", "required": True, "access": ["text"]}}}
+                        "fields": {"title": {"type": "string", "required": True},
+                                   "body": {"type": "string", "required": True}}}
         result = self.commit(f"{self.prefix}{self.runstamp}-schema-{len(self.points):04d}",
                              [{"op": "PUT", "address": {"kind": "Entity", "objectId": self.schema_id},
-                               "value": schema_value}])
+                               "value": schema_value}] + bench_index_declarations(self.schema_id))
         if result["disposition"] != "APPLIED":
             raise SystemExit(f"schema commit failed: {result['raw']}")
 

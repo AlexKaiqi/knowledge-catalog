@@ -64,7 +64,7 @@ httpsurface.Patterns()  ──测试对账──►  mux 已登记的 method+pat
 | 五个模块 `*_adapter.go`、`remote_dispatch.go` | 按模块声明装配输入/导航，注入同一 Client、转换请求上下文并分派；不复制模块叶规则或输出整形 |
 | `object/cli/commands.go`、`executor.go`、`output.go` | 对象叶声明、统一引用输入、任务执行与产品结果；完整引用传给 Object 服务，宿主不复制规则 |
 | `discovery/cli/` | 通用查询、关系、遍历、访问概览及统一插件说明读取的声明、输入、结果和帮助 |
-| `declarativeindex/cli/` | 插件静态 Affordance、既有投影运维任务及帮助；不持 Index 或 Controller |
+| `declarativeindex/cli/` | 既有投影运维任务及帮助；不持 Index 或 Controller（插件静态 Affordance 与清单在 `declarativeindex/capability/`） |
 | `liveaccess/cli/` | 当前态访问、调用、绑定说明的声明、参数、产品结果与帮助；采用宿主注入的固定范围 |
 | `snapshot/cli/commands.go`、`executor.go` | 库存、仓登记与登记历史、Dataset 发布/详情/退役与同源 help/flags |
 | `snapshot/cli/recipe.go`、`overlay.go`、`clone.go` | 配方输入、本机配方合成与已发布文件树物化 |
@@ -77,6 +77,12 @@ httpsurface.Patterns()  ──测试对账──►  mux 已登记的 method+pat
 KC 保留全局 parser、认证会话、统一编码、部署与跨模块装配；模块产品结果由模块拥有。
 Snapshot 叶 help 按可供性说明用途、输入、条件、结果、后果、风险与成本、失败恢复及示例，
 独立模块、`kc help <命令>` 与 `<命令> --help` 显示同一完整内容。
+
+首次目录发布使用 `kc writer commit --repo <id> --dir <目录> --command-id <id> --bulk`，
+CLI 自动生成 ChangeSet。省略 `--base` 时读取目标 ref 的固定 head；服务端明确证明该 commit
+的文件树为空后，CLI 省去逐对象 Resolve。已有任意文件、服务端未提供空树信息或显式指定历史
+`--base` 时沿用差异对照；空树信息读取失败或格式错误会阻止提交。Writer 独立检查固定基点，
+`--bulk` 仍只选择介质传输方式，不影响 Schema 校验、CAS、回执和单次提交边界。
 
 `kc plugin <名称> help` 经同一已认证 Server 读取登记说明；`kc help plugin` 本地显示该任务用法。
 对象访问概览沿既有 `operations access-spec describe` 保留逻辑合同并附本次来源的插件帮助入口；
@@ -120,8 +126,9 @@ create 只让 KC 能打开该 Repository，不登记来源成员；用户随后�
 旧 `catalog/worktree` Git checkout / sync 已退役，不能作为 Snapshot 合同之外的入口。
 
 `invocation/request_shape.go` 把 flags 编成 `SearchRequest`，共享用例由 `discovery/service/` 执行。
-`invocation/allow.go` 是授权求值；命名 Dataset SEARCH 要 `file.read`
-与 `object.search`，正文走 `delivery/` 按仓 `object.read` 屏蔽。访问证据不在这里。
+`invocation/allow.go` 是授权求值；Dataset SEARCH 按固定发布版的 `file.read`
+消费权限准入，命中在同一 Dataset 修订内回读并保留来源仓与版本。Dataset 消费权不授予来源仓
+直接读取权限；按仓直接读取仍检查 `object.read`。访问证据不在这里。
 
 `AllowFile.initialGrants` 保存 allocation → 请求 digest 的一次策略应用回执，与初始仓级规则原子持久化。普通 `grant remove` 保留这份回执，create retry 不会重建已撤销规则。策略可明确授予仓级 `writer.receipt.read`；receipt 授权从耐久 command entry 取得真实 Repository/ref，不信任调用者指定的仓。托管创建的过程回执不进入登记 Snapshot 或 Writer command ledger。
 
@@ -134,9 +141,9 @@ create 只让 KC 能打开该 Repository，不登记来源成员；用户随后�
 | `server/serve_facade.go` | `httpFacade`、`/health` `/livez` `/readyz` `/metrics` |
 | `server/service_routes.go` | 正式 namespace、typed DTO 与 handler |
 | `server/service_management_routes.go` | Admin / Operations / Snapshot 写面 |
-| `server/auth.go` | 可注册 Authenticator 合同与 factory registry |
-| `server/serve_auth.go` | 请求入口认证、Gitea 身份验证与 admin 判定 |
-| `server/auth_gitea.go` / `server/auth_taihu.go` / `server/auth_service.go` | 具体认证器 |
+| `identity/registry.go` / `identity/request.go` | 可注册认证器与唯一的请求认证判定 |
+| `server/serve_auth.go` | 请求入口认证与 admin 判定 |
+| `identity/local/` / `identity/taihu/` | 具体认证器 |
 | `invoke/http.go` / `invoke/http_write.go` | 请求解码与统一错误信封 |
 | `server/internal/readiness/` | 分 Surface readiness |
 | `server/serve_state.go` | 保留 StateLookup 公开别名；HTTP adapter 在 `liveaccess/state_lookup.go` |
@@ -171,21 +178,19 @@ Gateway 支撑的宿主挂载目录。
 | Server 模式 | 业务凭证 | 拒绝 |
 |---|---|---|
 | `local` | `X-Kc-As` | `Authorization`、自报委托、空身份 |
-| `taihu` / `gitea` | `Authorization`（Taihu 可经已验证网关头） | 自报 `X-Kc-As` / `X-Kc-On-Behalf-Of`、空身份 |
-| `lakefs` | 原用户 `Authorization`，或同源组合控制台的原会话 Cookie | 自报身份、混合证明、缺失防跨站标记或非 JSON Cookie 写请求 |
+| `taihu` | `Authorization`（Taihu 可经已验证网关头） | 自报 `X-Kc-As` / `X-Kc-On-Behalf-Of`、空身份 |
 
-lakefs 模式直接向固定原后端验证调用方证明；不继承 Store 管理员角色。Cookie
-过滤、防跨站、账号映射与生命周期边界由 [`server/README.md`](../server/README.md) 维护。
-CLI 使用已签发 Bearer 的既有 token 模式，浏览器直接复用原登录。
+lakeFS 只作存储，原 `lakefs` 认证模式已退役。浏览器请求检查由 [`server/README.md`](../server/README.md) 维护，
+认证器的组织与替换方式见 [`identity/README.md`](../identity/README.md)。
 
 认证后的自报身份或委托返回 `FORBIDDEN`；缺少匹配凭证返回 `UNAUTHENTICATED`。
-lakefs 的多个或混合证明因身份歧义返回 `UNAUTHENTICATED`，Cookie 防跨站失败返回 `FORBIDDEN`。进程内空 `HTTPServerOptions` / `HTTPHandler(home)` 是 local 测试接缝；正式部署必须显式选定模式。
+Cookie 防跨站失败返回 `FORBIDDEN`。进程内空 `HTTPServerOptions` / `HTTPHandler(home)` 是 local 测试接缝；正式部署必须显式选定模式。
 
-Taihu 资源方配置使用 `KC_SERVICE_CLIENT_SECRET` 作 introspection 应用密钥，`KC_TAIHU_HMAC_SECRET` 作网关 hex 验签密钥；两者不是调用方身份。`--auth-hmac-secret` / `--service-client-secret` 可以覆盖环境值，但不得把真实秘密作为 argv 字面量传入。精确配置见 `server/auth_taihu.go`、`server/auth_service.go` 与帮助文本。
+Taihu 资源方配置使用 `KC_SERVICE_CLIENT_SECRET` 作 introspection 应用密钥，`KC_TAIHU_HMAC_SECRET` 作网关 hex 验签密钥；两者不是调用方身份。`--auth-hmac-secret` / `--service-client-secret` 可以覆盖环境值，但不得把真实秘密作为 argv 字面量传入。精确配置见 `identity/taihu/register.go` 与帮助文本。
 
-已验证人类身份的 `principal` 是 `identity.CanonicalUsername` 接受的用户名，例如 `kaiqidong`；Gitea numeric ID、Taihu subject 和认证 issuer 只进入内部可信绑定，不作为公开身份或授权键。Taihu 有 actor 的委托保留 `agent:<id>`，`onBehalfOf` 为用户名；无用户且只有 client 时保留 `service:<client_id>`。Gitea/Taihu 认证器构造 `HTTPIdentity.User`，Server 在授权前通过 `identity/` 核对 `stateDir/identities.json`。同名不同 subject/provider/issuer、同 subject 改名均拒绝，不通过重新登录接管权限。网关必须提供 HMAC 签名、用户名与稳定 subject；裸 `X-Tai-User` 和未签名身份头不再是认证方式。
+已验证人类身份的 `principal` 是 `identity.CanonicalUsername` 接受的用户名，例如 `kaiqidong`；Taihu subject 和认证 issuer 只进入内部可信绑定，不作为公开身份或授权键。Taihu 有 actor 的委托保留 `agent:<id>`，`onBehalfOf` 为用户名；无用户且只有 client 时保留 `service:<client_id>`。Taihu 认证器构造 `HTTPIdentity.User`，Server 在授权前通过 `identity/` 核对 `stateDir/identities.json`。同名不同 subject/provider/issuer、同 subject 改名均拒绝，不通过重新登录接管权限。网关必须提供 HMAC 签名、用户名与稳定 subject；裸 `X-Tai-User` 和未签名身份头不再是认证方式。
 
-新部署初始化身份账，旧部署显式 `deployment init` 才建立该账；已有初始化回执后的缺失或损坏只能恢复。旧 `gitea:<id>` / `taihu:<username>` 形式的主体不再被接受，也没有迁移入口。
+新部署初始化身份账，旧部署显式 `deployment init` 才建立该账；已有初始化回执后的缺失或损坏只能恢复。旧版带提供方前缀的主体（如 `taihu:<username>`）不再被接受，也没有迁移入口。
 
 纯 Taihu 网关模式同样必须配置可信 `authURL`；签名身份没有可信 issuer 时拒绝绑定。
 
@@ -201,7 +206,7 @@ broker 验证。`legacy_login_test.go` 仅保留已退役直连 OAuth 交换的�
 
 浏览器组织登录的无状态接口为 `POST /identity/v1/authorize`、`POST /identity/v1/authorize:poll` 和 `POST /identity/v1/token`。前两者只传送固定部署的 PAR 请求/状态；token 接口的严格输入由 `client.TokenRequest` 定义。它们不建立 Server Workspace session、不发权，不接受调用者指定上游、应用 ID 或应用秘密。
 
-Resource Access 参考装配按 Domain Schema（或 ResourceDescriptor）上的 `origin` 调用独立 `resource-access/v1` runtime。`kc serve` 不再接受整台机器一个访问 URL。容器间使用对方能解析的服务网络地址；调用方容器的 `localhost` 不指向另一个服务。出站 `POST {origin}/v1/access` 转发已经通过 Server 认证边界的调用方证明：Taihu/Gitea 的 `Authorization`、Taihu 网关的 `X-Tai-Identity`，以及 `X-Resource-Principal`。local 配对只带 principal。接入方可以忽略这些头；KC 不得省略。凭证不进 Schema、flags、访问账或 JSON body。
+Resource Access 参考装配按 Domain Schema（或 ResourceDescriptor）上的 `origin` 调用独立 `resource-access/v1` runtime。`kc serve` 不再接受整台机器一个访问 URL。容器间使用对方能解析的服务网络地址；调用方容器的 `localhost` 不指向另一个服务。出站 `POST {origin}/v1/access` 转发已经通过 Server 认证边界的调用方证明：Taihu 的 `Authorization`、Taihu 网关的 `X-Tai-Identity`，以及 `X-Resource-Principal`。local 配对只带 principal。接入方可以忽略这些头；KC 不得省略。凭证不进 Schema、flags、访问账或 JSON body。
 
 ## 查权、申请入口与发权
 
@@ -250,9 +255,14 @@ Dataset、ref、object、aspect 过滤，不暴露授权账本私有回执。
 `pinId`、来源提交、条目和分页结果，但用户不需要传输 pin 文件。
 
 `kc files read --dataset <id> [--revision <n>] --path <file> [--offset <n>] [--length <n>]`
+或 `kc files read --repo <id> --commit <commit> --path <file> [--offset <n>] [--length <n>]`
 返回一个 JSON 字节块；`content` 是标准 base64，偏移与总大小按字节，`eof` 表示文件尾。
+`--repo` 与 `--dataset` 互斥。按仓读取必须显式指定固定 commit 和相对于原仓根目录的路径，
+检查该仓的 `file.read`，不自动选择分支最新版、不要求创建 Dataset。
+对象 definition 中的文件地址是普通值；按业务说明取得资源自己的仓、commit 和路径后调用。
+资源可在另一个仓、采用独立版本，不能默认套用对象说明自己的 commit；对象读权不产生文件读权。
 默认块大小 512 KiB，最大 4 MiB，0 使用默认。不将二进制解释成文本，也不向 stdout 写原始字节。
-指定 `--out <file>` 下载完整单文件，与范围参数互斥；同一固定发布贯穿全部块，每次仍检查
+指定 `--out <file>` 下载完整单文件，与范围参数互斥；同一固定 commit 或 Dataset 发布贯穿全部块，每次仍检查
 当前权限。完整成功后才发布目标，拒绝覆盖既有文件或符号链接；失败清理临时文件。
 源码端仍可能整文件读取后切片，不承诺源端 I/O 或内存受返回范围约束。
 

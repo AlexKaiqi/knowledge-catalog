@@ -52,7 +52,7 @@ func TestLiveAccessLayerAssignmentsAreExplicit(t *testing.T) {
 	for pkg, want := range map[string]string{
 		"liveaccess": "discovery", "liveaccess/discovery": "app", "liveaccess/contract": "object",
 		"liveaccess/evidence": "object", "liveaccess/service": "app", "liveaccess/plugin": "app",
-		"liveaccess/client": "app", "liveaccess/cli": "app", "liveaccess/fixture": "app",
+		"liveaccess/client": "app", "liveaccess/cli": "app",
 	} {
 		if got, declared := architectureLayer(pkg); !declared || got != want {
 			t.Errorf("%s layer=%q declared=%v want=%q", pkg, got, declared, want)
@@ -110,7 +110,7 @@ func productionSourceFiles(t *testing.T, selected func(string) bool) map[string]
 }
 
 func liveAccessOwnershipScope(owner string) bool {
-	for _, scope := range []string{"liveaccess", "object", "discovery/plugin", "discovery/adoption", "declarativeindex/cli", "invocation", "cli"} {
+	for _, scope := range []string{"liveaccess", "object", "discovery/plugin", "discovery/adoption", "declarativeindex/cli", "declarativeindex/capability", "invocation", "cli"} {
 		if deniedMatch(scope, owner) {
 			return true
 		}

@@ -1,0 +1,21 @@
+# Snapshot/Object trial: no source, answers, database client or Docker socket.
+ARG KC_CLI_IMAGE=kc-zk-snapshot:local
+FROM ${KC_CLI_IMAGE} AS kc
+
+FROM node:24-bookworm
+ARG NPM_REGISTRY=https://registry.npmjs.org
+ARG PI_PACKAGE=@earendil-works/pi-coding-agent@1.2.0
+RUN npm install -g --registry="$NPM_REGISTRY" "$PI_PACKAGE" && npm cache clean --force
+COPY --from=kc /usr/local/bin/kc /usr/local/bin/kc
+COPY agent-entrypoint.sh /usr/local/bin/zk-agent
+RUN chmod 0755 /usr/local/bin/zk-agent \
+ && chmod 0111 /usr/local/bin/kc \
+ && mkdir -p /work /runs \
+ && chown node:node /work /runs
+USER node
+WORKDIR /work
+ENV PI_OFFLINE=1 \
+    PI_TELEMETRY=0 \
+    PI_CODING_AGENT_DIR=/home/node/.pi/agent \
+    KC_SERVER_URL=http://kc-server:7380
+ENTRYPOINT ["/usr/local/bin/zk-agent"]

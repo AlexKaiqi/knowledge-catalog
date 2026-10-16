@@ -41,8 +41,9 @@ func TestIndexPluginsCloseCancelsBackgroundStateBeforeDrainingCatchUp(t *testing
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/shutdown", AspectName: "definition"}, Value: map[string]any{"name": "shutdown"}},
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.runtime"}, Value: map[string]any{
 				"entity": "Job", "aspect": "runtime",
-				"fields": map[string]any{"status": map[string]any{"type": "string", "access": []any{"filter"}}},
+				"fields": map[string]any{"status": map[string]any{"type": "string"}},
 			}},
+			testkit.IndexField("schema/job.runtime", "status", "keyword"),
 			bindingfixture.PutDescriptor("resource/scheduler", bindingfixture.Descriptor("https://scheduler.example")),
 			bindingfixture.PutAspect("job/shutdown", "runtime", "schema/job.runtime", "resource/scheduler"),
 		},
@@ -70,10 +71,7 @@ func TestIndexPluginsCloseCancelsBackgroundStateBeforeDrainingCatchUp(t *testing
 		contribution.Maintenance = foreground
 		return contribution, nil
 	}
-	config := consumerplugin.RepositoryPluginConfigs{Repositories: map[kernel.RepositoryID]consumerplugin.RepositoryPluginConfig{
-		source.RepositoryID: {Version: 1, Plugins: []consumerplugin.PluginSelection{{Name: "declarative-index", Instance: "shutdown"}}},
-	}}
-	plugins, err := consumerplugin.OpenIndexPlugins(config, map[string]consumerplugin.IndexPluginEntry{"declarative-index": entry})
+	plugins, err := consumerplugin.OpenIndexPlugins(indexConfig("shutdown"), consumerplugin.PluginScope{Repositories: []kernel.RepositoryID{source.RepositoryID}}, map[string]consumerplugin.IndexPluginEntry{"declarative-index": entry})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,6 +97,12 @@ func TestIndexPluginsCloseCancelsBackgroundStateBeforeDrainingCatchUp(t *testing
 		awaitPluginSignal(t, closed, "shutdown cleanup")
 	})
 	query := retrieval.SearchOf(retrieval.SearchClause{Op: retrieval.OpEQ, Field: &retrieval.FieldRef{Schema: "schema/job.runtime", Aspect: "runtime", Path: "status"}, Value: "running"})
+	// Declared faces are read from a ready projection's retained declaration
+	// members; without one the query side fails closed. Prepare the actual
+	// Snapshot projection so the pre-check sees the maintained declaration.
+	if _, err := queries.EnsureAt(repo, commit.Result.NewCommit); err != nil {
+		t.Fatal(err)
+	}
 	if required, err := plugins.RequiresState(repo, commit.Result.NewCommit, query); err != nil || !required {
 		t.Fatalf("fixture is not a real Bound State query: required=%v error=%v", required, err)
 	}
@@ -212,6 +216,14 @@ func assertShutdownEnginesOpen(t *testing.T, engines []*pluginPhysicalEngine) {
 func (c *shutdownCatchUp) CatchUp(ctx context.Context) error {
 	close(c.entered)
 	err := c.Controller.CatchUp(ctx)
+	close(c.drained)
+	<-c.release
+	return err
+}
+
+func (c *shutdownCatchUp) CatchUpRepository(ctx context.Context, repository kernel.RepositoryID) error {
+	close(c.entered)
+	err := c.Controller.CatchUpRepository(ctx, repository)
 	close(c.drained)
 	<-c.release
 	return err

@@ -1,0 +1,16 @@
+---
+object_id: media-asset/autumn-launch.cut-15s
+aspect_name: vision
+kind: Aspect
+schema_ref: schema/media-asset.vision
+---
+labels:
+- 暖色渐变背景
+- 竖版
+- 无人物
+dominantColors:
+- "#F2B544"
+- "#7A4E1D"
+- "#FBE7B5"
+textDetected: []
+producedBy: 识图团队 vision-tagger 0.3（示例）

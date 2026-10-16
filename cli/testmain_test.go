@@ -75,12 +75,6 @@ func TestMain(m *testing.M) {
 			code = 1
 		}
 	}
-	if err := testkit.StopGitea(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		if code == 0 {
-			code = 1
-		}
-	}
 	os.Exit(code)
 }
 

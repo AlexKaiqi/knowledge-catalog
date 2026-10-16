@@ -14,7 +14,7 @@ serve/service_routes/handlers/授权/遥测/就绪探测搬入（B6/B7）。生�
 ## 边界
 
 拥有：HTTP 路由闭集（`routes.go`）、typed handler 与授权强制（B6 已迁入）、遥测注入（B6
-已迁入，`serve_facade.go`/`serve_telemetry`）、gitea/配对身份（B6 已迁入）、
+已迁入，`serve_facade.go`/`serve_telemetry`）、配对身份（B6 已迁入）、
 就绪探测（B7 已迁入：`server/internal/readiness` 持探测/缓存/指纹与证据写探针；search 后端经 `Providers.SearchBackend` 端口注入——探测函数由装配根 `home` 的 `NewSearchBackendProbe` 绑定具体 adapter，本包与 readiness 包都不 import 具体 provider，A-01 守卫 `TestProviderAdaptersImportedOnlyAtAssembly` 钉住）。
 
 不拥有：业务规则与执行器（`object/service`、`discovery/service`、`discovery/datasets`、
@@ -37,22 +37,28 @@ for _, r := range server.Routes() {
 Index、Controller；只有授权文件而没有运行布局时也可读取。说明不代表支持或就绪。
 根 CLI 的离线帮助与此服务读取分别由所属 CLI/SDK 接入。
 
-既有 access-spec describe 继续沿 `object.access.describe` 和获准的固定来源范围，
+access-spec describe 按命名 Dataset 的 `file.read` 和已接受修订的固定来源范围授权，
 在原 `AccessPlan` 根字段之外附插件简述和帮助入口，不修改 Schema 返回。
 正常服务运行在激活 workers 前由根 Home 执行一次 `VerifyIndexPlugins`；自有连接的
 冷管理恢复不探测插件配置。运行视图不随请求或凭据轮换热加载；变更在下一次根装配生效。
 
 Handler 构造保持冷态，不核验自有连接的插件配置或启动维护；配置入口先恢复根 Home。
-返回的 `ManagedHTTPHandler.Start()` 显式激活该根：核验一次当前 Repo 配置，绑定后台
+返回的 `ManagedHTTPHandler.Start()` 显式激活该根：按部署插件配置打开一次实例，绑定后台
 服务身份，再启动索引与 Object 维护。`kc serve` 在 `ListenAndServe` 前调用 `Start`；
 嵌入式宿主未显式启动时，第一条需要运行资源的 typed 任务激活同一个根，后续任务复用它。
 静态插件说明不触发激活。重复 `Start` 不重读配置或重建实例；关闭后不能再启动。
 
-LiveAccess 经同一根 Repo 配置激活。`HTTPServerOptions.LiveAccessPlugins` 提供编译入口，
+LiveAccess 经同一根的部署插件配置激活。`HTTPServerOptions.LiveAccessPlugins` 提供编译入口，
 `StateLookup` 只可作为所选标准入口的嵌入 adapter，不能替代采用配置。
 `LiveAccessCredentialOrigins` 或部署的 `liveaccess.credentialOrigins` 固定适用证明目标；
+`LiveAccessReadLimits` 或部署的 `lookupTimeout`/`readTimeout` 固定外部取值时限，随每个请求传入。
 请求传本次已认证主体、证明及关联。逐值采用、目标限制和可靠原结果留证归 LiveAccess。
 独立访问审计支持 `AuditQueryRequest.requestId` 筛选原请求；普通读取不附完整结果证据。
+
+文件读取也进入同一访问账，可按 `traceId`、`requestId` 或两者同时筛选：原始文件保留真实
+仓路径、仓身份及固定 commit，Dataset 读取附已接受的 pin；语义投影保留来源快照，合成路径
+不作为物理文件记录。每个读取请求（包括每块）单独留证，成功字节必须等证据可靠保存后才交付。
+多仓静态对象保留每个实际采用来源的 commit 与方面范围，不计入未采用或无权来源。
 
 `ManagedHTTPHandler.BeginShutdown()` 先拒绝新工作，取消并等待后台维护，保留在途请求
 所需资源。`kc serve` 收到退出信号后先调用它，再由 `http.Server.Shutdown` 排空 HTTP，
@@ -70,24 +76,16 @@ LiveAccess 经同一根 Repo 配置激活。`HTTPServerOptions.LiveAccessPlugins
 
 ## 验证
 
-控制台同源组合可使用 `--auth lakefs --auth-url <原 lakeFS origin>`（配置为
-`auth: lakefs` 与 `authURL`），逐请求向固定 `/api/v1/user` 验证用户原会话或
-Basic/Bearer proof；不使用 Snapshot adapter 的服务凭证，不继承 lakeFS Admin。
-`GET /identity/v1/auth` 报告 `mode: lakefs`、`accepts: [Cookie, Authorization]`。
-Cookie 仅接受唯一的 `internal_auth_session`、`oidc_auth_session` 或
-`saml_auth_session`；其它 Cookie 不转发，Authorization 与任意 Cookie 混用拒绝。
-Cookie 请求要求 `X-Kc-Console: 1`；兼容没有 Fetch Metadata 的客户端，若有
-`Sec-Fetch-Site` 则仅接受 `same-origin` 或 `none`，拒绝 `same-site/cross-site`。
-非 GET/HEAD/OPTIONS 方法要求 `application/json`。KC 不开放跨源 CORS。
-验证器不带服务端 cookie jar、不追重定向，仅接受 HTTP 200 和有界的单个用户 JSON。
+认证方式来自 identity 注册表（`local`、`taihu`），装配只在 `serve_handler.go` 经
+`identity.Resolve` 完成；本包不按认证方式名字分支，请求认证统一调用 `identity.Authenticate`。
+lakeFS 只作存储：原 `--auth lakefs` 已退役，KC 只在认证与授权之后用服务私有凭证访问 lakeFS，
+调用方的 Authorization 与 lakeFS 会话 Cookie 都不转发（`TestVerifiedCallerProofIsNeverForwardedToStorage`）。
 
-经验证的原 `user.id` 必须满足既有 KC 规范用户名合同，不做大小写/邮箱别名转换；
-不兼容的有效账号返回 `FORBIDDEN` 并要求显式身份关联，当前未提供该关联功能。
-缺失 ID 或非正整数 `creation_date` 失败。`identity.Bind` 耐久绑定
-provider/issuer/`id:creation_date`，创建时间变化的同名账号不能继承旧授权。
-原 [v1.58 用户 API](https://github.com/treeverse/lakeFS/blob/v1.58.0/api/swagger.yml)
-只暴露秒精度创建时间，同名同秒重建无法据此区分；部署必须显式处理账号回收与旧授权，
-当前接线不宣称完整身份生命周期的不可重派保证。KC 登记管理与 Dataset 授权仍单独判定。
+浏览器请求检查与认证方式无关（`identity.BrowserRequestCheck`）：带 Cookie、或由浏览器经网关
+到达的已验证网关身份请求，要求唯一的 `X-Kc-Console: 1`；兼容没有 Fetch Metadata 的客户端，若有
+`Sec-Fetch-Site` 则仅接受 `same-origin` 或 `none`，拒绝 `same-site/cross-site`。
+非 GET/HEAD/OPTIONS 方法要求 `application/json`。带 Authorization 的请求不视为浏览器环境请求。
+KC 不开放跨源 CORS。
 
 授权管理继续使用 `GET/POST /admin/v1/grants` 和
 `DELETE /admin/v1/grants/{grant}`，经 CLI/HTTP 共享的 typed 执行与范围授权。

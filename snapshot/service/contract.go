@@ -56,23 +56,30 @@ type Resources struct {
 	DiscoveryWorkspaceID string
 	// BeforeAttach verifies optional host-owned durable connection bindings.
 	// It must not register a source; membership is accepted by Datasets alone.
-	BeforeAttach       func(context.Context, identity.HTTPIdentity, kernel.RepositoryID) error
-	BeforePublish      func(context.Context, identity.HTTPIdentity, dataset.Service, dataset.Dataset) (dataset.Dataset, map[string]any, error)
-	PreparePublication func(context.Context, identity.HTTPIdentity, dataset.Dataset) error
+	BeforeAttach  func(context.Context, identity.HTTPIdentity, kernel.RepositoryID) error
+	BeforePublish func(context.Context, identity.HTTPIdentity, dataset.Service, dataset.Dataset) (dataset.Dataset, map[string]any, error)
+	// PreparePublication readies derived capabilities for the frozen candidate
+	// and returns it with any reference dependencies it froze. It may not
+	// change the candidate's identity or sources.
+	PreparePublication func(context.Context, identity.HTTPIdentity, dataset.Dataset) (dataset.Dataset, error)
 	// EnsureDataset is optional host coordination before named consumption.
 	// KC only confirms an accepted definition. A host that adopts a recipe must
 	// enforce target management and source publication permission before that
 	// one-time acceptance; ordinary consumption does not require source grants.
 	EnsureDataset func(context.Context, identity.HTTPIdentity, dataset.Service, string) error
-	RecordRead    func(context.Context, identity.HTTPIdentity, FileReadEvidence) error
-	RequestURL    string
-	OpenView      func(context.Context, identity.HTTPIdentity, FileCoordinate, dataset.Service, dataset.Dataset, dataset.ResolvedDataset) (FileView, error)
-	around        func(context.Context, identity.HTTPIdentity, string, func() (any, error)) (any, error)
+	// RecordRead persists one final file:read outcome before delivery. A failed
+	// receipt prevents successful bytes; it does not replace a source error.
+	RecordRead func(context.Context, identity.HTTPIdentity, FileReadEvidence) error
+	RequestURL string
+	// OpenView must use the supplied per-request source evidence callback.
+	OpenView func(context.Context, identity.HTTPIdentity, FileCoordinate, dataset.Service, dataset.Dataset, dataset.ResolvedDataset, func(FileReadEvidence) error) (FileView, error)
+	around   func(context.Context, identity.HTTPIdentity, string, func() (any, error)) (any, error)
 }
 
 type IdentityOptions struct {
-	Mode          string
-	Local         bool
+	// Mode labels an unconfigured service in error messages.
+	Mode string
+	// Authenticator is the selected pairing; nil fails closed.
 	Authenticator identity.HTTPAuthenticator
 	// BrowserLogin is optional discovery metadata owned by an external login
 	// provider; this file service neither implements nor interprets that flow.

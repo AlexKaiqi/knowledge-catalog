@@ -48,11 +48,7 @@ func newPublishedObjectFixture(t *testing.T, indexed bool) *publishedObjectFixtu
 	if !indexed {
 		body(t, kc(home, "store-set", "--index", "none"))
 	}
-	if indexed {
-		seedRepo(t, home, f.repository)
-	} else {
-		seedUnindexedRepo(t, home, f.repository)
-	}
+	seedRepo(t, home, f.repository)
 	fake := testkit.NewLakeFSFake(t)
 	f.resourceStore, f.resourceCommit = publishObjectResources(t, home, fake, f.resourceRepository,
 		[]string{"media/tea-tin.png", "src/tax/calculate.js", "test-vectors/tax.json"})
@@ -67,7 +63,7 @@ func newPublishedObjectFixture(t *testing.T, indexed bool) *publishedObjectFixtu
 	f.server = server.URL
 	for _, role := range []struct{ principal, actions string }{
 		{"agent:object-publisher", "writer.commit,writer.preview,object.read"},
-		{"agent:object-consumer", "object.read,object.search,object.schema.read,resource.access"},
+		{"agent:object-consumer", "object.read,object.schema.read,resource.access"},
 	} {
 		body(t, f.govern(t, "grant", "add", "--principal", role.principal, "--repo", f.repository, "--action", role.actions))
 	}
@@ -115,7 +111,7 @@ func publishObjectResources(t *testing.T, home string, fake *testkit.LakeFSFake,
 	if err != nil {
 		t.Fatal(err)
 	}
-	seedUnindexedRepo(t, home, repository, "--driver", "lakefs", "--dsn", fake.DSN(physical))
+	seedRepo(t, home, repository, "--driver", "lakefs", "--dsn", fake.DSN(physical))
 	return store, string(commit)
 }
 
@@ -188,6 +184,12 @@ func (f *publishedObjectFixture) publish(t *testing.T, kind string) (string, map
 	return commit, definition
 }
 
+func (f *publishedObjectFixture) prepareSearchDataset(t *testing.T, commit string) {
+	t.Helper()
+	body(t, f.govern(t, "dataset", "define", "--dataset", "published-objects", "--revision", "1", "--source", f.repository))
+	body(t, f.govern(t, "grant", "add", "--principal", "agent:object-consumer", "--dataset", "published-objects", "--action", "file.read"))
+}
+
 func (f *publishedObjectFixture) verifyDiscovery(t *testing.T, kind, object, keyword, commit string, definition map[string]any) {
 	t.Helper()
 	schema := asMap(t, body(t, f.consume(t, "read", testObjectReference(t, f.repository, "schema/published-object.definition/v1", ""), "--repo", f.repository, "--commit", commit)))
@@ -196,14 +198,20 @@ func (f *publishedObjectFixture) verifyDiscovery(t *testing.T, kind, object, key
 	if !ok {
 		t.Fatalf("published Schema read has no field contract: %#v", schema)
 	}
-	if schema["commit"] != commit || asMap(t, schema["value"])["entity"] != "PublishedObject" ||
-		!reflect.DeepEqual(asMap(t, fields["kind"])["access"], []any{"filter"}) {
-		t.Fatalf("instance and its declared discovery fields do not share the publication basis: %#v", schema)
+	if schema["commit"] != commit || asMap(t, schema["value"])["entity"] != "PublishedObject" || asMap(t, fields["kind"])["access"] != nil {
+		t.Fatalf("instance and its Schema do not share the publication basis: %#v", schema)
 	}
-	body(t, f.govern(t, "operations", "projection", "sync", "--repo", f.repository))
+	declaration := asMap(t, body(t, f.consume(t, "read", testObjectReference(t, f.repository, "index/published-object", testObjectLocator("index", "kind-filter")), "--repo", f.repository, "--commit", commit)))
+	declared := asMap(t, declaration["value"])
+	if declaration["commit"] != commit || !reflect.DeepEqual(declared["uses"], []any{"filter"}) ||
+		!reflect.DeepEqual(declared["inputs"], []any{map[string]any{"from": "schema/published-object.definition/v1#/fields/kind"}}) {
+		t.Fatalf("instance and its declared discovery fields do not share the publication basis: %#v", declaration)
+	}
+	f.prepareSearchDataset(t, commit)
+	body(t, f.govern(t, "operations", "projection", "sync", "--dataset", "published-objects", "--revision", "1"))
 	consumer := productClient(t, f.server, "agent:object-consumer").Objects()
 	for _, query := range [][]string{{"--query", keyword}, {"--eq", "kind=" + kind}} {
-		args := append([]string{"search", "--repo", f.repository, "--commit", commit}, query...)
+		args := append([]string{"search", "--dataset", "published-objects", "--revision", "1"}, query...)
 		search := asMap(t, body(t, f.consume(t, args...)))
 		if len(search["hits"].([]any)) != 1 || searchHitObjectID(t, search) != object || search["completeness"] != "complete" {
 			t.Fatalf("declared discovery did not identify the published object: %#v", search)
@@ -212,7 +220,7 @@ func (f *publishedObjectFixture) verifyDiscovery(t *testing.T, kind, object, key
 		if hit["repository"] != f.repository || hit["commit"] != commit || hit["objectId"] != object {
 			t.Fatalf("discovery lost object identity or fixed version: %#v", hit)
 		}
-		request := kcclient.ObjectSearchRequest{ObjectScope: kcclient.ObjectScope{Repository: f.repository, Commit: commit}}
+		request := kcclient.ObjectSearchRequest{ObjectScope: kcclient.ObjectScope{Dataset: "published-objects", Revision: 1}}
 		if query[0] == "--query" {
 			request.Query = keyword
 		} else {
@@ -235,11 +243,11 @@ func (f *publishedObjectFixture) verifyDiscovery(t *testing.T, kind, object, key
 			t.Fatalf("hit and authoritative same-version read diverged: hit=%#v read=%#v", fixed, read)
 		}
 	}
-	private := asMap(t, body(t, f.consume(t, "search", "--repo", f.repository, "--commit", commit, "--query", "hiddenassetnotes")))
+	private := asMap(t, body(t, f.consume(t, "search", "--dataset", "published-objects", "--revision", "1", "--query", "hiddenassetnotes")))
 	if len(private["hits"].([]any)) != 0 {
-		t.Fatalf("a field without access was searched: %#v", private)
+		t.Fatalf("an undeclared field was searched: %#v", private)
 	}
-	expectCode(t, f.consume(t, "search", "--repo", f.repository, "--commit", commit, "--eq", "internalNote=hiddenassetnotes"), "CAPABILITY_UNSATISFIED")
+	expectCode(t, f.consume(t, "search", "--dataset", "published-objects", "--revision", "1", "--eq", "internalNote=hiddenassetnotes"), "CAPABILITY_UNSATISFIED")
 	f.verifyUninstalledInspection(t, object, commit)
 }
 

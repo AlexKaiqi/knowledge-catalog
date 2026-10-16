@@ -1,0 +1,36 @@
+name: kc-acceptance-live-origin
+
+# 两个实例跑同一份脚本：live-origin 在部署的 credentialOrigins 里，untrusted-origin 不在。
+# 验收用它确认凭证只发往可信 origin。live-origin 容器另在 7402 起一份，用来证明同 host 不同端口也不带凭证；别名 api.live-origin 指向同一容器，用来证明子域名也不带凭证。镜像与 accessor 夹具使用同一基础镜像，不额外安装依赖。
+services:
+  live-origin:
+    image: python:3.13-alpine
+    working_dir: /opt/live-origin
+    command: [sh, -c, "python3 origin.py --listen 0.0.0.0:7402 --name live-origin-alt-port --generation alt-port-v1 & exec python3 origin.py --listen 0.0.0.0:7400 --name live-origin --generation live-origin-v1"]
+    ports:
+      - "127.0.0.1:7400:7400"
+      - "127.0.0.1:7402:7402"
+    networks:
+      default:
+        aliases: [api.live-origin]
+    volumes:
+      - ./:/opt/live-origin:ro
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7400/health'); urllib.request.urlopen('http://127.0.0.1:7402/health')"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  untrusted-origin:
+    image: python:3.13-alpine
+    working_dir: /opt/live-origin
+    command: [python3, origin.py, --listen, 0.0.0.0:7401, --name, untrusted-origin, --generation, untrusted-v1]
+    ports:
+      - "127.0.0.1:7401:7401"
+    volumes:
+      - ./:/opt/live-origin:ro
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7401/health')"]
+      interval: 2s
+      timeout: 3s
+      retries: 20

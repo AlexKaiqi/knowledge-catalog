@@ -44,7 +44,7 @@ func TestModuleParameterContractChecksWhitelistAndRepeatedValuesOnly(t *testing.
 		flags   map[string]any
 		message string
 	}{
-		{map[string]any{"repo": "other"}, "--repo is not valid for kc files read"},
+		{map[string]any{"ref": "main"}, "--ref is not valid for kc files read"},
 		{map[string]any{"path": []string{"one", "two"}}, "--path must be supplied once"},
 		{map[string]any{"path": true}, "--path requires a value"},
 	} {

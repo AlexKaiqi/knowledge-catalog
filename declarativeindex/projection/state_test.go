@@ -47,6 +47,10 @@ func TestStateRefreshFindsDynamicValueWithoutChangingSnapshot(t *testing.T) {
 		Basis: objectmodel.ObservationBasis{BindingGeneration: "g1", Consistency: objectmodel.ObservationRepeatable, SourceRevision: "r1", ObservedAt: "2026-08-27T00:00:00Z"},
 	}
 	request := retrieval.SearchOf(retrieval.SearchMATCH("running"))
+	// Declarations reach the query side through a maintained projection.
+	if _, err := idx.Ensure(repo, commit); err != nil {
+		t.Fatal(err)
+	}
 	required, err := idx.RequiresState(repo, commit, request)
 	if err != nil || !required {
 		t.Fatalf("dynamic text query must select State projection: required=%v err=%v", required, err)

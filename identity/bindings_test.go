@@ -12,7 +12,7 @@ import (
 
 func TestVerifiedUsernameBindingsSurviveReplacementAndRejectTakeover(t *testing.T) {
 	path := filepath.Join(t.TempDir(), identity.Filename)
-	user := identity.VerifiedUser{Username: "kaiqidong", Provider: "gitea", Issuer: "https://id.example", Subject: "42"}
+	user := identity.VerifiedUser{Username: "kaiqidong", Provider: "taihu", Issuer: "https://id.example", Subject: "42"}
 	if err := identity.Bind(path, user); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
 		t.Fatalf("missing durable state: %v", err)
 	}
@@ -34,7 +34,7 @@ func TestVerifiedUsernameBindingsSurviveReplacementAndRejectTakeover(t *testing.
 	}{
 		{"recycled username", func(u *identity.VerifiedUser) { u.Subject = "43" }},
 		{"different issuer", func(u *identity.VerifiedUser) { u.Issuer = "https://other.example" }},
-		{"different provider", func(u *identity.VerifiedUser) { u.Provider = "taihu" }},
+		{"different provider", func(u *identity.VerifiedUser) { u.Provider = "oidc" }},
 		{"renamed user", func(u *identity.VerifiedUser) { u.Username = "renamed" }},
 	} {
 		t.Run(change.name, func(t *testing.T) {
@@ -68,7 +68,7 @@ func TestConcurrentBindingHasOneOwner(t *testing.T) {
 			if i%2 == 0 {
 				subject = "43"
 			}
-			results <- identity.Bind(path, identity.VerifiedUser{Username: "kaiqidong", Provider: "gitea", Issuer: "https://id.example", Subject: subject})
+			results <- identity.Bind(path, identity.VerifiedUser{Username: "kaiqidong", Provider: "taihu", Issuer: "https://id.example", Subject: subject})
 		}(i)
 	}
 	wg.Wait()

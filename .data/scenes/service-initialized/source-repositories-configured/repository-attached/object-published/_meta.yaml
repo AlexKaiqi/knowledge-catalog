@@ -12,17 +12,28 @@ evidence:
       - "publication"
       - "consumption"
     tests:
-      - "cli/read_flow_test.go"
+      - "TestCatalogRepoReadFlow"
+      - "TestCatalogRepoReadErrors"
+      - "TestAspectBindingResolveThroughCLIAndWorkspace"
+      - "TestWorkspaceSearchDoesNotAdoptUnselectedSourceDeclarations"
+      - "TestWorkspaceSearchUnsatisfiedExplainsHowToRecover"
+      - "TestWorkspaceSearchPublicContinuation"
       - "TestObjectResolveAndObjectLogOverHTTP"
       - "TestCatalogViewsChecksAndObjectResolve"
     title: "读取与解析已发表对象返回对应正文及历史"
+  - id: "relation-discovery-without-index-fails-closed"
+    source: "snapshot.product"
+    views: ["consumption", "lifecycle"]
+    title: "Dataset 已发表并可精确回读，但无索引不能发现关系"
+    tests:
+      - "TestRelationsWithoutIndexNeverFallsBackToAuthorityScan"
   - source: "schema.access"
     views:
       - "publication"
       - "consumption"
     tests:
-      - "TestDescribeSchemaListsAccessHints"
-    title: "描述 Schema 时返回访问提示"
+      - "TestDescribeSchemaListsStructureWithoutAccess"
+    title: "描述 Schema 时仅返回结构"
   - source: "access.rules"
     views:
       - "access-control"
@@ -35,7 +46,7 @@ probes:
     views:
       - "publication"
       - "consumption"
-    title: "读取已发表对象得到正文和历史，无索引时关系查询拒绝执行"
+    title: "读取已发表对象的正文和历史，固定 Dataset 修订回读并返回精确空关系结果"
   - file: "probe-remove.feature"
     source: "writer.snapshot"
     views:

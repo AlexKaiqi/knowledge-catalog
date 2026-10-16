@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"kc/kernel"
 	"kc/snapshot"
 	"kc/snapshot/dataset"
 )
@@ -31,8 +32,12 @@ type WorkspaceFileDirectoryRequest struct {
 
 type WorkspaceFileReadRequest struct {
 	WorkspaceFileCoordinate
-	MountPath string `json:"mountPath"`
-	File      string `json:"file"`
+	// Repository+Commit select raw fixed file access instead of a Dataset.
+	// This mode uses Path and rejects Dataset, Pin, View, MountPath and File.
+	Repository string `json:"repository,omitempty"`
+	Commit     string `json:"commit,omitempty"`
+	MountPath  string `json:"mountPath"`
+	File       string `json:"file"`
 	// Path addresses one delivered file in the composed tree (see
 	// WorkspaceFileDirectoryRequest).
 	Path   string `json:"path,omitempty"`
@@ -65,6 +70,18 @@ type WorkspaceFileReadResponse struct {
 	TotalBytes int64                `json:"totalBytes"`
 	EOF        bool                 `json:"eof"`
 	Content    []byte               `json:"content"`
+}
+
+// RepositoryFileReadResponse is returned for Repository+Commit reads. A raw
+// source file has no Dataset pin or delivery-layout coordinates.
+type RepositoryFileReadResponse struct {
+	Repository kernel.RepositoryID `json:"repository"`
+	Commit     kernel.CommitID     `json:"commit"`
+	Path       string              `json:"path"`
+	Offset     int64               `json:"offset"`
+	TotalBytes int64               `json:"totalBytes"`
+	EOF        bool                `json:"eof"`
+	Content    []byte              `json:"content"`
 }
 
 func (s filesService) Mounts(ctx context.Context, request WorkspaceFileMountsRequest, options RequestOptions, output any) error {

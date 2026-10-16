@@ -15,7 +15,17 @@ func (s *Service) ReadReference(ctx context.Context, ref objectmodel.Reference) 
 	if err != nil {
 		return nil, err
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if ref.Locator == "" {
+		complete, err := s.declarations.Contains(ref.Repository, ref.Object)
+		if err != nil {
+			return nil, err
+		}
+		if !complete {
+			return s.readPartialReference(ctx, ref, rawReference)
+		}
 		values, err := s.declarations.ReadReference(ref)
 		if err != nil {
 			return nil, err
@@ -49,6 +59,9 @@ func (s *Service) ReadReference(ctx context.Context, ref objectmodel.Reference) 
 	result.Reference, result.Locator = rawReference, ref.Locator
 	if len(result.Observations) > 0 {
 		result.Digest = ""
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return []objectmodel.ObservedValue{result}, nil
 }

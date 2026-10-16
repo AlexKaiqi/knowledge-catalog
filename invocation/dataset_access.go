@@ -302,7 +302,7 @@ func allowedDatasetFileRead(home string, flags map[string]invoke.FlagValue, repo
 		Repo:      repository,
 		Dataset:   invoke.DatasetOf(flags),
 	}
-	_, ok := MatchAllow(file.Rules, q)
+	_, ok := MatchAllow(withDatasetDefaults(home, as, file.Rules), q)
 	return ok
 }
 
@@ -442,10 +442,18 @@ func DatasetFSMayReadRepository(home string, flags map[string]invoke.FlagValue, 
 	if OwnerBypass(flags) {
 		return true, nil
 	}
-	if allowedDatasetFileRead(home, flags, repository) {
-		return true, nil
+	// File consumption has a fixed source version, but no application-level
+	// Object or Aspect coordinate. Keep authorization errors distinguishable
+	// from a caller's lack of permission so inventory cannot hide a failure.
+	query := map[string]invoke.FlagValue{
+		"as": invoke.FlagString(flags, "as"), "dataset": invoke.DatasetOf(flags),
+		"repo": repository, "ref": invoke.FlagString(flags, "ref"),
 	}
-	return PrincipalAllowed(home, invoke.FlagString(flags, "as"), "file.read", repository, opened...), nil
+	err := Authorize(home, "file.read", query, nil, opened...)
+	if kernel.CodeOf(err) == kernel.ErrForbidden {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 func (p *SemanticProjection) List(directory string, limit int, continuation string) ([]snapshot.DirectoryEntry, string, bool, error) {

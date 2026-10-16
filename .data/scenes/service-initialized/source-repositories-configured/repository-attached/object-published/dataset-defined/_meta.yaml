@@ -12,7 +12,7 @@ evidence:
       - "consumption"
     tests:
       - "TestOpenedDatasetPinDoesNotMoveWithLaterCommit"
-      - "TestRemoteAccessDescribeSendsWorkspaceNotRepository"
+      - "TestRemoteAccessDescribeSendsThePinnedWorkspace"
       - "TestPlanAccessTwoRepositories"
     title: "固定 Dataset 版本后后续写入不改变 pin，访问计划保留各仓来源"
   - source: "dataset.compose"
@@ -139,12 +139,12 @@ evidence:
       - "TestSearchAtDoesNotRewindLive"
       - "TestIndexSchemaChangeForcesRebuild"
       - "TestCompiledDocumentDoesNotCarryWorkspaceScope"
-    title: "切换查询版本不回退实时投影，Schema 变化要求重建且索引不混入 Workspace 范围"
+    title: "底层旧版本查询不回退实时投影，Schema 变化要求重建，编译对象不携带消费范围"
   - source: "object.relations"
     views:
       - "consumption"
     tests:
-      - "TestRelationRepositoryWorkspaceAndHTTPUseOneExactBasisExecutor"
+      - "TestRelationDatasetCLIAndHTTPUseOneExactBasisExecutor"
       - "TestRelationsWithoutIndexNeverFallsBackToAuthorityScan"
     title: "关系查询共享精确版本基线，无索引时拒绝回退扫描"
   - source: "object.traverse"

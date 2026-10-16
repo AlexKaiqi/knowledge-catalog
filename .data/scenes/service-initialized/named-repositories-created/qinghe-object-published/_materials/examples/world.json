@@ -1,0 +1,35 @@
+{
+  "world": "qinghe-examples",
+  "repositories": [
+    {"id": "product", "provision": "managed"},
+    {"id": "campaign", "provision": "managed"},
+    {"id": "media", "provision": "connected"},
+    {"id": "store-ops", "provision": "connected"},
+    {"id": "table-meta", "provision": "managed"},
+    {"id": "sales-semantic", "provision": "managed"}
+  ],
+  "datasets": ["qinghe-analysis", "autumn-launch-kit", "store-oncall"],
+  "steps": [
+    {"kind": "commit", "repository": "product", "dir": "repos/product", "commandId": "examples-product-base"},
+    {"kind": "commit", "repository": "campaign", "dir": "repos/campaign", "commandId": "examples-campaign-base"},
+    {"kind": "files", "repository": "media", "dir": "files/media/r1", "message": "秋季上新成片、封面与第一版字幕"},
+    {"kind": "commit", "repository": "media", "dir": "repos/media", "commandId": "examples-media-base"},
+    {"kind": "files", "repository": "store-ops", "dir": "files/store-ops/r1", "message": "order-cli 示例脚本"},
+    {"kind": "commit", "repository": "store-ops", "dir": "repos/store-ops", "commandId": "examples-store-ops-base"},
+    {"kind": "commit", "repository": "table-meta", "dir": "../table-meta", "commandId": "examples-table-meta-base"},
+    {"kind": "commit", "repository": "sales-semantic", "dir": "../sales-semantic", "commandId": "examples-sales-semantic-base"},
+    {"kind": "commit", "repository": "sales-semantic", "dir": "updates/gmv-caliber-v1", "commandId": "examples-gmv-caliber-v1"},
+    {"kind": "define", "dataset": "qinghe-analysis", "revision": 1, "recipe": "datasets/qinghe-analysis.yaml"},
+    {"kind": "define", "dataset": "autumn-launch-kit", "revision": 1, "recipe": "datasets/autumn-launch-kit.yaml"},
+    {"kind": "define", "dataset": "store-oncall", "revision": 1, "recipe": "datasets/store-oncall.yaml"},
+    {"kind": "commit", "repository": "sales-semantic", "dir": "updates/gmv-caliber-v2", "commandId": "examples-gmv-caliber-v2"},
+    {"kind": "define", "dataset": "qinghe-analysis", "revision": 2, "recipe": "datasets/qinghe-analysis.yaml"},
+    {"kind": "files", "repository": "media", "dir": "files/media/r2", "message": "字幕更正：尝鲜价 32 元"},
+    {"kind": "commit", "repository": "media", "dir": "updates/media-subtitle-fix", "commandId": "examples-media-subtitle-fix"},
+    {"kind": "define", "dataset": "autumn-launch-kit", "revision": 2, "recipe": "datasets/autumn-launch-kit.yaml"},
+    {"kind": "commit", "repository": "media", "dir": "updates/media-vision", "commandId": "examples-media-vision"},
+    {"kind": "define", "dataset": "autumn-launch-kit", "revision": 3, "recipe": "datasets/autumn-launch-kit.yaml"},
+    {"kind": "commit", "repository": "store-ops", "dir": "updates/store-ops-runbook-v2", "commandId": "examples-store-ops-runbook-v2"},
+    {"kind": "define", "dataset": "store-oncall", "revision": 2, "recipe": "datasets/store-oncall.yaml"}
+  ]
+}

@@ -1,0 +1,13 @@
+---
+object_id: rel/affected-by/order-service-autumn-2026
+kind: Relation
+schema_ref: schema/relation.canonical
+---
+relationId: rel/affected-by/order-service-autumn-2026
+relationType: affected-by
+direction: DIRECTED
+endpoints:
+- role: service
+  object: service/qinghe.order-service
+- role: campaign
+  object: campaign/qinghe.autumn-2026

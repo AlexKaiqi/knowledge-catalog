@@ -13,6 +13,9 @@ import (
 	"kc/snapshot"
 )
 
+// Access planning over a Dataset pin reads only the scoped Schema authority and
+// never scans the repository. Schemas carry structure only, so the plan holds no
+// retrieval face from them; Dataset-selected index declarations supply faces.
 func TestSchemaAccessCompilationReadsOnlyScopedSchemaUnits(t *testing.T) {
 	raw := testkit.MakeTreeStore(t, "kr://reader/schema-access-scope")
 	stores := snapshot.NewRegistry()
@@ -28,8 +31,8 @@ func TestSchemaAccessCompilationReadsOnlyScopedSchemaUnits(t *testing.T) {
 		TargetRepository: raw.ID(), TargetRef: snapshot.DefaultRef,
 		BaseCommit: root, ExpectedTargetCommit: root,
 		Operations: []objectmodel.Operation{
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/article"}, PathHint: "public/article-schema.yaml", Value: map[string]any{"entity": "Article", "fields": map[string]any{"body": map[string]any{"type": "string", "access": []any{"text"}}}}},
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/private"}, PathHint: "private/schema.yaml", Value: map[string]any{"entity": "Private", "fields": map[string]any{"secret": map[string]any{"type": "string", "access": []any{"filter"}}}}},
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/article"}, PathHint: "public/article-schema.yaml", Value: map[string]any{"entity": "Article", "fields": map[string]any{"body": map[string]any{"type": "string"}}}},
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/private"}, PathHint: "private/schema.yaml", Value: map[string]any{"entity": "Private", "fields": map[string]any{"secret": map[string]any{"type": "string"}}}},
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "article/a"}, PathHint: "public/article.yaml", Value: map[string]any{"body": "ordinary content"}},
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "index/ordinary"}, PathHint: "public/ordinary-index.yaml", Value: map[string]any{"targets": "ordinary content"}},
 		},
@@ -50,8 +53,8 @@ func TestSchemaAccessCompilationReadsOnlyScopedSchemaUnits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(plan.Specs) != 1 || len(plan.Specs[0].Schemas) != 1 || len(plan.Specs[0].Fields) != 1 || plan.Specs[0].Fields[0].Schema != "schema/article" {
-		t.Fatalf("compiled access escaped the published Schema scope: %#v", plan)
+	if len(plan.Specs) != 1 || len(plan.Specs[0].Fields) != 0 || len(plan.Specs[0].Schemas) != 0 {
+		t.Fatalf("a structure-only Schema contributed retrieval faces: %#v", plan)
 	}
 	if counting.listCalls != 0 || counting.reads[repofile.LocatorManifestPath] != 0 {
 		t.Fatalf("access compilation scanned the repository: lists=%d reads=%#v", counting.listCalls, counting.reads)

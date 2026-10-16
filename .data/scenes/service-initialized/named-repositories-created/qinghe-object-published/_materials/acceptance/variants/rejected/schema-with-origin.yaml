@@ -1,0 +1,10 @@
+---
+object_id: schema/table.live-stats-bound
+origin: http://live-origin:7400
+---
+entity: Table
+aspect: live-stats-bound
+pattern: record
+fields:
+  rowCount:
+    type: number

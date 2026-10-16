@@ -1,7 +1,8 @@
 package server
 
 import (
-	inv "kc/invocation"
+	"kc/identity"
+	"kc/identity/local"
 	"kc/invoke"
 
 	"net/http"
@@ -21,12 +22,16 @@ type HTTPServerOptions struct {
 	AuthMode string
 	// NativeAPIOrigin is a fixed lakeFS origin, never a client-selected proxy.
 	NativeAPIOrigin string
-	Authenticator   inv.HTTPAuthenticator
+	// Authenticator is the selected pairing. Nil with an empty or local
+	// AuthMode is the local test seam; any other nil fails closed.
+	Authenticator   identity.HTTPAuthenticator
 	AdminPrincipals []string
-	// ServiceIdentity identifies the KC service to Taihu for token introspection
-	// and client-side login flows. When non-nil, the service has a registered
-	// Taihu application identity.
-	ServiceIdentity *ServiceIdentity
+	// LoginBroker relays the deployment-owned login application for clients;
+	// nil means browser and CLI login are not offered by this Server.
+	LoginBroker identity.LoginBroker
+	// ServicePrincipal is the service's own principal for background
+	// observation; empty installs no worker identity.
+	ServicePrincipal string
 	// StateLookup may be supplied by an embedding application. Standalone
 	// kc serve installs a generic HTTP adapter; each request uses the origin
 	// declared on that Binding's Domain Schema. Nil fails bound READs instead
@@ -38,6 +43,9 @@ type HTTPServerOptions struct {
 	// LiveAccessCredentialOrigins is the deployment's trusted proof audience
 	// set. Descriptor origins and redirects cannot extend this set.
 	LiveAccessCredentialOrigins []string
+	// LiveAccessReadLimits bounds each external unit and the time all external
+	// units of one request share. Zero values leave a limit unset.
+	LiveAccessReadLimits objectserving.ReadLimits
 	// Embedder is an optional request-time query-vector provider for semantic
 	// recall. Nil keeps semantic recall fail-closed (CAPABILITY_UNSATISFIED).
 	Embedder retrieval.Embedder
@@ -46,24 +54,32 @@ type HTTPServerOptions struct {
 	Reranker retrieval.Reranker
 }
 
-func (o HTTPServerOptions) Authenticated() bool { return o.Authenticator != nil }
+// authenticator is the effective pairing. The zero-value options used by
+// HTTPHandler(home) and a bare --auth local resolve to the local
+// authenticator, so every request goes through the same identity decision.
+func (o HTTPServerOptions) authenticator() identity.HTTPAuthenticator {
+	if o.Authenticator == nil {
+		if mode := strings.TrimSpace(o.AuthMode); mode == "" || strings.EqualFold(mode, local.Name) {
+			return local.New()
+		}
+	}
+	return o.Authenticator
+}
+
+// Authenticated reports whether callers must prove identity. A
+// self-asserting pairing (local) only names the caller.
+func (o HTTPServerOptions) Authenticated() bool {
+	a := o.authenticator()
+	return a != nil && !identity.SelfAsserted(a)
+}
 
 func (o HTTPServerOptions) AuthModeLabel() string {
-	if o.Authenticator != nil {
-		return o.Authenticator.Name()
-	}
-	mode := strings.ToLower(strings.TrimSpace(o.AuthMode))
-	if mode == "" {
-		return "local"
-	}
-	return mode
+	return identity.Mode(o.authenticator(), o.AuthMode)
 }
 
-func (o HTTPServerOptions) localAssertion() bool {
-	return o.Authenticator == nil && o.AuthModeLabel() == "local"
-}
+func (o HTTPServerOptions) localAssertion() bool { return identity.SelfAsserted(o.authenticator()) }
 
-func (o HTTPServerOptions) isAdmin(id inv.HTTPIdentity) bool {
+func (o HTTPServerOptions) isAdmin(id identity.HTTPIdentity) bool {
 	if id.Admin {
 		return true
 	}
@@ -75,18 +91,11 @@ func (o HTTPServerOptions) isAdmin(id inv.HTTPIdentity) bool {
 	return false
 }
 
-func authenticateHTTPRequest(w http.ResponseWriter, r *http.Request, options HTTPServerOptions) (inv.HTTPIdentity, bool) {
+func authenticateHTTPRequest(w http.ResponseWriter, r *http.Request, options HTTPServerOptions) (identity.HTTPIdentity, bool) {
 	if !options.Authenticated() {
-		return inv.HTTPIdentity{}, true
+		return identity.HTTPIdentity{}, true
 	}
-	var id inv.HTTPIdentity
-	var err error
-	if options.AuthModeLabel() == "lakefs" || options.AuthModeLabel() == "taihu" {
-		err = validateLakeFSConsoleRequest(r)
-	}
-	if err == nil {
-		id, err = options.Authenticator.Authenticate(r.Context(), r.Header)
-	}
+	id, err := identity.Authenticate(r, identity.RequestOptions{Authenticator: options.authenticator(), Mode: options.AuthMode, Check: identity.BrowserRequestCheck(false)})
 	if err != nil {
 		status := http.StatusUnauthorized
 		if kernel.CodeOf(err) == kernel.ErrTemporaryUnavailable {
@@ -99,7 +108,7 @@ func authenticateHTTPRequest(w http.ResponseWriter, r *http.Request, options HTT
 			w.Header().Set("WWW-Authenticate", `Bearer realm="kc"`)
 		}
 		invoke.WriteJSON(w, status, kernel.FaultJSON(err))
-		return inv.HTTPIdentity{}, false
+		return identity.HTTPIdentity{}, false
 	}
 	return id, true
 }

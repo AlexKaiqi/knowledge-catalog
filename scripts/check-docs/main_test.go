@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -92,7 +93,7 @@ func TestValidateMarkdownLinksMaintainedDocuments(t *testing.T) {
 		path string
 	}{
 		{name: "package README", path: "component/nested/README.md"},
-		{name: "root task", path: "TASK.md"},
+		{name: "task", path: "tasks/todo/PLUGIN-INDEX-01.md"},
 		{name: "agent rules", path: "AGENTS.md"},
 		{name: "maintained note", path: "cli/SURFACE.md"},
 		{name: "design document", path: "doc/design/topic.md"},
@@ -103,7 +104,7 @@ func TestValidateMarkdownLinksMaintainedDocuments(t *testing.T) {
 			root := filepath.Join(t.TempDir(), ".checkout")
 			writeMarkdownFixture(t, root, tc.path, "[contract](contract.md)\n")
 			var docs []string
-			if strings.HasPrefix(tc.path, "doc/") {
+			if strings.HasPrefix(tc.path, "doc/") || strings.HasPrefix(tc.path, "tasks/") {
 				docs = []string{tc.path}
 			}
 			check := func() error {
@@ -119,6 +120,25 @@ func TestValidateMarkdownLinksMaintainedDocuments(t *testing.T) {
 			writeMarkdownFixture(t, root, filepath.Join(filepath.Dir(tc.path), "contract.md"), "contract\n")
 			if err := check(); err != nil {
 				t.Fatalf("repaired maintained-document link failed: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateMarkdownLinksRejectsLocalValidationEvidence(t *testing.T) {
+	for _, present := range []bool{false, true} {
+		t.Run(fmt.Sprint(present), func(t *testing.T) {
+			root := filepath.Join(t.TempDir(), ".checkout")
+			writeMarkdownFixture(t, root, "README.md", "[evidence](.validation/run/report.json)\n")
+			if present {
+				writeMarkdownFixture(t, root, ".validation/run/report.json", "{}\n")
+			}
+			if err := validateMarkdownLinks(root, []string{"README.md"}); err == nil || !strings.Contains(err.Error(), "local validation evidence is not checked in") {
+				t.Fatalf("local-only evidence link was not rejected: %v", err)
+			}
+			writeMarkdownFixture(t, root, "README.md", "Evidence: `.validation/run/report.json`.\n")
+			if err := validateMarkdownLinks(root, []string{"README.md"}); err != nil {
+				t.Fatalf("literal evidence path rejected: %v", err)
 			}
 		})
 	}

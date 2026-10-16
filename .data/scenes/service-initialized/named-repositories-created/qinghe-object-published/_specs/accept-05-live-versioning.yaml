@@ -1,0 +1,62 @@
+# 插件重构验收：LiveAccess 版本、固定与实例替换。夹具见 _materials/acceptance/README.md；用例树见同文件“用例树”一节。
+# 每条从本节点前态独立开始，由 probe 显式创建所需仓与夹具，不传递其他用例的后态。
+
+- id: accept-live-pinned-descriptor-head-change
+  title: 固定版本按原取值描述取值，改描述会改变声明摘要
+  claims: ["liveaccess#U21", "liveaccess#U5"]
+  given:
+    - 成员级世界；Dataset sales-analysis 修订 1 已发布，固定 table-meta 与 ops-shared 的提交。
+    - 发布后在 ops-shared HEAD 把 ops/pipeline-monitor 的 origin 改为 untrusted-origin 的 7401 端口。
+  when:
+    - 经 Dataset sales-analysis 读取 table/shop.orders 的 runtime；再直接按 table-meta 与 ops-shared HEAD 读取。
+  then:
+    - Dataset 读取仍调用 live-origin，freshness-lag 观察里的声明摘要与发布前一致。
+    - HEAD 读取的 freshness-lag 声明摘要与 Dataset 读取不同；调用目标按部署可信范围处理，不向 untrusted-origin 发送凭证。
+  risk: 固定版本悄悄跟随 HEAD 的取值描述，或描述变化不改变声明摘要，事后无法复核用的是哪份声明。
+
+- id: accept-live-replace-instance
+  title: 更换测试源实例不改来源声明
+  claims: ["liveaccess#U11"]
+  given:
+    - 成员级世界已完成一次读取，测试源代际为 live-origin-v1。
+  when:
+    - 在同一地址用 --generation live-origin-v2 重启测试源，再读取 table/shop.orders 的 runtime。
+  then:
+    - 新观察的 bindingGeneration 为 live-origin-v2，声明摘要与取值描述摘要和替换前相同。
+    - 仓内容与 HEAD 不变。
+  risk: 换实例要求改仓内声明，或旧观察冒充新实例的结果。
+
+- id: accept-live-descriptor-deleted-at-head
+  title: HEAD 删除取值描述不影响固定读取
+  claims: ["liveaccess#U5"]
+  given:
+    - 成员级世界；Dataset sales-analysis 修订 1 已发布；随后 ops-shared HEAD 删除 ops/pipeline-monitor。
+  when:
+    - 经 Dataset 修订 1 读取 table/shop.orders 的 runtime；再按 HEAD 读取。
+  then:
+    - 修订 1 的读取照常调用 live-origin 返回 freshness-lag。
+    - HEAD 读取中 freshness-lag 在 failures 里报取值描述无法解析，row-count 与 retention-days 照常。
+  risk: 跨仓删除让固定版本失效，或 HEAD 读取静默跳过该成员。
+
+- id: accept-live-descriptor-digest-fanout
+  title: 改一份取值描述只改变引用它的单元的声明摘要
+  claims: ["liveaccess#U21", "liveaccess#U5"]
+  given:
+    - 成员级与方面级世界；记录 row-count、freshness-lag 与三张表 live-stats 的声明摘要。
+  when:
+    - 只修改 ops/warehouse-stats 的 name 字段后重新读取。
+  then:
+    - row-count 与三张表 live-stats 的声明摘要都变化；freshness-lag 的不变。
+    - 测试源收到的 descriptorDigest 与读取结果里的观察一致。
+  risk: 取值描述变化不进入声明摘要，事后无法复核用的是哪份描述；或摘要变化波及无关单元。
+
+- id: accept-live-pinned-dataset-unit-changed
+  title: 固定版本不跟随单元在 HEAD 改为静态
+  claims: ["liveaccess#U5"]
+  given:
+    - 成员级世界；Dataset sales-analysis 修订 1 已发布；随后 table-meta HEAD 把 row-count 改为静态值 0。
+  when:
+    - 经修订 1 读取 runtime；再按 HEAD 读取。
+  then:
+    - 修订 1 中 row-count 仍从测试源取得 6 并带观察；HEAD 中为静态 0 且没有观察。
+  risk: 固定版本按 HEAD 的声明解释，旧交付的含义被改写。

@@ -6,7 +6,7 @@ path_hint: capabilities/projections/definition.md
 ---
 # 维护查询投影
 
-查看投影状态、显式同步和发送观察变化提示；AccessSpec 说明可用的逻辑访问能力。
+查看 Dataset 固定修订的索引状态，并在维护授权下显式准备索引。访问概览说明选入的声明、解释它们的实例、能力清单和就绪；说明读取不触发构建。
 
 相关说明：[派生投影](../../mechanisms/projection/definition.md)、[版本](../../concepts/version/definition.md)、[动态资源访问](../../mechanisms/dynamic-access/definition.md)。
 

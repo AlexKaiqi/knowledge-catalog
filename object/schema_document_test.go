@@ -15,15 +15,8 @@ func TestSchemaDocumentJSONSchemaMatchesBuiltinContract(t *testing.T) {
 	if !ok {
 		t.Fatal("schema-document.schema.yaml missing $defs")
 	}
-	gotAccess := enumSet(t, defs, "access")
-	for hint := range supportedSchemaAccess {
-		if _, ok := gotAccess[hint]; !ok {
-			t.Fatalf("JSON Schema access enum missing %s", hint)
-		}
-		delete(gotAccess, hint)
-	}
-	if len(gotAccess) != 0 {
-		t.Fatalf("JSON Schema access enum extras %v", gotAccess)
+	if _, exists := defs["access"]; exists {
+		t.Fatal("schema-document.schema.yaml still defines field access; retrieval belongs to an index declaration")
 	}
 
 	gotTypes := enumSet(t, defs, "fieldType")

@@ -37,8 +37,10 @@ func (f *httpFacade) snapshotStoreService() snapshotservice.Handler {
 }
 
 func (f *httpFacade) snapshotNativeCredential() func(context.Context) (string, error) {
-	explicitLocal := f.options.localAssertion() && strings.EqualFold(strings.TrimSpace(f.options.AuthMode), "local")
-	if (!f.options.Authenticated() && !explicitLocal) || f.options.AuthModeLabel() == "lakefs" {
+	// The implicit local seam (HTTPHandler(home)) has no deployment and no
+	// private storage credential; an explicit --auth local or a verifying
+	// pairing uses the operator-supplied one. Caller proof is never forwarded.
+	if f.options.authenticator() == nil || strings.TrimSpace(f.options.AuthMode) == "" && !f.options.Authenticated() {
 		return nil
 	}
 	return func(context.Context) (string, error) {
@@ -47,14 +49,11 @@ func (f *httpFacade) snapshotNativeCredential() func(context.Context) (string, e
 }
 
 func (f *httpFacade) snapshotIdentityOptions() snapshotservice.IdentityOptions {
-	options := snapshotservice.IdentityOptions{
-		Mode: f.options.AuthModeLabel(), Local: f.options.localAssertion(),
-		Authenticator: f.options.Authenticator,
-	}
+	options := snapshotservice.IdentityOptions{Mode: f.options.AuthModeLabel(), Authenticator: f.options.authenticator()}
 	if login := f.browserLoginConfig(); login != nil {
 		options.BrowserLogin = login
 	}
-	if f.deployment != nil && f.options.AuthModeLabel() != "lakefs" {
+	if f.deployment != nil {
 		options.ProviderURL = strings.TrimSuffix(strings.TrimRight(f.deployment.AuthURL, "/"), "/oauth2")
 		options.LogoutURL = f.deployment.AuthLogoutURL
 	}
@@ -88,6 +87,9 @@ func snapshotOperationAction(operation string) (string, error) {
 }
 
 func (f *httpFacade) acquireSnapshotResources(ctx context.Context, caller identity.HTTPIdentity, operation string) (snapshotservice.Resources, func(), error) {
+	if strings.TrimSpace(caller.Principal) == "" {
+		return snapshotservice.Resources{}, nil, kernel.Fail(kernel.ErrUnauthenticated, "a verified Server principal is required")
+	}
 	action, err := snapshotOperationAction(operation)
 	if err != nil {
 		return snapshotservice.Resources{}, nil, err
@@ -159,6 +161,7 @@ func (f *httpFacade) snapshotResources(opened *Home, caller identity.HTTPIdentit
 		flags["revision"] = definition.Revision
 		prepared, err := inv.PublishDatasetRecipe(&inv.Invocation{
 			Home: opened.Dir, WS: opened, Context: ctx, Flags: flags, Command: operation,
+			Observation: invoke.NewObservationTelemetry(ctx, f.runtime, operation, func() string { return inv.TelemetryProvider(flags) }),
 		}, definition)
 		if err != nil || prepared == nil {
 			return definition, nil, err
@@ -175,7 +178,7 @@ func (f *httpFacade) snapshotResources(opened *Home, caller identity.HTTPIdentit
 		}
 		return definition, receipt, nil
 	}
-	resources.PreparePublication = func(ctx context.Context, _ identity.HTTPIdentity, definition dataset.Dataset) error {
+	resources.PreparePublication = func(ctx context.Context, _ identity.HTTPIdentity, definition dataset.Dataset) (dataset.Dataset, error) {
 		return opened.DatasetPreparation.Execute(ctx, definition)
 	}
 	resources.EnsureDataset = func(_ context.Context, _ identity.HTTPIdentity, cat dataset.Service, id string) error {
@@ -187,8 +190,8 @@ func (f *httpFacade) snapshotResources(opened *Home, caller identity.HTTPIdentit
 	resources.RecordRead = func(ctx context.Context, caller identity.HTTPIdentity, evidence snapshotservice.FileReadEvidence) error {
 		return f.snapshotRecordFileRead(ctx, opened, caller, evidence)
 	}
-	resources.OpenView = func(ctx context.Context, caller identity.HTTPIdentity, coordinate snapshotservice.FileCoordinate, cat dataset.Service, definition dataset.Dataset, pin dataset.ResolvedDataset) (snapshotservice.FileView, error) {
-		return f.snapshotSemanticView(ctx, opened, caller, coordinate, cat, definition, pin)
+	resources.OpenView = func(ctx context.Context, caller identity.HTTPIdentity, coordinate snapshotservice.FileCoordinate, cat dataset.Service, definition dataset.Dataset, pin dataset.ResolvedDataset, record func(snapshotservice.FileReadEvidence) error) (snapshotservice.FileView, error) {
+		return f.snapshotSemanticView(ctx, opened, caller, coordinate, cat, definition, pin, record)
 	}
 	return resources
 }

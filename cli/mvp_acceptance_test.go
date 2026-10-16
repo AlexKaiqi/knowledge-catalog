@@ -14,7 +14,8 @@ func TestMVPProviderConsumerJourney(t *testing.T) {
 	repo := "kr://acme/public/core"
 	body(t, kc(home, "init"))
 	seedRepo(t, home, repo)
-	body(t, kc(home, "put", testObjectReference(t, repo, "schema/runbook.body", ""), "--repo", repo, "--command-id", "schema-1", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+	body(t, kc(home, "put", testObjectReference(t, repo, "schema/runbook.body", ""), "--repo", repo, "--command-id", "schema-1", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string"}}}`))
+	seedTextDeclaration(t, home, repo, "index/runbook-search", "schema/runbook.body", "body")
 	receipt := asMap(t, asMap(t, body(t, kc(home, "put", testObjectReference(t, repo, "runbook/payment-oncall", ""), "--repo", repo, "--command-id", "source-1", "--schema-ref", "schema/runbook.body", "--value", `{"body":"切换支付流量前先检查冻结窗口"}`, "--origin-kind", "SOURCE", "--source-ref", "file:///source/runbooks/payment-oncall.md")))["result"])
 	commit := receipt["newCommit"].(string)
 
@@ -31,7 +32,7 @@ func TestMVPProviderConsumerJourney(t *testing.T) {
 	}
 	expectCode(t, kc(home, "workspace", "list"), "USAGE_INVALID")
 
-	syncIndexes(t, home, repo)
+	syncIndexes(t, home, "agent")
 	search := asMap(t, body(t, kc(home, "search", "--dataset", "agent",
 		"--query", "冻结窗口")))
 	if search["completeness"] != "complete" || len(search["hits"].([]any)) != 1 {

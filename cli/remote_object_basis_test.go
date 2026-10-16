@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestProductSearchTransmitsRepositoryBasis(t *testing.T) {
+func TestProductSearchTransmitsDatasetRevision(t *testing.T) {
 	t.Setenv("KC_CONFIG_DIR", t.TempDir())
 	t.Setenv("KC_HOME", t.TempDir())
 	t.Setenv("KC_DATASET", "")
@@ -24,12 +24,12 @@ func TestProductSearchTransmitsRepositoryBasis(t *testing.T) {
 		_, _ = w.Write([]byte(`{}`))
 	}))
 	defer server.Close()
-	result := Run([]string{"--server", server.URL, "--as", "agent:reader", "search", "--repo", "kr://acme/source", "--ref", "refs/heads/release", "--commit", "fixed", "--query", "note"})
+	result := Run([]string{"--server", server.URL, "--as", "agent:reader", "search", "--dataset", "published", "--revision", "3", "--query", "note"})
 	if result.Status != 0 {
 		t.Fatal(result.Stdout)
 	}
-	if got["repository"] != "kr://acme/source" || got["ref"] != "refs/heads/release" || got["commit"] != "fixed" {
-		t.Fatalf("search lost repository basis: %#v", got)
+	if got["dataset"] != "published" || got["revision"] != float64(3) || got["repository"] != nil || got["ref"] != nil || got["commit"] != nil {
+		t.Fatalf("search lost Dataset revision: %#v", got)
 	}
 	var request serv.ObjectSearchRequest
 	raw, _ := json.Marshal(got)
@@ -37,8 +37,8 @@ func TestProductSearchTransmitsRepositoryBasis(t *testing.T) {
 		t.Fatal(err)
 	}
 	flags := request.Flags()
-	if invoke.FlagString(flags, "repo") != "kr://acme/source" || invoke.FlagString(flags, "ref") != "refs/heads/release" || invoke.FlagString(flags, "commit") != "fixed" {
-		t.Fatalf("HTTP search lost repository basis: %#v", flags)
+	if invoke.FlagString(flags, "dataset") != "published" || invoke.FlagString(flags, "revision") != "3" || invoke.FlagString(flags, "repo") != "" {
+		t.Fatalf("HTTP search lost Dataset revision: %#v", flags)
 	}
 }
 
@@ -112,7 +112,7 @@ func TestHTTPObjectRejectsMixedPinAndRepositoryBasis(t *testing.T) {
 		request.Header.Set("X-Kc-As", "agent:reader")
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, request)
-		if !strings.Contains(response.Body.String(), "USAGE_INVALID") || (route == "/object/v1/search" && !strings.Contains(response.Body.String(), "do not mix")) || (route == "/object/v1/objects:read" && !strings.Contains(response.Body.String(), "choose one scope")) {
+		if !strings.Contains(response.Body.String(), "USAGE_INVALID") || (route == "/object/v1/objects:read" && !strings.Contains(response.Body.String(), "choose one scope")) {
 			t.Errorf("mixed HTTP basis reached repository path: %s", response.Body.String())
 		}
 	}

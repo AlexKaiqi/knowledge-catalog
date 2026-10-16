@@ -14,23 +14,20 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	kcclient "kc/client"
 	"kc/identity"
+	"kc/identity/identitytest"
 	"kc/kernel"
 	"kc/liveaccess"
 	objectmodel "kc/object"
 	"kc/server"
 )
 
-type acceptanceAuthenticator struct{}
-
-func (acceptanceAuthenticator) Name() string { return "liveaccess-acceptance" }
-func (acceptanceAuthenticator) Authenticate(_ context.Context, header http.Header) (identity.HTTPIdentity, error) {
+var acceptanceAuthenticator = func() identitytest.Authenticator {
+	proofs := map[string]identity.HTTPIdentity{}
 	for _, principal := range []string{"operator", "reader", "auditor", "alice", "bob"} {
-		if header.Get("Authorization") == "Bearer "+principal+"-proof" {
-			return identity.HTTPIdentity{Principal: principal, OnBehalfOf: "verified-" + principal, Provider: "liveaccess-acceptance"}, nil
-		}
+		proofs["Bearer "+principal+"-proof"] = identity.HTTPIdentity{Principal: principal, OnBehalfOf: "verified-" + principal, Provider: "liveaccess-acceptance"}
 	}
-	return identity.HTTPIdentity{}, kernel.Fail(kernel.ErrUnauthenticated, "fixture authenticator rejected proof")
-}
+	return identitytest.Bearer("liveaccess-acceptance", proofs)
+}()
 
 // U16: a real verifier proves identity from Authorization; interleaved SDK
 // requests cross Server and the default Repo-selected HTTP entry unchanged.
@@ -71,7 +68,7 @@ func TestServerLiveAccessInterleavedAuthenticationUsesVerifiedCurrentCaller(t *t
 		_ = json.NewEncoder(w).Encode(map[string]any{"value": value, "basis": objectmodel.ObservationBasis{BindingGeneration: "source", Consistency: objectmodel.ObservationRepeatable, ObservedAt: "2026-10-14T12:00:00Z"}})
 	}))
 	t.Cleanup(runtime.Close)
-	f := newAcceptanceFixture(t, server.HTTPServerOptions{Authenticator: acceptanceAuthenticator{}})
+	f := newAcceptanceFixture(t, server.HTTPServerOptions{Authenticator: acceptanceAuthenticator})
 	f.stop(t)
 	f.config.LiveAccess.CredentialOrigins = []string{runtime.URL}
 	f.writeConfig(t)

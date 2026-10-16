@@ -14,10 +14,13 @@ import access "kc/liveaccess/service"
 import discovery "kc/discovery/service"
 func VerbRead() { OnTarget(func() { readRepositoryObserved() }) }
 func OnTarget(read func()) { read() }
-func VerbSearch() { (discovery.SearchExecutor{}).Execute() }`,
+func VerbSearch() { searchDataset() }`,
 		"invocation/repository_read.go": `package invocation
 import liveservice "kc/liveaccess/service"
 func readRepositoryObserved() { liveservice.ReadRepository() }`,
+		"invocation/dataset_search.go": `package invocation
+import discovery "kc/discovery/service"
+func searchDataset() { (discovery.DatasetSearchExecutor{}).Execute() }`,
 		"cli/commands_test.go": `package cli
 import inv "kc/invocation"
 func readVerbs() map[string]command { return map[string]command{"object-read": {Run: inv.VerbRead}} }
@@ -29,7 +32,7 @@ func (f *httpFacade) registerServiceRoutes(mux Mux) {
  mux.HandleFunc("POST /object/v1/search", f.objectSearch)
 }
 func (f *httpFacade) objectRead() { f.executeTyped(w,r,"object-read","object.read",inv.Command{Run: inv.VerbRead},flags) }
-func (f *httpFacade) objectSearch() { f.executeTyped(w,r,"object-search","object.search",inv.Command{Run: inv.VerbSearch},flags) }
+func (f *httpFacade) objectSearch() { f.executeTyped(w,r,"object-search","file.read",inv.Command{Run: inv.VerbSearch},flags) }
 func (f *httpFacade) executeTyped() { inv.InvokeApplicationWithTelemetryAtHome() }`,
 	}
 	parse := func(sources map[string]string) map[string]*ast.File {
@@ -51,7 +54,12 @@ func (f *httpFacade) executeTyped() { inv.InvokeApplicationWithTelemetryAtHome()
 		{"callee does not invoke callback", "invocation/verbs.go", "func OnTarget(read func()) { read() }", "func OnTarget(read func()) { _ = read }", "VerbRead does not call"},
 		{"foreign executor alias", "invocation/repository_read.go", `"kc/liveaccess/service"`, `"kc/unrelated/service"`, "VerbRead does not call"},
 		{"shadowed executor alias", "invocation/repository_read.go", "liveservice.ReadRepository()", "liveservice := other; liveservice.ReadRepository()", "VerbRead does not call"},
-		{"constructed but not executed search", "invocation/verbs.go", "(discovery.SearchExecutor{}).Execute()", "_ = discovery.SearchExecutor{}", "VerbSearch does not call"},
+		{"direct Dataset search executor", "invocation/verbs.go", "searchDataset() }", "(discovery.DatasetSearchExecutor{}).Execute() }", ""},
+		{"uncalled search helper", "invocation/verbs.go", "searchDataset() }", "unrelated() }", "VerbSearch does not call"},
+		{"constructed but not executed search", "invocation/dataset_search.go", "(discovery.DatasetSearchExecutor{}).Execute()", "_ = discovery.DatasetSearchExecutor{}", "VerbSearch does not call"},
+		{"retired repository search executor", "invocation/dataset_search.go", "discovery.DatasetSearchExecutor", "discovery.SearchExecutor", "VerbSearch does not call"},
+		{"foreign search executor alias", "invocation/dataset_search.go", `"kc/discovery/service"`, `"kc/unrelated/service"`, "VerbSearch does not call"},
+		{"shadowed search executor alias", "invocation/dataset_search.go", "(discovery.DatasetSearchExecutor{}).Execute()", "discovery := other; (discovery.DatasetSearchExecutor{}).Execute()", "VerbSearch does not call"},
 		{"missing CLI route", "cli/commands_test.go", `"object-read": {Run: inv.VerbRead}`, `"unrelated": {Run: inv.VerbRead}`, "route is not bound"},
 		{"missing HTTP registration", "server/routes.go", `mux.HandleFunc("POST /object/v1/objects:read", f.objectRead)`, "", "route is not bound"},
 		{"comment cannot bind Run", "server/routes.go", "Run: inv.VerbRead", "Run: nil /* Run: inv.VerbRead */", "route is not bound"},

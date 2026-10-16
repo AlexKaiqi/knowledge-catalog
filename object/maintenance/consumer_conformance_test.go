@@ -329,7 +329,8 @@ func committedConsumerPolicy(t *testing.T) (*testkit.ObjectRepository, kernel.Co
 		t.Fatal(err)
 	}
 	head := consumerPutAt(t, repo, root, []objectmodel.Operation{
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/policy.body"}, Value: map[string]any{"entity": "Policy", "pattern": "record", "fields": map[string]any{"body": map[string]any{"access": []any{"text"}}}}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/policy.body"}, Value: map[string]any{"entity": "Policy", "pattern": "record", "fields": map[string]any{"body": map[string]any{}}}},
+		testkit.IndexText("schema/policy.body", "body"),
 		testkit.PutEntity("policy/P-1", map[string]any{"body": "needs a runbook"}, "")[0],
 	})
 	return repo, root, head

@@ -22,7 +22,7 @@ import (
 type Identity = observability.IdentityContext
 
 // Authentication is an opaque HTTP authorization value. KC does not interpret
-// its scheme or secret on the client side. A future OIDC, Gitea, or deployment
+// its scheme or secret on the client side. A future OIDC or deployment
 // authenticator can replace it or refresh it per audience.
 //
 // Authentication values are secrets. They must not be logged, serialized into

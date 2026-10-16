@@ -39,6 +39,8 @@ func serveDoc(root string, w http.ResponseWriter, r *http.Request) {
 		serveRaw(w, r, abs, "image/svg+xml")
 	case ".png":
 		serveRaw(w, r, abs, "image/png")
+	case ".html":
+		serveRaw(w, r, abs, "text/html; charset=utf-8")
 	case ".md":
 		src, err := readFile(abs)
 		if err != nil {

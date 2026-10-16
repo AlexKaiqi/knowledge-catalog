@@ -97,7 +97,8 @@ func TestObjectPublicationDoesNotRequireIndexOrInstalledHandler(t *testing.T) {
 	if !reflect.DeepEqual(asMap(t, read["value"])["definition"], definition) {
 		t.Fatalf("missing capabilities blocked fixed object read: %#v", read)
 	}
-	expectCode(t, f.consume(t, "search", "--repo", f.repository, "--commit", commit, "--query", "externalcatalogtoken"), "CAPABILITY_UNSATISFIED")
+	f.prepareSearchDataset(t, commit)
+	expectCode(t, f.consume(t, "search", "--dataset", "published-objects", "--revision", "1", "--query", "externalcatalogtoken"), "CAPABILITY_UNSATISFIED")
 	f.verifyUninstalledInspection(t, "table/external-orders", commit)
 	if f.offlineCalls.Load() != 0 {
 		t.Fatal("basic publication/read called the external table")

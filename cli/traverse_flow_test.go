@@ -127,9 +127,9 @@ func TestTraverseNeighborhoodClosureAcrossChannels(t *testing.T) {
 	seedRepo(t, home, repository)
 	body(t, kc(home, "commit", "--command-id", "relation-chain", "--payload", traverseChangeSet(t, repository)))
 	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", repository+"=refs/heads/main@"))
-	syncIndexes(t, home, repository)
+	syncIndexes(t, home, "agent")
 
-	repositoryFull := body(t, kc(home, "traverse", "--repo", repository, "--object", "table/orders",
+	repositoryFull := body(t, kc(home, "traverse", "--dataset", "agent", "--object", "table/orders",
 		"--max-hops", "2", "--limit", "100", "--relation-type", "owned-by", "--direction", "DIRECTED"))
 	// The closure is a deduplicated neighborhood: the start is never a node,
 	// depth-2 nodes only appear when the hop ceiling allows a second hop, and
@@ -145,20 +145,20 @@ func TestTraverseNeighborhoodClosureAcrossChannels(t *testing.T) {
 		t.Fatalf("out-of-scope frontier must be a boundary: %#v", got)
 	}
 
-	repositoryOneHop := body(t, kc(home, "traverse", "--repo", repository, "--object", "table/orders",
+	repositoryOneHop := body(t, kc(home, "traverse", "--dataset", "agent", "--object", "table/orders",
 		"--max-hops", "1", "--relation-type", "owned-by", "--direction", "DIRECTED"))
 	if nodes := traverseNodes(t, repositoryOneHop); len(nodes) != 1 || nodes["team/finance"] != 1 {
 		t.Fatalf("one-hop ceiling: %#v", nodes)
 	}
-	expectCode(t, kc(home, "traverse", "--repo", repository, "--object", "table/orders", "--max-hops", "0"), "USAGE_INVALID")
-	expectCode(t, kc(home, "traverse", "--repo", repository, "--object", "table/orders", "--max-hops", "9"), "USAGE_INVALID")
-	expectCode(t, kc(home, "traverse", "--repo", repository, "--object", "table/orders"), "USAGE_INVALID")
+	expectCode(t, kc(home, "traverse", "--dataset", "agent", "--object", "table/orders", "--max-hops", "0"), "USAGE_INVALID")
+	expectCode(t, kc(home, "traverse", "--dataset", "agent", "--object", "table/orders", "--max-hops", "9"), "USAGE_INVALID")
+	expectCode(t, kc(home, "traverse", "--dataset", "agent", "--object", "table/orders"), "USAGE_INVALID")
 
 	datasetFull := body(t, kc(home, "traverse", "--dataset", "agent", "--object", "table/orders",
 		"--max-hops", "2", "--relation-type", "owned-by", "--direction", "DIRECTED"))
 	datasetNodes := traverseNodes(t, datasetFull)
 	if len(datasetNodes) != len(nodes) {
-		t.Fatalf("repository/workspace closure drift: %#v != %#v", datasetNodes, nodes)
+		t.Fatalf("fixed Dataset closure drift: %#v != %#v", datasetNodes, nodes)
 	}
 
 	// Delta paging: --limit 1 yields disjoint pages whose union is the closure.
@@ -193,8 +193,7 @@ func TestTraverseNeighborhoodClosureAcrossChannels(t *testing.T) {
 	}
 
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--dataset", "agent"))
-	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "object.traverse", "--repo", repository))
-	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "object.read", "--repo", repository))
+	expectCode(t, kc(home, "read", "urn:kc:object:table/orders", "--repo", repository, "--as", "agent:http-test"), "FORBIDDEN")
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })

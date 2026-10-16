@@ -1,0 +1,17 @@
+---
+object_id: index/sales-search
+aspect_name: index
+member_key: table-name
+kind: Member
+schema_ref: schema/core/index-declaration/v1
+---
+catalog: declarative-index/opensearch@2026-10
+inputs:
+  - from: schema/table.properties#/fields/name
+    boost: 3
+  - from: schema/table.properties#/fields/qualifiedName
+build:
+  kind: text
+  analyzer: standard
+uses:
+  - text

@@ -1,0 +1,12 @@
+---
+object_id: ops/pipeline-events
+---
+kind: ResourceDescriptor
+name: Pipeline event stream
+origin: http://live-origin:7400
+mode: stream
+runtime: http
+protocol: resource-access/v1
+access:
+  lookup:
+    call: lookup

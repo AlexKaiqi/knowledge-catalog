@@ -1,0 +1,35 @@
+---
+object_id: schema/media-asset.definition
+---
+entity: MediaAsset
+aspect: definition
+pattern: record
+fields:
+  name:
+    type: string
+    required: true
+  kind:
+    type: string
+    required: true
+  file:
+    type: string
+    required: true
+  format:
+    type: string
+    required: true
+  durationSeconds:
+    type: number
+  aspectRatio:
+    type: string
+  cover:
+    type: string
+  subtitles:
+    type: string
+  subtitleRevision:
+    type: string
+  productRef:
+    type: object_ref
+    refTypes:
+    - Product
+  owner:
+    type: string

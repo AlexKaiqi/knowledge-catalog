@@ -1,0 +1,11 @@
+---
+object_id: table/shop.orders
+aspect_name: runtime
+member_key: queue-depth
+kind: Member
+schema_ref: schema/table.runtime
+valueSource:
+  kind: binding
+  binding:
+    descriptorRef: ops/not-published
+---

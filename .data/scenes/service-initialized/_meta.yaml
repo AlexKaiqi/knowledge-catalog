@@ -23,15 +23,17 @@ evidence:
     tests:
       - "TestCatalogRepoWriteFlow"
       - "TestRegistryHistoryRequiresExplicitAuditReadGrant"
-      - "TestCatalogAuditIsGitLog"
+      - "TestCatalogAuditReadsSnapshotHistory"
     title: "修改与读取 登记空间 登记表时保留库存身份及可审计历史"
   - source: "identity.bind"
     views:
       - "access-control"
     tests:
       - "TestLocalDeploymentBootstrapsThenUsesServerClientBoundary"
-      - "TestDeploymentIdentityMigrationPreservesRevocationAndRefusesReassignment"
-    title: "初始化部署并迁移身份时维持 Server 边界和撤权约束"
+      - "TestVerifiedUsernameBindingsSurviveReplacementAndRejectTakeover"
+      - "TestGrantSelfRevocationDoesNotRestorePermissionAndReadDoesNotManage"
+      - "TestRetiredPathsStayAbsent"
+    title: "初始化部署保持 Server 边界，身份绑定耐久拒绝冒领，撤权不恢复；旧迁移实现保持退役"
   - id: "bounded-system-schema-directory"
     title: "已发布实体目录按页浏览而不返回对象正文"
     source: "schema.browse"
@@ -68,8 +70,6 @@ evidence:
     tests:
       - "TestManagedRepositoryProviderCreatesPublishesAndResumes"
       - "TestManagedRepositoryCreatePublicArgv"
-      - "TestManagedRepositoryProviderOnLiveGitea"
-      - "TestManagedProductHumanSelfServiceOnLiveGitea"
       - "TestManagedProductHumanSelfServiceOnLakeFS"
     title: "接入方经正式部署创建平台仓、发布并在替换实例后续用"
   - source: "access.rules"

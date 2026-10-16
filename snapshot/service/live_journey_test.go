@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	localauth "kc/identity/local"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -79,7 +80,7 @@ func TestLiveSnapshotPublicationJourney(t *testing.T) {
 		{ID: "consumer", Principal: "consumer", Dataset: "delivery", Actions: []string{"dataset.resolve", "file.read"}},
 	}}
 	resources := service.Resources{Datasets: cat, Sources: sources, Access: access.NewService(rules), NativeRepositories: map[string]kernel.RepositoryID{sourceName: source.ID()}}
-	handler := service.NewHandler(service.Config{Identity: service.IdentityOptions{Local: true}, NativeOrigin: origin, NativeCredential: func(context.Context) (string, error) { return credential, nil }, Acquire: func(context.Context, identity.HTTPIdentity, string) (service.Resources, func(), error) {
+	handler := service.NewHandler(service.Config{Identity: service.IdentityOptions{Authenticator: localauth.New()}, NativeOrigin: origin, NativeCredential: func(context.Context) (string, error) { return credential, nil }, Acquire: func(context.Context, identity.HTTPIdentity, string) (service.Resources, func(), error) {
 		return resources, func() {}, nil
 	}})
 	server := httptest.NewServer(handler)

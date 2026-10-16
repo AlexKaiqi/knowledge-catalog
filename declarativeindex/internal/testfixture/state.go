@@ -114,14 +114,18 @@ func StateProjection(t *testing.T) (objectmodel.Repository, kernel.CommitID, obj
 		BaseCommit: setup.RootCommitID, ExpectedTargetCommit: setup.RootCommitID,
 		Operations: []objectmodel.Operation{
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.definition"}, Value: map[string]any{
-				"entity": "Job", "aspect": "definition", "fields": map[string]any{"owner": map[string]any{"type": "string", "access": []any{"filter"}}},
+				"entity": "Job", "aspect": "definition", "fields": map[string]any{"owner": map[string]any{"type": "string"}},
 			}},
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.runtime"}, Value: map[string]any{
 				"entity": "Job", "aspect": "runtime", "fields": map[string]any{
-					"status": map[string]any{"type": "string", "access": []any{"text", "filter"}},
-					"owner":  map[string]any{"type": "string", "access": []any{"filter"}},
+					"status": map[string]any{"type": "string"},
+					"owner":  map[string]any{"type": "string"},
 				},
 			}},
+			testkit.IndexField("schema/job.definition", "owner", "keyword"),
+			testkit.IndexText("schema/job.runtime", "status"),
+			testkit.IndexField("schema/job.runtime", "status", "keyword"),
+			testkit.IndexField("schema/job.runtime", "owner", "keyword"),
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: address.ObjectID, AspectName: "definition"}, Value: map[string]any{"owner": "data"}, SchemaRef: "schema/job.definition"},
 			bindingfixture.PutDescriptor(StateDescriptor, bindingfixture.Descriptor("https://scheduler.example")),
 			bindingfixture.Bind(address, "schema/job.runtime", StateDescriptor),

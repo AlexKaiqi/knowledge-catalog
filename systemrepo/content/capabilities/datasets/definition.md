@@ -4,9 +4,9 @@ aspect: definition
 schema_ref: schema/system/capability-definition/v1
 path_hint: capabilities/datasets/definition.md
 ---
-# 组合与采用 Dataset
+# 读取文件与组合 Dataset
 
-选择确定版本的来源文件、定义交付目录并发布；消费方检出已接受范围，明确采用更新。
+已知仓、固定版本和文件路径时，可以直接下载单文件。需要组合交付时，选择确定版本的来源文件、定义交付目录并发布 Dataset；消费方读取已接受范围，明确采用更新。
 
 相关说明：[Dataset](../../concepts/dataset/definition.md)、[固定消费依据](../../concepts/pin/definition.md)、[登记空间](../../concepts/registration/definition.md)。
 

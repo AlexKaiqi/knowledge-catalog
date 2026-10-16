@@ -33,8 +33,9 @@ func TestProjectionControllerRecoversPhysicalLossWithReadyLedger(t *testing.T) {
 				Operations: []objectmodel.Operation{
 					{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/policy.body"}, Value: map[string]any{
 						"entity": "Policy", "pattern": "record",
-						"fields": map[string]any{"body": map[string]any{"access": []any{"text"}}},
+						"fields": map[string]any{"body": map[string]any{}},
 					}},
+					testkit.IndexText("schema/policy.body", "body"),
 					testkit.PutEntity("policy/P-1", map[string]any{"body": "tested runbook"}, "")[0],
 					testkit.PutEntity("policy/P-2", map[string]any{"body": "another runbook"}, "")[0],
 					testkit.PutEntity("policy/unrelated", map[string]any{"body": "ordinary notes"}, "")[0],
@@ -115,7 +116,9 @@ func TestProjectionControllerRecoversPhysicalLossWithReadyLedger(t *testing.T) {
 			}
 			assertStorageLossReadyLedger(t, recovery, repo.ID(), head)
 			desc, err := reopened.Describe(repo)
-			if err != nil || desc.State != ports.ProjectionStateReady || desc.BasisCommit != head || desc.ObjectCount != 3 {
+			// Three policies plus index/fixture, the ordinary object holding the
+			// index declaration member.
+			if err != nil || desc.State != ports.ProjectionStateReady || desc.BasisCommit != head || desc.ObjectCount != 4 {
 				t.Fatalf("READY ledger did not restore physical projection: %#v err=%v", desc, err)
 			}
 			assertStorageLossSearchEqual(t, storageLossSearch(t, reopened, repo, head), want)
@@ -231,5 +234,5 @@ func (e *storageLossEngine) discard() {
 func (e *storageLossEngine) readyAt(commit kernel.CommitID) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	return e.backend.Meta.Basis == commit && e.backend.Meta.State == ports.ProjectionStateReady && len(e.backend.Docs) == 3
+	return e.backend.Meta.Basis == commit && e.backend.Meta.State == ports.ProjectionStateReady && len(e.backend.Docs) == 4
 }

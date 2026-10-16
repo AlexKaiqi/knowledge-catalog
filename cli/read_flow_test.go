@@ -172,7 +172,6 @@ func TestAspectBindingResolveThroughCLIAndWorkspace(t *testing.T) {
 	core := "kr://acme/public/core"
 	body(t, kc(h, "init"))
 	seedRepo(t, h, core)
-	adoptLiveAccessFixture(t, h, core)
 	body(t, kc(h, "put", testObjectReference(t, core, "schema/service.health", ""), "--repo", core, "--command-id", "binding-schema", "--value", `{"entity":"Service","aspect":"health","fields":{"status":{"type":"string"}}}`))
 	body(t, kc(h, "put", testObjectReference(t, core, "service/orders", "/properties"), "--repo", core, "--command-id", "binding-entity", "--value", `{"name":"orders"}`))
 	descriptor := putStateBinding(t, h, core, "service/orders", "health", "schema/service.health", "http://127.0.0.1:9")
@@ -191,22 +190,25 @@ func TestAspectBindingResolveThroughCLIAndWorkspace(t *testing.T) {
 	expectCode(t, kc(h, "access", "--dataset", "agent", "--object", "service/orders", "--aspect", "health"), "TEMPORARY_UNAVAILABLE")
 }
 
-func TestWorkspaceSearchFailsClosedWhenAnyMemberCannotSatisfyQuery(t *testing.T) {
+func TestWorkspaceSearchDoesNotAdoptUnselectedSourceDeclarations(t *testing.T) {
 	h := testkit.TempDir(t)
-	searchable := "kr://acme/public/searchable"
-	opaque := "kr://acme/public/opaque"
+	source := "kr://acme/public/searchable"
+	other := "kr://acme/public/other"
 	body(t, kc(h, "init"))
-	seedRepo(t, h, searchable)
-	seedRepo(t, h, opaque)
-	body(t, kc(h, "put", testObjectReference(t, searchable, "schema/policy.body", ""), "--repo", searchable, "--command-id", "schema", "--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`))
-	body(t, kc(h, "put", testObjectReference(t, searchable, "policy/A", ""), "--repo", searchable, "--command-id", "hit", "--value", `{"body":"runbook"}`))
-	body(t, kc(h, "put", testObjectReference(t, opaque, "note/A", ""), "--repo", opaque, "--command-id", "opaque", "--value", `{"body":"runbook"}`))
-	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1",
-		"--source", searchable+"=refs/heads/main", "--source", opaque+"=refs/heads/main"))
-	syncIndexes(t, h, searchable)
+	seedRepo(t, h, source)
+	seedRepo(t, h, other)
+	body(t, kc(h, "put", testObjectReference(t, source, "schema/policy.body", ""), "--repo", source, "--command-id", "schema", "--path-hint", "objects/schema.yaml", "--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"type":"string"}}}`))
+	seedTextDeclaration(t, h, source, "index/policy-body", "schema/policy.body", "body")
+	body(t, kc(h, "put", testObjectReference(t, source, "policy/A", ""), "--repo", source, "--command-id", "hit", "--schema-ref", "schema/policy.body", "--path-hint", "objects/a.yaml", "--value", `{"body":"runbook"}`))
+	body(t, kc(h, "put", testObjectReference(t, other, "note/A", ""), "--repo", other, "--command-id", "other", "--path-hint", "objects/b.yaml", "--value", `{"body":"runbook"}`))
+	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", source+"=refs/heads/main@objects@objects", "--source", other+"=refs/heads/main@other@objects"))
+	if searchAvailable() {
+		syncIndexes(t, h, "agent")
+	}
+	for _, expected := range []string{"index declaration selected into the dataset", "kc schema describe --dataset agent --revision 1"} {
+		expectMsg(t, kc(h, "search", "--dataset", "agent", "--query", "runbook"), expected)
+	}
 	expectCode(t, kc(h, "search", "--dataset", "agent", "--query", "runbook"), "CAPABILITY_UNSATISFIED")
-	expectMsg(t, kc(h, "search", "--dataset", "agent", "--query", "runbook"), opaque)
-	expectMsg(t, kc(h, "search", "--dataset", "agent", "--query", "runbook"), "schema/*")
 }
 
 func TestWorkspaceSearchUnsatisfiedExplainsHowToRecover(t *testing.T) {
@@ -220,7 +222,8 @@ func TestWorkspaceSearchUnsatisfiedExplainsHowToRecover(t *testing.T) {
 
 	expectCode(t, kc(h, "search", "--dataset", "agent", "--query", "runbook"), "CAPABILITY_UNSATISFIED")
 	expectMsg(t, kc(h, "search", "--dataset", "agent", "--query", "runbook"), "cannot satisfy SEARCH")
-	expectMsg(t, kc(h, "search", "--dataset", "agent", "--query", "runbook"), "schema/*")
+	expectMsg(t, kc(h, "search", "--dataset", "agent", "--query", "runbook"), "index declaration selected into the dataset")
+	expectMsg(t, kc(h, "search", "--dataset", "agent", "--query", "runbook"), "kc schema describe --dataset agent --revision 1")
 }
 
 func TestWorkspaceSearchPublicContinuation(t *testing.T) {
@@ -231,14 +234,19 @@ func TestWorkspaceSearchPublicContinuation(t *testing.T) {
 	values := [][]string{{"z", "a"}, {"y", "b"}}
 	for i, repo := range []string{one, two} {
 		seedRepo(t, h, repo)
-		body(t, kc(h, "put", testObjectReference(t, repo, "schema/item.structure", ""), "--repo", repo, "--command-id", fmt.Sprintf("schema-%d", i), "--value", `{"entity":"Item","pattern":"record","fields":{"name":{"type":"string","access":["filter","sort"]}}}`))
+		// Each Writer target owns its Schema; the Dataset selects one copy.
+		body(t, kc(h, "put", testObjectReference(t, repo, "schema/item.structure", ""), "--repo", repo, "--command-id", fmt.Sprintf("schema-%d", i), "--value", `{"entity":"Item","pattern":"record","fields":{"name":{"type":"string"}}}`))
 		for j, value := range values[i] {
-			body(t, kc(h, "put", testObjectReference(t, repo, fmt.Sprintf("item/%d-%d", i, j), ""), "--repo", repo, "--command-id", fmt.Sprintf("item-%d-%d", i, j), "--value", fmt.Sprintf(`{"name":"%s"}`, value)))
+			body(t, kc(h, "put", testObjectReference(t, repo, fmt.Sprintf("item/%d-%d", i, j), ""), "--repo", repo, "--command-id", fmt.Sprintf("item-%d-%d", i, j), "--schema-ref", "schema/item.structure", "--path-hint", fmt.Sprintf("items/%d-%d.yaml", i, j), "--value", fmt.Sprintf(`{"name":"%s"}`, value)))
+		}
+		// A single selected declaration covers both Dataset sources.
+		if repo == one {
+			seedIndexDeclaration(t, h, repo, "index/items", "name-keyword", map[string]any{"catalog": "declarative-index/opensearch@2026-10", "inputs": []any{map[string]any{"from": "schema/item.structure#/fields/name"}}, "build": map[string]any{"kind": "keyword"}, "uses": []any{"filter", "sort"}})
 		}
 	}
 	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1",
-		"--source", one+"=refs/heads/main", "--source", two+"=refs/heads/main"))
-	syncIndexes(t, h, one, two)
+		"--source", one+"=refs/heads/main@", "--source", two+"=refs/heads/main@two-items@items"))
+	syncIndexes(t, h, "agent")
 	first := asMap(t, body(t, kc(h, "search", "--dataset", "agent", "--exists", "name", "--sort", "name:desc", "--limit", "2")))
 	continuation, _ := first["continuation"].(string)
 	if got := workspaceSearchValues(t, first); fmt.Sprint(got) != "[item/0-0 item/1-0]" || continuation == "" {

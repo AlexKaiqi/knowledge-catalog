@@ -1,0 +1,11 @@
+---
+object_id: alert/qinghe.order-service.p99-latency
+aspect_name: definition
+kind: Aspect
+schema_ref: schema/alert.definition
+---
+name: 下单服务 p99 延迟过高
+serviceRef: service/qinghe.order-service
+condition: p99 延迟连续 5 分钟高于 500ms（活动首日临时放宽到 800ms）
+severity: P2
+firedAt: "2026-09-15T10:02:00+08:00"

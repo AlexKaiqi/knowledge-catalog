@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	indexclient "kc/declarativeindex/client"
 	inv "kc/invocation"
+	"kc/kernel"
 	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
@@ -53,9 +55,8 @@ var remoteDispatchRoutes = []remoteDispatchRouteCase{
 	{path: "grant add", method: http.MethodPost, target: "/admin/v1/grants"},
 	{path: "grant list", method: http.MethodGet, target: "/admin/v1/grants?action=object.read&principal=user%3Aalice"},
 	{path: "grant remove", method: http.MethodDelete, target: "/admin/v1/grants/rule-A"},
-	{path: "operations projection sync", method: http.MethodPost, target: "/operations/v1/projections:sync", flags: map[string]FlagValue{"repo": "repo-A", "commit": "commit-A", "ref": "refs/heads/main"}},
-	{path: "operations projection notice", method: http.MethodPost, target: "/operations/v1/projections:notice", flags: map[string]FlagValue{"repo": "repo-A", "object": "policy/A", "aspect": "body", "ref": "refs/heads/main"}},
-	{path: "operations projection describe", method: http.MethodPost, target: "/operations/v1/projections:describe", flags: map[string]FlagValue{"repo": "repo-A", "commit": "commit-A"}},
+	{path: "operations projection sync", method: http.MethodPost, target: "/operations/v1/projections:sync", flags: map[string]FlagValue{"dataset": "agent", "revision": "1"}},
+	{path: "operations projection describe", method: http.MethodPost, target: "/operations/v1/projections:describe", flags: map[string]FlagValue{"dataset": "agent", "revision": "1"}},
 	{path: "operations access-spec describe", method: http.MethodPost, target: "/operations/v1/access-specs:describe", flags: map[string]FlagValue{"dataset": "agent"}},
 	{path: "operations hook add", method: http.MethodPost, target: "/operations/v1/hooks"},
 	{path: "operations hook list", method: http.MethodGet, target: "/operations/v1/hooks"},
@@ -140,6 +141,17 @@ func TestRemoteTypedDispatchRoutesSupportedOperations(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			if test.path == "operations projection sync" || test.path == "operations projection describe" {
+				var payload indexclient.ProjectionRequest
+				decoder := json.NewDecoder(bytes.NewReader(capturedBody))
+				decoder.DisallowUnknownFields()
+				if err := decoder.Decode(&payload); err != nil {
+					t.Fatal(err)
+				}
+				if payload.Dataset != "agent" || payload.Revision != 1 {
+					t.Fatalf("projection dispatch lost its Dataset revision contract: %s", capturedBody)
+				}
+			}
 			if test.path == "pin" {
 				_, ok := output.(inv.TaskDatasetPin)
 				if !ok {
@@ -184,6 +196,25 @@ func TestRemoteTypedDispatchRoutesSupportedOperations(t *testing.T) {
 				t.Fatalf("production handler rejected the remote DTO: status=%d body=%s", response.StatusCode, raw)
 			}
 		})
+	}
+}
+
+func TestRemoteTypedDispatchRejectsRetiredProjectionNoticeBeforeNetwork(t *testing.T) {
+	called := false
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		called = true
+	}))
+	t.Cleanup(server.Close)
+	client, err := kcclient.New(kcclient.Config{BaseURL: server.URL, HTTPClient: server.Client()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = runRemoteRequest(context.Background(), client, "operations projection notice", remoteDispatchTestFlags(), kcclient.RequestOptions{})
+	if kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
+		t.Fatalf("retired projection notice dispatch returned %v", err)
+	}
+	if called {
+		t.Fatal("retired projection notice issued a remote request")
 	}
 }
 

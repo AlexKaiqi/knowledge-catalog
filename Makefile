@@ -1,13 +1,18 @@
 GO ?= go
+PYTHON ?= .venv/bin/python
+VERSION ?= 0.0.0
+DIST_DIR ?= dist
+TARGET ?=
 
 KC_DEPLOYMENT_CONFIG ?= /tmp/kc-demo/deployment.json
 LISTEN ?= 127.0.0.1:7380
 
 DOCS_LISTEN ?= 127.0.0.1:8766
 
-.PHONY: check-docs check-surface quality test test-component test-boundary test-e2e test-race test-cover test-server-web test-service-e2e test-taihu-live test-state-runtime-e2e test-kcfs-e2e test-adapters test-docker test-all system-lakefs-up system-lakefs-status system-lakefs-down deploy-local-up deploy-local-status deploy-local-access deploy-local-smoke deploy-local-scenes deploy-local-goto deploy-local-down deploy-dev-up deploy-dev-status deploy-dev-access deploy-dev-smoke deploy-dev-down deploy-dev-reset kc typecheck serve docs-serve
+.PHONY: check-docs check-surface quality test test-component test-boundary test-e2e test-race test-cover test-server-web test-taihu-live test-state-runtime-e2e test-kcfs-e2e test-adapters test-docker test-all system-lakefs-up system-lakefs-status system-lakefs-down deploy-local-up deploy-local-status deploy-local-access deploy-local-smoke deploy-local-scenes deploy-local-goto deploy-local-accept deploy-local-down deploy-dev-up deploy-dev-status deploy-dev-access deploy-dev-smoke deploy-dev-down deploy-dev-reset kc typecheck serve docs-serve
 .PHONY: test-lakefs test-contracts
 .PHONY: quality-webui test-webui
+.PHONY: build package package-all test-package
 
 quality-webui:
 	npm --prefix snapshot/console/webui run typecheck
@@ -28,6 +33,7 @@ validation-inventory:
 check-validation:
 	python3 ./scripts/validation_test.py
 	python3 ./scripts/maintenance_test.py
+	$(MAKE) test-package
 	$(GO) test -json -count=1 ./scripts/check-docs ./scripts/validation-inventory
 	$(GO) run ./scripts/validation-inventory --check
 
@@ -77,9 +83,6 @@ test-cover:
 test-server-web:
 	node --test server/web/repository.test.mjs server/web/console.test.mjs
 
-test-service-e2e:
-	GO=$(GO) ./scripts/testsuite.sh service-e2e
-
 # Real Taihu introspection. Skips unless KC_LIVE_TAIHU=1 and the env secrets
 # are set; the browser login helper is scripts/live-taihu-auth.sh.
 test-taihu-live:
@@ -126,6 +129,9 @@ deploy-local-access:
 deploy-local-smoke:
 	./scripts/deploy/deploy.sh local smoke
 
+deploy-local-accept:
+	./scripts/deploy/deploy.sh local accept $(if $(SPEC),--select $(SPEC))
+
 deploy-local-scenes:
 	./scripts/deploy/deploy.sh local scenes
 
@@ -152,6 +158,18 @@ deploy-dev-down:
 
 deploy-dev-reset:
 	./scripts/deploy/deploy.sh dev reset
+
+build:
+	GO="$(GO)" $(PYTHON) ./scripts/package/build.py build --version "$(VERSION)" --output "$(DIST_DIR)" $(if $(TARGET),--target "$(TARGET)")
+
+package:
+	GO="$(GO)" $(PYTHON) ./scripts/package/build.py package --version "$(VERSION)" --output "$(DIST_DIR)" $(if $(TARGET),--target "$(TARGET)")
+
+package-all:
+	GO="$(GO)" $(PYTHON) ./scripts/package/build.py package --all --version "$(VERSION)" --output "$(DIST_DIR)"
+
+test-package:
+	$(PYTHON) -m unittest discover -s scripts/package -p '*_test.py'
 
 kc:
 	$(GO) run ./cmd/kc -- $(ARGS)

@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"errors"
+	localauth "kc/identity/local"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -12,6 +13,7 @@ import (
 	"testing"
 
 	"kc/identity"
+	"kc/identity/identitytest"
 	"kc/kernel"
 )
 
@@ -52,7 +54,7 @@ func TestSnapshotResourceLeasesAndObservationPreserveActualFailure(t *testing.T)
 			acquired, released, observed := 0, 0, 0
 			metadata := RequestMetadata{RequestID: "request", TraceID: "trace", SpanID: "span", ParentSpanID: "parent"}
 			handler := newHandler(Config{
-				Identity: IdentityOptions{Local: true},
+				Identity: IdentityOptions{Authenticator: localauth.New()},
 				Acquire: func(ctx context.Context, caller identity.HTTPIdentity, operation string) (Resources, func(), error) {
 					acquired++
 					if caller.Principal != "alice" || operation != "probe" || !reflect.DeepEqual(ContextMetadata(ctx), metadata) {
@@ -104,7 +106,7 @@ func TestSnapshotTransportPreservesDomainAndAuthenticationStatusDistinction(t *t
 			t.Fatalf("domain error representation: %s %d %s", check.code, w.Code, w.Body.String())
 		}
 	}
-	verifier := &transportVerifier{mode: "verified", err: kernel.Fail(kernel.ErrPreconditionFailed, "binding unavailable")}
+	verifier := &identitytest.Recorder{Mode: "verified", Err: kernel.Fail(kernel.ErrPreconditionFailed, "binding unavailable")}
 	handler := newHandler(Config{Identity: IdentityOptions{Authenticator: verifier}})
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/identity/v1/whoami", nil)
@@ -159,7 +161,7 @@ func TestSnapshotAroundCannotRepeatReplaceOrEraseTheDomainOperation(t *testing.T
 func TestSnapshotLeaseAndObserverFinishWhenTheDomainPanics(t *testing.T) {
 	released, observed := 0, 0
 	handler := newHandler(Config{
-		Identity: IdentityOptions{Local: true},
+		Identity: IdentityOptions{Authenticator: localauth.New()},
 		Acquire: func(context.Context, identity.HTTPIdentity, string) (Resources, func(), error) {
 			return Resources{}, func() { released++ }, nil
 		},

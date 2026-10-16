@@ -49,6 +49,12 @@ func runRemoteFiles(ctx context.Context, client kcclient.Client, command string,
 }
 
 func fileCommandInput(command string, flags map[string]any) (string, *int, string, error) {
+	if _, present := flags["repo"]; command == "files read" && present {
+		return repositoryFileInput(flags)
+	}
+	if _, present := flags["commit"]; present {
+		return "", nil, "", kernel.Fail(kernel.ErrUsageInvalid, "--commit requires --repo; Dataset files use --revision")
+	}
 	id, err := requireRemoteFlag(flags, "dataset")
 	if err != nil {
 		return "", nil, "", err
@@ -62,6 +68,25 @@ func fileCommandInput(command string, flags map[string]any) (string, *int, strin
 		return "", nil, "", kernel.Fail(kernel.ErrUsageInvalid, "--path must identify a relative Dataset delivered path without traversal")
 	}
 	return id, revision, delivered, nil
+}
+
+func repositoryFileInput(flags map[string]any) (string, *int, string, error) {
+	if _, err := requireRemoteFlag(flags, "repo"); err != nil {
+		return "", nil, "", err
+	}
+	for _, name := range []string{"dataset", "revision"} {
+		if _, present := flags[name]; present {
+			return "", nil, "", kernel.Fail(kernel.ErrUsageInvalid, "--repo cannot be combined with --%s", name)
+		}
+	}
+	if _, err := requireRemoteFlag(flags, "commit"); err != nil {
+		return "", nil, "", err
+	}
+	file := flagString(flags, "path")
+	if !validRelativePath(file) {
+		return "", nil, "", kernel.Fail(kernel.ErrUsageInvalid, "--path must identify a relative Repository file without traversal")
+	}
+	return "", nil, file, nil
 }
 
 func fileListControls(flags map[string]any, revision *int) (int, string, error) {

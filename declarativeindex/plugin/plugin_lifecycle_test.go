@@ -20,7 +20,7 @@ import (
 
 func TestIndexPluginsCloseRejectsNewTasksAndWaitsForActualRetrieval(t *testing.T) {
 	f := newPluginFixture(t)
-	plugins, err := consumerplugin.OpenIndexPlugins(f.configs(), map[string]consumerplugin.IndexPluginEntry{"declarative-index": f.entry(t)})
+	plugins, err := consumerplugin.OpenIndexPlugins(f.configs(), consumerplugin.PluginScope{Repositories: f.repositories()}, map[string]consumerplugin.IndexPluginEntry{"declarative-index": f.entry(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestIndexPluginsCloseRejectsNewTasksAndWaitsForActualRetrieval(t *testing.T
 
 func TestIndexPluginsCloseWaitsForActualCatchUpAndRejectsFurtherCatchUp(t *testing.T) {
 	f := newPluginFixture(t)
-	plugins, err := consumerplugin.OpenIndexPlugins(f.configs(), map[string]consumerplugin.IndexPluginEntry{"declarative-index": f.entry(t)})
+	plugins, err := consumerplugin.OpenIndexPlugins(f.configs(), consumerplugin.PluginScope{Repositories: f.repositories()}, map[string]consumerplugin.IndexPluginEntry{"declarative-index": f.entry(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,11 +109,11 @@ func TestIndexPluginsCloseWaitsForActualCatchUpAndRejectsFurtherCatchUp(t *testi
 	}
 }
 
-func TestIndexPluginsPartialOpenAndStartFailureCloseActualResourcesInReverse(t *testing.T) {
+func TestIndexPluginsPartialOpenAndStartFailureCloseActualResources(t *testing.T) {
 	for _, phase := range []string{"open", "start"} {
 		t.Run(phase, func(t *testing.T) {
 			f := newPluginFixture(t)
-			fault := errors.New("second acquired instance failed " + phase)
+			fault := errors.New("acquired instance failed " + phase)
 			entry := f.entry(t)
 			open := entry.Open
 			entry.Open = func(scope consumerplugin.PluginScope) (consumerplugin.IndexContribution, error) {
@@ -135,7 +135,7 @@ func TestIndexPluginsPartialOpenAndStartFailureCloseActualResourcesInReverse(t *
 						return contribution, err
 					}
 				}
-				if scope.Instance == "main-b" {
+				if scope.Instance == "primary" {
 					if phase == "open" {
 						return contribution, fault
 					}
@@ -149,7 +149,7 @@ func TestIndexPluginsPartialOpenAndStartFailureCloseActualResourcesInReverse(t *
 				}
 				return contribution, nil
 			}
-			plugins, err := consumerplugin.OpenIndexPlugins(f.configs(), map[string]consumerplugin.IndexPluginEntry{"declarative-index": entry})
+			plugins, err := consumerplugin.OpenIndexPlugins(f.configs(), consumerplugin.PluginScope{Repositories: f.repositories()}, map[string]consumerplugin.IndexPluginEntry{"declarative-index": entry})
 			if phase == "open" {
 				if !errors.Is(err, fault) || plugins != nil {
 					t.Fatalf("partial actual open was accepted: runtime=%v error=%v", plugins, err)
@@ -178,30 +178,21 @@ func TestIndexPluginsPartialOpenAndStartFailureCloseActualResourcesInReverse(t *
 			f.pool.mu.Lock()
 			closes := append([]string(nil), f.pool.closes...)
 			f.pool.mu.Unlock()
-			assertPluginReverseInstances(t, closes)
+			assertPluginInstanceClosed(t, closes)
 			assertPluginEngineCloseCounts(t, f.pool, 1)
 		})
 	}
 }
 
-func assertPluginReverseInstances(t *testing.T, closes []string) {
+func assertPluginInstanceClosed(t *testing.T, closes []string) {
 	t.Helper()
-	seenA, seenB := false, false
+	if len(closes) == 0 {
+		t.Fatalf("partial open did not acquire/close the real instance: %v", closes)
+	}
 	for _, namespace := range closes {
-		switch namespace {
-		case "declarative-index/main-a":
-			seenA = true
-		case "declarative-index/main-b":
-			if seenA {
-				t.Fatalf("actual acquired physical resources did not close in reverse: %v", closes)
-			}
-			seenB = true
-		default:
+		if namespace != "declarative-index/primary" {
 			t.Fatalf("unknown instance resource: %v", closes)
 		}
-	}
-	if !seenA || !seenB {
-		t.Fatalf("partial open did not acquire/close both real instances: %v", closes)
 	}
 }
 

@@ -13,7 +13,7 @@ One service owns one registration space; callers never create, select or switch 
 The default `PassThroughAuthenticator` only validates field shape and may
 forward both `Authorization` and `X-Kc-As`. That is a test seam, not a pairing.
 CLI local pairing (`--auth local`) sends only `X-Kc-As`. Token pairing
-(`--auth taihu|gitea`) sends only `Authorization`. Mixing both on one request
+(`--auth taihu`) sends only `Authorization`. Mixing both on one request
 is fail-closed. A production authenticator verifies login, refresh or exchange
 in `AuthenticateRequest`, and never client-asserts identity headers when the
 server derives identity from the verified credential.

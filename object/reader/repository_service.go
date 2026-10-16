@@ -138,11 +138,16 @@ func (r *treeRepository) bindingSchemaCoordinates(commit kernel.CommitID) ([]obj
 	return locator.BindingSchemaObjectIDs(commit)
 }
 
+func (r *treeRepository) bindingUnitCoordinates(commit kernel.CommitID) ([]repofile.BindingCoordinate, error) {
+	locator := &treeManifestLocator{tree: r.tree}
+	return locator.bindingCoordinates(commit)
+}
+
 func (r *treeRepository) SchemaReferrerAddresses(schema objectmodel.ObjectID, commit kernel.CommitID) ([]objectmodel.Address, error) {
 	return repofile.ReadSchemaReferrers(r.tree, schema, commit)
 }
 
-// treeManifestLocator gives Gitea and other tree authorities bounded layer ②
+// treeManifestLocator gives tree authorities bounded layer ②
 // reads without teaching layer ⓪ about object_id. The Writer versions this
 // manifest in the same commit as the units; it is not a relation/search index.
 type treeManifestLocator struct {
@@ -194,12 +199,23 @@ func (l *treeManifestLocator) SchemaObjectIDs(commit kernel.CommitID) ([]objectm
 }
 
 func (l *treeManifestLocator) BindingSchemaObjectIDs(commit kernel.CommitID) ([]objectmodel.ObjectID, error) {
+	coordinates, err := l.bindingCoordinates(commit)
+	if err != nil {
+		return nil, err
+	}
+	return repofile.BindingSchemas(coordinates), nil
+}
+
+func (l *treeManifestLocator) bindingCoordinates(commit kernel.CommitID) ([]repofile.BindingCoordinate, error) {
 	if locatorLayoutComplete(l.tree, commit) {
 		raw, err := l.tree.ReadFile(repofile.LocatorBindingIndexPath, commit)
 		if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
 			ids, schemaErr := l.SchemaObjectIDs(commit)
-			if schemaErr != nil || len(ids) == 0 {
-				return ids, schemaErr
+			if schemaErr != nil {
+				return nil, schemaErr
+			}
+			if len(ids) == 0 {
+				return []repofile.BindingCoordinate{}, nil
 			}
 			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "object layout has no binding unit coordinates; explicitly rebuild locators")
 		}
@@ -210,13 +226,13 @@ func (l *treeManifestLocator) BindingSchemaObjectIDs(commit kernel.CommitID) ([]
 		if err != nil {
 			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "invalid binding unit coordinates at %s: %v", commit, err)
 		}
-		return repofile.BindingSchemas(coordinates), nil
+		return coordinates, nil
 	}
 	manifest, err := l.load(commit)
 	if err != nil {
 		return nil, err
 	}
-	return repofile.BindingSchemas(manifest.Bindings), nil
+	return manifest.Bindings, nil
 }
 
 func (l *treeManifestLocator) SchemaReferrerAddresses(schema objectmodel.ObjectID, commit kernel.CommitID) ([]objectmodel.Address, error) {
@@ -467,9 +483,13 @@ func (r *treeRepository) Resolve(objectID objectmodel.ObjectID, commit kernel.Co
 	if err != nil {
 		return objectmodel.Resolution{}, err
 	}
+	digest, err := objectmodel.UnitSetMaintenanceDigest(repofile.ToObjectUnits(units))
+	if err != nil {
+		return objectmodel.Resolution{}, err
+	}
 	resolution := objectmodel.Resolution{
 		Repository: r.ID(), Commit: commit, ObjectID: objectID,
-		Address: value.Address, Digest: kernel.CanonicalDigest(value.Value),
+		Address: value.Address, Digest: digest,
 		PathHint:          repofile.EntityPathHint(units, objectID),
 		DeclarationDigest: repofile.TreeDeclarationDigest(units),
 		Status:            objectmodel.StatusResolved,
@@ -501,7 +521,7 @@ func (r *treeRepository) ResolveAddress(address objectmodel.Address, commit kern
 	}
 	return objectmodel.Resolution{
 		Repository: r.ID(), Commit: commit, ObjectID: address.ObjectID,
-		Address: unit.Address, PathHint: hint, Digest: unit.Digest,
+		Address: unit.Address, PathHint: hint, Digest: objectmodel.MaintenanceDigest(unit.Digest, unit.SchemaRef, unit.ValueSource),
 		DeclarationDigest: objectmodel.DeclarationDigest(unit.SchemaRef, unit.ValueSource),
 		SchemaRef:         unit.SchemaRef, ValueSource: unit.ValueSource, Status: objectmodel.StatusResolved,
 	}, nil

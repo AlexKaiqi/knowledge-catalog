@@ -1,0 +1,31 @@
+---
+object_id: schema/product.definition
+---
+entity: Product
+aspect: definition
+pattern: record
+fields:
+  name:
+    type: string
+    required: true
+  sku:
+    type: string
+    required: true
+  category:
+    type: string
+    required: true
+  listPrice:
+    type: number
+    required: true
+  currency:
+    type: string
+    required: true
+  launchDate:
+    type: string
+  status:
+    type: string
+    required: true
+  description:
+    type: string
+  owner:
+    type: string

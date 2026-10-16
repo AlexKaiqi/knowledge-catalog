@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"kc/declarativeindex/capability"
 	"kc/declarativeindex/internal/testfixture"
 	discoveryservice "kc/discovery/service"
 	"net/http"
@@ -57,7 +58,8 @@ func TestSemanticWindowRecallApproximateEnvelopeAndFailClosed(t *testing.T) {
 	repo := testfixture.MakeIndexRepository(t, "kr://acme/public/semantic-window")
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
 	head := testfixture.PutAt(t, repo, root, []objectmodel.Operation{
-		testfixture.PolicyBodySchema(),
+		testfixture.PolicyBodySchema(), testfixture.PolicyBodyIndex(),
+		semanticPolicyBodyMember(),
 		testkit.PutEntity("policy/P-1", map[string]any{"body": "tested runbook"}, "")[0],
 		testkit.PutEntity("policy/P-2", map[string]any{"body": "quarterly revenue report"}, "")[0],
 	})
@@ -66,6 +68,8 @@ func TestSemanticWindowRecallApproximateEnvelopeAndFailClosed(t *testing.T) {
 	// window fails closed instead of downgrading to lexical recall. This
 	// assertion runs before any embedding environment exists.
 	noEmbedderIndex := liveIndex(t)
+	manifest := capability.DefaultManifest()
+	noEmbedderIndex.SetDeclarationManifest(manifest.Check, manifest.Describe().Digest)
 	t.Cleanup(func() { _ = noEmbedderIndex.Close() })
 	if _, err := noEmbedderIndex.Rebuild(repo, head); err != nil {
 		t.Fatal(err)
@@ -84,6 +88,8 @@ func TestSemanticWindowRecallApproximateEnvelopeAndFailClosed(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-key")
 
 	projection := liveIndex(t)
+	vectorManifest := capability.DefaultManifest("fake-embed-1")
+	projection.SetDeclarationManifest(vectorManifest.Check, vectorManifest.Describe().Digest)
 	t.Cleanup(func() { _ = projection.Close() })
 	if _, err := projection.Rebuild(repo, head); err != nil {
 		t.Fatal(err)
@@ -147,11 +153,14 @@ func TestSemanticExecutorEndToEndOverVectorProjection(t *testing.T) {
 	repo := testfixture.MakeIndexRepository(t, "kr://acme/public/semantic-executor")
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
 	head := testfixture.PutAt(t, repo, root, []objectmodel.Operation{
-		testfixture.PolicyBodySchema(),
+		testfixture.PolicyBodySchema(), testfixture.PolicyBodyIndex(),
+		semanticPolicyBodyMember(),
 		testkit.PutEntity("policy/P-1", map[string]any{"body": "tested runbook"}, "")[0],
 		testkit.PutEntity("policy/P-2", map[string]any{"body": "quarterly revenue report"}, "")[0],
 	})
 	projection := liveIndex(t)
+	manifest := capability.DefaultManifest("fake-embed-1")
+	projection.SetDeclarationManifest(manifest.Check, manifest.Describe().Digest)
 	t.Cleanup(func() { _ = projection.Close() })
 	if _, err := projection.Rebuild(repo, head); err != nil {
 		t.Fatal(err)
@@ -173,4 +182,10 @@ func TestSemanticExecutorEndToEndOverVectorProjection(t *testing.T) {
 	if !strings.Contains(claims, "approximate k-NN ranking window") || !strings.Contains(claims, "fake-embed-1") {
 		t.Fatalf("claims must disclose window and model: %q", claims)
 	}
+}
+
+func semanticPolicyBodyMember() objectmodel.Operation {
+	member := testkit.IndexMember("policy-body-semantic", "vector", []string{"semantic"}, "schema/policy.body#/fields/body")
+	member.Value.(map[string]any)["build"] = map[string]any{"kind": "vector", "model": "fake-embed-1", "distance": "cosine"}
+	return member
 }

@@ -19,9 +19,10 @@ func TestLocalCLISearchDoesNotCatchUpProjection(t *testing.T) {
 	// export KC_TEST_OPENSEARCH_URL, so pin index:none explicitly.
 	body(t, kc(h, "store-set", "--index", "none"))
 	seedRepo(t, h, core)
-	body(t, kc(h, "put", testObjectReference(t, core, "schema/policy.body", ""), "--repo", core, "--command-id", "schema-body", "--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`))
+	body(t, kc(h, "put", testObjectReference(t, core, "schema/policy.body", ""), "--repo", core, "--command-id", "schema-body", "--value", `{"entity":"Policy","pattern":"record","fields":{"body":{}}}`))
 	body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--repo", core, "--command-id", "i1", "--value", `{"body":"needs a runbook"}`))
-	expectCode(t, kc(h, "search", "--repo", core, "--query", "runbook"), "CAPABILITY_UNSATISFIED")
+	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", core+"=refs/heads/main@"))
+	expectCode(t, kc(h, "search", "--dataset", "agent", "--query", "runbook"), "CAPABILITY_UNSATISFIED")
 }
 
 func TestServeProjectionWorkerCatchesCommitWithoutSync(t *testing.T) {
@@ -68,7 +69,7 @@ func TestServeProjectionWorkerCatchesCommitWithoutSync(t *testing.T) {
 	body(t, governor("grant", "add", "--principal", consumer,
 		"--action", "inventory.read,dataset.resolve,file.read"))
 	body(t, governor("grant", "add", "--principal", consumer,
-		"--action", "object.read,object.search,object.schema.read",
+		"--action", "object.read,object.schema.read",
 		"--repo", repositoryID))
 	body(t, governor("dataset", "define", "--dataset", setID, "--revision", "1",
 		"--source", repositoryID))

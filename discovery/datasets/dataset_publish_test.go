@@ -30,15 +30,15 @@ func TestDatasetPublicationSwitchesOnlyAfterCapabilitiesReady(t *testing.T) {
 			problem := errors.New("projection unavailable")
 			executor := DatasetPublisher{Registry: registry,
 				Authorize: func(context.Context, DatasetPublication) error { events = append(events, "authorize"); return nil },
-				Prepare: func(context.Context, dataset.Dataset) error {
+				Prepare: func(_ context.Context, def dataset.Dataset) (dataset.Dataset, error) {
 					events = append(events, "prepare")
 					if registry.accepted != 1 {
 						t.Fatal("switched before ready")
 					}
 					if fail {
-						return problem
+						return dataset.Dataset{}, problem
 					}
-					return nil
+					return def, nil
 				},
 			}
 			metadata := map[string]string{"custom": "value"}
@@ -67,7 +67,10 @@ func TestDatasetPublicationSwitchesOnlyAfterCapabilitiesReady(t *testing.T) {
 func TestDatasetPublicationDeniedBeforeFreeze(t *testing.T) {
 	var events []string
 	denied := errors.New("denied")
-	executor := DatasetPublisher{Registry: &publicationRegistry{events: &events}, Authorize: func(context.Context, DatasetPublication) error { return denied }, Prepare: func(context.Context, dataset.Dataset) error { t.Fatal("prepared denied publication"); return nil }}
+	executor := DatasetPublisher{Registry: &publicationRegistry{events: &events}, Authorize: func(context.Context, DatasetPublication) error { return denied }, Prepare: func(context.Context, dataset.Dataset) (dataset.Dataset, error) {
+		t.Fatal("prepared denied publication")
+		return dataset.Dataset{}, nil
+	}}
 	if _, err := executor.Execute(context.Background(), DatasetPublication{}); !errors.Is(err, denied) || len(events) != 0 {
 		t.Fatalf("authorization order: %v %v", events, err)
 	}

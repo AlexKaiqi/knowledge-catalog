@@ -15,7 +15,7 @@ Feature: repository-attached
     Then the output has:
       | catalogId | absent |
       | repositories.0.id | kr://kc/system |
-      | repositories.0.schemaCount | 11 |
+      | repositories.0.schemaCount | 12 |
       | repositories.1.id | kr://scene/graph |
       | repositories.1.schemaCount | 0 |
       | repositories.2.id | kr://scene/object |

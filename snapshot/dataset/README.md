@@ -55,6 +55,12 @@ argv 或其它输入 adapter 使用，不读取 flags、环境或 Home。目录�
 消费者对旧清单失败关闭；它只检查该显式文件目标，不枚举 prefix。调用方须先授权
 冲突依据来源，再提供取得 Store 的回调。
 
+`Dataset.Dependencies` 是可选的 `{repository → commit}` 引用依赖，由上层准备在 `PrepareDataset`
+返回的候选上填写，与来源一起固定在发布 revision 中。它只用来解释选入单元引用的、不在选入仓里的
+对象（如取值描述），不进入文件清单、成员与读权。`PublishDataset` 校验坐标非空、依赖仓已挂载、
+提交存在；依赖仓也是来源时提交必须与冻结来源一致。有依赖时 PinID 把依赖纳入计算，无依赖时
+保持历史值；回放与 `ResolvedDataset` 都带出依赖。
+
 `Dataset.Metadata` 是可选的字符串键值 map，与文件选择一起固定在发布 revision 中。
 调用方可以在 `PrepareDataset` 返回的候选上设置 metadata，再交给 `PublishDataset`；
 原有 `DefineDataset` / `PrepareDataset` 签名保持不变。metadata 原样进入当前定义、
@@ -66,7 +72,13 @@ metadata 不读取、识别或处理 README，不增加任何来源或文件范�
 自身 JSON 数值精度和字节预算的传输层可以另行调用 `ValidateMetadataJSON(raw, target)`。
 该验证端口只沿目标 Go 类型识别 Dataset / 配方，`any` 与 `json.RawMessage` 正文保持不透明。
 
-`DatasetVersion` 返回已接受历史记录。`ReplayPublished` 从可信发布记录恢复 pin，再
+`DatasetVersion` 返回已接受历史记录。`ReplayedDefinition(svc, setID, revision, sources, metadata)`
+判定一次发布请求是否只是已接受修订的重试：该修订已存在、请求来源（忽略服务端冻结的
+commit）与 metadata 完全相同时返回已接受定义，调用方以 `disposition: REPLAYED` 回答且不再
+准备或写入；首次接受回答 `APPLIED`。同修订号但配方不同仍由 `PublishDataset` 拒绝为
+`NON_FAST_FORWARD`。本地 `dataset define` 与 HTTP 发布都在授权之后调用它。
+请求显式提供 commit 时必须与该已接受来源提交一致；省略 commit 的分支重试不随当前 HEAD 重新冻结。
+`ReplayPublished` 从可信发布记录恢复 pin，再
 核对客户端坐标与文件清单；客户端摘要不能授权自己。`ReplayDefinition` 仅用于另行授权
 的临时配方，不能借命名 Dataset grant 扩大范围。成员准入、退役和当前权限继续约束旧 pin。
 空清单不是整仓别名，父目录跳转与未选入文件不能扩大范围。

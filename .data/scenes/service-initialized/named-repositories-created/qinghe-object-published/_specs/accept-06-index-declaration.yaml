@@ -1,0 +1,58 @@
+# 插件重构验收：索引声明的写入边界。夹具见 _materials/acceptance/README.md；用例树见同文件“用例树”一节。
+# 每条从本节点前态独立开始，由 probe 显式创建所需仓与夹具，不传递其他用例的后态。
+
+- id: accept-search-writer-rejects-index
+  title: 索引声明的结构错误由 Writer 拒绝
+  claims: ["discovery#U7"]
+  given:
+    - sales-analysis 仓已发布默认四个成员，记录 HEAD；两个独立变体。
+  when:
+    - 分别写入 variants/rejected/index-missing-field.yaml 与 index-with-engine.yaml。
+  then:
+    - 前者因输入在 schema/table.properties 上无法解析被拒，后者因声明含 instance 与 engine 被拒；HEAD 不变。
+  risk: 指向不存在字段或夹带物理配置的声明进入仓，后续只能在构建时才暴露。
+
+- id: accept-index-reject-shape
+  title: 索引声明的形状错误由 Writer 拒绝
+  claims: ["discovery#U7"]
+  given:
+    - sales-analysis 仓已发布默认四个成员，记录 HEAD；四个独立变体。
+  when:
+    - 分别写入 variants/rejected 下的 index-empty-inputs、index-bad-locator、index-raw-mapping、index-with-value-source。
+  then:
+    - 空输入、定位符不是对象引用写法或带通配、夹带原始 mapping 或脚本、索引声明自身声明外部取值，都被拒绝并指向违规位置；HEAD 不变。
+  risk: 形状不合法的声明进仓后只能在构建时报错，或原始引擎配置借声明绕过能力清单。
+
+- id: accept-index-writer-accepts-unsupported
+  title: 形状合法但清单外的写法由插件判断，不由 Writer 拒绝
+  claims: ["discovery#U8"]
+  given:
+    - sales-analysis 仓已发布默认成员，记录 HEAD。
+  when:
+    - 写入 variants/index/table-name-unsupported-analyzer.yaml。
+  then:
+    - Writer 接受写入，HEAD 前进；回读成员与写入一致。
+    - 试运行与准备都把 table-name 标为不支持，原因是分词器不在清单内。
+  risk: Writer 绑定某个实例的能力，换部署或升级清单后历史声明无法写入或回读。
+
+- id: accept-index-cross-repo-schema-ref
+  title: 索引声明可以引用别的仓发布的 Schema
+  claims: ["discovery#U7"]
+  given:
+    - sales-analysis 仓不含任何 Schema；所引用的 schema/table.properties 等发布在 table-meta。
+  when:
+    - 写入默认四个成员。
+  then:
+    - Writer 按引用解析到 table-meta 中的 Schema 并接受；回读成员的输入定位符原样保留。
+  risk: 维护者为写索引声明被迫在自己仓里复制 Schema。
+
+- id: accept-index-array-input
+  title: 数组字段按声明平铺后可过滤
+  claims: ["discovery#U1", "discovery#U7"]
+  given:
+    - 默认搜索世界；写入 variants/index/columns-array.yaml 并发布 Dataset 修订 2。
+  when:
+    - 按 primaryKeyColumnRefs 等于 table/shop.orders 主键列的引用过滤。
+  then:
+    - 命中 table/shop.orders，依据标出 primary-key-refs 以过滤角色参与；不命中其他表。
+  risk: 数组字段只取第一个元素，或因数组而整条成员被拒。

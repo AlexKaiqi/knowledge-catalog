@@ -96,8 +96,8 @@ python3 .data/scale/scenes/perf_tree.py --check      # 结构与引用检查
 - 本树当前是**用例规格**：runner 未实现，没有任何一条探针产生过资格结论。
 - 资格线与实测入口尚未登记；`metrics.yaml` 的 gateRef 数值只作默认参考，不构成 lakeFS 部署的承诺或通过线。
 - `history-aged` 节点依赖真实历史档生成（`history-generation`），生成器未实现前
-  该节点不可构建；`_meta.yaml` 的 `gaps` 显式记录。代际 rollover 结论待 REVIEW-01
-  选定方案后补充，不预先建状态。
+  该节点不可构建；`_meta.yaml` 的 `gaps` 显式记录。代际 rollover（旧 KC-PERF-12）已撤销，
+  不建状态。
 
 ## 7. 维护
 

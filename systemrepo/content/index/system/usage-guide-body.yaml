@@ -1,0 +1,22 @@
+---
+object_id: index/system
+aspect_name: index
+member_key: usage-guide-body
+kind: Member
+path_hint: index/system/usage-guide-body.yaml
+schema_ref: schema/core/index-declaration/v1
+---
+{
+  "catalog": "declarative-index/opensearch@2026-10",
+  "inputs": [
+    {
+      "from": "schema/system/usage-guide/v1#/fields/body"
+    }
+  ],
+  "build": {
+    "kind": "text"
+  },
+  "uses": [
+    "text"
+  ]
+}

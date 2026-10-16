@@ -447,6 +447,9 @@ func OpenDeployment(c DeploymentConfig) (*Home, error) {
 			return fail(err)
 		}
 	}
+	if err := writeDatasetAccess(c.StateDir, c.DatasetAccess); err != nil {
+		return fail(err)
+	}
 	if err := writeEvidencePolicy(c.StateDir, c.Evidence); err != nil {
 		return fail(err)
 	}

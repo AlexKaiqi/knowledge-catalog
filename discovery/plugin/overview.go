@@ -20,10 +20,7 @@ func (p *IndexPlugins) Overview(pin reader.DatasetPin) ([]SourcePlugin, error) {
 	}
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	for _, id := range ids {
-		if p.unavailable[id] != nil {
-			return nil, p.unavailable[id]
-		}
-		instance := p.byRepo[id]
+		instance := p.instanceForRepository(id)
 		if instance == nil {
 			continue
 		}
@@ -39,7 +36,7 @@ func (p *IndexPlugins) Overview(pin reader.DatasetPin) ([]SourcePlugin, error) {
 			files = append(files, file)
 		}
 		explanation, err := p.Help(instance.selection.Name)
-		item := SourcePlugin{Repository: id, Commit: pin.Repositories[id], Files: files, Name: instance.selection.Name, Instance: instance.selection.Instance}
+		item := SourcePlugin{Repository: id, Commit: pin.Repositories[id], Files: files, Name: instance.selection.Name, Instance: instance.selection.Instance, Catalog: instance.catalog}
 		if err == nil {
 			item.Summary, item.Help = explanation.Summary, "kc plugin "+explanation.Name+" help"
 		}

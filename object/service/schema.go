@@ -18,9 +18,11 @@ type SchemaPageCursor struct {
 }
 
 // SchemaEntity is one published type name. It is not the Schema document and
-// not DESCRIBE_SCHEMA.
+// not DESCRIBE_SCHEMA. Aspect tells several contracts of one Entity apart, so a
+// caller can pick the Aspect it needs before describing any contract.
 type SchemaEntity struct {
 	Entity      string               `json:"entity"`
+	Aspect      string               `json:"aspect,omitempty"`
 	Description string               `json:"description,omitempty"`
 	ObjectID    objectmodel.ObjectID `json:"objectId"`
 }
@@ -62,7 +64,7 @@ func SchemaEntityName(repo objectmodel.Repository, commit kernel.CommitID, objec
 	if err != nil {
 		return SchemaEntity{}, err
 	}
-	return SchemaEntity{Entity: def.Entity, Description: def.Description, ObjectID: objectID}, nil
+	return SchemaEntity{Entity: def.Entity, Aspect: def.Aspect, Description: def.Description, ObjectID: objectID}, nil
 }
 
 func DecodeSchemaPageCursor(raw string, repository kernel.RepositoryID, commit kernel.CommitID) (objectmodel.ObjectID, error) {

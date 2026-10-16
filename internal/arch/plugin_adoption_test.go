@@ -9,8 +9,8 @@ import (
 )
 
 var pluginAdoptionSurface = []string{
-	"ParseRepositoryPlugins", "PluginAffordance", "PluginScope", "PluginSelection",
-	"RepositoryPluginConfig", "RepositoryPluginConfigs", "RepositoryPluginsKey", "SelectRepositoryPlugins", "SourcePlugin",
+	"PluginAffordance", "PluginConfig", "PluginInstanceConfig", "PluginScope", "PluginSelection",
+	"PluginsConfig", "SourcePlugin",
 }
 
 func TestPluginAdoptionContractsHaveOneLowLevelDefinition(t *testing.T) {
@@ -40,7 +40,7 @@ func pluginAdoptionDependencySignals(graph depGraph) []string {
 
 func TestLiveAccessConsumesCommonAdoptionWithoutIndexRegistry(t *testing.T) {
 	graph := loadGraph(t)
-	for _, owner := range []string{"liveaccess/service", "liveaccess/plugin", "liveaccess/cli", "liveaccess/fixture"} {
+	for _, owner := range []string{"liveaccess/service", "liveaccess/plugin", "liveaccess/cli"} {
 		reach := graph.reachable(owner)
 		if _, shared := reach["discovery/adoption"]; !shared {
 			t.Errorf("%s does not consume its shared adoption contract", owner)
@@ -60,6 +60,10 @@ func pluginAdoptionOwnershipSignals(files map[string]*ast.File) []string {
 		owner := filepath.ToSlash(filepath.Dir(path))
 		ast.Inspect(file, func(node ast.Node) bool {
 			names, concrete := liveAccessDeclaredNames(node)
+			if spec, ok := node.(*ast.TypeSpec); ok {
+				// A named map or struct type is a definition; only aliases copy.
+				concrete = !spec.Assign.IsValid()
+			}
 			for _, name := range names {
 				if owner == "discovery/adoption" && ast.IsExported(name) {
 					public[name] = true
@@ -69,7 +73,7 @@ func pluginAdoptionOwnershipSignals(files map[string]*ast.File) []string {
 				}
 				if owner == "discovery/adoption" {
 					found[name]++
-					if !concrete && name != "RepositoryPluginsKey" {
+					if !concrete {
 						signals = append(signals, fmt.Sprintf("%s must own the concrete shared adoption %s", path, name))
 					}
 				} else if !pluginAdoptionCompatibleDeclaration(owner, node, file, name) {
@@ -94,15 +98,13 @@ func pluginAdoptionOwnershipSignals(files map[string]*ast.File) []string {
 }
 
 func pluginAdoptionCompatibleDeclaration(owner string, node ast.Node, file *ast.File, name string) bool {
-	allowed := owner == "discovery/plugin" || name == "PluginAffordance" && (owner == "liveaccess/cli" || owner == "declarativeindex/cli")
+	allowed := owner == "discovery/plugin" || name == "PluginAffordance" && (owner == "liveaccess/cli" || owner == "declarativeindex/capability")
 	if !allowed {
 		return false
 	}
 	switch declared := node.(type) {
 	case *ast.TypeSpec:
 		return declared.Assign.IsValid() && pluginAdoptionSelector(declared.Type, file, name)
-	case *ast.ValueSpec:
-		return name == "RepositoryPluginsKey" && len(declared.Values) == 1 && pluginAdoptionSelector(declared.Values[0], file, name)
 	case *ast.FuncDecl:
 		if declared.Body == nil || len(declared.Body.List) != 1 {
 			return false

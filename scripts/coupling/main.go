@@ -5,7 +5,7 @@
 // when the propagation cost exceeds the recorded baseline, when a unit's
 // Instability drifts by 0.05 or more, or when a unit is missing from the
 // baseline; new or tightened baselines require an explicit -write-baseline run
-// and a TASK.md note.
+// and a note in the delivery of the task under tasks/.
 package main
 
 import (
@@ -135,7 +135,7 @@ func main() {
 		if err := os.WriteFile(basePath, append(raw, '\n'), 0o644); err != nil {
 			fatal(err)
 		}
-		fmt.Printf("baseline written: %s (tightening must be noted in TASK.md)\n", basePath)
+		fmt.Printf("baseline written: %s (tightening must be noted in the task delivery under tasks/)\n", basePath)
 		return
 	}
 

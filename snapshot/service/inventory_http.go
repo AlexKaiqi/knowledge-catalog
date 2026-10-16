@@ -34,13 +34,52 @@ func (h *handler) inventoryShow(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return nil, err
 			}
-			view := map[string]any{"repositories": repositories, "datasets": dataset.PublicDatasets(state.Datasets)}
+			datasets, err := consumableDatasets(ctx, caller, resources, state.Datasets)
+			if err != nil {
+				return nil, err
+			}
+			view := map[string]any{"repositories": repositories, "datasets": datasets}
 			if resources.DiscoveryWorkspaceID != "" {
 				view["discoveryWorkspaceId"] = resources.DiscoveryWorkspaceID
 			}
 			return view, nil
 		})
 	})
+}
+
+// consumableDatasets lists accepted summaries only after current consumption
+// authorization. It uses frozen authority coordinates, never source inspection
+// or the inventory-discovery shortcut used by other explicit operations.
+func consumableDatasets(ctx context.Context, caller identity.HTTPIdentity, resources Resources, definitions []dataset.Dataset) ([]map[string]any, error) {
+	visible := make([]map[string]any, 0, len(definitions))
+	for _, definition := range definitions {
+		allowed, err := datasetConsumptionAllowed(ctx, caller, resources, definition)
+		if err != nil {
+			return nil, err
+		}
+		if allowed {
+			visible = append(visible, dataset.PublicDataset(definition))
+		}
+	}
+	return visible, nil
+}
+
+func datasetConsumptionAllowed(ctx context.Context, caller identity.HTTPIdentity, resources Resources, definition dataset.Dataset) (bool, error) {
+	if definition.Retired {
+		return false, nil
+	}
+	err := resources.authorize(ctx, Authorization{Caller: caller, Query: access.Query{Action: "dataset.resolve", Dataset: definition.SetID}})
+	if err == nil {
+		pin := dataset.ResolvedDataset{SetID: definition.SetID, Revision: definition.Revision, Repositories: map[kernel.RepositoryID]kernel.CommitID{}}
+		for _, source := range definition.Sources {
+			pin.Repositories[source.Repository] = source.Commit
+		}
+		err = authorizeCheckedFiles(ctx, caller, resources, pin)
+	}
+	if kernel.CodeOf(err) == kernel.ErrForbidden {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 func auditLimit(r *http.Request) (int, error) {

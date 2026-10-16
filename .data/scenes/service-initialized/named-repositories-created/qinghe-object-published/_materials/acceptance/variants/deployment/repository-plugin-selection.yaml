@@ -1,0 +1,6 @@
+# 测试部署配置片段：退役的按仓选择插件写法，部署启动必须拒绝，不静默忽略。
+repositories:
+  table-meta:
+    plugins:
+      liveaccess: live-main
+      declarative-index: opensearch-main

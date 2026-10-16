@@ -1,0 +1,241 @@
+# 插件重构验收：Dataset 修订的跟随、检索空间与保留。夹具见 _materials/acceptance/README.md；用例树见同文件“用例树”一节。
+# 每条从本节点前态独立开始，由 probe 显式创建所需仓与夹具，不传递其他用例的后态。
+# 自动发布的触发时机属于后台维护，断言等待有界：probe 在固定上限内轮询状态，超时即失败，不以 sleep 代替。
+
+- id: accept-revision-follow-default
+  title: 来源登记默认跟随，分支前进自动发修订并准备索引
+  claims: ["dataset#U11", "discovery#U4"]
+  given:
+    - Dataset sales-analysis 按 variants/dataset/follow-default.yaml 定义，三个来源未写跟随方式；修订 1 就绪。
+  when:
+    - table-meta 的 main 提交一个新表 table/shop.refunds；等待 Dataset 状态不再处于准备中。
+    - 在 Dataset 当前修订搜索 "refunds"。
+  then:
+    - 当前修订推进到 2，来源 table-meta 冻结在新提交，另两个来源的提交不变；发布者是服务身份。
+    - 搜索命中 table/shop.refunds；依据中的 Dataset 修订是 2。
+    - 修订 1 的发布记录仍可查，冻结的提交不变。
+  risk: 来源前进后 Dataset 不动，使用方长期读到旧内容；或自动发布绕过准备直接切换。
+
+- id: accept-revision-follow-coalesce
+  title: 分支连续前进只追最新提交
+  claims: ["dataset#U11"]
+  given:
+    - 同上，修订 1 就绪；准备阶段由测试注入可控延迟，使连续提交在一次准备完成前到达。
+  when:
+    - table-meta 的 main 连续提交三次（c1、c2、c3）；等待准备结束。
+  then:
+    - 发布记录只新增一条修订，冻结在 c3；没有冻结在 c1 或 c2 的修订被接受。
+    - 被作废的准备不出现在发布历史中，也不能被查询选中。
+  risk: 每个中间提交都发一版，修订号和索引准备成本随提交频率线性增长。
+
+- id: accept-revision-follow-prepare-failure
+  title: 自动发布准备失败时当前修订继续服务
+  claims: ["dataset#U11", "discovery#U4"]
+  given:
+    - 修订 1 就绪；测试让下一次索引准备失败（例如注入物理索引写入错误）。
+  when:
+    - table-meta 的 main 提交新表；等待准备结束；在 Dataset 上搜索 "orders" 并读取 Dataset 状态。
+    - 撤除故障后 table-meta 再提交一次；等待准备结束。
+  then:
+    - 第一次：当前修订仍是 1，搜索照常命中，依据是修订 1；状态列出失败原因、落后的来源 table-meta 与目标提交。
+    - 第二次：重新尝试并冻结在最新提交，当前修订推进到 2；失败那次没有留下已接受的修订。
+  risk: 自动发布失败让 Dataset 不可用、公开半成品，或此后再也不跟随。
+
+- id: accept-revision-manual-source
+  title: 手动来源不随分支前进
+  claims: ["dataset#U11"]
+  given:
+    - Dataset 按 variants/dataset/follow-manual-semantic.yaml 定义：sales-semantic 为手动，其余跟随；修订 1 就绪。
+  when:
+    - sales-semantic 的 main 改动 metric/shop.gmv 的定义；等待一个跟随周期；再让 table-meta 的 main 前进。
+  then:
+    - sales-semantic 前进不触发新修订；table-meta 前进触发修订 2。
+    - 修订 2 中 sales-semantic 仍冻结在修订 1 的提交，搜索读到旧定义。
+  risk: 手动登记被当作跟随，维护者冻结的来源被悄悄推进。
+
+- id: accept-revision-follow-declaration-change
+  title: 索引声明的分支改动随新修订生效
+  claims: ["dataset#U11", "discovery#U7"]
+  given:
+    - 修订 1 就绪，index/sales-search 含 metric-text 成员。
+  when:
+    - sales-analysis 的 main 删除 metric-text 成员；准备完成前在 Dataset 搜索 "discount"；准备完成后再搜。
+  then:
+    - 准备完成前仍按修订 1 的声明命中 metric/shop.gmv，概览列出 metric-text。
+    - 修订 2 接受后，新搜索不再经该成员命中，概览不再列出它；声明变化不绕过修订直接改变检索。
+  risk: 声明 HEAD 改动立即影响检索，或声明改动不触发跟随。
+
+- id: accept-revision-follow-permission-revoked
+  title: 撤销来源发布许可后停止跟随
+  claims: ["dataset#U11", "dataset#U3"]
+  given:
+    - 修订 1 就绪；随后撤销 Dataset 维护者对 sales-semantic 的内容发布许可。
+  when:
+    - sales-semantic 的 main 前进；table-meta 的 main 前进；读取 Dataset 状态；reader 在 Dataset 上搜索。
+  then:
+    - 不产生新修订；状态报停止跟随，原因指向 sales-semantic 的发布许可。
+    - 修订 1 照常按消费权限服务，reader 搜索不受影响。
+    - 恢复许可后，下一次来源前进重新开始跟随。
+  risk: 服务身份的自动发布变成越权通道，把已无许可的来源新内容发布出去。
+
+- id: accept-revision-search-retention
+  title: 超出检索保留的修订可读不可搜
+  claims: ["dataset#U12", "discovery#U4"]
+  given:
+    - Dataset 按 variants/dataset/retention-two.yaml 定义：至少保留 1 小时、至少 2 个修订，来源为手动。
+    - 测试时钟下 10 分钟内依次发布修订 1 至 4，每版都就绪。
+  when:
+    - 立即在修订 1 搜索 "orders"；时钟推进 2 小时后，按固定修订 2 读取 table/shop.orders，在修订 2、3、4 搜索 "orders"。
+  then:
+    - 推进前修订 1 仍可搜：未满时间下限的修订不因数量超出被回收。
+    - 修订 2 的读取成功，值与修订 2 的冻结提交一致。
+    - 修订 2 的搜索明确报检索已不可用，指出修订与保留策略，不返回零命中。
+    - 修订 3 与 4 的搜索都命中，依据分别是各自修订。
+  risk: 旧修订搜索静默返回空结果；只按数量保留，频繁跟随时长任务固定的修订几分钟就被挤出；或保留策略不生效，旧修订检索无限累积。
+
+- id: accept-revision-continuation-grace
+  title: 被替换修订的续页只在宽限内可用
+  claims: ["dataset#U12", "discovery#U5"]
+  given:
+    - 检索保留为 minAge 0、minRevisions 1（只保留当前修订）；修订 1 就绪；测试部署把续页宽限设为可控的短时长。
+  when:
+    - 在修订 1 发起搜索取得第一页与续页位置；发布修订 2 并就绪；宽限内用续页取第二页；宽限过后再用同一续页。
+  then:
+    - 宽限内的第二页依据仍是修订 1，与第一页不重复不遗漏。
+    - 宽限过后续页明确失败并要求重新开始，不接到修订 2 的索引上。
+  risk: 发布新修订立刻打断正在翻页的调用者，或续页悄悄改读新修订。
+
+- id: accept-revision-retire
+  title: 退役修订后读取与搜索都拒绝，记录仍可追溯
+  claims: ["dataset#U12", "dataset#U4"]
+  given:
+    - 手动来源；修订 1 至 3 已发布，当前为 3。
+  when:
+    - 维护者退役修订 2；按固定修订 2 读取与搜索；列出发布历史；读取来源仓 table-meta 在修订 2 冻结提交上的内容。
+  then:
+    - 修订 2 的读取与搜索都以已退役拒绝，错误与“检索已不可用”可区分。
+    - 发布历史仍列出修订 2，标为已退役，冻结的来源提交可查。
+    - 来源仓的该提交仍可直接读取，历史未被改写；修订 1 与 3 不受影响。
+  risk: 退役删掉审计记录或来源历史，或退役只挡搜索不挡读取。
+
+- id: accept-revision-retire-current-rejected
+  title: 当前修订不能退役
+  claims: ["dataset#U12"]
+  given:
+    - 手动来源；修订 1 与 2 已发布，当前为 2。
+  when:
+    - 维护者退役修订 2。
+  then:
+    - 请求被拒，错误说明要先发布新修订或退役整个 Dataset；修订 2 仍可读可搜。
+  risk: 退役当前修订让 Dataset 处于没有可用修订的状态。
+
+- id: accept-revision-usage-no-auto-retire
+  title: 使用记录公开修订访问与空间，系统不据此退役
+  claims: ["dataset#U12", "discovery#U9"]
+  given:
+    - 检索保留为 minAge 0、minRevisions 3；修订 1 至 3 已发布；只在修订 3 上有查询，修订 2 长期无人访问。
+  when:
+    - 维护者读取 Dataset 的使用数据；经过超过一个维护周期后再在修订 2 搜索。
+  then:
+    - 使用数据逐修订列出最近访问时间与所占空间，修订 2 显示无访问。
+    - 修订 2 仍在保留范围内，搜索照常命中；无人访问不导致自动回收或退役。
+  risk: 搜索可用性取决于别人最近有没有用过，同一请求的结果无法预期和复现。
+
+- id: accept-revision-pinned-task-out-of-retention
+  title: 任务固定的修订超出保留时明确报错
+  claims: ["dataset#U12"]
+  given:
+    - retention-two.yaml；一个任务按 TaskDatasetPin 固定到修订 1；随后发布修订 2 至 4，时钟推进 2 小时。
+  when:
+    - 任务按固定的修订 1 搜索 "orders"，并读取 table/shop.orders。
+  then:
+    - 搜索报检索已不可用，错误带当前修订号并提示改用它；不返回零命中。
+    - 读取仍成功；任务固定不延长保留，修订 1 不因此被重新纳入检索。
+  risk: 任务中途拿到空结果当作真实结论，或“有人固定”变成隐式的按使用保留。
+
+- id: accept-revision-follow-non-fast-forward
+  title: 分支倒退或删除时停止跟随，不退回旧内容
+  claims: ["dataset#U11"]
+  given:
+    - follow-default.yaml；table-meta 的 main 前进到 c2，Dataset 修订 2 冻结在 c2。
+  when:
+    - 把 table-meta 的 main 重置到 c1；等待一个跟随周期；读取 Dataset 状态并搜索 c2 新增的对象。
+    - 另起一例：删除 sales-semantic 的 main。
+  then:
+    - 不产生新修订，当前仍是 2，c2 新增的对象仍可搜；状态报非快进，指出来源、当前冻结提交与分支位置。
+    - 删除分支同样停止跟随并报出原因；修订 2 照常服务。
+    - 维护者手动发布后跟随恢复。
+  risk: “只追最新”把一次误操作的 reset 变成全体使用方的内容回退。
+
+- id: accept-revision-cross-repo-combination
+  title: 跨仓配套改动只到一半时不接受，到齐后自动通过
+  claims: ["dataset#U11", "discovery#U7"]
+  given:
+    - follow-default.yaml；修订 1 就绪，table-row-count 成员指向 schema/table.live-stats#/fields/rowCount。
+  when:
+    - table-meta 写入 variants/declaration-split/table-meta-schema-ahead.yaml；等待准备结束；读取状态并按行数过滤搜索。
+    - sales-analysis 写入 variants/declaration-split/index-follows-schema.yaml；等待准备结束；再次搜索。
+  then:
+    - 第一步：准备校验失败，不产生新修订；状态指出 table-row-count 的输入在冻结组合里无法解析，以及涉及的两个来源提交；修订 1 照常过滤。
+    - 第二步：自动重试通过，修订 2 两个来源都冻结在新提交，按 rows 过滤成立。
+    - 任何时刻都没有接受“Schema 新、声明旧”的修订。
+  risk: 跟随先发布半套配套改动，成员整体失效或对象校验失败，检索突然退化。
+
+- id: accept-revision-follow-min-interval
+  title: 自动发布有最小间隔
+  claims: ["dataset#U11"]
+  given:
+    - 部署 variants/deployment/dataset-quota.yaml（最小间隔 30s，测试时钟）；follow-default.yaml，修订 1 就绪。
+  when:
+    - 修订 2 被自动接受后 5 秒内 table-meta 再前进两次；时钟推进到间隔结束。
+  then:
+    - 间隔内不接受新修订；间隔结束后只发一个修订，冻结在最后一次提交。
+  risk: 高频提交的仓让 Dataset 持续重建，索引资源被一个来源耗尽。
+
+- id: accept-revision-source-commit-held
+  title: 保留中的修订冻结的提交不被 lakeFS 回收
+  claims: ["dataset#U13"]
+  given:
+    - 手动来源；修订 1 冻结 table-meta 的 c1；随后 main 被重置到不含 c1 的新历史，修订 2 冻结在新提交。
+  when:
+    - 运行 lakeFS 回收；按固定修订 1 读取 table/shop.orders；退役修订 1 后再运行一次回收并查看 c1。
+  then:
+    - 第一次回收后修订 1 仍可读，值来自 c1。
+    - 退役修订 1 后保留释放，第二次回收可以删除 c1；修订 2 不受影响。
+  risk: 已发布修订在一次常规回收后不可读，“固定版本”名存实亡。
+
+- id: accept-revision-gc-rule-check
+  title: 回收规则会越过保留时部署拒绝启动
+  claims: ["dataset#U13"]
+  given:
+    - 部署叠加 variants/deployment/lakefs-gc-unsafe.yaml。
+  when:
+    - 启动部署。
+  then:
+    - 启动失败，原因指出 table-meta 的回收规则不承认提交保留；不进入只在读取时才报错的状态。
+  risk: 配置错误潜伏到某次回收之后，才以大面积读取失败暴露。
+
+- id: accept-revision-quota
+  title: 超出 Dataset 配额不接受新修订
+  claims: ["dataset#U14"]
+  given:
+    - 部署 variants/deployment/dataset-quota.yaml（向量成员上限 0）；修订 1 就绪且不含向量成员。
+  when:
+    - sales-analysis 的 main 写入 variants/index/metric-semantic.yaml，触发自动发布；再由维护者手动发布同一内容。
+  then:
+    - 两次都不接受新修订，状态指出超出向量成员配额；修订 1 照常服务。
+  risk: 任何维护者都能无上限消耗共享的索引资源，自动跟随还会反复重试放大成本。
+
+- id: accept-revision-emergency-purge
+  title: 紧急清除覆盖索引与证据，记录仍可追溯
+  claims: ["dataset#U15", "liveaccess#U18"]
+  given:
+    - 手动来源，保留 minAge 0、minRevisions 3；table-meta 新增含敏感描述的 table/shop.secret，发布修订 2、3 并都被搜索和读取过。
+  when:
+    - 从 table-meta 删除 table/shop.secret，发布修订 4；退役修订 2、3 并要求清除；等待清除完成（有界轮询）。
+    - 在修订 4 搜索敏感描述里的词；查询物理索引里 table/shop.secret 的文档；读取修订 2、3 的访问证据。
+  then:
+    - 修订 2、3 的读取与搜索都拒绝；修订 4 无命中。
+    - 修订 1 与 4 共用的物理索引里不再有 table/shop.secret 的任何字段。
+    - 证据中 table/shop.secret 的观察值显示“已清除”，摘要与访问记录仍在；清除状态给出完成时间。
+  risk: 退役只挡住访问，敏感数据仍留在共用索引与证据中，无法证明已经清除。

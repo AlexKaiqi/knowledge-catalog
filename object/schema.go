@@ -51,17 +51,15 @@ var supportedSchemaTypes = map[string]struct{}{
 	"object_ref_list": {}, "relation_endpoint_list": {},
 }
 
-var supportedSchemaAccess = map[string]struct{}{"text": {}, "filter": {}, "sort": {}}
-
 var schemaTemporalFraction = regexp.MustCompile(`[.,]([0-9]+)(?:Z|[+-][0-9]{2}:[0-9]{2})$`)
 
-// SchemaFieldDefinition is one logical Domain Schema field. Access contains
-// logical query affordances, never physical provider settings.
+// SchemaFieldDefinition is one logical Domain Schema field. Schema describes
+// structure only; retrieval capability lives in a separate index declaration
+// (the `index` Aspect), never on the Schema field.
 type SchemaFieldDefinition struct {
 	Path     string   `json:"path"`
 	Type     string   `json:"type,omitempty"`
 	Required bool     `json:"required,omitempty"`
-	Access   []string `json:"access,omitempty"`
 	RefTypes []string `json:"refTypes,omitempty"`
 }
 
@@ -220,22 +218,9 @@ func parseSchemaFields(objectID ObjectID, raw any) ([]SchemaFieldDefinition, err
 				return nil, schemaUnsupported(objectID, "field %s required must be boolean", name)
 			}
 		}
-		access, err := schemaStringList(body["access"])
-		if err != nil {
-			return nil, schemaUnsupported(objectID, "field %s access: %v", name, err)
-		}
-		for _, hint := range access {
-			if _, supported := supportedSchemaAccess[hint]; !supported {
-				return nil, schemaUnsupported(objectID,
-					"field %s has unsupported access %q; expected text, filter or sort", name, hint)
-			}
-		}
-		if len(access) > 0 {
-			switch fieldType {
-			case "object", "record", "array", "relation_endpoint_list":
-				return nil, schemaUnsupported(objectID,
-					"field %s type %q has no defined scalar access; declare access on typed scalar fields", name, fieldType)
-			}
+		if _, legacy := body["access"]; legacy {
+			return nil, schemaUnsupported(objectID,
+				"field %s declares access; Schema describes structure only, retrieval capability belongs to an index declaration", name)
 		}
 		refTypes, err := schemaStringList(body["refTypes"])
 		if err != nil {
@@ -243,7 +228,7 @@ func parseSchemaFields(objectID ObjectID, raw any) ([]SchemaFieldDefinition, err
 		}
 		fields = append(fields, SchemaFieldDefinition{
 			Path: name, Type: fieldType, Required: required,
-			Access: compactSorted(access), RefTypes: compactSorted(refTypes),
+			RefTypes: compactSorted(refTypes),
 		})
 	}
 	sort.Slice(fields, func(i, j int) bool { return fields[i].Path < fields[j].Path })
@@ -346,8 +331,8 @@ func ValidateSchemaAddress(address Address, schema SchemaDefinition) error {
 
 // BreakingSchemaChanges returns deterministic value-structure compatibility
 // breaks. A provider must publish a new major identity for any returned change.
-// Field access is a versioned query declaration: narrowing or removing it
-// changes AccessSpec, not the structural validity of the stored values.
+// Schema describes structure only; retrieval capability lives in a separate
+// index declaration, so it never participates in structural compatibility.
 func BreakingSchemaChanges(previous, next SchemaDefinition) []string {
 	changes := []string{}
 	if previous.MetaSchema != next.MetaSchema {

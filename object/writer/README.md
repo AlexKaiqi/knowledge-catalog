@@ -29,9 +29,21 @@ PUT 替换一个完整 Address 单元，可携带 `schema_ref`、provenance 与 
 
 更新未指定 `path_hint` 时保留该 Address 的原有路径；显式指定才迁移。原生 provider 接收原始 ChangeSet，合并现有单元后仅为尚无路径的单元分配默认路径，Writer 不提前把路径省略改写成迁移。
 
-`Ingest` / `Reconcile` 只产生 ChangeSet 预览，不是采集框架，也不是 ingestion control（面 3 只追 published HEAD 的派生投影）。产品 CLI 的目录写入是 `writer commit --dir`；一次性接入大量文件时可加 `--bulk` 显式请求介质的批量写通路——只换对象传输原语，CAS 与 commit 语义不变，介质未提供该能力时整条确定性拒绝；可选 `kc diff --dir` 看同一对照，不把 ChangeSet 交给调用方。HTTP Writer 仍收 ChangeSet（含 `bulkIngest`）。PROPOSAL 只推进 candidate Ref；ControlPlane merge 才推进发布 Ref。人在自有 git 上改 frontmatter 不经过本 CLI 时，进 published 的对象发布仍须过与 COMMIT 相同的校验（CI 代发或只验不写，见 `TASK.md` WRITE-VALIDATE）；本包本轮不新增 validate-only 命令。部署发布 `systemrepo/content` 完整出版物由 `systemrepo.PublishSystem` 聚合并调用专用 Writer：只写入空的实际 `kr://kc/system` Snapshot，已有内容、Address、Schema 绑定和路径必须与当前版本一致，额外或缺失内容文件拒绝。运行时 Writer 保持拒绝系统仓写入。
+`Ingest` / `Reconcile` 只产生 ChangeSet 预览，不是采集框架，也不是 ingestion control（面 3 只追 published HEAD 的派生投影）。产品 CLI 的目录写入是 `writer commit --dir`；一次性接入大量文件时可加 `--bulk` 显式请求介质的批量写通路——只换对象传输原语，CAS 与 commit 语义不变，介质未提供该能力时整条确定性拒绝；可选 `kc diff --dir` 看同一对照，不把 ChangeSet 交给调用方。HTTP Writer 仍收 ChangeSet（含 `bulkIngest`）。PROPOSAL 只推进 candidate Ref；ControlPlane merge 才推进发布 Ref。人在自有 git 上改 frontmatter 不经过本 CLI 时，进 published 的对象发布仍须过与 COMMIT 相同的校验（CI 代发或只验不写，见 `tasks/done/WRITE-VALIDATE.md`，方向在 `doc/roadmap.md` 的“未到”）；本包本轮不新增 validate-only 命令。部署发布 `systemrepo/content` 完整出版物由 `systemrepo.PublishSystem` 聚合并调用专用 Writer：只写入空的实际 `kr://kc/system` Snapshot，已有内容、Address、Schema 绑定和路径必须与当前版本一致，额外或缺失内容文件拒绝。运行时 Writer 保持拒绝系统仓写入。
+
+首次上传的空树快路自动生效：Writer 通过可选 `DirectoryReader` 独立确认固定 `BaseCommit`
+的根目录为空，对这一不可变基点的规划读取直接返回缺失，省去逐对象旧值读取。任何已有条目
+（包括 `.kc`）都使基点按非空处理；不具备目录读取能力时保留原流程，读取失败则拒绝。
+Schema、同批路径冲突、操作前置条件、CAS 和命令摘要仍完整校验；实际写入和通知沿原 authority。
+应用层 writer head 响应的 `empty` 是同一 `commit` 的可选布尔信息：已确认为空才为 true，
+非空为 false，能力未知省略。CLI 仅在未显式指定 `--base` 且该信息为 true 时跳过逐对象对照；
+ChangeSet 无需声明“首次上传”，服务端不信任客户端的空树提示。
 
 幂等规则：同 command_id 同 digest 返回原 Receipt（REPLAYED）；同 id 异 digest 是 `IDEMPOTENCY_CONFLICT`。Snapshot CAS 过期是 `NON_FAST_FORWARD`。带 `schema_ref` 的 PUT 必须在 target commit 可解析。DERIVATION 必须携带固定 inputWorkspaceVersionRef 和 algorithm。
+
+目录对照为零变化时，有已应用命令的重试仍从命令账记录的原始基点重新求差，再交 Writer 核验完整
+请求摘要，不能只凭 command ID 或当前正文相同返回回执。目标、bulk 方式或原请求内容不同仍冲突；
+无法读取原始基点或缺少核验元数据时明确拒绝，不能把未知状态当作已重放。
 
 Relation PUT 可以引用其他仓的对象；仅校验 `CanonicalRelation` 的结构化信封，不读取或写入端点仓，不为端点发权。单仓 target、CAS、幂等与失败原子性不变。端点是否存在和是否允许读取留给消费上下文处理。
 
@@ -40,7 +52,7 @@ Relation PUT 可以引用其他仓的对象；仅校验 `CanonicalRelation` 的�
 保留窗口的 `APPLIED`/`ABANDONED`，永不推断 `PENDING`；Bolt 实现游标删除，不在启动时加载
 全部历史。Canonical 与账本已接受后，次级 evidence sink 失败不反转写入结果。
 
-每个 `schema/*` PUT 先按 System Meta Schema 归一化；未知逻辑 type、物理 access 词或错误
+每个 `schema/*` PUT 先按 System Meta Schema 归一化；未知逻辑 type、字段 `access` 或错误
 形状返回 `SCHEMA_UNSUPPORTED`。复用同一 Schema object ID 时先做兼容性 diff；字段删除、
 改类型、新增必填、归属/模式变化或约束收紧返回 `SCHEMA_INCOMPATIBLE`，接入方必须发布新
 major。`schema/core/readme/v1` 是平台 README Aspect：副本必须与 System 出版物 digest 一致，
@@ -58,14 +70,20 @@ Snapshot。同提交的固定 locator 记录 binding 单元所采用完整 Schem
 主要文件：`writer.go` 共用校验与 applySnapshot；`commit.go`、`propose.go` 两个 Surface；`schema.go` 校验 Meta Schema、schema_ref 和实例；`idempotency.go` 解释共享 command ledger 中的 Object 请求；`receipt.go` 定义 durable receipt；`preview.go` 只做预览。
 
 ```bash
-go run ./cmd/kc -- writer put --command-id schema-1 --repo kr://acme/public/core \
-  --object schema/service.health \
-  --value '{"entity":"Service","aspect":"health","origin":"https://stats.example","fields":{"status":{"type":"string"}}}'
+go run ./cmd/kc -- writer put 'urn:kc:object:schema/service.health' \
+  --command-id schema-1 --repo kr://acme/public/core \
+  --value '{"entity":"Service","aspect":"health","pattern":"record","fields":{"status":{"type":"string"}}}'
+go run ./cmd/kc -- writer put 'urn:kc:object:index/service-search#/index/status' \
+  --command-id index-1 --repo kr://acme/public/core --kind Member \
+  --schema-ref schema/core/index-declaration/v1 \
+  --value '{"catalog":"declarative-index/opensearch@2026-10","inputs":[{"from":"schema/service.health#/fields/status"}],"build":{"kind":"keyword"},"uses":["filter"]}'
 ```
 
 
-声明式索引唯一采用 Schema 字段 `access`。它声明逻辑查询能力，不属于值结构兼容约束；
-删除或收窄 access 可在同一 Schema 身份下发布，旧 pin 继续读取旧声明，新版本按新的
-AccessSpec 摘要维护投影。字段删除、改类型、新增必填、归属/模式和引用约束等结构守卫
-保持；平台 Schema 副本仍须精确匹配系统出版物。普通对象正文中的查询样式数据不赋予
-字段访问能力，也不会触发独立声明解析。
+索引声明是采用 `schema/core/index-declaration/v1` 的成员单元，Schema 字段不再接受 `access`。
+Writer 检查声明形状及输入定位符在所引用 Schema 上能否解析；构建方式是否被具体实例支持，
+由实例能力清单核对。删除或收窄索引成员不改变值结构，旧 pin 保留旧声明。
+`CheckIndexDeclaration` 复用 COMMIT 的结构和 Schema 校验并返回按输入顺序解析的字段，
+不写 Snapshot、回执账本或 evidence；它不预判存储路径准入或未来 CAS，也不判断实例能力。
+字段删除、改类型、新增必填、归属/模式和引用约束等结构守卫保持；平台 Schema 副本
+仍须精确匹配系统出版物。仅名为 `index` 而未采用声明 Schema 的业务内容不产生查询能力。

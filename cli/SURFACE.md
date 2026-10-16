@@ -137,14 +137,21 @@ kc writer merge --command-id <id> --repo <id> --from <branch> [--commit <id>] [-
 kc files list --dataset <id> [--revision <n>] [--path <dir>] [--limit <n>] [--continuation <cursor>]
 kc files read --dataset <id> [--revision <n>] --path <file> [--offset <n>] [--length <n>]
 kc files read --dataset <id> [--revision <n>] --path <file> --out <local-file>
+kc files read --repo <id> --commit <commit> --path <file> [--offset <n>] [--length <n>]
+kc files read --repo <id> --commit <commit> --path <file> --out <local-file>
 kc grant update --id <id> --file <replacement-rule.json> --expected-file <observed-rule.json>
 ```
 
-文件路径属于交付树，支持目录映射和重命名单文件混排；目录页只含直接子项并返回可继续
+`files read` 的 `--repo` 与 `--dataset` 互斥。按仓时必须指定资源的固定 commit，路径相对
+于原仓根目录，检查该仓的 `file.read`；不自动选择分支最新版，也不要求发布 Dataset。
+对象正文中的文件地址是普通值，Agent 按业务说明选择资源坐标，不能默认套用对象说明的
+仓或 commit；读取对象不自动下载、也不授予文件读取权。
+
+Dataset 文件路径属于交付树，支持目录映射和重命名单文件混排；目录页只含直接子项并返回可继续
 读取的路径。首次省略发布版只选当前一次，续页须显式沿用返回版号；后续读取沿用同版才能
 延续依据，独立命令默认当前版不构成同一基点。解析、每页和每块均检查当前权限。
 默认读取是 JSON 中的 base64 字节块，`--out` 则完整下载单文件且不覆盖既有目标。
-块大小有界不表示源端 Range I/O 或内存有界。这些入口复用 Snapshot 网关；独立 `kcfs`
+块大小有界不表示源端 Range I/O 或内存有界。这些入口复用 Snapshot 文件服务；独立 `kcfs`
 作为外部宿主客户端，不归 Snapshot 挂载实现。
 
 授权更新使用此前观察的单条规则和完整新规则，通过已有 Admin PUT 原子替换；保持 ID

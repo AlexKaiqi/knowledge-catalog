@@ -33,6 +33,3 @@ func (c *client) DescribeProjection(ctx context.Context, r ProjectionRequest, o 
 func (c *client) SyncProjection(ctx context.Context, r ProjectionRequest, o RequestOptions, out any) error {
 	return c.request(ctx, "/operations/v1/projections:sync", r, o, out)
 }
-func (c *client) NotifyProjection(ctx context.Context, r ProjectionNotifyRequest, o RequestOptions, out any) error {
-	return c.request(ctx, "/operations/v1/projections:notice", r, o, out)
-}

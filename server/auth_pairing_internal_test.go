@@ -1,30 +1,19 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"io"
-	inv "kc/invocation"
+	kcidentity "kc/identity"
+	"kc/identity/identitytest"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"kc/kernel"
 )
 
-type pairingAuthenticator struct {
-	principal string
-	onBehalf  string
-}
-
-func (a pairingAuthenticator) Name() string { return "taihu" }
-
-func (a pairingAuthenticator) Authenticate(_ context.Context, headers http.Header) (inv.HTTPIdentity, error) {
-	if strings.TrimSpace(headers.Get("Authorization")) == "" {
-		return inv.HTTPIdentity{}, kernel.Fail(kernel.ErrUnauthenticated, "missing Authorization")
-	}
-	return inv.HTTPIdentity{Principal: a.principal, OnBehalfOf: a.onBehalf, Provider: "taihu", Subject: a.principal}, nil
+// pairingAuthenticator accepts any Authorization and names the given principal.
+func pairingAuthenticator(principal string) identitytest.Authenticator {
+	return identitytest.RequireHeaders("taihu", kcidentity.HTTPIdentity{Principal: principal, Provider: "taihu", Subject: principal}, "Authorization")
 }
 
 func TestIdentityAuthDiscovery(t *testing.T) {
@@ -36,7 +25,7 @@ func TestIdentityAuthDiscovery(t *testing.T) {
 	}
 
 	product := httptest.NewServer(HTTPHandlerWithOptions(t.TempDir(), HTTPServerOptions{
-		Authenticator: pairingAuthenticator{principal: "taihu:1"},
+		Authenticator: pairingAuthenticator("taihu:1"),
 	}))
 	t.Cleanup(product.Close)
 	status, body = pairingGET(t, product, "/identity/v1/auth", nil)
@@ -72,7 +61,7 @@ func TestLocalPairingRejectsAuthorizationAndOnBehalfOf(t *testing.T) {
 
 func TestProductPairingRejectsLocalAssertionAndMixedHeaders(t *testing.T) {
 	server := httptest.NewServer(HTTPHandlerWithOptions(t.TempDir(), HTTPServerOptions{
-		Authenticator: pairingAuthenticator{principal: "taihu:1"},
+		Authenticator: pairingAuthenticator("taihu:1"),
 	}))
 	t.Cleanup(server.Close)
 

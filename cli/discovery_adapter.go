@@ -58,16 +58,9 @@ func executeDiscoveryCommand(ctx context.Context, remote *kcclient.Client, path 
 	if path == "plugin" {
 		return discoverycli.New(remote.DiscoveryService(), discoverycli.Context{}).Execute(ctx, path, snapshotFlags(flags), discoveryclient.RequestOptions{RequestID: options.RequestID})
 	}
-	inventory := inventorySearchRequested(path, flags)
 	if err := inv.PrepareObjectPinContext(flags); err != nil {
 		return nil, err
 	}
-	if inventory {
-		if err := prepareRemoteInventoryDiscovery(ctx, remote, flags, options); err != nil {
-			return nil, err
-		}
-	}
 	caller := discoveryCaller(flags)
-	caller.InventoryDiscovery = inventory
 	return discoverycli.New(remote.DiscoveryService(), caller).Execute(ctx, path, discoveryFlags(flags), discoveryclient.RequestOptions{RequestID: options.RequestID})
 }

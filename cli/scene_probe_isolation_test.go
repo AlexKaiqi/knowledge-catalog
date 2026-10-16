@@ -85,11 +85,15 @@ func (f *sceneUnavailableOnReplay) NewRepo() string {
 // scene features. The observer must pass alone, in either probe order, and as
 // a successor, including when the mutated Snapshot authority is remote.
 func TestSceneProbesIsolateAuthorityAndGrants(t *testing.T) {
-	sceneProbeAuthorityOrders(t, false)
+	sceneProbeAuthorityOrders(t, false, false)
 }
 
 func TestSceneProbeReplayIsolatesUncloneableAuthority(t *testing.T) {
-	sceneProbeAuthorityOrders(t, true)
+	sceneProbeAuthorityOrders(t, true, false)
+}
+
+func TestSceneCheckpointProbesReuseAuthorityAndGrants(t *testing.T) {
+	sceneProbeAuthorityOrders(t, false, true)
 }
 
 type sceneUncloneableAuthority struct{ sceneLakeFS }
@@ -98,7 +102,7 @@ func (sceneUncloneableAuthority) ForkStamps(string) error {
 	return errors.New("this authority cannot preserve commit IDs in a physical copy; replay is required")
 }
 
-func sceneProbeAuthorityOrders(t *testing.T, replay bool) {
+func sceneProbeAuthorityOrders(t *testing.T, replay, checkpoint bool) {
 	t.Helper()
 	for _, order := range []struct {
 		name   string
@@ -143,6 +147,12 @@ Then error FORBIDDEN
 			}, order.probes, sceneIsolationObserve)
 			writeSceneIsolationFile(t, filepath.Join(root.Dir, "_materials", "baseline.json"), `{"text":"baseline"}`)
 			writeSceneIsolationFile(t, filepath.Join(root.Dir, "_materials", "changed.json"), `{"text":"changed"}`)
+			if checkpoint {
+				fake := cache.lakefs.(*testkit.LakeFSFake)
+				nodes := cache.nodes
+				cache = newSceneHomeCacheWith(t, testkit.NewLakeFSLive(t, fake.Origin(), fake.Credential(), "s3://checkpoint-test"))
+				cache.nodes = nodes
+			}
 			if replay {
 				cache.replay = true
 				cache.lakefs = sceneUncloneableAuthority{cache.lakefs}
@@ -227,6 +237,15 @@ Then error FORBIDDEN
 }
 
 func TestSceneProjectionProbesRestoreSharedBaseline(t *testing.T) {
+	sceneProjectionProbeOrders(t, false)
+}
+
+func TestSceneCheckpointProjectionProbesRestoreSharedBaseline(t *testing.T) {
+	sceneProjectionProbeOrders(t, true)
+}
+
+func sceneProjectionProbeOrders(t *testing.T, checkpoint bool) {
+	t.Helper()
 	if strings.TrimSpace(os.Getenv("KC_TEST_OPENSEARCH_URL")) == "" {
 		t.Fatal("KC_TEST_OPENSEARCH_URL is required for the scene projection isolation contract")
 	}
@@ -241,18 +260,30 @@ func TestSceneProjectionProbesRestoreSharedBaseline(t *testing.T) {
 		t.Run(order.name, func(t *testing.T) {
 			doc := loadSceneCatalog(t)
 			cache := newSceneHomeCache(t)
-			node, ok := cache.nodes["projection-synced"]
-			if !ok {
-				t.Fatal("projection-synced state missing")
+			if checkpoint {
+				fake := cache.lakefs.(*testkit.LakeFSFake)
+				nodes := cache.nodes
+				cache = newSceneHomeCacheWith(t, testkit.NewLakeFSLive(t, fake.Origin(), fake.Credential(), "s3://checkpoint-test"))
+				cache.nodes = nodes
 			}
+			node, ok := cache.nodes["semantic-dataset-defined"]
+			if !ok {
+				t.Fatal("prepared Dataset state missing")
+			}
+			republish := sceneIsolationRepublish(t, node)
 			// Reuse the actual publication spine, but keep this runner's
 			// adversarial probes and results in an independent fixture.
 			node.Dir = t.TempDir()
 			node.Probes = nil
 			observe := `
-When I run ` + "`kc search --repo kr://scene/object --query merchandise`" + `
+When I run ` + "`kc operations projection describe --dataset scene-set`" + `
+Then the output has:
+  | dataset | scene-set |
+  | revision | 1 |
+  | snapshot.state | READY |
+When I run ` + "`kc search --dataset scene-set --revision 1 --query merchandise`" + `
 Then 1 hit metric/gmv
-When I run ` + "`kc read urn:kc:object:metric/gmv#/definition`" + `
+When I run ` + "`kc read urn:kc:object:metric/gmv#/definition --dataset scene-set --revision 1`" + `
 Then the output has:
   | value.name | Gross merchandise value |
 `
@@ -262,13 +293,18 @@ Then the output has:
 When I run ` + "`kc writer put urn:kc:object:metric/gmv#/definition --repo kr://scene/object --command-id changed-projection --schema-ref schema/metric.definition --file $materials/changed.json`" + `
 Then the output has:
   | disposition | APPLIED |
-When I run ` + "`kc operations projection sync --repo kr://scene/object`" + `
+When I run ` + "`" + republish + "`" + `
 Then the output has:
-  | repository | kr://scene/object |
-  | basisCommit | nonempty |
-When I run ` + "`kc search --repo kr://scene/object --query merchandise`" + `
+  | setId | scene-set |
+  | revision | 2 |
+When I run ` + "`kc operations projection sync --dataset scene-set --revision 2`" + `
+Then the output has:
+  | dataset | scene-set |
+  | revision | 2 |
+  | snapshot.mode | ready |
+When I run ` + "`kc search --dataset scene-set --revision 2 --query merchandise`" + `
 Then 0 hits
-When I run ` + "`kc read urn:kc:object:metric/gmv#/definition`" + `
+When I run ` + "`kc read urn:kc:object:metric/gmv#/definition --dataset scene-set --revision 2`" + `
 Then the output has:
   | value.name | Changed total |
 `,
@@ -307,26 +343,37 @@ func TestSceneProbesRestoreAbsentProjection(t *testing.T) {
 		{"absent-only", []string{"absent"}},
 	} {
 		t.Run(order.name, func(t *testing.T) {
-			absent := "When I run `kc relations --repo kr://scene/object --object note/hello`\nThen error CAPABILITY_UNSATISFIED\n"
+			absent := "When I run `kc relations --dataset isolated-notes --revision 1 --object note/hello`\nThen error CAPABILITY_UNSATISFIED\n"
 			root, child, doc, cache := sceneIsolationFixture(t, `
 Given deployment fixture
 Given existing repository kr://scene/object
 When I run `+"`kc attach --repo kr://scene/object`"+`
 Then the output has:
   | repositoryId | kr://scene/object |
+When I run `+"`kc dataset define --dataset isolated-notes --revision 1 --source kr://scene/object=refs/heads/main`"+`
+Then the output has:
+  | setId | isolated-notes |
+  | revision | 1 |
 `, map[string]string{
 				"absent": absent,
 				"build": `
-When I run ` + "`kc operations projection sync --repo kr://scene/object`" + `
+When I run ` + "`kc operations projection sync --dataset isolated-notes --revision 1`" + `
 Then the output has:
-  | repository | kr://scene/object |
-  | basisCommit | nonempty |
-When I run ` + "`kc relations --repo kr://scene/object --object note/hello`" + `
+  | dataset | isolated-notes |
+  | revision | 1 |
+  | members.0.repository | kr://scene/object |
+  | members.0.commit | nonempty |
+  | snapshot.mode | ready |
+  | state.mode | rebuild |
+When I run ` + "`kc relations --dataset isolated-notes --revision 1 --object note/hello`" + `
 Then the output has:
   | hits | [] |
 `,
 			}, order.probes, absent)
-			runSceneNode(t, doc, root, cache)
+			freezeSceneWithoutProjection(t, root, cache)
+			for _, probe := range root.Probes {
+				runIsolatedSceneProbe(t, root, probe, cache, &sceneRunReport{})
+			}
 			runSceneNode(t, doc, child, cache)
 		})
 	}
@@ -338,11 +385,43 @@ func TestSceneIndexedWorldDoesNotLeakIntoUnindexedWorld(t *testing.T) {
 	}
 	doc := loadSceneCatalog(t)
 	indexed := newSceneHomeCache(t)
-	runSceneNode(t, doc, indexed.nodes["projection-synced"], indexed)
+	indexedNode, ok := indexed.nodes["semantic-dataset-defined"]
+	if !ok {
+		t.Fatal("prepared Dataset state missing")
+	}
+	runSceneNode(t, doc, indexedNode, indexed)
 	// This separate cache repeats logical Repository IDs and fake commit IDs,
 	// just as TestProductScenes does after TestMetricPermissionScenes.
 	unindexed := newSceneHomeCache(t)
-	runSceneNode(t, doc, unindexed.nodes["object-published"], unindexed)
+	unindexedNode := unindexed.nodes["semantic-dataset-defined"]
+	freezeSceneWithoutProjection(t, unindexedNode, unindexed)
+	probe := filepath.Join(t.TempDir(), "absent.feature")
+	writeSceneIsolationFile(t, probe, "Feature: cross-world projection isolation\nScenario: absent projection\nWhen I run `kc relations --dataset scene-set --revision 1 --object metric/gmv`\nThen error CAPABILITY_UNSATISFIED\n")
+	runIsolatedSceneProbe(t, unindexedNode, probe, unindexed, &sceneRunReport{})
+}
+
+func freezeSceneWithoutProjection(t *testing.T, node sceneTreeNode, cache *sceneHomeCache) {
+	t.Helper()
+	cache.ensureFrozen(t, node, nil)
+	media := cache.frozen[node.ID].projection
+	if media == nil || len(media.indices) == 0 {
+		t.Fatal("accepted Dataset did not prepare projection media")
+	}
+	// Publication prepares the Dataset first. Remove only this frozen world's
+	// exact owned media so every probe retains the accepted files and revision
+	// while starting without a projection; no other world's indices are touched.
+	media.close()
+}
+
+func sceneIsolationRepublish(t *testing.T, node sceneTreeNode) string {
+	t.Helper()
+	for _, step := range nodeConstructSteps(t, node) {
+		if step.kind == "run" && strings.HasPrefix(step.command, "kc dataset define --dataset scene-set --revision 1 ") {
+			return strings.Replace(step.command, "--revision 1 ", "--revision 2 ", 1)
+		}
+	}
+	t.Fatal("prepared Dataset construct has no publication command")
+	return ""
 }
 
 func sceneIsolationFixture(t *testing.T, construct string, probes map[string]string, order []string, childConstruct string) (sceneTreeNode, sceneTreeNode, sceneCatalogFile, *sceneHomeCache) {

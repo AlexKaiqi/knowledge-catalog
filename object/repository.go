@@ -73,6 +73,14 @@ type BindingLocator interface {
 	BindingSchemaObjectIDs(commitID kernel.CommitID) ([]ObjectID, error)
 }
 
+// BindingReference is one binding unit and the ResourceDescriptor it names,
+// read from bounded binding coordinates; a Dataset publication uses it to
+// freeze descriptor dependencies without scanning a Snapshot.
+type BindingReference struct {
+	Address       Address  `json:"address"`
+	DescriptorRef ObjectID `json:"descriptorRef"`
+}
+
 // SchemaReferrerLocator is an optional bounded reverse index over schema_ref.
 // Publishing a Domain Schema must prove the change is safe for the instances
 // that already reference it, so the maintenance path needs referrers without
@@ -106,6 +114,8 @@ type StoreIdentified interface {
 // layer ② implementation. Reader must not infer this from Repository alone,
 // because test/file wrappers may expose read methods while still requiring the
 // shared batch/cache interpreter.
+// Its Resolve methods and conditional writes share MaintenanceDigest and
+// UnitSetMaintenanceDigest; content READ digests retain their value semantics.
 type NativeRepository interface {
 	Repository
 	NativeObjectRepository()

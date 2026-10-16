@@ -6,6 +6,7 @@ import (
 	"kc/declarativeindex/client"
 	"kc/kernel"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -35,7 +36,7 @@ func (e *executor) ValidateFlags(path string, flags map[string]any) error {
 	}
 	sort.Strings(unknown)
 	if len(unknown) > 0 {
-		return kernel.Fail(kernel.ErrUsageInvalid, "unknown flag --%s for kc %s", unknown[0], path)
+		return kernel.Fail(kernel.ErrUsageInvalid, "%s rejects --%s; use --dataset and optional --revision", path, unknown[0])
 	}
 	for name, value := range flags {
 		if _, multiple := value.([]string); multiple {
@@ -54,8 +55,13 @@ func (e *executor) Validate(path string, flags map[string]any) error {
 	if _, ok := command(path); !ok || flags["help"] == true {
 		return nil
 	}
-	if flagString(flags, "repo") == "" {
-		return kernel.Fail(kernel.ErrUsageInvalid, "missing --repo")
+	if flagString(flags, "dataset") == "" {
+		return kernel.Fail(kernel.ErrUsageInvalid, "missing --dataset")
+	}
+	if raw := flagString(flags, "revision"); raw != "" {
+		if n, err := strconv.Atoi(raw); err != nil || n < 1 {
+			return kernel.Fail(kernel.ErrUsageInvalid, "--revision must be a positive integer")
+		}
 	}
 	return nil
 }
@@ -75,22 +81,14 @@ func (e *executor) Execute(ctx context.Context, path string, flags map[string]an
 	}
 	var output any
 	var err error
-	request := client.ProjectionRequest{Repository: flagString(flags, "repo"), Commit: flagString(flags, "commit"), Ref: flagString(flags, "ref")}
+	revision, _ := strconv.Atoi(flagString(flags, "revision"))
+	request := client.ProjectionRequest{Dataset: flagString(flags, "dataset"), Revision: revision}
 	switch path {
 	case "operations projection describe":
 		err = e.client.DescribeProjection(ctx, request, options, &output)
 	case "operations projection sync":
 		err = e.client.SyncProjection(ctx, request, options, &output)
-	case "operations projection notice":
-		notice := client.ProjectionNotifyRequest{Repository: request.Repository, Ref: request.Ref, SourceRevision: flagString(flags, "source-revision")}
-		if object := flagString(flags, "object"); object != "" {
-			kind := flagString(flags, "kind")
-			if kind == "" && flagString(flags, "aspect") != "" {
-				kind = "Aspect"
-			}
-			notice.Address = &client.ProjectionNoticeAddress{Kind: kind, ObjectID: object, AspectName: flagString(flags, "aspect")}
-		}
-		err = e.client.NotifyProjection(ctx, notice, options, &output)
+
 	}
 	return output, err
 }

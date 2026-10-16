@@ -1,0 +1,11 @@
+---
+object_id: schema/table.access-annotated
+---
+entity: Table
+aspect: access-annotated
+pattern: record
+fields:
+  name:
+    type: string
+    access:
+    - text

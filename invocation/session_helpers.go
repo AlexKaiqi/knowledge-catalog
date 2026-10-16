@@ -248,7 +248,7 @@ func SearchWorkspace(cx *Invocation) (any, error) {
 	embedder, _ := cx.Flags["_embedder"].(retrieval.Embedder)
 	return (discoveryservice.DatasetSearchExecutor{
 		Embedder:  embedder,
-		Authorize: func(context.Context) error { return Authorize(cx.Home, "object.search", cx.Flags, nil, cx.WS) },
+		Authorize: func(context.Context) error { return Authorize(cx.Home, "file.read", cx.Flags, nil, cx.WS) },
 		Resolve: func(context.Context) (*reader.Serving, discoveryservice.LogicalHydrator, error) {
 			serving, _, err := OpenServingAt(cx, cx.WS, cx.Flags)
 			if err != nil {
@@ -325,7 +325,7 @@ func WriteOperation(flags map[string]invoke.FlagValue, op objectmodel.OpKind, va
 func ReadingInventoryCommand(flags map[string]invoke.FlagValue) bool { return false }
 
 func DeliverSearchHit(home string, flags map[string]invoke.FlagValue, hit retrieval.ObjectHit) (retrieval.ObjectHit, error) {
-	env, err := ObjectDelivery(home, flags).Apply(delivery.Context{Principal: invoke.FlagString(flags, "as")}, delivery.FromValue(hit.Object, hit.Version.Observations))
+	env, err := objectDelivery(home, flags, &hit.Object).Apply(delivery.Context{Principal: invoke.FlagString(flags, "as")}, delivery.FromValue(hit.Object, hit.Version.Observations))
 	if err != nil {
 		return retrieval.ObjectHit{}, err
 	}
@@ -353,7 +353,11 @@ func OpenServingAt(cx *Invocation, ws *kchome.Home, flags map[string]invoke.Flag
 	if ws != nil {
 		home = ws.Dir
 	}
-	resolved, err := ResolveOrReplay(ws, home, cat, setID, flags)
+	scope := namedConsumptionScopeOf(flags, ws)
+	resolved, err := ResolveAtRevision(ws, home, cat, setID, flags)
+	if err == nil && scope != nil {
+		scope.pin = &resolved
+	}
 	if err != nil {
 		return nil, nil, err
 	}
@@ -375,7 +379,14 @@ func LogicalWorkspaceServing(cx *Invocation, declarations *reader.Serving) (*liv
 }
 
 func ObjectDelivery(home string, flags map[string]invoke.FlagValue) delivery.Chain {
+	return objectDelivery(home, flags, nil)
+}
+
+func objectDelivery(home string, flags map[string]invoke.FlagValue, value *objectmodel.ObjectValue) delivery.Chain {
 	return delivery.Chain{delivery.RepositoryRead{Allowed: func(_ string, ref objectmodel.ObjectRef) bool {
+		if value != nil {
+			return objectValueDeliveryAllowed(home, flags, *value, ref)
+		}
 		return AllowedRepoRead(home, flags, string(ref.Repository), string(ref.Object))
 	}}}
 }
@@ -437,6 +448,9 @@ func AllowedRepoAspectRead(home string, flags map[string]invoke.FlagValue, repo,
 		// secondary per-repository check could not be evaluated.
 		return false
 	}
+	if pin, allowed, err := namedDatasetMemberConsumption(home, flags, nil); err == nil && allowed && pin.Repositories[kernel.RepositoryID(repo)] != "" {
+		return true
+	}
 	_, ok := MatchAllow(file.Rules, AllowQuery{Principal: as, Action: "object.read", Repo: repo, Object: object, Aspect: aspect})
 	return ok
 }
@@ -450,6 +464,14 @@ func RequireCompleteWorkspaceRead(home string, flags map[string]invoke.FlagValue
 		return nil
 	}
 	if AllowedDatasetFileRead(home, flags) {
+		return nil
+	}
+	if basis, allowed, err := namedDatasetMemberConsumption(home, flags, nil); err != nil {
+		return err
+	} else if allowed {
+		if kernel.CanonicalDigest(kchome.DatasetPin(basis)) != kernel.CanonicalDigest(pin) {
+			return kernel.Fail(kernel.ErrForbidden, "workspace read does not use the authorized Dataset basis")
+		}
 		return nil
 	}
 	for repositoryID := range pin.Repositories {

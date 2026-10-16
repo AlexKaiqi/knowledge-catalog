@@ -62,12 +62,12 @@ func ReplayDefinition(def Dataset, pin ResolvedDataset) (ResolvedDataset, error)
 	if err != nil {
 		return ResolvedDataset{}, err
 	}
-	id := HashResolved(def.SetID, def.Sources, want)
+	id := pinIdentity(def, want)
 	if (pin.PinID != "" && pin.PinID != id) || (len(pin.Items) > 0 && !slices.Equal(pin.Items, items)) {
 		return ResolvedDataset{}, kernel.Fail(kernel.ErrDatasetInvalid, "pin scope does not match dataset")
 	}
 	if pin.Ref != "" && pin.Ref != DatasetVersionRef(def.Revision) {
 		return ResolvedDataset{}, kernel.Fail(kernel.ErrDatasetInvalid, "pin version does not match dataset")
 	}
-	return ResolvedDataset{SetID: def.SetID, Revision: def.Revision, Ref: DatasetVersionRef(def.Revision), Repositories: want, Items: items, PinID: id}, nil
+	return ResolvedDataset{SetID: def.SetID, Revision: def.Revision, Ref: DatasetVersionRef(def.Revision), Repositories: want, Items: items, PinID: id, Dependencies: maps.Clone(def.Dependencies)}, nil
 }

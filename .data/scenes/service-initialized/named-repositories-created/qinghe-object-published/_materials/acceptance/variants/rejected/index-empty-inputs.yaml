@@ -1,0 +1,14 @@
+---
+object_id: index/sales-search
+aspect_name: index
+member_key: empty-inputs
+kind: Member
+schema_ref: schema/core/index-declaration/v1
+---
+catalog: declarative-index/opensearch@2026-10
+inputs: []
+build:
+  kind: text
+  analyzer: standard
+uses:
+  - text

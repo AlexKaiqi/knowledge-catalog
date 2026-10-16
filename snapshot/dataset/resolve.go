@@ -3,6 +3,7 @@ package dataset
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"maps"
 	"sort"
 	"strconv"
 	"strings"
@@ -29,6 +30,9 @@ type ResolvedDataset struct {
 	// not participate. Re-export and pass --pin to replay; replay still
 	// evaluates allow per member (doc/design/dataset.md).
 	PinID string `json:"pinId,omitempty"`
+	// Dependencies are interpretation-only Repository versions frozen with the
+	// revision (Dataset.Dependencies). They are not members: no Items, no read.
+	Dependencies map[kernel.RepositoryID]kernel.CommitID `json:"dependencies,omitempty"`
 }
 
 type DatasetIssue struct {
@@ -84,6 +88,27 @@ func HashResolved(setID string, sources []DatasetSource, repos map[kernel.Reposi
 		} else {
 			s += "\x00" + strings.Join(tokens, "\x00")
 		}
+	}
+	h := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(h[:])
+}
+
+// pinIdentity is HashResolved plus the revision's interpretation versions.
+// A pin without dependencies keeps its historical PinID; a dependency changes
+// how selected objects are interpreted, so it participates when present.
+func pinIdentity(def Dataset, repos map[kernel.RepositoryID]kernel.CommitID) string {
+	base := HashResolved(def.SetID, def.Sources, repos)
+	if len(def.Dependencies) == 0 {
+		return base
+	}
+	keys := make([]string, 0, len(def.Dependencies))
+	for id := range def.Dependencies {
+		keys = append(keys, string(id))
+	}
+	sort.Strings(keys)
+	s := base
+	for _, k := range keys {
+		s += "\x00dep:" + k + "=" + string(def.Dependencies[kernel.RepositoryID(k)])
 	}
 	h := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(h[:])
@@ -187,7 +212,8 @@ func (c *service) ResolveDefinitionOverlay(def Dataset, overlay map[kernel.Repos
 		Ref:          DatasetVersionRef(def.Revision),
 		Repositories: repositories,
 		Items:        items,
-		PinID:        HashResolved(def.SetID, def.Sources, repositories),
+		PinID:        pinIdentity(def, repositories),
+		Dependencies: maps.Clone(def.Dependencies),
 	}, nil
 }
 

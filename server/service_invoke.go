@@ -5,6 +5,7 @@ package server
 // registration and per-route handlers stay in service_routes.go.
 
 import (
+	kcidentity "kc/identity"
 	inv "kc/invocation"
 	"kc/invoke"
 	objectserving "kc/liveaccess"
@@ -67,6 +68,7 @@ func (f *httpFacade) executeTyped(w http.ResponseWriter, r *http.Request, name, 
 	if !f.options.localAssertion() {
 		ctx = objectserving.ContextWithCallerCredentials(ctx, objectserving.CallerCredentialsFromHeader(r.Header))
 	}
+	ctx = objectserving.ContextWithReadLimits(ctx, f.options.LiveAccessReadLimits)
 	var access objectserving.StateLookup
 	if opened.LiveAccess != nil && opened.LiveAccess.Configured() {
 		access = opened.LiveAccess
@@ -94,7 +96,7 @@ func (f *httpFacade) lockTypedInvocation(action string) func() {
 	return f.invoke.Unlock
 }
 
-func (f *httpFacade) serviceIdentity(w http.ResponseWriter, r *http.Request) (inv.HTTPIdentity, bool) {
+func (f *httpFacade) serviceIdentity(w http.ResponseWriter, r *http.Request) (kcidentity.HTTPIdentity, bool) {
 	caller, err := snapshotservice.AuthenticateRequest(r, f.snapshotIdentityOptions())
 	if err == nil {
 		recordHTTPIdentity(f.runtime, r.Context(), f.options, caller)
@@ -110,7 +112,7 @@ func (f *httpFacade) serviceIdentity(w http.ResponseWriter, r *http.Request) (in
 		w.Header().Set("WWW-Authenticate", `Bearer realm="kc"`)
 	}
 	invoke.WriteJSON(w, status, kernel.FaultJSON(err))
-	return inv.HTTPIdentity{}, false
+	return kcidentity.HTTPIdentity{}, false
 }
 
 // requestJSONStream returns the request body as a bounded JSON stream,

@@ -34,31 +34,34 @@ func TestProductRepoCommitFreezesObjectAndCurrentPermissions(t *testing.T) {
 	}
 	govern := func(args ...string) kcRunResult { return invoke(admin, args...) }
 	body(t, govern("grant", "add", "--principal", consumer, "--action", "inventory.read,dataset.resolve,file.read"))
-	grant := asMap(t, body(t, govern("grant", "add", "--principal", consumer, "--action", "object.read,object.provenance,object.history.read,object.search", "--repo", repo)))
-	body(t, govern("writer", "put", testObjectReference(t, repo, "schema/note", ""), "--repo", repo, "--command-id", "temp-schema", "--value", `{"entity":"Note","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+	grant := asMap(t, body(t, govern("grant", "add", "--principal", consumer, "--action", "object.read,object.provenance,object.history.read", "--repo", repo)))
+	body(t, govern("writer", "put", testObjectReference(t, repo, "schema/note", ""), "--repo", repo, "--command-id", "temp-schema", "--value", `{"entity":"Note","pattern":"record","fields":{"body":{"type":"string"}}}`))
+	seedTextDeclaration(t, home, repo, "index/note-search", "schema/note", "body")
 	first := publishedCommit(t, asMap(t, body(t, govern("writer", "put", testObjectReference(t, repo, "note/one", ""), "--repo", repo, "--command-id", "temp-first", "--schema-ref", "schema/note", "--value", `{"body":"first"}`))))
+	body(t, govern("dataset", "define", "--dataset", "temp-search", "--revision", "1", "--source", repo))
 	searchAvailable := os.Getenv("KC_TEST_OPENSEARCH_URL") != ""
 	if searchAvailable {
-		body(t, govern("operations", "projection", "sync", "--repo", repo))
+		body(t, govern("operations", "projection", "sync", "--dataset", "temp-search"))
 	}
-	before := asMap(t, body(t, govern("show")))
 	body(t, govern("writer", "put", testObjectReference(t, repo, "note/one", ""), "--repo", repo, "--command-id", "temp-second", "--schema-ref", "schema/note", "--value", `{"body":"second"}`))
+	body(t, govern("dataset", "define", "--dataset", "temp-search", "--revision", "2", "--source", repo))
+	before := asMap(t, body(t, govern("show")))
 	if searchAvailable {
-		body(t, govern("operations", "projection", "sync", "--repo", repo))
+		body(t, govern("operations", "projection", "sync", "--dataset", "temp-search"))
 		for _, args := range [][]string{
-			{"search", "--repo", repo, "--commit", first, "--query", "first"},
+			{"search", "--dataset", "temp-search", "--revision", "1", "--query", "first"},
 		} {
 			result := asMap(t, body(t, invoke(consumer, args...)))
 			if len(result["hits"].([]any)) != 1 || searchHitObjectID(t, result) != "note/one" {
-				t.Fatalf("SEARCH did not reuse first commit: %#v", result)
+				t.Fatalf("SEARCH did not reuse first Dataset revision: %#v", result)
 			}
 		}
-		latest := asMap(t, body(t, invoke(consumer, "search", "--repo", repo, "--ref", "refs/heads/main", "--query", "second")))
+		latest := asMap(t, body(t, invoke(consumer, "search", "--dataset", "temp-search", "--revision", "2", "--query", "second")))
 		if len(latest["hits"].([]any)) != 1 || searchHitObjectID(t, latest) != "note/one" {
-			t.Fatalf("explicit latest ref SEARCH: %#v", latest)
+			t.Fatalf("explicit latest Dataset revision SEARCH: %#v", latest)
 		}
 	} else {
-		expectCode(t, invoke(consumer, "search", "--repo", repo, "--commit", first, "--query", "first"), "CAPABILITY_UNSATISFIED")
+		expectCode(t, invoke(consumer, "search", "--dataset", "temp-search", "--revision", "1", "--query", "first"), "CAPABILITY_UNSATISFIED")
 	}
 	for _, operation := range []string{"resolve", "provenance"} {
 		got := asMap(t, body(t, invoke(consumer, operation, "--repo", repo, "--commit", first, "--object", "note/one")))

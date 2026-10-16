@@ -8,16 +8,16 @@ publishes:
   - access.rules
 summary: object.schema.read 可 browse/describe；不被 inventory.read 隐含；不放行实例正文
 evidence:
-  - id: normalized-schema-fields-and-access
-    title: Schema 内省返回规范字段与访问声明
+  - id: normalized-schema-fields-without-access
+    title: Schema 内省只返回规范结构字段
     source: access.rules
     views:
       - access-control
     tests:
-      - TestDescribeSchemaListsAccessHints
+      - TestDescribeSchemaListsStructureWithoutAccess
     verifies:
       - claim: "object#U1"
-        detail: DESCRIBE_SCHEMA 返回声明的 Entity、Aspect、pattern 与规范字段路径，并保留 db 字段的 filter AccessHint。
+        detail: DESCRIBE_SCHEMA 返回声明的 Entity、Aspect、pattern 与规范字段路径；每个字段不带检索能力，能力由索引声明提供。
   - source: access.rules
     views:
       - access-control
@@ -32,10 +32,10 @@ probes:
       - access-control
       - consumption
     title: Schema 读权允许目录浏览但拒绝实例正文
-  - file: schema-describe-returns-access-fields.feature
-    source: schema.access
+  - file: schema-describe-returns-structure.feature
+    source: access.rules
     views:
       - publication
       - consumption
-    title: Schema 内省返回字段路径并保持响应边界
+    title: Schema 内省只返回结构，检索能力看索引声明
 fixture: schema-reader 对仓仅持 object.schema.read，可作为目录浏览与内省的同一授权前态。

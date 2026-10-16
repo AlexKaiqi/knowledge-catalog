@@ -7,18 +7,11 @@ import (
 	objectmodel "kc/object"
 )
 
-func TestSchemaStructureDigestExcludesOnlyFieldAccessAndPreservesOriginal(t *testing.T) {
-	base := objectmodel.SchemaDefinition{ObjectID: "schema/implements.example/v1", MetaSchema: objectmodel.MetaSchemaV1, Entity: "Object", Description: "Implementation", Aspect: "interfaces", Pattern: "keyed_collection", Fields: []objectmodel.SchemaFieldDefinition{{Path: "target", Type: "object_ref", Required: true, Access: []string{"filter"}, RefTypes: []string{"Object"}}}}
-	originalDigest := kernel.CanonicalDigest(base)
+func TestSchemaStructureDigestCoversEverySchemaSemantic(t *testing.T) {
+	base := objectmodel.SchemaDefinition{ObjectID: "schema/implements.example/v1", MetaSchema: objectmodel.MetaSchemaV1, Entity: "Object", Description: "Implementation", Aspect: "interfaces", Pattern: "keyed_collection", Fields: []objectmodel.SchemaFieldDefinition{{Path: "target", Type: "object_ref", Required: true, RefTypes: []string{"Object"}}}}
 	structureDigest := objectmodel.SchemaStructureDigest(base)
-	withoutAccess := base
-	withoutAccess.Fields = append([]objectmodel.SchemaFieldDefinition(nil), base.Fields...)
-	withoutAccess.Fields[0].Access = nil
-	if structureDigest != objectmodel.SchemaStructureDigest(withoutAccess) || originalDigest == kernel.CanonicalDigest(withoutAccess) {
-		t.Fatal("field access must change full schema evidence but not support matching")
-	}
-	if kernel.CanonicalDigest(base) != originalDigest || len(base.Fields[0].Access) != 1 {
-		t.Fatal("support matching mutated the original schema")
+	if structureDigest != kernel.CanonicalDigest(base) {
+		t.Fatal("a structure-only Schema must match on its complete definition")
 	}
 	changes := map[string]func(*objectmodel.SchemaDefinition){
 		"identity":             func(s *objectmodel.SchemaDefinition) { s.ObjectID = "schema/implements.example/v2" },
@@ -43,7 +36,7 @@ func TestSchemaStructureDigestExcludesOnlyFieldAccessAndPreservesOriginal(t *tes
 			changed.Fields = append([]objectmodel.SchemaFieldDefinition(nil), base.Fields...)
 			change(&changed)
 			if objectmodel.SchemaStructureDigest(changed) == structureDigest {
-				t.Fatal("support matching discarded a non-access schema semantic")
+				t.Fatal("support matching discarded a schema semantic")
 			}
 		})
 	}
@@ -53,7 +46,7 @@ func TestSchemaStructureDigestPreservesEmptyFieldRepresentation(t *testing.T) {
 	for _, fields := range [][]objectmodel.SchemaFieldDefinition{nil, {}} {
 		definition := objectmodel.SchemaDefinition{ObjectID: "schema/empty/v1", Entity: "Object", Pattern: "record", Fields: fields}
 		if objectmodel.SchemaStructureDigest(definition) != kernel.CanonicalDigest(definition) {
-			t.Fatal("schema without access declarations changed during support matching")
+			t.Fatal("schema changed during support matching")
 		}
 	}
 }

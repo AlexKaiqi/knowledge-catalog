@@ -27,7 +27,8 @@ func WrapAuthenticator(base HTTPAuthenticator, bindingPath string, fixture bool)
 	return a
 }
 
-func (a *boundAuthenticator) Name() string { return a.base.Name() }
+func (a *boundAuthenticator) Name() string              { return a.base.Name() }
+func (a *boundAuthenticator) Unwrap() HTTPAuthenticator { return a.base }
 
 func (a *boundAuthenticator) Authenticate(ctx context.Context, headers http.Header) (HTTPIdentity, error) {
 	id, err := a.base.Authenticate(ctx, headers)

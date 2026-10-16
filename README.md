@@ -24,8 +24,8 @@ LiveAccess；Affordance 同时说明对象和系统自身怎样使用。大文�
 | 角色 | 最短闭环 | 入口 |
 |---|---|---|
 | 对象接入方 | Client `create` → `attach --repo` → `writer commit --dir`（或 `writer put <对象URN>`）→ `read <对象URN>`；来源核对走 `provenance` | `kc help write` |
-| 治理方 | `attach --repo <配置源>` → `dataset define --source <repository>` → `grant add`；serve 追 live 投影，必要时 `operations projection sync --repo` | `kc help compose` |
-| 对象消费方 | `连接服务 → show`；已知对象直接 `read <对象URN>`，可加 `--dataset`；未知对象先按仓或 Dataset`search`，再读取命中引用 | `kc help consume` |
+| 治理方 | `attach --repo <配置源>` → `dataset define --source <repository>` → `grant add`；Dataset 发布准备索引，必要时 `operations projection sync --dataset <id>` | `kc help compose` |
+| 对象消费方 | `连接服务 → show`；已知对象直接 `read <对象URN>`，可加 `--dataset`；未知对象先选择 Dataset，再 `search --dataset <id>`，随后读取命中引用 | `kc help consume` |
 
 Dataset 负责文件范围、组合与版本交付，不是写入源仓的前置条件；普通文件无需对象 Schema，结构校验和声明式检索在对象层提供。
 
@@ -95,7 +95,7 @@ liveaccess/         # 当前态访问的独立实现及来源端口
 ├── service/ contract/
 ├── client/ cli/    # 当前态访问、调用与插件说明入口
 └── discovery/      # 向动态投影供给已核验观察
-discovery/          # Schema 字段 access、逻辑查询及补判
+discovery/          # 索引声明编译、能力清单、逻辑查询及补判
 ├── service/ datasets/               # 发现任务及可搜索 Dataset 流程
 ├── client/ cli/                    # 所属 typed SDK 与任务交互
 ├── projection/                     # 派生编译、固定依据与就绪
@@ -151,6 +151,8 @@ make quality              # gofmt/tidy/vet/staticcheck + 复杂度/文件体积/
 make test-state-runtime-e2e # 独立 Docker runtime + OpenSearch；HTTP index-sync/search 动态旅程
 make test-server-web      # Server 浏览器登录与 Web 入口测试
 make test-all             # 夹具、真实 lakeFS 部署、混合合同、Server Web 与其它 adapter/FUSE；需 local 测试栈
+make build                # 当前平台二进制：dist/bin/<os>_<arch>/kc
+make package              # 当前平台安装包；全部四目标：make package-all（macOS 主机）
 go run ./cmd/kc -- help
 go run ./cmd/kc -- deployment init --config deployment.yaml # 首次初始化；登记空间 Snapshot 与状态独立持久
 go run ./cmd/kc -- deployment status --config deployment.yaml
@@ -160,6 +162,9 @@ go run ./cmd/kcfs -- plan --dataset agent --root "$PWD"
 # Linux + fuse3: 将 plan 改成 mount，进程存活期间提供多个只读宿主挂载
 ```
 
+macOS `.pkg` 与 Linux 安装压缩包的构建、校验、安装和卸载见
+[`scripts/package/README.md`](scripts/package/README.md)。本地打包不发布。
+
 `deployment.yaml` 是部署配置，不是运行缓存。配置类型与完整校验在 `home.DeploymentConfig`；例如独立的 登记空间 Snapshot 权威，以及平台管理的存储池：
 
 ```yaml
@@ -167,8 +172,8 @@ version: 1
 stateDir: /var/lib/kc/state
 cacheDir: /var/cache/kc
 bootstrapPrincipal: alice
-auth: lakefs
-authURL: https://lakefs.example
+auth: taihu
+authURL: https://taihu.example
 listen: 127.0.0.1:7380
 registry:
   id: kr://acme/registry
@@ -213,15 +218,19 @@ kc attach --repo "$REPOSITORY"
 
 # 接入方：对象 URN 只含对象 ID；写入用 --repo 指定写到哪个仓，读取在请求范围内按 ID 解析。
 kc writer put urn:kc:object:schema/runbook.body --repo "$REPOSITORY" --command-id schema-1 \
-  --value '{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}'
+  --value '{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string"}}}'
+# Schema 只描述结构；检索能力由显式索引声明成员提供，系统不按字段类型生成默认声明。
+kc writer put 'urn:kc:object:index/runbook#/index/body-text' --repo "$REPOSITORY" --command-id index-1 \
+  --schema-ref schema/core/index-declaration/v1 \
+  --value '{"catalog":"declarative-index/opensearch@2026-10","inputs":[{"from":"schema/runbook.body#/fields/body"}],"build":{"kind":"text"},"uses":["text"]}'
 kc writer put urn:kc:object:runbook/payment-oncall --repo "$REPOSITORY" --command-id sync-1 --schema-ref schema/runbook.body \
   --value '{"body":"切换支付流量前先检查冻结窗口"}' \
   --origin-kind SOURCE --source-ref file:///source/runbooks/payment-oncall.md
 kc read urn:kc:object:runbook/payment-oncall
 
-# 治理方：命名 Dataset、发权。serve 追 live 投影；sync 用于历史 EnsureAt / 强制重建 / 排障。
+# 治理方：命名 Dataset、发权。发布时按固定来源与选入声明准备索引；sync 恢复已接受修订的派生投影。
 kc dataset define agent --revision 1 --source "$REPOSITORY"
-kc operations projection sync --repo "$REPOSITORY"
+kc operations projection sync --dataset agent --revision 1
 kc registry audit
 
 # 消费方：同一对象引用限定到已发布 Dataset；精确历史读取保留返回的 commit。
@@ -231,8 +240,8 @@ kc search --dataset agent --query 冻结窗口
 kc read "$RUNBOOK_REFERENCE" --dataset agent
 kc provenance --dataset agent --object runbook/payment-oncall
 kc log --dataset agent --object runbook/payment-oncall
-# 共享服务可验证 Gitea 登录；调用方带 Authorization，主体变为稳定的 gitea:<user-id>
-kc serve --config deployment.yaml # auth: gitea / authURL / bootstrapPrincipal 在持久配置中
+# 共享服务可验证 Taihu 登录；调用方带 Authorization，主体是已验证的用户名（例如 kaiqidong）
+kc serve --config deployment.yaml # auth: taihu / authURL / bootstrapPrincipal 在持久配置中
 ```
 
 `--dataset` 跟已发布配方（`KS-01`）。精确 READ 在已有 object id 时仍可用；SEARCH
@@ -250,7 +259,7 @@ kc serve --config deployment.yaml # auth: gitea / authURL / bootstrapPrincipal �
 | component | `make test-component` | 各 Go 组件单元测试、本地合同；live adapter 在 short 模式跳过 |
 | boundary | `make test-boundary` | ⓪–③ import、类型归属、术语与 provider 边界 |
 | e2e | `make test-e2e` | 共享应用语义与 typed Client/HTTP/登记空间 边界；结束时对账全部产品 `kc` 命令 |
-| adapters | `make test-adapters` | 真实 Gitea、OpenSearch |
+| adapters | `make test-adapters` | 真实 OpenSearch |
 | state-runtime | `make test-state-runtime-e2e` | scene `_materials/accessor` 的 Resource Access 容器 + OpenSearch；动态候选与 Snapshot 不变性 |
 | docker | `make test-docker` | adapters + State runtime + Docker Linux/FUSE |
 | all | `make test-all` | 场景、真实 lakeFS 部署、contracts、docker 与插件；需准备 local 测试栈，不包含付费 Agent、Taihu 或规模资格 |
@@ -284,7 +293,7 @@ kc serve --config deployment.yaml # auth: gitea / authURL / bootstrapPrincipal �
 - `doc/design/`：按能力的设计篇，每篇含用例与进度，目录见 `doc/README.md` 的“设计”表。
 - [`doc/engineering/testing.md`](doc/engineering/testing.md) 与 [`doc/engineering/test-catalog.md`](doc/engineering/test-catalog.md)：验证入口、用例与证据。
 
-改文档后运行 `make check-docs`：`doc/` 下每篇以标题开头、不带 frontmatter、能从 `doc/README.md` 经链接走到，仓内 Markdown 链接不悬空。包级具体契约放在对应目录的 README，不复制到设计篇。执行接力棒是根目录 `TASK.md`。
+改文档后运行 `make check-docs`：`doc/` 下每篇以标题开头、不带 frontmatter、能从 `doc/README.md` 经链接走到，仓内 Markdown 链接不悬空。包级具体契约放在对应目录的 README，不复制到设计篇。任务在 `tasks/`，状态即目录，规则见 [tasks/README.md](tasks/README.md)。
 
 ## Store 扩展
 

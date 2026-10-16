@@ -157,14 +157,19 @@ func (w *Writer) applySnapshot(commandID string, surface objectmodel.Surface, cs
 		BaseCommit: string(cs.BaseCommit), ExpectedTargetCommit: string(cs.ExpectedTargetCommit),
 		OperationCount: len(cs.Operations),
 	}, func() (any, error) {
-		if err := validateSchemaRefs(w.store, repo, cs); err != nil {
+		basis, err := commitReadBasis(repo, cs.BaseCommit)
+		if err != nil {
+			return nil, snapshot.WriteNotApplied(err)
+		}
+		if err := validateSchemaRefs(w.store, basis, cs); err != nil {
 			return nil, snapshot.WriteNotApplied(err)
 		}
 		oldCommit, err := repo.Head(cs.TargetRef)
 		if err != nil {
 			return nil, snapshot.WriteNotApplied(err)
 		}
-		commitID, err := applyObjectCommit(commandID, repo, cs)
+		basisTree, _ := snapshot.TreeStoreOf(basis)
+		commitID, err := applyObjectCommit(commandID, repo, cs, basisTree)
 		if err != nil {
 			return nil, err
 		}

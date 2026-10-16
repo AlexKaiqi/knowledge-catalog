@@ -24,7 +24,7 @@ func TestNativePhysicalSourcesRequireEverySourceOwner(t *testing.T) {
 	}))
 	defer backend.Close()
 	rules := &nativeTestRules{rules: []access.Rule{{Principal: "alice", Repo: "kr://test/a", Actions: []string{access.RepositoryImport, access.RepositoryFileRead}}}}
-	h := NewHandler(Config{NativeOrigin: backend.URL, NativeCredential: func(context.Context) (string, error) { return "storage:secret", nil }, Identity: IdentityOptions{Authenticator: nativeExternalTestIdentity{}}, Acquire: func(context.Context, identity.HTTPIdentity, string) (Resources, func(), error) {
+	h := NewHandler(Config{NativeOrigin: backend.URL, NativeCredential: func(context.Context) (string, error) { return "storage:secret", nil }, Identity: IdentityOptions{Authenticator: nativeExternalTestIdentity}, Acquire: func(context.Context, identity.HTTPIdentity, string) (Resources, func(), error) {
 		return Resources{NativeRepositories: map[string]kernel.RepositoryID{"alpha": "kr://test/a", "beta": "kr://test/b"}, Access: access.NewService(rules)}, nil, nil
 	}})
 	for _, row := range []struct {
@@ -78,7 +78,7 @@ func TestNativeServiceBackendFailureIsObservedWithoutReplacingCaller(t *testing.
 			var observed error
 			var principal string
 			rules := &nativeTestRules{rules: []access.Rule{{Principal: "alice", Repo: "kr://test/a", Actions: []string{access.RepositoryMetadataRead}}}}
-			h := NewHandler(Config{NativeOrigin: backend.URL, NativeCredential: func(context.Context) (string, error) { return "storage:secret", nil }, Identity: IdentityOptions{Authenticator: nativeExternalTestIdentity{}}, Acquire: func(context.Context, identity.HTTPIdentity, string) (Resources, func(), error) {
+			h := NewHandler(Config{NativeOrigin: backend.URL, NativeCredential: func(context.Context) (string, error) { return "storage:secret", nil }, Identity: IdentityOptions{Authenticator: nativeExternalTestIdentity}, Acquire: func(context.Context, identity.HTTPIdentity, string) (Resources, func(), error) {
 				return Resources{NativeRepositories: map[string]kernel.RepositoryID{"alpha": "kr://test/a"}, Access: access.NewService(rules)}, nil, nil
 			}, Observe: func(ctx context.Context, caller identity.HTTPIdentity, _ string) (context.Context, func(any, error)) {
 				principal = caller.Principal

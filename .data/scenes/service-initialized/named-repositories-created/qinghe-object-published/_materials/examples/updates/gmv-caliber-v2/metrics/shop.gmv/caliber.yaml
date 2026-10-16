@@ -1,0 +1,13 @@
+---
+object_id: metric/shop.gmv
+aspect_name: caliber
+kind: Aspect
+schema_ref: schema/metric.caliber
+---
+revision: "2"
+effectiveFrom: "2026-09-14"
+rules:
+- 对外汇报的 GMV 按订单明细计算：数量 × 单价 × (1 − 折扣)，不使用 sales_mart 汇总表。
+- 统计状态为 PAID、SHIPPED 与 UNPAID 的订单，只有 CANCELLED 不计入（据门店反馈修订，替代上一版第 2 条）。
+- 周口径为周一至周日，按下单日期 order_date 归属。
+owner: 分析组 Lin

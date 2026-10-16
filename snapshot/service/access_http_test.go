@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	localauth "kc/identity/local"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -12,6 +13,7 @@ import (
 	"testing"
 
 	"kc/identity"
+	"kc/identity/identitytest"
 	"kc/snapshot/access"
 )
 
@@ -38,7 +40,7 @@ func (s *transportRuleStore) UpdateRules(_ context.Context, update func([]access
 
 func transportAccessHandler(store *transportRuleStore) *handler {
 	return newHandler(Config{
-		Identity: IdentityOptions{Local: true},
+		Identity: IdentityOptions{Authenticator: localauth.New()},
 		Acquire: func(context.Context, identity.HTTPIdentity, string) (Resources, func(), error) {
 			return Resources{Access: access.NewService(store), RequestURL: "https://itsm.example/access"}, func() {}, nil
 		},
@@ -123,7 +125,7 @@ func TestSnapshotAdmissionIsPersonalAndNativeAdminDoesNotGrantAccess(t *testing.
 	if request["url"] != "https://itsm.example/access" || !reflect.DeepEqual(request["administrators"], []any{"amy", "zed"}) {
 		t.Fatalf("administrator contacts changed: %#v", request)
 	}
-	handler.config.Identity = IdentityOptions{Authenticator: &transportVerifier{mode: "lakefs", caller: identity.HTTPIdentity{Principal: "alice", Admin: true}}}
+	handler.config.Identity = IdentityOptions{Authenticator: &identitytest.Recorder{Mode: "verified", Caller: identity.HTTPIdentity{Principal: "alice", Admin: true}}}
 	r := httptest.NewRequest(http.MethodGet, "/admin/v1/grants", nil)
 	r.Header.Set("Authorization", "Bearer native-admin-proof")
 	w := httptest.NewRecorder()

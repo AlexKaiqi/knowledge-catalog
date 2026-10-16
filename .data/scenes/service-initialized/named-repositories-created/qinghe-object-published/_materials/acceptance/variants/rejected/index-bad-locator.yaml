@@ -1,0 +1,16 @@
+---
+object_id: index/sales-search
+aspect_name: index
+member_key: bad-locator
+kind: Member
+schema_ref: schema/core/index-declaration/v1
+---
+catalog: declarative-index/opensearch@2026-10
+inputs:
+  - from: schema/table.properties.name
+  - from: "schema/table.properties#/fields/*"
+build:
+  kind: text
+  analyzer: standard
+uses:
+  - text

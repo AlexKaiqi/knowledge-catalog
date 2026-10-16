@@ -61,7 +61,7 @@ func mixedUnitFixture(t *testing.T, readWrappers ...func(snapshot.Store) snapsho
 		operations = append(operations, objectmodel.Operation{Op: objectmodel.OpPut,
 			Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: objectmodel.ObjectID(schemaRef)},
 			Value: map[string]any{"entity": "Widget", "aspect": aspect, "pattern": "record",
-				"fields": map[string]any{"value": map[string]any{"type": "number", "access": []any{"filter"}}}},
+				"fields": map[string]any{"value": map[string]any{"type": "number"}}},
 		}, bindingfixture.PutAspect(id, aspect, schemaRef, widgetDescriptor))
 	}
 	return publishUnitFixture(t, id, operations, readWrappers...)

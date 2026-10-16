@@ -19,7 +19,8 @@ import (
 
 type scopedStatePlanner struct {
 	searchProjection
-	t *testing.T
+	t      *testing.T
+	source objectmodel.Repository
 }
 
 func (p *scopedStatePlanner) RequiresState(repo objectmodel.Repository, at kernel.CommitID, _ retrieval.SearchRequest) (bool, error) {
@@ -29,17 +30,30 @@ func (p *scopedStatePlanner) RequiresState(repo objectmodel.Repository, at kerne
 	return false, nil
 }
 
+// AccessSpecAt stands in for a maintained projection: maintenance retains the
+// source's declaration members and the scoped query side reads them exactly,
+// so only declarations selected into the Dataset take effect.
+func (p *scopedStatePlanner) AccessSpecAt(repo objectmodel.Repository, at kernel.CommitID) (retrieval.AccessSpec, error) {
+	maintained, err := retrieval.AccessSpecForRepository(p.source, at)
+	if err != nil {
+		return retrieval.AccessSpec{}, err
+	}
+	return retrieval.AccessSpecFromAdoptions(repo, at, maintained.AdoptionWitnesses())
+}
+
 func TestDatasetStatePlanningUsesPublishedSchemaScope(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	at, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID, Operations: []objectmodel.Operation{
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/public"}, PathHint: "public/schema.yaml", Value: map[string]any{"entity": "Public", "fields": map[string]any{"status": map[string]any{"type": "string", "access": []any{"filter"}}}}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/private"}, PathHint: "private/schema.yaml", Value: map[string]any{"entity": "Private", "aspect": "runtime", "fields": map[string]any{"secret": map[string]any{"type": "string", "access": []any{"filter"}}}}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/public"}, PathHint: "public/schema.yaml", Value: map[string]any{"entity": "Public", "fields": map[string]any{"status": map[string]any{"type": "string"}}}},
+		testkit.IndexUnder("public", testkit.IndexField("schema/public", "status", "keyword")),
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/private"}, PathHint: "private/schema.yaml", Value: map[string]any{"entity": "Private", "aspect": "runtime", "fields": map[string]any{"secret": map[string]any{"type": "string"}}}},
+		testkit.IndexUnder("private", testkit.IndexField("schema/private", "secret", "keyword")),
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return s.Repo, nil }, reader.DatasetPin{Repositories: map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: at}, Items: []reader.DatasetItem{{Repository: s.RepositoryID, Commit: at, Kind: "prefix", Prefix: "public"}}})
-	e := DatasetSearchExecutor{Authorize: func(context.Context) error { return nil }, Repositories: searchLookup{repo: s.Repo}, Projection: &scopedStatePlanner{t: t},
+	e := DatasetSearchExecutor{Authorize: func(context.Context) error { return nil }, Repositories: searchLookup{repo: s.Repo}, Projection: &scopedStatePlanner{t: t, source: s.Repo},
 		Resolve: func(context.Context) (*reader.Serving, LogicalHydrator, error) {
 			return scope, liveservice.Open(scope, nil, observability.IdentityContext{}), nil
 		},
@@ -54,7 +68,8 @@ func TestDatasetStateObservationRequiresPublishedDeclaration(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	commit, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID, Operations: []objectmodel.Operation{
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/one", AspectName: "definition"}, PathHint: "public/job.yaml", Value: map[string]any{"name": "one"}},
-		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/runtime"}, PathHint: "public/schema.yaml", Value: map[string]any{"entity": "Job", "aspect": "runtime", "fields": map[string]any{"status": map[string]any{"type": "string", "access": []any{"filter"}}}}},
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/runtime"}, PathHint: "public/schema.yaml", Value: map[string]any{"entity": "Job", "aspect": "runtime", "fields": map[string]any{"status": map[string]any{"type": "string"}}}},
+		testkit.IndexField("schema/runtime", "status", "keyword"),
 		bindingfixture.WithPath(bindingfixture.PutDescriptor("resource/scheduler", bindingfixture.Descriptor("https://scheduler.example")), "public/descriptor.yaml"),
 		bindingfixture.WithPath(bindingfixture.PutAspect("job/one", "runtime", "schema/runtime", "resource/scheduler"), "private/runtime.yaml"),
 	}})

@@ -1,0 +1,19 @@
+---
+object_id: schema/service.health
+---
+entity: Service
+aspect: health
+pattern: record
+fields:
+  status:
+    type: string
+    required: true
+  p99LatencyMs:
+    type: number
+  errorRate:
+    type: number
+  observedAt:
+    type: string
+    required: true
+  note:
+    type: string

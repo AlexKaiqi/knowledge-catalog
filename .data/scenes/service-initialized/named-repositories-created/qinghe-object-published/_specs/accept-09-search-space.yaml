@@ -1,0 +1,108 @@
+# 插件重构验收：检索空间与权限。夹具见 _materials/acceptance/README.md；用例树见同文件“用例树”一节。
+# 每条从本节点前态独立开始，由 probe 显式创建所需仓与夹具，不传递其他用例的后态。
+
+- id: accept-search-dataset-is-space
+  title: Dataset 是唯一检索空间，跨仓跨类型在其中成立
+  claims: ["discovery#U2", "dataset#U1"]
+  given:
+    - 方面级世界与 sales-analysis 仓已发布；Dataset sales-analysis 选入 tables、metrics、indexes 并就绪。
+    - 对照 Dataset sales-plain 选入同样的 tables 与 metrics，不选 indexes。
+  when:
+    - 在 sales-analysis 搜索 "orders"；在 sales-plain 做同一搜索；不带 Dataset 发起搜索。
+  then:
+    - sales-analysis 命中 table/shop.orders（来源 table-meta），每个命中带来源仓、提交与参与的声明成员。
+    - sales-plain 明确报未声明，不返回零命中。
+    - 不带 Dataset 的搜索以用法错误拒绝，不回退到按仓或全部可读仓。
+  risk: 声明跟着来源仓跨 Dataset 泄漏，或保留了隐式全局搜索。
+
+- id: accept-search-only-selected-declarations
+  title: 只有选进 Dataset 的声明生效
+  claims: ["discovery#U7"]
+  given:
+    - sales-analysis 仓发布 index/sales-search；Dataset sales-plain 不选 indexes，Dataset sales-analysis 选入。
+  when:
+    - 分别读取两个 Dataset 的访问概览并搜索 "orders"。
+  then:
+    - sales-analysis 的概览列出 index/sales-search 四个成员及解释它们的实例与清单版本；sales-plain 不列任何索引声明。
+    - 搜索结果与概览一致。
+  risk: 声明在来源仓存在即全局生效，Dataset 无法决定检索空间。
+
+- id: accept-search-find-dataset
+  title: 先在库存中找到 Dataset 再搜索
+  claims: ["discovery#U10"]
+  given:
+    - 发布 sales-analysis 与 sales-plain，并为两者写入用途说明；reader 只有 sales-analysis 的消费权。
+  when:
+    - reader 从服务库存列出可用 Dataset 并按 "sales" 匹配，选中后搜索。
+  then:
+    - 列表只含 sales-analysis 及其用途说明，不含 sales-plain；此步不经过对象索引。
+    - 选中后的搜索沿用该 Dataset 当前发布版。
+  risk: 调用者不知道去哪个 Dataset 找，或库存列出他无权消费的 Dataset。
+
+- id: accept-search-pinned-dataset-frozen
+  title: 固定的 Dataset 修订不跟随声明 HEAD
+  claims: ["discovery#U4"]
+  given:
+    - Dataset sales-analysis 修订 1 就绪；随后 sales-analysis 仓 HEAD 删除 metric-text 成员，但未发布新修订。
+  when:
+    - 在修订 1 搜索 "discount"；读取访问概览。
+  then:
+    - 仍命中 metric/shop.gmv，依据中声明版本属于修订 1 固定的提交。
+    - 概览列出的声明与修订 1 一致；发布修订 2 并准备好后，新请求才不再命中。
+  risk: 声明 HEAD 改动立即影响已发布 Dataset，固定版本失去意义。
+
+- id: accept-search-repo-flag-retired
+  title: 按仓搜索被拒绝
+  claims: ["discovery#U2"]
+  given:
+    - 默认搜索世界就绪；reader 同时有 table-meta 仓读权与 sales-analysis 消费权。
+  when:
+    - 执行 kc search --repo table-meta "orders"。
+  then:
+    - 以用法错误拒绝并提示改用 --dataset；不返回任何命中，不回退到某个 Dataset。
+  risk: 旧入口仍可用，形成第二套检索空间与权限语义。
+
+- id: accept-search-consume-vs-repo-read
+  title: 能否搜索只看 Dataset 消费权
+  claims: ["discovery#U2", "object#U16"]
+  given:
+    - 默认搜索世界就绪；carol 只有 sales-analysis 消费权；dave 只有 table-meta 仓读权。
+  when:
+    - carol 与 dave 分别在 sales-analysis 搜索 "orders" 并回读命中。
+  then:
+    - carol 命中并能回读完整正文，结果不逐对象过滤。
+    - dave 被拒绝，错误说明缺 Dataset 消费权；仓读权不替代消费权。
+  risk: 仓读权被当作 Dataset 消费权，或消费权内仍逐对象裁剪结果。
+
+- id: accept-search-revoke-mid-pagination
+  title: 撤销消费权后续页被拒绝
+  claims: ["discovery#U5", "discovery#U2"]
+  given:
+    - 默认搜索世界就绪；carol 有消费权；每页 1 条。
+  when:
+    - carol 取第一页；撤销 carol 的消费权；carol 用续页位置取第二页。
+  then:
+    - 第二页被拒绝；第一页的续页位置不能绕过授权。
+  risk: 续页令牌被当作授权凭据，撤权后仍可继续读。
+
+- id: accept-search-unselected-path
+  title: 来源仓里未选进 Dataset 的对象搜不到
+  claims: ["dataset#U6", "discovery#U2"]
+  given:
+    - Dataset sales-orders 只选入 table-meta 中 table/shop.orders 的文件与 indexes，并就绪。
+  when:
+    - 在 sales-orders 搜索 "customers" 与 "orders"。
+  then:
+    - 搜索 customers 返回完整零命中；搜索 orders 只命中 table/shop.orders。
+  risk: 索引按来源仓整仓构建，未选进的对象经搜索泄漏。
+
+- id: accept-search-first-revision-not-ready
+  title: 新 Dataset 尚未准备好时报未就绪
+  claims: ["discovery#U4"]
+  given:
+    - 新定义 Dataset sales-fresh 并发布首个修订，准备尚未完成（测试部署暂停构建）。
+  when:
+    - 在 sales-fresh 搜索 "orders"。
+  then:
+    - 返回未就绪，不返回零命中；恢复构建并就绪后同一查询命中。
+  risk: 首个修订在准备期间以零命中冒充完整结果。

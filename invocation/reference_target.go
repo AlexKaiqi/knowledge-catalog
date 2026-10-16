@@ -122,7 +122,7 @@ func bindReferenceScope(cx *Invocation, action string) error {
 			candidates[id] = commit
 		}
 	}
-	selection, err := selectReferenceHoldings(cx, bound.reference, candidates)
+	selection, err := selectReferenceHoldings(cx, bound.reference, candidates, cx.WS.Reader.PlanReference)
 	if err != nil {
 		return err
 	}
@@ -134,7 +134,7 @@ func bindReferenceScope(cx *Invocation, action string) error {
 
 // selectReferenceHoldings plans the root object in every candidate Repository
 // at its fixed commit (metadata only) and applies the object identity rule.
-func selectReferenceHoldings(cx *Invocation, reference objectmodel.Reference, candidates map[kernel.RepositoryID]kernel.CommitID) (objectmodel.HoldingSelection, error) {
+func selectReferenceHoldings(cx *Invocation, reference objectmodel.Reference, candidates map[kernel.RepositoryID]kernel.CommitID, plan func(objectmodel.Reference, kernel.CommitID) ([]objectmodel.Address, error)) (objectmodel.HoldingSelection, error) {
 	ids := make([]kernel.RepositoryID, 0, len(candidates))
 	for id := range candidates {
 		ids = append(ids, id)
@@ -154,7 +154,7 @@ func selectReferenceHoldings(cx *Invocation, reference objectmodel.Reference, ca
 	holdings := make([]objectmodel.Holding, 0, len(ids))
 	for _, id := range ids {
 		root := objectmodel.Reference{Repository: id, Object: reference.Object}
-		units, err := cx.WS.Reader.PlanReference(root, candidates[id])
+		units, err := plan(root, candidates[id])
 		if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved || err == nil && len(units) == 0 {
 			continue
 		}
@@ -181,7 +181,17 @@ func readDatasetReference(cx *Invocation, ref objectmodel.Reference) ([]objectmo
 		return nil, err
 	}
 	pin := serving.Pin().Repositories
-	selection, err := selectReferenceHoldings(cx, ref, pin)
+	selection, err := selectReferenceHoldings(cx, ref, pin, func(reference objectmodel.Reference, commit kernel.CommitID) ([]objectmodel.Address, error) {
+		member, err := serving.Member(reference.Repository)
+		if err != nil {
+			return nil, err
+		}
+		planner, ok := member.(objectmodel.ReferencePlanner)
+		if !ok {
+			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "dataset member has no metadata-only reference planner")
+		}
+		return planner.PlanReference(reference, commit)
+	})
 	if err != nil {
 		return nil, err
 	}

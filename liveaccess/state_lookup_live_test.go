@@ -68,9 +68,11 @@ func TestLiveHTTPRuntimeBuildsOpenSearchStateProjection(t *testing.T) {
 		Operations: []objectmodel.Operation{
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/service.health"}, Value: map[string]any{
 				"entity": "Service", "aspect": "health", "fields": map[string]any{
-					"status": map[string]any{"type": "string", "access": []any{"text", "filter"}},
+					"status": map[string]any{"type": "string"},
 				},
 			}},
+			testkit.IndexText("schema/service.health", "status"),
+			testkit.IndexField("schema/service.health", "status", "keyword"),
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: address.ObjectID, AspectName: "properties"}, Value: map[string]any{"name": "orders"}},
 			bindingfixture.PutDescriptor("resource/health", bindingfixture.Descriptor(origin)),
 			bindingfixture.Bind(address, "schema/service.health", "resource/health"),

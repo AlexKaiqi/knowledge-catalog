@@ -15,11 +15,10 @@ Snapshot Store 的独立 HTTP 适配：文件 Dataset 的定义、固定来源�
 `access.RuleStore` 对授权检查与更新提供同一串行边界；不得以客户端断言代替已验证身份。
 服务不提供第二份 Dataset、授权或身份账，不要求 KC Home、Invocation、Object 或索引。
 
-`IdentityOptions` 使用显式配置的验证器；未配置不会自动接受 local 身份。
-原 lakeFS 登录证明由 `NewLakeFSAuthenticator` 向固定的 native origin 校验。使用者先显式
-初始化通用 `identity` 绑定权威，再以 `identity.WrapAuthenticator` 包装验证器。
-lakeFS native 管理员身份不产生本模块的管理授权；退出也不删除耐久身份绑定或恢复 grant。
-native 用户身份的秒级代际及兼容用户名限制与原接线相同，见控制台 API review 和 TASK 登记。
+`IdentityOptions` 使用显式配置的认证器；未配置不会自动接受 local 身份。请求认证调用
+`identity.Authenticate`，与 Server 是同一个判定入口，本模块不按认证方式名字分支。使用者先显式
+初始化通用 `identity` 绑定权威，再以 `identity.WrapAuthenticator` 包装认证器。
+lakeFS 只作存储，不是身份来源；退出不删除耐久身份绑定，也不恢复 grant。
 
 ## 最小用法
 
@@ -48,6 +47,12 @@ KC Server 通过窄回调提供既有默认政策、便携 recipe 准备、Objec
 `Around` 只可拒绝前置执行或观察真实结果，不能重复执行、伪造发布或覆盖领域错误。
 来源库存的外部描述不能更改登记身份。请求元数据只供诊断，不能用于发权。
 
+配置 `RecordRead` 后，进入 `file:read` 读取操作的请求在返回前记录一次最终结果，包括来源读取
+错误与读取授权拒绝；证据写入失败时不交付成功字节。Dataset 证据只采用服务端接受的 pin，
+原始文件路径使用实际仓路径，保留前缀映射与逐文件改名后的来源。`OpenView` 接收本次读取的
+记录回调，扩展视图应将它传给 `ViewOptions.Record`。投影文件没有物理仓路径时只提供已确定的
+来源仓与 commit，不把虚拟文件名伪装成仓路径。
+
 允许依赖 Snapshot 子包、通用 `identity` 与 `kernel`；禁止直接或传递依赖 `catalog`、
 `home`、`invocation`、`invoke`、`server`、`cli`、`client`、Object、Index、Retrieval。
 语义文件视图的解释和应用生命周期留在挂载方，原始文件算法只在本模块拥有。
@@ -72,7 +77,8 @@ HTTP 路由借用资源。架构守卫
 `consoleRepository`（可选原 lakeFS 仓名），用于进入完整控制台的固定提交比较。
 宿主只能在该来源的真实存储实例与浏览器已认证实例一致时提供此值；不得猜测逻辑
 RepositoryID 对应的原仓名，不得返回凭据。它只是导航元数据，不赋予原仓读权；
-原 Repository Compare 使用原 API 与调用方自己的会话。独立文件服务可以不提供此值。
+原 Repository Compare 经受控 native API 授权后使用服务私有存储凭据，调用方证明不转发到存储。
+独立文件服务可以不提供此值。
 
 `GET /snapshot/v1/inventory` 返回同一登记 authority 的 Repository 描述和 Dataset 摘要，
 不枚举全部已连接 Store，也不读取来源字节。`Resources.DiscoveryWorkspaceID` 是宿主可选的
@@ -102,11 +108,29 @@ null 或重复键。候选准备、可选配方出版与最终接受均保留这
 选择的历史详情回读同一已接受记录。修改和清空需发布新 revision；不读取或识别说明文件，
 不扩大文件范围，也不改变 Dataset 授权。
 
+发布响应带 `disposition`：首次接受为 `APPLIED`；授权通过后若同一修订号已以相同来源与
+metadata 接受，按重试回答 `REPLAYED` 并返回已接受记录，不再准备、出版配方或写入。
+同修订号、配方不同仍返回 `NON_FAST_FORWARD`。判定见 `dataset.ReplayedDefinition`。
+
 文件组合 API 使用 `/snapshot/v1/datasets`、`/snapshot/v1/datasets/{dataset}` 及对应
 `resolve` / `check` / `retire` 动作；原始文件交付使用
-`/snapshot/v1/files/mounts:list`、`tree:list`、`file:read`。请求只给 Dataset 与固定 pin，
+`/snapshot/v1/files/mounts:list`、`tree:list`、`file:read`。Dataset 消费请求给 Dataset 与固定 pin，
 旧 `/catalog/v1/catalogs/...` 路由和 `catalog` DTO 字段明确拒绝，不保留别名。
-`inventoryDiscovery` 是上层库存发现政策的显式标记，不改变文件清单、准入或授权。
+旧 `inventoryDiscovery` 标记已退役，请求携带该标记时明确拒绝。
+
+`file:read` 也接受逻辑 `repository`、固定 `commit` 和仓内相对 `path`，用于按资源声明
+取一个原始文件。该模式与 Dataset、pin、view 及挂载相对坐标互斥，不要求发布 Dataset，
+不扩展 `mounts:list` 或 `tree:list`。版本必须是实际 commit，分支、ref 和 `HEAD` 不作为
+固定版本接受。服务先按 Repo 和该 commit 检查当前 `file.read`，再查来源和版本、调用
+已有 `snapshot.TreeReader`；Dataset、Object 或 Aspect 限定授权不扩成原仓读取许可。
+宿主的默认可读仓政策继续由同一原仓授权适配执行。逻辑仓绑定与存储证明留在服务端，
+不需要消费者查询原生仓名或持有私网存储凭据。
+
+原仓读取返回独立 `RepositoryFileReadResponse`，含 repository、commit、path、offset、
+totalBytes、eof 和 base64 content，不生成 Dataset pin。范围与 Dataset 字节读取共用
+512 KiB 缺省值和 4 MiB 上限；每个请求重新认证和授权。`RecordRead` 接收实际来源坐标，
+此模式的 `FileReadEvidence.Pin` 为空，宿主不得据此伪造发布依据。原始文件读取不解释
+对象里的字段、URL 或内容声明，也不会跟随引用发起外部请求。
 
 ## 原 Repo API 的强制检查
 
@@ -125,16 +149,15 @@ GET 本身不代表只读，例如 staging/backing 需要单独的导入能力�
 网关保留原请求与响应，不写入登记账、不冻结到来源 commit、不从文件生成值；
 所有键都作为不解释的字符串处理，不用于身份、来源选择或授权。
 
-认证复用现有验证器与耐久身份绑定。Taihu/Gitea 等外部认证模式及显式本地测试身份下，
+认证复用现有认证器与耐久身份绑定。任何认证方式下，
 `Config.NativeCredential` 只在服务端提供私有存储证明；每个请求先验证真实主体，再检查
 当前产品授权。改写后删除用户 Authorization、Cookie、X-Kc、X-Tai 与转发身份头，
 仅对固定 native origin 设置存储证明，绝不把该证明返回浏览器。
 缺少私有证明失败关闭，不回退用户证明。`GET /api/v1/user` 只显示已验证主体；
 native 账号、凭据、策略、组、初始化接口拒绝转发。账号入口由已有认证系统承接。
-遗留 `auth: lakefs` 显式模式才按原调用者证明转发，并保留其原认证器限制。
 认证管理员、存储管理员或组成员资格均不产生本模块 grant。
 KC 只在明确 `auth: local` 且可信本地身份成立时接入同一私网证明路径；空模式或未配置
-身份不借用私网凭据。既有 lakeFS 身份模式不扩大；服务身份的 setup/config 显示既有
+身份不借用私网凭据。服务身份的 setup/config 显示既有
 提供方，不要求使用者初始化私有存储账号或填写 vendor 用户配置。
 Repo 查询不使用库存默认政策、Dataset、Object 或 Aspect 规则；Ref 是精确范围，
 文件路径不进入 Object 字段。库存按当前元数据权限过滤，游标仅来自可见仓。
@@ -182,7 +205,8 @@ selector（空值为 `snapshot.DefaultRef`）。普通仓读取、Dataset 管理
 分享来源权。独立服务与 KC 宿主的自定义授权都使用 `access.MatchSourcePublication`。
 
 来源授权先于来源检查与可选 portable-recipe 副作用；外部 before-hook、`BeforePublish`
-及 `PreparePublication` 之后再次求值。selector 被服务器冻结为 Commit 后，最终复查仍
+及 `PreparePublication` 之后再次求值。`PreparePublication` 返回准备后的定义，服务只采用其中冻结的
+引用依赖（`Dependencies`）；SetID、修订被改写即拒绝，来源仍须与冻结的来源一致。selector 被服务器冻结为 Commit 后，最终复查仍
 使用调用方的原选定坐标；`BeforePublish` 返回的新选择要重新授权，最终准备不能原地
 替换冻结的来源。撤权或替换失败不接受发布、不推进登记权威和当前版；之前独立源提交
 仍成立。可信 programmatic Dataset 端口不携带 principal，强制检查由产品服务承担。

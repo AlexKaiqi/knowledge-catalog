@@ -15,6 +15,7 @@ func TestSnapshotHelpRootNavigation(t *testing.T) {
 	groups := map[string][]string{
 		"composition": {"show", "create", "attach", "detach", "registry audit", "grant add", "grant list", "grant remove", "dataset define", "dataset clone", "dataset retire", "dataset overlay"},
 		"dataset":     {"show", "grant add", "grant list", "grant remove", "dataset define", "dataset clone", "dataset retire", "dataset overlay"},
+		"files":       {"files list", "files read"},
 		"grant":       {"grant add", "grant list", "grant remove"},
 		"registry":    {"registry audit"},
 	}
@@ -40,6 +41,22 @@ func TestSnapshotHelpRootNavigation(t *testing.T) {
 	}
 	if !strings.Contains(root.Stdout, "kcfs help") || !strings.Contains(Run([]string{"help", "dataset"}).Stdout, "kcfs help") {
 		t.Error("Snapshot root and Dataset help must both link to the file-view tool")
+	}
+}
+
+func TestConsumeHelpConnectsObjectFileAddressesToDownload(t *testing.T) {
+	consume := Run([]string{"help", "consume"})
+	for _, fact := range []string{"definition", "资源自己的仓", "commit", "路径", "kc files read", "kc help files", "file.read"} {
+		if consume.Status != 0 || !strings.Contains(consume.Stdout, fact) {
+			t.Errorf("object consumption help omits file download step %q: %#v", fact, consume)
+		}
+	}
+	files := Run([]string{"help", "files"})
+	leaf := Run([]string{"help", "files", "read"})
+	for _, help := range []RunResult{files, leaf} {
+		if help.Status != 0 || !strings.Contains(help.Stdout, "--repo <id> --commit <commit>") {
+			t.Errorf("file help cannot carry an object reader to a repository download: %#v", help)
+		}
 	}
 }
 

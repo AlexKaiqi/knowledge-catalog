@@ -42,7 +42,7 @@ func (idx *Index) RequiresState(repo objectmodel.Repository, commit kernel.Commi
 	if len(boundSchemas) == 0 {
 		return false, nil
 	}
-	spec, err := idx.AccessSpecAt(repo, commit)
+	spec, maintained, err := idx.maintainedAccessSpecAt(repo, commit)
 	if err != nil {
 		return false, err
 	}
@@ -64,6 +64,12 @@ func (idx *Index) RequiresState(repo objectmodel.Repository, commit kernel.Commi
 			continue
 		}
 		field, err := spec.ResolveField(ref)
+		if err != nil && !maintained {
+			// No ready projection retained the declarations yet: this is not
+			// "undeclared". The Snapshot search reports the projection as not
+			// prepared instead.
+			return false, nil
+		}
 		if err != nil {
 			return false, err
 		}
@@ -108,7 +114,7 @@ func (idx *Index) refreshState(ctx context.Context, repo objectmodel.Repository,
 	if commit == "" {
 		return ports.StateSync{}, kernel.Fail(kernel.ErrUsageInvalid, "State projection requires a declaration commit")
 	}
-	spec, err := specAtCommit(repo, commit)
+	spec, err := idx.specAtCommit(repo, commit)
 	if err != nil {
 		return ports.StateSync{}, err
 	}
@@ -225,7 +231,7 @@ func (idx *Index) refreshState(ctx context.Context, repo objectmodel.Repository,
 	if incremental {
 		mode = ports.IndexModeIncremental
 	}
-	providerMeta := projectionMeta(eng, commit, spec, mode, "observation")
+	providerMeta := idx.projectionMeta(eng, commit, spec, mode, "observation")
 	providerMeta.ObservationDigest = next.observationDigest
 	providerMeta.Revision = next.revision
 	streaming, ok := eng.(ports.StreamingProjectionMaintainer)
@@ -311,12 +317,12 @@ func (idx *Index) StateProjectionReady(ctx context.Context, repo objectmodel.Rep
 	if err != nil {
 		return false, err
 	}
-	return stateProjectionMatches(eng, meta, commit, state), nil
+	return idx.stateProjectionMatches(eng, meta, commit, state), nil
 }
 
 // stateProjectionMatches checks one provider metadata read against the
 // immutable resident observation. Query and maintenance share this condition.
-func stateProjectionMatches(eng ports.Engine, meta ports.Meta, commit kernel.CommitID, state *stateProjection) bool {
-	return state != nil && meta.State == ports.ProjectionStateReady && projectionMatches(eng, meta, commit, state.accessDigest) &&
+func (idx *Index) stateProjectionMatches(eng ports.Engine, meta ports.Meta, commit kernel.CommitID, state *stateProjection) bool {
+	return state != nil && meta.State == ports.ProjectionStateReady && idx.projectionMatches(eng, meta, commit, state.accessDigest) &&
 		meta.Revision == state.revision && meta.ObservationDigest == state.observationDigest
 }

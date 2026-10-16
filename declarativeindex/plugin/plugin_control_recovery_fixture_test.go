@@ -21,6 +21,7 @@ import (
 	"kc/liveaccess"
 	sourcebridge "kc/liveaccess/discovery"
 	objectmodel "kc/object"
+	objectreader "kc/object/reader"
 	"kc/snapshot"
 	"kc/snapshot/dataset"
 )
@@ -93,12 +94,8 @@ func (f *controlRecoveryFixture) open(t *testing.T, repositories ...kernel.Repos
 		}
 		return contribution, err
 	}
-	configs := consumerplugin.RepositoryPluginConfigs{Repositories: map[kernel.RepositoryID]consumerplugin.RepositoryPluginConfig{}}
-	for _, id := range repositories {
-		configs.Repositories[id] = consumerplugin.RepositoryPluginConfig{Version: 1, Plugins: []consumerplugin.PluginSelection{{Name: "declarative-index", Instance: "control-recovery"}}}
-	}
 	var err error
-	runtime.plugins, err = consumerplugin.OpenIndexPlugins(configs, map[string]consumerplugin.IndexPluginEntry{"declarative-index": entry})
+	runtime.plugins, err = consumerplugin.OpenIndexPlugins(indexConfig("control-recovery"), consumerplugin.PluginScope{Repositories: repositories}, map[string]consumerplugin.IndexPluginEntry{"declarative-index": entry})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +105,17 @@ func (f *controlRecoveryFixture) open(t *testing.T, repositories ...kernel.Repos
 
 func (f *controlRecoveryFixture) publish(t *testing.T, runtime *controlRecoveryRuntime, name string, id kernel.RepositoryID, at kernel.CommitID) dataset.Dataset {
 	t.Helper()
-	prepare := discoverydatasets.Preparation{Enabled: true, Lookup: f.lookup, Provider: runtime.plugins}
+	prepare := discoverydatasets.Preparation{Enabled: true, Lookup: f.lookup, Provider: runtime.plugins,
+		Dependencies: func(candidate dataset.ResolvedDataset) (map[kernel.RepositoryID]kernel.CommitID, error) {
+			inventory := func() []kernel.RepositoryID {
+				ids := make([]kernel.RepositoryID, 0, len(f.base.setups))
+				for _, setup := range f.base.setups {
+					ids = append(ids, setup.RepositoryID)
+				}
+				return ids
+			}
+			return objectreader.Open(objectreader.MemberLookup(f.lookup), testkit.DatasetPin(candidate)).FreezeDependencies(inventory)
+		}}
 	def, err := (discoverydatasets.DatasetPublisher{Registry: f.base.cat,
 		Authorize: func(context.Context, discoverydatasets.DatasetPublication) error { return nil }, Prepare: prepare.Execute,
 	}).Execute(context.Background(), discoverydatasets.DatasetPublication{Dataset: name, Revision: 1,
@@ -260,6 +267,7 @@ type controlHeadFailure struct {
 	objectmodel.StoreIdentified
 	objectmodel.SchemaStore
 	objectmodel.SchemaAdoptionLocator
+	objectmodel.SchemaReferrerLocator
 	objectmodel.BindingLocator
 	objectmodel.SnapshotObjectPager
 	objectmodel.BatchReadStore
@@ -276,8 +284,8 @@ func (r controlHeadFailure) Head(ref string) (kernel.CommitID, error) {
 
 func failingControlHead(repo objectmodel.Repository, err error) objectmodel.Repository {
 	return controlHeadFailure{Repository: repo, StoreIdentified: repo.(objectmodel.StoreIdentified), SchemaStore: repo.(objectmodel.SchemaStore),
-		SchemaAdoptionLocator: repo.(objectmodel.SchemaAdoptionLocator),
-		BindingLocator:        repo.(objectmodel.BindingLocator), SnapshotObjectPager: repo.(objectmodel.SnapshotObjectPager),
+		SchemaAdoptionLocator: repo.(objectmodel.SchemaAdoptionLocator), SchemaReferrerLocator: repo.(objectmodel.SchemaReferrerLocator),
+		BindingLocator: repo.(objectmodel.BindingLocator), SnapshotObjectPager: repo.(objectmodel.SnapshotObjectPager),
 		BatchReadStore: repo.(objectmodel.BatchReadStore), FastObjectChanges: repo.(objectmodel.FastObjectChanges), err: err}
 }
 

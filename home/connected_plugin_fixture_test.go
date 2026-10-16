@@ -1,8 +1,10 @@
 package home
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
-	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
@@ -18,7 +20,6 @@ import (
 
 	"kc/declarativeindex/opensearch"
 	retrieval "kc/discovery"
-	consumerplugin "kc/discovery/plugin"
 	"kc/internal/testkit"
 	"kc/kernel"
 	objectmodel "kc/object"
@@ -66,15 +67,15 @@ func newConnectedPluginFixture(t *testing.T) *connectedPluginFixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { closeManagedSource(source) })
-	writeConnectedPluginConfig(t, source, []consumerplugin.PluginSelection{{Name: "declarative-index", Instance: "main"}})
 	repo := testkit.OpenRepository(t, source)
 	root := testkit.MustHead(t, source, snapshot.DefaultRef)
 	f.basis, err = repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: f.id, TargetRef: snapshot.DefaultRef, BaseCommit: root, ExpectedTargetCommit: root,
 		Operations: []objectmodel.Operation{
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/article"}, Value: map[string]any{
-				"entity": "Article", "fields": map[string]any{"body": map[string]any{"type": "string", "access": []any{"text"}}},
+				"entity": "Article", "fields": map[string]any{"body": map[string]any{"type": "string"}},
 			}},
+			testkit.IndexText("schema/article", "body"),
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "article/current"}, SchemaRef: "schema/article", Value: map[string]any{
 				"body": "runbook from the connected authority", "detail": "canonical content absent from indexed fields",
 			}},
@@ -94,7 +95,7 @@ func newConnectedPluginFixture(t *testing.T) *connectedPluginFixture {
 		URL: connectedPluginSearchEndpoint(t, namespace), Namespace: namespace, PrimaryShards: 1,
 	}
 	f.config.Connections = &ConnectionPolicy{AllowedOrigins: []string{provider.Origin()}, CreatorActions: []string{
-		"repository.connections.manage", "repository.metadata.read", "object.read", "object.search",
+		"repository.connections.manage", "repository.metadata.read", "object.read",
 	}}
 	if err := InitializeDeployment(f.config, func(dir, _ string) error {
 		return os.WriteFile(filepath.Join(dir, "allow.json"), []byte(`{"version":2,"rules":[]}`), 0600)
@@ -135,17 +136,6 @@ func (f *connectedPluginFixture) openCold(t *testing.T) *Home {
 	return ws
 }
 
-func writeConnectedPluginConfig(t *testing.T, source snapshot.Store, selections []consumerplugin.PluginSelection) {
-	t.Helper()
-	raw, err := json.Marshal(consumerplugin.RepositoryPluginConfig{Version: 1, Plugins: selections})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := source.(metadataWrapperWriter).WriteRepositoryMetadata(map[string]string{consumerplugin.RepositoryPluginsKey: string(raw)}); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func (f *connectedPluginFixture) frozen(t *testing.T, ws *Home) dataset.Dataset {
 	t.Helper()
 	def, err := ws.Datasets.PrepareDataset("connected-articles", 1, []dataset.DatasetSource{{
@@ -163,7 +153,11 @@ func (f *connectedPluginFixture) prepareAndRead(t *testing.T, ws *Home) {
 		t.Fatal("runtime configuration did not reach query and Dataset preparation together")
 	}
 	def := f.frozen(t, ws)
-	if err := ws.DatasetPreparation.Execute(context.Background(), def); err != nil {
+	def, err := ws.DatasetPreparation.Execute(context.Background(), def)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ws.Datasets.PublishDataset(def); err != nil {
 		t.Fatal(err)
 	}
 	f.assertCanonical(t, ws)
@@ -175,7 +169,11 @@ func (f *connectedPluginFixture) assertCanonical(t *testing.T, ws *Home) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := ws.Index.SearchAtContext(context.Background(), repo, f.basis, retrieval.SearchOf(retrieval.SearchMATCH("runbook")))
+	resolved, err := ws.Datasets.ResolveDataset("connected-articles")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := ws.Plugins.SearchDataset(context.Background(), ws.Reader.Lookup(ws.Datasets.Require), testkit.DatasetPin(resolved), retrieval.SearchOf(retrieval.SearchMATCH("runbook")))
 	if err != nil || result.Completeness != retrieval.CompletenessComplete || len(result.Hits) != 1 || result.SearchView.Snapshots[f.id] != f.basis {
 		t.Fatalf("verified connected plugin did not serve its fixed complete result: result=%#v error=%v", result, err)
 	}
@@ -207,6 +205,21 @@ func connectedPluginSearchEndpoint(t *testing.T, namespace string) string {
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	proxy.ModifyResponse = func(response *http.Response) error {
 		request := response.Request
+		if response.StatusCode == http.StatusServiceUnavailable {
+			raw, err := io.ReadAll(response.Body)
+			if err != nil {
+				return err
+			}
+			response.Body = io.NopCloser(bytes.NewReader(raw))
+			diagnostic := raw
+			if response.Header.Get("Content-Encoding") == "gzip" {
+				if compressed, err := gzip.NewReader(bytes.NewReader(raw)); err == nil {
+					diagnostic, _ = io.ReadAll(compressed)
+					_ = compressed.Close()
+				}
+			}
+			t.Logf("physical OpenSearch 503 %s %s: %s", request.Method, request.URL.Path, diagnostic)
+		}
 		if request.Method == http.MethodPut && response.StatusCode < 300 {
 			path := strings.Trim(request.URL.Path, "/")
 			if strings.HasPrefix(path, "kc-projection-control-v1") && strings.SplitN(path, "/", 2)[0] != controlIndex {

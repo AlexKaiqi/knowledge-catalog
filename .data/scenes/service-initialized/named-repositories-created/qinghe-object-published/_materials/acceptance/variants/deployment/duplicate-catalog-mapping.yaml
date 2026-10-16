@@ -1,0 +1,9 @@
+# 测试部署配置片段：同一能力清单名对应两个实例，部署启动必须拒绝。
+# 实例只写清单名；后端连接仍由部署 stores 配置，不在此片段里另起字段。
+plugins:
+  declarative-index:
+    instances:
+      opensearch-a:
+        catalog: declarative-index/opensearch@2026-10
+      opensearch-b:
+        catalog: declarative-index/opensearch@2026-10

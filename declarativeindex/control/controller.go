@@ -156,15 +156,26 @@ func (c *Controller) Close() {
 	}
 }
 
-func (c *Controller) CatchUp(ctx context.Context) error {
+func (c *Controller) CatchUp(ctx context.Context) error { return c.catchUp(ctx, "") }
+
+// CatchUpRepository brings one source of the instance current. Other sources
+// the same instance interprets keep their own lanes and are not touched.
+func (c *Controller) CatchUpRepository(ctx context.Context, repository kernel.RepositoryID) error {
+	if repository == "" {
+		return kernel.Fail(kernel.ErrUsageInvalid, "scoped catch-up requires a Repository")
+	}
+	return c.catchUp(ctx, repository)
+}
+
+func (c *Controller) catchUp(ctx context.Context, only kernel.RepositoryID) error {
 	c.catchupMu.Lock()
 	defer c.catchupMu.Unlock()
 	refreshErr := c.refreshDemands(ctx)
 	if c.demands == nil || c.index == nil {
 		return refreshErr
 	}
-	heads, reconcileErr := c.reconcile(ctx)
-	return errors.Join(refreshErr, reconcileErr, c.applyPending(ctx, heads), c.catchUpFixed(ctx), c.catchUpState(ctx, heads))
+	heads, reconcileErr := c.reconcile(ctx, only)
+	return errors.Join(refreshErr, reconcileErr, c.applyPending(ctx, heads), c.catchUpFixed(ctx, only), c.catchUpState(ctx, heads, only))
 }
 
 // Reconcile discovers current HEAD demand without building physical state.
@@ -175,7 +186,7 @@ func (c *Controller) Reconcile(ctx context.Context) error {
 	if c.demands == nil || c.index == nil {
 		return refreshErr
 	}
-	_, reconcileErr := c.reconcile(ctx)
+	_, reconcileErr := c.reconcile(ctx, "")
 	return errors.Join(refreshErr, reconcileErr)
 }
 

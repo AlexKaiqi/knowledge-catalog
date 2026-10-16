@@ -14,6 +14,7 @@ import (
 // providers. Scale providers should use the matching typed slot.
 type ProjectionCell struct {
 	Field        string              `json:"field"`
+	Member       string              `json:"member,omitempty"`
 	Value        string              `json:"value"`
 	Access       []reader.AccessHint `json:"access"`
 	StringValue  *string             `json:"stringValue,omitempty"`
@@ -39,9 +40,12 @@ type ProjectionRelation struct {
 // Schema objects never appear. Aspect/member operations invalidate this object;
 // they are deliberately not physical document boundaries.
 type CompiledDoc struct {
-	ObjectID objectmodel.ObjectID    `json:"objectId"`
-	Kind     objectmodel.AddressKind `json:"kind"`
-	Text     string                  `json:"text"`
+	SourceRepository kernel.RepositoryID       `json:"sourceRepository,omitempty"`
+	SourceCommit     kernel.CommitID           `json:"sourceCommit,omitempty"`
+	ObjectID         objectmodel.ObjectID      `json:"objectId"`
+	Kind             objectmodel.AddressKind   `json:"kind"`
+	Text             string                    `json:"text"`
+	Semantic         []retrieval.SemanticField `json:"semantic,omitempty"`
 	// EligibleFields proves filter applicability, including observed missing
 	// values. Text or sort alone cannot promise EXISTS/MISSING/filter access.
 	EligibleFields []string            `json:"eligibleFields"`

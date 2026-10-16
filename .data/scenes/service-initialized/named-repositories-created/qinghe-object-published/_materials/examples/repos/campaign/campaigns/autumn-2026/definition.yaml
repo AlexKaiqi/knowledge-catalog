@@ -1,0 +1,19 @@
+---
+object_id: campaign/qinghe.autumn-2026
+aspect_name: definition
+kind: Aspect
+schema_ref: schema/campaign.definition
+---
+name: 2026 秋季上新
+productRef: product/qinghe.osmanthus-oolong
+startDate: "2026-09-15"
+endDate: "2026-10-15"
+channels:
+- 门店
+- 小程序
+- 短视频
+launchPrice: 32
+currency: CNY
+firstDayNotice: 9 月 15 日上新首日，小程序下单量预计是平日的 3 倍；下单服务 p99 延迟告警阈值临时放宽到 800ms，值班请先看活动流量再判断故障。
+successMeasure: 活动期内桂花乌龙的 GMV，按 metric/shop.gmv 的当前口径计算；与上月同周期对比。
+owner: 市场组 Zhou

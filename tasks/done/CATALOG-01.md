@@ -1,0 +1,3 @@
+# CATALOG-01 · Catalog 登记表不能落在易失盘
+
+- [x] 已落地：生产 Catalog 登记表落在独立 Snapshot 权威（`dolt` / `gitea` / `lakefs`，与知识仓同类介质、不同 identity），不走本机 Git、`stateDir` SQL、知识仓或 Writer。`CatalogBinding` 只接受 `driver`+`dir`/`dsn`；未知 YAML `remote:` 与 Git `file://`、实例盘路径、缺 driver 在 `deployment init` / `serve` 失败关闭。丢失的 Catalog 权威不得重建空登记表。本地 `kc init` 夹具仍用 gitdir `NewRegistry`，不是生产路径。验收：`make check-docs` 与 `make test` 全绿，无 skip。锚点 `TestDeploymentRejectsLegacyCatalogGitRemoteField` / `TestDeploymentRejectsInstanceBoundAuthorities` / `TestDeploymentDoesNotRecreateLostCatalogBranch` / `TestSnapshotRegistryPersistsMembershipWithoutKnowledgeSemantics` / `TestCloseReleasesDurableDirectory`。

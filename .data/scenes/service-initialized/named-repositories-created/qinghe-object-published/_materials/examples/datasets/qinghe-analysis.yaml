@@ -1,0 +1,26 @@
+name: qinghe-analysis
+metadata:
+  title: 清河茶铺销售分析
+  question: 上周销售额为什么下降？
+  owner: 分析组 Lin
+mounts:
+- {repository: table-meta, selector: refs/heads/main, path: tables, subPath: tables}
+- {repository: table-meta, selector: refs/heads/main, path: columns, subPath: columns}
+- {repository: table-meta, selector: refs/heads/main, path: data-jobs, subPath: data-jobs}
+- {repository: table-meta, selector: refs/heads/main, path: relations-table-meta, subPath: relations}
+- {repository: sales-semantic, selector: refs/heads/main, path: semantic-models, subPath: semantic-models}
+- {repository: sales-semantic, selector: refs/heads/main, path: metrics, subPath: metrics}
+- {repository: sales-semantic, selector: refs/heads/main, path: relations-sales-semantic, subPath: relations}
+- {repository: product, selector: refs/heads/main, path: products, subPath: products}
+- {repository: product, selector: refs/heads/main, path: concepts, subPath: concepts}
+- {repository: product, selector: refs/heads/main, path: relations-product, subPath: relations}
+- {repository: sales-semantic, selector: refs/heads/main, path: _schemas, subPath: _schemas}
+files:
+- {repository: table-meta, selector: refs/heads/main, file: _schemas/table.properties.aspect.yaml, target: _schemas/table.properties.aspect.yaml}
+- {repository: table-meta, selector: refs/heads/main, file: _schemas/table.schema.aspect.yaml, target: _schemas/table.schema.aspect.yaml}
+- {repository: table-meta, selector: refs/heads/main, file: _schemas/table.stats.aspect.yaml, target: _schemas/table.stats.aspect.yaml}
+- {repository: table-meta, selector: refs/heads/main, file: _schemas/column.properties.aspect.yaml, target: _schemas/column.properties.aspect.yaml}
+- {repository: table-meta, selector: refs/heads/main, file: _schemas/data-job.definition.aspect.yaml, target: _schemas/data-job.definition.aspect.yaml}
+- {repository: table-meta, selector: refs/heads/main, file: _schemas/data-job.properties.aspect.yaml, target: _schemas/data-job.properties.aspect.yaml}
+- {repository: product, selector: refs/heads/main, file: _schemas/product.definition.aspect.yaml, target: _schemas/product.definition.aspect.yaml}
+- {repository: product, selector: refs/heads/main, file: _schemas/concept.definition.aspect.yaml, target: _schemas/concept.definition.aspect.yaml}

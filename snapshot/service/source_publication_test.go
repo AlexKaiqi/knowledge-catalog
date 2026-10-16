@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	localauth "kc/identity/local"
 	"net/http"
 	"testing"
 
@@ -51,7 +52,10 @@ func TestDatasetPublicationRequiresSourcePermissionBeforeInspection(t *testing.T
 				portable++
 				return definition, nil, nil
 			}
-			f.resources.PreparePublication = func(context.Context, identity.HTTPIdentity, dataset.Dataset) error { ready++; return nil }
+			f.resources.PreparePublication = func(_ context.Context, _ identity.HTTPIdentity, definition dataset.Dataset) (dataset.Dataset, error) {
+				ready++
+				return definition, nil
+			}
 			before := dataset.NormalizeState(f.catalog.DumpState())
 			head := testkit.MustHead(t, f.authority, snapshot.DefaultRef)
 			f.source.inspections = 0
@@ -111,7 +115,7 @@ func TestDatasetPublicationRechecksSourcePermissionAfterPreparation(t *testing.T
 			inspectionsAtRevocation := -1
 			handler := f.handler()
 			if phase == "pre-hook" {
-				handler = service.NewHandler(service.Config{Identity: service.IdentityOptions{Local: true},
+				handler = service.NewHandler(service.Config{Identity: service.IdentityOptions{Authenticator: localauth.New()},
 					Acquire: func(context.Context, identity.HTTPIdentity, string) (service.Resources, func(), error) {
 						return f.resources, func() {}, nil
 					},
@@ -132,14 +136,14 @@ func TestDatasetPublicationRechecksSourcePermissionAfterPreparation(t *testing.T
 					return definition, nil, nil
 				}
 			} else {
-				f.resources.PreparePublication = func(_ context.Context, _ identity.HTTPIdentity, definition dataset.Dataset) error {
+				f.resources.PreparePublication = func(_ context.Context, _ identity.HTTPIdentity, definition dataset.Dataset) (dataset.Dataset, error) {
 					if phase == "prepared-source-replacement" {
 						definition.Sources[0].Commit = "c2"
 					} else {
 						f.rules.rules = f.rules.rules[:1]
 					}
 					inspectionsAtRevocation = f.source.inspections
-					return nil
+					return definition, nil
 				}
 			}
 			status, code := http.StatusForbidden, kernel.ErrForbidden

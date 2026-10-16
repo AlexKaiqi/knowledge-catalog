@@ -117,9 +117,10 @@ func remoteCurrentDigests(ctx context.Context, client *kcclient.Client, reposito
 func prepareRemoteDesiredIngest(ctx context.Context, client *kcclient.Client, flags map[string]FlagValue, repository, dir string, options kcclient.RequestOptions) (writer.IngestPreview, kernel.CommitID, map[string]string, error) {
 	ref := snapshotRef(flags)
 	base := kernel.CommitID(invoke.FlagString(flags, "base"))
+	empty := false
 	if base == "" {
 		var err error
-		base, err = remoteHeadCommit(ctx, client, repository, ref, options)
+		base, empty, err = remoteHeadBasis(ctx, client, repository, ref, options)
 		if err != nil {
 			return writer.IngestPreview{}, "", nil, err
 		}
@@ -128,6 +129,9 @@ func prepareRemoteDesiredIngest(ctx context.Context, client *kcclient.Client, fl
 	if err != nil {
 		return writer.IngestPreview{}, "", nil, err
 	}
+	if empty {
+		return preview, base, map[string]string{}, nil
+	}
 	current, err := remoteCurrentDigests(ctx, client, repository, base, preview.ChangeSet.Operations, options)
 	if err != nil {
 		return writer.IngestPreview{}, "", nil, err
@@ -135,49 +139,32 @@ func prepareRemoteDesiredIngest(ctx context.Context, client *kcclient.Client, fl
 	return preview, base, current, nil
 }
 
-func remoteHeadCommit(ctx context.Context, client *kcclient.Client, repository, ref string, options kcclient.RequestOptions) (kernel.CommitID, error) {
+func remoteHeadBasis(ctx context.Context, client *kcclient.Client, repository, ref string, options kcclient.RequestOptions) (kernel.CommitID, bool, error) {
 	var raw any
 	if err := client.WriterService().Head(ctx, repository, ref, options, &raw); err != nil {
-		return "", err
+		return "", false, err
 	}
 	row, _ := raw.(map[string]any)
 	if row == nil {
 		encoded, err := json.Marshal(raw)
 		if err != nil {
-			return "", err
+			return "", false, err
 		}
 		if err := json.Unmarshal(encoded, &row); err != nil || row == nil {
-			return "", fmt.Errorf("writer head did not return a commit")
+			return "", false, fmt.Errorf("writer head did not return a commit")
 		}
 	}
 	commit, _ := row["commit"].(string)
 	if commit == "" {
-		return "", fmt.Errorf("writer head did not return a commit")
+		return "", false, fmt.Errorf("writer head did not return a commit")
 	}
-	return kernel.CommitID(commit), nil
-}
-
-func remoteReceipt(ctx context.Context, client *kcclient.Client, commandID string, options kcclient.RequestOptions) (writer.CommitReceipt, bool, error) {
-	var raw any
-	if err := client.WriterService().Receipt(ctx, commandID, options, &raw); err != nil {
-		return writer.CommitReceipt{}, false, nil
-	}
-	encoded, err := json.Marshal(raw)
-	if err != nil {
-		return writer.CommitReceipt{}, false, err
-	}
-	var entry struct {
-		Receipt writer.CommitReceipt `json:"receipt"`
-	}
-	if err := json.Unmarshal(encoded, &entry); err != nil {
-		return writer.CommitReceipt{}, false, err
-	}
-	if entry.Receipt.CommandID == "" {
-		var receipt writer.CommitReceipt
-		if err := json.Unmarshal(encoded, &receipt); err != nil || receipt.CommandID == "" {
-			return writer.CommitReceipt{}, false, nil
+	empty := false
+	if value, ok := row["empty"]; ok {
+		var valid bool
+		empty, valid = value.(bool)
+		if !valid {
+			return "", false, fmt.Errorf("writer head returned an invalid empty state")
 		}
-		return receipt, true, nil
 	}
-	return entry.Receipt, true, nil
+	return kernel.CommitID(commit), empty, nil
 }

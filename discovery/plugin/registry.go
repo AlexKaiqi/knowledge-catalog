@@ -26,6 +26,9 @@ type IndexQueries interface {
 
 type IndexMaintenance interface {
 	ProjectionController
+	// CatchUpRepository brings one interpreted source current without running
+	// the maintenance of the instance's other sources.
+	CatchUpRepository(context.Context, kernel.RepositoryID) error
 	PrepareServingBasis(context.Context, objectmodel.Repository, kernel.CommitID) error
 	ApplyNotice(context.Context, index.ChangeNotice, index.ObservationSource) (index.StateSync, error)
 	SetObservationSource(index.ObservationSource)
@@ -33,10 +36,11 @@ type IndexMaintenance interface {
 }
 
 type IndexContribution struct {
-	Queries     IndexQueries
-	Maintenance IndexMaintenance
-	Start       func(context.Context) error
-	Stop        func()
+	Queries      IndexQueries
+	Maintenance  IndexMaintenance
+	Capabilities IndexCapabilities
+	Start        func(context.Context) error
+	Stop         func()
 }
 
 type IndexPluginEntry struct {
@@ -46,79 +50,71 @@ type IndexPluginEntry struct {
 
 type indexInstance struct {
 	selection PluginSelection
+	catalog   string
 	services  IndexContribution
 	resources []func() error
 	started   bool
 	stopOnce  sync.Once
 }
 
-// IndexPlugins is the immutable running selection of each configured source.
+// IndexPlugins is the immutable running set of deployed index instances.
 // Opening and explanation never start workers. Activation and shutdown belong
 // to the product host; borrowed task views do not own runtime resources.
 type IndexPlugins struct {
-	byRepo      map[kernel.RepositoryID]*indexInstance
-	unavailable map[kernel.RepositoryID]error
-	entries     map[string]IndexPluginEntry
-	instances   []*indexInstance
-	mu          sync.Mutex
-	closed      bool
-	started     bool
-	stopped     bool
-	closeOnce   sync.Once
-	closeErr    error
-	active      sync.WaitGroup
+	byRepo             map[kernel.RepositoryID]*indexInstance
+	containsRepository func(kernel.RepositoryID) bool
+	entries            map[string]IndexPluginEntry
+	instances          []*indexInstance
+	mu                 sync.Mutex
+	closed             bool
+	started            bool
+	stopped            bool
+	closeOnce          sync.Once
+	closeErr           error
+	active             sync.WaitGroup
 }
 
-func OpenIndexPlugins(configs RepositoryPluginConfigs, entries map[string]IndexPluginEntry) (*IndexPlugins, error) {
-	p := &IndexPlugins{byRepo: map[kernel.RepositoryID]*indexInstance{}, unavailable: map[kernel.RepositoryID]error{}, entries: map[string]IndexPluginEntry{}}
-	for repo, err := range configs.Unavailable {
-		if err == nil {
-			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "unavailable Repository configuration requires its failure")
-		}
-		if _, exists := configs.Repositories[repo]; exists {
-			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "Repository configuration cannot be both available and unavailable")
-		}
-		p.unavailable[repo] = err
-	}
+// OpenIndexPlugins opens the deployed instances of the compiled index entries.
+// A catalog maps to exactly one instance. Until declarations route by their
+// catalog (INDEX-SEARCH-SPACE-01), the one installed instance interprets every
+// Repository of the deployment; more than one instance is refused, not guessed.
+func OpenIndexPlugins(config PluginsConfig, scope PluginScope, entries map[string]IndexPluginEntry) (*IndexPlugins, error) {
+	p := &IndexPlugins{byRepo: map[kernel.RepositoryID]*indexInstance{}, entries: map[string]IndexPluginEntry{}, containsRepository: scope.ContainsRepository}
 	for name, entry := range entries {
 		entry.Affordance.Tasks = append([]string(nil), entry.Affordance.Tasks...)
 		p.entries[name] = entry
 	}
-	groups := map[PluginSelection][]kernel.RepositoryID{}
-	for repo, config := range configs.Repositories {
-		for _, selected := range config.Plugins {
-			if _, ok := entries[selected.Name]; !ok {
-				p.unavailable[repo] = kernel.Fail(kernel.ErrCapabilityUnsatisfied, "configured plugin %s has no entry", selected.Name)
-				break
-			}
-		}
-		if p.unavailable[repo] != nil {
+	if err := config.CheckCatalogs(); err != nil {
+		return nil, err
+	}
+	var selected []*indexInstance
+	for _, name := range config.Names() {
+		if _, ok := entries[name]; !ok {
 			continue
 		}
-		for _, selected := range config.Plugins {
-			groups[selected] = append(groups[selected], repo)
+		plugin := config[name]
+		for _, instanceName := range plugin.InstanceNames() {
+			instance := plugin.Instances[instanceName]
+			selection := PluginSelection{Name: name, Instance: instanceName}
+			if instance.Catalog == "" || instance.Protocol != "" || len(instance.Runtimes) != 0 {
+				return nil, kernel.Fail(kernel.ErrPreconditionFailed, "index instance %s/%s requires exactly a catalog", name, instanceName)
+			}
+			selected = append(selected, &indexInstance{selection: selection, catalog: instance.Catalog})
 		}
 	}
-	selections := make([]PluginSelection, 0, len(groups))
-	for selected := range groups {
-		selections = append(selections, selected)
+	if len(selected) > 1 {
+		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "more than one index instance is not served until declarations route by catalog")
 	}
-	sort.Slice(selections, func(i, j int) bool {
-		if selections[i].Name != selections[j].Name {
-			return selections[i].Name < selections[j].Name
-		}
-		return selections[i].Instance < selections[j].Instance
-	})
-	for _, selected := range selections {
-		repos := groups[selected]
-		sort.Slice(repos, func(i, j int) bool { return repos[i] < repos[j] })
-		instance := &indexInstance{selection: selected}
+	repos := append([]kernel.RepositoryID(nil), scope.Repositories...)
+	sort.Slice(repos, func(i, j int) bool { return repos[i] < repos[j] })
+	for _, instance := range selected {
 		p.instances = append(p.instances, instance)
-		entry := entries[selected.Name]
+		entry := entries[instance.selection.Name]
 		if entry.Open == nil {
-			return nil, errors.Join(kernel.Fail(kernel.ErrCapabilityUnsatisfied, "plugin entry %s is incomplete", selected.Name), p.Close())
+			return nil, errors.Join(kernel.Fail(kernel.ErrCapabilityUnsatisfied, "plugin entry %s is incomplete", instance.selection.Name), p.Close())
 		}
-		services, err := entry.Open(PluginScope{Name: selected.Name, Instance: selected.Instance, Repositories: append([]kernel.RepositoryID(nil), repos...),
+		services, err := entry.Open(PluginScope{Name: instance.selection.Name, Instance: instance.selection.Instance, Repositories: append([]kernel.RepositoryID(nil), repos...),
+			ContainsRepository: scope.ContainsRepository, RepositoryInventory: scope.RepositoryInventory,
 			Own: func(close func() error) {
 				if close != nil {
 					instance.resources = append(instance.resources, close)
@@ -127,15 +123,12 @@ func OpenIndexPlugins(configs RepositoryPluginConfigs, entries map[string]IndexP
 		})
 		instance.services = services
 		if err == nil && (nilContribution(services.Queries) || nilContribution(services.Maintenance) || services.Start == nil || services.Stop == nil) {
-			err = kernel.Fail(kernel.ErrCapabilityUnsatisfied, "plugin %s/%s has incomplete contributions", selected.Name, selected.Instance)
+			err = kernel.Fail(kernel.ErrCapabilityUnsatisfied, "plugin %s/%s has incomplete contributions", instance.selection.Name, instance.selection.Instance)
 		}
 		if err != nil {
 			return nil, errors.Join(err, p.Close())
 		}
 		for _, repo := range repos {
-			if p.byRepo[repo] != nil {
-				return nil, errors.Join(kernel.Fail(kernel.ErrPreconditionFailed, "Repository has more than one index contribution"), p.Close())
-			}
 			p.byRepo[repo] = instance
 		}
 	}
@@ -179,11 +172,23 @@ func (p *IndexPlugins) Start(ctx context.Context) error {
 }
 
 func (p *IndexPlugins) Configured() bool {
-	return p != nil && (len(p.byRepo) != 0 || len(p.unavailable) != 0)
+	return p != nil && len(p.instances) != 0
 }
 
 func (p *IndexPlugins) ConfiguredFor(repo kernel.RepositoryID) bool {
-	return p != nil && (p.byRepo[repo] != nil || p.unavailable[repo] != nil)
+	return p != nil && p.instanceForRepository(repo) != nil
+}
+
+// instanceForRepository uses host admission facts; the deployed interpreter is
+// fixed even when the host adds or removes an admitted source.
+func (p *IndexPlugins) instanceForRepository(repo kernel.RepositoryID) *indexInstance {
+	if p.containsRepository != nil {
+		if len(p.instances) == 1 && p.containsRepository(repo) {
+			return p.instances[0]
+		}
+		return nil
+	}
+	return p.byRepo[repo]
 }
 
 func (p *IndexPlugins) Running() bool {
@@ -258,12 +263,9 @@ func (p *IndexPlugins) take(repo kernel.RepositoryID) (*indexInstance, func(), e
 	if p.closed {
 		return nil, nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "index plugins have stopped")
 	}
-	instance := p.byRepo[repo]
-	if p.unavailable[repo] != nil {
-		return nil, nil, p.unavailable[repo]
-	}
+	instance := p.instanceForRepository(repo)
 	if instance == nil {
-		return nil, nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "search projection is not available: Repository %s has no configured index plugin", repo)
+		return nil, nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "search projection is not available: no index plugin is installed for Repository %s", repo)
 	}
 	p.active.Add(1)
 	return instance, p.active.Done, nil
@@ -291,12 +293,9 @@ func (p *IndexPlugins) selected(repo kernel.RepositoryID) (*indexInstance, error
 	if p.closed {
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "index plugins have stopped")
 	}
-	instance := p.byRepo[repo]
-	if p.unavailable[repo] != nil {
-		return nil, p.unavailable[repo]
-	}
+	instance := p.instanceForRepository(repo)
 	if instance == nil {
-		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Repository %s has no configured index plugin", repo)
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "no index plugin is installed for Repository %s", repo)
 	}
 	return instance, nil
 }

@@ -26,6 +26,7 @@ type RetrievalLaneEvidence struct {
 
 type RetrievalCandidate struct {
 	ObjectRef    objectmodel.PinnedObjectRef   `json:"objectRef"`
+	Sources      []objectmodel.SourceBasis     `json:"sources,omitempty"`
 	Rank         int                           `json:"rank"`
 	ValueDigest  kernel.Digest                 `json:"valueDigest,omitempty"`
 	Evidence     []RetrievalLaneEvidence       `json:"evidence,omitempty"`
@@ -97,17 +98,16 @@ func (e RetrievalEvent) Validate() error {
 	}
 	seen := map[objectmodel.ObjectRef]struct{}{}
 	for i, candidate := range e.Candidates {
-		if candidate.Rank != i+1 || candidate.ObjectRef.Repository == "" || candidate.ObjectRef.Commit == "" || candidate.ObjectRef.Object == "" {
+		if candidate.Rank != i+1 {
 			return fmt.Errorf("retrieval candidate requires rank and pinned ObjectRef")
+		}
+		if err := validateRetrievalCandidateBasis(candidate, e.Dataset, e.SearchView); err != nil {
+			return err
 		}
 		if _, duplicate := seen[candidate.ObjectRef.ObjectRef]; duplicate {
 			return fmt.Errorf("retrieval candidate ref is duplicated")
 		}
 		seen[candidate.ObjectRef.ObjectRef] = struct{}{}
-		basis, member := e.SearchView.Snapshots[candidate.ObjectRef.Repository]
-		if !member || basis != candidate.ObjectRef.Commit {
-			return fmt.Errorf("retrieval candidate is outside SearchView")
-		}
 		if candidate.ValueDigest == "" {
 			return fmt.Errorf("retrieval candidate requires canonical value digest")
 		}
@@ -128,6 +128,50 @@ func (e RetrievalEvent) Validate() error {
 	}
 	if e.Outcome == "ERROR" && len(e.Error) == 0 {
 		return fmt.Errorf("failed retrieval evidence requires error")
+	}
+	return nil
+}
+
+func validateRetrievalCandidateBasis(candidate RetrievalCandidate, dataset string, view RefineSearchView) error {
+	ref := candidate.ObjectRef
+	if ref.Object == "" {
+		return fmt.Errorf("retrieval candidate requires an object identity")
+	}
+	if len(candidate.Sources) == 0 {
+		if ref.Repository == "" || ref.Commit == "" {
+			return fmt.Errorf("retrieval candidate requires pinned ObjectRef")
+		}
+		if basis, member := view.Snapshots[ref.Repository]; !member || basis != ref.Commit {
+			return fmt.Errorf("retrieval candidate is outside SearchView")
+		}
+		return nil
+	}
+	if strings.TrimSpace(dataset) == "" || ref.Repository != "" || ref.Commit != "" || len(candidate.Sources) < 2 {
+		return fmt.Errorf("composed retrieval candidate requires a Dataset, object identity and source vector without single-source coordinates")
+	}
+	return validateRetrievalSources(candidate.Sources, view)
+}
+
+func validateRetrievalSources(sources []objectmodel.SourceBasis, view RefineSearchView) error {
+	repositories := map[kernel.RepositoryID]bool{}
+	aspects := map[string]bool{}
+	for _, source := range sources {
+		if strings.TrimSpace(string(source.Repository)) == "" || strings.TrimSpace(string(source.Commit)) == "" || repositories[source.Repository] {
+			return fmt.Errorf("composed retrieval candidate requires unique pinned sources")
+		}
+		if basis, member := view.Snapshots[source.Repository]; !member || basis != source.Commit {
+			return fmt.Errorf("composed retrieval candidate source is outside SearchView")
+		}
+		if len(source.Aspects) == 0 {
+			return fmt.Errorf("composed retrieval candidate source requires Aspects")
+		}
+		repositories[source.Repository] = true
+		for _, aspect := range source.Aspects {
+			if strings.TrimSpace(aspect) == "" || aspects[aspect] {
+				return fmt.Errorf("composed retrieval candidate requires disjoint nonempty Aspects")
+			}
+			aspects[aspect] = true
+		}
 	}
 	return nil
 }

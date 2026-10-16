@@ -1,0 +1,16 @@
+# 零知识验证：接入方。夹具与判定见 qinghe-object-published/_materials/zero-knowledge/README.md。
+# 起点是本节点：两个托管仓已创建但为空，环境里没有清河业务对象，消费方答对只能依赖接入方的交付。
+
+- id: zk-task-supplier-onboarding
+  title: 接入方的资料发布后，同事能用它答对问题
+  claims: ["affordance#U2", "object#U1", "object#U15"]
+  given:
+    - 接入方 Agent 拿到 kc、服务地址与身份 zk-supplier，权限明确包含：在 table-meta、sales-semantic 发布对象，定义并发布 Dataset qinghe-shared，给同事授予该 Dataset 的权限；不另给对象命名。
+    - 接入方另拿到三份原始文件（不给对象形态）：表结构导出 .data/scenes/service-initialized/source-repositories-configured/repository-attached/_materials/accessor/mysql/init/00-schema.sql、qinghe-object-published/_materials/queries/ 下的 SQL、口径说明 qinghe-object-published/_materials/zero-knowledge/supplier/gmv-caliber.v1.md。
+    - 另一个零知识的消费方 Agent 只拿到消费身份 zk-colleague 与 mysql 连接串，与接入方不共享对话；他的 Dataset 权限只来自接入方的授权。
+  when:
+    - 接入方说：“我有这些资料，希望同事能找到并使用。同事的账号是 zk-colleague，交付物就叫 qinghe-shared。”交付后 operator 同步两仓检索投影，消费方用业务说法问 zk-biz-two-gmv 与 zk-biz-unpaid-in-gmv 的问题（原话见 trial/prompts/colleague.md）。
+  then:
+    - 接入方 Agent 自己学会复用或新建 Schema、确定对象身份、经 Writer 发布、组成 Dataset 并给同事授权；对象组织与命名由接入方自定，合理即可。
+    - 以消费方结果判定：两题按 answers.yaml 的 zk-task-supplier-onboarding 语义一致即可，对象名不必与清河材料相同；UNPAID 一题能引用接入方发布的口径规则。
+  risk: 接入方能把资料“放进去”，但环境没有引导他放入口径、负责人等含义，同事仍用不起来。

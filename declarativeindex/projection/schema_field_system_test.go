@@ -14,7 +14,7 @@ import (
 func TestSystemPublicationSchemaFieldsSupplyDiscoveryContract(t *testing.T) {
 	repo := testkit.MakeSystemRepository(t)
 	basis := testkit.MustHead(t, repo, snapshot.DefaultRef)
-	spec, err := specAtCommit(repo, basis)
+	spec, err := (&Index{}).specAtCommit(repo, basis)
 	if err != nil {
 		t.Fatal(err)
 	}

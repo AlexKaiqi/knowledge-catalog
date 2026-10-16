@@ -1,7 +1,9 @@
 package home
 
 import (
+	"kc/declarativeindex/opensearch"
 	indexplugin "kc/declarativeindex/plugin"
+	common "kc/discovery/adoption"
 	indexplugins "kc/discovery/plugin"
 	index "kc/discovery/projection"
 	"kc/kernel"
@@ -10,12 +12,8 @@ import (
 	objectmodel "kc/object"
 )
 
-type repositoryMetadataReader interface {
-	ReadRepositoryMetadata() (map[string]string, error)
-}
-
 // ExplainPlugin reads compiled registration facts without constructing a
-// runtime or consulting Repository configuration. It never claims readiness.
+// runtime or consulting deployment configuration. It never claims readiness.
 func ExplainPlugin(name string) (indexplugins.PluginAffordance, error) {
 	switch name {
 	case "declarative-index":
@@ -28,7 +26,7 @@ func ExplainPlugin(name string) (indexplugins.PluginAffordance, error) {
 }
 
 func (ws *Home) configureIndexPlugins(directory string) error {
-	plugins, access, err := ws.openPlugins(directory, false)
+	plugins, access, err := ws.openPlugins(directory)
 	if err != nil {
 		return err
 	}
@@ -37,8 +35,8 @@ func (ws *Home) configureIndexPlugins(directory string) error {
 	return nil
 }
 
-// SetLiveAccessEntries supplies compiled factories, never Repo adoption. The
-// next root verification still derives every selection from Repo metadata.
+// SetLiveAccessEntries supplies compiled factories. The deployment's plugins
+// configuration still decides which instances are installed.
 func (ws *Home) SetLiveAccessEntries(entries map[string]liveservice.PluginEntry) error {
 	if ws.readOnly || ws.pluginsVerified || !ws.Plugins.Unactivated() {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "running plugin entries are immutable")
@@ -51,8 +49,8 @@ func (ws *Home) SetLiveAccessEntries(entries map[string]liveservice.PluginEntry)
 }
 
 // VerifyIndexPlugins is the root's one-time runtime assembly step. Cold
-// connection management does not probe providers; serving verifies their
-// Repository configuration before activating workers or accepting requests.
+// connection management does not probe providers; serving reopens the
+// deployed instances over the verified Repositories before activating workers.
 // It is not a request-time refresh or a hot-loading operation.
 func (ws *Home) VerifyIndexPlugins() error {
 	if ws.readOnly {
@@ -64,7 +62,7 @@ func (ws *Home) VerifyIndexPlugins() error {
 	if ws.pluginsVerified {
 		return nil
 	}
-	plugins, access, err := ws.openPlugins(ws.indexDirectory, true)
+	plugins, access, err := ws.openPlugins(ws.indexDirectory)
 	if err != nil {
 		return err
 	}
@@ -85,34 +83,30 @@ func (ws *Home) VerifyIndexPlugins() error {
 	return nil
 }
 
-func (ws *Home) openPlugins(directory string, verifyConnections bool) (*indexplugins.IndexPlugins, *liveservice.Plugins, error) {
-	configs := indexplugins.RepositoryPluginConfigs{Repositories: map[kernel.RepositoryID]indexplugins.RepositoryPluginConfig{}, Unavailable: map[kernel.RepositoryID]error{}}
-	for _, id := range ws.Store.IDs() {
-		store, ok := ws.Store.Get(id)
-		if !ok {
-			return nil, nil, kernel.Fail(kernel.ErrPreconditionFailed, "configured Repository disappeared")
-		}
-		if _, connected := store.(*connectedSource); connected && !verifyConnections {
-			configs.Unavailable[id] = kernel.Fail(kernel.ErrPreconditionFailed, "connected Repository plugin configuration has not been verified")
-			continue
-		}
-		metadata := map[string]string{}
-		if source, ok := store.(repositoryMetadataReader); ok {
-			var err error
-			metadata, err = source.ReadRepositoryMetadata()
-			if err != nil {
-				configs.Unavailable[id] = err
-				continue
-			}
-		}
-		config, err := indexplugins.ParseRepositoryPlugins(metadata)
-		if err != nil {
-			configs.Unavailable[id] = err
-			continue
-		}
-		configs.Repositories[id] = config
+// pluginsConfig is the deployment's installed plugins. Without an explicit
+// plugins section the compiled defaults are installed; an explicit empty
+// section installs none, so declarations stay ordinary content.
+func (ws *Home) pluginsConfig() indexplugins.PluginsConfig {
+	if ws.Stores.Plugins != nil {
+		return *ws.Stores.Plugins
+	}
+	config := indexplugins.PluginsConfig{"liveaccess": {Instances: map[string]indexplugins.PluginInstanceConfig{"main": {Protocol: objectmodel.ProtocolResourceAccessV1}}}}
+	if ws.Stores.Index != "none" {
+		config["declarative-index"] = indexplugins.PluginConfig{Instances: map[string]indexplugins.PluginInstanceConfig{"main": {Catalog: indexplugin.Catalog}}}
+	}
+	return config
+}
+
+// openPlugins opens the deployed instances for every Repository of this
+// deployment. No Repository or Dataset selects an instance.
+func (ws *Home) openPlugins(directory string) (*indexplugins.IndexPlugins, *liveservice.Plugins, error) {
+	repositories := ws.Store.IDs()
+	models, err := opensearch.ConfiguredEmbeddingModels()
+	if err != nil {
+		return nil, nil, err
 	}
 	entry := indexplugin.Entry(indexplugin.Options{Directory: directory,
+		RegisteredModels: models,
 		Engine: func(namespace string) index.EngineOpener {
 			stores := ws.Stores
 			if namespace != "" {
@@ -132,16 +126,35 @@ func (ws *Home) openPlugins(directory string, verifyConnections bool) (*indexplu
 	if accessEntries == nil {
 		accessEntries = map[string]liveservice.PluginEntry{"liveaccess": accessplugin.Entry(accessplugin.Options{})}
 	}
-	known, accessNames := []string{"declarative-index"}, []string{}
+	scopedEntries := make(map[string]liveservice.PluginEntry, len(accessEntries))
+	for name, accessEntry := range accessEntries {
+		if open := accessEntry.Open; open != nil {
+			accessEntry.Open = func(scope common.PluginScope) (liveservice.PluginContribution, error) {
+				scope.ContainsRepository = func(id kernel.RepositoryID) bool {
+					_, ok := ws.Store.Get(id)
+					return ok
+				}
+				return open(scope)
+			}
+		}
+		scopedEntries[name] = accessEntry
+	}
+	known := []string{"declarative-index"}
 	for name := range accessEntries {
 		known = append(known, name)
-		accessNames = append(accessNames, name)
 	}
-	plugins, err := indexplugins.OpenIndexPlugins(indexplugins.SelectRepositoryPlugins(configs, []string{"declarative-index"}, known), map[string]indexplugins.IndexPluginEntry{"declarative-index": entry})
+	config := ws.pluginsConfig()
+	if err := config.Validate(known); err != nil {
+		return nil, nil, err
+	}
+	plugins, err := indexplugins.OpenIndexPlugins(config, indexplugins.PluginScope{Repositories: repositories,
+		ContainsRepository:  func(id kernel.RepositoryID) bool { _, ok := ws.Store.Get(id); return ok },
+		RepositoryInventory: ws.Store.IDs,
+	}, map[string]indexplugins.IndexPluginEntry{"declarative-index": entry})
 	if err != nil {
 		return nil, nil, err
 	}
-	access, err := liveservice.OpenPlugins(indexplugins.SelectRepositoryPlugins(configs, accessNames, known), accessEntries)
+	access, err := liveservice.OpenPlugins(config, repositories, scopedEntries)
 	if err != nil {
 		_ = plugins.Close()
 		return nil, nil, err

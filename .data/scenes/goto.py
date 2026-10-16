@@ -71,12 +71,6 @@ def apply_target(target: str, *, probe: str | None = None) -> None:
 def validate_live_feature(feature: Path) -> None:
     """Reject unsupported walkthrough syntax before starting any live setup."""
     for step in parse_feature(feature.read_text()):
-        if step["kind"] == "repository-adoption":
-            raise GotoError(
-                f"{feature}: cannot verify required native LiveAccess/{step['instance']} "
-                f"adoption for {step['repository']} through the current walk CLI; "
-                "configure the source authority before service startup and use the "
-                "live lakeFS scene runner to verify this fixture. No construct was applied.")
         if step["kind"] == "error":
             raise GotoError(f"{feature}: live goto supports positive walkthroughs; use the test runner for error cases")
         values = [step["command"]] if step["kind"] == "run" else [cell for row in step.get("rows", []) for cell in row]
@@ -165,11 +159,33 @@ def apply_feature(state: dict, feature: Path) -> None:
         raise GotoError(f"{state['id']}: unsupported step {step['kind']}")
 
 
+def strip_feature_comment(raw: str) -> str:
+    """Only whitespace-delimited hashes outside quoted feature content comment."""
+    quote = None
+    escaped = False
+    for index, char in enumerate(raw):
+        if escaped:
+            escaped = False
+            continue
+        if char == '\\' and quote != "'":
+            escaped = True
+            continue
+        if quote is not None:
+            if char == quote:
+                quote = None
+            continue
+        if char in ('"', "'", '`'):
+            quote = char
+        elif char == '#' and (index == 0 or raw[index-1].isspace()):
+            return raw[:index]
+    return raw
+
+
 def parse_feature(text: str) -> list[dict]:
     steps: list[dict] = []
     pending: dict | None = None
     for raw in text.splitlines():
-        line = raw.split("#", 1)[0].rstrip()
+        line = strip_feature_comment(raw).rstrip()
         if not line.strip():
             continue
         stripped = line.strip()
@@ -186,15 +202,10 @@ def parse_feature(text: str) -> list[dict]:
         if keyword in {"Given", "When", "Then", "And"}:
             rest = rest.strip()
             if rest.startswith("existing repository "):
-                source = rest[len("existing repository ") :]
-                repository, selected, instance = source.partition(" with LiveAccess instance ")
-                if len(repository.split()) != 1 or (selected and len(instance.split()) != 1):
-                    raise GotoError(f"invalid existing Repository fixture: {rest}")
-                if selected:
-                    steps.append({"kind": "repository-adoption", "repository": repository,
-                                  "instance": instance})
-                else:
-                    steps.append({"kind": "skip"})
+                repository = rest[len("existing repository ") :]
+                if len(repository.split()) != 1:
+                    raise GotoError(f"invalid existing Repository fixture (one id; plugin instances come from deployment): {rest}")
+                steps.append({"kind": "skip"})
                 continue
             if rest == "deployment fixture":
                 steps.append({"kind": "skip"})

@@ -15,8 +15,8 @@ OpenSearch managed projection，属于可丢弃、可重建的检索层，不是
 - 查询使用 PIT + `search_after`，候选返回后必须在同一 basis 回读 Canonical。
 - Open 仅校验本地配置，不发送网络请求；首次重建才确保 control index。搜索、关系及 PIT 的超时、
   部分分片失败和提前终止不得变成完整候选；增量每批等待其触及分片可见后才发布。
-- 当前提供方版本为 `opensearch-v5-adopted-schema-access`，mapping 为
-  `typed-cells-v4-access-faces`，compiler 为 `object-units-v3-schema-adoption`；
+- 当前提供方版本为 `opensearch-v6-declaration-member-fields`，mapping 为
+  `typed-cells-v4-access-faces`，compiler 为 `object-units-v4-member-construction`；
   这些标识进入物理摘要。它保留无损整数游标与纳秒时间排序键；时间键只属于 adapter，
   公开排序元数据使用规范时间。既有物理版本通过原维护机制重建。
 - `LoadMetaContext` 在同一 context 读取控制记录并检查其实际 generation 是否存在；缺代返回空 Meta，
@@ -42,7 +42,10 @@ KC_TEST_OPENSEARCH_URL=http://127.0.0.1:9200 go test ./declarativeindex/opensear
 ## 语义向量投影
 
 设置 `KC_EMBEDDING_MODEL` 与 `KC_EMBEDDING_DIMENSIONS`（加 OPENAI_BASE_URL/OPENAI_API_KEY）后，
-投影在生成索引里加入 `semantic_vector` knn_vector 字段（hnsw/lucene，cosinesimil），构建批次内
-以一次 embeddings 调用为每个对象正文派生向量；无正文对象（如关系）不入语义窗口。模型或维度
-未配置的引擎保持纯 lexical 投影。语义窗口是单次有界 top-K 查询，候选携带 approximate 证据；
+投影在生成索引里加入 `semantic_vectors` nested 字段，其中每个显式 vector 成员独立保存
+成员身份、登记模型与 knn_vector（hnsw/lucene，cosinesimil）。构建批次内以一次 embeddings 调用
+处理这些成员声明的输入；text 成员不隐式产生向量。模型或维度未配置的引擎保持纯 lexical 投影，
+没有选入可用 vector 成员时语义查询明确拒绝。语义窗口是单次有界 top-K 查询，候选携带 approximate 证据；
 这是派生投影，不是第二权威（doc/design/discovery.md）。
+
+控制元数据读取遇到同一控制索引主分片明确处于恢复状态时，在调用者截止时间内最多等待一秒，随后保留真实的不可用结果；只重复只读元数据 GET，不创建索引，也不重试其它提供方错误。

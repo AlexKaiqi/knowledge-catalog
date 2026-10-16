@@ -37,8 +37,10 @@ func TestWorkspaceSearchHitUsesLogicalStateHydration(t *testing.T) {
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: objectID, AspectName: "definition"}, Value: map[string]any{"name": "Orders"}},
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/service.health"}, Value: map[string]any{
 				"entity": "Service", "aspect": "health",
-				"fields": map[string]any{"status": map[string]any{"type": "string", "access": []any{"text", "filter"}}},
+				"fields": map[string]any{"status": map[string]any{"type": "string"}},
 			}},
+			testkit.IndexText("schema/service.health", "status"),
+			testkit.IndexField("schema/service.health", "status", "keyword"),
 			bindingfixture.PutDescriptor("resource/health", bindingfixture.Descriptor("https://health.example")),
 			bindingfixture.PutAspect(objectID, "health", "schema/service.health", "resource/health"),
 		},

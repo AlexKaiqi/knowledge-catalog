@@ -11,7 +11,7 @@ test('file preview decodes the Go []byte JSON contract', async () => {
         content: btoa(String.fromCharCode(...new TextEncoder().encode('茶铺\n'))),
         eof: true, totalBytes: 7,
     }), { status: 200 })));
-    await session.restore({mode: 'lakefs', localAssertion: false, accepts: ['Cookie']});
+    await session.restore({mode: 'taihu', localAssertion: false, accepts: ['Authorization']});
     const result = await kc.file('shared', {setId: 'shared', revision: 1, repositories: {'source': 'c1'}}, '说明.txt');
     expect(new TextDecoder().decode(decodeContent(result.content))).toBe('茶铺\n');
 });
@@ -19,7 +19,7 @@ test('file preview decodes the Go []byte JSON contract', async () => {
 test('historical detail requests carry bounded pagination without altering the revision', async () => {
     const fetcher = vi.fn(async (path: string) => new Response(JSON.stringify(path === '/identity/v1/whoami' ? {principal: 'alice'} : {}), {status: 200}));
     vi.stubGlobal('fetch', fetcher);
-    await session.restore({mode: 'lakefs', localAssertion: false, accepts: ['Cookie']});
+    await session.restore({mode: 'taihu', localAssertion: false, accepts: ['Authorization']});
     await kc.dataset('shared', 1, undefined, {limit: 50, continuation: 'basis+/='});
     expect(fetcher.mock.calls[1][0]).toBe('/snapshot/v1/datasets/shared?revision=1&limit=50&continuation=basis%2B%2F%3D');
 });
@@ -28,7 +28,7 @@ test.each([undefined, 1])('named Dataset consumption resolves revision %s withou
     const pin = {setId: 'shared/name', revision: revision ?? 3, repositories: {source: 'fixed'}, pinId: 'accepted'};
     const fetcher = vi.fn(async (path: string) => new Response(JSON.stringify(path === '/identity/v1/whoami' ? {principal: 'alice'} : pin), {status: 200}));
     vi.stubGlobal('fetch', fetcher);
-    await session.restore({mode: 'lakefs', localAssertion: false, accepts: ['Cookie']});
+    await session.restore({mode: 'taihu', localAssertion: false, accepts: ['Authorization']});
     const controller = new AbortController();
     expect(await kc.resolve('shared/name', revision, controller.signal)).toEqual(pin);
     expect(fetcher.mock.calls[1]).toEqual(['/snapshot/v1/datasets/shared%2Fname/resolve', expect.objectContaining({
@@ -43,7 +43,7 @@ test('build output belongs to the Snapshot Store console module', () => {
 test('a grant update cannot acknowledge another rule as a successful replacement', async () => {
     vi.stubGlobal('fetch', vi.fn(async (path: string) => new Response(JSON.stringify(path === '/identity/v1/whoami' ? {principal: 'alice'} : {
         id: 'another-rule', principal: 'alice', actions: ['file.read'], }), {status: 200})));
-    await session.restore({mode: 'lakefs', localAssertion: false, accepts: ['Cookie']});
+    await session.restore({mode: 'taihu', localAssertion: false, accepts: ['Authorization']});
     await expect(kc.updateGrant({id: 'original-rule', principal: 'alice', actions: ['file.read'], }, {principal: 'alice', actions: ['file.read'], })).rejects.toMatchObject({status: 502});
 });
 

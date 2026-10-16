@@ -22,7 +22,18 @@ func (f *httpFacade) pluginHelp(w http.ResponseWriter, r *http.Request) {
 	addHTTPTraceFlags(flags, r)
 	unlock := f.lockTypedInvocation("inventory.read")
 	defer unlock()
+	run := inv.VerbPluginHelp
+	f.homeMu.Lock()
+	opened := f.readHome
+	f.homeMu.Unlock()
+	if opened != nil && opened.Plugins != nil {
+		// Borrow the configured Entry's explanation when the serving root is
+		// already assembled. This reads no source and never opens a runtime.
+		if explanation, err := opened.Plugins.Help(r.PathValue("name")); err == nil {
+			run = func(*inv.Invocation) (any, error) { return explanation, nil }
+		}
+	}
 	// Run the same authorized application task without eager source mounting.
 	invoke.WriteInvoke(w, inv.InvokeApplicationWithTelemetryAtHome(r.Context(), f.runtime, "object-plugin-help", "inventory.read",
-		inv.Command{Stage: invoke.StageHome, Run: inv.VerbPluginHelp}, flags, nil, nil))
+		inv.Command{Stage: invoke.StageHome, Run: run}, flags, nil, nil))
 }

@@ -6,10 +6,11 @@ import (
 	retrieval "kc/discovery"
 	"kc/kernel"
 	objectmodel "kc/object"
+	"kc/object/reader"
 )
 
 func (p *IndexPlugins) RequiresState(repo objectmodel.Repository, at kernel.CommitID, request retrieval.SearchRequest) (bool, error) {
-	instance, done, err := p.take(repo.ID())
+	instance, done, err := p.takeRepository(repo)
 	if err != nil {
 		return false, err
 	}
@@ -27,12 +28,39 @@ func (p *IndexPlugins) StateView(repo kernel.RepositoryID, at kernel.CommitID) (
 }
 
 func (p *IndexPlugins) AccessSpecAt(repo objectmodel.Repository, at kernel.CommitID) (retrieval.AccessSpec, error) {
-	instance, done, err := p.take(repo.ID())
+	instance, done, err := p.takeRepository(repo)
 	if err != nil {
 		return retrieval.AccessSpec{}, err
 	}
 	defer done()
+	if scoped, ok := repo.(interface {
+		DatasetScope() (reader.MemberLookup, reader.DatasetPin)
+	}); ok {
+		if queries, ok := instance.services.Queries.(interface {
+			DatasetAccessSpec(reader.MemberLookup, reader.DatasetPin) (retrieval.AccessSpec, error)
+		}); ok {
+			lookup, pin := scoped.DatasetScope()
+			return queries.DatasetAccessSpec(lookup, pin)
+		}
+	}
 	return instance.services.Queries.AccessSpecAt(repo, at)
+}
+
+// DeclaredAccessSpecAt compiles the declarations this commit selects with the
+// serving instance's manifest check. It touches no engine, projection or
+// readiness probe, so explanations stay free of physical work; whether the
+// member can serve search now is a separate readiness question.
+func (p *IndexPlugins) DeclaredAccessSpecAt(repo objectmodel.Repository, at kernel.CommitID) (retrieval.AccessSpec, error) {
+	instance, done, err := p.takeRepository(repo)
+	if err != nil {
+		return retrieval.AccessSpec{}, err
+	}
+	defer done()
+	var check retrieval.DeclarationCheck
+	if !nilContribution(instance.services.Capabilities) {
+		check = instance.services.Capabilities.Check
+	}
+	return retrieval.AccessSpecForRepositoryChecked(repo, at, check)
 }
 
 func (p *IndexPlugins) SearchAtContext(ctx context.Context, repo objectmodel.Repository, at kernel.CommitID, request retrieval.SearchRequest) (retrieval.SearchResult, error) {
@@ -44,7 +72,7 @@ func (p *IndexPlugins) SearchStateAtRevisionContext(ctx context.Context, repo ob
 }
 
 func (p *IndexPlugins) search(ctx context.Context, repo objectmodel.Repository, at kernel.CommitID, revision string, state bool, request retrieval.SearchRequest) (retrieval.SearchResult, error) {
-	instance, done, err := p.take(repo.ID())
+	instance, done, err := p.takeRepository(repo)
 	if err != nil {
 		return retrieval.SearchResult{}, err
 	}
@@ -66,7 +94,7 @@ func (p *IndexPlugins) search(ctx context.Context, repo objectmodel.Repository, 
 }
 
 func (p *IndexPlugins) SemanticWindowAtContext(ctx context.Context, repo objectmodel.Repository, at kernel.CommitID, request retrieval.SearchRequest, vector []float32) (retrieval.SearchResult, error) {
-	instance, done, err := p.take(repo.ID())
+	instance, done, err := p.takeRepository(repo)
 	if err != nil {
 		return retrieval.SearchResult{}, err
 	}
@@ -87,7 +115,7 @@ func (p *IndexPlugins) SemanticWindowAtContext(ctx context.Context, repo objectm
 }
 
 func (p *IndexPlugins) RelationsAtContext(ctx context.Context, repo objectmodel.Repository, at kernel.CommitID, request retrieval.RelationPageRequest) (retrieval.RelationPage, error) {
-	instance, done, err := p.take(repo.ID())
+	instance, done, err := p.takeRepository(repo)
 	if err != nil {
 		return retrieval.RelationPage{}, err
 	}

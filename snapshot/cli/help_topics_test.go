@@ -89,3 +89,28 @@ func TestSnapshotHelpTopicsExplainResourceVersionAndAuthorityBoundaries(t *testi
 		})
 	}
 }
+
+func TestSnapshotHelpExplainsObjectFileDownloadWithoutDataset(t *testing.T) {
+	for topic, facts := range map[string][]string{
+		"files":      {"--repo <id> --commit <commit>", "definition", "资源自己的仓和 commit", "原仓根目录", "object.read 不包含 file.read"},
+		"repository": {"已知固定 commit 和文件路径", "kc help files read"},
+		"versions":   {"按仓读取单文件", "--commit", "资源版本"},
+	} {
+		text := snapshotcli.HelpTopics()[topic]
+		for _, fact := range facts {
+			if !strings.Contains(text, fact) {
+				t.Errorf("%s help cannot guide an object reader to the file: missing %q", topic, fact)
+			}
+		}
+	}
+	for _, command := range snapshotcli.Commands() {
+		if command.Path != "files read" {
+			continue
+		}
+		for _, fact := range []string{"--repo <id> --commit <commit>", "--repo 与 --dataset 互斥", "原仓根目录", "资源自己的 commit", "file.read", "按原 commit 重试"} {
+			if !strings.Contains(command.Usage, fact) {
+				t.Errorf("file download help omits source-coordinate contract %q", fact)
+			}
+		}
+	}
+}

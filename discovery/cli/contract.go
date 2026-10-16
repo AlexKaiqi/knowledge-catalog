@@ -15,10 +15,9 @@ type Command struct {
 
 // Context carries caller defaults and already fixed scope, never credentials.
 type Context struct {
-	Dataset            string
-	Pin                json.RawMessage
-	Definition         *dataset.Dataset
-	InventoryDiscovery bool
+	Dataset    string
+	Pin        json.RawMessage
+	Definition *dataset.Dataset
 }
 type Executor interface {
 	Execute(context.Context, string, map[string]any, client.RequestOptions) (any, error)

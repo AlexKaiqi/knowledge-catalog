@@ -2,7 +2,6 @@ package cli
 
 import (
 	"sort"
-	"strings"
 )
 
 var hostFlags = words("server home as request-id trace-id span-id parent-span-id on-behalf-of help")
@@ -24,8 +23,8 @@ func (e *executor) ValidateFlags(path string, flags map[string]any) error {
 	}
 	sort.Strings(unknown)
 	if len(unknown) > 0 {
-		if unknown[0] == "pin" || unknown[0] == "catalog" || unknown[0] == "source" {
-			return usage("%s rejects --%s; pass --dataset or --repo", path, unknown[0])
+		if unknown[0] == "pin" || unknown[0] == "catalog" || unknown[0] == "source" || unknown[0] == "repo" {
+			return usage("%s rejects --%s; pass --dataset", path, unknown[0])
 		}
 		return usage("unknown flag --%s for kc %s", unknown[0], path)
 	}
@@ -47,6 +46,14 @@ func validateCoordinates(flags map[string]any) error {
 	if set != "" && (flagString(flags, "commit") != "" || flagString(flags, "ref") != "") {
 		return usage("Dataset has its own fixed basis; do not mix --dataset and --commit/--ref")
 	}
+	if flagString(flags, "revision") != "" {
+		if set == "" {
+			return usage("--revision fixes a named Dataset; pass --dataset")
+		}
+		if revision, err := integer(flags, "revision", false); err != nil || revision == 0 {
+			return usage("--revision must be a positive integer")
+		}
+	}
 	return nil
 }
 func (e *executor) Validate(path string, flags map[string]any) error {
@@ -57,20 +64,11 @@ func (e *executor) Validate(path string, flags map[string]any) error {
 		return nil
 	}
 	if path == "plugin" {
-		if _, err := required(flags, "name"); err != nil {
-			return err
-		}
-		if flagString(flags, "task") != "help" {
-			return usage("plugin task must be help; use kc plugin <name> help")
-		}
-		return nil
+		return validatePlugin(flags)
 	}
 	scope := e.scope(flags)
-	if path != "search" && scope.Repository == "" && scope.Dataset == "" && len(scope.Pin) == 0 && scope.Definition == nil {
-		return usage("missing --repo or --dataset")
-	}
-	if scope.Repository == "" && (flagString(flags, "commit") != "" || flagString(flags, "ref") != "") {
-		return usage("--commit/--ref require --repo")
+	if scope.Dataset == "" || scope.Definition != nil {
+		return usage("%s requires a named --dataset; search scope is one published Dataset revision", path)
 	}
 	if path == "relations" || path == "traverse" {
 		if _, err := required(flags, "object"); err != nil {
@@ -89,18 +87,4 @@ func (e *executor) Validate(path string, flags map[string]any) error {
 		}
 	}
 	return nil
-}
-
-// InventorySearchRequested identifies the existing unscoped search task. The
-// host resolves its authenticated inventory before supplying fixed Context.
-func InventorySearchRequested(path string, flags map[string]any, caller Context) bool {
-	if path != "search" || caller.Dataset != "" || len(caller.Pin) > 0 || caller.Definition != nil {
-		return false
-	}
-	for _, name := range words("repo dataset commit ref") {
-		if strings.TrimSpace(flagString(flags, name)) != "" {
-			return false
-		}
-	}
-	return true
 }

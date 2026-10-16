@@ -91,17 +91,16 @@ func TestDatasetSearchKeepsReleaseWhenPublicationAdvancesBeforeObjectRead(t *tes
 	schemaID := objectmodel.ObjectID("schema/article")
 	articleID := objectmodel.ObjectID("article/public")
 	hiddenID := objectmodel.ObjectID("article/private")
-	schema := func(access string) map[string]any {
-		return map[string]any{"entity": "Article", "fields": map[string]any{
-			"body": map[string]any{"type": "string", "access": []any{access}},
-		}}
-	}
+	schema := map[string]any{"entity": "Article", "fields": map[string]any{
+		"body": map[string]any{"type": "string"},
+	}}
+	bodyText := testkit.IndexUnder("public", testkit.IndexText(schemaID, "body"))
 	original := map[string]any{"body": "runbook from a"}
 	aReceipt, err := s.Writer.Commit("publish-dataset-a", objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: []objectmodel.Operation{
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: schemaID}, PathHint: "public/schema.yaml", Value: schema("text")},
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: schemaID}, PathHint: "public/schema.yaml", Value: schema}, bodyText,
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: articleID}, PathHint: "public/article.yaml", SchemaRef: string(schemaID), Value: original},
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: hiddenID}, PathHint: "private/article.yaml", SchemaRef: string(schemaID), Value: map[string]any{"body": "runbook outside a's scope"}},
 		},
@@ -157,7 +156,8 @@ func TestDatasetSearchKeepsReleaseWhenPublicationAdvancesBeforeObjectRead(t *tes
 			TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 			BaseCommit: a, ExpectedTargetCommit: a,
 			Operations: []objectmodel.Operation{
-				{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: schemaID}, Value: schema("filter")},
+				{Op: objectmodel.OpRemove, Address: bodyText.Address},
+				testkit.IndexUnder("public", testkit.IndexField(schemaID, "body", "keyword")),
 				{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: articleID}, SchemaRef: string(schemaID), Value: map[string]any{"body": "retired at b"}},
 			},
 		})
@@ -170,7 +170,7 @@ func TestDatasetSearchKeepsReleaseWhenPublicationAdvancesBeforeObjectRead(t *tes
 	}
 	resolves := 0
 	executor := DatasetSearchExecutor{
-		Authorize: func(context.Context) error { return nil }, Repositories: sourceReader, Projection: idx,
+		Authorize: func(context.Context) error { return nil }, Repositories: sourceReader, Projection: fixedSourceSearchProjection{idx, idx},
 		Resolve: func(context.Context) (*reader.Serving, LogicalHydrator, error) {
 			resolves++
 			serving, err := openServing()
@@ -208,12 +208,12 @@ func TestDatasetSearchKeepsReleaseWhenPublicationAdvancesBeforeObjectRead(t *tes
 	if err != nil || valueB.Value.(map[string]any)["body"] != "retired at b" {
 		t.Fatalf("concurrent object change did not persist: %#v %v", valueB, err)
 	}
-	specB, err := retrieval.AccessSpecFromAdoptions(s.Repo, b, nil)
+	specB, err := retrieval.AccessSpecForRepository(s.Repo, b)
 	if err != nil {
 		t.Fatal(err)
 	}
 	accessErr := retrieval.CheckSearch(retrieval.SearchOf(retrieval.SearchMATCH("runbook")), specB)
 	if kernel.CodeOf(accessErr) != kernel.ErrCapabilityUnsatisfied {
-		t.Fatalf("concurrent Schema change did not reject text access for the expected reason: %#v %v", specB, accessErr)
+		t.Fatalf("concurrent declaration change did not reject text access for the expected reason: %#v %v", specB, accessErr)
 	}
 }

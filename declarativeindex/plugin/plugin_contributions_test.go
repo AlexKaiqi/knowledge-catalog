@@ -33,17 +33,27 @@ type pluginFixture struct {
 	pool   *pluginEnginePool
 }
 
-func newPluginFixture(t *testing.T) *pluginFixture {
+func newPluginFixture(t *testing.T, distinct ...bool) *pluginFixture {
 	t.Helper()
 	f := &pluginFixture{pool: &pluginEnginePool{stores: map[string]*pluginPhysicalStore{}}}
 	registry := snapshot.NewRegistry()
 	for n := 1; n <= 3; n++ {
 		s := testkit.NewSetup(t, fmt.Sprintf("kr://plugin/source-%d", n))
+		schema, article := objectmodel.ObjectID("schema/article"), objectmodel.ObjectID("article/one")
+		if len(distinct) > 0 && distinct[0] {
+			schema = objectmodel.ObjectID(fmt.Sprintf("schema/article-%d", n))
+			article = objectmodel.ObjectID(fmt.Sprintf("article/source-%d", n))
+		}
+		declaration := testkit.IndexText(schema, "body")
+		if len(distinct) > 0 && distinct[0] {
+			declaration = testkit.IndexOn(objectmodel.ObjectID(fmt.Sprintf("index/source-%d", n)), declaration)
+		}
 		_, err := s.Writer.Commit(fmt.Sprintf("seed-source-%d", n), objectmodel.CommitChangeSet{
 			TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 			Operations: []objectmodel.Operation{
-				{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/article"}, Value: map[string]any{"entity": "Article", "fields": map[string]any{"body": map[string]any{"type": "string", "access": []any{"text"}}}}},
-				{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "article/one"}, SchemaRef: "schema/article", Value: map[string]any{"body": fmt.Sprintf("runbook source %d at a", n)}},
+				{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: schema}, Value: map[string]any{"entity": "Article", "fields": map[string]any{"body": map[string]any{"type": "string"}}}},
+				declaration,
+				{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: article}, SchemaRef: string(schema), Value: map[string]any{"body": fmt.Sprintf("runbook source %d at a", n)}},
 			},
 		})
 		if err != nil {
@@ -68,17 +78,22 @@ func (f *pluginFixture) entry(t *testing.T) consumerplugin.IndexPluginEntry {
 	return declarative.Entry(declarative.Options{Directory: filepath.Join(t.TempDir(), "projection"), Engine: f.pool.opener, Lookup: f.lookup, Datasets: f.cat})
 }
 
-func (f *pluginFixture) configs() consumerplugin.RepositoryPluginConfigs {
-	out := map[kernel.RepositoryID]consumerplugin.RepositoryPluginConfig{}
-	for n, instance := range []string{"main-a", "main-b"} {
-		out[f.setups[n].RepositoryID] = consumerplugin.RepositoryPluginConfig{Version: 1, Plugins: []consumerplugin.PluginSelection{{Name: "declarative-index", Instance: instance}}}
-	}
-	return consumerplugin.RepositoryPluginConfigs{Repositories: out}
+// indexConfig installs one declarative-index instance for the default catalog.
+func indexConfig(instance string) consumerplugin.PluginsConfig {
+	return consumerplugin.PluginsConfig{"declarative-index": {Instances: map[string]consumerplugin.PluginInstanceConfig{instance: {Catalog: declarative.Catalog}}}}
+}
+
+func (f *pluginFixture) configs() consumerplugin.PluginsConfig { return indexConfig("primary") }
+
+// repositories is the deployment the instance interprets; source 3 stays
+// outside it so tests can prove an unconfigured source never falls back.
+func (f *pluginFixture) repositories() []kernel.RepositoryID {
+	return []kernel.RepositoryID{f.setups[0].RepositoryID, f.setups[1].RepositoryID}
 }
 
 func TestIndexPluginsExecuteRealSourceContributionsAndKeepDatasetMappings(t *testing.T) {
-	f := newPluginFixture(t)
-	plugins, err := consumerplugin.OpenIndexPlugins(f.configs(), map[string]consumerplugin.IndexPluginEntry{"declarative-index": f.entry(t)})
+	f := newPluginFixture(t, true)
+	plugins, err := consumerplugin.OpenIndexPlugins(f.configs(), consumerplugin.PluginScope{Repositories: f.repositories()}, map[string]consumerplugin.IndexPluginEntry{"declarative-index": f.entry(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,9 +124,10 @@ func TestIndexPluginsExecuteRealSourceContributionsAndKeepDatasetMappings(t *tes
 			t.Fatal(err)
 		}
 		result, err := plugins.SearchAtContext(context.Background(), repo, at, query)
-		assertPluginHit(t, result, err, s.RepositoryID, at, fmt.Sprintf("runbook source %d at a", n+1))
+		assertPluginHit(t, result, err, s.RepositoryID, at, fmt.Sprintf("runbook source %d at a", n+1), objectmodel.ObjectID(fmt.Sprintf("article/source-%d", n+1)))
 		sources = append(sources, dataset.DatasetSource{Repository: s.RepositoryID, BaseRev: string(at), Selector: snapshot.DefaultRef, Path: dataset.MountPath(fmt.Sprintf("source-%d", n+1))})
 	}
+	ownedCorpora := map[kernel.RepositoryID]bool{}
 	for _, set := range []string{"first", "second"} {
 		if _, err := f.cat.DefineDataset(set, 1, sources); err != nil {
 			t.Fatal(err)
@@ -123,14 +139,25 @@ func TestIndexPluginsExecuteRealSourceContributionsAndKeepDatasetMappings(t *tes
 			t.Fatal(err)
 		}
 		pin := pluginDatasetPin(resolved)
+		if err := plugins.PrepareDatasetScope(context.Background(), f.lookup, pin); err != nil {
+			t.Fatal(err)
+		}
+		member, err := plugins.DatasetMember(f.lookup, pin, f.setups[0].RepositoryID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		desc, err := plugins.DescribeAt(member, pin.Repositories[member.ID()])
+		if err != nil {
+			t.Fatal(err)
+		}
+		ownedCorpora[kernel.RepositoryID(string(desc.BasisRepository)+"@"+string(desc.BasisCommit))] = true
 		before := f.pool.operations.Load()
 		overview, err := (service.AccessDescribeExecutor{Repositories: f.lookup, Plugins: plugins}).Execute(context.Background(), service.AccessDescribeRequest{Pin: pin})
 		if err != nil || len(overview.Specs) != 2 || len(overview.Plugins) != 2 || f.pool.operations.Load() != before {
 			t.Fatalf("Dataset %s access explanation executed physical work or lost source contracts: %#v %v", set, overview, err)
 		}
 		for _, selected := range overview.Plugins {
-			config := f.configs().Repositories[selected.Repository].Plugins[0]
-			if selected.Name != config.Name || selected.Instance != config.Instance || selected.Commit != pin.Repositories[selected.Repository] || selected.Help != "kc plugin declarative-index help" || selected.Summary == "" || len(selected.Files) == 0 {
+			if selected.Name != "declarative-index" || selected.Instance != "primary" || selected.Commit != pin.Repositories[selected.Repository] || selected.Help != "kc plugin declarative-index help" || selected.Summary == "" || len(selected.Files) == 0 {
 				t.Fatalf("Dataset %s explanation lost actual source selection/navigation: %#v", set, selected)
 			}
 		}
@@ -150,24 +177,23 @@ func TestIndexPluginsExecuteRealSourceContributionsAndKeepDatasetMappings(t *tes
 			if err != nil {
 				t.Fatal(err)
 			}
-			canonical, err := repo.Read("article/one", pin.Repositories[repo.ID()])
-			if err != nil || !reflect.DeepEqual(hit.Object, canonical) || !reflect.DeepEqual(hit.Version, retrieval.VersionOf(canonical)) {
-				t.Fatalf("Dataset %s did not return actual source canonical value: %#v %v", set, hit, err)
+			canonical, err := repo.Read(hit.Object.Address.ObjectID, pin.Repositories[repo.ID()])
+			// Logical reads include the content digest; raw repository reads
+			// expose the same value and declarations without that derived field.
+			// Compare all version evidence in its wire form: omitted nil and
+			// empty observation lists have the same protocol meaning.
+			canonical.Digest = kernel.CanonicalDigest(canonical.Value)
+			if err != nil || kernel.CanonicalDigest(hit.Object) != kernel.CanonicalDigest(canonical) || kernel.CanonicalDigest(hit.Version) != kernel.CanonicalDigest(retrieval.VersionOf(canonical)) {
+				t.Fatalf("Dataset %s did not return actual source canonical value: got=%#v canonical=%#v version=%#v expectedVersion=%#v error=%v", set, hit.Object, canonical, hit.Version, retrieval.VersionOf(canonical), err)
 			}
 		}
 	}
-	if len(f.pool.namespaces()) != 2 {
-		t.Fatalf("Dataset composition constructed another plugin instance: %v", f.pool.namespaces())
+	if namespaces := f.pool.namespaces(); len(namespaces) != 1 || namespaces[0] != "declarative-index/primary" {
+		t.Fatalf("Dataset composition constructed another plugin instance: %v", namespaces)
 	}
-	for _, namespace := range f.pool.namespaces() {
-		want := f.setups[0].RepositoryID
-		if namespace == "declarative-index/main-b" {
-			want = f.setups[1].RepositoryID
-		}
-		for _, repository := range f.pool.repositories(namespace) {
-			if !strings.HasPrefix(string(repository), string(want)) {
-				t.Fatalf("source used another instance's physical contribution: namespace=%s repository=%s", namespace, repository)
-			}
+	for _, repository := range f.pool.repositories("declarative-index/primary") {
+		if !ownedCorpora[repository] && !strings.HasPrefix(string(repository), string(f.setups[0].RepositoryID)) && !strings.HasPrefix(string(repository), string(f.setups[1].RepositoryID)) {
+			t.Fatalf("instance acquired a physical contribution outside its deployment: %s", repository)
 		}
 	}
 	plain := f.setups[2]
@@ -176,7 +202,7 @@ func TestIndexPluginsExecuteRealSourceContributionsAndKeepDatasetMappings(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	value, err := f.reader.Read(objectmodel.ObjectRef{Repository: plain.RepositoryID, Object: "article/one"}, at, nil)
+	value, err := f.reader.Read(objectmodel.ObjectRef{Repository: plain.RepositoryID, Object: "article/source-3"}, at, nil)
 	if err != nil || value.Value.(map[string]any)["body"] != "runbook source 3 at a" {
 		t.Fatalf("unconfigured source lost basic reads: %#v %v", value, err)
 	}
@@ -205,7 +231,7 @@ func pluginDatasetPin(resolved dataset.ResolvedDataset) reader.DatasetPin {
 
 func TestIndexPluginsPreserveFixedBasisWhenSourceAdvancesDuringCandidateRead(t *testing.T) {
 	f := newPluginFixture(t)
-	plugins, err := consumerplugin.OpenIndexPlugins(f.configs(), map[string]consumerplugin.IndexPluginEntry{"declarative-index": f.entry(t)})
+	plugins, err := consumerplugin.OpenIndexPlugins(f.configs(), consumerplugin.PluginScope{Repositories: f.repositories()}, map[string]consumerplugin.IndexPluginEntry{"declarative-index": f.entry(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +261,9 @@ func TestIndexPluginsPreserveFixedBasisWhenSourceAdvancesDuringCandidateRead(t *
 	}
 }
 
-func TestIndexPluginsRejectOtherInstanceContinuationBeforeBackend(t *testing.T) {
+// One instance serves both sources; a page token of one source's search view
+// must be refused before any candidate retrieval of another source.
+func TestIndexPluginsRejectOtherSourceContinuationBeforeRetrieval(t *testing.T) {
 	f := newPluginFixture(t)
 	for n := 0; n < 2; n++ {
 		source := f.setups[n]
@@ -247,7 +275,7 @@ func TestIndexPluginsRejectOtherInstanceContinuationBeforeBackend(t *testing.T) 
 			t.Fatal(err)
 		}
 	}
-	plugins, err := consumerplugin.OpenIndexPlugins(f.configs(), map[string]consumerplugin.IndexPluginEntry{"declarative-index": f.entry(t)})
+	plugins, err := consumerplugin.OpenIndexPlugins(f.configs(), consumerplugin.PluginScope{Repositories: f.repositories()}, map[string]consumerplugin.IndexPluginEntry{"declarative-index": f.entry(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -273,9 +301,9 @@ func TestIndexPluginsRejectOtherInstanceContinuationBeforeBackend(t *testing.T) 
 		t.Fatalf("real index did not produce a first page: %#v %v", first, err)
 	}
 	query.Continuation = first.Continuation
-	before := f.pool.operations.Load()
-	if _, err := plugins.SearchAtContext(context.Background(), repositories[1], bases[1], query); kernel.CodeOf(err) != kernel.ErrPreconditionFailed || f.pool.operations.Load() != before {
-		t.Fatalf("other instance's page entered physical backend: %v", err)
+	before := f.pool.retrievals.Load()
+	if _, err := plugins.SearchAtContext(context.Background(), repositories[1], bases[1], query); kernel.CodeOf(err) != kernel.ErrPreconditionFailed || f.pool.retrievals.Load() != before {
+		t.Fatalf("other source's page entered physical retrieval: %v", err)
 	}
 	second, err := plugins.SearchAtContext(context.Background(), repositories[0], bases[0], query)
 	if err != nil || len(second.Hits) != 1 || second.Hits[0].Object.Address.ObjectID != "article/two" || second.Hits[0].Object.Commit != bases[0] || second.Hits[0].Object.Value.(map[string]any)["body"] != "runbook second page" {
@@ -283,13 +311,17 @@ func TestIndexPluginsRejectOtherInstanceContinuationBeforeBackend(t *testing.T) 
 	}
 }
 
-func assertPluginHit(t *testing.T, result retrieval.SearchResult, err error, repo kernel.RepositoryID, at kernel.CommitID, body string) {
+func assertPluginHit(t *testing.T, result retrieval.SearchResult, err error, repo kernel.RepositoryID, at kernel.CommitID, body string, objects ...objectmodel.ObjectID) {
 	t.Helper()
 	if err != nil || result.Completeness != retrieval.CompletenessComplete || len(result.Hits) != 1 {
 		t.Fatalf("actual index query: %#v %v", result, err)
 	}
 	hit := result.Hits[0]
-	if hit.Object.Repository != repo || hit.Object.Commit != at || hit.Object.Address.ObjectID != "article/one" || hit.Object.Value.(map[string]any)["body"] != body || hit.Version.DeclarationCommit != at {
+	id := objectmodel.ObjectID("article/one")
+	if len(objects) > 0 {
+		id = objects[0]
+	}
+	if hit.Object.Repository != repo || hit.Object.Commit != at || hit.Object.Address.ObjectID != id || hit.Object.Value.(map[string]any)["body"] != body || hit.Version.DeclarationCommit != at {
 		t.Fatalf("query did not read exact source canonical value: %#v", hit)
 	}
 }
@@ -314,6 +346,7 @@ type pluginEnginePool struct {
 	held            map[*pluginPhysicalEngine]bool
 	closes          []string
 	operations      atomic.Int64
+	retrievals      atomic.Int64
 	block           atomic.Bool
 	blockRebuild    atomic.Bool
 	entered         chan struct{}
@@ -374,6 +407,19 @@ type pluginPhysicalEngine struct {
 	closed     atomic.Int64
 }
 
+// handlesFor counts physical handles any instance acquired for one source.
+func (p *pluginEnginePool) handlesFor(source kernel.RepositoryID) int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	count := 0
+	for _, h := range p.handles {
+		if strings.HasPrefix(string(h.repository), string(source)) {
+			count++
+		}
+	}
+	return count
+}
+
 func (*pluginPhysicalEngine) Probe(retrieval.SearchClause, retrieval.AccessSpec) index.Capability {
 	return index.Capability{Guarantee: index.GuaranteeSuperset, Coverage: 1}
 }
@@ -397,6 +443,7 @@ func (e *pluginPhysicalEngine) Retrieve(req index.RetrieveRequest) (index.Candid
 }
 func (e *pluginPhysicalEngine) RetrieveContext(ctx context.Context, req index.RetrieveRequest) (index.CandidatePage, error) {
 	e.pool.operations.Add(1)
+	e.pool.retrievals.Add(1)
 	e.pool.mu.Lock()
 	before := e.pool.beforeRetrieve
 	e.pool.beforeRetrieve = nil
@@ -448,7 +495,12 @@ func (e *pluginPhysicalEngine) LoadMeta() (index.Meta, error) {
 func (e *pluginPhysicalEngine) Rebuild(docs []index.CompiledDoc, meta index.Meta) error {
 	e.pool.operations.Add(1)
 	e.pool.mu.Lock()
-	failure := e.pool.rebuildFailures[e.namespace]
+	var failure error
+	for key, err := range e.pool.rebuildFailures {
+		if key == e.namespace || strings.HasPrefix(string(e.repository), key) {
+			failure = err
+		}
+	}
 	e.pool.mu.Unlock()
 	if failure != nil {
 		return failure

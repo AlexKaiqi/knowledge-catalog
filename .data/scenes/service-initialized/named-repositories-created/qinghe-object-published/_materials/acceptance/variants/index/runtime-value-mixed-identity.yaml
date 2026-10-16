@@ -1,0 +1,16 @@
+---
+object_id: index/sales-search
+aspect_name: index
+member_key: runtime-value
+kind: Member
+schema_ref: schema/core/index-declaration/v1
+---
+# runtime 方面的成员混合三种来源：row-count（shared）、freshness-lag（per-caller）、retention-days（静态）。
+# 整条成员必须标为不支持并列出 freshness-lag，不逐单元跳过。
+catalog: declarative-index/opensearch@2026-10
+inputs:
+  - from: schema/table.runtime#/fields/value
+build:
+  kind: number
+uses:
+  - filter

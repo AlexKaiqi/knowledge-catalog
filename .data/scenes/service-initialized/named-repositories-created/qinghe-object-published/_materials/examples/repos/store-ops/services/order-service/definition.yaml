@@ -1,0 +1,14 @@
+---
+object_id: service/qinghe.order-service
+aspect_name: definition
+kind: Aspect
+schema_ref: schema/service.definition
+---
+name: 下单服务
+purpose: 门店与小程序共用的下单入口，创建订单、查询订单状态、接收支付回调。
+owner: 交易组 Ma
+oncall: 交易组值班（企业微信群「清河交易值班」）
+endpoint: https://order.qinghe.example/v1
+dependsOn:
+- 支付网关
+- table/shop.orders（异步写入）

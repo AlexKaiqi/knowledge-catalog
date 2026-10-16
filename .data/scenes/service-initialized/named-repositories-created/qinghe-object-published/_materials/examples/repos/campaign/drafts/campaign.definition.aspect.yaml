@@ -1,0 +1,36 @@
+---
+object_id: schema/campaign.definition
+---
+entity: Campaign
+aspect: definition
+pattern: record
+fields:
+  name:
+    type: string
+    required: true
+  productRef:
+    type: object_ref
+    required: true
+    refTypes:
+    - Product
+  startDate:
+    type: string
+    required: true
+  endDate:
+    type: string
+    required: true
+  channels:
+    type: array
+    required: true
+  launchPrice:
+    type: number
+    required: true
+  currency:
+    type: string
+    required: true
+  firstDayNotice:
+    type: string
+  successMeasure:
+    type: string
+  owner:
+    type: string

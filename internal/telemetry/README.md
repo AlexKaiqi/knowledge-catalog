@@ -19,7 +19,7 @@
 | `kc.projection.state` | `BUILDING\|READY\|UPDATING\|FAILED\|RETIRED\|other` | metric、span、log |
 | `kc.propagation.outcome` | `accepted\|generated\|legacy\|invalid\|conflict` | metric、span、log |
 | `kc.principal.kind` | `owner\|user\|agent\|service\|other` | metric、span、log |
-| `kc.identity.provider` | `local\|gitea\|oidc\|taihu\|other` | metric、span、log |
+| `kc.identity.provider` | `local\|oidc\|taihu\|other` | metric、span、log |
 | `kc.binding.mode` | `state\|stream\|other` | metric、span、log |
 
 instrument 专用 attribute 的稳定值域：

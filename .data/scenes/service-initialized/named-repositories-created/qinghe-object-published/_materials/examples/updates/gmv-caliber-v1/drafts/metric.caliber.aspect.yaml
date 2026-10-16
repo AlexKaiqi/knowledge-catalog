@@ -1,0 +1,19 @@
+---
+object_id: schema/metric.caliber
+---
+entity: Metric
+aspect: caliber
+pattern: record
+fields:
+  revision:
+    type: string
+    required: true
+  effectiveFrom:
+    type: string
+    required: true
+  rules:
+    type: array
+    required: true
+  owner:
+    type: string
+    required: true

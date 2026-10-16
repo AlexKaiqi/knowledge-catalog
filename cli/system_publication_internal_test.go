@@ -27,7 +27,7 @@ func TestSystemCLIEntrypoints(t *testing.T) {
 	groups := map[string][]any{}
 	for _, path := range paths {
 		surface := cliSurface[path]
-		group := systemCapabilityGroup(surface.Action)
+		group := systemCapabilityGroup(path, surface.Action)
 		if path == "serve" {
 			group = "deployment"
 		}
@@ -69,7 +69,15 @@ func TestSystemCLIEntrypoints(t *testing.T) {
 	}
 }
 
-func systemCapabilityGroup(action string) string {
+func systemCapabilityGroup(path, action string) string {
+	switch path {
+	case "search":
+		return "search-object"
+	case "relations", "traverse":
+		return "explore-relations"
+	case "operations projection describe", "operations projection sync", "operations access-spec describe":
+		return "projections"
+	}
 	switch {
 	case strings.HasPrefix(action, "identity."):
 		return "identity"
@@ -85,8 +93,6 @@ func systemCapabilityGroup(action string) string {
 		return "schemas"
 	case action == "object.read", strings.HasPrefix(action, "object.history."), action == "object.provenance":
 		return "read-object"
-	case action == "object.search":
-		return "search-object"
 	case action == "object.relations", action == "object.traverse":
 		return "explore-relations"
 	case action == "resource.access", strings.HasPrefix(action, "object.binding."):

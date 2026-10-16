@@ -1,0 +1,15 @@
+---
+object_id: tool/qinghe.order-cli
+aspect_name: definition
+kind: Aspect
+schema_ref: schema/tool.definition
+---
+name: order-cli
+kind: cli
+implements: service/qinghe.order-service
+version: 0.1.0
+install: 从本 Dataset 的固定修订读取 tools/order-cli/order-cli.sh 保存为 order-cli，执行 chmod +x ./order-cli；需要 bash 与 curl，先运行 ./order-cli --help。
+start: ORDER_SERVICE_URL=<endpoint> ./order-cli health
+examples:
+- ./order-cli health
+- ./order-cli get O-1042

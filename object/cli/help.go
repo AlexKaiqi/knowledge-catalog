@@ -8,7 +8,7 @@ type helpEntry struct {
 var leafHelp = map[string]helpEntry{
 	"read": {
 		Description: "按固定声明依据读取对象或 URN 指定的数据",
-		Usage: `kc read <object-urn[#/json/pointer]> [--repo <id> | --dataset <id>] [--commit <id> | --ref <name>]
+		Usage: `kc read <object-urn[#/json/pointer]> [--repo <id> | --dataset <id> [--revision <N>]] [--commit <id> | --ref <name>]
 
 用途：
   读取来源对象的完整内容或指定数据；同一个引用可随后交给 writer put/remove 维护完整单元。
@@ -17,6 +17,7 @@ var leafHelp = map[string]helpEntry{
   /columns/order_id 选 Member；/columns/order_id/constraints/nullable 选其中的字段；/tags/0 选数组首项。
   键中的 / 写 ~1，~ 写 ~0；不支持通配、过滤或把点当层级。深层读取不会新增写粒度。
   --dataset 限制统一引用的交付范围；此时 --commit 须匹配发布版中的来源 commit，不接受 --ref。
+  --revision <N> 固定 Dataset 的已发布修订，与 search/relations/traverse/schema 沿用同一个 N 时各步看到同一组来源 commit；省略时用当前修订。
   省略 --repo 与 --dataset 时，在你可读的全部仓里按 ID 解析：多个仓各持有不同方面时组合返回，同一方面来自两个仓时报 OBJECT_ID_CONFLICT，无权的仓列在 withheld。
   --repo 只读该仓，可加 --commit 或 --ref；省略时读取 refs/heads/main（published）的当前 commit。
   对象身份只由 URN 指定，内容只由 locator 选择；sources 记录每个方面来自哪个仓、哪个 commit。
@@ -41,6 +42,7 @@ var leafHelp = map[string]helpEntry{
 示例：
   例：kc read 'urn:kc:object:table/orders#/columns/order_id/constraints/nullable'
   例：kc read 'urn:kc:object:table/orders#/columns/order_id' --dataset scene-set
+  例：kc read 'urn:kc:object:table/orders' --dataset scene-set --revision 2
   例：kc read 'urn:kc:object:kc/system#/readme'
   例：kc read 'urn:kc:object:kc/concept/object#/definition'
   系统对象示例仅在该服务已出版相应对象且当前主体有读取权时可用；理解本地 kc help 不需要这个前提。
@@ -55,6 +57,7 @@ var leafHelp = map[string]helpEntry{
 用法与参数：
   --object 同 read；可指定 --aspect <name>，--member <key> 必须同时指定 aspect。
   单仓可用 --commit 或 --ref；省略按 refs/heads/main（published）解析，Dataset 按本次解析的选择范围查找。
+  Dataset 可加 --revision <N> 固定已发布修订，不能与 --pin 同用。
 条件：
   已认证；单仓需 object.read，命名 Dataset 以其 file.read 准入，不另要求来源仓 object.read。
  Dataset 须通过所需对象与选择范围的完整读取检查；另行解析 pin 需 dataset.resolve，不能探测未获准的来源。
@@ -81,7 +84,7 @@ var leafHelp = map[string]helpEntry{
   查看对象各对象单元随固定版本保存的来源声明，帮助核对其产生依据。
 用法与参数：
   --object 是对象 id；这是对象级命令，不接受 --aspect 或 --member。
-  单仓可用 --commit 或 --ref；Dataset 在本次解析的合法选择范围内返回来源结果。
+  单仓可用 --commit 或 --ref；Dataset 在本次解析的合法选择范围内返回来源结果，可加 --revision <N> 固定已发布修订。
 条件：
   已认证；单仓需 object.provenance，命名 Dataset 按其 file.read 解释清单内材料，不另要求来源仓对象动作。
  Dataset 须通过所需对象与选择范围的完整读取检查；另行解析 pin 需 dataset.resolve，不由此扩大可读来源。
@@ -108,7 +111,7 @@ var leafHelp = map[string]helpEntry{
   查看对象的固定内容在哪些仓版本发生修订，为回读旧版本或核对发布提供依据。
 用法与参数：
   --object 是对象 id，不接受 --aspect 或 --member；--limit 默认 50、最大 200。
-  单仓可用 --commit 或 --ref 指定历史起点；--continuation 续页时保持对象和来源依据。
+  单仓可用 --commit 或 --ref 指定历史起点；Dataset 可加 --revision <N>；--continuation 续页时保持对象和来源依据。
 条件：
   已认证；单仓需 object.history.read，命名 Dataset 以其 file.read 准入，不另要求来源仓 history/read 动作。
  Dataset 须通过所需对象与选择范围的完整读取检查，不能借历史越过交付切片；另行解析 pin 需 dataset.resolve。
@@ -129,57 +132,68 @@ var leafHelp = map[string]helpEntry{
   例：kc log --dataset scene-set --object example/report`,
 	},
 	"schema list": {
-		Description: "列出一个 Repository 已发布的对象类型，不是对象实例目录或合同正文",
-		Usage: `kc schema list --repo <id> [--limit <n>] [--continuation <cursor>]
+		Description: "列出一个 Repository 或 Dataset 已发布的对象类型，不是对象实例目录或合同正文",
+		Usage: `kc schema list (--repo <id> | --dataset <id> [--revision <N>]) [--limit <n>] [--continuation <cursor>]
 
 用途：
-  发现仓中已发布的 Schema 身份，再用 schema describe 查看结构与约束。
+  发现单仓或 Dataset 范围内已发布的 Schema 身份，再用 schema describe 查看结构、可检索字段与就绪状态。
 用法与参数：
-  必须指定 --repo；可用 --commit 或 --ref，省略固定读取 refs/heads/main（published）的当前 commit。
-  --limit 默认 50、最大 200；--continuation 续页须保持同仓、同版本。
+  --repo 可用 --commit 或 --ref，省略固定读取 refs/heads/main（published）的当前 commit。
+  --dataset 列出选入范围内各成员的 Schema；--revision <N> 固定已发布修订，省略时用当前修订。
+  --limit 默认 50、最大 200；--continuation 续页须保持同仓同版本，Dataset 续页须带首页的同一 --revision。
 条件：
-  已认证并有目标仓的 object.schema.read；本叶仅接受单仓，Dataset file.read 不放行这条 --repo 通路。
-  来源须提供 Schema 名单读取能力，不依赖检索投影。
+  已认证；单仓需目标仓的 object.schema.read，命名 Dataset 以其 file.read 准入，不另要求来源仓 object.schema.read。
+ Dataset 须通过整份选择范围的完整读取检查；来源须提供 Schema 名单读取能力，不依赖检索投影。
 结果：
-  JSON 返回 repository/commit 与 schemas 的类型名称、objectId 和适用的描述，以及后续页游标。
+  单仓 JSON 返回 repository/commit 与 schemas 的类型名称 entity、aspect（有则给）、objectId 和适用的描述，以及后续页游标。
+ Dataset JSON 返回 dataset/revision，schemas 每项带 repository/commit/objectId/entity/aspect/description、字段数 fields 与已声明的检索用途 uses。
+  同一实体的多个 aspect 是多份合同、各占一行；先按 aspect 选定所需合同，再对其 objectId 做 schema describe。
   名单不是对象实例目录，也不是 Schema 合同正文；无续页游标表示该名单已到末页。
 后果：
   读取已发布 Schema 名单，不安装 Schema、不扫描全部业务对象、不建立索引。
 风险与成本：
-  返回量受页大小约束，但后端仍可能先列出 Schema 身份并读取本页合同，成本随名单规模增长。
-  Schema 在名单中不证明实例存在、投影就绪或 Bound State 源可访问。
+  返回量受页大小约束，但后端仍可能先列出 Schema 身份并读取合同，Dataset 成本随成员和 Schema 数量增长。
+  Schema 在名单中不证明实例存在、投影就绪或 Bound State 源可访问；uses 只说明声明了什么用途。
 失败恢复：
   来源不支持名单时不能用全对象扫描补偿；请来源维护者提供相应能力或明确已知 Schema id。
-  游标失效时核对版本，显式使用回执 commit 重查；获取字段继续 schema describe。
+  游标属于另一修订时用首页的 --revision 重查；单仓游标失效时显式使用回执 commit 重查；获取字段与就绪继续 schema describe。
 示例：
+  例：kc schema list --dataset scene-set --revision 2
   例：kc schema list --repo kr://scene/object --limit 50
   例：kc schema list --repo kr://kc/system`,
 	},
 	"schema describe": {
-		Description: "查看 Schema 的结构、约束与附加访问声明",
-		Usage: `kc schema describe --repo <id> --object <schema-id>
+		Description: "查看 Schema 结构与约束的规范化展示；Dataset 下同时说明可检索字段与就绪状态",
+		Usage: `kc schema describe (--repo <id> | --dataset <id> [--revision <N>]) --object <schema-id>
 
 用途：
-  核对 Schema 的完整定义、结构与约束，并查看附加查询能力和可选 origin 声明。
+  核对 Schema 的结构与约束，判断已有类型是否适合自己的资料；在 Dataset 下确认哪些字段能检索、怎样检索。
 用法与参数：
   --object 是 schema/* 合同 id，来自 schema list 的 objectId，不是业务对象 id 或文件路径。
-  单仓可用 --commit 或 --ref 指定版本；Dataset 可用 --dataset 代替 --repo，但仅描述已选入范围。
+  单仓可用 --commit 或 --ref 指定版本；Dataset 可用 --dataset 代替 --repo，但仅描述已选入范围，--revision <N> 固定已发布修订。
 条件：
   已认证；单仓需 object.schema.read，命名 Dataset 以其 file.read 准入，不另要求来源仓 object.schema.read。
  Dataset 须通过所需对象与选择范围的完整读取检查；合同及必要依据须在清单内，另行解析 pin 需 dataset.resolve。
 结果：
-  JSON 给出 repository/commit、Schema objectId、完整 definition、字段 path/type/access 与可选 origin。
-  access 表示 filter/text/sort 等逻辑声明，不是引擎映射或运行状态；definition 保留结构与约束，access 是附加查询声明。
-  结合字段类型理解查询能力；用法与保证见 kc plugin declarative-index help。此说明入口经 Server 读取，不改写 Schema 结果。
+  JSON 给出 repository/commit、Schema objectId、规范化 definition 和字段 path/type；fields 是数组。
+ Dataset 下按成员仓各给一份报告，另有 dataset/revision；fields[].access 是选入 Dataset 的索引声明给该字段的用途：text 供 --query，filter 供 --eq 等条件，sort 供 --sort。
+  search.state 为 ready 或 unavailable（附 reason，如投影未就绪或无索引插件）；search.declarations 逐条给出声明的 status（ready/unsupported/invalid）、reason、inputs 与 uses。
+  这是供理解的规范化展示，不能把 definition 或整个响应直接当作 Schema 发布输入；原始 fields 必须是对象映射。
+  要复用原始 Schema，用 kc read 读取相同 objectId 与 commit，取返回的 value，而非整个读取信封。
+  也可经 kc files list / kc files read 从 Dataset 取得含文件头的 Schema 原文件，列目录与读取固定同一 revision。
+  Schema 只描述结构；查询能力见独立索引声明及 kc plugin declarative-index help，外部取值见取值描述。
 后果：
-  读取字段与访问声明，不查询业务对象，不调用 origin，不更新 Schema 或投影。
+  读取字段、结构约束和已选入的索引声明，不查询业务对象，不调用外部取值，不更新 Schema 或投影。
 风险与成本：
-  成本随合同和字段数量增长；声明允许查询不证明后端已实现、投影就绪或外部源授权成立。
-  commit 固定声明版本；origin 描述访问原点，不把该原点的当前值变为固定内容。
+  成本随合同、字段和声明数量增长；结构可解释不证明外部源授权成立，就绪只反映本次固定修订。
+  commit 固定声明版本，不证明外部当前值或后续写入已经通过校验。
 失败恢复：
-  id 未解析时先 schema list；字段未声明所需能力时调整查询，或经 Writer 正式发布合同变更。
-  检索就绪问题另查 operations projection describe；完整合同可另行 read，单仓需 object.read，Dataset 仍按 file.read 清单解释。
+  id 未解析时，在 Dataset 内用 schema list --dataset 或 files list 查找已交付的 Schema；有来源仓读取权时也可用 schema list --repo。
+  结构约束不符时核对实例与 Schema，需要变更须经 Writer 发布。
+  字段没有所需 uses 时搜索会被拒绝：检索能力由独立索引声明决定，请维护者发布并把声明选入 Dataset，不通过修改 Schema 增加查询能力。
+  声明 unsupported/invalid 按原因修声明；就绪问题另查 operations projection describe；原始合同 read 在单仓需 object.read，Dataset 仍按 file.read 清单解释。
 示例：
+  例：kc schema describe --dataset scene-set --revision 2 --object schema/metric.definition
   例：kc schema describe --repo kr://kc/system --object schema/meta/schema-definition/v1`,
 	},
 	"writer put": {
@@ -189,6 +203,7 @@ var leafHelp = map[string]helpEntry{
     按统一引用创建或更新完整维护单元。PUT 替换完整单元，不合并部分字段。
   用法与参数：
     --value 是该完整单元允许的 JSON 值，用单引号包住。--file 从本机文件读取同样的 JSON 值，二选一。
+    --file 不接受 frontmatter 对象文件，也不接受 read 响应信封；从读取结果取 value，多个对象文件见 kc help writer commit。
     位置参数是对象 URN 与 locator；服务端解析维护范围，不按 Pointer 深度猜写粒度。
     写入只支持完整 blob、Aspect 或 Member；深字段、集合整体不产生新的写粒度。
     首次建立 Member 需 --kind Member；已有单元采用其维护模型，不把路径深度自动当成 Member。

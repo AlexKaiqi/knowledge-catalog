@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	indexplugin "kc/declarativeindex/plugin"
 	consumerplugin "kc/discovery/plugin"
 	"kc/internal/testkit"
 	"kc/snapshot"
@@ -20,7 +21,6 @@ func TestHomeAssemblyFailureReleasesAcquiredAuthorityHandles(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			writeConnectedPluginConfig(t, source, []consumerplugin.PluginSelection{{Name: "declarative-index", Instance: "main"}})
 			sourceBefore := testkit.MustHead(t, source, snapshot.DefaultRef)
 			store := snapshot.NewRegistry()
 			if err := store.Add(source); err != nil {
@@ -43,7 +43,8 @@ func TestHomeAssemblyFailureReleasesAcquiredAuthorityHandles(t *testing.T) {
 			before := testkit.MustHead(t, authority, snapshot.DefaultRef)
 			home := t.TempDir()
 			projections := filepath.Join(home, "projections")
-			settings := StoresFile{Index: "none", Layout: LayoutFile{Projections: projections}}
+			installed := consumerplugin.PluginsConfig{"declarative-index": {Instances: map[string]consumerplugin.PluginInstanceConfig{"main": {Catalog: indexplugin.Catalog}}}}
+			settings := StoresFile{Index: "none", Layout: LayoutFile{Projections: projections}, Plugins: &installed}
 			want := "cache limits cannot be negative"
 			if stage == "hydration" {
 				settings.HydrationCache = &HydrationCacheConfig{MaxEntries: -1}

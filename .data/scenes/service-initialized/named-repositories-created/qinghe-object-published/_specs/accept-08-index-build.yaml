@@ -1,0 +1,132 @@
+# 插件重构验收：索引构建、失效与重建。夹具见 _materials/acceptance/README.md；用例树见同文件“用例树”一节。
+# 每条从本节点前态独立开始，由 probe 显式创建所需仓与夹具，不传递其他用例的后态。
+
+- id: accept-search-cross-aspect-text
+  title: 跨方面拼接的全文成员按声明构建
+  claims: ["discovery#U7"]
+  given:
+    - Dataset sales-analysis 就绪，metric-text 成员拼接 metric.properties 的 name 与 metric.definition 的 expression。
+  when:
+    - 搜索只出现在 expression 中的词 "discount"；搜索只出现在 name 中的词 "merchandise"。
+  then:
+    - 两次都命中 metric/shop.gmv，命中依据标出 metric-text 以全文打分角色参与。
+    - 回读 metric/shop.gmv 的值与直接读取一致。
+    - 某个指标缺 definition 方面时按 missing skip 只用 name 构建，不从 Dataset 外补读。
+  risk: 多输入只取第一个字段，或缺一个方面就整个对象不进索引。
+
+- id: accept-search-live-value-indexed
+  title: 外部值按观察进索引并可过滤排序
+  claims: ["discovery#U1", "liveaccess#U20"]
+  given:
+    - Dataset sales-analysis 就绪，table-row-count 成员指向 table.live-stats 的 rowCount；测试源 rowCount 为 6、4、4。
+  when:
+    - 按 rowCount 大于等于 5 过滤；按 rowCount 降序排序；测试源把 products 的 live-stats 设为 error 后重新准备并查询。
+  then:
+    - 过滤只命中 table/shop.orders；排序首位是 orders。
+    - products 取值失败后不进入 rowCount 过滤结果，并在结果里作为取值失败单独说明，不当作 0。
+    - 动态命中回读原观察，观察依据与索引时一致。
+  risk: 外部值被当成静态值索引，或取值失败以缺省值进入过滤与排序。
+
+- id: accept-search-undeclared-condition
+  title: 未声明的条件明确拒绝且计为缺失需求
+  claims: ["discovery#U1", "discovery#U9"]
+  given:
+    - Dataset sales-analysis 就绪；没有成员覆盖 table.properties 的 nativeKind。
+  when:
+    - 按 nativeKind 等于 TABLE 过滤搜索。
+  then:
+    - 返回未声明错误并指出字段定位符，不返回零命中，不现场建索引。
+    - 该条件出现在使用数据的缺失需求里。
+  risk: 搜不到与没索引混为一谈，维护者看不到缺哪条声明。
+
+- id: accept-search-schema-field-removed
+  title: Schema 删掉字段后相关成员报失效
+  claims: ["discovery#U7", "discovery#U3"]
+  given:
+    - Dataset sales-analysis 就绪；随后 table-meta 发布新版 schema/table.live-stats 去掉 rowCount，并发布 Dataset 修订 2。
+  when:
+    - 在修订 2 上按 rowCount 过滤；在修订 1 上做同一查询。
+  then:
+    - 修订 2 报 table-row-count 成员失效，不当作零命中；其他成员照常可用。
+    - 修订 1 仍按原 Schema 与原声明返回结果。
+  risk: 字段被删后索引静默变空，或固定的旧修订被新 Schema 影响。
+
+- id: accept-search-rebuild-vs-boost
+  title: 改构建方式触发重建，只改权重不重建
+  claims: ["discovery#U7", "discovery#U8"]
+  given:
+    - Dataset sales-analysis 就绪并记录索引物理摘要；两个独立变体。
+  when:
+    - 变体 A 写入 variants/index/table-name-boost.yaml 后发布 Dataset 修订 2；变体 B 把 table-name 的 analyzer 改为清单内另一个分词器后发布修订 2。
+  then:
+    - A 的准备不重建 table-name 字段，物理摘要中该字段不变，结果排序体现权重。
+    - B 的准备重建 table-name 字段后才接受修订 2；准备期间修订 1 照常服务。
+    - 两个变体的使用数据都仍按成员键 table-name 连续统计。
+  risk: 能力清单里“是否重建”与实际行为不符，或改配置后旧索引冒充新配置。
+
+- id: accept-index-missing-exclude
+  title: 缺值处理按声明执行
+  claims: ["discovery#U7"]
+  given:
+    - 默认搜索世界；有一个指标缺 definition 方面；写入 variants/index/metric-text-missing-exclude.yaml 后发布修订 2。
+  when:
+    - 在修订 1 与修订 2 分别搜索该指标 name 中的词。
+  then:
+    - 修订 1（missing skip）命中该指标；修订 2（missing exclude）不经 metric-text 命中它，结果完整且不报未声明。
+  risk: 缺值处理写法被忽略，skip 与 exclude 得到相同结果。
+
+- id: accept-index-rename-key
+  title: 换成员键等于撤下旧声明、新建一条
+  claims: ["discovery#U7", "discovery#U9"]
+  given:
+    - 默认搜索世界已产生 metric-text 的使用记录；删除 metric-text 并写入 variants/index/metric-text-renamed.yaml 后发布修订 2。
+  when:
+    - 在修订 2 搜索 "discount" 并回读、采纳；读取使用数据。
+  then:
+    - 命中依据标出 metric-fulltext；metric-text 的历史计数保留在旧键下，metric-fulltext 从零开始计数。
+  risk: 换键后旧计数被并到新键，或新键继承旧键的物理字段而不按新声明构建。
+
+- id: accept-index-two-members-compare
+  title: 两条配置不同的成员可以并存比较
+  claims: ["discovery#U7", "discovery#U9"]
+  given:
+    - 默认搜索世界；额外写入 variants/index/metric-text-renamed.yaml，metric-text 与 metric-fulltext 并存，发布修订 2。
+  when:
+    - 搜索 "discount"，回读并采纳命中。
+  then:
+    - 依据同时列出两个成员及各自角色；使用数据对两者分别计数。
+  risk: 并存成员被合并或只保留一个，维护者无法做对比。
+
+- id: accept-index-ambiguous-field
+  title: 同一字段有两条可用于同一条件的成员时明确拒绝
+  claims: ["discovery#U1"]
+  given:
+    - 默认搜索世界；写入 variants/index/table-row-count-duplicate.yaml，rowCount 同时有 number 与 keyword 两条过滤成员，发布修订 2。
+  when:
+    - 按 rowCount 等于 6 过滤；按 rowCount 大于等于 5 过滤。
+  then:
+    - 等值过滤报有歧义并列出两条成员；范围过滤只有 table-row-count 支持，照常执行并只命中 table/shop.orders。
+  risk: 插件按装配顺序挑一条成员，同一查询在不同修订得到不同语义。
+
+- id: accept-index-declared-no-objects
+  title: 声明了但范围内没有适用对象时是完整的零命中
+  claims: ["discovery#U1", "discovery#U2"]
+  given:
+    - Dataset sales-metrics 只选入 metrics 与 indexes，不选 tables，并就绪。
+  when:
+    - 在 sales-metrics 搜索 "orders"；按 rowCount 大于等于 5 过滤。
+  then:
+    - 两者都返回零命中且标为完整，不报未声明或不支持。
+  risk: 范围里没有对象时被误报为未声明，或未声明被误报为零命中。
+
+- id: accept-index-lost-and-rebuilt
+  title: 物理索引丢失后报未就绪，重建后结果等价
+  claims: ["discovery#U3"]
+  given:
+    - Dataset sales-analysis 就绪，记录搜索 "orders" 与 rowCount 排序的结果。
+  when:
+    - 直接删除该 Dataset 在 OpenSearch 中的物理索引，立即搜索；等待自动重建后再搜索。
+  then:
+    - 删除后的搜索报未就绪，不返回零命中，也不现场扫描全仓。
+    - 重建后两次查询结果与删除前一致。
+  risk: 索引丢失被当成没有匹配，或重建结果与原结果不等价。

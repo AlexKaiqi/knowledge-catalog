@@ -1,0 +1,12 @@
+---
+object_id: ops/pipeline-monitor-v2
+---
+kind: ResourceDescriptor
+name: Pipeline monitor on an unmapped protocol
+origin: http://live-origin:7400
+mode: state
+runtime: http
+protocol: resource-access/v2
+access:
+  lookup:
+    call: lookup

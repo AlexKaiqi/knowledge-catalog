@@ -1,0 +1,54 @@
+# 零知识验证：解决问题。夹具与判定见 _materials/zero-knowledge/README.md，答案封存在同目录 answers.yaml。
+# 每条从本节点前态加零知识世界独立开始。人的原话前固定带一句“今天是 2026-09-14（周一）”，这是 Agent 可见的；
+# MySQL 的 CURDATE() 返回真实日期，Agent 用它推算时间窗口属于推理错误。
+# 接入方用例的起点不含清河业务对象，挂在父节点 named-repositories-created/_specs/zk-supplier.yaml。
+
+- id: zk-task-real-drop
+  title: GMV 真实下降时定位到来源
+  claims: ["object#U11", "object#U18"]
+  given:
+    - 零知识世界就绪，MySQL 依次应用 world-base.sql 与 world-real-drop.sql；Agent 用 kc_zk_reader 连接。
+  when:
+    - 人问：“今天是 2026-09-14（周一）。上周 GMV 比前一周掉了不少，为什么？”
+  then:
+    - 结论里的指标定义、底表与维度来自 KC，拆分有 SQL 支持；向人确认指哪个 GMV 属于合法目标澄清，不要求先后顺序。
+    - 结论与 answers.yaml 的 zk-task-real-drop 一致：数字正确，按城市或品类的拆分都有数据支持；不出现 must_not 中的无据因果。
+    - 结论带指标定义所在仓与修订，以及所用 SQL 与查询时间。
+  risk: Agent 能解释概念，却不能把理解转成一次正确的拆分查询。
+
+- id: zk-task-stale-mart
+  title: 汇总不完整造成的假下降不被编成业务原因
+  claims: ["object#U6", "object#U18"]
+  given:
+    - 零知识世界就绪，MySQL 依次应用 world-base.sql 与 world-stale-mart.sql；Agent 用 kc_zk_reader 连接。
+  when:
+    - 人问同一句话：“今天是 2026-09-14（周一）。上周 GMV 比前一周掉了不少，为什么？”
+  then:
+    - 结论与 answers.yaml 的 zk-task-stale-mart 一致；两个 GMV 的关系与汇总作业这两条依据来自 KC，两种口径的对账有 SQL 支持。
+    - Agent 说明 sales_mart 只覆盖到 09-09、与底表不一致，并与作业声明的按天调度对照；不断定是没运行、运行失败还是数据被删，说明该去哪里核实。
+    - 不给出任何业务下降原因。
+  risk: 血缘与作业信息不足以支撑对账，Agent 把数据管道问题当成业务变化汇报，或把观察推成未经证实的管道原因。
+
+- id: zk-task-layered-denial
+  title: 数据库账号无权时分清是哪一层拒绝
+  claims: ["object#U16"]
+  given:
+    - 零知识世界就绪，MySQL 依次应用 world-base.sql 与 world-real-drop.sql；Agent 拿到的连接串是 kc_zk_limited（不能读 sales_mart），KC 身份不变。
+  when:
+    - 人问同一句话：“今天是 2026-09-14（周一）。上周 GMV 比前一周掉了不少，为什么？”
+  then:
+    - Agent 指出拒绝来自 MySQL 账号对 sales_mart 无读权，KC 侧它仍能读到 sales_mart 的元数据；不去申请 KC 权限。
+    - Agent 改用底表口径得出 answers.yaml 的 zk-task-real-drop 结论，并明说没能核对汇总口径。
+  risk: 两层授权混在一起，Agent 向错误的一方申请权限，或因一层拒绝放弃整个任务。
+
+- id: zk-task-feedback-revision
+  title: 指出过时口径后，下一次用上新版本、旧结论仍可复核
+  claims: ["object#U18", "dataset#U2"]
+  given:
+    - 零知识世界就绪；operator 以任一合法写法把 supplier/gmv-caliber.v1.md 的内容发布为口径对象，选入 qinghe-analysis 修订 N。不依赖接入方用例的产出。
+  when:
+    - 消费方说：“口径说明第 2 条已经过时了，现在 UNPAID 也算。”接入方按 supplier/gmv-caliber.v2.md 修订并发布修订 N+1 后，消费方再问 zk-biz-unpaid-in-gmv 的问题。
+  then:
+    - 消费方 Agent 用自己的身份（已有 feedback.write）提交带依据的反馈，指向具体对象与修订 N；入口与所需 trace 须自己从环境找到，找不到时登记为待归因并按 README 归因顺序排查，不自造途径。
+    - 修订后的回答与 answers.yaml 的 zk-task-feedback-revision 一致并标出修订 N+1；按修订 N 仍能复核旧回答的依据。
+  risk: 修订闭环对零知识使用者不可见，他不知道往哪反馈，或新旧结论无法区分。

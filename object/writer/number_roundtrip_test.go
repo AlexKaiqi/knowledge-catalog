@@ -19,7 +19,7 @@ func TestWriterReaderPreservesAdjacentLargeIntegers(t *testing.T) {
 	values := []int64{9007199254740992, 9007199254740993, 9223372036854775807}
 	operations := []objectmodel.Operation{{
 		Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: schemaID},
-		Value: map[string]any{"entity": "Sample", "fields": map[string]any{"value": map[string]any{"type": "integer", "access": []any{"filter", "sort"}}}},
+		Value: map[string]any{"entity": "Sample", "fields": map[string]any{"value": map[string]any{"type": "integer"}}},
 	}}
 	for i, value := range values {
 		operations = append(operations, objectmodel.Operation{

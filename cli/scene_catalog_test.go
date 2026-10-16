@@ -233,8 +233,6 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 		"semantic-dataset-defined":         "semantic-object-published",
 		"dataset-manage-granted":           "semantic-dataset-defined",
 		"dataset-query-principals-granted": "semantic-dataset-defined",
-		"projection-synced":                "semantic-object-published",
-		"object-search-granted":            "projection-synced",
 		"object-published":                 "repository-attached",
 		"dataset-defined":                  "object-published",
 		"review-branch-written":            "dataset-defined",
@@ -246,7 +244,7 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 			t.Errorf("%s must consume the reusable %s fixture", child, parent)
 		}
 	}
-	for _, retired := range []string{"repository-registered", "product.gmv", "connector-registered", "schema-browsed", "catalog-allow-ready", "file-view-planned", "dataset-mounted", "proposal-validated", "validation-recorded", "proposal-merged", "observation-refreshed", "proposal-opened", "proposal-preview-created"} {
+	for _, retired := range []string{"repository-registered", "product.gmv", "connector-registered", "schema-browsed", "catalog-allow-ready", "file-view-planned", "dataset-mounted", "proposal-validated", "validation-recorded", "proposal-merged", "observation-refreshed", "proposal-opened", "proposal-preview-created", "projection-synced", "object-search-granted"} {
 		if _, exists := ids[retired]; exists {
 			t.Errorf("%s must not appear as a reusable scene state", retired)
 		}
@@ -267,9 +265,7 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 			"probe-merge-publishes-reviewed-branch.feature": {"kc writer merge", "refs/heads/main", "proposed"},
 			"probe-merge-refuses-diverged-main.feature":     {"kc writer put", "Then error NON_FAST_FORWARD", "drift"},
 		},
-		"object-search-granted": {
-			"read-grant-returns-canonical.feature": {"--action object.read", "Then READ body is full canonical"},
-		},
+
 		"semantic-dataset-defined": {
 			"dataset-file-read-does-not-grant-repository-access.feature": {"--action file.read", "Then error FORBIDDEN"},
 			"dataset-resolve-does-not-grant-read.feature":                {"--action dataset.resolve", "Then error FORBIDDEN"},
@@ -292,9 +288,9 @@ func TestSceneCatalogTreeFollowsLayersAndRoles(t *testing.T) {
 		}
 	}
 
-	access := processOn(ids["object-search-granted"], "schema.access")
-	if access.File != "_probes/schema-search-enforces-declared-access.feature" {
-		t.Fatal("declared access is a process inside object-search-granted")
+	access := processOn(ids["semantic-dataset-defined"], "schema.access")
+	if access.File != "_probes/dataset-search-enforces-selected-declarations.feature" {
+		t.Fatal("selected declaration access is a process inside semantic-dataset-defined")
 	}
 
 	for _, bundle := range doc.Bundles {
@@ -476,7 +472,7 @@ func TestSceneCatalogCoversPublicProductSurfaces(t *testing.T) {
 		"writer receipt":  "domain-schema-published",
 		"writer put":      "object-published",
 		"schema list":     "schema-read-granted",
-		"read":            "object-search-granted",
+		"read":            "semantic-dataset-defined",
 		"show":            "inventory-read-granted",
 	}
 	for command, stateID := range want {
@@ -931,8 +927,7 @@ func TestSceneCatalogCoversPermissionActions(t *testing.T) {
 		"inventory.read":      "inventory-read-granted",
 		"registry.audit.read": "service-initialized",
 		"repositories.create": "repository-create-granted",
-		"object.search":       "object-search-granted",
-		"object.read":         "object-search-granted",
+		"object.read":         "semantic-dataset-defined",
 		"object.schema.read":  "schema-read-granted",
 		"file.read":           "semantic-dataset-defined",
 		"dataset.resolve":     "semantic-dataset-defined",
@@ -943,8 +938,8 @@ func TestSceneCatalogCoversPermissionActions(t *testing.T) {
 			t.Errorf("PERMISSIONS action %s: missing state %s", action, state)
 		}
 	}
-	if processOn(loadState(doc, "object-search-granted"), "delivery.chain").Source != "delivery.chain" {
-		t.Fatal("AUTH-03 delivery chain must be a process on object-search-granted")
+	if processOn(loadState(doc, "semantic-dataset-defined"), "delivery.chain").Source != "delivery.chain" {
+		t.Fatal("AUTH-03 delivery chain must be a process on semantic-dataset-defined")
 	}
 	if processOn(loadState(doc, "semantic-dataset-defined"), "access.rules").Source != "access.rules" {
 		t.Fatal("AUTH-02 consume isolation must be a process on semantic-dataset-defined")
@@ -959,8 +954,8 @@ func TestSceneCatalogFeaturesCoverProductPoints(t *testing.T) {
 	}
 	dirs := sceneStateDirs(t, ids)
 	for _, id := range []string{
-		"domain-schema-published", "projection-synced",
-		"object-search-granted",
+		"domain-schema-published", "semantic-dataset-defined",
+		"dataset-query-principals-granted",
 	} {
 		if _, ok := ids[id]; !ok {
 			t.Errorf("missing state %s", id)
@@ -971,14 +966,12 @@ func TestSceneCatalogFeaturesCoverProductPoints(t *testing.T) {
 			t.Errorf("dynamic observation lost named evidence %s", name)
 		}
 	}
-	strip := filepath.Join(dirs["object-search-granted"], "_probes", "search-only-principal-cannot-read.feature")
+	strip := filepath.Join(dirs["semantic-dataset-defined"], "_probes", "dataset-file-read-does-not-grant-repository-access.feature")
 	if _, err := os.Stat(strip); err != nil {
 		t.Fatalf("delivery strip probe: %v", err)
 	}
 
 	searchOnly := map[string]struct{}{
-		"projection-synced":                {},
-		"object-search-granted":            {},
 		"dataset-query-principals-granted": {},
 	}
 	seenSearch := map[string]struct{}{}
@@ -1427,7 +1420,7 @@ func discoverConstructableNodes(t *testing.T) []sceneTreeNode {
 func nodeNeedsIndex(node sceneTreeNode) bool {
 	chain := append(append([]string{}, node.Ancestors...), node.ID)
 	for _, id := range chain {
-		if id == "projection-synced" {
+		if id == "semantic-dataset-defined" {
 			return true
 		}
 	}
@@ -1489,14 +1482,13 @@ func TestSceneWalkLeafIsTwoNamedRepositories(t *testing.T) {
 			t.Errorf("qinghe-object-published missing %s", needle)
 		}
 	}
-	indexBody, err := os.ReadFile(filepath.Join(ready.Dir, "_probes", "probe-sync-projections-and-search.feature"))
+	plainBody, err := os.ReadFile(filepath.Join(ready.Dir, "_probes", "probe-dataset-without-declarations-rejects-search.feature"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	indexText := string(indexBody)
-	for _, needle := range []string{"kc operations projection sync --repo table-meta", "kc operations projection sync --repo sales-semantic", "kc search --repo table-meta", "kc search --repo sales-semantic", "table/shop.orders", "metric/shop.gmv"} {
-		if !strings.Contains(indexText, needle) {
-			t.Errorf("index-ready missing %s", needle)
+	for _, needle := range []string{"kc dataset define --dataset qinghe-plain", "kc read urn:kc:object:table/shop.orders --dataset qinghe-plain", "kc search --dataset qinghe-plain", "Then error CAPABILITY_UNSATISFIED"} {
+		if !strings.Contains(string(plainBody), needle) {
+			t.Errorf("undeclared Dataset probe lost %s", needle)
 		}
 	}
 	datasetBody, err := os.ReadFile(filepath.Join(ready.Dir, "_probes", "probe-publish-dataset-with-scoped-members.feature"))

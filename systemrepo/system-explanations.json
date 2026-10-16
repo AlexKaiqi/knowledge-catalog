@@ -46,11 +46,11 @@
     "path": "concepts/index-declaration/definition.md",
     "bases": [
       {
-        "owner": "doc/design/liveaccess.md",
-        "topic": "合同",
-        "term": "access",
-        "source": "object/schema.go",
-        "symbol": "SchemaFieldDefinition"
+        "owner": "doc/design/discovery.md",
+        "topic": "索引声明",
+        "term": "输入",
+        "source": "object/index_declaration.go",
+        "symbol": "IndexDeclaration"
       }
     ]
   },

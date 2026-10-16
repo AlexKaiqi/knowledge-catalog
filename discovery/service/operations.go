@@ -205,7 +205,32 @@ func (e AccessDescribeExecutor) Execute(_ context.Context, request AccessDescrib
 		return AccessOverview{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
 			"access describe service is unavailable")
 	}
-	plan, err := retrieval.PlanAccess(e.Repositories, request.Pin)
+	// Describe compiles the declarations each member selects with the same
+	// instance manifest check search admits by, without touching an engine;
+	// without an installed plugin the plan stays structure-only.
+	var contracts retrieval.AccessContractProvider
+	if e.Plugins != nil {
+		contracts = func(repo objectmodel.Repository, commit kernel.CommitID) (retrieval.AccessSpec, error) {
+			if e.Plugins.Configured() {
+				var err error
+				repo, err = e.Plugins.DatasetMember(e.Repositories, request.Pin, repo.ID())
+				if err != nil {
+					return retrieval.AccessSpec{}, err
+				}
+			}
+			spec, err := e.Plugins.DeclaredAccessSpecAt(repo, commit)
+			if kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
+				return spec, err
+			}
+			// No instance interprets this member: report structure only.
+			report, err := reader.DescribeRepoSchema(repo, commit, "")
+			if err != nil {
+				return retrieval.AccessSpec{}, err
+			}
+			return retrieval.AccessSpecFromReport(report), nil
+		}
+	}
+	plan, err := retrieval.PlanAccess(e.Repositories, request.Pin, contracts)
 	if err != nil {
 		return AccessOverview{}, err
 	}

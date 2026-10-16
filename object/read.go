@@ -60,6 +60,9 @@ func SelectAspects(value any, units []Address, selector *AspectSelector) any {
 	return out
 }
 
+// Resolution identifies a fixed maintenance target. Digest is its conditional
+// write/remove basis (MaintenanceDigest or UnitSetMaintenanceDigest), distinct
+// from the content digest returned by READ for a binding declaration.
 type Resolution struct {
 	Repository        kernel.RepositoryID `json:"repository"`
 	Commit            kernel.CommitID     `json:"commit"`

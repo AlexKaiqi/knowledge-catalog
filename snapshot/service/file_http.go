@@ -54,12 +54,9 @@ func (h *handler) fileRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r = requestWithDataset(r, request.Dataset)
+	r.SetPathValue("repository", request.Repository)
 	h.withResources(w, r, "file-read", func(ctx context.Context, caller identity.HTTPIdentity, resources Resources) (any, error) {
-		view, err := resources.OpenFiles(ctx, caller, request.FileCoordinate, true)
-		if err != nil {
-			return nil, err
-		}
-		return view.Read(request)
+		return resources.readFile(ctx, caller, request)
 	})
 }
 
@@ -113,11 +110,17 @@ func (resources Resources) OpenFiles(ctx context.Context, caller identity.HTTPId
 	if err != nil {
 		return nil, err
 	}
+	record := func(evidence FileReadEvidence) error {
+		if resources.RecordRead == nil {
+			return nil
+		}
+		return resources.RecordRead(ctx, caller, evidence)
+	}
 	if coordinate.View != "" && coordinate.View != "repository" {
 		if resources.OpenView == nil {
 			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "the requested external file view is not configured")
 		}
-		view, err := resources.OpenView(ctx, caller, coordinate, cat, definition, pin)
+		view, err := resources.OpenView(ctx, caller, coordinate, cat, definition, pin, record)
 		if err != nil {
 			return nil, err
 		}
@@ -131,7 +134,7 @@ func (resources Resources) OpenFiles(ctx context.Context, caller identity.HTTPId
 		return nil, err
 	}
 	mayRead := func(repository kernel.RepositoryID) (bool, error) {
-		q := access.Query{Principal: caller.Principal, Action: "file.read", Dataset: coordinate.Dataset, Repo: string(repository)}
+		q := access.Query{Principal: caller.Principal, Action: "file.read", Dataset: coordinate.Dataset, Repo: string(repository), Ref: string(pin.Repositories[repository])}
 		err := resources.authorize(ctx, Authorization{Caller: caller, Query: q, Pin: &pin})
 		if kernel.CodeOf(err) == kernel.ErrForbidden {
 			return false, nil
@@ -162,9 +165,6 @@ func (resources Resources) OpenFiles(ctx context.Context, caller identity.HTTPId
 			items = append(items, item)
 		}
 	}
-	options := ViewOptions{Pin: pin, Mounts: visible, Items: items, Sources: resources.Sources, Delivered: true}
-	if resources.RecordRead != nil {
-		options.Record = func(evidence FileReadEvidence) error { return resources.RecordRead(ctx, caller, evidence) }
-	}
+	options := ViewOptions{Pin: pin, Mounts: visible, Items: items, Sources: resources.Sources, Delivered: true, Record: record}
 	return NewFileView(options), nil
 }

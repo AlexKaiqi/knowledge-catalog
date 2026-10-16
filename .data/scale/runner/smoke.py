@@ -61,6 +61,21 @@ def mean(samples):
     return sum(samples) / len(samples)
 
 
+INDEX_DECLARATION_SCHEMA = "schema/core/index-declaration/v1"
+INDEX_CATALOG = "declarative-index/opensearch@2026-10"
+
+
+def bench_index_declarations(schema_id):
+    """BenchDoc 的检索能力：title 过滤、body 全文。Schema 只描述结构，能力由索引声明成员提供。"""
+    members = [("title-filter", "title", "keyword", "filter"), ("body-text", "body", "text", "text")]
+    return [{"op": "PUT",
+             "address": {"kind": "Member", "objectId": "index/bench", "aspectName": "index", "memberKey": key},
+             "schemaRef": INDEX_DECLARATION_SCHEMA,
+             "value": {"catalog": INDEX_CATALOG, "inputs": [{"from": f"{schema_id}#/fields/{field}"}],
+                       "build": {"kind": kind}, "uses": [use]}}
+            for key, field, kind, use in members]
+
+
 def self_test():
     """用已知输入验证指标计算逻辑；这是 --self-test 的判定合同。"""
     failures = []
@@ -254,11 +269,11 @@ class SmokeRun:
     # ---- 构造：schema + 批量导入（bulk-loaded construct 证据）
     def build_baseline(self, total_docs, batch):
         schema_value = {"entity": "BenchDoc", "pattern": "record",
-                        "fields": {"title": {"type": "string", "required": True, "access": ["filter"]},
-                                   "body": {"type": "string", "required": True, "access": ["text"]}}}
+                        "fields": {"title": {"type": "string", "required": True},
+                                   "body": {"type": "string", "required": True}}}
         result = self.commit(f"{self.prefix}schema-1",
                              [{"op": "PUT", "address": {"kind": "Entity", "objectId": self.schema_id},
-                               "value": schema_value}])
+                               "value": schema_value}] + bench_index_declarations(self.schema_id))
         if result["disposition"] != "APPLIED":
             raise SystemExit(f"schema commit failed: {result['raw']}")
         self.next_doc = 0
@@ -278,7 +293,7 @@ class SmokeRun:
         wall = time.perf_counter() - start
         self.append_samples("bulk-loaded.construct", batches)
         metrics = {
-            "cap.repo_objects": total_docs + 1,
+            "cap.repo_objects": total_docs + 2,  # 文档 + schema/bench.doc + index/bench
             "write.upload.files_per_second": rate(total_docs, wall),
             "write.commit.latency": quantiles_ms([b["commitSeconds"] * 1000 for b in batches]),
         }

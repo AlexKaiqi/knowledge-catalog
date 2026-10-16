@@ -94,7 +94,7 @@ func (s AccessSpec) Bind(refs []string) AccessSpec {
 	if len(want) == 0 {
 		return s
 	}
-	out := AccessSpec{Repository: s.Repository, Commit: s.Commit, Fields: []AccessField{}, Schemas: []objectmodel.ObjectID{}, AccessDigest: s.AccessDigest, schemaForms: s.schemaForms, currentFields: s.currentFields, adoptions: s.adoptions}
+	out := AccessSpec{Repository: s.Repository, Commit: s.Commit, Fields: []AccessField{}, Schemas: []objectmodel.ObjectID{}, AccessDigest: s.AccessDigest, Declarations: s.Declarations, schemaForms: s.schemaForms, currentFields: s.currentFields, adoptions: s.adoptions, builds: s.builds, declarationSchemas: s.declarationSchemas}
 	seen := map[objectmodel.ObjectID]struct{}{}
 	for _, field := range s.Fields {
 		if _, ok := want[field.Schema]; !ok {
@@ -117,11 +117,16 @@ type AccessSpec struct {
 	Fields       []AccessField          `json:"fields"`
 	Schemas      []objectmodel.ObjectID `json:"schemas"`
 	AccessDigest kernel.Digest          `json:"accessDigest"`
+	// Declarations are the index declaration members compiled at Commit, with
+	// per-member status. They are the only source of Fields' retrieval faces.
+	Declarations []DeclarationStatus `json:"declarations,omitempty"`
 	// schemaForms is execution metadata for actually adopted releases. It is
 	// not a second declaration form or an addition to the public wire shape.
-	schemaForms   map[string][]AccessField
-	currentFields []AccessField
-	adoptions     []SchemaAdoption
+	schemaForms        map[string][]AccessField
+	currentFields      []AccessField
+	adoptions          []SchemaAdoption
+	builds             []declarationBuild
+	declarationSchemas map[objectmodel.ObjectID]bool
 }
 
 func AccessSpecFromReport(report reader.SchemaReport) AccessSpec {

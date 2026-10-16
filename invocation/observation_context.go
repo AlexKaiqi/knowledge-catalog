@@ -47,8 +47,8 @@ func MatchedRuleID(home, command string, flags map[string]invoke.FlagValue) stri
 	if err != nil {
 		return ""
 	}
-	action := ActionOf(command, flags)
-	rule, ok := MatchAllow(file.Rules, AllowQuery{
+	action := authorizationAction(command, flags)
+	rule, ok := MatchAllow(withDatasetDefaults(home, invoke.FlagString(flags, "as"), file.Rules), AllowQuery{
 		Principal: invoke.FlagString(flags, "as"),
 		Action:    action,
 		Repo:      invoke.FlagString(flags, "repo"),
@@ -123,11 +123,28 @@ func RequestHomeJournal(home, command string, flags map[string]invoke.FlagValue)
 	}), nil
 }
 
-// ActionOf resolves the authorization action for an operation: the explicit
-// _action flag (the typed service always sets it) or the internal-owner
-// derivation for local CLI paths. It is flag derivation only; the argv
-// surface table stays in cli.
+// ActionOf identifies the resolved operation in access, retrieval and audit
+// evidence. Consumption permission stays separate: searching a Dataset and
+// reading one of its files both use file.read, but they are different actions.
 func ActionOf(command string, flags map[string]invoke.FlagValue) string {
+	switch command {
+	case "object-search":
+		return "object.search"
+	case "object-relations":
+		return "object.relations"
+	case "object-traverse":
+		return "object.traverse"
+	case "operations-access-spec-describe":
+		return "object.access.describe"
+	case "operations-projection-describe":
+		return "projection.read"
+	case "operations-projection-sync":
+		return "projection.manage"
+	}
+	return authorizationAction(command, flags)
+}
+
+func authorizationAction(command string, flags map[string]invoke.FlagValue) string {
 	if action := strings.TrimSpace(invoke.FlagString(flags, "_action")); action != "" {
 		return action
 	}

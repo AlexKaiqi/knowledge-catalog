@@ -20,12 +20,18 @@ func TestPublishedSchemaTypedSearchPreservesLongTextIntegersAndTime(t *testing.T
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
 	ops := []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/article"}, Value: map[string]any{
 		"entity": "Article", "fields": map[string]any{
-			"body": map[string]any{"type": "string", "access": []any{"text"}},
-			"rank": map[string]any{"type": "integer", "access": []any{"filter", "sort"}},
-			"when": map[string]any{"type": "timestamp", "access": []any{"filter", "sort"}},
-			"day":  map[string]any{"type": "date", "access": []any{"filter", "sort"}},
+			"body": map[string]any{"type": "string"},
+			"rank": map[string]any{"type": "integer"},
+			"when": map[string]any{"type": "timestamp"},
+			"day":  map[string]any{"type": "date"},
 		},
 	}}}
+	ops = append(ops,
+		testkit.IndexText("schema/article", "body"),
+		testkit.IndexField("schema/article", "rank", "number", objectmodel.IndexUseFilter, objectmodel.IndexUseSort),
+		testkit.IndexField("schema/article", "when", "date", objectmodel.IndexUseFilter, objectmodel.IndexUseSort),
+		testkit.IndexField("schema/article", "day", "date"),
+	)
 	for n, stamp := range []string{"2026-09-08T00:00:00.000000001Z", "2026-09-08T08:00:00.000000002+08:00", "2026-09-08T00:00:00.000000003Z"} {
 		ops = append(ops, objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: objectmodel.ObjectID(fmt.Sprintf("article/%d", n))}, SchemaRef: "schema/article", Value: map[string]any{
 			"body": strings.Repeat("规范对象 reliability ", 4000), "rank": int64(9007199254740992) + int64(n), "when": stamp, "day": "2026-09-08",
@@ -99,11 +105,14 @@ func TestControlledVocabularyAndProgressiveReadingUseFixedObjectBasis(t *testing
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
 	head := testfixture.PutAt(t, repo, root, []objectmodel.Operation{
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/concept"}, Value: map[string]any{"entity": "Concept", "fields": map[string]any{
-			"alias": map[string]any{"type": "string", "access": []any{"filter", "text"}},
+			"alias": map[string]any{"type": "string"},
 		}}},
+		testkit.IndexText("schema/concept", "alias"),
+		testkit.IndexField("schema/concept", "alias", "keyword"),
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/guide"}, Value: map[string]any{"entity": "Guide", "fields": map[string]any{
-			"concept": map[string]any{"type": "object_ref", "access": []any{"filter"}},
+			"concept": map[string]any{"type": "object_ref"},
 		}}},
+		testkit.IndexField("schema/guide", "concept", "keyword"),
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "concept/refund"}, SchemaRef: "schema/concept", Value: map[string]any{"alias": "退货退款", "definition": "退回已支付的金额"}},
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "guide/refund"}, SchemaRef: "schema/guide", Value: map[string]any{"concept": "concept/refund", "body": "退款条件见政策；例外情况需要进一步阅读。"}},
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "guide/exception"}, Value: map[string]any{"body": "退款例外需提供原始凭据。"}},

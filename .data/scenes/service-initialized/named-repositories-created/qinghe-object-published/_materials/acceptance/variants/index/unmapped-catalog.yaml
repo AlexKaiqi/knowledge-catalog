@@ -1,0 +1,15 @@
+---
+object_id: index/sales-search
+aspect_name: index
+member_key: table-name-elastic
+kind: Member
+schema_ref: schema/core/index-declaration/v1
+---
+catalog: declarative-index/elastic@2026-01
+inputs:
+  - from: schema/table.properties#/fields/name
+build:
+  kind: text
+  analyzer: standard
+uses:
+  - text

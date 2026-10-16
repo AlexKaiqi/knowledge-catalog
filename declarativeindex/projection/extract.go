@@ -21,7 +21,10 @@ func compileProjectionDocumentObserved(repo objectmodel.Repository, value object
 	if err != nil {
 		return ports.CompiledDoc{}, err
 	}
+	// Repository projections take their read basis from the published control
+	// record, so unchanged documents remain reusable when that basis advances.
 	doc := ports.CompiledDoc{ObjectID: value.Address.ObjectID, Kind: logical.Kind, Text: logical.Text, EligibleFields: logical.EligibleFields}
+	doc.Semantic = append([]retrieval.SemanticField(nil), logical.Semantic...)
 	for _, scalar := range logical.Values {
 		cell, err := projectionCell(scalar)
 		if err != nil {
@@ -50,7 +53,7 @@ func compileProjectionDocumentObserved(repo objectmodel.Repository, value object
 
 func projectionCell(value retrieval.FieldValue) (ports.ProjectionCell, error) {
 	field, normalized := value.Field, value.Value
-	cell := ports.ProjectionCell{Field: field.FieldRef.Key(), Value: normalized, Access: append([]reader.AccessHint(nil), field.Access...)}
+	cell := ports.ProjectionCell{Field: value.Key(), Member: value.Member, Value: normalized, Access: append([]reader.AccessHint(nil), field.Access...)}
 	if field.Has(reader.HintText) {
 		cell.TextValue = normalized
 	}

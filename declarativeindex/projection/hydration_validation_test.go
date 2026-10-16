@@ -37,7 +37,7 @@ func (h malformedSearchHydrator) ReadAddress(repo objectmodel.Repository, commit
 func TestSearchRejectsMalformedInjectedHydration(t *testing.T) {
 	repo := testfixture.MakeIndexRepository(t, "kr://acme/public/hydration-validation")
 	commit := testfixture.PutAt(t, repo, testkit.MustHead(t, repo, snapshot.DefaultRef), []objectmodel.Operation{
-		testfixture.PolicyBodySchema(),
+		testfixture.PolicyBodySchema(), testfixture.PolicyBodyIndex(),
 		testkit.PutEntity("policy/P-1", map[string]any{"body": "runbook alpha"}, "")[0],
 	})
 	engine := &staleCandidateEngine{candidates: []ports.CandidateRef{{Repository: repo.ID(), ObjectID: "policy/P-1", Basis: commit}}}

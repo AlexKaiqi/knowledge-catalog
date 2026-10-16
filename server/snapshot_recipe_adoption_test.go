@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"testing"
 
+	discoverydatasets "kc/discovery/datasets"
 	apphome "kc/home"
 	"kc/internal/testkit"
 	inv "kc/invocation"
@@ -64,7 +65,11 @@ func TestNonDeploymentSnapshotConsumptionCannotAdoptPortableRecipe(t *testing.T)
 			if err := inv.WriteAllow(dir, policy); err != nil {
 				t.Fatal(err)
 			}
-			opened := &Home{Dir: dir, Store: stores, Datasets: cat, Registry: registry, File: apphome.HomeFile{Registry: apphome.HomeRegistry{ID: string(authority.ID())}}}
+			// The hand-built Home has a single file-only source and no Reader, so
+			// its publication can reference no object outside the selection.
+			// home.Open wires the real Serving.FreezeDependencies in production.
+			preparation := discoverydatasets.Preparation{Dependencies: func(dataset.ResolvedDataset) (map[kernel.RepositoryID]kernel.CommitID, error) { return nil, nil }}
+			opened := &Home{Dir: dir, Store: stores, Datasets: cat, Registry: registry, DatasetPreparation: preparation, File: apphome.HomeFile{Registry: apphome.HomeRegistry{ID: string(authority.ID())}}}
 			facade := &httpFacade{home: dir, readHome: opened, options: HTTPServerOptions{AuthMode: "local"}}
 			handler := facade.snapshotStoreService()
 			before := dataset.NormalizeState(cat.DumpState())

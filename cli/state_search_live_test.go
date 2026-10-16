@@ -1,6 +1,8 @@
 package cli_test
 
 import (
+	"encoding/json"
+	"kc/internal/bindingfixture"
 	"kc/internal/testkit"
 	serv "kc/server"
 	"net/http/httptest"
@@ -10,8 +12,8 @@ import (
 )
 
 // This is the public-surface counterpart of the provider contract test: the
-// runtime and OpenSearch are separate Docker services, while all setup,
-// refresh, and SEARCH operations cross the kc HTTP facade.
+// runtime and OpenSearch are separate Docker services. Authored declarations
+// are selected at publication; refresh and SEARCH cross the typed HTTP facade.
 func TestLiveHTTPDynamicStateSearchJourney(t *testing.T) {
 	runtimeURL := strings.TrimSpace(os.Getenv("KC_TEST_STATE_RUNTIME_URL"))
 	opensearchURL := strings.TrimSpace(os.Getenv("KC_TEST_OPENSEARCH_URL"))
@@ -23,20 +25,25 @@ func TestLiveHTTPDynamicStateSearchJourney(t *testing.T) {
 	}
 	home := testkit.TempDir(t)
 	repositoryID := "kr://docker/public/services"
-	body(t, kc(home, "init"))
-	body(t, kc(home, "store-set", "--index", "opensearch"))
-	body(t, kc(home, "store-set", "--driver", "opensearch", "--url", opensearchURL))
+	body(t, kc(home, "local", "init"))
+	body(t, kc(home, "local", "store", "set", "--index", "opensearch"))
+	body(t, kc(home, "local", "store", "set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repositoryID)
-	adoptLiveAccessFixture(t, home, repositoryID)
-	body(t, kc(home, "put", testObjectReference(t, repositoryID, "schema/service.health", ""), "--repo", repositoryID, "--command-id", "state-schema", "--value", `{"entity":"Service","aspect":"health","fields":{"status":{"type":"string","access":["text","filter"]}}}`))
-	body(t, kc(home, "put", testObjectReference(t, repositoryID, "service/orders", "/properties"), "--repo", repositoryID, "--command-id", "state-entity", "--value", `{"name":"orders"}`))
-	putStateBinding(t, home, repositoryID, "service/orders", "health", "schema/service.health", runtimeURL)
-	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", repositoryID+"=refs/heads/main@"))
-	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--dataset", "agent"))
-	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read,search", "--repo", repositoryID))
-	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "projection.manage", "--repo", repositoryID))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "schema/service.health", ""), "--repo", repositoryID, "--command-id", "state-schema", "--value", `{"entity":"Service","aspect":"health","fields":{"status":{"type":"string"}}}`))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "service/orders", "/properties"), "--repo", repositoryID, "--command-id", "state-entity", "--value", `{"name":"orders"}`))
+	descriptorID := putStateBinding(t, home, repositoryID, "service/orders", "health", "schema/service.health", runtimeURL)
+	descriptor := bindingfixture.Descriptor(runtimeURL)
+	descriptor["identity"] = "shared"
+	rawDescriptor, err := json.Marshal(descriptor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body(t, kc(home, "writer", "put", "urn:kc:object:"+descriptorID, "--repo", repositoryID, "--command-id", "shared-state-descriptor", "--value", string(rawDescriptor)))
+	seedTextDeclaration(t, home, repositoryID, "index/service-health", "schema/service.health", "status")
+	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", repositoryID))
+	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "file.read", "--dataset", "agent"))
+	body(t, kc(home, "allow", "--principal", "agent:maintainer", "--action", "dataset.manage", "--dataset", "agent"))
 	before := asMap(t, body(t, kc(home, "writer", "head", "--repo", repositoryID)))["commit"]
-	expectCode(t, kc(home, "search", "--dataset", "agent", "--query", "healthy"), "CAPABILITY_UNSATISFIED")
 
 	lookup := serv.NewHTTPStateLookup(nil)
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{StateLookup: lookup})
@@ -46,14 +53,14 @@ func TestLiveHTTPDynamicStateSearchJourney(t *testing.T) {
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
-	sync := asMap(t, postAny(t, server.URL, "/operations/v1/projections:sync", map[string]any{
-		"repository": repositoryID, "ref": "refs/heads/main",
+	sync := asMap(t, postAs(t, server.URL, "/operations/v1/projections:sync", "agent:maintainer", map[string]any{
+		"dataset": "agent", "revision": 1,
 	}))
-	if asMap(t, sync["state"])["revision"] == "" {
+	if sync["dataset"] != "agent" || sync["revision"] != float64(1) || datasetProjectionState(t, sync, repositoryID)["revision"] == "" {
 		t.Fatalf("index-sync did not publish State projection: %#v", sync)
 	}
-	search := asMap(t, postAny(t, server.URL, "/object/v1/search", map[string]any{
-		"dataset": "agent", "query": "healthy",
+	search := asMap(t, postAs(t, server.URL, "/object/v1/search", "agent:http-test", map[string]any{
+		"dataset": "agent", "revision": 1, "query": "healthy",
 	}))
 	hits := search["hits"].([]any)
 	if len(hits) != 1 {
@@ -67,7 +74,7 @@ func TestLiveHTTPDynamicStateSearchJourney(t *testing.T) {
 		t.Fatalf("dynamic hit lost observation basis: %#v", hit)
 	}
 	view := asMap(t, search["searchView"])
-	if asMap(t, view["projectionRevisions"])[repositoryID] == "" {
+	if asMap(t, view["snapshots"])[repositoryID] != before || asMap(t, view["projectionRevisions"])[repositoryID] != datasetProjectionState(t, sync, repositoryID)["revision"] {
 		t.Fatalf("SearchView did not bind provider revision: %#v", view)
 	}
 	// State is an external observation, not a Snapshot health unit. Check the

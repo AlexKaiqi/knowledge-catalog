@@ -1,0 +1,14 @@
+---
+object_id: index/published-object
+aspect_name: index
+member_key: summary-text
+kind: Member
+schema_ref: schema/core/index-declaration/v1
+---
+catalog: declarative-index/opensearch@2026-10
+inputs:
+  - from: schema/published-object.definition/v1#/fields/summary
+build:
+  kind: text
+uses:
+  - text

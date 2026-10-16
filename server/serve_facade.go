@@ -16,11 +16,13 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	apphome "kc/home"
+	"kc/identity"
 	"kc/internal/telemetry"
 	"kc/server/internal/readiness"
 )
@@ -43,8 +45,8 @@ type httpFacade struct {
 }
 
 // HTTPHandlerWithOptions adds a trusted authentication boundary to the typed
-// service APIs. Without an Authenticator, requests must still assert an
-// explicitly authorized local principal through X-Kc-As (--auth local).
+// service APIs. Without an Authenticator, the local pairing applies: requests
+// must still assert an explicitly authorized principal through X-Kc-As.
 func HTTPHandlerWithOptions(home string, options HTTPServerOptions) http.Handler {
 	return newHTTPHandler(home, options, nil)
 }
@@ -70,7 +72,10 @@ func newHTTPHandlerWithRuntime(home string, options HTTPServerOptions, opened *H
 	if runtime.StartupError() != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "kc telemetry: optional OTLP exporter disabled; inspect /metrics")
 	}
-	options.Authenticator = observeHTTPAuthenticator(bindHTTPAuthenticator(options.Authenticator, home, opened == nil), runtime)
+	if !identity.SelfAsserted(options.Authenticator) {
+		// Self-asserted callers carry no provider claims to bind or observe.
+		options.Authenticator = observeHTTPAuthenticator(identity.WrapAuthenticator(options.Authenticator, filepath.Join(home, identity.Filename), opened == nil), runtime)
+	}
 	facade := &httpFacade{home: home, options: options, runtime: runtime, ready: readiness.NewCache(home, 5*time.Second, readiness.Providers{SearchBackend: apphome.NewSearchBackendProbe()})}
 	if opened != nil {
 		facade.deployment = opened.Deployment
@@ -212,10 +217,10 @@ func (f *httpFacade) startProjectionWorker(ws *Home) error {
 	if ws.Plugins != nil {
 		ws.Plugins.SetObservationSource(nil)
 	}
-	if identity := f.options.ServiceIdentity; ws.LiveAccess != nil && identity != nil && strings.TrimSpace(identity.Principal) != "" {
+	if principal := strings.TrimSpace(f.options.ServicePrincipal); ws.LiveAccess != nil && principal != "" {
 		if ws.Plugins != nil {
 			ws.Plugins.SetObservationSource(sourcebridge.Source{Lookup: ws.LiveAccess, Request: objectmodel.RequestContext{
-				Identity: kernel.IdentityContext{Principal: identity.Principal},
+				Identity: kernel.IdentityContext{Principal: principal},
 			}})
 		}
 	}
@@ -277,7 +282,7 @@ func (f *httpFacade) closeReadHome() error {
 	return err
 }
 
-func (f *httpFacade) addIdentityFlags(flags map[string]FlagValue, r *http.Request, id inv.HTTPIdentity) {
+func (f *httpFacade) addIdentityFlags(flags map[string]FlagValue, r *http.Request, id identity.HTTPIdentity) {
 	if id.User != nil {
 		flags["_identity-provider"] = id.User.Provider
 		flags["_identity-issuer"] = id.User.Issuer
@@ -330,16 +335,18 @@ func HTTPHandlerFromConfig(path string, options HTTPServerOptions) (http.Handler
 	if options.LiveAccessCredentialOrigins == nil && cfg.LiveAccess.CredentialOrigins != nil {
 		options.LiveAccessCredentialOrigins = append([]string{}, cfg.LiveAccess.CredentialOrigins...)
 	}
+	if options.LiveAccessReadLimits == (liveaccess.ReadLimits{}) {
+		if options.LiveAccessReadLimits, err = cfg.LiveAccess.Limits(); err != nil {
+			return nil, err
+		}
+	}
 	if options.AuthMode == "" && options.Authenticator == nil {
 		auth, err := HTTPServerOptionsFromFlags(map[string]FlagValue{"auth": cfg.Auth, "auth-url": cfg.AuthURL})
 		if err != nil {
 			return nil, err
 		}
 		options.AuthMode, options.Authenticator = auth.AuthMode, auth.Authenticator
-		options.NativeAPIOrigin = auth.NativeAPIOrigin
-	}
-	if options.NativeAPIOrigin == "" && options.AuthModeLabel() == "lakefs" {
-		options.NativeAPIOrigin = cfg.AuthURL
+		options.LoginBroker, options.ServicePrincipal = auth.LoginBroker, auth.ServicePrincipal
 	}
 	if options.NativeAPIOrigin == "" && cfg.Registry.Driver == "lakefs" {
 		endpoint, err := snapshot.ParseLakeFSDSN(cfg.Registry.DSN)

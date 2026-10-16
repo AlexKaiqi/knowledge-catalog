@@ -6,14 +6,12 @@ import (
 
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 
 	retrieval "kc/discovery"
-	index "kc/discovery/projection"
 	"kc/kernel"
 	objectmodel "kc/object"
 	"kc/snapshot/dataset"
@@ -94,13 +92,13 @@ func (f *httpFacade) registerServiceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /object/v1/bindings:resolve", f.objectBinding)
 	mux.HandleFunc("POST /object/v1/resources:access", f.objectResourceAccess)
 	mux.HandleFunc("POST /operations/v1/projections:sync", f.projectionSync)
-	mux.HandleFunc("POST /operations/v1/projections:notice", f.projectionNotify)
 }
 
 // objectDatasetIdentity is the shared dataset-channel identity envelope:
 // a named workspace, or an inline published pin/definition.
 type objectDatasetIdentity struct {
 	Dataset    string           `json:"dataset,omitempty"`
+	Revision   int              `json:"revision,omitempty"`
 	Pin        json.RawMessage  `json:"pin,omitempty"`
 	Definition *dataset.Dataset `json:"definition,omitempty"`
 }
@@ -111,6 +109,7 @@ type objectDatasetIdentity struct {
 // contract is unchanged.
 type objectScope struct {
 	Dataset    string           `json:"dataset,omitempty"`
+	Revision   int              `json:"revision,omitempty"`
 	Pin        json.RawMessage  `json:"pin,omitempty"`
 	Definition *dataset.Dataset `json:"definition,omitempty"`
 	Repository string           `json:"repository,omitempty"`
@@ -128,27 +127,26 @@ type objectReadRequest struct {
 
 type ObjectSearchRequest struct {
 	objectScope
-	InventoryDiscovery bool                    `json:"inventoryDiscovery,omitempty"`
-	Query              string                  `json:"query,omitempty"`
-	Match              []string                `json:"match,omitempty"`
-	MatchMode          string                  `json:"matchMode,omitempty"`
-	Equal              []string                `json:"equal,omitempty"`
-	NotEqual           []string                `json:"notEqual,omitempty"`
-	In                 []string                `json:"in,omitempty"`
-	Exists             []string                `json:"exists,omitempty"`
-	Missing            []string                `json:"missing,omitempty"`
-	Prefix             []string                `json:"prefix,omitempty"`
-	Contains           []string                `json:"contains,omitempty"`
-	GreaterThan        []string                `json:"greaterThan,omitempty"`
-	GreaterEqual       []string                `json:"greaterEqual,omitempty"`
-	LessThan           []string                `json:"lessThan,omitempty"`
-	LessEqual          []string                `json:"lessEqual,omitempty"`
-	Sort               []string                `json:"sort,omitempty"`
-	Limit              int                     `json:"limit,omitempty"`
-	Continuation       string                  `json:"continuation,omitempty"`
-	Expression         *retrieval.SearchExpr   `json:"expression,omitempty"`
-	Order              *retrieval.SearchClause `json:"order,omitempty"`
-	Recall             string                  `json:"recall,omitempty"`
+	Query        string                  `json:"query,omitempty"`
+	Match        []string                `json:"match,omitempty"`
+	MatchMode    string                  `json:"matchMode,omitempty"`
+	Equal        []string                `json:"equal,omitempty"`
+	NotEqual     []string                `json:"notEqual,omitempty"`
+	In           []string                `json:"in,omitempty"`
+	Exists       []string                `json:"exists,omitempty"`
+	Missing      []string                `json:"missing,omitempty"`
+	Prefix       []string                `json:"prefix,omitempty"`
+	Contains     []string                `json:"contains,omitempty"`
+	GreaterThan  []string                `json:"greaterThan,omitempty"`
+	GreaterEqual []string                `json:"greaterEqual,omitempty"`
+	LessThan     []string                `json:"lessThan,omitempty"`
+	LessEqual    []string                `json:"lessEqual,omitempty"`
+	Sort         []string                `json:"sort,omitempty"`
+	Limit        int                     `json:"limit,omitempty"`
+	Continuation string                  `json:"continuation,omitempty"`
+	Expression   *retrieval.SearchExpr   `json:"expression,omitempty"`
+	Order        *retrieval.SearchClause `json:"order,omitempty"`
+	Recall       string                  `json:"recall,omitempty"`
 }
 
 type objectRelationsRequest struct {
@@ -197,7 +195,9 @@ type objectSchemaRequest struct {
 }
 
 type objectSchemaPageRequest struct {
-	Repository   string `json:"repository"`
+	Dataset      string `json:"dataset,omitempty"`
+	Revision     int    `json:"revision,omitempty"`
+	Repository   string `json:"repository,omitempty"`
 	Commit       string `json:"commit,omitempty"`
 	Ref          string `json:"ref,omitempty"`
 	Limit        int    `json:"limit,omitempty"`
@@ -236,16 +236,14 @@ func (request ObjectSearchRequest) Flags() map[string]FlagValue {
 	if request.Definition != nil {
 		flags[inv.WorkspaceDefinitionFlag] = request.Definition
 	}
-	if request.InventoryDiscovery {
-		flags[inv.InventoryDiscoveryFlag] = true
-	}
+
 	if len(request.Pin) > 0 {
 		flags["pin"] = string(request.Pin)
 	}
 	if request.Limit > 0 {
 		flags["limit"] = request.Limit
 	}
-	return compactFlags(flags)
+	return withRevision(compactFlags(flags), request.Revision)
 }
 
 func (request ObjectSearchRequest) searchRequest() (retrieval.SearchRequest, error) {
@@ -268,9 +266,17 @@ func (request ObjectSearchRequest) searchRequest() (retrieval.SearchRequest, err
 }
 
 type projectionSyncRequest struct {
-	Repository string `json:"repository"`
-	Commit     string `json:"commit,omitempty"`
-	Ref        string `json:"ref,omitempty"`
+	Dataset  string `json:"dataset"`
+	Revision int    `json:"revision,omitempty"`
+}
+
+// withRevision carries a named Dataset's accepted revision; invocation turns
+// it into a replayed published pin, so it never widens scope.
+func withRevision(flags map[string]FlagValue, revision int) map[string]FlagValue {
+	if revision != 0 {
+		flags["revision"] = strconv.Itoa(revision)
+	}
+	return flags
 }
 
 func objectCoordinateFlags(workspace, repository, commit, ref string, pin json.RawMessage, definition ...*dataset.Dataset) map[string]FlagValue {
@@ -290,7 +296,7 @@ func objectCoordinateFlags(workspace, repository, commit, ref string, pin json.R
 func (request objectReadRequest) Flags() map[string]FlagValue {
 	flags := objectCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
 	flags["reference"] = request.Reference
-	return flags
+	return withRevision(flags, request.Revision)
 }
 
 func (f *httpFacade) objectRead(w http.ResponseWriter, r *http.Request) {
@@ -316,6 +322,10 @@ func (f *httpFacade) objectSearch(w http.ResponseWriter, r *http.Request) {
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
+	if err := inv.RequireDatasetDiscoveryScope(request.Flags()); err != nil {
+		invoke.WriteInvoke(w, inv.ErrorResult(err))
+		return
+	}
 	search, err := request.searchRequest()
 	if err != nil {
 		invoke.WriteInvoke(w, inv.ErrorResult(err))
@@ -326,7 +336,7 @@ func (f *httpFacade) objectSearch(w http.ResponseWriter, r *http.Request) {
 	if f.options.Embedder != nil {
 		flags["_embedder"] = f.options.Embedder
 	}
-	f.executeTyped(w, r, "object-search", "object.search", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbSearch}, flags)
+	f.executeTyped(w, r, "object-search", "file.read", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbSearch}, flags)
 }
 
 func (f *httpFacade) objectRerank(w http.ResponseWriter, r *http.Request) {
@@ -351,6 +361,10 @@ func (f *httpFacade) objectRerank(w http.ResponseWriter, r *http.Request) {
 func (f *httpFacade) objectSearchRerank(w http.ResponseWriter, r *http.Request) {
 	var request objectSearchRerankRequest
 	if !decodeServiceRequest(w, r, &request) {
+		return
+	}
+	if err := inv.RequireDatasetDiscoveryScope(request.Flags()); err != nil {
+		invoke.WriteInvoke(w, inv.ErrorResult(err))
 		return
 	}
 	search, err := request.searchRequest()
@@ -381,7 +395,11 @@ func (f *httpFacade) objectRelations(w http.ResponseWriter, r *http.Request) {
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	flags := objectCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
+	if err := inv.RequireDatasetDiscoveryScope(objectCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)); err != nil {
+		invoke.WriteInvoke(w, inv.ErrorResult(err))
+		return
+	}
+	flags := withRevision(objectCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition), request.Revision)
 	if request.Endpoint != "" {
 		flags["object"] = request.Endpoint
 	}
@@ -400,7 +418,7 @@ func (f *httpFacade) objectRelations(w http.ResponseWriter, r *http.Request) {
 	if request.Continuation != "" {
 		flags["continuation"] = request.Continuation
 	}
-	f.executeTyped(w, r, "object-relations", "object.relations", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbRelations}, flags)
+	f.executeTyped(w, r, "object-relations", "file.read", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbRelations}, flags)
 }
 
 func (f *httpFacade) objectTraverse(w http.ResponseWriter, r *http.Request) {
@@ -408,7 +426,11 @@ func (f *httpFacade) objectTraverse(w http.ResponseWriter, r *http.Request) {
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	flags := objectCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
+	if err := inv.RequireDatasetDiscoveryScope(objectCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)); err != nil {
+		invoke.WriteInvoke(w, inv.ErrorResult(err))
+		return
+	}
+	flags := withRevision(objectCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition), request.Revision)
 	if request.Endpoint != "" {
 		flags["object"] = request.Endpoint
 	}
@@ -433,11 +455,11 @@ func (f *httpFacade) objectTraverse(w http.ResponseWriter, r *http.Request) {
 	if request.Continuation != "" {
 		flags["continuation"] = request.Continuation
 	}
-	f.executeTyped(w, r, "object-traverse", "object.traverse", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbTraverse}, flags)
+	f.executeTyped(w, r, "object-traverse", "file.read", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbTraverse}, flags)
 }
 
 func (request objectRequest) Flags() map[string]FlagValue {
-	flags := objectCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
+	flags := withRevision(objectCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition), request.Revision)
 	if request.Object != "" {
 		flags["object"] = request.Object
 	}
@@ -451,7 +473,7 @@ func (request objectRequest) Flags() map[string]FlagValue {
 }
 
 func (request objectSchemaRequest) Flags() map[string]FlagValue {
-	flags := objectCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
+	flags := withRevision(objectCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition), request.Revision)
 	if request.Object != "" {
 		flags["object"] = request.Object
 	}
@@ -459,7 +481,7 @@ func (request objectSchemaRequest) Flags() map[string]FlagValue {
 }
 
 func (request objectBindingRequest) Flags() map[string]FlagValue {
-	flags := objectCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
+	flags := withRevision(objectCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition), request.Revision)
 	if request.Object != "" {
 		flags["object"] = request.Object
 	}
@@ -479,6 +501,7 @@ func (request objectResourceAccessRequest) Flags() map[string]FlagValue {
 		"aspect": request.Aspect, "member": request.Member, "operation": request.Operation,
 		"implementation": request.Implementation,
 	})
+	withRevision(flags, request.Revision)
 	if request.Definition != nil {
 		flags[inv.WorkspaceDefinitionFlag] = request.Definition
 	}
@@ -517,10 +540,11 @@ func (f *httpFacade) objectSchemaPage(w http.ResponseWriter, r *http.Request) {
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	flags := compactFlags(map[string]FlagValue{
-		"repo": request.Repository, "commit": request.Commit, "ref": request.Ref,
+	flags := withRevision(compactFlags(map[string]FlagValue{
+		"dataset": request.Dataset,
+		"repo":    request.Repository, "commit": request.Commit, "ref": request.Ref,
 		"continuation": request.Continuation,
-	})
+	}), request.Revision)
 	if request.Limit > 0 {
 		flags["limit"] = request.Limit
 	}
@@ -553,39 +577,10 @@ func (f *httpFacade) projectionSync(w http.ResponseWriter, r *http.Request) {
 	if !decodeServiceRequest(w, r, &request) {
 		return
 	}
-	flags := compactFlags(map[string]FlagValue{"repo": request.Repository, "commit": request.Commit, "ref": request.Ref})
-	f.executeTyped(w, r, "operations-projection-sync", "projection.manage", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbIndexSync}, flags)
-}
-
-func (f *httpFacade) projectionNotify(w http.ResponseWriter, r *http.Request) {
-	stream, err := requestJSONStream(r, inv.MaxServiceRequestBytes)
-	if err != nil {
-		invoke.WriteJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "decode request: %v", err)))
+	flags := withRevision(compactFlags(map[string]FlagValue{"dataset": request.Dataset}), request.Revision)
+	if err := inv.RequireDatasetDiscoveryScope(flags); err != nil {
+		invoke.WriteInvoke(w, inv.ErrorResult(err))
 		return
 	}
-	raw, err := io.ReadAll(stream)
-	if err != nil {
-		invoke.WriteJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "decode request: %v", err)))
-		return
-	}
-	if len(raw) > inv.MaxServiceRequestBytes {
-		invoke.WriteJSON(w, http.StatusBadRequest, kernel.FaultJSON(kernel.Fail(kernel.ErrUsageInvalid, "request body is too large")))
-		return
-	}
-	notice, err := index.ParseChangeNotice(raw)
-	if err != nil {
-		invoke.WriteJSON(w, http.StatusBadRequest, kernel.FaultJSON(err))
-		return
-	}
-	flags := compactFlags(map[string]FlagValue{
-		"repo": string(notice.Repository), "ref": notice.Ref, "source-revision": notice.SourceRevision,
-	})
-	if notice.Address != nil {
-		flags["object"] = string(notice.Address.ObjectID)
-		flags["aspect"] = notice.Address.AspectName
-		if notice.Address.Kind != "" {
-			flags["kind"] = string(notice.Address.Kind)
-		}
-	}
-	f.executeTyped(w, r, "operations-projection-notice", "projection.manage", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbIndexNotify}, flags)
+	f.executeTyped(w, r, "operations-projection-sync", "dataset.manage", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbIndexSync}, flags)
 }

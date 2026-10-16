@@ -60,7 +60,7 @@ Non-Goals 沿用 [Dataset owner](../../../doc/design/dataset.md) 的文件层边
 - `TestDatasetConsoleManagementHistoryAndByteContract` / `TestRegistryAuditRequiresCurrentGrant`：经 Server 的真实历史、分页、具体错误码、认证 / 登记审计授权、已发布原始字节与退役。
 
 上述 Go 定向回归已执行到绿；前端、总合同、质量门禁与浏览器证据以本轮
-[TASK 记录](../../../TASK.md) 为准。夹具成功不代替生产同源网关、外部 SSO 或真实 lakeFS 部署验收。
+[任务记录](../../../tasks/done/DATASET-04.md) 为准。夹具成功不代替生产同源网关、外部 SSO 或真实 lakeFS 部署验收。
 
 ## 剩余差距登记
 

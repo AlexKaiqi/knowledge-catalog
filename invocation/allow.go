@@ -36,7 +36,7 @@ var commandActions = map[string]string{
 	"branch": "writer.branch", "merge": "writer.merge",
 	"resolve": "dataset.resolve", "resolve-object": "object.read", "resolve-binding": "object.binding.resolve",
 	"read": "object.read", "relations": "object.relations", "describe-schema": "object.schema.read",
-	"search": "object.search", "log": "object.history.read", "provenance": "object.provenance",
+	"search": "file.read", "log": "object.history.read", "provenance": "object.provenance",
 	"describe-index": "projection.read", "index-sync": "projection.manage", "index-notify": "projection.manage", "describe-access": "object.access.describe",
 	"register":       "repositories.manage",
 	"archive-repo":   "repositories.manage",
@@ -70,9 +70,7 @@ func WriteAllow(home string, file AllowFile) error {
 	return jsonfile.Write(AllowPath(home), file)
 }
 
-func ValidateActions(actions []string) error {
-	return access.ValidateActions(actions)
-}
+func ValidateActions(actions []string) error { return access.ValidateActions(actions) }
 
 func MatchAllow(rules []AllowRule, q AllowQuery) (AllowRule, bool) {
 	return access.Match(rules, q)
@@ -96,6 +94,30 @@ func PrincipalAllowed(home, as, cmd, repo string, opened ...*kchome.Home) bool {
 		return true
 	}
 	return RepositoryAuthenticatedAllowed(home, as, action, repo, opened...)
+}
+
+// withDatasetDefaults returns the rules one authorization decision sees: the
+// durable grants plus the deployment's authenticated Dataset defaults for this
+// verified principal. Derived rules are scoped to their Dataset, are never
+// listed or written back, and an unreadable declaration adds nothing.
+func withDatasetDefaults(home, principal string, rules []AllowRule) []AllowRule {
+	if principal == "" {
+		return rules
+	}
+	declared, err := kchome.ReadDatasetAccess(home)
+	if err != nil || len(declared) == 0 {
+		return rules
+	}
+	out := append(make([]AllowRule, 0, len(rules)+len(declared)), rules...)
+	for _, item := range declared {
+		out = append(out, AllowRule{
+			ID:        "dataset-access:" + item.ID,
+			Principal: principal,
+			Dataset:   item.ID,
+			Actions:   append([]string(nil), item.AuthenticatedActions...),
+		})
+	}
+	return out
 }
 
 func RepositoryAuthenticatedAllowed(home, as, action, repo string, opened ...*kchome.Home) bool {
@@ -193,16 +215,11 @@ func Authorize(home, command string, flags map[string]invoke.FlagValue, observe 
 		Aspect:    invoke.FlagString(flags, "aspect"),
 		Dataset:   invoke.DatasetOf(flags),
 	}
+	file.Rules = withDatasetDefaults(home, q.Principal, file.Rules)
 	definition := SuppliedDataset(flags)
 	var ws *kchome.Home
 	if len(opened) > 0 {
 		ws = opened[0]
-	}
-	if IsInventoryDiscovery(flags) && (action == "dataset.resolve" || action == "object.search") {
-		if !InventoryReadAllowed(home, q.Principal, ws) {
-			return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to inventory.read", q.Principal)
-		}
-		return nil
 	}
 	if action == "dataset.resolve" && definition != nil && q.Repo == "" {
 		if workspaceScopeAllowed(file.Rules, q, definition) {
@@ -211,9 +228,23 @@ func Authorize(home, command string, flags map[string]invoke.FlagValue, observe 
 		return kernel.Fail(kernel.ErrForbidden, "%s is not allowed to dataset.resolve for every selected member", q.Principal)
 	}
 	if err := AuthorizeWorkspaceObjectDefinition(file.Rules, q, definition); err != ErrNotWorkspaceObject {
+		if kernel.CodeOf(err) == kernel.ErrForbidden && definition == nil {
+			if _, allowed, memberErr := namedDatasetMemberConsumption(home, flags, ws); memberErr != nil {
+				return memberErr
+			} else if allowed {
+				return nil
+			}
+		}
 		return err
 	}
 	if _, ok := MatchAllow(file.Rules, q); !ok {
+		if action == "file.read" && definition == nil {
+			if _, allowed, memberErr := namedDatasetMemberConsumption(home, flags, ws); memberErr != nil {
+				return memberErr
+			} else if allowed {
+				return nil
+			}
+		}
 		if action == "inventory.read" && InventoryReadAllowed(home, q.Principal, ws) {
 			return nil
 		}
@@ -286,6 +317,7 @@ func AuthorizationFlags(cx *Invocation) map[string]invoke.FlagValue {
 	if cx == nil || cx.WS == nil {
 		return cx.Flags
 	}
+	bindNamedConsumptionScope(cx)
 	derived := make(map[string]invoke.FlagValue, len(cx.Flags)+2)
 	for name, value := range cx.Flags {
 		derived[name] = value

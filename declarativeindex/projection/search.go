@@ -29,7 +29,7 @@ func (idx *Index) CheckSearchProjectionAt(repo objectmodel.Repository, commit ke
 	if err != nil {
 		return ports.Meta{}, err
 	}
-	return meta, requireSearchProjection(repo, eng, meta, commit)
+	return meta, idx.requireSearchProjection(repo, eng, meta, commit)
 }
 
 // SearchAt evaluates SEARCH at a frozen commit without rewinding the live engine.
@@ -55,7 +55,7 @@ func (idx *Index) SearchAtContext(ctx context.Context, repo objectmodel.Reposito
 	if err != nil {
 		return retrieval.SearchResult{}, searchPreparationError(ctx, err)
 	}
-	if err := requireSearchProjection(repo, eng, meta, commit); err != nil {
+	if err := idx.requireSearchProjection(repo, eng, meta, commit); err != nil {
 		return retrieval.SearchResult{}, searchPreparationError(ctx, err)
 	}
 	return idx.searchEngineAtContext(ctx, repo, eng, commit, req, retrieval.SearchView{
@@ -90,7 +90,7 @@ func (idx *Index) SemanticWindowAtContext(ctx context.Context, repo objectmodel.
 	if err != nil {
 		return retrieval.SearchResult{}, searchPreparationError(ctx, err)
 	}
-	if err := requireSearchProjection(repo, eng, meta, commit); err != nil {
+	if err := idx.requireSearchProjection(repo, eng, meta, commit); err != nil {
 		return retrieval.SearchResult{}, searchPreparationError(ctx, err)
 	}
 	window, ok := eng.(ports.SemanticWindowRetriever)
@@ -98,7 +98,7 @@ func (idx *Index) SemanticWindowAtContext(ctx context.Context, repo objectmodel.
 		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
 			"search projection for %s has no vector window", repo.ID())
 	}
-	spec, err := specForProjection(repo, meta)
+	spec, err := idx.specForProjection(repo, meta)
 	if err != nil {
 		return retrieval.SearchResult{}, err
 	}
@@ -126,7 +126,7 @@ func (idx *Index) SemanticWindowAtContext(ctx context.Context, repo objectmodel.
 	return result, nil
 }
 
-func requireSearchProjection(repo objectmodel.Repository, eng ports.Engine, meta ports.Meta, commit kernel.CommitID) error {
+func (idx *Index) requireSearchProjection(repo objectmodel.Repository, eng ports.Engine, meta ports.Meta, commit kernel.CommitID) error {
 	if meta.State == ports.ProjectionStateBuilding || meta.State == ports.ProjectionStateUpdating {
 		return kernel.Fail(kernel.ErrTemporaryUnavailable, "search projection for %s is being built", repo.ID())
 	}
@@ -138,11 +138,11 @@ func requireSearchProjection(repo objectmodel.Repository, eng ports.Engine, meta
 		return kernel.Fail(kernel.ErrPreconditionFailed,
 			"search projection basis %s does not match fixed commit %s", meta.Basis, commit)
 	}
-	spec, err := specForProjection(repo, meta)
+	spec, err := idx.specForProjection(repo, meta)
 	if err != nil {
 		return err
 	}
-	if meta.AccessDigest != spec.AccessDigest || !physicalMatches(eng, meta) {
+	if meta.AccessDigest != spec.AccessDigest || !idx.physicalMatches(eng, meta) {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "search projection metadata does not match its fixed basis")
 	}
 	return nil
@@ -187,7 +187,13 @@ func (idx *Index) SearchStateAtRevisionContext(ctx context.Context, repo objectm
 	return idx.searchEngineAtContext(ctx, repo, eng, commit, req, view, state)
 }
 
-func (idx *Index) searchEngineAtContext(ctx context.Context, repo objectmodel.Repository, eng ports.Engine, commit kernel.CommitID, req retrieval.SearchRequest, view retrieval.SearchView, state *stateProjection) (retrieval.SearchResult, error) {
+type searchEngineScope struct {
+	spec   retrieval.AccessSpec
+	filter func(ports.CandidatePage) (ports.CandidatePage, error)
+	append func(ports.CandidatePage, retrieval.SearchRequest, bool, *retrieval.SearchResult, retrieval.ResidualMatchVerifier) error
+}
+
+func (idx *Index) searchEngineAtContext(ctx context.Context, repo objectmodel.Repository, eng ports.Engine, commit kernel.CommitID, req retrieval.SearchRequest, view retrieval.SearchView, state *stateProjection, scopes ...searchEngineScope) (retrieval.SearchResult, error) {
 	result := retrieval.SearchResult{
 		SearchView:   view,
 		Completeness: retrieval.CompletenessComplete,
@@ -198,12 +204,17 @@ func (idx *Index) searchEngineAtContext(ctx context.Context, repo objectmodel.Re
 	if err != nil {
 		return retrieval.SearchResult{}, err
 	}
-	if state != nil && !stateProjectionMatches(eng, meta, commit, state) {
+	if state != nil && !idx.stateProjectionMatches(eng, meta, commit, state) {
 		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "State projection does not match the published observation basis")
 	}
-	spec, err := specForProjection(repo, meta)
-	if err != nil {
-		return retrieval.SearchResult{}, err
+	var spec retrieval.AccessSpec
+	if len(scopes) > 0 {
+		spec = scopes[0].spec
+	} else {
+		spec, err = idx.specForProjection(repo, meta)
+		if err != nil {
+			return retrieval.SearchResult{}, err
+		}
 	}
 	var identity ports.ProviderIdentity
 	if provider, ok := eng.(ports.ProviderIdentity); ok {
@@ -213,16 +224,15 @@ func (idx *Index) searchEngineAtContext(ctx context.Context, repo objectmodel.Re
 	if err != nil {
 		return retrieval.SearchResult{}, err
 	}
+	plan.Projection.PhysicalDigest = idx.projectionPhysicalDigest(eng)
 	resolved := plan.Search
 	needsResidual, err := applySearchGuarantees(plan, &result)
 	if err != nil {
 		return retrieval.SearchResult{}, err
 	}
-	var matchVerifier retrieval.ResidualMatchVerifier
+	matchVerifier := matchVerifierForContext(ctx, eng)
 	if needsResidual && retrieval.SearchHasOp(resolved, retrieval.OpMatch) {
-		var ok bool
-		matchVerifier, ok = eng.(retrieval.ResidualMatchVerifier)
-		if !ok {
+		if matchVerifier == nil {
 			return retrieval.SearchResult{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "provider cannot prove analyzed MATCH residual semantics")
 		}
 	}
@@ -300,12 +310,22 @@ func (idx *Index) searchEngineAtContext(ctx context.Context, repo objectmodel.Re
 		hydrateStarted := time.Now()
 		hitsBeforePage := len(result.Hits)
 		unscopedCount := len(page.Candidates)
-		page, err = ports.FilterCandidateScope(ctx, repo.ID(), commit, page)
+		if len(scopes) > 0 {
+			page, err = scopes[0].filter(page)
+		} else {
+			page, err = ports.FilterCandidateScope(ctx, repo.ID(), commit, page)
+		}
 		if err != nil {
 			return retrieval.SearchResult{}, err
 		}
 		result.Stats.Dropped += unscopedCount - len(page.Candidates)
-		if err := idx.appendCandidatePage(repo, commit, page, resolved, spec, needsResidual, state, &result, matchVerifier); err != nil {
+		var appendErr error
+		if len(scopes) > 0 {
+			appendErr = scopes[0].append(page, resolved, needsResidual, &result, matchVerifier)
+		} else {
+			appendErr = idx.appendCandidatePage(repo, commit, page, resolved, spec, needsResidual, state, &result, matchVerifier)
+		}
+		if err := appendErr; err != nil {
 			if reason, canceled := ports.SearchContextStatus(ctx); reason != "" {
 				result.Hits = result.Hits[:hitsBeforePage]
 				markSearchBudget(&result, reason)

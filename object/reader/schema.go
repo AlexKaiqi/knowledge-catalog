@@ -5,8 +5,9 @@ import (
 	objectmodel "kc/object"
 )
 
-// AccessHint is a logical access declaration on a schema field, not a physical
-// index declaration or query operator.
+// AccessHint is a logical retrieval face (text / filter / sort). Schema
+// describes structure only; the face a field carries is declared in a separate
+// index declaration (the `index` Aspect), not on the Schema field.
 type AccessHint string
 
 const (
@@ -15,6 +16,9 @@ const (
 	HintSort   AccessHint = "sort"
 )
 
+// FieldAccess is one Schema field's structural shape. Access is always empty
+// here because retrieval capability no longer lives on the Schema; it is
+// populated by the index-declaration compiler from the `index` Aspect.
 type FieldAccess struct {
 	Path   string       `json:"path"`
 	Type   string       `json:"type,omitempty"`
@@ -185,11 +189,7 @@ func describeValue(_ kernel.RepositoryID, _ kernel.CommitID, objectID objectmode
 	}
 	fields := make([]FieldAccess, 0, len(definition.Fields))
 	for _, field := range definition.Fields {
-		access := make([]AccessHint, 0, len(field.Access))
-		for _, hint := range field.Access {
-			access = append(access, AccessHint(hint))
-		}
-		fields = append(fields, FieldAccess{Path: field.Path, Type: field.Type, Access: access})
+		fields = append(fields, FieldAccess{Path: field.Path, Type: field.Type})
 	}
 	desc := SchemaDescription{
 		ObjectID:             objectID,

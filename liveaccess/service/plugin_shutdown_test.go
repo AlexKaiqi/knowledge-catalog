@@ -28,7 +28,7 @@ func TestAccessPluginsCloseDrainsLookupOperationAndPrivateInterface(t *testing.T
 	t.Cleanup(func() { releaseOnce.Do(func() { close(release) }) })
 	var closed atomic.Int32
 	closeFailure := errors.New("owned close failure")
-	plugins, err := OpenPlugins(pluginConfigs(map[kernel.RepositoryID]string{"repo": "main"}), map[string]PluginEntry{"liveaccess": {Open: func(scope common.PluginScope) (PluginContribution, error) {
+	plugins, err := OpenPlugins(mainPlugin(), []kernel.RepositoryID{"repo"}, map[string]PluginEntry{"liveaccess": {Open: func(scope common.PluginScope) (PluginContribution, error) {
 		scope.Own(func() error { closed.Add(1); return closeFailure })
 		return PluginContribution{
 			Lookup: pluginLookupFunc(func(context.Context, liveaccess.StateLookupRequest) (liveaccess.StateObservation, error) {
@@ -62,14 +62,14 @@ func TestAccessPluginsCloseDrainsLookupOperationAndPrivateInterface(t *testing.T
 	}
 	results := make(chan error, 3)
 	go func() {
-		value, err := plugins.LookupState(context.Background(), liveaccess.StateLookupRequest{Binding: liveaccess.ResolvedBinding{Repository: "repo"}})
+		value, err := plugins.LookupState(context.Background(), lookupRequest("http"))
 		if err == nil && value.Value != "lookup-result" {
 			err = errors.New("lookup result changed")
 		}
 		results <- err
 	}()
 	go func() {
-		value, err := plugins.AccessResource(context.Background(), liveaccess.ResourceOperationRequest{Descriptor: liveaccess.ResourceDescriptorCoordinate{Repository: "repo"}})
+		value, err := plugins.AccessResource(context.Background(), liveaccess.ResourceOperationRequest{Descriptor: liveaccess.ResourceDescriptorCoordinate{Repository: "repo"}, Runtime: "http", Protocol: testProtocol})
 		if err == nil && value != "operation-result" {
 			err = errors.New("operation result changed")
 		}
@@ -112,7 +112,7 @@ func TestAccessPluginsCloseDrainsLookupOperationAndPrivateInterface(t *testing.T
 		t.Fatal("Close returned before contributions drained")
 	default:
 	}
-	if _, err := plugins.LookupState(context.Background(), liveaccess.StateLookupRequest{Binding: liveaccess.ResolvedBinding{Repository: "repo"}}); kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
+	if _, err := plugins.LookupState(context.Background(), lookupRequest("http")); kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
 		t.Fatalf("new call admitted during Close: %v", err)
 	}
 	if _, err := registration.Handler.Execute(context.Background(), interfaces.InterfaceCall{Implementation: implementation}); kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {

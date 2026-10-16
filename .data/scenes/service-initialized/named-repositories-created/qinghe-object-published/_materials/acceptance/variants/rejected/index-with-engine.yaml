@@ -1,0 +1,19 @@
+---
+object_id: index/sales-search
+aspect_name: index
+member_key: engine-leak
+kind: Member
+schema_ref: schema/core/index-declaration/v1
+---
+catalog: declarative-index/opensearch@2026-10
+instance: opensearch-main
+engine:
+  url: http://opensearch:9200
+  shards: 3
+inputs:
+  - from: schema/table.properties#/fields/name
+build:
+  kind: text
+  analyzer: standard
+uses:
+  - text

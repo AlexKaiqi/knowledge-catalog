@@ -96,8 +96,9 @@ func TestStatePublicationFailurePreservesOriginalObservationUntilRetry(t *testin
 			}
 			failed, err := refresh()
 			if !errors.Is(err, problem) || kernel.CodeOf(err) != kernel.ErrTemporaryUnavailable || !reflect.DeepEqual(failed, ports.StateSync{}) ||
-				// Two documents: the job and the ResourceDescriptor it binds.
-				engine.commits != 2 || engine.appended != 2 || engine.candidate.Revision == original.Revision || lookup.Calls != 2 {
+				// Three documents: the job, the ResourceDescriptor it binds and
+				// index/fixture, the ordinary object holding the declarations.
+				engine.commits != 2 || engine.appended != 3 || engine.candidate.Revision == original.Revision || lookup.Calls != 2 {
 				t.Fatalf("failure did not reach actual candidate publication: sync=%#v error=%v commits=%d appended=%d lookups=%d", failed, err, engine.commits, engine.appended, lookup.Calls)
 			}
 			failedRevision := engine.candidate.Revision

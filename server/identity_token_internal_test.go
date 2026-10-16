@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"kc/identity/taihu"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -33,7 +34,7 @@ func TestIdentityTokenBrokerKeepsApplicationSecretOnServer(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "user-credential", "refresh_token": "rotated-refresh", "expires_in": 3600})
 	}))
 	defer upstream.Close()
-	srv := httptest.NewServer(HTTPHandlerWithOptions(t.TempDir(), HTTPServerOptions{Authenticator: pairingAuthenticator{principal: "kaiqidong"}, ServiceIdentity: &ServiceIdentity{ClientID: "kc-app", ClientSecret: "server-secret", OAuth2Base: upstream.URL}}))
+	srv := httptest.NewServer(HTTPHandlerWithOptions(t.TempDir(), HTTPServerOptions{Authenticator: pairingAuthenticator("kaiqidong"), LoginBroker: taihu.NewBroker(taihu.Application{ClientID: "kc-app", ClientSecret: "server-secret", OAuth2Base: upstream.URL}, nil)}))
 	defer srv.Close()
 	client, err := kcclient.New(kcclient.Config{BaseURL: srv.URL})
 	if err != nil {
@@ -78,7 +79,7 @@ func TestIdentityTokenBrokerRejectsUpstreamFailureAndRedirect(t *testing.T) {
 				_, _ = w.Write([]byte(`{"access_token":"should-never-be-returned","expires_in":3600,"error_description":"server-secret"}`))
 			}))
 			defer upstream.Close()
-			srv := httptest.NewServer(HTTPHandlerWithOptions(t.TempDir(), HTTPServerOptions{Authenticator: pairingAuthenticator{principal: "kaiqidong"}, ServiceIdentity: &ServiceIdentity{ClientID: "kc-app", ClientSecret: "server-secret", OAuth2Base: upstream.URL}}))
+			srv := httptest.NewServer(HTTPHandlerWithOptions(t.TempDir(), HTTPServerOptions{Authenticator: pairingAuthenticator("kaiqidong"), LoginBroker: taihu.NewBroker(taihu.Application{ClientID: "kc-app", ClientSecret: "server-secret", OAuth2Base: upstream.URL}, nil)}))
 			defer srv.Close()
 			client, _ := kcclient.New(kcclient.Config{BaseURL: srv.URL})
 			result, err := client.IdentityService().ExchangeToken(context.Background(), kcclient.TokenRequest{GrantType: "refresh_token", RefreshToken: "refresh"})
@@ -113,7 +114,7 @@ func TestBrowserAuthorizationUsesFixedDeploymentUpstream(t *testing.T) {
 		}
 	}))
 	defer upstream.Close()
-	handler := HTTPHandlerWithOptions(t.TempDir(), HTTPServerOptions{Authenticator: pairingAuthenticator{principal: "kaiqidong"}, ServiceIdentity: &ServiceIdentity{ClientID: "kc-app", ClientSecret: "server-secret", OAuth2Base: upstream.URL}})
+	handler := HTTPHandlerWithOptions(t.TempDir(), HTTPServerOptions{Authenticator: pairingAuthenticator("kaiqidong"), LoginBroker: taihu.NewBroker(taihu.Application{ClientID: "kc-app", ClientSecret: "server-secret", OAuth2Base: upstream.URL}, nil)})
 	defer handler.(interface{ Close() error }).Close()
 	for _, step := range []struct{ path, body string }{
 		{"/identity/v1/authorize", `{"codeChallenge":"` + strings.Repeat("a", 43) + `","state":"` + strings.Repeat("b", 43) + `"}`},

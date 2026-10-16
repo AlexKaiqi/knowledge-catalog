@@ -56,6 +56,9 @@ func validateSchemaRefs(registry snapshot.Registry, target snapshot.Store, cs ob
 	if err := resolver.prepareFinalUnits(cs); err != nil {
 		return err
 	}
+	if err := resolver.validateIndexDeclarations(registry, cs, drafts); err != nil {
+		return err
+	}
 	if err := resolver.validateValueSources(registry, cs); err != nil {
 		return err
 	}
@@ -197,6 +200,12 @@ func (r *schemaResolver) definitionFor(ref string, drafts map[objectmodel.Object
 		return objectmodel.SchemaDefinition{}, kernel.Fail(kernel.ErrSchemaRevisionUnresolved,
 			"schema_ref %q is not a schema/* object", ref)
 	}
+	if parsed.Repository == "" && parsed.Commit == "" {
+		if trusted, ok := objectmodel.ProtocolTrustRootSchema(parsed.Object); ok {
+			r.definitions[ref] = trusted
+			return trusted, nil
+		}
+	}
 	if parsed.Repository != "" && parsed.Repository != r.target.ID() {
 		return objectmodel.SchemaDefinition{}, kernel.Fail(kernel.ErrSchemaRevisionUnresolved,
 			"schema_ref %q must name the target repository", ref)
@@ -217,6 +226,9 @@ func (r *schemaResolver) definitionFor(ref string, drafts map[objectmodel.Object
 	}
 	value, err := r.schemaValue(parsed.Object, commit)
 	if err != nil {
+		if code := kernel.CodeOf(err); code != kernel.ErrObjectRefUnresolved && code != kernel.ErrSchemaRevisionUnresolved {
+			return objectmodel.SchemaDefinition{}, err
+		}
 		return objectmodel.SchemaDefinition{}, kernel.Fail(kernel.ErrSchemaRevisionUnresolved,
 			"schema_ref %q does not resolve to a schema object", ref)
 	}

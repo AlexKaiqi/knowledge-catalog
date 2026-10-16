@@ -1,0 +1,33 @@
+# Test-deployment external sources. Included only in local, never in dev.
+services:
+  live-origin:
+    image: python:3.13-alpine
+    working_dir: /opt/live-origin
+    command: [sh, -c, "python3 origin.py --listen 0.0.0.0:7402 --name live-origin-alt-port --generation alt-port-v1 & exec python3 origin.py --listen 0.0.0.0:7400 --name live-origin --generation live-origin-v1"]
+    ports:
+      - "127.0.0.1:7400:7400"
+      - "127.0.0.1:7402:7402"
+    networks:
+      default:
+        aliases: [api.live-origin]
+    volumes:
+      - ../../.data/scenes/service-initialized/named-repositories-created/qinghe-object-published/_materials/acceptance/live-origin:/opt/live-origin:ro
+    healthcheck:
+      test: [CMD, python3, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7400/health'); urllib.request.urlopen('http://127.0.0.1:7402/health')"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  untrusted-origin:
+    image: python:3.13-alpine
+    working_dir: /opt/live-origin
+    command: [python3, origin.py, --listen, 0.0.0.0:7401, --name, untrusted-origin, --generation, untrusted-v1]
+    ports:
+      - "127.0.0.1:7401:7401"
+    volumes:
+      - ../../.data/scenes/service-initialized/named-repositories-created/qinghe-object-published/_materials/acceptance/live-origin:/opt/live-origin:ro
+    healthcheck:
+      test: [CMD, python3, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7401/health')"]
+      interval: 2s
+      timeout: 3s
+      retries: 20

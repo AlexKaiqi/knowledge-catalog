@@ -1,0 +1,9 @@
+# 测试部署配置片段：Dataset 配额与自动发布最小间隔。向量成员上限 0，使 index/metric-semantic.yaml 超额。
+datasets:
+  defaults:
+    quota:
+      vectorMembers: 0
+      indexBytes: 256MiB
+      retainedRevisions: 10
+    follow:
+      minInterval: 30s

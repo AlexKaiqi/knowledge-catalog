@@ -7,6 +7,7 @@ import (
 	index "kc/discovery/projection"
 	"kc/kernel"
 	objectmodel "kc/object"
+	"kc/object/reader"
 	"kc/snapshot/dataset"
 )
 
@@ -16,44 +17,76 @@ func (p *IndexPlugins) AfterSnapshot(snapshot dataset.Snapshot) error {
 	if p == nil || snapshot.Repository == nil {
 		return nil
 	}
-	if err := p.unavailable[snapshot.Repository.ID()]; err != nil {
-		return err
-	}
-	if p.byRepo[snapshot.Repository.ID()] == nil {
+	if !p.ConfiguredFor(snapshot.Repository.ID()) {
 		return nil
 	}
 	return p.Desire(snapshot.Repository.ID(), snapshot.To)
 }
 
 func (p *IndexPlugins) CheckSearchProjectionAt(repo objectmodel.Repository, at kernel.CommitID) (index.Meta, error) {
-	instance, done, err := p.take(repo.ID())
+	instance, done, err := p.takeRepository(repo)
 	if err != nil {
 		return index.Meta{}, err
 	}
 	defer done()
+	if scoped, ok := repo.(interface {
+		DatasetScope() (reader.MemberLookup, reader.DatasetPin)
+	}); ok {
+		if queries, ok := instance.services.Queries.(interface {
+			CheckDatasetProjection(reader.MemberLookup, reader.DatasetPin) (index.Meta, error)
+		}); ok {
+			lookup, pin := scoped.DatasetScope()
+			return queries.CheckDatasetProjection(lookup, pin)
+		}
+	}
 	return instance.services.Queries.CheckSearchProjectionAt(repo, at)
 }
 
 func (p *IndexPlugins) DescribeAt(repo objectmodel.Repository, at kernel.CommitID) (index.IndexDescriptor, error) {
-	instance, done, err := p.take(repo.ID())
+	instance, done, err := p.takeRepository(repo)
 	if err != nil {
 		return index.IndexDescriptor{}, err
 	}
 	defer done()
+	if scoped, ok := repo.(interface {
+		DatasetScope() (reader.MemberLookup, reader.DatasetPin)
+	}); ok {
+		if queries, ok := instance.services.Queries.(interface {
+			DescribeDataset(reader.MemberLookup, reader.DatasetPin) (index.IndexDescriptor, error)
+		}); ok {
+			lookup, pin := scoped.DatasetScope()
+			return queries.DescribeDataset(lookup, pin)
+		}
+	}
 	return instance.services.Queries.DescribeAt(repo, at)
 }
 
 func (p *IndexPlugins) EnsureAt(repo objectmodel.Repository, at kernel.CommitID) (index.IndexSync, error) {
-	instance, done, err := p.take(repo.ID())
+	instance, done, err := p.takeRepository(repo)
 	if err != nil {
 		return index.IndexSync{}, err
 	}
 	defer done()
+	if scoped, ok := repo.(interface {
+		DatasetScope() (reader.MemberLookup, reader.DatasetPin)
+	}); ok {
+		if queries, ok := instance.services.Queries.(interface {
+			PrepareDataset(context.Context, reader.MemberLookup, reader.DatasetPin) (index.IndexSync, error)
+		}); ok {
+			lookup, pin := scoped.DatasetScope()
+			return queries.PrepareDataset(context.Background(), lookup, pin)
+		}
+	}
 	return instance.services.Queries.EnsureAt(repo, at)
 }
 
 func (p *IndexPlugins) Ensure(repo objectmodel.Repository, at kernel.CommitID) (index.IndexSync, error) {
-	instance, done, err := p.take(repo.ID())
+	if _, ok := repo.(interface {
+		DatasetScope() (reader.MemberLookup, reader.DatasetPin)
+	}); ok {
+		return p.EnsureAt(repo, at)
+	}
+	instance, done, err := p.takeRepository(repo)
 	if err != nil {
 		return index.IndexSync{}, err
 	}
@@ -62,16 +95,26 @@ func (p *IndexPlugins) Ensure(repo objectmodel.Repository, at kernel.CommitID) (
 }
 
 func (p *IndexPlugins) RefreshState(ctx context.Context, repo objectmodel.Repository, at kernel.CommitID, source index.ObservationSource) (index.StateSync, error) {
-	instance, done, err := p.take(repo.ID())
+	instance, done, err := p.takeRepository(repo)
 	if err != nil {
 		return index.StateSync{}, err
 	}
 	defer done()
+	if scoped, ok := repo.(interface {
+		DatasetScope() (reader.MemberLookup, reader.DatasetPin)
+	}); ok {
+		if queries, ok := instance.services.Queries.(interface {
+			RefreshDatasetState(context.Context, reader.MemberLookup, reader.DatasetPin, index.ObservationSource) (index.StateSync, error)
+		}); ok {
+			lookup, pin := scoped.DatasetScope()
+			return queries.RefreshDatasetState(ctx, lookup, pin, source)
+		}
+	}
 	return instance.services.Queries.RefreshState(ctx, repo, at, source)
 }
 
 func (p *IndexPlugins) PrepareServingBasis(ctx context.Context, repo objectmodel.Repository, at kernel.CommitID) error {
-	instance, done, err := p.take(repo.ID())
+	instance, done, err := p.takeRepository(repo)
 	if err != nil {
 		return err
 	}
@@ -133,7 +176,7 @@ func (p *IndexPlugins) CatchUpRepository(ctx context.Context, repo kernel.Reposi
 		return err
 	}
 	defer done()
-	return instance.services.Maintenance.CatchUp(ctx)
+	return instance.services.Maintenance.CatchUpRepository(ctx, repo)
 }
 
 func (p *IndexPlugins) SetObservationSource(source index.ObservationSource) {

@@ -24,19 +24,7 @@ func (h *handler) nativeAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	target, _ := url.Parse(origin)
-	if h.nativeServiceIdentity() && h.nativeServicePublic(w, r, target) {
-		return
-	}
-	if nativePublicRequest(r) {
-		var proof http.Header
-		if nativeHasProof(r) {
-			proof, err = lakeFSCallerProof(r.Header)
-			if err != nil {
-				writeNativeError(w, err)
-				return
-			}
-		}
-		relayNative(w, r, target, proof, true, h.decorateNativeConfig)
+	if h.nativeServicePublic(w, r, target) {
 		return
 	}
 	r = nativeNavigationRequest(r)
@@ -48,25 +36,12 @@ func (h *handler) nativeAPI(w http.ResponseWriter, r *http.Request) {
 		writeNativeError(w, err)
 		return
 	}
-	if !h.nativeServiceIdentity() && (caller.User == nil || caller.User.Provider != "lakefs" || caller.User.Issuer != origin) {
-		writeNativeError(w, kernel.Fail(kernel.ErrForbidden, "native API requires proof from its configured authentication instance"))
-		return
-	}
 	if nativeAccountRequest(r) {
-		if h.nativeServiceIdentity() {
-			if r.URL.Path == "/api/v1/user" && r.Method == http.MethodGet {
-				writeJSON(w, 200, map[string]any{"user": map[string]string{"id": caller.Principal}})
-			} else {
-				writeNativeError(w, kernel.Fail(kernel.ErrForbidden, "accounts and credentials belong to the configured identity provider"))
-			}
-			return
+		if r.URL.Path == "/api/v1/user" && r.Method == http.MethodGet {
+			writeJSON(w, 200, map[string]any{"user": map[string]string{"id": caller.Principal}})
+		} else {
+			writeNativeError(w, kernel.Fail(kernel.ErrForbidden, "accounts and credentials belong to the configured identity provider"))
 		}
-		proof, err := h.nativeStorageProof(r)
-		if err != nil {
-			writeNativeError(w, err)
-			return
-		}
-		relayNative(w, r, target, proof, true, nil)
 		return
 	}
 	proof, err := h.nativeStorageProof(r)
@@ -120,19 +95,6 @@ func safeNativePath(path string) bool {
 	return true
 }
 
-func nativeHasProof(r *http.Request) bool {
-	if r.Header.Get("Authorization") != "" {
-		return true
-	}
-	for _, cookie := range r.Cookies() {
-		switch cookie.Name {
-		case "internal_auth_session", "oidc_auth_session", "saml_auth_session":
-			return true
-		}
-	}
-	return false
-}
-
 func (h *handler) serveNativeRepository(w http.ResponseWriter, r *http.Request, caller identity.HTTPIdentity, resources Resources, target *url.URL, proof http.Header, route nativeRoute, values map[string]string) (any, error) {
 	if route.path == "/repositories" && r.Method == http.MethodGet {
 		return nativeInventory(w, r, caller, resources, target, proof)
@@ -180,7 +142,7 @@ func (h *handler) serveNativeRepository(w http.ResponseWriter, r *http.Request, 
 
 func (h *handler) nativeResponseDecoration(next func(*http.Response) error) func(*http.Response) error {
 	return func(response *http.Response) error {
-		if h.nativeServiceIdentity() && (response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden) {
+		if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
 			return kernel.Fail(kernel.ErrTemporaryUnavailable, "private storage authorization is unavailable")
 		}
 		if next != nil {

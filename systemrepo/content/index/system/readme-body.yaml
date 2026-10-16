@@ -1,0 +1,22 @@
+---
+object_id: index/system
+aspect_name: index
+member_key: readme-body
+kind: Member
+path_hint: index/system/readme-body.yaml
+schema_ref: schema/core/index-declaration/v1
+---
+{
+  "catalog": "declarative-index/opensearch@2026-10",
+  "inputs": [
+    {
+      "from": "schema/core/readme/v1#/fields/body"
+    }
+  ],
+  "build": {
+    "kind": "text"
+  },
+  "uses": [
+    "text"
+  ]
+}

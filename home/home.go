@@ -160,7 +160,7 @@ func assemble(home string, file HomeFile, stores StoresFile, store snapshot.Regi
 		return ws.Reader.Require(id, kernel.ErrCapabilityUnsatisfied)
 	}
 	ws.DatasetPreparation = discoverydatasets.Preparation{Enabled: ws.Plugins.Configured(), Provider: ws.Plugins, Lookup: lookup,
-		Conflicts: publicationConflicts(lookup)}
+		PrepareDataset: ws.prepareDataset(lookup), Conflicts: publicationConflicts(lookup), Dependencies: publicationDependencies(lookup, store.IDs)}
 	ws.wireSidecars()
 	return ws, nil
 }

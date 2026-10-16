@@ -14,12 +14,13 @@ func TestPluginAdoptionOwnershipGuardRejectsCopiesAndWrongAliases(t *testing.T) 
 	}
 	for _, fixture := range []struct{ path, source, signal string }{
 		{"discovery/plugin/copied.go", "package plugin; type PluginScope struct{}", "copies or misroutes shared adoption PluginScope"},
-		{"liveaccess/service/copied.go", "package service; type RepositoryPluginConfig struct{}", "copies or misroutes shared adoption RepositoryPluginConfig"},
+		{"liveaccess/service/copied.go", "package service; type PluginsConfig map[string]int", "copies or misroutes shared adoption PluginsConfig"},
 		{"home/copied.go", "package home; type PluginSelection struct{Name string; Instance string}", "copies or misroutes shared adoption PluginSelection"},
 		{"liveaccess/cli/affordance.go", "package cli; type PluginAffordance struct{}", "copies or misroutes shared adoption PluginAffordance"},
-		{"declarativeindex/cli/affordance.go", "package cli; import old \"kc/discovery/plugin\"; type PluginAffordance = old.PluginAffordance", "copies or misroutes shared adoption PluginAffordance"},
+		{"declarativeindex/capability/affordance.go", "package capability; import old \"kc/discovery/plugin\"; type PluginAffordance = old.PluginAffordance", "copies or misroutes shared adoption PluginAffordance"},
+		{"declarativeindex/cli/affordance.go", "package cli; import common \"kc/discovery/adoption\"; type PluginAffordance = common.PluginAffordance", "copies or misroutes shared adoption PluginAffordance"},
 		{"discovery/plugin/config.go", "package plugin; import common \"kc/discovery/adoption\"; type PluginScope = common.SourcePlugin", "copies or misroutes shared adoption PluginScope"},
-		{"discovery/plugin/config.go", "package plugin; import common \"kc/discovery/adoption\"; func ParseRepositoryPlugins(){return common.SelectRepositoryPlugins()}", "copies or misroutes shared adoption ParseRepositoryPlugins"},
+		{"discovery/plugin/config.go", "package plugin; import common \"kc/discovery/adoption\"; type PluginConfig = common.PluginInstanceConfig", "copies or misroutes shared adoption PluginConfig"},
 		{"discovery/adoption/extra.go", "package adoption; type ArbitraryContribution struct{Role string; Value any}", "exported surface adds unselected ArbitraryContribution"},
 	} {
 		t.Run(fixture.signal+fixture.path, func(t *testing.T) {

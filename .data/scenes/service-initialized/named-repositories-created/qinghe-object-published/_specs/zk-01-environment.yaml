@@ -1,0 +1,65 @@
+# 零知识验证：认识环境。夹具与判定见 _materials/zero-knowledge/README.md，答案封存在同目录 answers.yaml。
+# 每条从本节点前态加零知识世界独立开始；Agent 只拿到 kc、服务地址、一个只有 qinghe-analysis 消费权的身份与人的原话。
+# 开放发现先跑，判定 Agent 能否自己拼出能力图；判断题在其后，只用于定位理解错误，不单独构成通过条件。
+
+- id: zk-env-capability-map
+  title: 不给提示也能自己拼出能力图
+  claims: ["affordance#U8", "object#U9", "service#U5"]
+  given:
+    - 零知识世界就绪，使用基础种子；Agent 未执行任何业务请求，也没有被告知任何能力名称。
+  when:
+    - 人问：“这里有哪些能力？各自解决什么问题？要满足什么条件？我怎么开始用？”
+  then:
+    - Agent 自己列出能力清单，与 answers.yaml 的 capability_map 对照：覆盖 must_cover 全部项，每项说出解决的问题、前提条件与一条可运行的入口命令。
+    - 每项前提与入口都能指出来自哪条帮助或哪个系统仓对象；入口命令在本环境实际可运行，失败时 Agent 能说出是哪个前提不满足。
+    - 不把未列入环境的能力说成存在，不把两种能力混成一种（例如把搜索说成读取，把固定内容说成当前值）。
+  risk: 帮助里逐条有命令，但没有能拼成“能力、用途、条件、入口”的路径，Agent 只能逐条试错。
+
+- id: zk-env-concepts
+  title: 能力图背后的概念关系没有理解错
+  claims: ["object#U9", "object#U8"]
+  given:
+    - 与 zk-env-capability-map 同一次运行，紧接在开放发现之后。
+  when:
+    - 人问：“这是什么系统，我能用它干什么？”随后判定者给出 answers.yaml 中 concepts 的六道判断题。
+  then:
+    - Agent 说清仓、版本、Dataset、对象、方面、关系、Schema 之间怎样关联，每个说法都能指出来自哪条帮助或哪个系统仓对象。
+    - 六道判断题每题给出环境内依据；答错的题回指开放发现里对应的错误说法，用于归因，不单独决定通过。
+  risk: 帮助里逐条讲了概念，但拼不成正确的关系，Agent 在后续任务里按错误模型行动。
+
+- id: zk-env-find-usable
+  title: 不知道任何名字也能找到自己可用的 Dataset
+  claims: ["discovery#U10", "service#U5"]
+  given:
+    - 零知识世界就绪；身份只有 qinghe-analysis 的消费权，服务上另有至少一个他无权消费的 Dataset。
+  when:
+    - 人问：“我手上有什么能用的？”
+  then:
+    - Agent 只靠自己的身份列出 qinghe-analysis 及其用途，不列无权的 Dataset，不猜仓名。
+    - Agent 说明这个身份能在 qinghe-analysis 里搜索和读取，但不等于能直接读来源仓。
+  risk: 消费方入口要求事先知道名字，或把无权的 Dataset 也列给他。
+
+- id: zk-env-choose-capability
+  title: 四种问法各自选对能力
+  claims: ["affordance#U8", "affordance#U1", "object#U11"]
+  given:
+    - 零知识世界就绪，使用基础种子，取值能力已部署；Agent 已知道 mysql 客户端与连接串。
+  when:
+    - 人依次问：“帮我找个跟订单有关的表”“orders 现在有多少行”“sales_mart 和 orders 是什么关系”“shop.gmv 这个定义是哪个版本的”。
+  then:
+    - 第一问在 Dataset 里搜索；第三问沿关系浏览；第四问给出对象所在仓与 Dataset 修订固定的提交。
+    - 第二问读 orders 的 stats 当前观察，或用 mysql 对映射到的物理表计数，两条都是合法路径；无论哪条都说清这是当前值并给出观察或查询时间，不把固定修订里的内容当当前值。
+    - 每次都说出该能力需要的前提（消费权、索引声明、取值能力或 MySQL 账号）。
+  risk: 固定内容与当前值、搜索与关系浏览的区别没讲清，Agent 选错能力或把旧值当当前值。
+
+- id: zk-env-failure-feedback
+  title: 无权、未声明、插件没装与真没有能分开
+  claims: ["affordance#U4", "affordance#U5", "affordance#U8"]
+  given:
+    - 四个独立变体各自从前态开始：A 身份没有 qinghe-analysis 消费权；B Dataset 不选 zk-index；C 部署未装声明式索引；D 一切就绪但搜索词是 "refunds"（环境里没有）。
+  when:
+    - 人在每个变体里都说：“帮我找 refunds 相关的表。”
+  then:
+    - A 说明缺消费权并指出该向谁申请；B 说明这个 Dataset 没有声明检索；C 说明部署没有检索能力；D 说明确实没有。
+    - 四种情况的说法互不混淆，A、B、C 都不被说成“没有这张表”。
+  risk: 失败反馈说不清，陌生使用者把权限或能力问题误判为数据不存在。

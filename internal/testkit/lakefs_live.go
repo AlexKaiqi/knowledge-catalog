@@ -16,10 +16,8 @@ import (
 )
 
 // LakeFSLive creates empty Graveler repositories for live scene walks.
-// It is a testkit fixture, not a Snapshot adapter. ForkStamps is a no-op:
-// live Graveler cannot preserve commit IDs across physical copies, so the
-// live scene DFS uses a fresh cache per node (replay from root) instead of
-// parent-home clones.
+// It is a testkit fixture, not a Snapshot adapter. Sequential scene worlds use
+// SnapshotStamps to restore their owned authorities without replaying writes.
 type LakeFSLive struct {
 	origin    string
 	cred      string
@@ -113,9 +111,10 @@ func (f *LakeFSLive) OwnsDSN(dsn string) bool {
 	return strings.HasPrefix(dsn, f.origin+"/")
 }
 
-// ForkStamps is intentionally a no-op. See type comment.
+// ForkStamps cannot copy a live commit graph into a different physical repo.
+// A caller must use SnapshotStamps for sequential checkpoint restoration.
 func (f *LakeFSLive) ForkStamps(dst string) error {
-	return nil
+	return fmt.Errorf("live lakeFS requires an owned checkpoint, not a physical repository copy")
 }
 
 func (f *LakeFSLive) cleanup() {

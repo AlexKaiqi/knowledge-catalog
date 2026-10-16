@@ -61,6 +61,12 @@ type Dataset struct {
 	// Metadata belongs to this published revision. Keys and values are opaque
 	// strings; neither metadata nor its absence changes the delivered file scope.
 	Metadata map[string]string `json:"metadata,omitempty" yaml:"metadata,omitempty"`
+	// Dependencies are the Repository versions frozen with this revision only
+	// to interpret references (Schema, ResourceDescriptor) held outside the
+	// selected sources. The file layer stores them as opaque coordinates: they
+	// are not sources, deliver no files and grant no read. Following does not
+	// watch them; the next revision freezes them again (doc/design/dataset.md).
+	Dependencies map[kernel.RepositoryID]kernel.CommitID `json:"dependencies,omitempty" yaml:"dependencies,omitempty"`
 }
 
 func (c *service) DefineDataset(setID string, revision int, sources []DatasetSource) (Dataset, error) {
@@ -164,7 +170,10 @@ func (c *service) PublishDataset(def Dataset) (Dataset, error) {
 	if err := c.validatePublicationFiles(items); err != nil {
 		return Dataset{}, err
 	}
-	def = Dataset{SetID: def.SetID, Revision: def.Revision, Sources: frozen, Items: items, Metadata: maps.Clone(def.Metadata)}
+	if err := c.validateDependencies(frozen, def.Dependencies); err != nil {
+		return Dataset{}, err
+	}
+	def = Dataset{SetID: def.SetID, Revision: def.Revision, Sources: frozen, Items: items, Metadata: maps.Clone(def.Metadata), Dependencies: maps.Clone(def.Dependencies)}
 	next := c.dumpState()
 	next.Datasets = slices.DeleteFunc(next.Datasets, func(existing Dataset) bool { return existing.SetID == def.SetID })
 	next.Datasets = append(next.Datasets, cloneDataset(def))
@@ -247,6 +256,7 @@ func (c *service) Set(setID string) (Dataset, error) {
 
 func cloneDataset(def Dataset) Dataset {
 	def.Metadata = maps.Clone(def.Metadata)
+	def.Dependencies = maps.Clone(def.Dependencies)
 	def.Sources = slices.Clone(def.Sources)
 	def.Items = slices.Clone(def.Items)
 	for i := range def.Sources {

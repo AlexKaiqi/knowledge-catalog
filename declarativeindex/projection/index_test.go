@@ -103,7 +103,7 @@ func TestIndexIncrementalOnObjectChange(t *testing.T) {
 	repo := testfixture.MakeIndexRepository(t, "kr://acme/public/core")
 	root := testkit.MustHead(t, repo, "refs/heads/main")
 	c1 := testfixture.PutAt(t, repo, root, []objectmodel.Operation{
-		testfixture.PolicyBodySchema(),
+		testfixture.PolicyBodySchema(), testfixture.PolicyBodyIndex(),
 		testkit.PutEntity("policy/P-1", map[string]any{"body": "needs a runbook"}, "")[0],
 	})
 	idx := liveIndex(t)
@@ -127,7 +127,7 @@ func TestSearchRejectsCandidateMissingFromFixedAuthorityBasis(t *testing.T) {
 	repo := testfixture.MakeIndexRepository(t, "kr://acme/public/core")
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
 	head := testfixture.PutAt(t, repo, root, []objectmodel.Operation{
-		testfixture.PolicyBodySchema(),
+		testfixture.PolicyBodySchema(), testfixture.PolicyBodyIndex(),
 		testkit.PutEntity("policy/P-1", map[string]any{"body": "runbook"}, "")[0],
 	})
 	engine := &staleCandidateEngine{candidates: []ports.CandidateRef{
@@ -148,7 +148,7 @@ func TestSearchRejectsCandidateMissingFromFixedAuthorityBasis(t *testing.T) {
 func TestSearchRejectsNonAdvancingProviderContinuation(t *testing.T) {
 	repo := testfixture.MakeIndexRepository(t, "kr://acme/public/non-advancing-search")
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
-	commit := testfixture.PutAt(t, repo, root, []objectmodel.Operation{testfixture.PolicyBodySchema()})
+	commit := testfixture.PutAt(t, repo, root, []objectmodel.Operation{testfixture.PolicyBodySchema(), testfixture.PolicyBodyIndex()})
 	engine := &nonAdvancingEngine{}
 	idx := index.NewIndexEngine("", func(string, kernel.RepositoryID) (ports.Engine, error) { return engine, nil })
 	t.Cleanup(func() { _ = idx.Close() })
@@ -169,8 +169,9 @@ func TestSupersetResidualRestoresCompleteAndContinuesCandidates(t *testing.T) {
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
 	head := testfixture.PutAt(t, repo, root, []objectmodel.Operation{
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/table.structure"}, Value: map[string]any{
-			"entity": "Table", "aspect": "structure", "fields": map[string]any{"db": map[string]any{"type": "string", "access": []any{"filter"}}},
+			"entity": "Table", "aspect": "structure", "fields": map[string]any{"db": map[string]any{"type": "string"}},
 		}},
+		testkit.IndexField("schema/table.structure", "db", "keyword"),
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/no", AspectName: "structure"}, Value: map[string]any{"db": "other"}},
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/a", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/b", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
@@ -207,7 +208,7 @@ func TestIndexRemoveIsIncremental(t *testing.T) {
 	repo := testfixture.MakeIndexRepository(t, "kr://acme/public/core")
 	root := testkit.MustHead(t, repo, "refs/heads/main")
 	c1 := testfixture.PutAt(t, repo, root, []objectmodel.Operation{
-		testfixture.PolicyBodySchema(),
+		testfixture.PolicyBodySchema(), testfixture.PolicyBodyIndex(),
 		testkit.PutEntity("policy/gone", map[string]any{"body": "temporary runbook"}, "")[0],
 	})
 	idx := liveIndex(t)
@@ -234,8 +235,9 @@ func TestIndexSchemaChangeForcesRebuild(t *testing.T) {
 	c1 := testfixture.PutAt(t, repo, root, []objectmodel.Operation{
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/dw.table.structure"}, Value: map[string]any{
 			"entity": "Table", "aspect": "structure", "pattern": "record",
-			"fields": map[string]any{"db": map[string]any{"access": []any{"filter"}}},
+			"fields": map[string]any{"db": map[string]any{}},
 		}},
+		testkit.IndexField("schema/dw.table.structure", "db", "keyword"),
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/t", AspectName: "structure"}, Value: map[string]any{"db": "tl", "note": "events"}},
 	})
 	idx := liveIndex(t)
@@ -244,13 +246,13 @@ func TestIndexSchemaChangeForcesRebuild(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c2 := testfixture.PutAt(t, repo, c1, testkit.PutEntity("schema/dw.table.structure", map[string]any{
+	c2 := testfixture.PutAt(t, repo, c1, append(testkit.PutEntity("schema/dw.table.structure", map[string]any{
 		"entity": "Table", "aspect": "structure", "pattern": "record",
 		"fields": map[string]any{
-			"db":   map[string]any{"access": []any{"filter"}},
-			"note": map[string]any{"access": []any{"text"}},
+			"db":   map[string]any{},
+			"note": map[string]any{},
 		},
-	}, ""))
+	}, ""), testkit.IndexText("schema/dw.table.structure", "note")))
 	second, err := idx.Apply(repo, c1, c2, []objectmodel.ObjectID{"schema/dw.table.structure"})
 	if err != nil || second.Mode != ports.IndexModeRebuild || second.Cause != ports.IndexCauseSchema {
 		t.Fatalf("AccessHints change must rebuild cause=schema, got %#v %v", second, err)
@@ -270,7 +272,7 @@ func TestIndexSchemaDocWithoutHintChangeIsContent(t *testing.T) {
 	schema := map[string]any{
 		"entity": "Table", "aspect": "structure", "pattern": "record",
 		"title":  "v1",
-		"fields": map[string]any{"db": map[string]any{"access": []any{"filter"}}},
+		"fields": map[string]any{"db": map[string]any{}},
 	}
 	c1 := testfixture.PutAt(t, repo, root, []objectmodel.Operation{
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/dw.table.structure"}, Value: schema},
@@ -296,10 +298,12 @@ func TestIndexOmitsUnhintedPermissions(t *testing.T) {
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/dw.table.structure"}, Value: map[string]any{
 			"entity": "Table", "aspect": "structure", "pattern": "record",
 			"fields": map[string]any{
-				"db":          map[string]any{"access": []any{"filter"}},
-				"description": map[string]any{"access": []any{"text"}},
+				"db":          map[string]any{},
+				"description": map[string]any{},
 			},
 		}},
+		testkit.IndexField("schema/dw.table.structure", "db", "keyword"),
+		testkit.IndexText("schema/dw.table.structure", "description"),
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/dw.table.permissions"}, Value: map[string]any{
 			"entity": "Table", "aspect": "permissions", "pattern": "record",
 			"fields": map[string]any{"principal": map[string]any{"type": "string"}},
@@ -328,12 +332,14 @@ func TestIndexPermissionsWhenHinted(t *testing.T) {
 	head := testfixture.PutAt(t, repo, root, []objectmodel.Operation{
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/dw.table.structure"}, Value: map[string]any{
 			"entity": "Table", "aspect": "structure", "pattern": "record",
-			"fields": map[string]any{"db": map[string]any{"access": []any{"filter"}}},
+			"fields": map[string]any{"db": map[string]any{}},
 		}},
+		testkit.IndexField("schema/dw.table.structure", "db", "keyword"),
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/dw.table.permissions"}, Value: map[string]any{
 			"entity": "Table", "aspect": "permissions", "pattern": "record",
-			"fields": map[string]any{"principal": map[string]any{"access": []any{"filter"}}},
+			"fields": map[string]any{"principal": map[string]any{}},
 		}},
+		testkit.IndexField("schema/dw.table.permissions", "principal", "keyword"),
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/t", AspectName: "structure"}, Value: map[string]any{"db": "tl"}},
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/t", AspectName: "permissions"}, Value: map[string]any{"principal": "user:a"}},
 	})
@@ -362,7 +368,7 @@ func TestCatalogHookUpdatesIndexAfterCommit(t *testing.T) {
 	if _, err := s.Writer.Commit("w0", objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: "refs/heads/main",
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
-		Operations: []objectmodel.Operation{testfixture.PolicyBodySchema()},
+		Operations: []objectmodel.Operation{testfixture.PolicyBodySchema(), testfixture.PolicyBodyIndex()},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -444,12 +450,14 @@ func TestIndexSchemaRefSelectsFields(t *testing.T) {
 	head := testfixture.PutAt(t, repo, root, []objectmodel.Operation{
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/alpha"}, Value: map[string]any{
 			"entity": "Doc", "pattern": "record",
-			"fields": map[string]any{"secret": map[string]any{"access": []any{"text"}}},
+			"fields": map[string]any{"secret": map[string]any{}},
 		}},
+		testkit.IndexText("schema/alpha", "secret"),
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/beta"}, Value: map[string]any{
 			"entity": "Doc", "pattern": "record",
-			"fields": map[string]any{"note": map[string]any{"access": []any{"text"}}},
+			"fields": map[string]any{"note": map[string]any{}},
 		}},
+		testkit.IndexText("schema/beta", "note"),
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "doc/a"},
 			Value: map[string]any{"secret": "alphasecret", "note": "betanote"}, SchemaRef: "schema/alpha"},
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "doc/b"},
@@ -473,14 +481,20 @@ func TestIndexSchemaRefSelectsFields(t *testing.T) {
 func TestDescribeIndexShowsCompiledSpec(t *testing.T) {
 	repo := testfixture.MakeIndexRepository(t, "kr://acme/public/physical")
 	root := testkit.MustHead(t, repo, "refs/heads/main")
+	// Keep the declarations on the table object: adding an unrelated fixture
+	// object would change the document count this Schema-exclusion test guards.
+	filter := testkit.IndexField("schema/dw.table.structure", "db", "keyword")
+	text := testkit.IndexText("schema/dw.table.structure", "note")
+	filter.Address.ObjectID, text.Address.ObjectID = "table/t", "table/t"
 	head := testfixture.PutAt(t, repo, root, []objectmodel.Operation{
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/dw.table.structure"}, Value: map[string]any{
 			"entity": "Table", "aspect": "structure", "pattern": "record",
 			"fields": map[string]any{
-				"db":   map[string]any{"type": "string", "access": []any{"filter"}},
-				"note": map[string]any{"access": []any{"text"}},
+				"db":   map[string]any{"type": "string"},
+				"note": map[string]any{},
 			},
 		}},
+		filter, text,
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/t", AspectName: "structure"},
 			Value: map[string]any{"db": "tl", "note": "events"}},
 	})
@@ -506,7 +520,7 @@ func TestSearchAtDoesNotRewindLive(t *testing.T) {
 	repo := testfixture.MakeIndexRepository(t, "kr://acme/public/core")
 	root := testkit.MustHead(t, repo, "refs/heads/main")
 	c1 := testfixture.PutAt(t, repo, root, []objectmodel.Operation{
-		testfixture.PolicyBodySchema(),
+		testfixture.PolicyBodySchema(), testfixture.PolicyBodyIndex(),
 		testkit.PutEntity("policy/P-1", map[string]any{"body": "needs a runbook"}, "")[0],
 	})
 	idx := liveIndex(t)
@@ -555,9 +569,11 @@ func TestIndexSharedPathUntypedObjectKeepsLiveAtHead(t *testing.T) {
 	root := testkit.MustHead(t, repo, "refs/heads/main")
 	c1 := testfixture.PutAt(t, repo, root, []objectmodel.Operation{
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/skill.body"},
-			Value: map[string]any{"entity": "Skill", "pattern": "record", "fields": map[string]any{"text": map[string]any{"access": []any{"text"}}}}},
+			Value: map[string]any{"entity": "Skill", "pattern": "record", "fields": map[string]any{"text": map[string]any{}}}},
+		testkit.IndexText("schema/skill.body", "text"),
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/metricview.definition"},
-			Value: map[string]any{"entity": "MetricView", "pattern": "record", "fields": map[string]any{"text": map[string]any{"access": []any{"text"}}}}},
+			Value: map[string]any{"entity": "MetricView", "pattern": "record", "fields": map[string]any{"text": map[string]any{}}}},
+		testkit.IndexText("schema/metricview.definition", "text"),
 		testkit.PutEntity("skill/sql.execute", map[string]any{"text": "run sql"}, "")[0],
 	})
 	idx := liveIndex(t)
@@ -606,9 +622,11 @@ func TestCatalogHookSharedPathDoesNotLeaveLiveLagging(t *testing.T) {
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: []objectmodel.Operation{
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/skill.body"},
-				Value: map[string]any{"entity": "Skill", "pattern": "record", "fields": map[string]any{"text": map[string]any{"access": []any{"text"}}}}},
+				Value: map[string]any{"entity": "Skill", "pattern": "record", "fields": map[string]any{"text": map[string]any{}}}},
+			testkit.IndexText("schema/skill.body", "text"),
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/metricview.definition"},
-				Value: map[string]any{"entity": "MetricView", "pattern": "record", "fields": map[string]any{"text": map[string]any{"access": []any{"text"}}}}},
+				Value: map[string]any{"entity": "MetricView", "pattern": "record", "fields": map[string]any{"text": map[string]any{}}}},
+			testkit.IndexText("schema/metricview.definition", "text"),
 		},
 	}); err != nil {
 		t.Fatal(err)

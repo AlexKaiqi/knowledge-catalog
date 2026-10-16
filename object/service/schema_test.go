@@ -15,8 +15,8 @@ func (namedSchemaRepo) Read(objectID objectmodel.ObjectID, commit kernel.CommitI
 	return objectmodel.ObjectValue{
 		ObjectRef: objectmodel.ObjectRef{Object: objectID},
 		Value: map[string]any{
-			"entity": "Note", "description": "A short note.", "pattern": "record",
-			"fields": map[string]any{"body": map[string]any{"type": "string", "access": []any{"text"}}},
+			"entity": "Note", "aspect": "body", "description": "A short note.", "pattern": "record",
+			"fields": map[string]any{"body": map[string]any{"type": "string"}},
 		},
 	}, nil
 }
@@ -26,7 +26,8 @@ func TestSchemaListNamesEntitiesWithoutContractDetails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(listed) != 1 || listed[0].ObjectID != "schema/note" || listed[0].Entity != "Note" || listed[0].Description != "A short note." {
-		t.Fatalf("schema list must name the entity: %#v", listed)
+	if len(listed) != 1 || listed[0].ObjectID != "schema/note" || listed[0].Entity != "Note" ||
+		listed[0].Aspect != "body" || listed[0].Description != "A short note." {
+		t.Fatalf("schema list must name the entity and its aspect: %#v", listed)
 	}
 }

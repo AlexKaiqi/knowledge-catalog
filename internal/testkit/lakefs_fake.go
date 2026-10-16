@@ -296,6 +296,13 @@ func (f *LakeFSFake) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		writeLakeFSJSON(w, http.StatusOK, map[string]any{"id": repoName, "default_branch": "main", "storage_namespace": namespace})
 	case suffix == "/metadata":
 		serveLakeFSRepositoryMetadata(w, r, repo)
+	case suffix == "/branches" && r.Method == http.MethodGet:
+		results := []map[string]string{}
+		for name, commit := range repo.branches {
+			results = append(results, map[string]string{"id": name, "commit_id": commit})
+		}
+		sort.Slice(results, func(i, j int) bool { return results[i]["id"] < results[j]["id"] })
+		writeLakeFSJSON(w, http.StatusOK, map[string]any{"results": results, "pagination": map[string]any{"has_more": false}})
 	case suffix == "/branches" && r.Method == http.MethodPost:
 		f.createBranch(w, r, repo)
 	case strings.HasPrefix(suffix, "/branches/"):
@@ -383,6 +390,7 @@ func (f *LakeFSFake) serveBranch(w http.ResponseWriter, r *http.Request, repoNam
 			return
 		}
 		repo.branches[name] = source
+		delete(repo.staged, name)
 		w.WriteHeader(http.StatusNoContent)
 	case action == "commits" && r.Method == http.MethodPost:
 		f.commit(w, r, repo, name)

@@ -13,7 +13,7 @@ func hostEnvironmentHelpEntries() map[string]helpEntry {
     Taihu 首次执行打开授权链接，浏览器完成后再执行 kc login --wait；模式须与 Server 配对。
   条件：
     Server 的认证发现与身份验证可用，本机配置目录可写。local 只适用于显式 local 部署。
-    普通用户无需部署应用秘密；Gitea/lakeFS 登录使用认证系统已经签发的 Bearer token。
+    普通用户无需部署应用秘密；--mode token 使用认证系统已经签发的 Bearer token。
   结果：
     token/local 或 Taihu 等待阶段验证并保存成功后输出 authenticated 和 principal。
     Taihu 发起阶段输出授权链接与 next_step，尚未完成登录。

@@ -23,11 +23,8 @@ func applyInterfaceOperations(t *testing.T, state testkit.Setup, base kernel.Com
 	return head
 }
 
-func interfaceAccessSchema(prefixType string, access []string) map[string]any {
+func interfaceAccessSchema(prefixType string) map[string]any {
 	prefix := map[string]any{"type": prefixType, "required": true}
-	if len(access) != 0 {
-		prefix["access"] = access
-	}
 	return map[string]any{"entity": "Object", "aspect": "interfaces", "pattern": "keyed_collection", "additionalProperties": false, "fields": map[string]any{"interfaceRef": map[string]any{"type": "string", "required": true}, "prefix": prefix}}
 }
 
@@ -54,33 +51,41 @@ func TestObjectInterfaceAccessEvolutionReusesHandlerAndRetainsFullSchemaBasis(t 
 	contractRef := objectmodel.FormatPinnedRef(contracts.RepositoryID, contractCommit, "interface/prefix/v1")
 	schemaAddress := objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/implements.prefix/v1"}
 	memberAddress := objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: "object/message", AspectName: interfaces.ObjectInterfacesAspect, MemberKey: "friendly"}
+	prefixText := testkit.IndexText(schemaAddress.ObjectID, "prefix")
+	prefixFilter := testkit.IndexField(schemaAddress.ObjectID, "prefix", "keyword")
 	head := applyInterfaceOperations(t, state, state.RootCommitID, []objectmodel.Operation{
-		{Op: objectmodel.OpPut, Address: schemaAddress, Value: interfaceAccessSchema("string", []string{"text", "filter"})},
+		{Op: objectmodel.OpPut, Address: schemaAddress, Value: interfaceAccessSchema("string")},
 		{Op: objectmodel.OpPut, Address: memberAddress, SchemaRef: string(schemaAddress.ObjectID), Value: map[string]any{"interfaceRef": contractRef, "prefix": "Hello "}},
+		prefixText, prefixFilter,
 	})
 	firstReader, first := fixedInterfaceAccessReader(t, contracts, state, contractCommit, head)
 	handler := &prefixInterfaceHandler{}
 	registry := registerPrefix(t, first, handler)
 	request := interfaces.InterfaceRequest{Repository: state.RepositoryID, Object: memberAddress.ObjectID, Implementation: memberAddress.MemberKey, Operation: "read", Input: map[string]any{"text": "World"}}
 	caller := objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "agent"}}
-	previousDigest := first.ImplementationSchemaDigest
-	for _, access := range [][]string{{"filter"}, nil} {
-		head = applyInterfaceOperations(t, state, head, []objectmodel.Operation{{Op: objectmodel.OpPut, Address: schemaAddress, Value: interfaceAccessSchema("string", access)}})
+	// Retrieval capability lives in index declaration members, not in the
+	// Schema: narrowing and then removing them must neither reinstall the
+	// handler nor change any Schema evidence the call is bound to.
+	removeText := prefixText
+	removeText.Op, removeText.Value, removeText.SchemaRef = objectmodel.OpRemove, nil, ""
+	removeFilter := prefixFilter
+	removeFilter.Op, removeFilter.Value, removeFilter.SchemaRef = objectmodel.OpRemove, nil, ""
+	for _, change := range []objectmodel.Operation{removeText, removeFilter} {
+		head = applyInterfaceOperations(t, state, head, []objectmodel.Operation{change})
 		base, current := fixedInterfaceAccessReader(t, contracts, state, contractCommit, head)
 		result, err := dispatch.Open(base, registry, caller).Call(context.Background(), request)
 		if err != nil {
-			t.Fatalf("access-only schema change required handler reinstallation: %v", err)
+			t.Fatalf("index declaration change required handler reinstallation: %v", err)
 		}
 		if result.Value.(map[string]any)["text"] != "Hello World" || result.Basis.Contract != first.Contract || result.Basis.HandlerRevision != "prefix-v1" {
-			t.Fatalf("access-only update changed execution: %#v", result)
+			t.Fatalf("index declaration change changed execution: %#v", result)
 		}
 		if current.ImplementationSchemaStructureDigest != first.ImplementationSchemaStructureDigest || result.Basis.ImplementationSchemaStructureDigest != first.ImplementationSchemaStructureDigest {
-			t.Fatalf("field access changed handler support basis: first=%#v current=%#v result=%#v", first, current, result.Basis)
+			t.Fatalf("index declaration changed handler support basis: first=%#v current=%#v result=%#v", first, current, result.Basis)
 		}
-		if current.ImplementationSchemaDigest == previousDigest || result.Basis.ImplementationSchemaDigest != current.ImplementationSchemaDigest || result.Basis.ImplementationSchema.Commit != head {
-			t.Fatalf("full schema evidence lost indexing change: previous=%s current=%#v result=%#v", previousDigest, current, result.Basis)
+		if current.ImplementationSchemaDigest != first.ImplementationSchemaDigest || result.Basis.ImplementationSchemaDigest != first.ImplementationSchemaDigest {
+			t.Fatalf("index declaration leaked into full schema evidence: first=%#v current=%#v result=%#v", first, current, result.Basis)
 		}
-		previousDigest = current.ImplementationSchemaDigest
 	}
 	old, err := dispatch.Open(firstReader, registry, caller).Call(context.Background(), request)
 	if err != nil || old.Basis.ImplementationSchemaDigest != first.ImplementationSchemaDigest || old.Basis.ImplementationSchema != first.ImplementationSchema {
@@ -90,7 +95,7 @@ func TestObjectInterfaceAccessEvolutionReusesHandlerAndRetainsFullSchemaBasis(t 
 	// and contract, but changes the value type. It must not reuse the handler.
 	typed := testkit.NewSetup(t, "kr://interface/typed")
 	typedHead := applyInterfaceOperations(t, typed, typed.RootCommitID, []objectmodel.Operation{
-		{Op: objectmodel.OpPut, Address: schemaAddress, Value: interfaceAccessSchema("number", nil)},
+		{Op: objectmodel.OpPut, Address: schemaAddress, Value: interfaceAccessSchema("number")},
 		{Op: objectmodel.OpPut, Address: memberAddress, SchemaRef: string(schemaAddress.ObjectID), Value: map[string]any{"interfaceRef": contractRef, "prefix": 7}},
 	})
 	typedReader, _ := fixedInterfaceAccessReader(t, contracts, typed, contractCommit, typedHead)

@@ -55,8 +55,9 @@ func noticeBackgroundFixture(t *testing.T) (objectmodel.Repository, kernel.Commi
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/notice", AspectName: "definition"}, Value: map[string]any{"name": "notice"}},
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.runtime"}, Value: map[string]any{
 				"entity": "Job", "aspect": "runtime",
-				"fields": map[string]any{"status": map[string]any{"type": "string", "access": []any{"filter"}}},
+				"fields": map[string]any{"status": map[string]any{"type": "string"}},
 			}},
+			testkit.IndexField("schema/job.runtime", "status", "keyword"),
 			bindingfixture.PutDescriptor("resource/scheduler", bindingfixture.Descriptor("https://scheduler.example")),
 			bindingfixture.PutAspect("job/notice", "runtime", "schema/job.runtime", "resource/scheduler"),
 		},

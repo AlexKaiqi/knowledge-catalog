@@ -1,6 +1,7 @@
 package server
 
 import (
+	"kc/identity"
 	"testing"
 )
 
@@ -18,25 +19,25 @@ func TestHTTPServerOptionsFromFlags(t *testing.T) {
 	if _, err := HTTPServerOptionsFromFlags(map[string]FlagValue{"auth": "oidc"}); err == nil {
 		t.Fatal("unknown auth mode must fail")
 	}
-	if _, err := HTTPServerOptionsFromFlags(map[string]FlagValue{"auth": "gitea"}); err == nil {
-		t.Fatal("gitea mode without auth-url must fail")
+	if _, err := HTTPServerOptionsFromFlags(map[string]FlagValue{"auth": "gitea", "auth-url": "https://git.example"}); err == nil {
+		t.Fatal("retired gitea login must be an unknown auth mode")
 	}
 	if _, err := HTTPServerOptionsFromFlags(map[string]FlagValue{"auth": "local", "auth-url": "https://git.example"}); err == nil {
 		t.Fatal("--auth local with --auth-url must fail")
 	}
 	local, err := HTTPServerOptionsFromFlags(map[string]FlagValue{"auth": "local"})
-	if err != nil || local.Authenticator != nil || local.AuthModeLabel() != "local" || !local.localAssertion() {
+	if err != nil || !identity.SelfAsserted(local.Authenticator) || local.Authenticated() || local.AuthModeLabel() != "local" || !local.localAssertion() {
 		t.Fatalf("local options: %#v %v", local, err)
 	}
 	options, err := HTTPServerOptionsFromFlags(map[string]FlagValue{
-		"auth":       "gitea",
-		"auth-url":   "https://git.example/prefix",
-		"auth-admin": []string{"gitea:1", "gitea:2"},
+		"auth":       "taihu",
+		"auth-url":   "https://taihu.example/prefix",
+		"auth-admin": []string{"ops-1", "ops-2"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if options.Authenticator == nil || options.Authenticator.Name() != "gitea" || len(options.AdminPrincipals) != 2 {
+	if options.Authenticator == nil || options.Authenticator.Name() != "taihu" || len(options.AdminPrincipals) != 2 {
 		t.Fatalf("unexpected options: %#v", options)
 	}
 	// Taihu can work without --auth-url (x-tai-identity header mode).

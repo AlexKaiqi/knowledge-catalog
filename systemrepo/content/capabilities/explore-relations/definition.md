@@ -6,7 +6,7 @@ path_hint: capabilities/explore-relations/definition.md
 ---
 # 沿关系探索
 
-查询当前范围内关系，按预算遍历端点并保留方向、来源和截断证据。
+查询 Dataset 固定修订内的关系，按预算遍历端点并保留方向、来源和截断证据。关系邻接索引由系统固定构建，无需业务索引声明。
 
 相关说明：[关系](../../concepts/relation/definition.md)、[对象地址](../../concepts/address/definition.md)、[身份认证与授权](../../mechanisms/authorization/definition.md)。
 

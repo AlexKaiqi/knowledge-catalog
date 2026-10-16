@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"kc/identity"
+	"kc/identity/identitytest"
 	"kc/kernel"
 	"kc/snapshot/access"
 )
@@ -37,10 +38,11 @@ func (s *nativeTestRules) UpdateRules(_ context.Context, update func([]access.Ru
 
 type nativeTestUpstream struct {
 	sync.Mutex
-	calls  []string
-	bodies []string
-	proof  []string
-	query  []string
+	calls   []string
+	bodies  []string
+	proof   []string
+	cookies []string
+	query   []string
 }
 
 func (s *nativeTestUpstream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -58,6 +60,7 @@ func (s *nativeTestUpstream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.calls = append(s.calls, r.Method+" "+r.URL.Path)
 	s.bodies = append(s.bodies, string(raw))
 	s.proof = append(s.proof, r.Header.Get("Authorization"))
+	s.cookies = append(s.cookies, r.Header.Get("Cookie"))
 	s.query = append(s.query, r.URL.RawQuery)
 	s.Unlock()
 	if r.URL.Path == "/api/v1/repositories" {
@@ -93,14 +96,30 @@ func nativeTestHandler(t *testing.T, rules *nativeTestRules) (Handler, *nativeTe
 	upstream := &nativeTestUpstream{}
 	server := httptest.NewServer(upstream)
 	t.Cleanup(server.Close)
-	verifier, err := NewLakeFSAuthenticator(server.URL, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return NewHandler(Config{NativeOrigin: server.URL, Identity: IdentityOptions{Authenticator: verifier}, Acquire: func(context.Context, identity.HTTPIdentity, string) (Resources, func(), error) {
+	return NewHandler(Config{NativeOrigin: server.URL, NativeCredential: func(context.Context) (string, error) { return nativeServiceCredential, nil }, Identity: IdentityOptions{Authenticator: basicVerifier}, Acquire: func(context.Context, identity.HTTPIdentity, string) (Resources, func(), error) {
 		return Resources{NativeRepositories: map[string]kernel.RepositoryID{"alpha": "kr://test/a", "beta": "kr://test/b", "hidden": "kr://test/hidden"}, Access: access.NewService(rules)}, func() {}, nil
 	}}), upstream
 }
+
+// nativeServiceCredential is the Server's private storage key; callers never
+// see it and their own proof never reaches storage.
+const nativeServiceCredential = "kc-service:storage-secret"
+
+func nativeServiceProof() string {
+	r := &http.Request{Header: http.Header{}}
+	r.SetBasicAuth("kc-service", "storage-secret")
+	return r.Header.Get("Authorization")
+}
+
+// basicVerifier stands in for a deployment identity provider: it verifies the
+// caller's Basic credential and names the caller by its user.
+var basicVerifier = identitytest.Authenticator{Mode: "verified", Verify: func(headers http.Header) (identity.HTTPIdentity, error) {
+	user, _, ok := (&http.Request{Header: headers}).BasicAuth()
+	if !ok || user == "" {
+		return identity.HTTPIdentity{}, identitytest.Reject("missing caller credential")
+	}
+	return identity.HTTPIdentity{Principal: user}, nil
+}}
 
 func callNativeTest(t *testing.T, handler http.Handler, user, method, path, body string, want int) *httptest.ResponseRecorder {
 	t.Helper()
@@ -130,9 +149,17 @@ func TestNativeRepoCurrentProductGrantsAndCallerProof(t *testing.T) {
 	if len(upstream.calls) != 2 || !strings.Contains(upstream.query[0], "presign=false") {
 		t.Fatalf("denied calls reached native or presigned delivery escaped: %#v %#v", upstream.calls, upstream.query)
 	}
+	for _, proof := range upstream.proof {
+		if proof != nativeServiceProof() {
+			t.Fatalf("storage received caller proof instead of the service credential: %q", proof)
+		}
+	}
 	callNativeTest(t, handler, "alice", "POST", "/api/v1/repositories/alpha/branches/main/commits", "{}", 403)
 	callNativeTest(t, handler, "alice", "GET", "/api/v1/repositories/alpha/unreviewed-read", "", 403)
-	callNativeTest(t, handler, "alice", "GET", "/api/v1/auth/groups", "", 501)
+	callNativeTest(t, handler, "alice", "GET", "/api/v1/auth/groups", "", 403)
+	if len(upstream.calls) != 2 {
+		t.Fatalf("storage account API was relayed for a product caller: %#v", upstream.calls)
+	}
 	if err := rules.UpdateRules(context.Background(), func(rows []access.Rule) ([]access.Rule, error) { return rows[1:], nil }); err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +228,7 @@ func TestNativeUploadCSRFIsNarrowAndJSONContractsStayStrict(t *testing.T) {
 	rules := &nativeTestRules{rules: []access.Rule{{Principal: "alice", Repo: "kr://test/a", Actions: []string{access.RepositoryFilesWrite}}}}
 	gateway, upstream := nativeTestHandler(t, rules)
 	h := gateway.(*handler)
-	h.config.Identity.Authenticator = &transportVerifier{mode: "lakefs", caller: identity.HTTPIdentity{Principal: "alice", User: &identity.VerifiedUser{Provider: "lakefs", Issuer: h.config.NativeOrigin}}}
+	h.config.Identity.Authenticator = &identitytest.Recorder{Mode: "verified", Caller: identity.HTTPIdentity{Principal: "alice"}}
 	for _, site := range []string{"same-origin", "cross-site"} {
 		r := httptest.NewRequest("POST", "/api/v1/repositories/alpha/branches/main/objects?path=data", strings.NewReader("multipart-exact-body"))
 		r.Header = http.Header{"Cookie": {"internal_auth_session=caller-session"}, "X-Kc-Console": {"1"}, "Sec-Fetch-Site": {site}, "Content-Type": {"multipart/form-data; boundary=owned"}}
@@ -220,8 +247,8 @@ func TestNativeUploadCSRFIsNarrowAndJSONContractsStayStrict(t *testing.T) {
 			}
 		}
 	}
-	if len(upstream.calls) != 1 || upstream.bodies[0] != "multipart-exact-body" || upstream.proof[0] != "" {
-		t.Fatal("upload changed body or injected an access key")
+	if len(upstream.calls) != 1 || upstream.bodies[0] != "multipart-exact-body" || upstream.proof[0] != nativeServiceProof() || upstream.cookies[0] != "" {
+		t.Fatalf("upload changed body or forwarded caller session: proof=%q cookie=%q", upstream.proof, upstream.cookies)
 	}
 }
 

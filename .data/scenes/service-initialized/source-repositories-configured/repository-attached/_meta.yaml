@@ -92,6 +92,17 @@ evidence:
     verifies:
       - claim: "liveaccess#U20"
         detail: "真实Writer、所选LiveAccess/索引Entry和OpenSearch以Schema/access建立Member观察31/g1；来源变47后固定StateRevision查询及命中正文仍31/原Schema/原来源。首次来源/Basis/Schema/未采用失败无成功projection，不索引7占位或失败说明，不伪完整零命中。"
+  - id: "published-image-file-download"
+    source: "writer.snapshot"
+    views: ["publication", "consumption", "access-control"]
+    tests:
+      - "TestPublishedImageReferenceDownloadsThroughPublicFileCommand"
+    title: "Agent 从图片说明取得资源坐标并经公开命令下载"
+    verifies:
+      - claim: "object#U1"
+        detail: "公开 Writer 发布图片说明，消费者读取 definition 中的普通资源坐标；经 Server 按资源独立版本下载并逐字节核对图片，不依赖索引或图片处理器。"
+      - claim: "affordance#U6"
+        detail: "公开文件帮助说明仓、commit 与路径；同一 CLI 经认证 HTTP 下载，只有对象读权及撤销文件读权后均拒绝且不留下本机目标。"
   - id: "published-image-discovery"
     source: "writer.snapshot"
     views:
@@ -137,7 +148,9 @@ evidence:
     views:
       - "publication"
     tests:
-      - "cli/write_flow_test.go"
+      - "TestCatalogRepoWriteFlow"
+      - "TestCatalogRepoWriteErrors"
+      - "TestDatasetSearchFollowsExplicitRevisionPublication"
     title: "通过 Writer 写入后按写入合同返回结果"
   - source: "writer.snapshot"
     views:
@@ -224,7 +237,9 @@ evidence:
     views:
       - "access-control"
     tests:
-      - "cli/write_flow_test.go"
+      - "TestCatalogRepoWriteFlow"
+      - "TestCatalogRepoWriteErrors"
+      - "TestDatasetSearchFollowsExplicitRevisionPublication"
       - "TestDesiredDirCommitRequiresWriterCommit"
       - "TestAuditTrail"
     title: "提交所需写权独立检查且操作进入审计轨迹"
@@ -232,9 +247,11 @@ evidence:
     views:
       - "lifecycle"
     tests:
-      - "TestRegisterRetireArchive"
+      - "TestRegisterRetireRecovers"
+      - "TestArchiveRepositoryBlocksOpenDataset"
+      - "TestDatasetServiceHasNoRegistryArchiveLifecycle"
       - "TestCatalogArchiveRejectsAnUnknownExplicitTarget"
-    title: "归档已知 登记空间 成功，显式未知目标被拒绝"
+    title: "Dataset 退役和成员登记耐久恢复，来源仓归档阻断消费；登记空间不再提供归档生命周期"
   - source: "aspect.binding"
     views:
       - "publication"
@@ -260,7 +277,7 @@ evidence:
       - "lifecycle"
     tests:
       - "TestChangeNoticeRejectsBody"
-      - "TestProjectionNotifyHTTPRejectsObservationBody"
+      - "TestRetiredProjectionNotifyHTTPHasNoMutationRoute"
       - "TestProjectionControllerNoticePullsStateWithoutChangingSnapshot"
       - "TestStateRefreshFindsDynamicValueWithoutChangingSnapshot"
       - "TestProjectionCompilerRequiresObservationForBindingEligibility"
@@ -280,8 +297,8 @@ evidence:
       - "TestProjectionControllerNoticePullsStateWithoutChangingSnapshot"
       - "TestStateRefreshObjectsOnlyTouchesNamedAddress"
       - "TestDynamicProjectionPublicEnvelopesStayCompact"
-      - "TestProjectionNotifyPullsBoundStateWithoutChangingHEAD"
-      - "TestSceneAccessorNoticeUpdatesSearchIndex"
+      - "TestDatasetProjectionSyncRefreshesStateWithoutChangingHEAD"
+      - "TestSceneAccessorRefreshUpdatesSearchIndex"
     id: "state-refresh-preserves-snapshot-head"
     title: "动态观察更新索引且不移动 Snapshot HEAD"
     verifies:
@@ -533,7 +550,7 @@ evidence:
       - "consumption"
     tests:
       - "TestSystemSchemaDiscoveryIsBoundedAndWorkspaceIndependent"
-      - "TestDescribeSchemaListsAccessHints"
+      - "TestDescribeSchemaListsStructureWithoutAccess"
       - "TestDescribeSchemaFollowsSchemaRef"
       - "TestDescribeSchemaKeepsCompleteConstraintsAtFixedVersions"
       - "TestSchemaDescriptionDigestCoversConstraintOnlyChanges"

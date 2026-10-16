@@ -65,7 +65,27 @@ func fixtureHomeOperation(argv []string, runtime *telemetry.Runtime) (RunResult,
 			}
 		}
 		action := strings.ReplaceAll(path, " ", ".")
-		return inv.InvokeApplicationWithTelemetryAtHome(context.Background(), runtime, strings.ReplaceAll(path, " ", "-"), action, cmd, parsed.Flags, nil, nil), true
+		name := strings.ReplaceAll(path, " ", "-")
+		parsed.Flags["_action"] = action
+		return invokeLocalApplicationWithTelemetry(context.Background(), runtime, name, parsed.Flags, func(ctx context.Context, observation *invoke.ObservationTelemetry) (any, error) {
+			if _, err := inv.RequestIDFrom(parsed.Flags); err != nil {
+				return nil, err
+			}
+			if _, err := inv.IdentityContextFrom(parsed.Flags); err != nil {
+				return nil, err
+			}
+			if _, err := inv.TraceContextFrom(parsed.Flags); err != nil {
+				return nil, err
+			}
+			if err := inv.RejectUnknownFlags(parsed.Flags); err != nil {
+				return nil, err
+			}
+			home, err := resolveHome(parsed.Flags)
+			if err != nil {
+				return nil, err
+			}
+			return inv.ExecuteApplicationOperation(ctx, name, action, cmd, parsed.Flags, nil, nil, home, observation)
+		}), true
 	}
 	return RunResult{}, false
 }
@@ -118,9 +138,6 @@ func verbInit(cx *inv.Invocation) (any, error) {
 		if _, err := kchome.PublishSystemRepository(cx.Home, driver, dsn, ""); err != nil {
 			return nil, err
 		}
-		if err := ConfigureFixtureIndexSource(cx.Home, objectmodel.SystemRepositoryID, dsn); err != nil {
-			return nil, err
-		}
 	}
 	systemCommit, err := kchome.EnsureSystemRepository(cx.Home)
 	if err != nil {
@@ -158,12 +175,6 @@ func verbSystemPublish(cx *inv.Invocation) (any, error) {
 	status, err := kchome.PublishSystemRepository(cx.Home, cx.Flag("driver"), cx.Flag("dsn"), cx.Flag("dir"))
 	if err != nil {
 		return nil, err
-	}
-	if status["seeded"] == true {
-		dsn, _ := status["dsn"].(string)
-		if err := ConfigureFixtureIndexSource(cx.Home, objectmodel.SystemRepositoryID, dsn); err != nil {
-			return nil, err
-		}
 	}
 	return status, nil
 }

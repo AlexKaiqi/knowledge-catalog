@@ -28,6 +28,14 @@ type workspaceBudgetEngine struct {
 	requests []int
 }
 
+// These contracts exercise the fixed-source provider's federated paging lane.
+// Expose only that provider's roles; Dataset corpus queries use the shared
+// execution budget, rather than the per-source engines configured here.
+type fixedSourceSearchProjection struct {
+	SearchProjection
+	accessContractProjection
+}
+
 func (e *workspaceBudgetEngine) Probe(retrieval.SearchClause, retrieval.AccessSpec) index.Capability {
 	guarantee := index.GuaranteeExact
 	if e.superset {
@@ -53,7 +61,14 @@ func (e *workspaceBudgetEngine) Retrieve(req index.RetrieveRequest) (index.Candi
 }
 func (e *workspaceBudgetEngine) LoadMeta() (index.Meta, error) { return e.meta, nil }
 func (e *workspaceBudgetEngine) Rebuild(docs []index.CompiledDoc, meta index.Meta) error {
-	e.docs = append([]index.CompiledDoc(nil), docs...)
+	// Like a physical engine, only documents carrying a declared field can
+	// become candidates; index/fixture holds the declarations and has none.
+	e.docs = nil
+	for _, doc := range docs {
+		if len(doc.EligibleFields) > 0 {
+			e.docs = append(e.docs, doc)
+		}
+	}
 	sort.Slice(e.docs, func(i, j int) bool { return e.docs[i].ObjectID < e.docs[j].ObjectID })
 	e.meta = meta
 	return nil
@@ -84,7 +99,7 @@ func workspaceBudgetFixture(t *testing.T, members, objects int, superset bool) (
 			t.Fatal(err)
 		}
 		head := testkit.MustHead(t, repo, snapshot.DefaultRef)
-		ops := []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/item"}, Value: map[string]any{"entity": "Item", "fields": map[string]any{"status": map[string]any{"type": "string", "access": []any{"filter"}}}}}}
+		ops := []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/item"}, Value: map[string]any{"entity": "Item", "fields": map[string]any{"status": map[string]any{"type": "string"}}}}, testkit.IndexField("schema/item", "status", "keyword")}
 		for n := 0; n < objects; n++ {
 			status := "yes"
 			if superset && n < objects-1 {
@@ -117,7 +132,7 @@ func workspaceBudgetFixture(t *testing.T, members, objects int, superset bool) (
 	executor := DatasetSearchExecutor{
 		Authorize:    func(context.Context) error { return nil },
 		Repositories: sourceReader,
-		Projection:   idx,
+		Projection:   fixedSourceSearchProjection{idx, idx},
 		Resolve: func(context.Context) (*reader.Serving, LogicalHydrator, error) {
 			resolved, err := cat.ResolveDataset("budget")
 			if err != nil {

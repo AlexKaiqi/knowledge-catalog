@@ -17,6 +17,8 @@ import (
 // an arbitrary flag map.
 func (f *httpFacade) registerManagementRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /object/v1/plugins/{name}", f.pluginHelp)
+	mux.HandleFunc("GET /object/v1/plugins/{name}/capabilities", f.pluginCapabilities)
+	mux.HandleFunc("POST /object/v1/plugins/{name}/declarations:trial", f.trialDeclarations)
 	f.registerRepositoryRoutes(mux)
 	f.snapshotStoreService().Register(mux)
 	mux.HandleFunc("POST /snapshot/v1/repositories:create", f.registryRepositoryCreate)
@@ -141,13 +143,13 @@ func (f *httpFacade) writerMerge(w http.ResponseWriter, r *http.Request) {
 }
 
 type projectionRequest struct {
-	Repository string `json:"repository"`
-	Commit     string `json:"commit,omitempty"`
-	Ref        string `json:"ref,omitempty"`
+	Dataset  string `json:"dataset"`
+	Revision int    `json:"revision,omitempty"`
 }
 
 type accessSpecDescribeRequest struct {
 	Dataset    string          `json:"dataset"`
+	Revision   int             `json:"revision,omitempty"`
 	Repository string          `json:"repository,omitempty"`
 	Pin        json.RawMessage `json:"pin,omitempty"`
 }
@@ -196,7 +198,7 @@ func retrievalAuditFlags(q auditQueryRequest) map[string]FlagValue {
 }
 
 func projectionFlags(request projectionRequest) map[string]FlagValue {
-	return compactFlags(map[string]FlagValue{"repo": request.Repository, "commit": request.Commit, "ref": request.Ref})
+	return withRevision(compactFlags(map[string]FlagValue{"dataset": request.Dataset}), request.Revision)
 }
 
 func (f *httpFacade) observeStores(w http.ResponseWriter, r *http.Request) {
@@ -206,13 +208,23 @@ func (f *httpFacade) observeStores(w http.ResponseWriter, r *http.Request) {
 func (f *httpFacade) projectionDescribe(w http.ResponseWriter, r *http.Request) {
 	var q projectionRequest
 	if decodeServiceRequest(w, r, &q) {
-		f.executeTyped(w, r, "operations-projection-describe", "projection.read", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbDescribeIndex}, projectionFlags(q))
+		flags := projectionFlags(q)
+		if err := inv.RequireDatasetDiscoveryScope(flags); err != nil {
+			invoke.WriteInvoke(w, inv.ErrorResult(err))
+			return
+		}
+		f.executeTyped(w, r, "operations-projection-describe", "file.read", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbDescribeIndex}, flags)
 	}
 }
 func (f *httpFacade) accessSpecDescribe(w http.ResponseWriter, r *http.Request) {
 	var q accessSpecDescribeRequest
 	if decodeServiceRequest(w, r, &q) {
-		f.executeTyped(w, r, "operations-access-spec-describe", "object.access.describe", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbDescribeAccess}, objectCoordinateFlags(q.Dataset, q.Repository, "", "", q.Pin))
+		flags := withRevision(objectCoordinateFlags(q.Dataset, q.Repository, "", "", q.Pin), q.Revision)
+		if err := inv.RequireDatasetDiscoveryScope(flags); err != nil {
+			invoke.WriteInvoke(w, inv.ErrorResult(err))
+			return
+		}
+		f.executeTyped(w, r, "operations-access-spec-describe", "file.read", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbDescribeAccess}, flags)
 	}
 }
 

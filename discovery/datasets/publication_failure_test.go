@@ -65,8 +65,9 @@ func newPublicationFailureFixture(t *testing.T) publicationFailureFixture {
 		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
 		Operations: []objectmodel.Operation{
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/article"}, Value: map[string]any{
-				"entity": "Article", "fields": map[string]any{"body": map[string]any{"type": "string", "access": []any{"text"}}},
+				"entity": "Article", "fields": map[string]any{"body": map[string]any{"type": "string"}},
 			}},
+			testkit.IndexText("schema/article", "body"),
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "article/current"}, SchemaRef: "schema/article", Value: map[string]any{"body": "runbook a"}},
 		},
 	})
@@ -164,7 +165,7 @@ func TestDatasetPublicationFailuresPreserveAcceptedReleaseAndSourceCommit(t *tes
 					events = append(events, "authorize")
 					return nil
 				},
-				Prepare: func(_ context.Context, def dataset.Dataset) error {
+				Prepare: func(_ context.Context, def dataset.Dataset) (dataset.Dataset, error) {
 					events = append(events, "prepare")
 					frozen = def
 					if len(def.Sources) != 1 || def.Sources[0].Commit != f.nextCommit || len(def.Items) != 1 || def.Items[0].Commit != f.nextCommit ||
@@ -176,7 +177,7 @@ func TestDatasetPublicationFailuresPreserveAcceptedReleaseAndSourceCommit(t *tes
 					} else {
 						cancel()
 					}
-					return nil
+					return def, nil
 				},
 			}
 			request := DatasetPublication{Dataset: "reading", Revision: 2, Sources: f.sources, Metadata: map[string]string{"description": "candidate b"}}
@@ -213,11 +214,11 @@ func TestDatasetPublicationFailuresPreserveAcceptedReleaseAndSourceCommit(t *tes
 			latest := commitPublicationSource(t, f.setup, f.nextCommit, "c")
 			f.authority.err = nil
 			request.Sources = frozen.Sources
-			executor.Prepare = func(_ context.Context, def dataset.Dataset) error {
+			executor.Prepare = func(_ context.Context, def dataset.Dataset) (dataset.Dataset, error) {
 				if !reflect.DeepEqual(def, frozen) {
 					t.Fatalf("retry changed its prepared basis: got=%#v want=%#v", def, frozen)
 				}
-				return nil
+				return def, nil
 			}
 			accepted, err := executor.Execute(context.Background(), request)
 			if err != nil || !reflect.DeepEqual(accepted, frozen) {

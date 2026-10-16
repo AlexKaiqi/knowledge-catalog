@@ -1,0 +1,15 @@
+---
+object_id: index/metric
+aspect_name: index
+member_key: name-text
+kind: Member
+schema_ref: schema/core/index-declaration/v1
+path_hint: indexes/metric/name-text.yaml
+---
+catalog: declarative-index/opensearch@2026-10
+inputs:
+  - from: schema/metric.definition#/fields/name
+build:
+  kind: text
+uses:
+  - text

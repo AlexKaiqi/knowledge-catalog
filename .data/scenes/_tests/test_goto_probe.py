@@ -11,6 +11,37 @@ SPEC.loader.exec_module(goto)
 
 
 class GotoProbeTest(unittest.TestCase):
+    def test_feature_comments_preserve_fragments_and_quoted_command_content(self):
+        command = 'kc read urn:kc:object:semantic-model/shop.sales#/properties'
+        source = ('# before feature\nFeature: Fragment read # actual comment\n'
+                  'Scenario: Verify\nWhen I run `'+command+'` # after command\n'
+                  'Then the output has: # after assertion\n'
+                  '| address | urn:kc:object:semantic-model/shop.sales#/properties | # after row\n')
+        steps = goto.parse_feature(source)
+        self.assertEqual(steps, [{'kind': 'run', 'command': command},
+                                {'kind': 'has', 'rows': [('address', 'urn:kc:object:semantic-model/shop.sales#/properties')]}])
+        for command in [
+            'kc search --dataset example --query "sales # tag"',
+            "kc invoke --repo example --input '{\"text\": \"value # tag\"}'",
+            r'kc search --dataset example --query "quoted \\" # tag"',
+        ]:
+            with self.subTest(command=command):
+                self.assertEqual(goto.parse_feature('When I run `'+command+'` # comment'),
+                                 [{'kind': 'run', 'command': command}])
+
+    def test_feature_comment_quoting_and_escape_boundaries(self):
+        for raw, wanted in [
+            ('# full comment', ''),
+            ('value # comment', 'value '),
+            ('urn:kc:object:item#/properties # comment', 'urn:kc:object:item#/properties '),
+            ('"quoted # value" # comment', '"quoted # value" '),
+            ("'quoted # value' # comment", "'quoted # value' "),
+            (r'"escaped \" # value" # comment', r'"escaped \" # value" '),
+            ('`quoted # value` # comment', '`quoted # value` '),
+        ]:
+            with self.subTest(raw=raw):
+                self.assertEqual(goto.strip_feature_comment(raw), wanted)
+
     def test_catalog_read_construct_remains_live_compatible(self):
         feature = (Path(__file__).resolve().parents[1] / "service-initialized" /
                    "inventory-read-granted" / "_build" / "construct.feature")
@@ -74,11 +105,11 @@ class GotoProbeTest(unittest.TestCase):
                 finally:
                     feature.write_text(original)
 
-    def test_explicit_source_adoption_is_not_silently_skipped(self):
+    def test_retired_per_repository_selection_is_rejected_before_setup(self):
         given = "Given existing repository kr://scene/object with LiveAccess instance main\n"
-        step = goto.parse_feature(given)[0]
-        self.assertEqual(step, {"kind": "repository-adoption", "repository": "kr://scene/object",
-                               "instance": "main"})
+        with self.assertRaisesRegex(goto.GotoError, "plugin instances come from deployment"):
+            goto.parse_feature(given)
+        self.assertEqual(goto.parse_feature("Given existing repository kr://scene/object\n"), [{"kind": "skip"}])
         feature = self.root / "published/_build/construct.feature"
         feature.write_text(given + "When I run `kc attach --repo kr://scene/object`\n")
         with patch.object(goto, "ROOT", self.root), \
@@ -86,7 +117,7 @@ class GotoProbeTest(unittest.TestCase):
                 patch.object(goto, "start_runtime") as runtime, \
                 patch.object(goto, "apply_construct") as construct, \
                 patch.object(goto, "run_kc") as command:
-            with self.assertRaisesRegex(goto.GotoError, "cannot verify required native LiveAccess/main"):
+            with self.assertRaisesRegex(goto.GotoError, "plugin instances come from deployment"):
                 goto.apply_target("published")
             runtime.assert_not_called()
             construct.assert_not_called()

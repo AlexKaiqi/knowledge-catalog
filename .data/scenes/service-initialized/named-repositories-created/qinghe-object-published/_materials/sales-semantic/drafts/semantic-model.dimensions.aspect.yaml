@@ -8,9 +8,6 @@ fields:
   name:
     type: string
     required: true
-    access:
-    - text
-    - filter
   columnRef:
     type: object_ref
     required: true
@@ -18,5 +15,3 @@ fields:
     - Column
   dataType:
     type: string
-    access:
-    - filter

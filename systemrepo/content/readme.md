@@ -6,7 +6,7 @@ path_hint: README.md
 ---
 # Knowledge Catalog 系统仓（KC 协议仓）
 
-这里发布 Knowledge Catalog 关于自身的对象：模型、操作入口、运行机制、能力说明、使用指南、插件合同、导航关系与带逻辑访问声明的基础 Schema。人和 Agent 从这份导读进入，按要做的事情选择需要的内容。
+这里发布 Knowledge Catalog 关于自身的对象：模型、操作入口、运行机制、能力说明、使用指南、插件合同、导航关系与基础 Schema。人和 Agent 从这份导读进入，按要做的事情选择需要的内容。
 
 ## 开始阅读
 
@@ -23,6 +23,12 @@ kc read 'urn:kc:object:kc/concept/object#/definition'
 ```
 
 第一次使用，先阅读 [第一次读取对象](guides/first-read/guide.md)。准备建模时从 [对象](concepts/object/definition.md)、[切面](concepts/aspect/definition.md)、[关系](concepts/relation/definition.md)、[Schema](concepts/schema/definition.md)和 [声明式索引](concepts/index-declaration/definition.md) 开始。做具体工作时直接选择下方使用指南。
+
+## 从公开例子开始
+
+先运行 `kc show`，按用途选择自己能消费的 Dataset：`qinghe-analysis` 展示销售分析，`autumn-launch-kit` 展示上新素材，`store-oncall` 展示值班交接。用 `kc dataset show <id>` 核对交付范围和 revision；搜索用 `kc search --dataset <id> --revision <N>`，命中用 `kc read <对象URN> --dataset <id> --revision <N>` 同版本回读。也可沿 `kc files list` 返回的路径，用 `kc files read` 读取导读、Schema 和对象原文件。列目录、翻页与读取显式沿用同一 revision；具体参数见对应叶子 help。
+
+准备发布自己的资料时，先复用适合的已发布 Schema 与文件格式，再确定自己的对象身份和业务正文。[首次发布领域对象](guides/first-publication/guide.md) 给出从公开示例下载、单仓发布到固定版本读回的完整旅程。已有目标仓直接使用；不因读例子而创建或重建来源仓。
 
 ## 使用指南
 
@@ -47,7 +53,7 @@ kc read 'urn:kc:object:kc/concept/object#/definition'
 - [搜索对象](capabilities/search-object/definition.md) — `kc/capability/search-object`
 - [沿关系探索](capabilities/explore-relations/definition.md) — `kc/capability/explore-relations`
 - [发布与修订对象](capabilities/publish-object/definition.md) — `kc/capability/publish-object`
-- [组合与采用 Dataset](capabilities/datasets/definition.md) — `kc/capability/datasets`
+- [读取文件与组合 Dataset](capabilities/datasets/definition.md) — `kc/capability/datasets`
 - [查询与管理授权](capabilities/permissions/definition.md) — `kc/capability/permissions`
 - [访问动态资源](capabilities/resource-access/definition.md) — `kc/capability/resource-access`
 - [维护查询投影](capabilities/projections/definition.md) — `kc/capability/projections`
@@ -106,9 +112,9 @@ kc read 'urn:kc:object:kc/concept/object#/definition'
 
 ## 插件合同与查询声明
 
-[LiveAccess 合同](object-interfaces/live-access/definition.yaml) 是内置 LiveAccess 插件的合同，承接当前状态与已声明操作。插件按对象 Schema 生效，由部署安装处理器，不在运行时追加系统仓。基本对象发现与读取不依赖插件。
+[LiveAccess 合同](object-interfaces/live-access/definition.yaml) 是内置 LiveAccess 插件的合同，承接当前状态与已声明操作。插件按方面或成员上的取值来源认领，由它引用的取值描述说明 origin、模式与身份要求；部署安装处理器，不在运行时追加系统仓。基础精确读取与维护不依赖插件。
 
-[声明式索引](concepts/index-declaration/definition.md) 使用 Schema 字段 access 说明正文与声明字段允许怎样查询，这是唯一书写形式。Schema 的结构校验与查询合同解释分别处理，投影实现与就绪由运行环境维护；声明不自动授权，也不表示外部运行值已经可搜索。
+[声明式索引](concepts/index-declaration/definition.md) 是选进 Dataset 才生效的 index 方面成员，说明输入字段、构建方式、用途和所依据的实例能力清单版本；Schema 只描述结构，不承载查询或外部取值声明。一个 Dataset 发布修订是一个检索空间，搜索只在这个范围进行，命中按同一修订回读。缺声明、不支持、失效与未就绪分别判断；声明不自动授权，也不表示外部运行值已经可搜索。
 
 ## 版本与范围
 

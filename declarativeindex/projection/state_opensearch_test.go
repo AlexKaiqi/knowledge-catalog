@@ -37,15 +37,19 @@ func TestLiveOpenSearchStateProjectionRefreshAndSameBasisHydrate(t *testing.T) {
 	commit := testfixture.PutAt(t, repo, root, []objectmodel.Operation{
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.definition"}, Value: map[string]any{
 			"entity": "Job", "aspect": "definition", "fields": map[string]any{
-				"owner": map[string]any{"type": "string", "access": []any{"filter"}},
+				"owner": map[string]any{"type": "string"},
 			},
 		}},
+		testkit.IndexField("schema/job.definition", "owner", "keyword"),
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.runtime"}, Value: map[string]any{
 			"entity": "Job", "aspect": "runtime", "fields": map[string]any{
-				"status":   map[string]any{"type": "string", "access": []any{"text", "filter"}},
-				"attempts": map[string]any{"type": "integer", "access": []any{"filter", "sort"}},
+				"status":   map[string]any{"type": "string"},
+				"attempts": map[string]any{"type": "integer"},
 			},
 		}},
+		testkit.IndexText("schema/job.runtime", "status"),
+		testkit.IndexField("schema/job.runtime", "status", "keyword"),
+		testkit.IndexField("schema/job.runtime", "attempts", "number", "filter", "sort"),
 		bindingfixture.PutDescriptor("resource/scheduler", bindingfixture.Descriptor("https://scheduler.example")),
 		bindingfixture.Bind(address, "schema/job.runtime", "resource/scheduler"),
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: address.ObjectID, AspectName: "definition"}, Value: map[string]any{"owner": "data"}, SchemaRef: "schema/job.definition"},

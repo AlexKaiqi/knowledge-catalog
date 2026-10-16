@@ -32,7 +32,7 @@ func (r *Runtime) AddHTTPActive(ctx context.Context, delta int64, method string)
 }
 
 func (r *Runtime) StartAuthentication(ctx context.Context, provider string) (context.Context, trace.Span, time.Time) {
-	provider = enumValue(provider, "other", "local", "gitea", "oidc", "taihu", "other")
+	provider = enumValue(provider, "other", "local", "oidc", "taihu", "other")
 	ctx, span := r.tracer.Start(ctx, "kc.authenticate", trace.WithSpanKind(trace.SpanKindClient), trace.WithAttributes(
 		attribute.String("kc.identity.provider", provider),
 	))
@@ -41,7 +41,7 @@ func (r *Runtime) StartAuthentication(ctx context.Context, provider string) (con
 
 func (r *Runtime) EndAuthentication(ctx context.Context, span trace.Span, started time.Time, provider, outcome, errorType string) {
 	attrs := []attribute.KeyValue{
-		attribute.String("kc.identity.provider", enumValue(provider, "other", "local", "gitea", "oidc", "taihu", "other")),
+		attribute.String("kc.identity.provider", enumValue(provider, "other", "local", "oidc", "taihu", "other")),
 		attribute.String("kc.outcome", enumValue(outcome, "error", "ok", "denied", "invalid", "error")),
 	}
 	if errorType != "" && errorType != "none" {
@@ -58,7 +58,7 @@ func (r *Runtime) EndAuthentication(ctx context.Context, span trace.Span, starte
 
 func (r *Runtime) RecordIdentity(ctx context.Context, provider, principalKind string, delegated bool) {
 	attrs := []attribute.KeyValue{
-		attribute.String("kc.identity.provider", enumValue(provider, "other", "local", "gitea", "oidc", "taihu", "other")),
+		attribute.String("kc.identity.provider", enumValue(provider, "other", "local", "oidc", "taihu", "other")),
 		attribute.String("kc.principal.kind", enumValue(principalKind, "other", "owner", "user", "agent", "service", "other")),
 		attribute.Bool("kc.identity.delegated", delegated),
 	}

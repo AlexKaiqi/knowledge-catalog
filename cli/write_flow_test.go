@@ -266,32 +266,41 @@ func TestCatalogRepoWriteErrors(t *testing.T) {
 	}
 }
 
-func TestSearchAfterPutIsIncremental(t *testing.T) {
+func TestDatasetSearchFollowsExplicitRevisionPublication(t *testing.T) {
 	h := testkit.TempDir(t)
 	core := "kr://acme/public/core"
 	body(t, kc(h, "init"))
 	seedRepo(t, h, core)
-	body(t, kc(h, "put", testObjectReference(t, core, "schema/policy.body", ""), "--repo", core, "--command-id", "schema-body", "--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"access":["text"]}}}`))
-	put1 := asMap(t, body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--repo", core, "--command-id", "i1", "--value", `{"body":"needs a runbook"}`)))
+	body(t, kc(h, "put", testObjectReference(t, core, "schema/policy.body", ""), "--repo", core, "--command-id", "schema-body", "--value", `{"entity":"Policy","pattern":"record","fields":{"body":{"type":"string"}}}`))
+	seedTextDeclaration(t, h, core, "index/policy-search", "schema/policy.body", "body")
+	put1 := asMap(t, body(t, kc(h, "put", testObjectReference(t, core, "policy/A", ""), "--repo", core, "--command-id", "i1", "--schema-ref", "schema/policy.body", "--value", `{"body":"needs a runbook"}`)))
 	if put1["disposition"] != "APPLIED" {
 		t.Fatal(put1)
 	}
-	syncIndexes(t, h, core)
-	search1 := asMap(t, body(t, kc(h, "search", "--repo", core, "--query", "runbook")))
+	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", core))
+	syncIndexes(t, h, "agent")
+	search1 := asMap(t, body(t, kc(h, "search", "--dataset", "agent", "--query", "runbook")))
 	if hits := search1["hits"].([]any); len(hits) != 1 {
 		t.Fatalf("%#v", search1)
 	}
-	put2 := asMap(t, body(t, kc(h, "put", testObjectReference(t, core, "policy/B", ""), "--repo", core, "--command-id", "i2", "--value", `{"body":"second runbook"}`)))
+	put2 := asMap(t, body(t, kc(h, "put", testObjectReference(t, core, "policy/B", ""), "--repo", core, "--command-id", "i2", "--schema-ref", "schema/policy.body", "--value", `{"body":"second runbook"}`)))
 	if put2["disposition"] != "APPLIED" {
 		t.Fatal(put2)
 	}
-	syncIndexes(t, h, core)
-	search2 := asMap(t, body(t, kc(h, "search", "--repo", core, "--query", "runbook")))
+	old := asMap(t, body(t, kc(h, "search", "--dataset", "agent", "--revision", "1", "--query", "runbook")))
+	if len(old["hits"].([]any)) != 1 {
+		t.Fatalf("source write changed frozen Dataset: %#v", old)
+	}
+	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "2", "--source", core))
+	syncIndexes(t, h, "agent")
+	search2 := asMap(t, body(t, kc(h, "search", "--dataset", "agent", "--query", "runbook")))
 	if hits := search2["hits"].([]any); len(hits) != 2 {
 		t.Fatalf("expected 2 after second put, got %#v", search2)
 	}
-	desc := asMap(t, body(t, kc(h, "describe-index", "--repo", core)))
-	if desc["lagBehindHead"] != false || desc["objectCount"].(float64) != 2 {
+	report := asMap(t, body(t, kc(h, "describe-index", "--dataset", "agent", "--revision", "2")))
+	desc := datasetProjectionSnapshot(t, report, core)
+	member := asMap(t, report["members"].([]any)[0])
+	if report["revision"] != float64(2) || member["commit"] != publishedCommit(t, put2) || desc["objectCount"].(float64) != 3 {
 		t.Fatalf("%#v", desc)
 	}
 	if desc["accessDigest"] == "" || desc["physicalDigest"] == "" || desc["providerRevision"] == "" {

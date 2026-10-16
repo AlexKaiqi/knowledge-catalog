@@ -1,0 +1,17 @@
+---
+object_id: schema/media-asset.usage
+---
+entity: MediaAsset
+aspect: usage
+pattern: record
+fields:
+  allowedChannels:
+    type: array
+    required: true
+  validUntil:
+    type: string
+    required: true
+  restrictions:
+    type: array
+  approvedBy:
+    type: string

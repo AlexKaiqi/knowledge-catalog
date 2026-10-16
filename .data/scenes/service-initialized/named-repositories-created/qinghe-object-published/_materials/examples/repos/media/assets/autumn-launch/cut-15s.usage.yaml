@@ -1,0 +1,15 @@
+---
+object_id: media-asset/autumn-launch.cut-15s
+aspect_name: usage
+kind: Aspect
+schema_ref: schema/media-asset.usage
+---
+allowedChannels:
+- 门店屏
+- 小程序首页
+- 短视频平台官方账号
+validUntil: "2026-10-15"
+restrictions:
+- 不得剪辑价格画面后单独投放
+- 活动结束后下线，不用于其他商品
+approvedBy: 市场组 Zhou

@@ -19,6 +19,8 @@ func MatchesResidual(repo objectmodel.Repository, value objectmodel.ObjectValue,
 }
 
 // MatchFields evaluates a request against already extracted logical fields.
+// Query eligibility belongs to ResolveSearch; an inapplicable field on this
+// particular object evaluates false without granting a query capability.
 func MatchFields(req SearchRequest, doc FieldSet, spec AccessSpec, verifier ...ResidualMatchVerifier) (bool, error) {
 	eligible := map[string]struct{}{}
 	for _, field := range doc.EligibleFields {
@@ -57,12 +59,15 @@ func matchesResidualExpression(expression SearchExpr, doc FieldSet, eligible map
 	if clause.Op == OpMatch && clause.Field == nil && clause.Path == "" {
 		return residualMatch(doc.Text, clause.Value, clause.Mode, verifier...)
 	}
+	if clause.Field == nil {
+		return false, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "query field is unresolved")
+	}
 	field, err := spec.ResolveField(*clause.Field)
 	if err != nil {
 		return false, err
 	}
 	if clause.Op != OpMatch {
-		if _, applies := eligible[field.FieldRef.Key()]; !applies {
+		if _, applies := eligible[memberFieldKey(field.FieldRef, clause.Member)]; !applies {
 			return false, nil
 		}
 	}
@@ -72,8 +77,14 @@ func matchesResidualExpression(expression SearchExpr, doc FieldSet, eligible map
 		if cell.Field.FieldRef.Key() != field.FieldRef.Key() {
 			continue
 		}
+		if clause.Member != "" && cell.Member != clause.Member {
+			continue
+		}
 		for _, hint := range cell.Field.Access {
 			if hint == reader.HintFilter {
+				// Construction may interpret a numeric input as a keyword.
+				// Compare the selected member's actual scalar representation.
+				field.Type = cell.Field.Type
 				values = append(values, cell.Value)
 				break
 			}

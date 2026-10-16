@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"sort"
+	"strings"
 
 	"kc/kernel"
 	objectmodel "kc/object"
@@ -17,13 +18,20 @@ type SchemaAdoption struct {
 // explicitly adopted by indexed unit declarations. It uses the existing
 // reverse dependency locator and exact declaration reads, never a tree scan.
 func AccessSpecForRepository(repo objectmodel.Repository, commit kernel.CommitID) (AccessSpec, error) {
-	report, err := reader.DescribeRepoSchema(repo, commit, "")
+	return AccessSpecForRepositoryChecked(repo, commit, nil)
+}
+
+// AccessSpecForRepositoryChecked is AccessSpecForRepository with the plugin
+// instance's capability manifest check applied to every declaration member.
+func AccessSpecForRepositoryChecked(repo objectmodel.Repository, commit kernel.CommitID, check DeclarationCheck) (AccessSpec, error) {
+	report, declared, err := declaredReport(repo, commit, check)
 	if err != nil {
 		return AccessSpec{}, err
 	}
-	spec := accessSpecWithCurrentForms(report)
+	spec := accessSpecWithCurrentForms(report, declared)
 	locator, ok := repo.(objectmodel.SchemaReferrerLocator)
 	if !ok {
+		finalizeAdoptedAccessSpec(&spec)
 		return spec, nil
 	}
 	historical := map[string][]AccessField{}
@@ -50,11 +58,11 @@ func AccessSpecForRepository(repo objectmodel.Repository, commit kernel.CommitID
 			if _, exists := historical[key]; exists {
 				continue
 			}
-			adopted, err := reader.DescribeRepoSchema(repo, ref.Commit, ref.Object)
+			adopted, _, err := describeSchemaRelease(repo, commit, ref)
 			if err != nil {
 				return AccessSpec{}, err
 			}
-			historical[key] = AccessSpecFromReport(adopted).Fields
+			historical[key] = AccessSpecFromReport(declared.annotateRelease(adopted, ref.Commit)).Fields
 		}
 	}
 	keys := make([]string, 0, len(historical))
@@ -75,24 +83,61 @@ func AccessSpecForRepository(repo objectmodel.Repository, commit kernel.CommitID
 }
 
 // AdoptionWitnesses is retained by projection maintenance at the same commit.
-// It carries declarations, not object bodies or caller permissions.
+// It carries declarations, not object bodies or caller permissions. The index
+// declaration members compiled at the commit are retained as the witnesses of
+// the index declaration Schema, so consumers read them exactly.
 func (s AccessSpec) AdoptionWitnesses() []SchemaAdoption {
-	out := make([]SchemaAdoption, len(s.adoptions))
+	out := make([]SchemaAdoption, len(s.adoptions), len(s.adoptions)+1)
 	for i, adoption := range s.adoptions {
 		out[i] = SchemaAdoption{SchemaRef: adoption.SchemaRef, Witnesses: append([]objectmodel.Address(nil), adoption.Witnesses...)}
 	}
+	if len(s.Declarations) > 0 {
+		members := make([]objectmodel.Address, len(s.Declarations))
+		for i, status := range s.Declarations {
+			members[i] = status.Member
+		}
+		out = append(out, SchemaAdoption{SchemaRef: string(objectmodel.IndexDeclarationSchemaV1), Witnesses: members})
+	}
 	return out
+}
+
+// splitDeclarationWitnesses separates the retained index declaration members
+// from fixed Schema release adoptions.
+func splitDeclarationWitnesses(adoptions []SchemaAdoption) ([]SchemaAdoption, []objectmodel.Address) {
+	releases := make([]SchemaAdoption, 0, len(adoptions))
+	var members []objectmodel.Address
+	for _, adoption := range adoptions {
+		if adoption.SchemaRef == string(objectmodel.IndexDeclarationSchemaV1) {
+			members = append(members, adoption.Witnesses...)
+			continue
+		}
+		releases = append(releases, adoption)
+	}
+	return releases, members
 }
 
 // AccessSpecFromAdoptions verifies retained maintenance witnesses using exact
 // reads under the caller's fixed scope. It never enumerates instance bodies or
 // reads a repository-wide locator. A projection is not a Schema authority.
 func AccessSpecFromAdoptions(repo objectmodel.Repository, commit kernel.CommitID, adoptions []SchemaAdoption) (AccessSpec, error) {
+	return AccessSpecFromAdoptionsChecked(repo, commit, adoptions, nil)
+}
+
+// AccessSpecFromAdoptionsChecked is AccessSpecFromAdoptions with the plugin
+// instance's capability manifest check. Index declarations are read exactly
+// at the members maintenance retained, never through the referrer locator.
+func AccessSpecFromAdoptionsChecked(repo objectmodel.Repository, commit kernel.CommitID, adoptions []SchemaAdoption, check DeclarationCheck) (AccessSpec, error) {
+	adoptions, members := splitDeclarationWitnesses(adoptions)
 	report, err := reader.DescribeRepoSchema(repo, commit, "")
 	if err != nil {
 		return AccessSpec{}, err
 	}
-	spec := accessSpecWithCurrentForms(report)
+	declared, err := compileDeclarationMembers(repo, commit, report, members, check)
+	if err != nil {
+		return AccessSpec{}, err
+	}
+	report = declared.annotate(report)
+	spec := accessSpecWithCurrentForms(report, declared)
 	for _, adoption := range adoptions {
 		ref, valid := objectmodel.ParseSchemaRef(adoption.SchemaRef)
 		if !valid || ref.Commit == "" || len(adoption.Witnesses) == 0 || (ref.Repository != "" && ref.Repository != repo.ID()) {
@@ -120,11 +165,11 @@ func AccessSpecFromAdoptions(repo objectmodel.Repository, commit kernel.CommitID
 		if !verified {
 			continue
 		}
-		adopted, err := reader.DescribeRepoSchema(repo, ref.Commit, ref.Object)
+		adopted, _, err := describeSchemaRelease(repo, commit, ref)
 		if err != nil {
 			return AccessSpec{}, err
 		}
-		fields := AccessSpecFromReport(adopted).Fields
+		fields := AccessSpecFromReport(declared.annotateRelease(adopted, ref.Commit)).Fields
 		spec.schemaForms[schemaFormKey(ref)] = fields
 		if err := spec.mergeAccessFields(fields); err != nil {
 			return AccessSpec{}, err
@@ -158,6 +203,11 @@ func (s AccessSpec) FieldsForDeclaration(ref string) ([]AccessField, error) {
 	}
 	if parsed.Commit == s.Commit {
 		parsed.Commit = ""
+	}
+	if parsed.Object == objectmodel.IndexDeclarationSchemaV1 {
+		// Index declarations are namespace configuration resolved from the
+		// trust root; they compile faces for others and expose none of their own.
+		return nil, nil
 	}
 	fields, exists := s.schemaForms[schemaFormKey(parsed)]
 	if !exists {
@@ -200,23 +250,76 @@ func (s *AccessSpec) mergeAccessFields(fields []AccessField) error {
 	return nil
 }
 
-func accessSpecWithCurrentForms(report reader.SchemaReport) AccessSpec {
+// declaredReport reads the structure-only Schema namespace and annotates it
+// with the faces compiled from the index declarations held at commit.
+func declaredReport(repo objectmodel.Repository, commit kernel.CommitID, check DeclarationCheck) (reader.SchemaReport, declaredAccess, error) {
+	report, err := reader.DescribeRepoSchema(repo, commit, "")
+	if err != nil {
+		return reader.SchemaReport{}, declaredAccess{}, err
+	}
+	declared, err := compileDeclarations(repo, commit, report, check)
+	if err != nil {
+		return reader.SchemaReport{}, declaredAccess{}, err
+	}
+	return declared.annotate(report), declared, nil
+}
+
+func accessSpecWithCurrentForms(report reader.SchemaReport, declared declaredAccess) AccessSpec {
 	spec := AccessSpecFromReport(report)
+	spec.Declarations = declared.statuses
+	spec.builds = declared.builds
+	spec.declarationSchemas = declared.schemas
 	spec.currentFields = append([]AccessField(nil), spec.Fields...)
 	spec.schemaForms = map[string][]AccessField{}
 	for _, schema := range report.Schemas {
 		spec.schemaForms[string(schema.ObjectID)] = AccessSpecFromReport(reader.SchemaReport{Schemas: []reader.SchemaDescription{schema}}).Fields
 	}
+	for _, build := range spec.builds {
+		if build.declaration.Build.Kind != "vector" {
+			continue
+		}
+		for _, input := range build.inputs {
+			field := AccessField{FieldRef: input.Field, Type: input.Type}
+			spec.schemaForms[input.form] = addConstructionField(spec.schemaForms[input.form], field)
+			if !strings.Contains(input.form, "@") {
+				spec.currentFields = addConstructionField(spec.currentFields, field)
+			}
+		}
+	}
 	return spec
 }
 
+func addConstructionField(fields []AccessField, field AccessField) []AccessField {
+	for _, existing := range fields {
+		if existing.FieldRef == field.FieldRef {
+			return fields
+		}
+	}
+	return append(fields, field)
+}
+
+// finalizeAdoptedAccessSpec fixes the digest over faces, adopted releases and
+// declaration member statuses, so a member turning unsupported or invalid
+// changes the access contract even when no face changes.
 func finalizeAdoptedAccessSpec(spec *AccessSpec) {
+	contracts := declarationContracts(spec.Declarations)
 	if len(spec.adoptions) == 0 {
+		if len(spec.Declarations) > 0 {
+			spec.AccessDigest = kernel.CanonicalDigest(map[string]any{"fields": spec.Fields, "declarations": contracts})
+		}
 		return
 	}
 	sortAccessFields(spec.Fields)
 	sortSchemaIDs(spec.Schemas)
-	spec.AccessDigest = kernel.CanonicalDigest(map[string]any{"fields": spec.Fields, "adopted": spec.schemaForms})
+	spec.AccessDigest = kernel.CanonicalDigest(map[string]any{"fields": spec.Fields, "adopted": spec.schemaForms, "declarations": contracts})
+}
+
+func declarationContracts(statuses []DeclarationStatus) []DeclarationStatus {
+	contracts := append([]DeclarationStatus(nil), statuses...)
+	for i := range contracts {
+		contracts[i].Repository, contracts[i].Commit = "", ""
+	}
+	return contracts
 }
 
 func cloneAccessFields(fields []AccessField) []AccessField {

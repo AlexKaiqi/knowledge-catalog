@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"io"
 	kcclient "kc/client"
+	kcidentity "kc/identity"
+	"kc/identity/identitytest"
+	"kc/identity/taihu"
 	inv "kc/invocation"
 	serv "kc/server"
 	"net/http"
@@ -18,18 +21,10 @@ import (
 	"kc/kernel"
 )
 
-// testPairingAuthenticator 是 pairing 流程的最小测试替身（客户端登录会话路）。
-// server 包内 pairingAuthenticator 校验 Authorization 头并携带 OnBehalfOf，测的
-// 是服务端授权；两者行为不同，B8 判定为设计使然而非重复（TASK.md 已收口）。
-// testTaihuAuthenticator stands in for server.TaihuAuthenticator: the
-// identity-token broker is only served in taihu mode (browser login requires
-// the OAuth2 identity provider), so the double must report the same mode name.
-type testTaihuAuthenticator struct{ principal string }
-
-func (a testTaihuAuthenticator) Name() string { return "taihu" }
-
-func (a testTaihuAuthenticator) Authenticate(_ context.Context, _ http.Header) (inv.HTTPIdentity, error) {
-	return inv.HTTPIdentity{Principal: a.principal, Admin: a.principal == "kaiqidong"}, nil
+// testTaihuAuthenticator reports the taihu mode name because the identity-token
+// broker is only served by an OAuth2 identity provider.
+func testTaihuAuthenticator(principal string) identitytest.Authenticator {
+	return identitytest.Static("taihu", kcidentity.HTTPIdentity{Principal: principal, Admin: principal == "kaiqidong"})
 }
 
 func isolateLoginConfig(t *testing.T) {
@@ -49,7 +44,7 @@ func loginTestServer(t *testing.T, principal string, request func(*http.Request)
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/identity/v1/auth":
-			_, _ = io.WriteString(w, `{"mode":"gitea","localAssertion":false}`)
+			_, _ = io.WriteString(w, `{"mode":"taihu","localAssertion":false}`)
 		case "/identity/v1/whoami":
 			_ = json.NewEncoder(w).Encode(map[string]string{"principal": principal})
 		case "/catalog/v1/catalogs":
@@ -222,7 +217,7 @@ func TestBrowserCodeCompletesThroughBrokerWithoutClientSecret(t *testing.T) {
 		_, _ = io.WriteString(w, `{"access_token":"verified-user-token","refresh_token":"refresh","expires_in":3600}`)
 	}))
 	t.Cleanup(upstream.Close)
-	server := httptest.NewServer(serv.HTTPHandlerWithOptions(t.TempDir(), serv.HTTPServerOptions{Authenticator: testTaihuAuthenticator{principal: "kaiqidong"}, ServiceIdentity: &serv.ServiceIdentity{ClientID: "kc-app", ClientSecret: "server-secret", OAuth2Base: upstream.URL}}))
+	server := httptest.NewServer(serv.HTTPHandlerWithOptions(t.TempDir(), serv.HTTPServerOptions{Authenticator: testTaihuAuthenticator("kaiqidong"), LoginBroker: taihu.NewBroker(taihu.Application{ClientID: "kc-app", ClientSecret: "server-secret", OAuth2Base: upstream.URL}, nil)}))
 	t.Cleanup(server.Close)
 	result, err := exchangeTaihuCode(&inv.Invocation{Context: context.Background()}, taihuPendingAuth{Server: server.URL, CodeVerifier: strings.Repeat("a", 43)}, "one-time-code", "http://localhost/callback")
 	if err != nil {
@@ -379,7 +374,7 @@ func TestCurrentTokenBrokerUsesDeploymentSecretAndRejectsInvalidProof(t *testing
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			before := upstreamCalls
-			handler := serv.HTTPHandlerWithOptions(t.TempDir(), serv.HTTPServerOptions{Authenticator: testTaihuAuthenticator{principal: "kaiqidong"}, ServiceIdentity: &serv.ServiceIdentity{ClientID: "knowledge-catalog", ClientSecret: test.secret, OAuth2Base: upstream.URL}})
+			handler := serv.HTTPHandlerWithOptions(t.TempDir(), serv.HTTPServerOptions{Authenticator: testTaihuAuthenticator("kaiqidong"), LoginBroker: taihu.NewBroker(taihu.Application{ClientID: "knowledge-catalog", ClientSecret: test.secret, OAuth2Base: upstream.URL}, nil)})
 			server := httptest.NewServer(handler)
 			t.Cleanup(server.Close)
 			remote, err := kcclient.New(kcclient.Config{BaseURL: server.URL, HTTPClient: server.Client()})

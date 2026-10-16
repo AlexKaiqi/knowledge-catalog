@@ -8,12 +8,11 @@ import (
 	"kc/kernel"
 )
 
+// nativeStorageProof is the Server's private storage credential. lakeFS is
+// storage, not an identity provider: caller proof is never forwarded to it.
 func (h *handler) nativeStorageProof(r *http.Request) (http.Header, error) {
 	if h.config.NativeCredential == nil {
-		if h.nativeServiceIdentity() {
-			return nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "native storage credential is required for external authentication")
-		}
-		return lakeFSCallerProof(r.Header)
+		return nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "native storage credential is required for external authentication")
 	}
 	credential, err := h.config.NativeCredential(r.Context())
 	if err != nil {
@@ -26,10 +25,6 @@ func (h *handler) nativeStorageProof(r *http.Request) (http.Header, error) {
 	proof := &http.Request{Header: http.Header{}}
 	proof.SetBasicAuth(key, secret)
 	return proof.Header, nil
-}
-
-func (h *handler) nativeServiceIdentity() bool {
-	return h.config.NativeCredential != nil || identityMode(h.config.Identity) != "lakefs" && !localIdentity(h.config.Identity)
 }
 
 // Service-backed consoles expose no storage-account login, setup or credential

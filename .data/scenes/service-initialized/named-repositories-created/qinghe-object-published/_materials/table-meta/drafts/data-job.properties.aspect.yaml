@@ -8,26 +8,21 @@ fields:
   entityType:
     type: string
     required: true
-    access: [filter]
   name:
     type: string
     required: true
-    access: [text, filter]
   qualifiedName:
     type: string
     required: true
-    access: [text, filter]
   nativeId:
     type: string
     required: true
   nativeKind:
     type: string
     required: true
-    access: [filter]
   nativeType:
     type: string
     required: true
-    access: [filter]
   platformRef:
     type: object_ref
     required: true

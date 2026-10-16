@@ -29,13 +29,12 @@ usage() {
     '  e2e         CLI/HTTP/Catalog journeys on ephemeral OpenSearch; every public kc verb required' \
     '  race        concurrency-sensitive local packages under the race detector' \
     '  coverage    short suite with an explicit statement-coverage floor' \
-    '  service-e2e authenticated provider/consumer journey with external identity + OpenSearch' \
     '  taihu-live  real Taihu introspection (KC_LIVE_TAIHU=1 + secrets)' \
     '  opensearch  live OpenSearch projection/search contract' \
     '  state-runtime live resource-access/v1 State runtime contract in Docker' \
     '  kcfs        Docker Linux/FUSE host projection acceptance' \
     '  adapters    opensearch' \
-    '  docker      adapters + State runtime + authenticated service roles + kcfs' \
+    '  docker      adapters + State runtime + kcfs' \
     '  all         lakefs + live deployment scenes + contracts + docker' \
     '' \
     'lakefs reuses KC_TEST_OPENSEARCH_URL or starts ephemeral OpenSearch; no deployment stack required.' \
@@ -116,10 +115,6 @@ run_coverage() {
   printf 'statement coverage %s%% (minimum %s%%)\n' "$total" "$minimum"
 }
 
-run_service_e2e() {
-  ./scripts/e2e-service-roles.sh
-}
-
 run_taihu_live() {
   KC_LIVE_TAIHU=1 run_named_go_test ./server TestLiveTaihuAuthentication -count=1 -timeout=2m
 }
@@ -137,6 +132,10 @@ run_kcfs() {
 }
 
 run_lakefs() {
+  if [[ -z "${KC_TEST_OPENSEARCH_RUN_PREFIX:-}" ]]; then
+    python3 "$repo_root/scripts/opensearch_fixture.py" run --endpoint "$KC_TEST_OPENSEARCH_URL" -- "$0" lakefs
+    return
+  fi
   # The existing scene tree owns its lakeFS HTTP fixtures. Index scenes use
   # real OpenSearch; neither suite needs a full product deployment.
   run_go_test -count=1 -timeout=15m -run '^(TestProductScenes|TestMetricPermissionScenes)$' ./cli
@@ -155,47 +154,15 @@ run_adapters() {
 run_docker() {
   run_adapters
   run_state_runtime
-  run_service_e2e
   run_kcfs
-}
-
-opensearch_container=""
-cleanup_local_services() {
-  if [[ -n "$opensearch_container" ]]; then
-    docker rm -f "$opensearch_container" >/dev/null 2>&1 || true
-  fi
 }
 
 start_local_opensearch() {
   if [[ -n "${KC_TEST_OPENSEARCH_URL:-}" ]]; then
     return
   fi
-  if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
-    printf 'FAIL: %s requires Docker because OpenSearch is the only retrieval implementation\n' "$group" >&2
-    exit 1
-  fi
-  opensearch_container="kc-local-opensearch-$$"
-  trap cleanup_local_services EXIT
-  docker run --rm -d \
-    --name "$opensearch_container" \
-    -p 127.0.0.1::9200 \
-    -e discovery.type=single-node \
-    -e DISABLE_INSTALL_DEMO_CONFIG=true \
-    -e DISABLE_SECURITY_PLUGIN=true \
-    -e 'OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m' \
-    "${KC_OPENSEARCH_IMAGE:-opensearchproject/opensearch:2.19.3}" >/dev/null
-  local mapped host_port
-  mapped="$(docker port "$opensearch_container" 9200/tcp)"
-  host_port="${mapped##*:}"
-  export KC_TEST_OPENSEARCH_URL="http://127.0.0.1:$host_port"
-  for _ in {1..60}; do
-    if curl -fsS "$KC_TEST_OPENSEARCH_URL/_cluster/health" >/dev/null 2>&1; then
-      return
-    fi
-    sleep 2
-  done
-  docker logs --tail 200 "$opensearch_container" >&2
-  exit 1
+  exec python3 "$repo_root/scripts/opensearch_auto.py" \
+    --image "${KC_OPENSEARCH_IMAGE:-opensearchproject/opensearch:2.19.3}" -- "$0" "$group"
 }
 
 case "$group" in
@@ -210,7 +177,6 @@ case "$group" in
   e2e) run_e2e ;;
   race) run_race ;;
   coverage) run_coverage ;;
-  service-e2e) run_service_e2e ;;
   taihu-live) run_taihu_live ;;
   opensearch) run_opensearch ;;
   state-runtime) run_state_runtime ;;

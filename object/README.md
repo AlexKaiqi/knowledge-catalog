@@ -15,7 +15,7 @@ Pointer 再解码一次。`PointerTokens` / `SelectPointer` 区分缺失与 JSON
 语法错误返回 `USAGE_INVALID`，不存在的选值返回 `OBJECT_REF_UNRESOLVED`。
 Dataset 范围和固定 commit 属于独立请求坐标，不改变 URN 来源身份。
 
-读取可选择任意节点，`Digest` 保留其完整维护单元的依据；Members 集合没有单一维护摘要。
+读取可选择任意节点，内容 `Digest` 保留其完整单元的值摘要；Members 集合没有单一维护摘要。
 写入由同一个 Reference 选择现有 Entity／Relation、完整 Aspect／Record 或单个 Member；
 PUT 完整替换，REMOVE 显式删除。创建首个 Member 集合须声明 `KindMember`，不能仅凭两段
 Pointer 猜维护模型。深字段、Members 集合、数组元素与组合对象整体 PUT 不属于写面。
@@ -23,6 +23,14 @@ Pointer 猜维护模型。深字段、Members 集合、数组元素与组合对�
 `ReferenceUnitsReader` 交付所选完整单元，供外部逻辑访问在 leaf 选择前应用观察。
 基础类型、单元组装与修改语义在本根包唯一维护；`CommitReceipt` 等回执纯类型也在本包，
 Writer 兼容别名不另造回执合同。
+
+`Resolution.Digest` 是固定版本上的条件维护依据，供 PUT／REMOVE 的摘要前置条件使用。
+Snapshot 单元沿用内容摘要；Binding 单元没有持久值，采用本单元 `SchemaRef` 与 `ValueSource`
+的 `DeclarationDigest`，不包含远端 ResourceDescriptor 版本或 live 观察。整个对象的 REMOVE
+在含 Binding 时按 Address 排序，组合各完整单元的维护摘要；全 Snapshot 对象保留组装内容摘要。
+`MaintenanceDigest`／`UnitSetMaintenanceDigest` 是 Provider 共用的算法，原生对象 Provider 的
+RESOLVE 和条件写入须采用相同依据。`Unit.Digest`、`UnitDeclaration.Digest` 和内容 READ 摘要
+继续只描述值；维护 Binding 时取得 RESOLVE 摘要，不能把空值内容摘要当作声明前置条件。
 
 `Repository` 是只读②视图。Tree provider 由 `object/reader` 在 Snapshot `TreeStore` 之上解释。都只提供 Canonical 精确读，Relation 候选必须来自③ exact-basis Retriever。挂载与 Dataset 服务 仍只要求 `snapshot.Store`，由应用装配显式取得② capability。
 
@@ -50,14 +58,14 @@ CLI 登记与 help 同源生成：`go generate ./cli`。普通测试中的
 实际仓通过既有 `snapshot.TreeReader` / `DirectoryReader` 提供文件字节和有界目录
 分页，不提供字面写面；精确对象读取不依赖投影。
 README 是 Markdown 对象单元，不是 Dataset 服务 库存的 title/summary。协议 Schema 是
-`schema/core/readme/v1`（Aspect `readme`，字段 `body` 为字符串）。其 `body` 字段的 `access: [text]` 声明查询能力。人写
+`schema/core/readme/v1`（Aspect `readme`，字段 `body` 为字符串）。查询能力由采用索引声明 Schema 的 `index` 成员另行声明。人写
 `README.md`：frontmatter 用 `entity` / `aspect` 承载 Address，正文是 markdown。
 身份仍是 Address；`README.md` 只是人写与 git 直推解释用的有界 `path_hint`。
 无 frontmatter 的根 README 不是对象。接入方须在同一仓
 发布与 System 出版物 digest 一致的 Schema 副本（`schema_ref` 不跨仓）。
 领域分类、owner、质量门槛和投影热状态不进入该对象。`catalog/` DTO 与 `kc show`
 的 `repositories` 只列 `{id, schemaCount?}`；读 README 使用对象 URN 的 `/readme` locator，
-SEARCH 只按固定版本 Schema 的 `body` access 编译 `text`；旧 pin 保留自己的 Schema 声明。
+SEARCH 按固定范围内选中的索引声明编译 `body` 的文本能力；旧 pin 保留自己的 Schema 和索引声明。
 `ParseSchemaDefinition` 与 `ValidateSchemaInstance` 是 Writer/Reader 共用的协议解释。
 Schema 文档可有可选 `description`，说明该实体是什么；不是固定元信息，不是仓 README，
 也不是 Dataset 服务 title/summary。`schemas:list` 可带上这一句。
@@ -65,7 +73,7 @@ Meta Schema 不向实例继承字段；Entity / Aspect / Relation / Member 是 A
 不是 System 仓里要「也列出来」的四种实体。
 System Repository 的完整出版物（值、Address、Schema 绑定与路径）须与二进制一致；
 实际 Snapshot commit 同时固定解释单元和文件字节，所有导读、入口和关系都参与版本依据。部署必须配置系统仓 binding，
-`kc deployment init --config deployment.yaml` 把整份出版物经 Writer 写入绑定的空 LakeFS/Gitea Snapshot；
+`kc deployment init --config deployment.yaml` 把整份出版物经 Writer 写入绑定的空 lakeFS Snapshot；
 `kc deployment system publish --config deployment.yaml` 可显式重试发布或核对。启动只核对并读取实际仓，不补发布、不挂载内置仓；
 已占用仓核对整份出版物，缺失、不一致或包含额外内容文件时拒绝，不能用新说明覆盖旧版本。Domain Schema 文档的
 JSON Schema 词表在 `schema-document.schema.yaml`，只用于对账，不替代 Go 校验器。
@@ -76,7 +84,7 @@ JSON Schema 词表在 `schema-document.schema.yaml`，只用于对账，不替�
 `object/record/array/relation_endpoint_list` 保留为可读取的复合对象值，不能直接声明
 未定义的标量访问。`keyed_collection` 中各 Member 的标量字段仍可声明访问。
 `BreakingSchemaChanges` 约束同一 Domain Schema object ID
-的值结构只能做兼容演进；字段 access 可随版本增加、收窄或移除，其逻辑摘要变化由投影维护处理。
+的值结构只能做兼容演进；检索能力在独立索引声明成员中增加、收窄或移除，其逻辑摘要变化由投影维护处理。
 单仓 Schema 发现由应用层 `schemas:list` 点名已发布实体，不是 Schema 正文或合同摘要。
 
 Address/pattern、必填与 `additionalProperties` 对每个 `schema/*` 无条件生效；省略
@@ -96,23 +104,28 @@ ref 直推：Reader 按文件 frontmatter 解释，live 投影对 HEAD 对账。
 分目录（`metrics/`、`tables/`），不再使用 `objects/` 前缀。身份仍是
 `object_id`，目录只是 `path_hint`。
 
-Binding 声明在 Domain Schema Canonical `origin` 上；运行状态、cursor、watermark 和凭证留在墙外 Materialization Runtime。`kc access` 用 origin + 实体 `object_id` 取回该 Aspect，不另存空实例。ResourceDescriptor `origin` 给 `kc invoke`。消费侧 `liveaccess/service` 可通过注入的 State 端口返回观察值及 observation basis，但不会把它写回 Repository 或伪装成 commit 中的值。
+外部取值来源声明在 Aspect 或 Member 的 `valueSource` 上，只通过 `binding.descriptorRef`
+引用 ResourceDescriptor。`origin`、State/Stream、runtime、protocol 与操作由取值描述声明，
+不写进 Domain Schema；Schema 只描述值结构。`liveaccess` 组合固定单元声明与引用的
+ResourceDescriptor 版本，声明摘要同时覆盖两者。`liveaccess/service` 在读取时采用外部值，
+记录观察依据和逐值失败，不写回 Repository，也不把观察值伪装成 commit 中的静态值。
+运行状态、cursor 和 watermark 由外部 runtime 维护；声明不携带凭证，凭证适用目标由部署配置限定。
 
 对象定义直接描述含义、边界与组成，不增加通用资源包装。插件实现声明组织为
 `interfaces` 集合的 Member，每个实现由 Schema 约束并引用插件合同；合同、实现与调用任务是
 LiveAccess 插件的内部机制（`liveaccess/handler`、`liveaccess/dispatch`），对象层不认识它们。
-`liveaccess/contract.LiveAccessInterfaceV1` 是唯一已安装的合同；ResourceDescriptor 仍是 `kc access` 的声明形式。
+`liveaccess/contract.LiveAccessInterfaceV1` 是唯一已安装的合同；ResourceDescriptor 描述单元引用的外部取值入口，由 LiveAccess 解释和调用。
 声明可读、Schema 合法、处理器存在、调用获准及运行可用分别证明。
 
 system 的 `object-interfaces/` 出版机器合同，`interfaces/` 仍解释 Writer/CLI 操作入口；
-Schema 的字段 `access` 出版逻辑查询声明。扩展合同在普通仓发布，处理器独立装配，不追加只读系统仓。
+索引声明成员出版逻辑查询声明，Schema 只描述值结构。扩展合同在普通仓发布，处理器独立装配，不追加只读系统仓。
 
 目录内聚合整个②垂直面：根包拥有协议类型与只读 Repository 视图，`reader/` 负责固定 commit 上的对象解释，`writer/` 负责 Object ChangeSet 的 COMMIT（可写指定分支）与条件合并 MERGE。字面路径写入不在本目录，见 `snapshot/`；检索合同不在本目录，见 `discovery/`。
 
 `semanticview/` 只把已经组装的固定版本 `ObjectValue` 渲染成带 `_kc` 坐标的消费 YAML；
 它不枚举 Repository、不写回，也不拥有投影生命周期。
 
-`service/` 拥有固定读写任务；`cache/` 实现可选 Hydrator；`maintenance/` 拥有有界遍历、变更解释和独立派生协调。Reader 不扫描、不维护派生、不执行来源访问。Interfaces、Discovery、LiveAccess 与完整 SystemRepo 出版均为外部能力，基础发布与读取不依赖它们。
+`service/` 拥有固定读写任务；`cache/` 实现可选 Hydrator；`maintenance/` 拥有有界遍历、变更解释和独立派生协调。Reader 不扫描、不维护派生、不执行来源访问。Discovery、LiveAccess 与完整 SystemRepo 出版均为外部能力，基础发布与读取不依赖它们。
 
 `cli/` 拥有对象命令、参数、帮助、结果视图与对象专属的既有命令扩展，通过公开贡献由 KC
 宿主装配；`client/` 拥有独立 Object HTTP SDK，只消费公开类型和注入的认证传输。

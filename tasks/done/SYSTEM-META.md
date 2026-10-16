@@ -1,0 +1,28 @@
+# SYSTEM-META · 接入方与 Agent 如何理解这套知识模型
+
+- [ ] 本轮认领（2026-10-10）：将 `kr://kc/system` 扩展为 Knowledge Catalog 的自描述知识仓，发布模型、操作入口、运行机制、能力说明、使用指南与导航关系；根 README 提供有界阅读入口。
+- Goal：Agent 从系统仓理解知识模型、选择能力并找到当前 CLI help；`systemrepo/content` 是项目中的出版源，显式部署初始化经 Writer 发布到配置指定的实际 system Snapshot，启动核对，运行时只读实际仓。Owner：[知识读写](../../doc/design/object.md) 的系统出版物与文件视图，[服务](../../doc/design/service.md) 的部署恢复，[CLI](../../doc/design/affordance.md) 的逐步披露，[术语表](../../doc/concepts.md) 的公开词汇。Non-Goals：不改现有 Entity 等 wire 名称，不引入通用 lastModified 等不存在的公共属性，不把运行就绪或当前授权写成固定出版物，不复制完整 CLI 参数表，不修改 Catalog 登记线的在途变更，不新增原地升级合同。
+- 不变量：`L-01`、`I-01`、`V-01`、`W-01`、`REL-01`、`KS-02`、`R-02`，及 service 的「初始化是显式管理动作，服务启动只恢复」。接口依据 `DeploymentConfig.Repositories`、`InitializeDeployment`、`OpenDeployment`、`SystemPublicationOperations`、`KnowledgeFileReader`、`PublishSystem` 与现有 frontmatter / Schema / Address 合同。
+- 选定：一对象一目录、一切面一文件；CLI 调用入口从既有登记生成并以合同守卫对齐；整份出版物内容参与版本摘要与发布/启动核对。否决：人工维护第二份参数合同、无 frontmatter 的说明冒充知识、按系统仓 ID 绕过授权、只校验 Schema 而允许说明或调用入口漂移。
+- 存量债登记：位置 `object/readme.go:protocolSchemaDigest`；信号为 owner 要求系统 Schema 副本一致，而现有 Writer 守卫只锁 README Schema，现行测试明确允许其它协议 Schema 原位差异。判定为设计/已选合同一致性缺口；本轮保留该合同，不借自描述出版物扩展改变业务 Schema 发布行为。触发条件为后续统一系统 Schema 副本与兼容演进合同，届时先选定边界并补反例。
+- 增量自检：Markdown 往返曾将普通 `.md` 标量转为 `{body}`，导致同一草稿重试冲突；已修正为仅对明确单 `body` 值渲染 Markdown，并以正文、标量、结构化值和原写入重试合同守卫。U8 的真实 Agent 语义验收缺口登记在 `.data/scenes/_views.yaml`，不把程序读取通过视为模型任务验收通过。
+- 本轮增量自检：已移除内置 Snapshot provider，保留出版源解析与信任根；原不变性断言迁移到实际部署运行句柄，原发布/文件一致性断言同时覆盖出版源与实际 Writer 输出。实际读取暴露的夹具/介质问题均当场修复并有守卫：memory 目录 cursor 绑定目录与 commit；lakeFS presigned redirect 消耗有界响应正文，使连接可复用，避免逐文件核对耗尽端口；lakeFS 测试夹具关闭前释放请求锁，以确定性在途请求回归和竞态检查守卫关闭死锁。另两条授权合同曾按列表首项误选 system，已改为按业务仓 identity 查 binding，保留原 FORBIDDEN 与默认可读隔离断言；组件库存合同现在明确断言实际 system 与业务 authority 均在场，按 identity 核对连接。
+- 托管建仓合同同步：静态部署配置仅含必需的 system authority，动态业务仓仍只能从持久供给账恢复，不把新增系统绑定误判为业务仓混入配置；原重启、幂等、历史读取和撤权断言完整保留。
+- 真实部署入口自检：CLI 普通夹具的默认 lakeFS credential 不得覆盖真实场景 DFS 的部署配置；TestMain 仅在普通夹具模式注入，以子进程回归同时核对已配置和缺失凭证保持原状。真实部署验收仍单独执行，不以该配置边界守卫代替。
+- 场景夹具同步：冻结与复制守卫现在同时核对实际 system、knowledge、graph 三个独立物理仓；故障回放夹具按每次构建的 system 与业务仓两次供给，把失败仍注入指定的业务前置步骤，保留原状态、最后步骤和失败报告断言。
+- 概念纠偏（2026-10-10）：Goal = 系统仓忠实解释已有 Catalog 模型，移除误增的 Task 领域概念；Non-Goals = 不改变已有调用、部署和知识读写协议，不改客户端宿主的 TaskContext。Owner 沿用知识读写与术语表；不变量沿用 L-01、I-01。选定使用指南作为出版物的阅读内容，目录与身份统一为 guides，不作为新增领域模型；否决把按用户目标编排的说明提升为系统 Task 类型。删除错误概念，同步正文、Schema、导航和既有读取/完整性合同，验证范围单独记录。
+- 概念纠偏验证：knowledge、object/writer、home、cli、server 中受影响的发布内容与 Schema、导航闭包、实际系统仓初始化/恢复、已认证读取、文件交付及 help 同源合同通过（34 个测试事件，0 失败、0 skip）；`make quality`（含 `make check-docs`）通过。证据见 `.validation/system-guide-correction-summary.json`；本轮未重复完整混合合同，未执行真实部署或真实 Agent 语义验收。
+- 全量概念复核（2026-10-10）：Goal = 逐一核对剩余 28 个 concept，只解释已有系统；Owner 为知识读写的系统出版物、术语表及各概念在文档图中的主题 owner。Non-Goals = 不扩展协议模型、授权、动态流或治理实现，不把现有 API 当作收窄设计的理由。不变量沿用 L-01、I-01、R-02、O-01。选定移除把说明分类实体化的 Capability，校正已有概念的定义，以既有 owner 语义和公开 Go 类型/入口登记每个保留概念的依据；否决凭概念正文自身证明概念存在。Task 与 Capability 同类问题已重复，升级为出版物合同：新增 concept 必须有经复核的 owner 主题与公开声明依据，自动检查依据存在和出版物覆盖，语义仍随人工 diff 复核。
+- 全量概念复核结果：移除 Capability 后保留 27 个 concept，依据登记于 `object/testdata/system-concepts.json`，独立 owner/public declaration 守卫及受影响的完整出版物、Schema、导航、部署恢复、认证读取和文件交付合同通过（62 个测试事件，0 失败、0 skip）；`make quality`（含 `make check-docs`）通过。证据见 `.validation/system-concept-audit-summary.json`；未重复完整混合合同，未执行真实部署或真实 Agent 语义验收。
+- 分类纠偏（2026-10-10）：Goal = 按已有模型、操作入口和运行机制整理系统知识，停止把所有有代码依据的名词都放进 concept；Owner 沿用知识读写的系统出版物、CLI 的调用入口、术语表及各机制的现有主题。Non-Goals = 不扩展领域模型、协议形状或运行行为，不新增升级/迁移/部署动作。不变量沿用 I-01、V-01、REL-01 与已有系统出版物启动核对合同。选定 concepts 仅保留知识模型、仓与组合、版本与来源依据；Writer/CLI 移到 interfaces；主体与权限、Binding/观察/资源访问、Proposal/Gate 按各自机制共同解释，Snapshot、Hook、投影和访问审计归 mechanisms；capabilities 说明用途，guides 说明步骤。统一模型/入口/机制说明的正文 Schema，避免把阅读分类定义成领域类型；导航按目标种类更新并合并归类后重复的边。依据守卫覆盖全部说明与分类，不只覆盖 concept。否决仅移动文件但保留错误的 concept 身份/Schema/关系类型，也否决把辅助记录重新列成平级核心模型。接口继续使用既有 Writer、Address、Schema、发布完整性与只读读取合同。
+- 分类纠偏结果与验证：模型与依据 14 项、操作入口 2 项、运行机制 7 篇，保留全部 27 个已有术语的 owner/public contract 依据，登记改为 `systemrepo/system-explanations.json`；合并同机制说明后删除 6 条重复导航边，正文共用说明 Schema。出版物/Schema/导航闭包、来源与分类守卫、初始化恢复、已认证模型/入口/机制读取、Dataset 原字节交付和 help 同源合同通过（62 个测试事件，0 失败、0 skip）；`make quality`（含 `make check-docs`）通过。证据见 `.validation/system-knowledge-layout-summary.json`；仅复验受影响合同，未重复完整混合合同，未执行真实部署或真实 Agent 语义验收。
+- 复核发现的存量债：位置 `hook/README.md`、`hook/store.go:mutatingOn` 与 `doc/design/governance.md` Non-Goals；信号是公开应用 Hook 支持 `writer.commit`，而 owner 排除普通 Writer 提交的出站 Hook。判定为已有设计/合同不一致，本轮仅准确说明配置动作与读取边界，不反向收窄设计或修改执行；处置为单独裁决，触发条件为扩展点或写路径合同维护。位置 `liveaccess/README.md` 的 Schema 正文校验段；信号是仍称 Schema 没有 required/additionalProperties，而 `object/schema.go` 与 Writer 合同已经具备；判定为存量过时说明，本轮不改动态正文校验行为；触发条件为 Serving 值校验合同维护，届时对齐 owner、公开 Schema 与动态校验责任。
+- 部署模型选定：实际 system binding 必填；初始化发布完整出版物后登记；恢复核对内容、声明和文件闭包；运行句柄保留实际仓读取能力并拒绝引用、归档和文件写入。否决默认内置仓、启动补发布、来源不可用时回退、直接复制文件绕过 Writer。
+- 平台升级边界：现有 `object/writer/system.go:PublishSystem` 只初始化空仓或核对相同出版物，旧版已绑定仓不会自动覆盖；版本不匹配时部署和启动拒绝。原地升级入口仍须单独选定 CAS、历史保留与信任根切换合同，触发条件为正式提出原地平台升级需求。
+- 本轮部署模型验证：实际发布、重启读同一 authority、重复初始化不补 bootstrap、缺失/漂移/离线拒绝、文件/引用/归档运行写面拒绝，以及组件夹具不再挂载默认仓的回归已通过；完整场景与混合合同复验及源码版本绑定证据以本轮交付报告为准，真实部署验收未执行。
+- 上一轮自描述出版物验证：受影响包、已认证 CLI 读取、系统 Schema 分页、场景材料与 help 同源守卫无 skip 通过；`make quality` 与 `make check-docs` 通过。完整混合合同首次复验 1,860 个测试事件通过、0 失败，含原有 20 个外部环境 skip；仅共享 `TASK.md` 在运行中更新使版本绑定检查拒绝该证据，隔离同内容源码复跑记录见本轮交付。真实部署与真实 Agent 语义验收未执行，保持本条未勾选。
+- 上一轮固定源码复验：固定同内容源码的 `make test` 为 21 个测试事件通过、0 失败、0 skip；`make test-contracts` 为 1,860 个测试事件通过、0 失败、原有 20 个外部环境 skip，60/60 公开 CLI 命令满足边界要求。两次运行源码指纹稳定，交付前对照的 1,793 个现存源码文件与工作区一致；版本绑定证据保存在 `.validation/system-publication-summary.json` 及对应 run 目录。
+
+## 关闭
+
+2026-10-15 拆分 `TASK.md` 时关闭，未按原条目验收。早于 2026-10-14 对象模型重构的认领，相关代码与设计已被后续重构改写（见 `0759640` 之后的提交），原范围按旧结构写成，不再继续。整体验收并入 `FINAL-ACCEPTANCE-01`，插件相关用例由验收规格 accept-01～13 取代。

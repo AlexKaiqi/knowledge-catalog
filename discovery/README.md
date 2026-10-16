@@ -12,12 +12,11 @@ OpenSearch 的具体装配入口在 [`declarativeindex/opensearch`](../declarati
 
 Provider 只返回带 basis 的 `CandidateRef`，不得把 `_source`、stored field 或物理 score payload 当 Canonical 返回。
 
-`RelationRetrieveRequest.Repository/Basis` 指向关系存储仓；`Query.Endpoint` 是独立的端点引用，二者的 Repository 可以不同。Dataset 一跳查询扇出到固定成员投影，不因端点引用而查询范围外的仓；候选仍在关系存储仓同 commit 回读。端点角色与完整引用必须关联匹配，不能混配多个端点的字段。
+`RelationRetrieveRequest.Repository/Basis` 定位已准备的关系候选空间；正式 Dataset 一跳查询使用该修订的单份 corpus，底层提供方合同也可定位固定来源投影。`Query.Endpoint` 是独立的端点引用，候选范围不因端点扩大；完整 Relation 在其真实来源仓的固定 commit 回读。端点角色与完整引用必须关联匹配，不能混配多个端点的字段。
 
-Workspace 是调用范围，不是检索字段。物理文档不得保存 Workspace/PinID；上层从
-ResolvedDataset 为每个 pin 成员 `(repository, commit)` 生成 fragment，复用对应投影后再合并。
-公开命中经交付链按仓 `object.read` 屏蔽正文（`doc/design/permissions.md`）。
-OpenSearch 多 index、`_msearch` 或 PinID 级短期 alias 只是可丢优化。
+Dataset 修订是消费检索范围，不是检索字段。物理文档不保存 Dataset/PinID；声明式索引
+把选入单位编译成一个 corpus，跨来源使用同一套打分。Dataset 消费权限先于检索，命中
+按相同修订的来源版本向量回读全部选入方面，正文不再逐来源按仓读权裁剪。
 
 ## TRAVERSE：有界邻域闭包
 
@@ -94,11 +93,11 @@ KC_LIVE_LLM_RERANK=1 go test ./discovery/llmhttp -run '^TestLiveLunaListwiseRera
 ```
 
 ```bash
-go run ./cmd/kc -- search --repo kr://acme/public/core --query runbook
-go run ./cmd/kc -- search --repo kr://acme/public/core --eq db=tl --query events
-go run ./cmd/kc -- search --repo kr://acme/public/core --contains name=order
-go run ./cmd/kc -- operations projection describe --repo kr://acme/public/core
-go run ./cmd/kc -- operations projection sync --repo kr://acme/public/core --ref refs/heads/main
+go run ./cmd/kc -- search --dataset sales-analysis --query runbook
+go run ./cmd/kc -- search --dataset sales-analysis --revision 1 --eq db=tl --query events
+go run ./cmd/kc -- search --dataset sales-analysis --contains name=order
+go run ./cmd/kc -- operations projection describe --dataset sales-analysis --revision 1
+go run ./cmd/kc -- operations projection sync --dataset sales-analysis
 ```
 
 ## RECALL：请求级召回策略（lexical / semantic / hybrid 闭集）
@@ -110,12 +109,10 @@ go run ./cmd/kc -- operations projection sync --repo kr://acme/public/core --ref
 - `ValidateSearch` 先验：未知策略与 `hybrid` 拒绝；`semantic` 要求请求携带至少一个 MATCH 文本叶
   （legacy clauses 与 typed expression 同规则），纯过滤请求不能形成向量窗口，也不得静默降级为
   lexical。
-- 资格先于召回执行：单仓 `SearchExecutor` 在任何 lane 工作前先取查询向量（`retrieval.Embedder`，
-  llmhttp embeddings 适配器，`KC_EMBEDDING_MODEL`/`KC_EMBEDDING_DIMENSIONS` 环境配置），再走
-  `index.SemanticWindowAtContext` → OpenSearch k-NN 窗口（派生 `semantic_vector` 投影）。未配置
-  提供方、投影无向量面、dimension 不符或 State 视图请求一律失败关闭——不冒充 lexical，也不把
-  近似结果伪装成 complete。Dataset 通道对每个固定成员各取一次有界向量窗口（成员无向量面、
-  State 成员或缺提供方一律整体失败关闭），按成员序 rank interleave 合并，不声明跨成员全局排序。
+- 资格先于召回执行：消费方取得请求向量后，`SemanticDatasetWindow` 在固定 Dataset corpus
+  的显式向量成员上取一次有界 k-NN 窗口。声明的模型必须由实例真实登记，全文成员不会
+  自动变成向量成员；缺提供方、无向量面、模型或 dimension 不符都失败关闭。底层提供方
+  合同保留 `SemanticWindowAtContext` 证明同样的近似、同版本回读和不降级风险。
 - 结果一律 Approximate：`retrieval.MarkApproximate` 强制 partial completeness，并披露近似来源
   （k-NN 排名窗口、embedding 模型身份）；投影侧候选带 `semantic-vector` lane 的
   `approximate` guarantee 证据。窗口是单次有界 top-K，不分页不续传。
@@ -123,19 +120,14 @@ go run ./cmd/kc -- operations projection sync --repo kr://acme/public/core --ref
 
 ## 声明式索引
 
-Schema 字段 `access` 是唯一书写形式；`AccessSpecFromReport` 将固定 Repository/Commit 下的
-Schema 报告编译为逻辑查询合同。`PlanAccess` 先采用 Dataset 的版本与范围，再通过有界
-Schema locator 读取声明。不解释普通对象正文中的查询样式数据。
+采用 `schema/core/index-declaration/v1` 的 `index` 成员是检索能力的唯一来源；Schema 报告
+只给出值结构。维护通过固定版本的有界反向 locator 编译声明并保留成员见证。消费侧
+`PlanAccess` 先采用 Dataset 的版本与范围，由提供方传入已维护的合同；
+`AccessSpecFromAdoptions` 在同一范围按成员见证精确回读验证，不枚举正文或补读仓级 locator。
+普通对象正文中的查询样式数据不产生能力。
 
-```yaml
-entity: Article
-aspect: body
-fields:
-  text: {type: string, access: [text]}
-  publishedAt: {type: timestamp, access: [filter, sort]}
-```
-
-字段身份仍是 `(Schema, Aspect, path)`；未知访问词或复合值的未定义标量能力由 Schema
-校验拒绝。access 可以增加、收窄或移除，不改变值结构的兼容性判断。旧 pin 保留原合同；
+每个成员列出 Schema 字段定位符、构建方式及用途，实例能力清单逐成员说明支持情况。
+逻辑字段仍定位到 `(Schema, Aspect, path)`；声明成员可独立增加、收窄或移除，
+不改变 Schema 值结构的兼容性判断。旧 pin 保留原合同；
 `AccessDigest` 覆盖逻辑字段、类型和访问能力，变化触发投影重建，普通内容更新保持增量。
 提供方能力、物理就绪、范围/授权和同依据回读分别证明，声明不代替任何一项。

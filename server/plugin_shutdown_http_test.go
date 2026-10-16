@@ -16,6 +16,7 @@ import (
 
 	indexcontrol "kc/declarativeindex/control"
 	declarative "kc/declarativeindex/plugin"
+	indeximplementation "kc/declarativeindex/projection"
 	retrieval "kc/discovery"
 	consumerplugin "kc/discovery/plugin"
 	index "kc/discovery/projection"
@@ -26,13 +27,16 @@ import (
 	"kc/kernel"
 	"kc/liveaccess"
 	sourcebridge "kc/liveaccess/discovery"
+	liveplugin "kc/liveaccess/plugin"
+	liveservice "kc/liveaccess/service"
 	objectmodel "kc/object"
 	"kc/object/reader"
 	"kc/snapshot"
+	"kc/snapshot/dataset"
 )
 
 // HTTP shutdown must cancel actual background State work before waiting for a
-// sync request that needs its Controller lock. Registration, compilation,
+// sync request that needs its State build lock. Registration, compilation,
 // State publication and canonical reads use the real Entry and object stack.
 func TestHTTPPluginShutdownCancelsStateBeforeDrainingAcceptedSync(t *testing.T) {
 	exerciseHTTPPluginShutdown(t, false)
@@ -45,6 +49,8 @@ func TestHTTPBeginShutdownCancelsStateThenDrainsBeforeResourceClose(t *testing.T
 func exerciseHTTPPluginShutdown(t *testing.T, beginThenDrain bool) {
 	t.Helper()
 	source := testkit.NewSetup(t, "kr://shutdown/http-source")
+	descriptor := bindingfixture.Descriptor("https://scheduler.example")
+	descriptor["identity"] = string(objectmodel.IdentityShared)
 	commit, err := source.Writer.Commit("seed-http-shutdown", objectmodel.CommitChangeSet{
 		TargetRepository: source.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: source.RootCommitID, ExpectedTargetCommit: source.RootCommitID,
@@ -52,9 +58,10 @@ func exerciseHTTPPluginShutdown(t *testing.T, beginThenDrain bool) {
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/shutdown", AspectName: "definition"}, Value: map[string]any{"name": "shutdown"}},
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.runtime"}, Value: map[string]any{
 				"entity": "Job", "aspect": "runtime",
-				"fields": map[string]any{"status": map[string]any{"type": "string", "access": []any{"filter"}}},
+				"fields": map[string]any{"status": map[string]any{"type": "string"}},
 			}},
-			bindingfixture.PutDescriptor("resource/scheduler", bindingfixture.Descriptor("https://scheduler.example")),
+			testkit.IndexField("schema/job.runtime", "status", "keyword"),
+			bindingfixture.PutDescriptor("resource/scheduler", descriptor),
 			bindingfixture.PutAspect("job/shutdown", "runtime", "schema/job.runtime", "resource/scheduler"),
 		},
 	})
@@ -70,35 +77,53 @@ func exerciseHTTPPluginShutdown(t *testing.T, beginThenDrain bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	cat := testkit.OpenDatasets(t, store)
+	if _, err := cat.DefineDataset("shutdown", 1, []dataset.DatasetSource{{Repository: source.RepositoryID, Selector: snapshot.DefaultRef, BaseRev: string(commit.Result.NewCommit), Path: dataset.MountPath("jobs")}}); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := cat.ResolveDataset("shutdown")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pin, memberLookup := testkit.DatasetPin(resolved), rd.Lookup(cat.Require)
 	pool := &httpShutdownPool{stores: map[string]*httpShutdownStorage{}}
 	entry := declarative.Entry(declarative.Options{Directory: filepath.Join(t.TempDir(), "projection"),
-		Engine: func(string) index.EngineOpener { return pool.open }, Datasets: testkit.OpenDatasets(t, store),
+		Engine: func(string) index.EngineOpener { return pool.open }, Datasets: cat,
 		Lookup: func(id kernel.RepositoryID) (objectmodel.Repository, error) {
 			return rd.Require(id, kernel.ErrObjectRefUnresolved)
 		},
 	})
 	open := entry.Open
-	var foreground *httpShutdownController
+	var foreground *httpShutdownQueries
 	var stops atomic.Int64
 	entry.Open = func(scope consumerplugin.PluginScope) (consumerplugin.IndexContribution, error) {
 		contribution, err := open(scope)
 		if err == nil {
 			controller := contribution.Maintenance.(*indexcontrol.Controller)
 			controller.SetReconcileInterval(time.Hour)
-			foreground = &httpShutdownController{Controller: controller, entered: make(chan struct{}), drained: make(chan struct{}), release: make(chan struct{})}
-			contribution.Maintenance = foreground
+			foreground = &httpShutdownQueries{Index: contribution.Queries.(*indeximplementation.Index), entered: make(chan struct{}), drained: make(chan struct{}), release: make(chan struct{})}
+			contribution.Queries = foreground
 			stop := contribution.Stop
 			contribution.Stop = func() { stops.Add(1); stop() }
 		}
 		return contribution, err
 	}
-	plugins, err := consumerplugin.OpenIndexPlugins(consumerplugin.RepositoryPluginConfigs{Repositories: map[kernel.RepositoryID]consumerplugin.RepositoryPluginConfig{
-		source.RepositoryID: {Version: 1, Plugins: []consumerplugin.PluginSelection{{Name: "declarative-index", Instance: "http-shutdown"}}},
-	}}, map[string]consumerplugin.IndexPluginEntry{"declarative-index": entry})
+	installed := consumerplugin.PluginsConfig{"declarative-index": {Instances: map[string]consumerplugin.PluginInstanceConfig{"http-shutdown": {Catalog: declarative.Catalog}}}}
+	plugins, err := consumerplugin.OpenIndexPlugins(installed, consumerplugin.PluginScope{Repositories: []kernel.RepositoryID{source.RepositoryID}}, map[string]consumerplugin.IndexPluginEntry{"declarative-index": entry})
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := plugins.PrepareDatasetScope(context.Background(), memberLookup, pin); err != nil {
+		t.Fatal(err)
+	}
 	lookup := &httpShutdownState{entered: make(chan liveaccess.StateLookupRequest, 1), canceled: make(chan struct{}), release: make(chan struct{})}
+	access, err := liveservice.OpenPlugins(consumerplugin.PluginsConfig{"liveaccess": {Instances: map[string]consumerplugin.PluginInstanceConfig{"main": {Protocol: "resource-access/v1"}}}}, []kernel.RepositoryID{source.RepositoryID}, map[string]liveservice.PluginEntry{
+		"liveaccess": liveplugin.Entry(liveplugin.Options{OpenLookup: func(consumerplugin.PluginScope) (liveaccess.StateLookup, error) { return lookup, nil }}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = access.Close() })
 	startContext, cancelStart := context.WithCancel(context.Background())
 	t.Cleanup(func() {
 		lookup.releaseOnce.Do(func() { close(lookup.release) })
@@ -119,14 +144,14 @@ func exerciseHTTPPluginShutdown(t *testing.T, beginThenDrain bool) {
 		t.Fatal("actual Controller did not enter background Bound State lookup")
 	}
 	dir := t.TempDir()
-	if err := inv.WriteAllow(dir, inv.AllowFile{Version: inv.AllowVersion, Rules: []inv.AllowRule{{ID: "sync", Principal: "maintainer", Repo: string(source.RepositoryID), Actions: []string{"projection.manage"}}}}); err != nil {
+	if err := inv.WriteAllow(dir, inv.AllowFile{Version: inv.AllowVersion, Rules: []inv.AllowRule{{ID: "sync", Principal: "maintainer", Dataset: "shutdown", Actions: []string{"dataset.manage"}}}}); err != nil {
 		t.Fatal(err)
 	}
 	runtime, err := telemetry.New(telemetry.Config{ServiceName: "http-plugin-shutdown-test"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws := &Home{Dir: dir, Store: store, Reader: rd, Index: plugins, Plugins: plugins}
+	ws := &Home{Dir: dir, Store: store, Reader: rd, Datasets: cat, Index: plugins, Plugins: plugins, LiveAccess: access}
 	// This fixture supplies an already genuinely activated consumer root. Cold
 	// construction and activation are independently checked by their owner tests.
 	facade := &httpFacade{home: dir, readHome: ws, workersStarted: true, runtime: runtime, options: HTTPServerOptions{AuthMode: "local"}}
@@ -166,7 +191,7 @@ func exerciseHTTPPluginShutdown(t *testing.T, beginThenDrain bool) {
 			t.Error("HTTP shutdown cleanup did not release its root")
 		}
 	})
-	body, _ := json.Marshal(map[string]any{"repository": source.RepositoryID, "commit": commit.Result.NewCommit})
+	body, _ := json.Marshal(map[string]any{"dataset": "shutdown", "revision": 1})
 	request := httptest.NewRequest(http.MethodPost, "/operations/v1/projections:sync", strings.NewReader(string(body))).WithContext(requestContext)
 	if network != nil {
 		request, err = http.NewRequestWithContext(requestContext, http.MethodPost, network.URL+"/operations/v1/projections:sync", strings.NewReader(string(body)))
@@ -192,10 +217,10 @@ func exerciseHTTPPluginShutdown(t *testing.T, beginThenDrain bool) {
 			_, _ = response.Body.Write(raw)
 		}
 	}()
-	httpShutdownSignal(t, foreground.entered, "actual HTTP foreground CatchUp")
+	httpShutdownSignal(t, foreground.entered, "actual HTTP foreground Dataset State refresh")
 	select {
 	case <-foreground.drained:
-		t.Fatal("foreground sync did not wait for the actual background Controller lock")
+		t.Fatal("foreground sync did not wait for the actual background State build lock")
 	case <-time.After(25 * time.Millisecond):
 	}
 	pool.mu.Lock()
@@ -235,6 +260,9 @@ func exerciseHTTPPluginShutdown(t *testing.T, beginThenDrain bool) {
 		t.Fatal("HTTP Close waited for its invocation lock without canceling background State work")
 	}
 	httpShutdownSignal(t, foreground.drained, "foreground State publication after background cancellation")
+	if foreground.failure != nil {
+		t.Fatalf("foreground Dataset State publication failed: %v", foreground.failure)
+	}
 	select {
 	case err := <-closed:
 		t.Fatalf("HTTP shutdown released resources before the accepted sync drained: %v", err)
@@ -249,21 +277,30 @@ func exerciseHTTPPluginShutdown(t *testing.T, beginThenDrain bool) {
 		}
 	}
 	query := retrieval.SearchOf(retrieval.SearchClause{Op: retrieval.OpEQ, Field: &retrieval.FieldRef{Schema: "schema/job.runtime", Aspect: "runtime", Path: "status"}, Value: "running"})
-	revision, ready := plugins.StateView(repo.ID(), commit.Result.NewCommit)
-	if !ready || revision == "" {
-		t.Fatal("accepted HTTP sync did not publish its actual State view")
-	}
-	result, err := plugins.SearchStateAtRevisionContext(context.Background(), repo, commit.Result.NewCommit, revision, query)
+	result, err := plugins.SearchDataset(context.Background(), memberLookup, pin, query)
 	if err != nil || len(result.Hits) != 1 || result.Hits[0].Object.Commit != commit.Result.NewCommit || result.Hits[0].Object.Address.ObjectID != "job/shutdown" || len(result.Hits[0].Version.Observations) != 1 || result.Hits[0].Object.Value.(map[string]any)["runtime"].(map[string]any)["status"] != "running" {
 		t.Fatalf("draining HTTP work lost its fixed canonical State query: %#v %v", result, err)
+	}
+	revision := result.SearchView.ProjectionRevisions[repo.ID()]
+	if revision == "" || result.Dataset == nil || result.Dataset.ID != "shutdown" || result.Dataset.Revision != 1 {
+		t.Fatalf("accepted HTTP sync did not publish its actual Dataset State view: %#v", result)
 	}
 	foreground.releaseOnce.Do(func() { close(foreground.release) })
 	httpShutdownSignal(t, finished, "accepted HTTP sync response")
 	if transportErr != nil {
 		t.Fatal(transportErr)
 	}
-	var synced index.IndexSync
-	if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &synced) != nil || synced.Mode != index.IndexModeReady || synced.Repository != source.RepositoryID || synced.BasisCommit != commit.Result.NewCommit || synced.AccessDigest == "" || synced.ObjectCount != 2 /* job and its ResourceDescriptor */ {
+	var synced struct {
+		Dataset  string `json:"dataset"`
+		Revision int    `json:"revision"`
+		Members  []struct {
+			Repository kernel.RepositoryID `json:"repository"`
+			Commit     kernel.CommitID     `json:"commit"`
+		} `json:"members"`
+		Snapshot index.IndexSync  `json:"snapshot"`
+		State    *index.StateSync `json:"state"`
+	}
+	if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &synced) != nil || synced.Dataset != "shutdown" || synced.Revision != 1 || len(synced.Members) != 1 || synced.Members[0].Repository != source.RepositoryID || synced.Members[0].Commit != commit.Result.NewCommit || synced.Snapshot.Mode != index.IndexModeReady || synced.Snapshot.AccessDigest == "" || synced.Snapshot.ObjectCount != 3 /* job, its ResourceDescriptor and the index declaration member */ || synced.State == nil || synced.State.Revision != revision || synced.State.ObservationDigest == "" {
 		t.Fatalf("accepted sync failed during shutdown: HTTP %d %s", response.Code, response.Body.String())
 	}
 	if beginThenDrain {
@@ -305,18 +342,20 @@ func exerciseHTTPPluginShutdown(t *testing.T, beginThenDrain bool) {
 	}
 }
 
-type httpShutdownController struct {
-	*indexcontrol.Controller
+type httpShutdownQueries struct {
+	*indeximplementation.Index
 	entered, drained, release chan struct{}
 	releaseOnce               sync.Once
+	failure                   error
 }
 
-func (c *httpShutdownController) CatchUp(ctx context.Context) error {
+func (c *httpShutdownQueries) RefreshDatasetState(ctx context.Context, lookup reader.MemberLookup, pin reader.DatasetPin, source index.ObservationSource) (index.StateSync, error) {
 	close(c.entered)
-	err := c.Controller.CatchUp(ctx)
+	result, err := c.Index.RefreshDatasetState(ctx, lookup, pin, source)
+	c.failure = err
 	close(c.drained)
 	<-c.release
-	return err
+	return result, err
 }
 
 type httpShutdownState struct {

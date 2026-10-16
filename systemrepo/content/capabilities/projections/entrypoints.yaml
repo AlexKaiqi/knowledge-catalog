@@ -8,27 +8,21 @@ schema_ref: schema/system/capability-entrypoints/v1
 {
   "commands": [
     {
-      "action": "object.access.describe",
+      "action": "file.read",
       "command": "kc operations access-spec describe",
-      "description": "查看 AccessSpec",
+      "description": "查看 Dataset 选入声明的逻辑访问概览",
       "help": "kc help operations access-spec describe"
     },
     {
-      "action": "projection.read",
+      "action": "file.read",
       "command": "kc operations projection describe",
-      "description": "查看投影状态",
+      "description": "查看 Dataset 修订的投影状态",
       "help": "kc help operations projection describe"
     },
     {
-      "action": "projection.manage",
-      "command": "kc operations projection notice",
-      "description": "通知 Bound State 观察变化，不推进仓 HEAD",
-      "help": "kc help operations projection notice"
-    },
-    {
-      "action": "projection.manage",
+      "action": "dataset.manage",
       "command": "kc operations projection sync",
-      "description": "同步历史或排障投影",
+      "description": "显式准备 Dataset 固定修订的索引",
       "help": "kc help operations projection sync"
     }
   ]

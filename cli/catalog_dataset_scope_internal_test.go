@@ -57,7 +57,7 @@ func TestDatasetSearchKeepsExplicitScopeWithSelectedCatalog(t *testing.T) {
 			if len(paths) != 1 || paths[0] != "POST /object/v1/search" {
 				t.Fatalf("explicit Dataset triggered additional discovery or resolution requests: %v", paths)
 			}
-			if search.Dataset != "scene-set" || search.Query != "merchandise" || search.InventoryDiscovery || len(search.Pin) != 0 || search.Definition != nil {
+			if search.Dataset != "scene-set" || search.Query != "merchandise" || len(search.Pin) != 0 || search.Definition != nil {
 				t.Fatalf("explicit Dataset search scope changed: %#v", search)
 			}
 		})

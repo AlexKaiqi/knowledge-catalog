@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -24,10 +25,13 @@ func TestServerLiveAccessCredentialBoundariesPreserveSiblingsAndSafeEvidence(t *
 	var otherCalls atomic.Int64
 	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		otherCalls.Add(1)
-		if r.Header.Get("Authorization") != "" {
+		if r.Header.Get("Authorization") != "" || r.Header.Get("X-Tai-Identity") != "" {
 			t.Error("inapplicable or redirected target received proof")
 		}
-		w.WriteHeader(http.StatusNoContent)
+		if r.Header.Get("X-Resource-Principal") != "alice" {
+			t.Error("untrusted target lost the unproven principal")
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"value": map[string]any{"value": 99}, "basis": objectmodel.ObservationBasis{BindingGeneration: "other", Consistency: objectmodel.ObservationRepeatable, SourceRevision: "other-99", ObservedAt: "2026-10-14T12:00:00Z"}})
 	}))
 	t.Cleanup(other.Close)
 	var mode atomic.Value
@@ -71,14 +75,14 @@ func TestServerLiveAccessCredentialBoundariesPreserveSiblingsAndSafeEvidence(t *
 		_ = json.NewEncoder(w).Encode(map[string]any{"value": value, "basis": basis})
 	}))
 	t.Cleanup(source.Close)
-	f := newAcceptanceFixture(t, server.HTTPServerOptions{Authenticator: acceptanceAuthenticator{}})
+	f := newAcceptanceFixture(t, server.HTTPServerOptions{Authenticator: acceptanceAuthenticator})
 	f.stop(t)
 	f.config.LiveAccess.CredentialOrigins = []string{source.URL}
 	f.writeConfig(t)
 	f.start(t)
 	f.publish(t, acceptanceR1, source.URL)
 	changeOrigin := func(origin string) {
-		f.commit(t, acceptanceR1, []objectmodel.Operation{bindingfixture.PutDescriptor(acceptanceDescriptor(acceptanceR1, "broken"), bindingfixture.Descriptor(origin))})
+		f.commit(t, acceptanceR1, []objectmodel.Operation{bindingfixture.PutDescriptor(acceptanceDescriptor(acceptanceR1, "broken"), acceptanceBody(acceptanceR1, origin))})
 	}
 	assertFailure := func(t *testing.T, requestID string, code kernel.ErrorCode) {
 		t.Helper()
@@ -98,19 +102,29 @@ func TestServerLiveAccessCredentialBoundariesPreserveSiblingsAndSafeEvidence(t *
 			}
 		}
 	}
-	// An initially inapplicable declaration and a later changed declaration
-	// use the same deployment policy; neither may acquire the caller's proof.
+	// An initially untrusted declaration and a later changed declaration use
+	// the same deployment policy: the source is called, never with the proof.
+	assertProofFree := func(requestID string) {
+		t.Helper()
+		row, err := f.read(t, "alice", requestID, kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR1, ""), Repository: string(acceptanceR1), Commit: string(f.commits[acceptanceR1])})
+		if err != nil || len(row.Failures) != 0 || len(row.Observations) != 4 {
+			t.Fatalf("untrusted target was not called without proof: %#v %v", row, err)
+		}
+		if broken := row.Value.(map[string]any)["broken"]; !reflect.DeepEqual(broken, map[string]any{"value": float64(99)}) {
+			t.Fatalf("untrusted target value not delivered at its address: %#v", broken)
+		}
+	}
 	changeOrigin(other.URL)
-	assertFailure(t, "credential-initial-target", kernel.ErrForbidden)
+	assertProofFree("credential-initial-target")
 	changeOrigin(source.URL)
 	row, err := f.read(t, "alice", "credential-appropriate-target", kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR1, ""), Repository: string(acceptanceR1), Commit: string(f.commits[acceptanceR1])})
 	if err != nil || len(row.Failures) != 0 || len(row.Observations) != 4 {
 		t.Fatalf("applicable target did not adopt actual result: %#v %v", row, err)
 	}
 	changeOrigin(other.URL)
-	assertFailure(t, "credential-changed-target", kernel.ErrForbidden)
-	if otherCalls.Load() != 0 || calls.Load() != 10 {
-		t.Fatalf("inapplicable target contacted or sibling lookup lost: trusted=%d other=%d", calls.Load(), otherCalls.Load())
+	assertProofFree("credential-changed-target")
+	if otherCalls.Load() != 2 || calls.Load() != 10 {
+		t.Fatalf("untrusted target not called once per read or sibling lookup lost: trusted=%d other=%d", calls.Load(), otherCalls.Load())
 	}
 	changeOrigin(source.URL)
 	// Even another independently trusted target cannot receive proof via 307.
@@ -127,7 +141,7 @@ func TestServerLiveAccessCredentialBoundariesPreserveSiblingsAndSafeEvidence(t *
 			assertFailure(t, "credential-"+test.mode, test.code)
 		})
 	}
-	if otherCalls.Load() != 0 {
+	if otherCalls.Load() != 2 {
 		t.Fatal("public read followed cross-origin redirect with current proof")
 	}
 	// Read the actual durable audit/process/retained-payload files, not a fake

@@ -3,6 +3,7 @@ package client
 
 import (
 	"context"
+	retrieval "kc/discovery"
 	"net/http"
 )
 
@@ -20,4 +21,6 @@ type Client interface {
 	Traverse(context.Context, TraverseRequest, RequestOptions, any) error
 	DescribeAccessSpec(context.Context, AccessSpecDescribeRequest, RequestOptions, any) error
 	PluginHelp(context.Context, string, RequestOptions, any) error
+	PluginCapabilities(context.Context, string, RequestOptions, any) error
+	TrialDeclarations(context.Context, string, retrieval.DeclarationTrialRequest, RequestOptions, any) error
 }

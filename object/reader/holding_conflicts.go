@@ -71,14 +71,21 @@ func (s *Serving) publishedHolding(id kernel.RepositoryID, repo objectmodel.Repo
 	if err != nil || !inRange {
 		return objectmodel.Holding{}, false, err
 	}
-	value, err := repo.Read(object, commit)
-	if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
+	// Plan the root reference from immutable metadata, the same way a read
+	// selects holdings. A value read reports no units for a whole-value object
+	// (Schemas included), which would hide its conflict until read time.
+	planner, ok := repo.(objectmodel.ReferencePlanner)
+	if !ok {
+		return objectmodel.Holding{}, false, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "repository %s cannot plan object units for the publication conflict check", repo.ID())
+	}
+	units, err := planner.PlanReference(objectmodel.Reference{Repository: id, Object: object}, commit)
+	if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved || err == nil && len(units) == 0 {
 		return objectmodel.Holding{}, false, nil
 	}
 	if err != nil {
 		return objectmodel.Holding{}, false, err
 	}
-	return objectmodel.HoldingOf(id, commit, true, value.Units), true, nil
+	return objectmodel.HoldingOf(id, commit, true, units), true, nil
 }
 
 func eachStoredObjectID(repo objectmodel.Repository, commit kernel.CommitID, visit func(objectmodel.ObjectID)) error {

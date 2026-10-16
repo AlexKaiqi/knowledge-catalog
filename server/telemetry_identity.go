@@ -2,48 +2,36 @@ package server
 
 import (
 	"context"
-	inv "kc/invocation"
-	"net/http"
 	"strings"
 
+	"kc/identity"
 	"kc/internal/telemetry"
+	inv "kc/invocation"
 )
 
-type observedHTTPAuthenticator struct {
-	base    inv.HTTPAuthenticator
-	runtime *telemetry.Runtime
-}
-
-func observeHTTPAuthenticator(base inv.HTTPAuthenticator, runtime *telemetry.Runtime) inv.HTTPAuthenticator {
-	if base == nil || runtime == nil {
+func observeHTTPAuthenticator(base identity.HTTPAuthenticator, runtime *telemetry.Runtime) identity.HTTPAuthenticator {
+	if runtime == nil {
 		return base
 	}
-	if _, wrapped := base.(*observedHTTPAuthenticator); wrapped {
-		return base
-	}
-	return &observedHTTPAuthenticator{base: base, runtime: runtime}
+	return identity.Observe(base, func(ctx context.Context, mode string) (context.Context, func(error)) {
+		ctx, span, started := runtime.StartAuthentication(ctx, mode)
+		return ctx, func(err error) {
+			outcome, errorType := inv.TelemetryResult(err)
+			runtime.EndAuthentication(ctx, span, started, mode, outcome, errorType)
+		}
+	})
 }
 
-func (a *observedHTTPAuthenticator) Name() string { return a.base.Name() }
-
-func (a *observedHTTPAuthenticator) Authenticate(ctx context.Context, headers http.Header) (inv.HTTPIdentity, error) {
-	ctx, span, started := a.runtime.StartAuthentication(ctx, a.base.Name())
-	identity, err := a.base.Authenticate(ctx, headers)
-	outcome, errorType := inv.TelemetryResult(err)
-	a.runtime.EndAuthentication(ctx, span, started, a.base.Name(), outcome, errorType)
-	return identity, err
-}
-
-func recordHTTPIdentity(runtime *telemetry.Runtime, ctx context.Context, options HTTPServerOptions, identity inv.HTTPIdentity) {
+func recordHTTPIdentity(runtime *telemetry.Runtime, ctx context.Context, options HTTPServerOptions, caller identity.HTTPIdentity) {
 	if runtime == nil {
 		return
 	}
 	provider := "local"
 	if options.Authenticated() {
-		provider = strings.TrimSpace(identity.Provider)
+		provider = strings.TrimSpace(caller.Provider)
 		if provider == "" {
-			provider = options.Authenticator.Name()
+			provider = options.authenticator().Name()
 		}
 	}
-	runtime.RecordIdentity(ctx, provider, inv.PrincipalKind(identity.Principal), identity.OnBehalfOf != "")
+	runtime.RecordIdentity(ctx, provider, inv.PrincipalKind(caller.Principal), caller.OnBehalfOf != "")
 }

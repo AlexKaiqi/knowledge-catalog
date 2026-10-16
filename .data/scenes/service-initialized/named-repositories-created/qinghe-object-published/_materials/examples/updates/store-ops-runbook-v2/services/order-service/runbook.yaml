@@ -1,0 +1,13 @@
+---
+object_id: service/qinghe.order-service
+aspect_name: runbook
+kind: Aspect
+schema_ref: schema/service.runbook
+---
+revision: "2"
+firstSteps:
+- 看告警对象的 condition 与 firedAt，确认是延迟还是错误率。
+- 先读 campaign/qinghe.autumn-2026 的 firstDayNotice：活动首日流量高，p99 在 800ms 以内属预期。
+- 用 order-cli health 查看当前状态；错误率低于 1% 且只有延迟升高时，不要重启，扩容实例即可。
+- 错误率升高时再按故障处理，重启前先在值班群说明。
+escalation: 15 分钟未恢复，找交易组 Ma；活动期间同时通知市场组 Zhou。

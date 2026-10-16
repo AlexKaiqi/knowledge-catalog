@@ -268,7 +268,7 @@ func declarativeIndexSharedContractSignals(files map[string]*ast.File) []string 
 }
 
 func declarativeIndexRuntimePackage(pkg string) bool {
-	return deniedMatch("declarativeindex", pkg) && !deniedMatch("declarativeindex/client", pkg) && !deniedMatch("declarativeindex/cli", pkg)
+	return deniedMatch("declarativeindex", pkg) && !deniedMatch("declarativeindex/client", pkg) && !deniedMatch("declarativeindex/cli", pkg) && !deniedMatch("declarativeindex/capability", pkg)
 }
 
 func declarativeIndexDependencySignals(graph depGraph) []string {
@@ -276,7 +276,7 @@ func declarativeIndexDependencySignals(graph depGraph) []string {
 	for owner, dependencies := range graph {
 		// Home constructs contributions. Other external production packages use
 		// the generic ports or owned SDKs, including the HTTP/CLI transports.
-		if owner != "home" && (!deniedMatch("declarativeindex", owner) || deniedMatch("declarativeindex/client", owner) || deniedMatch("declarativeindex/cli", owner)) {
+		if owner != "home" && (!deniedMatch("declarativeindex", owner) || deniedMatch("declarativeindex/client", owner) || deniedMatch("declarativeindex/cli", owner) || deniedMatch("declarativeindex/capability", owner)) {
 			for _, target := range dependencies {
 				if declarativeIndexRuntimePackage(target) {
 					signals = append(signals, fmt.Sprintf("%s directly imports concrete index implementation %s outside assembly", owner, target))
@@ -284,7 +284,7 @@ func declarativeIndexDependencySignals(graph depGraph) []string {
 			}
 		}
 		generic := deniedMatch("discovery", owner) && !deniedMatch("discovery/opensearch", owner) && !deniedMatch("discovery/internal/opensearchimpl", owner)
-		client := slices.Contains([]string{"client", "object/client", "object/cli", "snapshot/client", "snapshot/cli", "declarativeindex/client", "declarativeindex/cli"}, owner)
+		client := slices.Contains([]string{"client", "object/client", "object/cli", "snapshot/client", "snapshot/cli", "declarativeindex/client", "declarativeindex/cli", "declarativeindex/capability"}, owner)
 		if generic || client {
 			for target, trail := range graph.reachable(owner) {
 				if declarativeIndexRuntimePackage(target) {

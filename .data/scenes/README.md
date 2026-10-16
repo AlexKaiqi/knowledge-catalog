@@ -98,11 +98,11 @@ python3 .data/scenes/tree.py --check-product
 
 具名 bundle 写在入口节点的 `_bundles.yaml`：声明从该既有状态开始的任务。执行器复用祖先夹具，用户步骤无需从初始化重复。
 
-登记空间 固定 `kr://scene/catalog`。业务仓 `kr://scene/object`、关系仓 `kr://scene/graph` 只给后续 `attach` 和「已配置、尚未登记」的探用，**不**在 `service-initialized` 进入登记表。`Given deployment fixture` 不创建业务 Snapshot。 Dataset `scene-set` 发布时只纳入指定实体/关系路径，不是整仓别名。树自包含，不读数仓目录。
+登记空间 固定 `kr://scene/catalog`。业务仓 `kr://scene/object`、关系仓 `kr://scene/graph` 只给后续 `attach` 和「已配置、尚未登记」的探用，**不**在 `service-initialized` 进入登记表。`Given deployment fixture` 不创建业务 Snapshot。 `Given existing repository` 创建本节点拥有的空对象源，并由 Writer 的显式 locator 维护交付完整空协议元数据；后续 attach 只读接纳该既有源，不在 admission 时补写。 Dataset `scene-set` 发布时只纳入指定实体/关系路径，不是整仓别名。树自包含，不读数仓目录。
 
-**树脊（接入方）**：`service-initialized` → `source-repositories-configured` → `repository-attached`（服务验证既有 authority 并原子登记）→ `domain-schema-published` → `semantic-object-published` →（声明式索引）`projection-synced`。`repository-attached` 是接入完成；后续 commit、put 是对象发布。此脊验证外部既有 Snapshot 接入；部署启动和 attach 不隐式创建它。初始化前态挂载的托管建仓 Go 旅程使用正式配置，验证已授权接入方显式 create 平台仓、立即发布以及重部署后继续操作，目标仓无需静态配置。
+**树脊（接入方）**：`service-initialized` → `source-repositories-configured` → `repository-attached`（服务验证既有 authority 并原子登记）→ `domain-schema-published` → `semantic-object-published` → `semantic-dataset-defined`（选入声明并准备该 Dataset 修订）。`repository-attached` 是接入完成；后续 commit、put 是对象发布。此脊验证外部既有 Snapshot 接入；部署启动和 attach 不隐式创建它。初始化前态挂载的托管建仓 Go 旅程使用正式配置，验证已授权接入方显式 create 平台仓、立即发布以及重部署后继续操作，目标仓无需静态配置。
 
-树父是**构建前置**，不是权限蕴含：`object-search-granted` 下的读授权用例复用已有检索条件，再验证额外授予 READ 后的变化；SEARCH 本身不授予 READ。
+树父是**构建前置**，不是权限蕴含：Dataset 搜索与回读按同一消费范围准入，消费权不授来源仓直接读取；管理权也不授消费权。
 
 ## 2. 维护
 
@@ -123,7 +123,7 @@ python3 .data/scenes/tree.py --check-product
 
 执行器 DFS `.data/scenes/`，按套件选择受支持的构建节点，**复用父节点 construct 之后冻结的前态**（测试 TempDir，gitignore 的 `_results/` 只记本次是否绿，不当断言）。在副本上只跑本节点 construct，再冻结本节点。每条可执行 `_probes` 从该冻结状态取得独立环境；子状态也从同一冻结状态构建，不继承任何 probe 的结果。父前态尚未冻结时（单节点 `-run`），才从祖先 construct 链重建。
 
-`Given existing repository` 由执行器接到 lakeFS Snapshot adapter。Gherkin 不写介质名。默认 `make test` 运行 `TestProductScenes` 与 `TestMetricPermissionScenes`，使用进程内协议忠实假服务，不需要整套 lakeFS 部署：冻结和复制都必须隔离 lakeFS 物理仓，不能只拷指向同一远端的 home。HTTP 服务与客户端登录目录也按环境重新准备，不复用另一用例的 handler 或会话。OpenSearch 原生按逻辑仓标识投影，拷贝 home 不能隔离外部索引。测试执行器为每个环境提供独立物理索引与控制记录空间，仍由真实 OpenSearch 执行；复制环境重新绑定测试端点，关闭时只清理该环境自己的派生索引。需要已有投影时，在每条 probe 前重放构建链恢复基线；未构建投影的前态也不会继承其它用例的索引。场景仍顺序执行。独立 `make deploy-local-scenes` 在第一阶段部署拓扑运行同一棵树的 `TestLiveLakeFSSceneDFS`：真 Graveler + MinIO + PostgreSQL + OpenSearch，需先显式准备 local 测试栈。真 Graveler 不能按 commit id 分叉，所以 live DFS 的节点及各 probe 分别从祖先 construct 链重放，不克隆父 home。登记空间 组件夹具仍是 gitdir，不是生产 OpenSnapshotRegistry。
+`Given existing repository` 由执行器接到 lakeFS Snapshot adapter。Gherkin 不写介质名。默认 `make test` 运行 `TestProductScenes` 与 `TestMetricPermissionScenes`，使用进程内协议忠实假服务，不需要整套 lakeFS 部署：冻结和复制都必须隔离 lakeFS 物理仓，不能只拷指向同一远端的 home。HTTP 服务与客户端登录目录也按环境重新准备，不复用另一用例的 handler 或会话。OpenSearch 原生按逻辑仓标识投影，拷贝 home 不能隔离外部索引。测试执行器为每个环境提供独立物理索引与控制记录空间，仍由真实 OpenSearch 执行；复制环境重新绑定测试端点，关闭时只清理该环境自己的派生索引。冻结有投影的前态时，执行器把它的索引用 OpenSearch `_clone` 复制成一份写入封锁的冻结副本；每条 probe 与子状态从这份副本再分叉出自己的索引，不重放构建链，也不会写回冻结副本（`TestSceneProjectionNamespaceForkIsolatesFrozenMedia`）。未构建投影的前态不会继承其它用例的索引。场景仍顺序执行。独立 `make deploy-local-scenes` 在第一阶段部署拓扑运行同一棵树的 `TestLiveLakeFSSceneDFS`：真 Graveler + MinIO + PostgreSQL + OpenSearch，需先显式准备 local 测试栈。live DFS 顺序复用同次运行的前态：每个节点只执行自己的 construct 一次，随后保存本地 home、所拥有 lakeFS 仓的全部分支头和仓属性，以及独立的冻结索引。每条 probe 与子节点从该基线开始；执行器只对本次创建的物理仓恢复分支、清掉用例新增分支与未提交写入并恢复仓属性，保留不可变提交及 Dataset pin。HTTP 服务、登录目录和派生索引仍分别隔离；不重演祖先发布，也不复制成新历史。该恢复仅用于顺序夹具，不能绑定共享生产仓或与其它写入者并发。结果记录 `construct_runs` 与 `deployment_initializations`，便于检查是否再次引入重复构造。登记空间 组件夹具仍是 gitdir，不是生产 OpenSnapshotRegistry。
 
 两条写入脊不要并成一条：`object-published` 挂在 `repository-attached` 上（普通 Canonical）；`semantic-object-published` 挂在 Domain Schema 发表之后（语义实例）。调整前置时改目录嵌套；`depends_on` 由工具从目录生成。
 
@@ -132,7 +132,7 @@ export PATH="$HOME/.local/go/bin:$PATH"
 go test ./cli -run 'TestSceneCatalog|TestSceneFeaturesPinObservedState|TestSceneFeaturesCoverPublicCLI|TestSceneFeaturesCoverHelpShortestPaths|TestSceneConsumeJourneyIsOneFeature|TestSceneWriteSpine|TestSceneExecutorDiscovers|TestSceneGoTestFeatures|TestSceneExecutorReusesParentConstructHome'
 go test ./cli -run 'TestProductScenes'                                   # 不构建检索投影、不跑动态 State
 KC_TEST_OPENSEARCH_URL=http://127.0.0.1:19200 \
-  go test ./cli -run 'TestMetricPermissionScenes'                        # 祖先含 projection-synced，或 construct 含 projection sync
+  go test ./cli -run 'TestMetricPermissionScenes'                        # 包含 Dataset 修订索引准备或检索的节点
 go test ./cli -run 'TestProductScenes/source-repositories-configured$'           # 单节点
 make deploy-local-scenes                                                 # 同一棵树，真 Graveler + OpenSearch
 python3 .data/scenes/goto.py qinghe-object-published --probe probe-publish-dataset-with-scoped-members.feature
@@ -156,6 +156,31 @@ make deploy-local-goto NODE=qinghe-object-published PROBE=probe-publish-dataset-
 节点 `latest.json` 只是方便就近查看的副本；无 run-id 的直接运行文件不具有版本绑定能力。
 完整库存由 `make validation-inventory` 读取覆盖表与场景目录生成；结果与 skip/未观测的区别
 统一遵循 `doc/engineering/test-catalog.md` §0.2，不在本 README 维护第二张执行状态表。
+
+### 真实测试部署的逐规格验收
+
+`make deploy-local-accept` 独立于进程内场景执行器，只绑定已经部署的 local 测试栈；
+不启动、重建或重置服务。用 `SPEC=<规格 id>` 可显式选择一条。执行前检查 Server、lakeFS、
+OpenSearch 容量与三个外部取值端口，缺失时逐规格记录 `error`，不会把环境故障当成产品能力红。
+清河前态只构建一次；批跑器为具体 probe 创建独立工作分支与 Dataset 名，临时结果不传递给下一条。
+机器结果是同次 `.validation/runs/<run-id>/acceptance.json`，分别列出 `pass`、`fail`、`error` 与未接入的规格。
+`fail` 必须来自实际产品动作后的断言；没有可执行 probe、夹具错误或未选定接口一律是 `error`。
+
+离线入口：`.venv/bin/python .data/scenes/accept.py --list` 查看逐规格库存；`--check` 要求选中规格都有
+可执行断言。`.venv/bin/python .data/scenes/accept_interruption_test.py` 以真实子进程信号检查中断状态、一次清理及原子报告，不访问部署。
+`.venv/bin/python .data/scenes/accept_test.py` 与
+`.venv/bin/python scripts/opensearch_fixture_test.py` 验证执行器自身，不证明产品规格通过。
+
+共享 OpenSearch 的普通场景入口由 `scripts/opensearch_fixture.py` 包装：先检查可用分片，
+再把本次 `kc-test-<随机值>-` 前缀传入 Go 场景 namespace。路径、bulk 元数据与 clone 目标都保留该前缀；
+正常退出、失败与中断后只枚举并逐个清理本次完整前缀下的索引，不清空共享索引。
+该包装器只接纳正式 `scripts/testsuite.sh lakefs` 和显式选择的场景 namespace 回归；
+普通 Home/CLI Go 夹具不采用这个物理前缀，必须绑定专属 OpenSearch 后验证，并在结束后回收该专属环境。
+传入前缀环境变量不能给普通夹具建立共享资源清理权，包装器会在访问集群与启动子进程前拒绝这类调用。
+
+部署验收登记本次 Repository 与 Dataset 的完整名字。清理从控制记录核对这些来源的存储身份和
+Dataset corpus 身份，核对哈希、namespace、控制 CAS 与索引 UUID 后逐个删除；不触碰未登记 Dataset、
+其它运行资源或共享控制索引。只读资源快照覆盖同一集合，包含 corpus 的写计数与控制版本。
 
 ## 4. 用例规范
 
@@ -185,7 +210,7 @@ Then the output has:
 |---|---|
 | `Given material <id>` | 已退出树脊。写入必须是 `kc writer`；执行器仍解析该步骤，但 `TestSceneWriteSpineUsesPublicWriter` 禁止 construct 再用它 |
 | `Given deployment fixture` | 构建细合同的空 登记空间 与 System 信任根前态；不是用户命令，不创建业务 Snapshot |
-| `Given existing repository <id> [with LiveAccess instance <name>]` | 墙外测试夹具提供既有 Snapshot binding，尚未入 登记空间；可显式输入该源的 LiveAccess 实例选择，写入原生 Repo metadata 并保留索引选择。普通及真实 lakeFS 重放使用同一前态；已有部署须事先配置。接入仍由公开 attach 完成 |
+| `Given existing repository <id>` | 墙外测试夹具提供既有 Snapshot binding，尚未入 登记空间；只接受一个仓 id，不携带插件选择（实例由部署配置给出，带按仓选择后缀即解析失败）。普通及真实 lakeFS 重放使用同一前态。接入仍由公开 attach 完成 |
 | `Given configured catalog <id>` / `Given bootstrap principal <id>` | 多 登记空间 / 首次部署授权的夹具前态；真实初始化和恢复另走正式配置入口 |
 | `Given local HTTP server` | 测试认证器上的 typed Server；后续带 `--server $server` 的命令走正式 Run |
 | `When I run \`kc ...\`` | 公开 argv 的应用合同；带 `--server` 时是正式 Client。`$materials` → 本节点 `_materials/`，`$home` → 本趟 home，`$server` → Given local HTTP，`$last.field` / `$pinId` → 上次成功 CLI JSON |
@@ -228,8 +253,8 @@ Then the output has:
 
 协议不变量不在本 README 复述。本树的旅程必须能作为下列证据的可读过程，但不能改写它们：
 
-- `AUTH-01` 搜宽读严、无读权屏蔽正文、不标 `partial`
-- `AUTH-02` Dataset`file.read` 不放行仓 `object.*`
+- `AUTH-01` Dataset 消费授权与选入范围先于候选查询，未选声明不生效
+- `AUTH-02` Dataset`file.read` 允许清单内搜索和回读，不放行仓 `object.*`
 - `AUTH-03` 交付链不改 ID/Address
 - System Repository 可读、对业务 Writer 不可写（U1）
 - Domain Schema 在目标仓版本化（U2）；实例符合 Schema（U3）

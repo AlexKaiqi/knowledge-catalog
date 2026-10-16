@@ -86,6 +86,13 @@ func shapeCLISchemaDescribeReport(value any) any {
 	if v := stringField(obj, "commit"); v != "" {
 		out["commit"] = v
 	}
+	// A Dataset describe also says which revision answered and whether the
+	// member can serve search; dropping these would hide the next step.
+	for _, key := range []string{"dataset", "revision", "search"} {
+		if v, exists := obj[key]; exists {
+			out[key] = v
+		}
+	}
 	schemasIn, _ := obj["schemas"].([]any)
 	schemas := make([]any, 0, len(schemasIn))
 	for _, raw := range schemasIn {

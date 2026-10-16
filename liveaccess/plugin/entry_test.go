@@ -73,16 +73,16 @@ func TestEntryStaticExplanationDoesNotOpenAndInstanceFactoryIsUsed(t *testing.T)
 	if entry.Affordance.Name != "liveaccess" || entry.Affordance.Usage == "" || opened != 0 {
 		t.Fatalf("static affordance opened runtime: %#v opens=%d", entry.Affordance, opened)
 	}
-	configs := common.RepositoryPluginConfigs{Repositories: map[kernel.RepositoryID]common.RepositoryPluginConfig{"repo": {Version: 1, Plugins: []common.PluginSelection{{Name: "liveaccess", Instance: "replacement"}}}}}
-	plugins, err := service.OpenPlugins(configs, map[string]service.PluginEntry{"liveaccess": entry})
+	configs := common.PluginsConfig{"liveaccess": {Instances: map[string]common.PluginInstanceConfig{"replacement": {Protocol: objectmodel.ProtocolResourceAccessV1}}}}
+	plugins, err := service.OpenPlugins(configs, []kernel.RepositoryID{"repo"}, map[string]service.PluginEntry{"liveaccess": entry})
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := plugins.LookupState(context.Background(), liveaccess.StateLookupRequest{Binding: liveaccess.ResolvedBinding{Repository: "repo"}})
+	result, err := plugins.LookupState(context.Background(), liveaccess.StateLookupRequest{Binding: liveaccess.ResolvedBinding{Repository: "repo", Runtime: "source", Protocol: objectmodel.ProtocolResourceAccessV1}})
 	if err != nil || result.Value != "replacement" || opened != 1 {
 		t.Fatalf("configured factory not adopted: %#v %v opens=%d", result, err, opened)
 	}
-	if _, err := plugins.AccessResource(context.Background(), liveaccess.ResourceOperationRequest{Descriptor: liveaccess.ResourceDescriptorCoordinate{Repository: "repo"}}); kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
+	if _, err := plugins.AccessResource(context.Background(), liveaccess.ResourceOperationRequest{Runtime: "source", Protocol: objectmodel.ProtocolResourceAccessV1, Descriptor: liveaccess.ResourceDescriptorCoordinate{Repository: "repo"}}); kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
 		t.Fatalf("lookup-only adapter gained source operations: %v", err)
 	}
 	_ = plugins.Close()

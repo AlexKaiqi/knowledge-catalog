@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	localauth "kc/identity/local"
 	"net/http"
 	"testing"
 
@@ -24,7 +25,7 @@ func TestSnapshotDatasetHTTPHookCannotReplayOrFabricatePublication(t *testing.T)
 		return definition, nil, nil
 	}
 	config := service.Config{
-		Identity: service.IdentityOptions{Local: true},
+		Identity: service.IdentityOptions{Authenticator: localauth.New()},
 		Acquire: func(context.Context, identity.HTTPIdentity, string) (service.Resources, func(), error) {
 			return f.resources, func() {}, nil
 		},
@@ -42,8 +43,8 @@ func TestSnapshotDatasetHTTPHookCannotReplayOrFabricatePublication(t *testing.T)
 		t.Fatalf("hook repeated or replaced accepted publication: %#v accepted=%#v err=%v hooks=%d prepared=%d", result, accepted, err, hookCalls, prepared)
 	}
 
-	f.resources.PreparePublication = func(context.Context, identity.HTTPIdentity, dataset.Dataset) error {
-		return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "external preparation unavailable")
+	f.resources.PreparePublication = func(context.Context, identity.HTTPIdentity, dataset.Dataset) (dataset.Dataset, error) {
+		return dataset.Dataset{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "external preparation unavailable")
 	}
 	result = datasetHTTPCall(t, service.NewHandler(config), http.MethodPost, base, datasetHTTPDefinition(2, f.source.ID()), http.StatusBadRequest)
 	if code, _ := result["error"].(map[string]any)["code"].(string); code != string(kernel.ErrCapabilityUnsatisfied) {
@@ -79,7 +80,7 @@ func TestSnapshotDatasetHTTPAuthorizesBeforePublicationHooks(t *testing.T) {
 		return definition, nil, nil
 	}
 	config := service.Config{
-		Identity: service.IdentityOptions{Local: true},
+		Identity: service.IdentityOptions{Authenticator: localauth.New()},
 		Acquire: func(context.Context, identity.HTTPIdentity, string) (service.Resources, func(), error) {
 			return f.resources, func() {}, nil
 		},

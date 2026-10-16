@@ -11,7 +11,7 @@ import (
 
 // applyObjectCommit is the sole ② → ⓪ codec. Snapshot adapters receive
 // only literal path changes and never see Address, Aspect, or PUT/REMOVE.
-func applyObjectCommit(commandID string, target snapshot.Store, cs objectmodel.ChangeSet) (_ kernel.CommitID, err error) {
+func applyObjectCommit(commandID string, target snapshot.Store, cs objectmodel.ChangeSet, basis snapshot.TreeStore) (_ kernel.CommitID, err error) {
 	writeStarted := false
 	defer func() {
 		if err != nil && !writeStarted {
@@ -33,11 +33,14 @@ func applyObjectCommit(commandID string, target snapshot.Store, cs objectmodel.C
 		return "", kernel.Fail(kernel.ErrCapabilityUnsatisfied,
 			"repository %s is mounted as a plain snapshot and cannot accept object changes without tree access", target.ID())
 	}
-	if err := requireIncrementalLocatorLayout(tree, cs.BaseCommit); err != nil {
+	if basis == nil {
+		basis = tree
+	}
+	if err := requireIncrementalLocatorLayout(basis, cs.BaseCommit); err != nil {
 		return "", err
 	}
 
-	idx, err := readChangedObjects(tree, cs.BaseCommit, cs.Operations)
+	idx, err := readChangedObjects(basis, cs.BaseCommit, cs.Operations)
 	if err != nil {
 		return "", err
 	}
@@ -46,6 +49,9 @@ func applyObjectCommit(commandID string, target snapshot.Store, cs objectmodel.C
 	beforeRefs := repofile.BuildLocatorManifest(idx).Referrers
 	beforeBindings := repofile.BindingCoordinates(idx)
 	if err := repofile.ApplyOperations(idx, cs.Operations, cs.Provenance, toWrite, toDelete); err != nil {
+		return "", err
+	}
+	if err := requireAvailableUnitPaths(basis, cs.BaseCommit, idx, cs.Operations, toWrite); err != nil {
 		return "", err
 	}
 	for _, objectID := range changedObjectIDs(cs.Operations) {
@@ -61,10 +67,10 @@ func applyObjectCommit(commandID string, target snapshot.Store, cs objectmodel.C
 		}
 		toWrite[locatorPath] = string(locator)
 	}
-	if err := updateSchemaLocator(tree, cs.BaseCommit, beforeBindings, idx, cs.Operations, toWrite); err != nil {
+	if err := updateSchemaLocator(basis, cs.BaseCommit, beforeBindings, idx, cs.Operations, toWrite); err != nil {
 		return "", err
 	}
-	if err := updateSchemaReferrerLocators(tree, cs.BaseCommit, beforeRefs, idx, cs.Operations, toWrite, toDelete); err != nil {
+	if err := updateSchemaReferrerLocators(basis, cs.BaseCommit, beforeRefs, idx, cs.Operations, toWrite, toDelete); err != nil {
 		return "", err
 	}
 	toWrite[repofile.LocatorCompletePath] = repofile.LocatorCompleteBody
@@ -175,7 +181,7 @@ func readChangedObjects(tree snapshot.TreeStore, commit kernel.CommitID, operati
 	return idx, nil
 }
 
-func readObject(tree snapshot.TreeStore, objectID objectmodel.ObjectID, commit kernel.CommitID) ([]repofile.Unit, error) {
+func readObject(tree snapshot.TreeReader, objectID objectmodel.ObjectID, commit kernel.CommitID) ([]repofile.Unit, error) {
 	paths, err := repofile.ReadObjectLocator(tree, objectID, commit)
 	if err != nil {
 		return nil, err

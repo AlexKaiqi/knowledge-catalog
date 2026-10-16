@@ -1,5 +1,5 @@
-// Package plugin assembles the LiveAccess request contribution for a fixed
-// Repo scope. It owns the actual adapter construction and static explanation.
+// Package plugin assembles the LiveAccess request contribution for the host's
+// admitted Repo scope. It owns adapter construction and static explanation.
 package plugin
 
 import (
@@ -48,13 +48,17 @@ func Entry(options Options) service.PluginEntry {
 			return service.PluginContribution{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "LiveAccess adapter is unavailable")
 		}
 		accessor, _ := lookup.(liveaccess.ResourceOperationAccessor)
-		allowed := map[kernel.RepositoryID]bool{}
-		for _, repo := range scope.Repositories {
-			allowed[repo] = true
+		contains := scope.ContainsRepository
+		if contains == nil {
+			allowed := map[kernel.RepositoryID]bool{}
+			for _, repo := range scope.Repositories {
+				allowed[repo] = true
+			}
+			contains = func(repo kernel.RepositoryID) bool { return allowed[repo] }
 		}
-		contribution := service.PluginContribution{Lookup: scopedLookup{lookup: lookup, allowed: allowed}}
+		contribution := service.PluginContribution{Lookup: scopedLookup{lookup: lookup, contains: contains}}
 		if accessor != nil {
-			contribution.Accessor = scopedAccessor{accessor: accessor, allowed: allowed}
+			contribution.Accessor = scopedAccessor{accessor: accessor, contains: contains}
 		}
 		return contribution, nil
 	}}
@@ -71,12 +75,12 @@ func nilLookup(lookup liveaccess.StateLookup) bool {
 }
 
 type scopedLookup struct {
-	lookup  liveaccess.StateLookup
-	allowed map[kernel.RepositoryID]bool
+	lookup   liveaccess.StateLookup
+	contains func(kernel.RepositoryID) bool
 }
 
 func (s scopedLookup) LookupState(ctx context.Context, request liveaccess.StateLookupRequest) (liveaccess.StateObservation, error) {
-	if !s.allowed[request.Binding.Repository] {
+	if !s.contains(request.Binding.Repository) {
 		return liveaccess.StateObservation{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Repository is outside this plugin instance")
 	}
 	return s.lookup.LookupState(ctx, request)
@@ -84,11 +88,11 @@ func (s scopedLookup) LookupState(ctx context.Context, request liveaccess.StateL
 
 type scopedAccessor struct {
 	accessor liveaccess.ResourceOperationAccessor
-	allowed  map[kernel.RepositoryID]bool
+	contains func(kernel.RepositoryID) bool
 }
 
 func (s scopedAccessor) AccessResource(ctx context.Context, request liveaccess.ResourceOperationRequest) (any, error) {
-	if !s.allowed[request.Descriptor.Repository] {
+	if !s.contains(request.Descriptor.Repository) {
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Repository is outside this plugin instance")
 	}
 	return s.accessor.AccessResource(ctx, request)

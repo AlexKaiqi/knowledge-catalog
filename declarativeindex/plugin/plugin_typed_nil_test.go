@@ -43,7 +43,7 @@ func TestIndexPluginsRejectTypedNilContributionsAndReleaseActualResources(t *tes
 				}
 				return contribution, nil
 			}
-			plugins, err := consumerplugin.OpenIndexPlugins(f.configs(), map[string]consumerplugin.IndexPluginEntry{"declarative-index": entry})
+			plugins, err := consumerplugin.OpenIndexPlugins(f.configs(), consumerplugin.PluginScope{Repositories: f.repositories()}, map[string]consumerplugin.IndexPluginEntry{"declarative-index": entry})
 			if plugins != nil {
 				t.Cleanup(func() { _ = plugins.Close() })
 			}

@@ -4,13 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	liveaccesscontract "kc/liveaccess/contract"
-	livefixture "kc/liveaccess/fixture"
 	"kc/systemrepo"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	apphome "kc/home"
 	"kc/internal/testkit"
 	"kc/invocation"
 	"kc/kernel"
@@ -55,7 +53,6 @@ func TestPublicInvokeLiveAccessUsesPublishedContract(t *testing.T) {
 
 func publishLiveAccessDefinitions(t *testing.T, homeDir, repositoryID string) {
 	t.Helper()
-	adoptLiveAccessFixture(t, homeDir, repositoryID)
 	operations := systemrepo.SystemPublicationOperations()
 	// Individual Writer requests require the Schema to exist before its
 	// instances, independently of the complete publication bundle's order.
@@ -86,23 +83,6 @@ func publishLiveAccessDefinitions(t *testing.T, homeDir, repositoryID string) {
 			body(t, kc(homeDir, args...))
 		}
 	}
-}
-
-func adoptLiveAccessFixture(t *testing.T, directory, repository string) {
-	t.Helper()
-	file, err := apphome.ReadHome(directory)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, declared := range file.Repos {
-		if declared.ID == repository && declared.Driver == "lakefs" {
-			if err := livefixture.AdoptRepository(kernel.RepositoryID(repository), declared.DSN, "main"); err != nil {
-				t.Fatal(err)
-			}
-			return
-		}
-	}
-	t.Fatalf("explicit LiveAccess fixture source %s has no declared lakeFS DSN", repository)
 }
 
 // The handler contract is internal to plugins. A published contract that no

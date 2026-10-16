@@ -1,0 +1,22 @@
+---
+object_id: index/system
+aspect_name: index
+member_key: resource-kind
+kind: Member
+path_hint: index/system/resource-kind.yaml
+schema_ref: schema/core/index-declaration/v1
+---
+{
+  "catalog": "declarative-index/opensearch@2026-10",
+  "inputs": [
+    {
+      "from": "schema/core/resource-descriptor/v1#/fields/kind"
+    }
+  ],
+  "build": {
+    "kind": "keyword"
+  },
+  "uses": [
+    "filter"
+  ]
+}

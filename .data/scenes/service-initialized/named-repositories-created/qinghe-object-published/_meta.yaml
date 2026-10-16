@@ -4,21 +4,21 @@ layer: "2"
 role: "provider"
 surface: feature
 publishes:
-  - "schema.access"
+  - "index.declaration"
   - "aspect.binding"
   - "resource.handle"
   - "projection.index"
   - "dataset.compose"
-summary: "清河两仓对象已发布且接入方运行时可用，分别供投影检索与裁剪 Dataset 两个用例复用。"
+summary: "清河两仓对象已发布且接入方运行时可用，供裁剪 Dataset 与逐规格检索验收复用。"
 runtime:
   accessors:
     repository: "table-meta"
     origin: "http://resource-access:7390"
     materials: "service-initialized/source-repositories-configured/repository-attached/_materials/accessor"
 probes:
-  - file: "probe-sync-projections-and-search.feature"
+  - file: "probe-dataset-without-declarations-rejects-search.feature"
     source: "projection.index"
-    title: "同步两仓投影后能检索已发布的表、列、模型与指标"
+    title: "未选入声明的 Dataset 可以回读但不回退到来源仓检索"
     views:
       - "consumption"
   - file: "probe-publish-dataset-with-scoped-members.feature"
@@ -26,4 +26,4 @@ probes:
     title: "发布限定路径的 Dataset 后可读表与语义对象但不包含作业"
     views:
       - "consumption"
-fixture: "向 table-meta 与 sales-semantic 发布清河业务对象并启动其外部资源访问服务，供投影检索和 Dataset 路径裁剪两个用例复用。"
+fixture: "向 table-meta 与 sales-semantic 发布清河业务对象并启动其外部资源访问服务，供 Dataset 路径裁剪与逐规格检索验收复用。"

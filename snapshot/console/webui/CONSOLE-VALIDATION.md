@@ -53,7 +53,7 @@ TASK 登记，`DATASET-04` 不因目录收口或局部实测而标为完成。
 日期：2026-10-10。工作树：`codex/dataset-console-ui`；提交基线：
 `2aa827f8edd2c45c6014b1b17e62a46275ff3207`。用户已授权聚合提交并快进合并至 GitHub 默认 `main`；原共享目录未提交改动不纳入交付。
 范围是完整原 lakeFS 控制台组合与 Dataset 增量，见
-[TASK 的 DATASET-04](../../../TASK.md)、[接线与许可](KC-VENDOR.md) 和
+[任务 DATASET-04](../../../tasks/done/DATASET-04.md)、[接线与许可](KC-VENDOR.md) 和
 [Dataset API review](DATASET-API-REVIEW.md)。
 
 ## Access Control 增量与验证入口
@@ -131,8 +131,10 @@ KC 服务端验证并独立评权。下方两次登录的记录是纠偏前的�
 
 独立环境 `56008dfa48` 使用缓存的真实 lakeFS v1.86.0、MinIO 与本轮构建的 KC
 Server，前端继续固定 v1.58.0。原用户 `console-validation` 通过原 lakeFS 登录页
-获得会话，Dataset 直接复用同源 Cookie；KC 采用显式 `auth: lakefs` 与固定
-`authURL`，部署初始化显式授权该测试用户，没有继承原平台管理员权限。
+获得会话，Dataset 直接复用同源 Cookie；KC 当时采用显式 `auth: lakefs` 与固定
+`authURL`，部署初始化显式授权该测试用户，没有继承原平台管理员权限。该认证方式已在
+AUTH-LAYOUT-01 退役（lakeFS 只作存储，KC 只用服务凭证访问），本节只是历史走查记录，
+不代表当前可用的接线。
 
 浏览器实际完成一次原登录、显式 Catalog 选择、来源校验、发布 `shared-login v1`、
 交付目录与正文预览。来源 `reference` 映射到 `docs`，固定提交为
@@ -192,7 +194,7 @@ KC 未提供 CORS 响应头。浏览器无 error/warn。此次未配置外部 Id
 | 历史、比较、退役 | UI 查看真实 v1/v2、交付映射差异与来源定义；历史 URL 刷新保持 revision。API `limit=1` 得到 v2 后 v1，退役后旧 pin 的 mounts/tree/file 均拒绝继续消费。 |
 | Server embed | 真实 KC Server 的原仓与 Dataset 深链接返回同一入口；已有资产 200，缺失 js/css/png 404。 |
 
-本地证据保存在忽略目录 [`.validation/console/20261010/`](../../../.validation/console/20261010/)：
+本地证据保存在忽略目录 `.validation/console/20261010`：
 `kc-console-real-api-evidence.json` 包含状态码、版本、真实提交与字节校验，不含凭证；
 `go-summary.json` 包含各运行源码指纹、结果与具名 skip；另保存原提交、比较、CSV、
 Dataset 比较截图及实际下载的 v1 文件。这些是本地运行证据，不随源码提交。
@@ -236,10 +238,8 @@ Dataset 比较截图及实际下载的 v1 文件。这些是本地运行证据�
 - 原 `src/lib/hooks/api.jsx` 的登录返回只保存 pathname，丢失对象 URL 查询；统一登录
   接线已触发修复，改为保留 pathname/search/hash 并补回归，结果在新检查中记录。
 - 官方 Dataset 元数据、定义审批、Iceberg、发布审计信息与消费协议差距为 API review 的 D-01–D-05。
-- 新 lakefs 认证接线的账号代际仅能复用原 User API 的 id 与秒级创建时间，不能证明
-  同名同秒重建不可接管。具体位置、判定、处置和触发见 TASK 的认证质量登记；
-  单次登录走查不等于这个身份生命周期缺口已通过验收。原 lakeFS 账号 ID 与 KC
-  用户名不兼容时明确拒绝，邮箱等账号的显式身份关联尚未实现，也不声称已验收。
+- 当时 lakefs 认证接线的账号代际只能复用原 User API 的 id 与秒级创建时间；该接线已在
+  AUTH-LAYOUT-01 退役，这一缺口随之不再适用。邮箱等账号的显式身份关联仍未实现，也不声称已验收。
 
 本轮独立验证服务在证据保存后清理；仅删除带本轮标签的容器、独立网络、匹配临时
 binary 的 KC 进程与一次性测试凭据/状态。preview 与自建标签页也关闭。

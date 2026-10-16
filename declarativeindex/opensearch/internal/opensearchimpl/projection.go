@@ -43,6 +43,8 @@ type controlVersion struct {
 }
 
 type osDoc struct {
+	SourceRepository  string               `json:"source_repository,omitempty"`
+	SourceCommit      string               `json:"source_commit,omitempty"`
 	ObjectID          string               `json:"object_id"`
 	Kind              string               `json:"kind"`
 	EligibleFields    []string             `json:"eligible_fields"`
@@ -52,10 +54,7 @@ type osDoc struct {
 	RelationDirection string               `json:"relation_direction"`
 	RelationEndpoints []osRelationEndpoint `json:"relation_endpoints"`
 	ObjectDigest      string               `json:"object_digest"`
-	// SemanticVector is the derived window vector for the object text. Empty
-	// for objects without derived text (for example relations); the mapping
-	// only exists when the engine owns an embedding provider.
-	SemanticVector []float32 `json:"semantic_vector,omitempty"`
+	SemanticVectors   []osSemanticVector   `json:"semantic_vectors,omitempty"`
 }
 
 type osCell struct {
@@ -74,8 +73,15 @@ type osRelationEndpoint struct {
 	ObjectID string `json:"object_id"`
 }
 
-func encodeDoc(doc index.CompiledDoc, vector []float32) (osDoc, error) {
+type osSemanticVector struct {
+	Member string    `json:"member"`
+	Model  string    `json:"model"`
+	Vector []float32 `json:"vector"`
+}
+
+func encodeDoc(doc index.CompiledDoc, vectors [][]float32) (osDoc, error) {
 	out := osDoc{
+		SourceRepository: string(doc.SourceRepository), SourceCommit: string(doc.SourceCommit),
 		ObjectID: string(doc.ObjectID), Kind: string(doc.Kind), EligibleFields: doc.EligibleFields,
 		AllText: doc.Text, ObjectDigest: string(doc.ObjectDigest), Cells: make([]osCell, 0, len(doc.Cells)),
 		RelationEndpoints: []osRelationEndpoint{},
@@ -95,7 +101,12 @@ func encodeDoc(doc index.CompiledDoc, vector []float32) (osDoc, error) {
 			BooleanValue: cell.BooleanValue, DateValue: dateKey,
 		})
 	}
-	out.SemanticVector = vector
+	if len(vectors) != len(doc.Semantic) {
+		return osDoc{}, kernel.Fail(kernel.ErrPreconditionFailed, "semantic vector count does not match declared member inputs")
+	}
+	for i, field := range doc.Semantic {
+		out.SemanticVectors = append(out.SemanticVectors, osSemanticVector{Member: field.Member, Model: field.Model, Vector: vectors[i]})
+	}
 	if doc.Relation != nil {
 		out.RelationType = doc.Relation.Type
 		out.RelationDirection = string(doc.Relation.Direction)
@@ -141,7 +152,7 @@ func (e *openSearchEngine) loadControl() (controlDoc, *controlVersion, error) {
 }
 
 func (e *openSearchEngine) loadControlContext(ctx context.Context) (controlDoc, *controlVersion, error) {
-	status, body, err := e.doContext(ctx, http.MethodGet, "/"+e.controlIndexPath()+"/_doc/"+url.PathEscape(e.controlID), nil)
+	status, body, err := e.readControlResponse(ctx, "/"+e.controlIndexPath()+"/_doc/"+url.PathEscape(e.controlID))
 	if err != nil {
 		return controlDoc{}, nil, err
 	}
@@ -524,24 +535,22 @@ func (e *openSearchEngine) retireGeneration(name string) {
 	})
 }
 
-// embedBatch derives window vectors for one bulk batch. Objects without
-// derived text (empty AllText, for example relation documents) receive no
-// vector and stay outside the semantic window; that is a projection shape,
-// not an error. One provider call covers the batch; a failed call fails the
-// whole batch so a generation never mixes vector models.
-func (e *openSearchEngine) embedBatch(docs []index.CompiledDoc) ([][]float32, error) {
-	vectors := make([][]float32, len(docs))
-	if !e.VectorReady() {
-		return vectors, nil
-	}
-	texts := make([]string, 0, len(docs))
-	slots := make([]int, 0, len(docs))
+// embedBatch embeds only explicitly declared vector member inputs. Text members
+// never create vectors; each configured model must match the instance provider.
+func (e *openSearchEngine) embedBatch(docs []index.CompiledDoc) ([][][]float32, error) {
+	vectors := make([][][]float32, len(docs))
+	type slot struct{ document, member int }
+	texts := []string{}
+	slots := []slot{}
 	for i, doc := range docs {
-		if strings.TrimSpace(doc.Text) == "" {
-			continue
+		vectors[i] = make([][]float32, len(doc.Semantic))
+		for j, field := range doc.Semantic {
+			if !e.VectorReady() || field.Model != e.vectorModel {
+				return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "vector member %s requires registered model %s", field.Member, field.Model)
+			}
+			texts = append(texts, field.Text)
+			slots = append(slots, slot{i, j})
 		}
-		texts = append(texts, doc.Text)
-		slots = append(slots, i)
 	}
 	if len(texts) == 0 {
 		return vectors, nil
@@ -553,11 +562,11 @@ func (e *openSearchEngine) embedBatch(docs []index.CompiledDoc) ([][]float32, er
 	if len(result.Vectors) != len(texts) {
 		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "embedding batch returned %d vectors for %d texts", len(result.Vectors), len(texts))
 	}
-	for slot, vector := range result.Vectors {
+	for i, vector := range result.Vectors {
 		if len(vector) != e.vectorDimension {
 			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "embedding model returned %d dimensions, projection pins %d", len(vector), e.vectorDimension)
 		}
-		vectors[slots[slot]] = vector
+		vectors[slots[i].document][slots[i].member] = vector
 	}
 	return vectors, nil
 }

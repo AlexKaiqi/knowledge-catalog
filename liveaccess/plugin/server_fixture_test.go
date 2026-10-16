@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"sync/atomic"
 	"testing"
 
@@ -109,6 +110,7 @@ type acceptanceFixture struct {
 	server  *httptest.Server
 	handler http.Handler
 	options server.HTTPServerOptions
+	access  map[kernel.RepositoryID]string
 }
 
 func newAcceptanceFixture(t *testing.T, options server.HTTPServerOptions) *acceptanceFixture {
@@ -169,13 +171,35 @@ func newAcceptanceFixture(t *testing.T, options server.HTTPServerOptions) *accep
 
 func (f *acceptanceFixture) selectInstance(t *testing.T, repo kernel.RepositoryID, name, instance string) {
 	t.Helper()
-	raw, err := json.Marshal(common.RepositoryPluginConfig{Version: 1, Plugins: []common.PluginSelection{{Name: name, Instance: instance}}})
-	if err != nil {
-		t.Fatal(err)
+	if f.access == nil {
+		f.access = map[kernel.RepositoryID]string{}
 	}
-	if err := f.sources[repo].(interface{ WriteRepositoryMetadata(map[string]string) error }).WriteRepositoryMetadata(map[string]string{common.RepositoryPluginsKey: string(raw)}); err != nil {
-		t.Fatal(err)
+	f.access[repo] = instance
+	instances := map[string]common.PluginInstanceConfig{}
+	for selected, mapped := range f.access {
+		if mapped == "" {
+			continue
+		}
+		config := instances[mapped]
+		config.Protocol = objectmodel.ProtocolResourceAccessV1
+		config.Runtimes = append(config.Runtimes, acceptanceRuntimeName(selected))
+		sort.Strings(config.Runtimes)
+		instances[mapped] = config
 	}
+	plugins := common.PluginsConfig{}
+	if len(instances) != 0 {
+		plugins[name] = common.PluginConfig{Instances: instances}
+	}
+	f.config.Plugins = &plugins
+	if f.path != "" {
+		f.writeConfig(t)
+	}
+}
+
+// acceptanceRuntimeName gives each Repository's descriptors their own runtime,
+// so the deployment maps the two Repositories to different instances.
+func acceptanceRuntimeName(repo kernel.RepositoryID) string {
+	return "runtime-" + path.Base(string(repo))
 }
 func (f *acceptanceFixture) writeConfig(t *testing.T) {
 	t.Helper()
@@ -241,10 +265,13 @@ func (f *acceptanceFixture) publish(t *testing.T, repo kernel.RepositoryID, orig
 	// Descriptor IDs are unique per request scope, so each Repository names its
 	// own; broken has a separate descriptor so tests can move only its origin.
 	source, broken := acceptanceDescriptor(repo, "source"), acceptanceDescriptor(repo, "broken")
+	// Keep supporting objects distinct: the mixed object alone tests the
+	// cross-Repository Aspect conflict, including both full Dataset sources.
+	schemaPrefix := "schema/widget." + path.Base(string(repo)) + "."
 	operations := []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: acceptanceObject, AspectName: "definition"}, Value: map[string]any{"owner": "fixed"}},
-		bindingfixture.PutDescriptor(source, bindingfixture.Descriptor(origin)), bindingfixture.PutDescriptor(broken, bindingfixture.Descriptor(origin))}
+		bindingfixture.PutDescriptor(source, acceptanceBody(repo, origin)), bindingfixture.PutDescriptor(broken, acceptanceBody(repo, origin))}
 	for _, aspect := range []string{"good", "empty", "broken"} {
-		schemaRef := "schema/widget." + aspect
+		schemaRef := schemaPrefix + aspect
 		descriptor := source
 		if aspect == "broken" {
 			descriptor = broken
@@ -252,9 +279,13 @@ func (f *acceptanceFixture) publish(t *testing.T, repo kernel.RepositoryID, orig
 		operations = append(operations, objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: objectmodel.ObjectID(schemaRef)}, Value: map[string]any{"entity": "Widget", "aspect": aspect, "pattern": "record", "fields": map[string]any{"value": map[string]any{"type": "number"}}}},
 			bindingfixture.PutAspect(acceptanceObject, aspect, schemaRef, descriptor))
 	}
-	operations = append(operations, objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/widget.readings"}, Value: map[string]any{"entity": "Widget", "aspect": "readings", "pattern": "keyed_collection", "fields": map[string]any{"value": map[string]any{"type": "number"}}}},
-		bindingfixture.PutMember(acceptanceObject, "readings", "good", "schema/widget.readings", source))
+	operations = append(operations, objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: objectmodel.ObjectID(schemaPrefix + "readings")}, Value: map[string]any{"entity": "Widget", "aspect": "readings", "pattern": "keyed_collection", "fields": map[string]any{"value": map[string]any{"type": "number"}}}},
+		bindingfixture.PutMember(acceptanceObject, "readings", "good", schemaPrefix+"readings", source))
 	f.commit(t, repo, operations)
+}
+
+func acceptanceBody(repo kernel.RepositoryID, origin string) map[string]any {
+	return bindingfixture.DescriptorWith(origin, objectmodel.BindingState, acceptanceRuntimeName(repo), map[string]string{"lookup": "lookup"})
 }
 
 func acceptanceDescriptor(repo kernel.RepositoryID, name string) objectmodel.ObjectID {

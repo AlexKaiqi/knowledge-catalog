@@ -1,0 +1,29 @@
+---
+object_id: schema/tool.definition
+---
+entity: Tool
+aspect: definition
+pattern: record
+fields:
+  name:
+    type: string
+    required: true
+  kind:
+    type: string
+    required: true
+  implements:
+    type: object_ref
+    required: true
+    refTypes:
+    - Service
+  version:
+    type: string
+    required: true
+  install:
+    type: string
+    required: true
+  start:
+    type: string
+    required: true
+  examples:
+    type: array

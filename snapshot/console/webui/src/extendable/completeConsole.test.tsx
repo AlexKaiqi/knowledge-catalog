@@ -17,7 +17,7 @@ beforeEach(() => {
             path.includes('/config/version') ? { version: 'v1.58.0', version_context: 'lakeFS', upgrade_recommended: false } :
             path === '/api/v1/config' ? { storage_config: { blockstore_type: 'local', import_support: true }, version_config: { version: 'v1.58.0', version_context: 'lakeFS', upgrade_recommended: false } } :
             path.startsWith('/api/v1/repositories') ? { results: [], pagination: { has_more: false } } :
-            path === '/identity/v1/whoami' ? {principal: 'native-user'} : path === '/identity/v1/auth' ? {mode: 'lakefs', localAssertion: false, accepts: ['Cookie']} :
+            path === '/identity/v1/whoami' ? {principal: 'native-user'} : path === '/identity/v1/auth' ? {mode: 'taihu', localAssertion: false, accepts: ['Authorization']} :
             path === '/snapshot/v1/datasets' ? {datasets: []} : {};
         return new Response(JSON.stringify(result), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }));
@@ -53,7 +53,7 @@ describe('complete lakeFS console', () => {
     });
     it('keeps native API credentials separate from the fixed cookie bridge marker', async () => {
         localStorage.setItem('kc.ui.token', 'obsolete-kc-token');
-        await session.restore({mode: 'lakefs', localAssertion: false, accepts: ['Cookie']});
+        await session.restore({mode: 'taihu', localAssertion: false, accepts: ['Authorization']});
         render(<KCApp/>);
         await screen.findByRole('button', {name: 'Create Repository'});
         const requests = vi.mocked(fetch).mock.calls.filter(([path]) => String(path).startsWith('/api/v1'));
@@ -142,7 +142,7 @@ describe('complete lakeFS console', () => {
         expect(errors.mock.calls.some(args => args.join(' ').includes('Cannot update a component'))).toBe(false);
     });
     it('native logout navigates through the backend redirect chain without fetching it', async () => {
-        await session.restore({mode: 'lakefs', localAssertion: false, accepts: ['Cookie']});
+        await session.restore({mode: 'taihu', localAssertion: false, accepts: ['Authorization']});
         render(<KCApp/>);
         fireEvent.click(await screen.findByRole('button', {name: /Native User/}));
         expect(localStorage.getItem('user')).not.toBe(null);

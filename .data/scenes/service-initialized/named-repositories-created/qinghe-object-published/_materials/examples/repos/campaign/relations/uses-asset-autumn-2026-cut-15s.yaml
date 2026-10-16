@@ -1,0 +1,13 @@
+---
+object_id: rel/uses-asset/autumn-2026-cut-15s
+kind: Relation
+schema_ref: schema/relation.canonical
+---
+relationId: rel/uses-asset/autumn-2026-cut-15s
+relationType: uses-asset
+direction: DIRECTED
+endpoints:
+- role: campaign
+  object: campaign/qinghe.autumn-2026
+- role: asset
+  object: media-asset/autumn-launch.cut-15s

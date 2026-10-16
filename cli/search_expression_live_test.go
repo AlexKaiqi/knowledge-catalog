@@ -71,7 +71,7 @@ func TestHTTPExpressionSearchAllAnySortContinuationAndValidation(t *testing.T) {
 	body(t, kc(home, "store-set", "--index", "opensearch"))
 	body(t, kc(home, "store-set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repository)
-	body(t, kc(home, "put", testObjectReference(t, repository, "schema/runbook.search", ""), "--repo", repository, "--command-id", "expression-schema", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]},"team":{"type":"string","access":["filter"]},"severity":{"type":"number","access":["filter","sort"]}}}`))
+	body(t, kc(home, "put", testObjectReference(t, repository, "schema/runbook.search", ""), "--repo", repository, "--command-id", "expression-schema", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string"},"team":{"type":"string"},"severity":{"type":"number"}}}`))
 	for _, item := range []struct {
 		id, value string
 	}{
@@ -82,10 +82,13 @@ func TestHTTPExpressionSearchAllAnySortContinuationAndValidation(t *testing.T) {
 	} {
 		body(t, kc(home, "put", testObjectReference(t, repository, item.id, ""), "--repo", repository, "--command-id", "expression-"+strings.TrimPrefix(item.id, "runbook/"), "--schema-ref", "schema/runbook.search", "--value", item.value))
 	}
+	seedTextDeclaration(t, home, repository, "index/runbook-expression", "schema/runbook.search", "body")
+	for _, field := range []struct{ name, kind string }{{"team", "keyword"}, {"severity", "number"}} {
+		seedIndexDeclaration(t, home, repository, "index/runbook-expression", field.name, map[string]any{"catalog": "declarative-index/opensearch@2026-10", "inputs": []any{map[string]any{"from": "schema/runbook.search#/fields/" + field.name}}, "build": map[string]any{"kind": field.kind}, "uses": []any{"filter", "sort"}})
+	}
 	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "1", "--source", repository+"=refs/heads/main@"))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--dataset", workspace))
-	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "object.read,object.search", "--repo", repository))
-	syncIndexes(t, home, repository)
+	syncIndexes(t, home, workspace)
 
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {

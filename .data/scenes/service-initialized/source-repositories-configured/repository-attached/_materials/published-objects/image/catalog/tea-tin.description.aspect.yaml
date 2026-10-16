@@ -6,7 +6,7 @@ schema_ref: schema/published-object.definition/v1
 {
   "title": "imagecatalogtoken Tea tin photograph",
   "kind": "image",
-  "summary": "用于展示茶罐的图片；图片字节由另一个 Snapshot 保存。",
+  "summary": "用于展示茶罐的图片。resources 给出图片文件的仓、固定 commit 与仓内路径；下载用法见 kc help files read。",
   "resources": [{"repository": "__RESOURCE_REPO__", "commit": "__RESOURCE_COMMIT__", "path": "media/tea-tin.png"}],
   "internalNote": "hiddenassetnotes"
 }

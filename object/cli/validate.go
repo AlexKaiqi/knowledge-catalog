@@ -122,5 +122,16 @@ func validateCoordinates(flags map[string]any) error {
 	if flagString(flags, "commit") != "" && flagString(flags, "ref") != "" {
 		return usage("choose --commit or --ref; do not mix")
 	}
+	if flagString(flags, "revision") != "" {
+		if set == "" {
+			return usage("--revision fixes a named Dataset; pass --dataset")
+		}
+		if flagString(flags, "pin") != "" {
+			return usage("use either --revision or --pin, not both")
+		}
+		if _, err := revisionFrom(flags); err != nil {
+			return err
+		}
+	}
 	return nil
 }

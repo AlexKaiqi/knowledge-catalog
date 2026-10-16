@@ -1,0 +1,17 @@
+---
+object_id: service/qinghe.order-service
+aspect_name: interface
+kind: Aspect
+schema_ref: schema/service.interface
+---
+protocol: HTTP JSON
+operations:
+- name: create-order
+  request: POST /orders {storeId, items[{sku, qty}]}
+  returns: 订单号，形如 O-1042，初始状态 UNPAID
+- name: get-order
+  request: GET /orders/{orderId}
+  returns: 订单状态 UNPAID | PAID | SHIPPED | CANCELLED
+- name: payment-callback
+  request: POST /payments/callback
+  returns: 把订单从 UNPAID 推进到 PAID

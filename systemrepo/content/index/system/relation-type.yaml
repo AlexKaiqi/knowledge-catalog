@@ -1,0 +1,22 @@
+---
+object_id: index/system
+aspect_name: index
+member_key: relation-type
+kind: Member
+path_hint: index/system/relation-type.yaml
+schema_ref: schema/core/index-declaration/v1
+---
+{
+  "catalog": "declarative-index/opensearch@2026-10",
+  "inputs": [
+    {
+      "from": "schema/core/relation/v1#/fields/relationType"
+    }
+  ],
+  "build": {
+    "kind": "keyword"
+  },
+  "uses": [
+    "filter"
+  ]
+}

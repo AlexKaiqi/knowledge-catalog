@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"kc/kernel"
+	objectmodel "kc/object"
 	"kc/object/reader"
 )
 
@@ -44,6 +45,8 @@ type SearchClause struct {
 	Values []string  `json:"values,omitempty"`
 	Order  string    `json:"order,omitempty"`
 	Mode   MatchMode `json:"mode,omitempty"`
+	// Member is selected from the fixed declaration set, never supplied on wire.
+	Member string `json:"-"`
 }
 
 func (c SearchClause) Locates() bool { return c.Op != OpSort }
@@ -275,6 +278,13 @@ func checkClause(c SearchClause, spec AccessSpec) error {
 	if err != nil {
 		return err
 	}
+	build, err := spec.selectDeclarationBuild(field, c.Op)
+	if err != nil {
+		return err
+	}
+	if build != nil && build.declaration.Build.Kind == "keyword" {
+		field.Type = "string"
+	}
 	if !AllowsOp(field, c.Op) {
 		return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "%s is not implied by access %v type %q on %s", c.Op, field.Access, field.Type, c.Path)
 	}
@@ -338,18 +348,34 @@ func ResolveSearchClause(clause SearchClause, spec AccessSpec) (SearchClause, er
 	}
 	resolved := field.FieldRef
 	clause.Field = &resolved
-	clause.Path = resolved.Key()
+	build, err := spec.selectDeclarationBuild(field, clause.Op)
+	if err != nil {
+		return SearchClause{}, err
+	}
+	if build != nil {
+		clause.Member = objectmodel.AddressKey(build.member)
+		if build.declaration.Build.Kind == "keyword" {
+			field.Type = "string"
+		}
+	}
+	clause.Path = memberFieldKey(resolved, clause.Member)
 	if clause.Op != OpMatch && clause.Op != OpExists && clause.Op != OpMissing && clause.Op != OpSort {
 		if clause.Op != OpIN {
 			clause.Value, err = NormalizeScalarLiteral(field.Type, clause.Value)
 			if err != nil {
 				return SearchClause{}, err
 			}
+			if build != nil {
+				clause.Value = declarationScalar(build.declaration, clause.Value)
+			}
 		}
 		for j := range clause.Values {
 			clause.Values[j], err = NormalizeScalarLiteral(field.Type, clause.Values[j])
 			if err != nil {
 				return SearchClause{}, err
+			}
+			if build != nil {
+				clause.Values[j] = declarationScalar(build.declaration, clause.Values[j])
 			}
 		}
 	}

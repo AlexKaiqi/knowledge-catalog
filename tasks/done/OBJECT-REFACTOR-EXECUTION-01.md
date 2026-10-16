@@ -1,0 +1,32 @@
+# OBJECT-REFACTOR-EXECUTION-01 · Object 模块重构执行（2026-10-13）
+
+- [ ] 本轮认领：用户再次要求现在推进；Snapshot 检查点及 R0 发布发现同源基线已建立，R1 必要合同修正已定向取证，当前执行 R2 统一结构切换，随后 R3 验证；不把局部绿称作整批完成。
+- Goal / owner：沿 `object-refactor-plan.md` 与 `object-refactor-guideline.md` 建立发布发现验收和同源基线，再统一切换 Object、Interfaces、Discovery、LiveAccess、Systemrepo 及调用方；对象、访问、发现、授权、CLI 与验证保证仍归各主题 owner，关系沿 docs/graph。
+- Non-Goals：保留既有 CLI/HTTP、存储格式、对象身份、权限、版本及结果合同；不新增业务处理器、必填对象类型、Interface 或索引发布门槛，不实现尚未选定的插件管理命令或权限，不安装依赖、不推送，不覆盖其他在途改动。
+- 不变量与选定：沿 A-01/L-01、I-01/V-01、W-01/W-02、R-01/R-02、AUTH-01～03、API-01、CA-01、OI-01～05。先补图片、分散模块、外部表的公开 Writer/Server 验收；保持行为、必要修正及目标架构分别取证，R2 一次统一结构切换，不保留兼容壳、双实现或深层跨模块访问。
+- 接口与验证：沿当前 Snapshot 根及 dataset/access/service/console 公开入口、既有 Reader/Writer、Schema 字段 access、Interface 与访问观察合同。持续全包编译、定向回归、正式场景和架构契约；交付前 `make check-docs`、`make quality` 及受影响测试/race 全绿，真实部署另行取证，未执行和无关 live skip 不称验收通过。
+- 检查点依据：单登记空间已有 `fa52d18`；控制台线程中断后，由本任务核验 `.validation/shared-auth/20261013/` 当前 lakeFS 1.86 / Gitea 双主体证据及最终合同。82 项真实 API/CLI、33 项撤权及 30 条浏览器流程已有记录；实际提交还须核对源码一致性与依赖闭包。
+- 增量质量出口：最终契约 `20261013T033644Z-0a3a0f64af7a` 的两条 fail 事件来自同一个 `TestSceneViews/product_links`：新 `cli#U7` 缺少证据或明确 gap。当前同一测试已复现失败；在 `.data/scenes/_views.yaml` 如实登记尚未选定/实现的插件管理旅程，不削弱断言、不冒充已有发现测试覆盖管理能力。该轮 sourceChanged=true，不作为 Object 基线。
+- 候选增量检查：五个新 `docs/graph/relations/*.okf` 有 EOF 空行，先前工作树 `git diff --check` 不覆盖未跟踪文件。候选暂存检查取得失败证据；本轮去掉这些增量空行，并将 `scripts/check-quality.sh` 的增量空白检查覆盖工作树、暂存区及非忽略新文件，保持已有 Git 空白规则，不追存量或改阈值。
+- 阶段性提交：`8d24030c7de6c7a404bae2b833c9c1d43579441e`，冻结候选树 `0a14cc8a90cf00bf77f6e8899f16dba193968335`；候选 `make quality` / `make check-docs` 通过，`testsuite:contracts` / `20261013T040027Z-6c02d514ff54` 退出 0、2248 pass 事件、0 fail、11 既有外部/live skip、sourceChanged=false，CLI 57/57。实际界面与双主体证据沿上述独立材料；没有把 skip、生产 Taihu 或未实测网络隔离计为通过。Agent 约定、独立 Git helper 及冻结后的其它文档改动保留，没有推送。
+- R0 证据：宿主 `repository-attached/_materials/published-objects/` 新增图片、分散模块和离线外部表材料及独立公开 Writer/Server 证据；CLI 命中坐标、typed HTTP 正文/版本依据分别按既有形状验证。目标执行 `20261013T043458Z-9fd25381761f` 四项通过；冻结同源完整合同 `20261013T043540Z-6f5ce37cd5a4` 退出 0、2252 pass / 0 fail / 11 既有外部 skip、sourceChanged=false，CLI 57/57。源码清单与日志保留于 `.validation/object-refactor/r0/`，不是部署验收。
+- R1 独立反例：空/空白 ObjectID 经 tree/native COMMIT、CommitIntent、PROPOSAL 的共享写校验；旧 Schema 显式 pin 被新版 access 错误赋予 filter/EXISTS/MISSING；Bound State 返回不符合实际采用 Schema 的标量。红证据在 `.validation/object-refactor/r1-identity-red.log`、`r1-schema-red.log`、`r1-observation-red.log`；定向修正已通过，完整受影响回归仍待最后核对。
+- R1 选定与否决：保留现有对象/Schema 身份、作者格式、路由与权限。Schema 采用见证只进入可重建投影的维护元数据，物理修订使旧派生投影重新接受显式维护；消费端按固定依据精确核验见证与 Schema，不把投影当权威、不改 Snapshot 对象格式。否决在查询中枚举 reverse locator/整仓定位表；现有 scoped-Schema 守卫曾实际报红，保留并修正实现。私有应用端口不扩充 knowledgeapp 的公共锚点；无 Binding 的仓不打开索引或来源才能判断静态能力，原有反例保持。
+- R1 待核验出口：真实 OpenSearch 下的旧 Schema 投影重开与各逻辑访问面、Schema 采用见证伪造/范围拒绝、源值结构、实际访问证据与 HTTP 目标/证明政策。后两项沿计划列出的触发条件在 LiveAccess 服务/HTTP 归属切换前核验，不能由单次 Handler 成功外推。缓存、独立消费者及 Host 生命周期的新增合同仍在 R2 切换中分别取证；尚未实现公开插件管理面。
+
+- R2 当前范围：Object/Reader/Writer/Format/Cache、Interfaces 与其调用服务、LiveAccess 与其逻辑服务、Discovery 与投影/发现服务、Systemrepo 的实际实现和全部调用方已迁至所属 owner；旧知识应用容器拆成 Object/Discovery/治理/可搜索 Dataset 流程。组装与字段解释各保留唯一算法，逻辑补判不再编译物理索引，投影消费 ObservationSource，动态取源归 LiveAccess 桥接。通用 SnapshotConsumer 及持久进度提至 Object maintenance；没有制作转发壳。
+- 边界修订：最新 guideline/plan 已撤回通用 PluginHost 的首批前置；本次完整 Object 迁移不预建通用插件管理，独立索引贡献接入仍沿其专门任务验证，不把路径迁移宣称为插件接入完成。原公开 route/action/持久 ID 与 Schema 引用保留。引用同步误触公开 URL 与出版物 path_hint 已由失败证据定位并恢复，后续以同源用例和契约核对，不更改 Oracle。
+- 当前验证：全包编译及 Object、Interfaces、LiveAccess、Systemrepo、发现服务、Dataset 发布、架构定向测试通过，结构切换已进入 R3。最终完整合同仍在取证；不以目录存在或局部绿色确认整批完成。
+
+- 度量取证：旧 depth=1 诊断从 R0 26 单元/30.46% 到当前 27 单元/37.32%，没有将其写成改善或抬高旧阈值；该归组将 internal/testkit 与被它使用的 journal/treepath 合为一单元，制造跨能力假环。按真实模块根/公开一级能力统一 depth=2 重算 R0 同源树及当前源码（同一 Go 1.26/macOS，所有 import 保留），56→63 单元、20.0325%→17.3323%。对比 JSON 位于 `.validation/object-refactor/r2/coupling/`，唯一个既有 >=0.05 漂移为 Snapshot service 从 0.75→0.6667（增加直接消费者，Ce 不增加）；按实际共享 CLI 接入证据记录为更稳定的依赖面。源码包 DAG/深度守卫与度量各保留独立出口。选择 default depth=2，旧 depth=1 只供诊断；传播成本、未知单元、>=0.05 漂移与政策签名拒绝都保持，显式 -write-baseline 登记实际新 owner 及更低成本，未增加阈值。
+- 审阅债：`interfaces/schema_refs.go` 沿旧 Schema list helper 保留大小写折叠；含大写 Schema 身份的实际采用可能不一致。作为原行为待复核，触发为 Schema 引用规范化或该能力专门行为修正；本次未把结构迁移或现有小写用例算作它已验收。HTTP 目标/证明政策、直接 access 证据仍沿 R1 触发债单列，不称迁移已经修复。
+- R3 增量修复：完整应用合同定位到旧出版物目录夹具及逐次发布 Interface 的 Schema/实例顺序；当前共享修正保留原 Schema 校验及字节一致断言。又在两个验证脚本发现旧 `./index` 执行目标；先由 `TestValidationEntrypointsDoNotUseRetiredObjectOwners` 取得两处失败，再同步为实际 Projection 入口，红绿证据位于 `.validation/object-refactor/r3-entrypoints-{red,green}.log`。同类遗漏升级为覆盖 Makefile 与脚本的架构守卫，不修改业务 Oracle。
+- R3 独立部署：`20261013T073418Z-ad750e2e5ce3` 实际调用 `make deploy-local-scenes`，因 `/tmp/kc-deploy-local/compose.env` 不存在而退出 2；未运行部署场景，不隐式重建环境，不把现有其他用途容器或旧版本部署记录当成本批验收。
+- R3 固定候选：`.validation/object-refactor/r3-final/tree` / `5213e9121dd040305f622721a95e3fe6fb87d398f5e7a99d7a9d8ba3debafe5e`。`make test` / `20261013T074206Z-41c54898d8e4` 为 21 pass / 0 fail / 0 skip；受影响模块及 Home/Server race / `20261013T074216Z-e8ee570aedcb` 为 858 pass / 0 fail / 4 外部 skip；真实 OpenSearch 专项 / `20261013T074258Z-802a8f3bfce6` 为 12 pass / 0 fail / 0 skip；独立 HTTP State runtime 三项 / `20261013T074645Z-306da6b1d409` 为 3 pass / 0 fail / 0 skip。上述运行均 sourceChanged=false。全包 typecheck 与候选 make quality 通过；最终 README 归属纠正及任务记录不改运行代码，另跑工作树 make quality / check-docs。
+- R3 完整合同未通过：`20261013T074106Z-b514a7ba62d3` 退出 1，2443 pass / 0 个单项 fail / 11 外部 skip、sourceChanged=false；CLI TestMain 的覆盖闸失败，61/61 命令有成功执行，仅 57/61 满足风险边界。新增 Snapshot 命令 dataset show / files list / files read 缺 1 项登记边界，grant update 缺 2 项；是实际失败，不以既有 57 项或成功事件替代完整 61 项。当前由独立 Snapshot CLI/SDK 任务续作，保留原门槛及 `.validation/object-refactor/r3-final-contracts-2.log`，不宣布整仓合同绿色。
+- 本轮交接边界：已只读核对用户在「梳理目标架构中的瞬时状态访问」的最新直接指令——仅补针对性用例，等待当前重构之后再处理下一轮。新增四组回归由本任务复跑 `20261013T080146Z-8cdb2eb2fe89`，5 pass / 20 fail / 0 skip、sourceChanged=false：无 Schema 最终表示冲突、Reader 具体返回值写能力、直接 access 观察核验与实际访问证据、notice 改写后台来源。保留合法转换与合法值/null 控制组，未删除、放宽、标记 skip 或修实现。请求职责仍在 Invocation、Object endpoint 组装的归属也保留为下一轮审查项。主要结构迁移已落地，但完整职责收口与整体 R3 出口未闭合；本条保持未勾选，无最终提交或推送。
+- 验证入口存量债：`scripts/e2e-state-runtime-docker.sh` / `scripts/deploy/accessors.sh` 仍引用已迁走的 catalog-initialized 材料；前者的两个 provider 用例还只选择 CLI 包，现实际位于 LiveAccess。R0 同源脚本已含旧材料路径，判定为独立运行入口债；本批未改源码，以忽略目录中的独立 runner 使用实际场景材料和三个真实用例取证，不宣称旧 make 入口通过。触发为下一轮 State runtime / 部署入口维护。源码、运行范围及当前差异清单保留于 `.validation/object-refactor/r3-final/`。
+
+## 关闭
+
+2026-10-15 拆分 `TASK.md` 时关闭，未按原条目验收。早于 2026-10-14 对象模型重构的认领，相关代码与设计已被后续重构改写（见 `0759640` 之后的提交），原范围按旧结构写成，不再继续。整体验收并入 `FINAL-ACCEPTANCE-01`，插件相关用例由验收规格 accept-01～13 取代。

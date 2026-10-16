@@ -7,9 +7,5 @@ pattern: record
 fields:
   rowCount:
     type: number
-    access:
-    - filter
   table:
     type: string
-    access:
-    - filter

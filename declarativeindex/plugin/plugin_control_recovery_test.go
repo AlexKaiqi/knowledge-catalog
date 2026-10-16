@@ -251,8 +251,10 @@ func controlBoundJob(t *testing.T, f *controlRecoveryFixture) (kernel.CommitID, 
 	receipt, err := source.Writer.Commit("control-state-declaration-a", objectmodel.CommitChangeSet{
 		TargetRepository: source.RepositoryID, TargetRef: snapshot.DefaultRef, BaseCommit: base, ExpectedTargetCommit: base,
 		Operations: []objectmodel.Operation{
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.definition"}, Value: map[string]any{"entity": "Job", "aspect": "definition", "fields": map[string]any{"owner": map[string]any{"type": "string", "access": []any{"filter"}}}}},
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.runtime"}, Value: map[string]any{"entity": "Job", "aspect": "runtime", "fields": map[string]any{"status": map[string]any{"type": "string", "access": []any{"filter"}}}}},
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.definition"}, Value: map[string]any{"entity": "Job", "aspect": "definition", "fields": map[string]any{"owner": map[string]any{"type": "string"}}}},
+			testkit.IndexField("schema/job.definition", "owner", "keyword"),
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/job.runtime"}, Value: map[string]any{"entity": "Job", "aspect": "runtime", "fields": map[string]any{"status": map[string]any{"type": "string"}}}},
+			testkit.IndexField("schema/job.runtime", "status", "keyword"),
 			bindingfixture.PutDescriptor("resource/state", bindingfixture.Descriptor("https://old-state.example")),
 			bindingfixture.PutAspect("job/control", "runtime", "schema/job.runtime", "resource/state"),
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/control", AspectName: "definition"}, SchemaRef: "schema/job.definition", Value: map[string]any{"owner": "a-owner"}},

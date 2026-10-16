@@ -1,0 +1,14 @@
+---
+object_id: index/sales-search
+aspect_name: index
+member_key: table-row-count-text
+kind: Member
+schema_ref: schema/core/index-declaration/v1
+---
+catalog: declarative-index/opensearch@2026-10
+inputs:
+  - from: schema/table.live-stats#/fields/rowCount
+build:
+  kind: keyword
+uses:
+  - filter

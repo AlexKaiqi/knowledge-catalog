@@ -7,12 +7,18 @@ publishes:
   - "dataset.compose"
 summary: "语义脊的命名 Dataset scene-set：固定两仓语义实例与关系路径供消费与授权（canonical 脊的对应前态是 dataset-defined）"
 probes:
+  - file: "dataset-search-enforces-selected-declarations.feature"
+    source: "schema.access"
+    title: "未选声明的条件被拒绝，正常 Dataset 检索仍有命中"
+    views:
+      - "publication"
+      - "consumption"
   - file: "dataset-file-read-does-not-grant-repository-access.feature"
     source: "access.rules"
     views:
       - "access-control"
       - "consumption"
-    title: "Dataset file.read 可读清单但不授予仓级读搜权限"
+    title: "Dataset 消费权允许范围内搜索与回读但不授来源仓读权"
   - file: "dataset-resolve-does-not-grant-read.feature"
     source: "access.rules"
     views:
@@ -68,18 +74,21 @@ evidence:
     views:
       - "lifecycle"
     tests:
-      - "TestRegisterRetireArchive"
+      - "TestRegisterRetireRecovers"
+      - "TestArchiveRepositoryBlocksOpenDataset"
+      - "TestDatasetServiceHasNoRegistryArchiveLifecycle"
     id: "retirement-and-archive-block-consumption"
-    title: "退役与归档阻断后续消费"
+    title: "Dataset 退役与来源仓归档阻断后续消费，登记空间归档生命周期保持退役"
   - source: "dataset.compose"
     views:
       - "consumption"
       - "lifecycle"
     tests:
       - "TestOpenedDatasetPinDoesNotMoveWithLaterCommit"
-      - "TestHistoricalDatasetPinSearchHasNoIndependentProjection"
+      - "TestHistoricalDatasetReadStaysOnPublishedCommit"
+      - "TestDatasetSearchKeepsReleaseWhenPublicationAdvancesBeforeObjectRead"
     id: "dataset-republish-keeps-open-pins"
-    title: "已打开 Dataset pin 不移动且历史检索不伪造独立投影"
+    title: "已打开 Dataset pin 固定来源，查询与回读在并发发布中仍保持本次版本"
   - id: "semantic-yaml-business-values"
     title: "Gateway 返回组装业务 YAML 且不泄露 Canonical 信封"
     source: "dataset.files"
@@ -135,4 +144,163 @@ evidence:
       - "TestObjectOnlyWorkspaceCannotCheckoutByScanning"
     id: "kcfs-validates-commands-and-refuses-checkout-scan"
     title: "kcfs 校验公开命令且对象消费不能扫描复制项目"
-fixture: "scene-set v1 已固定两仓指标与关系路径及发表 commit，可供独立消费、授权与生命周期用例使用。"
+  - source: projection.index
+    views:
+      - publication
+      - consumption
+    tests:
+      - TestDescribeIndexShowsCompiledSpec
+      - TestIndexSchemaChangeForcesRebuild
+      - TestCatalogHookUpdatesIndexAfterCommit
+      - TestSearchAtDoesNotRewindLive
+    id: projection-compiles-schema-and-rebuilds-on-change
+    title: 声明式投影公开编译规格并按 Schema 变化重建
+    verifies:
+      - claim: "discovery#U3"
+        detail: "Schema 变化触发重建且同依据查询不倒退活动投影；未证明新插件维护选用或完整恢复。"
+  - id: index-declared-field-contract
+    title: 声明式字段查询保留实际文本、整数与时间语义
+    source: projection.index
+    views:
+      - consumption
+    tests:
+      - TestPublishedSchemaTypedSearchPreservesLongTextIntegersAndTime
+      - TestIndexDeclarationMembersAreTheOnlyRetrievalSource
+      - TestExpressionSearchFailsClosedWithoutCompositionProof
+    verifies:
+      - claim: "discovery#U1"
+        detail: "字段声明是唯一来源；真实文本、整数、时间查询与分页保持值及依据，缺组合能力证明时拒绝。尚未从新插件入口执行。"
+  - id: index-candidate-scope-before-read
+    title: 候选范围检查先于权威正文回读
+    source: projection.index
+    views:
+      - consumption
+    tests:
+      - TestDatasetCandidateScopeRunsBeforeCanonicalHydration
+      - TestDatasetSearchAuthorizesBeforeResolution
+      - TestDatasetRelationsQueryAllMembersAndBindContinuationToScope
+    verifies:
+      - claim: "discovery#U2"
+        detail: "先授权再解析，越界候选在正文回读前拒绝，跨仓关系枚举及续页遵守固定范围；不证明来源到 A/B 匹配或 Dataset 不覆盖来源采用。"
+  - id: index-maintenance-rebuild-and-consumer-isolation
+    title: 增量等价重建且独立消费方能恢复丢通知
+    source: projection.index
+    views:
+      - publication
+    tests:
+      - TestIncrementalProjectionSkipsUnchangedDocumentsAndMatchesRebuild
+      - TestSnapshotConsumerWorkersRecoverLostNotificationsWithoutBlockingEachOther
+    verifies:
+      - claim: "discovery#U3"
+        detail: "既有投影增量结果等价重建，消费工作者恢复漏通知；不证明新插件完整维护旅程。"
+      - claim: "discovery#U6"
+        detail: "阻塞某消费方不阻断另一方，关闭等待维护 worker 退出；消费方隔离不等于两插件实例物理数据隔离或排空所有业务请求。"
+  - id: index-fixed-basis-between-candidate-and-read
+    title: 候选返回后 Writer 推进版本仍回读原依据
+    source: projection.index
+    views:
+      - consumption
+    tests:
+      - TestSearchKeepsCandidateBasisWhenWriterAdvancesBeforeObjectRead
+      - TestDatasetPublicationSwitchesOnlyAfterCapabilitiesReady
+    verifies:
+      - claim: "discovery#U4"
+        detail: "单 Repo 实际候选 a 返回后 Writer 推进 b，真实回读仍保留 a 的命中集合、值与声明依据；Dataset 准备失败保留旧发布。不证明完整插件链。"
+  - id: index-bad-result-and-stale-continuation
+    title: 错误回读与过期发布代际的续页被拒绝
+    source: projection.index
+    views:
+      - consumption
+    tests:
+      - TestSearchRejectsMalformedInjectedHydration
+      - TestOpenSearchContinuationRequiresCurrentPublication
+    verifies:
+      - claim: "discovery#U5"
+        detail: "坏回读及发布代际不符的续页明确失败；未证明跨插件实例或真实历史观察回读。"
+  - id: index-notice-preserves-background-source
+    title: 通知及拒绝通知不能替换后台维护来源与身份
+    source: projection.index
+    views:
+      - access-control
+      - lifecycle
+    tests:
+      - TestProjectionNoticeExecutorPreservesBackgroundSourceAcrossCallers
+      - TestProjectionNoticeExecutorPreservesBackgroundSourceWhenNoticeRejected
+    verifies:
+      - claim: "discovery#U6"
+        detail: "固定后台配置接收不同请求或拒绝非法通知后应保持来源/身份，随后观察仍由后台源给出；风险由独立组件合同核验，执行结论以绑定源码的验证报告为准。"
+  - id: index-physical-loss-with-ready-ledger
+    title: 账仍 READY 时重启对账及运行中周期恢复物理索引
+    source: projection.index
+    views:
+      - lifecycle
+    tests:
+      - TestProjectionControllerRecoversPhysicalLossWithReadyLedger
+    verifies:
+      - claim: "discovery#U3"
+        detail: "真实 Index/Controller 在物理 Meta 与文档丢失后无需重发通知恢复，结果正文及依据等价独立重建；未验证真实 OpenSearch 删除或插件选用。"
+  - id: index-dataset-switch-during-object-read
+    title: Dataset 查询中途换版仍按原声明与范围回读
+    source: projection.index
+    views:
+      - consumption
+    tests:
+      - TestDatasetSearchKeepsReleaseWhenPublicationAdvancesBeforeObjectRead
+    verifies:
+      - claim: "discovery#U4"
+        detail: "真实 Writer/Index/DatasetSearchExecutor 在候选定位后推进来源、Schema 和 Dataset 范围；结果与对象层读取仍用 a，范围外候选不回读。未证明新插件登记及跨实例查询。"
+  - id: index-dataset-publication-failure
+    title: 冻结或接受失败及准备后取消保留完整旧发布
+    source: projection.index
+    views:
+      - publication
+    tests:
+      - TestDatasetPublicationFailuresPreserveAcceptedReleaseAndSourceCommit
+    verifies:
+      - claim: "discovery#U4"
+        detail: "真实 Dataset authority 的冻结/接受错误及准备后取消保持服务与耐久记录、HEAD 和旧版，来源提交不撤销；重试采用冻结 b 而非后续 c。"
+  - id: index-state-publication-failure
+    title: 观察已保存而引擎发布失败时保留原查询依据
+    source: projection.index
+    views:
+      - lifecycle
+    tests:
+      - TestStatePublicationFailurePreservesOriginalObservationUntilRetry
+    verifies:
+      - claim: "discovery#U5"
+        detail: "全量/增量 State 候选已保存后引擎 Commit 失败，旧完整结果与原观察仍可查，候选不可查且回收；成功重试发布新 revision，旧 revision 明确拒绝。"
+  - source: delivery.chain
+    views:
+      - access-control
+      - consumption
+    tests:
+      - TestEmptyChainReturnsHydratedBody
+      - TestRepositoryReadStripsUnauthorizedBodyAndKeepsID
+      - TestDatasetSearchRejectsMissingConsumptionBeforeQuery
+    id: search-delivery-applies-read-permissions
+    title: 交付链按读权保留或屏蔽正文且不改变对象身份
+  - source: access.rules
+    views:
+      - access-control
+    tests:
+      - TestDatasetAuthorizationCoverageIsHonest
+      - TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange
+    id: dataset-authorization-keeps-file-pages-bounded
+    title: Dataset 授权覆盖与固定 pin 文件分页保持边界
+  - source: delivery.chain
+    views:
+      - access-control
+      - consumption
+    tests:
+      - TestRepositoryReadKeepsAuthorizedBody
+    id: authorized-repository-read-keeps-body
+    title: 仓读取在获权后保留 Canonical 正文
+  - source: retrieval.refine
+    views:
+      - consumption
+    tests:
+      - TestHTTPSearchRerankPreservesRetrievalEvidenceAndUsesOneFixedView
+      - TestRerankEvidenceFeedbackAndTrainingSampleJourney
+    id: rerank-feedback-keeps-fixed-view-evidence
+    title: 重排与反馈保持一次固定 SearchView 的检索证据
+fixture: "scene-set v1 固定两仓语义文件、Schema 与选入的索引声明，Dataset 修订的投影准备后可供消费、授权及生命周期独立用例使用。"

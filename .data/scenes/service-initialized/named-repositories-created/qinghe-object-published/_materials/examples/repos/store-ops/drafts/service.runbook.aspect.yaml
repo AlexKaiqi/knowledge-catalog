@@ -1,0 +1,16 @@
+---
+object_id: schema/service.runbook
+---
+entity: Service
+aspect: runbook
+pattern: record
+fields:
+  revision:
+    type: string
+    required: true
+  firstSteps:
+    type: array
+    required: true
+  escalation:
+    type: string
+    required: true

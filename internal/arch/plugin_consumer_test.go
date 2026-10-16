@@ -28,6 +28,7 @@ func TestIndexPluginDependencyGuardRejectsHostAndImplementation(t *testing.T) {
 		{"discovery/llmhttp", true},
 		{"discovery/client", true},
 		{"declarativeindex/cli", true},
+		{"declarativeindex/capability", true},
 	} {
 		t.Run(tc.target, func(t *testing.T) {
 			for _, graph := range []depGraph{
@@ -43,7 +44,7 @@ func TestIndexPluginDependencyGuardRejectsHostAndImplementation(t *testing.T) {
 }
 
 func TestModuleClientsCannotReachIndexPluginRuntime(t *testing.T) {
-	for _, owner := range []string{"discovery/client", "discovery/cli", "declarativeindex/client", "declarativeindex/cli"} {
+	for _, owner := range []string{"discovery/client", "discovery/cli", "declarativeindex/client", "declarativeindex/cli", "declarativeindex/capability"} {
 		t.Run(owner, func(t *testing.T) {
 			for _, target := range []string{"discovery/plugin", "discovery/plugin/internal/registry"} {
 				graph := depGraph{owner: {"transport-bridge"}, "transport-bridge": {target}}

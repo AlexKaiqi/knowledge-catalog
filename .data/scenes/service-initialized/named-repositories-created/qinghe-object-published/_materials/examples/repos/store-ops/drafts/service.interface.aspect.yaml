@@ -1,0 +1,13 @@
+---
+object_id: schema/service.interface
+---
+entity: Service
+aspect: interface
+pattern: record
+fields:
+  protocol:
+    type: string
+    required: true
+  operations:
+    type: array
+    required: true

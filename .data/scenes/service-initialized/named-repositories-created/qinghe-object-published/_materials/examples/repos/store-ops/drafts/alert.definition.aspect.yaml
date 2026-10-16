@@ -1,0 +1,23 @@
+---
+object_id: schema/alert.definition
+---
+entity: Alert
+aspect: definition
+pattern: record
+fields:
+  name:
+    type: string
+    required: true
+  serviceRef:
+    type: object_ref
+    required: true
+    refTypes:
+    - Service
+  condition:
+    type: string
+    required: true
+  severity:
+    type: string
+    required: true
+  firedAt:
+    type: string

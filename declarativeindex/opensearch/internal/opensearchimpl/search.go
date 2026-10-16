@@ -110,7 +110,7 @@ func (e *openSearchEngine) RetrieveContext(ctx context.Context, req index.Retrie
 	}
 	state.PIT = pit
 
-	ids, sortValues, nextPIT, err := e.searchPITContext(ctx, state, req.Search, req.Spec, size+1)
+	candidates, sortValues, nextPIT, err := e.searchPITCandidatesContext(ctx, state, req.Search, req.Spec, size+1)
 	if err != nil {
 		e.closePITContext(ctx, state.PIT)
 		return index.CandidatePage{}, err
@@ -119,13 +119,13 @@ func (e *openSearchEngine) RetrieveContext(ctx context.Context, req index.Retrie
 		state.PIT = nextPIT
 	}
 	e.closePITContext(ctx, state.PIT)
-	hasMore := len(ids) > size
+	hasMore := len(candidates) > size
 	if hasMore {
-		ids = ids[:size]
+		candidates = candidates[:size]
 		sortValues = sortValues[:size]
 	}
 	page := index.CandidatePage{Exhausted: !hasMore}
-	for i, id := range ids {
+	for i, candidate := range candidates {
 		var providerOrder []any
 		if hasExplicitSort(req.Search) && i < len(sortValues) && len(sortValues[i]) > 0 {
 			orderValue, err := logicalSortValue(req.Search, req.Spec, sortValues[i][0])
@@ -134,19 +134,23 @@ func (e *openSearchEngine) RetrieveContext(ctx context.Context, req index.Retrie
 			}
 			providerOrder = []any{orderValue}
 		}
-		page.Candidates = append(page.Candidates, index.CandidateRef{
-			ObjectID: id, Basis: state.Basis,
-			Evidence: []retrieval.LaneEvidence{{
-				Provider: e.ProviderID(), Lane: osLane(req.Search), Guarantee: string(index.GuaranteeExact),
-				LocalRank: state.Rank + i + 1, ProviderOrder: providerOrder,
-			}},
-		})
+		// Older repository documents retained their compile-time source commit.
+		// Their published basis belongs to control; Dataset source coordinates
+		// name another repository and must keep their individually fixed basis.
+		if candidate.Repository == "" || candidate.Repository == req.Spec.Repository {
+			candidate.Repository, candidate.Basis = req.Spec.Repository, state.Basis
+		}
+		candidate.Evidence = []retrieval.LaneEvidence{{
+			Provider: e.ProviderID(), Lane: osLane(req.Search), Guarantee: string(index.GuaranteeExact),
+			LocalRank: state.Rank + i + 1, ProviderOrder: providerOrder,
+		}}
+		page.Candidates = append(page.Candidates, candidate)
 	}
 	if page.Exhausted || len(sortValues) == 0 {
 		return page, nil
 	}
 	state.Sort = sortValues[len(sortValues)-1]
-	state.Rank += len(ids)
+	state.Rank += len(candidates)
 	state.PIT = ""
 	page.Continuation = encodePITContinuation(state)
 	return page, nil
@@ -232,6 +236,15 @@ func (e *openSearchEngine) searchPIT(state pitContinuation, req retrieval.Search
 }
 
 func (e *openSearchEngine) searchPITContext(ctx context.Context, state pitContinuation, req retrieval.SearchRequest, spec retrieval.AccessSpec, size int) ([]objectmodel.ObjectID, [][]any, string, error) {
+	candidates, sorts, pit, err := e.searchPITCandidatesContext(ctx, state, req, spec, size)
+	ids := make([]objectmodel.ObjectID, len(candidates))
+	for i, candidate := range candidates {
+		ids[i] = candidate.ObjectID
+	}
+	return ids, sorts, pit, err
+}
+
+func (e *openSearchEngine) searchPITCandidatesContext(ctx context.Context, state pitContinuation, req retrieval.SearchRequest, spec retrieval.AccessSpec, size int) ([]index.CandidateRef, [][]any, string, error) {
 	query, scoring, err := osQuery(req, spec)
 	if err != nil {
 		return nil, nil, "", err
@@ -244,7 +257,7 @@ func (e *openSearchEngine) searchPITContext(ctx context.Context, state pitContin
 		sortSpec = append([]any{map[string]any{"_score": map[string]any{"order": "desc"}}}, sortSpec...)
 	}
 	payload := map[string]any{
-		"size": size, "_source": []string{"object_id"}, "track_total_hits": false,
+		"size": size, "_source": []string{"object_id", "source_repository", "source_commit"}, "track_total_hits": false,
 		"pit":   map[string]any{"id": state.PIT, "keep_alive": "2m"},
 		"query": query, "sort": sortSpec,
 	}
@@ -258,7 +271,7 @@ func (e *openSearchEngine) searchPITContext(ctx context.Context, state pitContin
 	if status >= 400 {
 		return nil, nil, "", fmt.Errorf("opensearch search: %s", body)
 	}
-	return decodeSearchResponse(body, len(sortSpec))
+	return decodeCandidateResponse(body, len(sortSpec))
 }
 
 // osSort freezes the logical reduction for multi-valued fields: ascending
@@ -273,7 +286,7 @@ func osSort(req retrieval.SearchRequest, spec retrieval.AccessSpec) ([]any, bool
 	if clause.Field == nil {
 		return nil, false, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "SORT field is unresolved")
 	}
-	field, err := spec.ResolveField(*clause.Field)
+	field, err := spec.ResolveClauseField(clause)
 	if err != nil {
 		return nil, false, err
 	}
@@ -337,7 +350,7 @@ func osExpression(expression retrieval.SearchExpr, spec retrieval.AccessSpec) (m
 		clause := *expression.Clause
 		fieldType := ""
 		if clause.Field != nil {
-			field, err := spec.ResolveField(*clause.Field)
+			field, err := spec.ResolveClauseField(clause)
 			if err != nil {
 				return nil, false, err
 			}
@@ -529,6 +542,9 @@ func (e *openSearchEngine) SemanticWindowContext(ctx context.Context, req index.
 	if !e.VectorReady() {
 		return index.CandidatePage{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "semantic recall requires a vector projection")
 	}
+	if len(req.Spec.SemanticMembers()) == 0 {
+		return index.CandidatePage{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "semantic recall requires a ready declared vector member")
+	}
 	if len(queryVector) != e.vectorDimension {
 		return index.CandidatePage{}, kernel.Fail(kernel.ErrUsageInvalid,
 			"query vector has %d dimensions, projection pins %d", len(queryVector), e.vectorDimension)
@@ -555,10 +571,11 @@ func (e *openSearchEngine) SemanticWindowContext(ctx context.Context, req index.
 		return index.CandidatePage{}, kernel.Fail(kernel.ErrUsageInvalid, "query vector dimension does not match the projection")
 	}
 	payload := map[string]any{
-		"size": size, "_source": []string{"object_id"}, "track_total_hits": false,
-		"query": map[string]any{"knn": map[string]any{"semantic_vector": map[string]any{
+		"size": size, "_source": []string{"object_id", "source_repository", "source_commit"}, "track_total_hits": false,
+		"query": map[string]any{"nested": map[string]any{"path": "semantic_vectors", "score_mode": "max", "query": map[string]any{"knn": map[string]any{"semantic_vectors.vector": map[string]any{
 			"vector": queryVector, "k": size,
-		}}},
+			"filter": map[string]any{"terms": map[string]any{"semantic_vectors.member": req.Spec.SemanticMembers()}},
+		}}}}},
 	}
 	status, body, err := e.doContext(ctx, http.MethodPost, "/"+control.ActiveIndex+"/_search?allow_partial_search_results=false", payload)
 	if err != nil {
@@ -567,19 +584,20 @@ func (e *openSearchEngine) SemanticWindowContext(ctx context.Context, req index.
 	if status >= 400 {
 		return index.CandidatePage{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "opensearch knn search: %s", body)
 	}
-	ids, _, _, err := decodeSearchResponse(body, 0)
+	candidates, _, _, err := decodeCandidateResponse(body, 0)
 	if err != nil {
 		return index.CandidatePage{}, err
 	}
 	page := index.CandidatePage{Exhausted: true}
-	for i, id := range ids {
-		page.Candidates = append(page.Candidates, index.CandidateRef{
-			ObjectID: id, Basis: kernel.CommitID(control.Basis),
-			Evidence: []retrieval.LaneEvidence{{
-				Provider: e.ProviderID(), Lane: "semantic-vector", Guarantee: string(index.GuaranteeApproximate),
-				LocalRank: i + 1,
-			}},
-		})
+	for i, candidate := range candidates {
+		if candidate.Repository == "" || candidate.Repository == req.Spec.Repository {
+			candidate.Repository, candidate.Basis = req.Spec.Repository, kernel.CommitID(control.Basis)
+		}
+		candidate.Evidence = []retrieval.LaneEvidence{{
+			Provider: e.ProviderID(), Lane: "semantic-vector", Guarantee: string(index.GuaranteeApproximate),
+			LocalRank: i + 1,
+		}}
+		page.Candidates = append(page.Candidates, candidate)
 	}
 	return page, nil
 }

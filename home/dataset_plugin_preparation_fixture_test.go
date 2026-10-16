@@ -2,12 +2,9 @@ package home
 
 import (
 	"context"
-	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
-	"sync/atomic"
 	"testing"
 
 	"kc/declarativeindex/opensearch"
@@ -29,35 +26,20 @@ type datasetPreparationSource struct {
 	canonical objectmodel.ObjectValue
 }
 
-func newDatasetPreparationHome(t *testing.T, indexedPlugin string, metadataStatus int) (*Home, datasetPreparationSource, datasetPreparationSource) {
+func newDatasetPreparationHome(t *testing.T, plugins *consumerplugin.PluginsConfig) (*Home, datasetPreparationSource, datasetPreparationSource) {
 	t.Helper()
-	var failedPath atomic.Value
-	failedPath.Store("")
-	fake := testkit.NewLakeFSFakeWithInterceptor(t, func(w http.ResponseWriter, r *http.Request) bool {
-		if metadataStatus != 0 && r.Method == http.MethodGet && r.URL.Path == failedPath.Load().(string) {
-			w.WriteHeader(metadataStatus)
-			return true
-		}
-		return false
-	})
-	plain := seedDatasetPreparationSource(t, fake, "plain", "")
-	indexed := seedDatasetPreparationSource(t, fake, "indexed", indexedPlugin)
-	failedPath.Store("/api/v1/repositories/" + strings.TrimPrefix(indexed.dsn, fake.Origin()+"/") + "/metadata")
+	fake := testkit.NewLakeFSFake(t)
+	plain := seedDatasetPreparationSource(t, fake, "plain")
+	indexed := seedDatasetPreparationSource(t, fake, "indexed")
 	cfg := deploymentFixture(t)
 	cfg.Repositories = append(cfg.Repositories,
 		RepositoryBinding{ID: string(plain.id), Driver: "lakefs", DSN: plain.dsn},
 		RepositoryBinding{ID: string(indexed.id), Driver: "lakefs", DSN: indexed.dsn},
 	)
+	cfg.Plugins = plugins
 	namespace := string(kernel.CanonicalDigest(t.TempDir()))
 	cfg.Stores.Index = "opensearch"
 	cfg.Stores.OpenSearch = opensearch.Config{URL: connectedPluginSearchEndpoint(t, namespace), Namespace: namespace, PrimaryShards: 1}
-	// The independent System contribution makes the process have indexed
-	// capabilities even when a Dataset's own source has no extension.
-	system, err := snapshot.OpenLakeFS(kernel.RepositoryID(cfg.Repositories[0].ID), cfg.Repositories[0].DSN, testkit.LakeFSFakeCredential)
-	if err != nil {
-		t.Fatal(err)
-	}
-	writeConnectedPluginConfig(t, system, []consumerplugin.PluginSelection{{Name: "declarative-index", Instance: "main"}})
 	if err := InitializeDeployment(cfg, func(dir, _ string) error {
 		return os.WriteFile(filepath.Join(dir, "allow.json"), []byte(`{"version":2,"rules":[]}`), 0600)
 	}); err != nil {
@@ -76,31 +58,31 @@ func newDatasetPreparationHome(t *testing.T, indexedPlugin string, metadataStatu
 			t.Fatal(err)
 		}
 	}
-	if !ws.DatasetPreparation.Enabled || !ws.Plugins.ConfiguredFor(objectmodel.SystemRepositoryID) || ws.Plugins.ConfiguredFor(plain.id) {
-		t.Fatal("fixture must have System indexing enabled and the plain source explicitly unconfigured")
+	installed := plugins == nil
+	if ws.DatasetPreparation.Enabled != installed || ws.Plugins.ConfiguredFor(plain.id) != installed || ws.Plugins.ConfiguredFor(indexed.id) != installed {
+		t.Fatalf("fixture must install the deployment's index instance for every source exactly when configured: installed=%t", installed)
 	}
 	return ws, plain, indexed
 }
 
-func seedDatasetPreparationSource(t *testing.T, fake *testkit.LakeFSFake, mount, plugin string) datasetPreparationSource {
+func seedDatasetPreparationSource(t *testing.T, fake *testkit.LakeFSFake, mount string) datasetPreparationSource {
 	t.Helper()
 	source := datasetPreparationSource{id: kernel.RepositoryID("kr://dataset-preparation/" + mount), mount: mount, dsn: fake.DSN(fake.NewRepo())}
 	raw, err := snapshot.OpenLakeFS(source.id, source.dsn, fake.Credential())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plugin != "" {
-		writeConnectedPluginConfig(t, raw, []consumerplugin.PluginSelection{{Name: plugin, Instance: "main"}})
-	}
 	repo := testkit.OpenRepository(t, raw)
 	root := testkit.MustHead(t, raw, snapshot.DefaultRef)
+	schema := objectmodel.ObjectID("schema/article-" + mount)
 	object, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: source.id, TargetRef: snapshot.DefaultRef, BaseCommit: root, ExpectedTargetCommit: root,
 		Operations: []objectmodel.Operation{
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/article"}, PathHint: "object/schema.yaml", Value: map[string]any{
-				"entity": "Article", "fields": map[string]any{"body": map[string]any{"type": "string", "access": []any{"text"}}},
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: schema}, PathHint: "object/schema.yaml", Value: map[string]any{
+				"entity": "Article", "fields": map[string]any{"body": map[string]any{"type": "string"}},
 			}},
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: objectmodel.ObjectID("article/" + mount)}, PathHint: "object/article.yaml", SchemaRef: "schema/article", Value: map[string]any{
+			testkit.IndexOn(objectmodel.ObjectID("index/"+mount), testkit.IndexText(schema, "body")),
+			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: objectmodel.ObjectID("article/" + mount)}, PathHint: "object/article.yaml", SchemaRef: string(schema), Value: map[string]any{
 				"body": "runbook " + mount, "detail": "complete canonical " + mount,
 			}},
 		},

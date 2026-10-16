@@ -5,6 +5,7 @@ import (
 	"kc/kernel"
 	"kc/snapshot/dataset"
 	"maps"
+	"reflect"
 )
 
 type DatasetPublication struct {
@@ -24,7 +25,7 @@ type DatasetRegistry interface {
 type DatasetPublisher struct {
 	Registry  DatasetRegistry
 	Authorize func(context.Context, DatasetPublication) error
-	Prepare   func(context.Context, dataset.Dataset) error
+	Prepare   func(context.Context, dataset.Dataset) (dataset.Dataset, error)
 }
 
 func (e DatasetPublisher) Execute(ctx context.Context, request DatasetPublication) (dataset.Dataset, error) {
@@ -39,9 +40,14 @@ func (e DatasetPublisher) Execute(ctx context.Context, request DatasetPublicatio
 		return dataset.Dataset{}, err
 	}
 	def.Metadata = maps.Clone(request.Metadata)
-	if err := e.Prepare(ctx, def); err != nil {
+	prepared, err := e.Prepare(ctx, def)
+	if err != nil {
 		return dataset.Dataset{}, err
 	}
+	if prepared.SetID != def.SetID || prepared.Revision != def.Revision || !reflect.DeepEqual(prepared.Sources, def.Sources) {
+		return dataset.Dataset{}, kernel.Fail(kernel.ErrPreconditionFailed, "capability preparation changed the frozen publication candidate")
+	}
+	def.Dependencies = prepared.Dependencies
 	if err := ctx.Err(); err != nil {
 		return dataset.Dataset{}, err
 	}

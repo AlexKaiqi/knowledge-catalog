@@ -5,150 +5,123 @@ type helpEntry struct{ Description, Usage string }
 func leafHelpEntries() map[string]helpEntry {
 	return map[string]helpEntry{
 		"plugin": {
-			Description: "读取插件的用途、适用声明和已有任务用法",
-			Usage: `kc plugin <name> help
+			Description: "读取插件说明、实例能力清单或只读试运行声明",
+			Usage: `kc plugin <name> help|describe|trial
 
 用途：
-  读取服务登记插件的说明，了解它解释哪些声明及如何沿已有任务使用。
+  help 读取登记说明和编译清单；describe 给出实际安装实例的带版本清单。
+  trial 用 Writer 相同结构规则校验候选声明，再按声明 catalog 核对实例能力。
 用法与参数：
-  name 来自 operations access-spec describe 的来源插件帮助入口；第二个位置参数只能是 help。
-  不接受安装、卸载、实例选择或目标配置参数。日常查询仍用 search、relations、traverse。
+  kc plugin declarative-index describe
+  kc plugin declarative-index trial --repo <id> --file <声明文件> [--commit <id> | --ref <ref>]
+  help 与 describe 不接受目标；trial 只读本地文件后发送内容，不让服务打开本机路径。
 条件：
-  通过已认证 Server 读取；仅需既有 inventory.read，名称须对应已登记说明。
+  通过显式身份的认证 Server；help/describe 需 inventory.read。
+  trial 需目标及所读 Schema 仓的完整 object.read；裸引用的远端回退无法证明读取权限时，改用显式 kc://<repo>/<schema> 定位符。
 结果：
-  返回插件名称、用途、用法与任务入口；不返回实例配置、凭据或投影状态。
+  清单列构建方式、可选值、修改是否重建、上限与摘要；不包含实例凭据、引擎地址或原始 mapping。
+  trial 返回逐成员 supported/unsupported/invalid、原因、固定基准和重建判断；新成员需要构建。
 后果：
-  只读说明，不执行插件能力、不访问来源、不建索引或启动维护。
+  不写入对象、命令账本或索引，不激活后台维护；试运行不预留之后提交的 CAS。
 风险与成本：
-  说明读取不证明目标声明适用、提供方支持、版本就绪或本次请求已获授权。
+  静态编译清单不能替代实际实例清单；试运行只检查写法与能力，不评估检索效果或证明就绪。
 失败恢复：
-  名称不存在时回到目标访问概览核对帮助入口；身份或服务故障按实际原因恢复。
+  按 invalid 的 Writer 定位修文件；unsupported 对照实例清单，不偷偷替换声明版本。
+  目标分支变化后重新试运行，再用正常 Writer 发布；安装管理与实例选择属于部署。
 示例：
-  例：kc plugin declarative-index help
+  kc plugin declarative-index help
+  kc plugin declarative-index trial --repo kr://scene/object --file index/name.yaml
   本地查看此任务用法：kc help plugin`,
 		},
 		"search": {
-			Description: "在固定仓或 Dataset 上按 Schema 字段的查询声明检索对象，列出匹配对象",
-			Usage: `kc search (--repo <id> | --dataset <id>) --query <text>
-
+			Description: "在 Dataset 的固定修订内搜索并取得同版本命中坐标",
+			Usage: `kc search --dataset <id> [--revision <N>] --query <text> [--eq <field=value>] [--sort <field>] [--limit <n>]
 用途：
-  根据已发布 Schema 的字段访问声明找对象，再按命中坐标读取正文。
+  先从 kc show 的消费库存找到 Dataset，再在该 Dataset 选入的对象与声明范围内检索。
 用法与参数：
-  --query 是 MATCH 关键字，不是文件 glob；精确条件可改用 --eq path=value，多个条件共同约束结果。
-  字段路径有歧义时写 schema::aspect::path；可用 --sort、--limit <1-1000> 和 --continuation <cursor>。
-  --recall lexical|semantic，省略为 lexical；semantic 需要文本查询，当前只返回一个近似候选窗口，不支持续页。
-  单仓可用 --commit 或 --ref 固定依据；省略使用 published。含空格、* 或 $ 的值须加单引号。
+  --dataset 必填；--revision 固定已接受修订，省略采用当前版。所有后续读取和翻页沿用结果中的修订。
+  用 kc schema describe --dataset <id> [--revision <N>] --object <schema> 查看声明支持的字段用途；过滤与排序按 Schema 字段定位符写，不传声明成员键。
+  --query 是关键词文本，不是文件 glob；多个条件共同约束结果。--limit 默认 100，范围 1-1000；--continuation 用同查询、同修订续页。
+  --recall lexical|semantic；semantic 需要查询文本和已配置向量能力，返回近似候选窗口，不支持续页。
 条件：
-  已认证；单仓需 object.search，命名 Dataset 按覆盖选定材料的 file.read 准入，不另要求 object.search。
-  不带范围的库存发现需 inventory.read；另行解析 Dataset pin 才需 dataset.resolve，解析权不代替材料读取权。
-  查询字段须经 Schema 声明，固定版本的检索投影须就绪；semantic 另需向量投影与 embedding 能力。
+  已认证并持有该 Dataset 完整选择范围的 file.read。仓读权不能代替 Dataset 消费权。
+  只选入 Dataset 的声明生效；所用成员与固定修订投影必须支持、有效并就绪。
 结果：
-  JSON hits 给出 repository/objectId/commit，供后续 read；还返回范围、完整性、续页或检索证据信息。
-  hits 不带正文；单仓搜索权不替代 object.read，Dataset 的对象消费范围由 file.read 和清单限定。
-  无命中不代表范围外或无权读取的对象不存在。
+  JSON hits 提供 repository/objectId/commit，dataset 提供 id/revision；命中含来源版本、完整性及续页依据。
+  CLI 列出坐标；kc read --dataset <id> --revision <N> <命中引用> 取得范围内完整正文。
 后果：
-  执行查询并留下服务配置的访问/检索证据，不发布对象、不自动建立或同步投影。
-  不带范围时仅可使用服务配置的库存发现 Dataset，不会扫描所有连接的来源。
+  查询并留证，不提交对象、不发布 Dataset、不隐式构建或同步投影。
 风险与成本：
-  lexical 默认每页 100 条；成本随来源、候选及回读数量增长。semantic 还会调用 embedding，可能有额外网络与模型成本。
-  semantic 窗口不保证穷尽或跨仓全局分数排序；'*' 不是全仓浏览，空条件不是扫描入口。
+  成本随声明成员、候选和回读增长；semantic 可能调用模型。无命中不说明范围外内容不存在。
+  不带 Dataset 或使用 --repo/--commit/--ref 会被拒绝。范围先于候选查询，不能先查范围外对象再遮正文。
 失败恢复：
-  字段被拒绝时先 schema list/schema describe；投影未就绪时查 operations projection describe，请维护者修复，不能把失败当零命中。
-  lexical 续页须保持查询、范围和版本；游标失效时核对依据后重新查询，单仓可显式复用已返回的 commit。
+  未声明、不支持、失效、未就绪与零命中分别处理；按错误定位修声明或向维护者查 operations projection describe --dataset <id>。
+  续页须保持查询与修订，撤权后下一页拒绝；游标失效时在同一修订重新开始。
 示例：
-  例：kc search --repo kr://scene/object --query 'merchandise'
-  例：kc search --dataset scene-set --query 'merchandise'
-  例：kc search --repo kr://scene/object --eq unit=CNY
-  例：kc search --repo kr://scene/object --eq 'name=Gross merchandise value'`,
+  kc search --dataset scene-set --revision 1 --query merchandise`,
 		},
-
 		"relations": {
-			Description: "列出连着对象的关系对象命中，不是邻接对象正文",
-			Usage: `kc relations (--repo <id> | --dataset <id>) --object <object-id> [--direction DIRECTED|UNDIRECTED] [--limit <n>] [--continuation <cursor>]
-
+			Description: "在 Dataset 固定修订内列出连接指定对象的关系",
+			Usage: `kc relations --dataset <id> [--revision <N>] --object <object-id> [--direction DIRECTED|UNDIRECTED] [--limit <n>] [--continuation <cursor>]
 用途：
-  找到把指定对象作为端点的关系对象，供读取关系或继续有界遍历。
+  找到以对象为端点的关系对象，按关系坐标读取或继续有界遍历。
 用法与参数：
-  --object 是对象 ID（<namespace>/<name>），单仓和 Dataset 写法相同；端点不带仓，查的是范围内存放的关系。
-  可按 --relation-type、--role 筛选；--direction 是关系的方向类型，不是 in/out。
-  --limit 默认 100、最大 1000；用 --continuation 续页。单仓可用 --commit 或 --ref 固定依据。
+  --object 是对象身份；按 --relation-type、--role、--direction 筛选，direction 表示关系方向类型。
+  --revision 固定发布版；--limit 默认 100、最大 1000，续页保持端点、条件与修订。
 条件：
-  已认证；单仓需 object.relations，命名 Dataset 以其 file.read 准入，不另要求来源仓 object.relations。
- Dataset 须通过整份选择范围的完整读取检查，单个端点放行不能替代；另行解析 pin 需 dataset.resolve。
-  固定版本的关系检索投影必须就绪。
+  已认证并持有 Dataset 完整选择范围的 file.read，固定修订的关系投影就绪。
 结果：
-  JSON hits 的 objectId 是关系对象身份，含 repository/commit/relationType/matchedRoles；不是邻居身份。
-  当前 CLI 命中视图不展开关系端点正文；按关系坐标 read 可核对端点，邻域节点请用 traverse。
+  hits 给关系对象的 repository/objectId/commit、类型与匹配角色，不是邻居正文。
 后果：
-  查询已有关系投影，不建立关系、不读取邻居正文、不把范围外引用加入 Dataset。
+  查询已有关系，不创建关系、不加入范围外引用或赋予来源仓权限。
 风险与成本：
-  高连接度对象会产生多页；结果受固定范围、权限和投影覆盖约束，不能当作所有来源的完整关系图。
-  关系查询不等于有向入边/出边查询，也不证明关系声明反映了外部源的当前事实。
+  高连接度会产生多页；固定范围的结果不代表全部来源关系图。
 失败恢复：
-  无投影时查 operations projection describe；--object 被拒绝时核对它是 <namespace>/<name> 形式的对象 ID。
-  续页保持端点、过滤和固定依据；游标失效时重新查询，单仓可复用返回的 commit，勿拼接不同版本的页。
+  投影故障查 operations projection describe --dataset <id>；游标失效在同一修订重新查询。
 示例：
-  例：kc relations --repo kr://scene/object --object example/report --direction DIRECTED
-  例：kc relations --dataset scene-set --object example/report --direction DIRECTED`,
+  kc relations --dataset scene-set --revision 1 --object trade/order-service`,
 		},
 		"traverse": {
-			Description: "在固定范围内沿关系做有界邻域遍历，不是图查询语言",
-			Usage: `kc traverse (--repo <id> | --dataset <id>) --object <object-id> --max-hops <1-8> [--min-hops <n>] [--relation-type <t>] [--role <r>] [--direction DIRECTED|UNDIRECTED] [--limit <n>] [--continuation <cursor>]
-
+			Description: "在 Dataset 固定修订内沿关系做有界邻域遍历",
+			Usage: `kc traverse --dataset <id> [--revision <N>] --object <object-id> --max-hops <1-8> [--min-hops <n>] [--relation-type <t>] [--role <r>] [--direction DIRECTED|UNDIRECTED] [--limit <n>] [--continuation <cursor>]
 用途：
-  从一个对象出发，沿获准的关系得到限定跳数的邻域闭包。
+  从对象出发取得限定跳数的邻域闭包，边界处停止。
 用法与参数：
-  --object 是起点对象 ID，单仓和 Dataset 写法相同。
-  --max-hops 必填且为 1-8；--min-hops 默认 0，须不大于 max-hops。类型、角色和方向可限制关系。
-  --limit 默认 100、最大 1000；续页须复用过滤与范围。单仓 --commit/--ref 固定来源版本。
+  --max-hops 为 1-8；--min-hops 默认 0 且不大于上限。类型、角色和方向限制关系。
+  --limit 默认 100、最大 1000；续页复用过滤、Dataset 与修订。
 条件：
-  已认证；单仓需 object.traverse，命名 Dataset 以其 file.read 准入，不另要求来源仓 object.traverse。
- Dataset 须通过整份选择范围的完整读取检查，单个起点放行不能替代；另行解析 pin 需 dataset.resolve。
-  范围内有仓持有起点 ID，所需固定版本的关系投影可用。
+  已认证并持有 Dataset 完整范围的 file.read；范围内持有起点，关系投影可用。
 结果：
-  nodes 按对象 ID 去重并给最小跳深；edges 给关系坐标及完整端点；boundary 是范围内无仓持有的端点 ID，在此停止。
-  游标返回闭包增量；完整性与未完成原因须一起检查，不枚举全部路径，也不承诺最短路径查询。
+  nodes 按身份去重并给最小跳深；edges 给关系坐标和端点，boundary 列出范围外端点。
 后果：
-  在请求固定的范围查询关系，不创建对象或关系，不追读范围外对象。
+  不追读范围外对象，不创建对象、关系或写权限。
 风险与成本：
-  跳数和关系扇出会迅速增加查询量；整个续页序列最多选择 5000 条边，达到预算不代表图已穷尽。
-  单页节点数不是闭包完整性指标；游标、预算或前沿未完成时不能把已返回片段当作全图。
+  扇出增加成本，整个续页序列最多选择 5000 条边；检查完整性与限制，不能把一页当完整图。
 失败恢复：
-  投影不可用时请维护者核对就绪版本；预算或高扇出时缩小跳数、关系类型或角色后重新遍历。
-  游标拒绝时核对固定依据，不混接不同版本的增量；临时失败可重试同一页，合并时按身份去重。
+  核对固定修订和投影状态；预算不足时缩小跳数、类型或角色重新执行。
 示例：
-  例：kc traverse --dataset scene-set --object table/orders --max-hops 3
-  例：kc traverse --repo kr://scene/object --object table/orders --max-hops 2 --relation-type owned-by`,
+  kc traverse --dataset scene-set --revision 1 --object trade/order-service --max-hops 2`,
 		},
 
 		"operations access-spec describe": {
-			Description: "查看 AccessSpec",
-			Usage: `kc operations access-spec describe (--repo <id> | --dataset <id>)
-
+			Description: "查看 Dataset 选入声明的逻辑访问概览",
+			Usage: `kc operations access-spec describe --dataset <id> [--revision <N>]
 用途：
-  查看固定来源的逻辑字段访问合同，核对哪些字段参与 Snapshot 查询或 State 访问。
+  查看选入声明提供的字段用途、成员状态和解释实例，与该 Dataset 查询使用同一范围。
 用法与参数：
-  选择 --repo 或 --dataset；单仓当前采用 published，Dataset 使用本次解析的来源选择。
-  此入口不传递 --commit/--ref，不能靠这两个 flag 指定其它单仓依据。
+  --dataset 必填，--revision 固定发布版，省略采用当前版；不会从范围外补入声明。
 条件：
-  已认证；单仓需 object.access.describe 及整仓 object.read，命名 Dataset 按其 file.read 准入，不另要求这两项来源仓动作。
-  此报告须通过整份选择范围的完整读取检查，单个对象放行不能替代；另行解析 Dataset pin 需 dataset.resolve。
-  来源已登记且可解析，所需 Schema 在合法范围内。
+  已认证并持有该 Dataset 完整范围的 file.read；Schema 引用可解析。
 结果：
-  JSON 保留固定来源依据与由 Schema 编译的逻辑 AccessSpec，并列出本次来源采用插件的用途和帮助入口。
-  可沿 kc plugin <名称> help 阅读完整说明；说明不证明支持、就绪或本次执行授权。
-  这不是引擎物理映射、就绪状态报告或一次查询的命中结果。
+  保留固定版本及 AccessSpec，并列出采用实例、能力清单版本和 kc plugin <名称> help 入口。
 后果：
-  读取并编译现有访问声明，不执行查询、不调用实时源、不建立或同步投影。
+  只读描述，不查询、不取外部值、不构建索引或发布修订。
 风险与成本：
-  成本随固定来源和 Schema 数量增长；声明能力不证明投影已就绪、后端支持所有算子或源授权可用。
-  published 或 Dataset 后续发布可改变下一次报告依据，比较报告时须同时核对返回版本。
+  成本随来源和声明数增长；描述不是物理映射或就绪证明。
 失败恢复：
-  来源或合同缺失时用 show/schema list/schema describe 核对登记与发布，请维护者修复合法选择及合同。
-  就绪问题另查 operations projection describe；不要把描述失败替换为空合同或隐式触发投影重建。
+  核对 Dataset 发布与 Schema、声明选择；就绪另查 operations projection describe --dataset <id>。
 示例：
-  例：kc operations access-spec describe --repo kr://scene/object
-  例：kc operations access-spec describe --dataset scene-set`,
+  kc operations access-spec describe --dataset scene-set --revision 1`,
 		},
 	}
 }

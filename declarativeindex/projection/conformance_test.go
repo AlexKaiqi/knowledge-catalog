@@ -16,7 +16,7 @@ func TestT8ProjectionLocateHydrateBasisLagAndRebuild(t *testing.T) {
 	repo := testfixture.MakeIndexRepository(t, "kr://acme/public/t8")
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
 	c1 := testfixture.PutAt(t, repo, root, []objectmodel.Operation{
-		testfixture.PolicyBodySchema(),
+		testfixture.PolicyBodySchema(), testfixture.PolicyBodyIndex(),
 		testkit.PutEntity("policy/P-1", map[string]any{"body": "tested runbook"}, "")[0],
 		testkit.PutEntity("policy/P-2", map[string]any{"body": "another runbook"}, "")[0],
 	})

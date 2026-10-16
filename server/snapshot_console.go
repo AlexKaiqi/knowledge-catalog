@@ -8,17 +8,11 @@ import (
 	"strings"
 )
 
-// A console link identifies a source in the already authenticated lakeFS
+// A console link identifies a source in the Server's configured lakeFS
 // instance. It conveys no credential or permission, and never guesses the
 // native repository name from a logical kr:// identity.
-func snapshotConsoleRepository(bindings []home.HomeRepo, caller identity.HTTPIdentity, id kernel.RepositoryID, configuredOrigin ...string) string {
-	origin := ""
-	if len(configuredOrigin) > 0 && caller.Principal != "" {
-		origin = configuredOrigin[0]
-	} else if caller.User != nil && caller.User.Provider == "lakefs" {
-		origin = caller.User.Issuer
-	}
-	if origin == "" {
+func snapshotConsoleRepository(bindings []home.HomeRepo, caller identity.HTTPIdentity, id kernel.RepositoryID, origin string) string {
+	if origin == "" || caller.Principal == "" {
 		return ""
 	}
 	for _, binding := range bindings {

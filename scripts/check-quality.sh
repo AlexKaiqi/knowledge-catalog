@@ -69,6 +69,6 @@ printf 'code quality passed (cyclo<=%s, file<=%s lines, duplicate<%s tokens)\n' 
 	"$max_cyclo" "$max_file_lines" "$duplicate_tokens"
 
 # Coupling ratchet (doc/engineering/quality.md, QUALITY-04): hard gate.
-# Baseline tightening requires an explicit -write-baseline run plus a TASK.md note.
+# Baseline tightening requires an explicit -write-baseline run plus a note in the task delivery under tasks/.
 printf 'coupling ratchet (strict):\n'
 "$go_bin" run ./scripts/coupling -strict

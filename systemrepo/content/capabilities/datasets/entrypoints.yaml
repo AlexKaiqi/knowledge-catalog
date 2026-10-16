@@ -40,7 +40,7 @@ schema_ref: schema/system/capability-entrypoints/v1
     {
       "action": "file.read",
       "command": "kc files read",
-      "description": "读取 Dataset 中一个交付文件的字节块，或下载完整单文件",
+      "description": "读取仓中固定版本或 Dataset 交付的文件字节，或下载完整单文件",
       "help": "kc help files read"
     }
   ]

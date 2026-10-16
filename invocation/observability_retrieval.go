@@ -174,9 +174,18 @@ func populateSearchRetrievalEvent(event *observability.RetrievalEvent, result re
 		}
 		event.Candidates = append(event.Candidates, observability.RetrievalCandidate{
 			ObjectRef: ref, Rank: i + 1, ValueDigest: kernel.CanonicalDigest(hit.Object.Value),
+			Sources:  cloneRetrievalSources(hit.Object.Sources),
 			Evidence: retrievalLaneEvidence(hit.Evidence), Observations: append([]objectmodel.UnitObservation(nil), hit.Version.Observations...),
 		})
 	}
+}
+
+func cloneRetrievalSources(sources []objectmodel.SourceBasis) []objectmodel.SourceBasis {
+	result := append([]objectmodel.SourceBasis(nil), sources...)
+	for i := range result {
+		result[i].Aspects = append([]string(nil), result[i].Aspects...)
+	}
+	return result
 }
 
 func populateRelationRetrievalEvent(event *observability.RetrievalEvent, result retrieval.RelationPage) {

@@ -8,6 +8,7 @@ import (
 	index "kc/discovery/projection"
 	"kc/kernel"
 	objectmodel "kc/object"
+	"kc/object/reader"
 )
 
 // executeSemantic serves one semantic window per fixed member (doc/design/discovery.md
@@ -38,6 +39,28 @@ func (e DatasetSearchExecutor) executeSemantic(ctx context.Context, req retrieva
 	if serving == nil {
 		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "dataset serving is unavailable")
 	}
+	if projection, ok := e.Projection.(interface {
+		datasetProjectionScope
+		SemanticDatasetWindow(context.Context, reader.MemberLookup, reader.DatasetPin, retrieval.SearchRequest, []float32) (retrieval.SearchResult, error)
+	}); ok {
+		result, err := projection.SemanticDatasetWindow(ctx, func(id kernel.RepositoryID) (objectmodel.Repository, error) {
+			return e.Repositories.Require(id, kernel.ErrObjectRefUnresolved)
+		}, serving.Pin(), req, vector)
+		if err != nil {
+			return retrieval.SearchResult{}, err
+		}
+		for i, hit := range result.Hits {
+			hit, err = e.Deliver(ctx, hit)
+			if err != nil {
+				return retrieval.SearchResult{}, err
+			}
+			result.Hits[i] = hit
+		}
+		if err := retrieval.MarkApproximate(&result, semanticWindowClaims(embedding)...); err != nil {
+			return retrieval.SearchResult{}, err
+		}
+		return result, nil
+	}
 	budgetCtx, cancel := index.WithSearchBudget(ctx, index.SearchBudget{})
 	defer cancel()
 	pin := serving.Pin()
@@ -49,7 +72,9 @@ func (e DatasetSearchExecutor) executeSemantic(ctx context.Context, req retrieva
 	})
 	plan, err := retrieval.PlanAccess(func(id kernel.RepositoryID) (objectmodel.Repository, error) {
 		return e.Repositories.Require(id, kernel.ErrObjectRefUnresolved)
-	}, pin, projectedAccessContracts(e.Projection))
+	}, pin, datasetAccessContracts(e.Projection, func(id kernel.RepositoryID) (objectmodel.Repository, error) {
+		return e.Repositories.Require(id, kernel.ErrObjectRefUnresolved)
+	}, pin))
 	if err != nil {
 		return retrieval.SearchResult{}, err
 	}
@@ -62,7 +87,9 @@ func (e DatasetSearchExecutor) executeSemantic(ctx context.Context, req retrieva
 	memberReq.Continuation = ""
 	windows := make([][]retrieval.ObjectHit, 0, len(plan.Specs))
 	for _, spec := range plan.Specs {
-		repo, err := e.Repositories.Require(spec.Repository, kernel.ErrObjectRefUnresolved)
+		repo, err := datasetMember(e.Projection, func(id kernel.RepositoryID) (objectmodel.Repository, error) {
+			return e.Repositories.Require(id, kernel.ErrObjectRefUnresolved)
+		}, serving, spec.Repository)
 		if err != nil {
 			return retrieval.SearchResult{}, err
 		}
@@ -91,6 +118,7 @@ func (e DatasetSearchExecutor) executeSemantic(ctx context.Context, req retrieva
 	result := retrieval.SearchResult{
 		SearchView: retrieval.SearchView{Snapshots: cloneCommitMap(pin.Repositories)},
 		Hits:       merged,
+		Dataset:    datasetBasis(pin),
 	}
 	claims := append(semanticWindowClaims(embedding),
 		fmt.Sprintf("recall=semantic: %d member windows merged by rank interleave", len(plan.Specs)))

@@ -8,16 +8,24 @@ import (
 	objectmodel "kc/object"
 )
 
-func TestSchemaAccessPreservesLogicalScalarsAndUnindexedCompositeValues(t *testing.T) {
+// Every logical scalar stays a valid structure type; retrieval over it is an
+// index declaration, so the same field with access is rejected (S-01/K-26).
+func TestSchemaPreservesLogicalScalarsAndUnindexedCompositeValues(t *testing.T) {
 	for _, kind := range []string{"", "string", "boolean", "number", "integer", "date", "datetime", "timestamp", "object_ref", "object_ref_list"} {
-		t.Run("access/"+kind, func(t *testing.T) {
+		t.Run("scalar/"+kind, func(t *testing.T) {
 			_, err := objectmodel.ParseSchemaDefinition("schema/sample/v1", map[string]any{
+				"entity": "Sample", "fields": map[string]any{"value": map[string]any{"type": kind}},
+			})
+			if err != nil {
+				t.Fatalf("defined scalar structure must remain valid: %v", err)
+			}
+			_, err = objectmodel.ParseSchemaDefinition("schema/sample/v1", map[string]any{
 				"entity": "Sample", "fields": map[string]any{
 					"value": map[string]any{"type": kind, "access": []any{"text", "filter", "sort"}},
 				},
 			})
-			if err != nil {
-				t.Fatalf("defined scalar access must remain valid: %v", err)
+			if kernel.CodeOf(err) != kernel.ErrSchemaUnsupported {
+				t.Fatalf("scalar field access must be rejected in favour of an index declaration: %v", err)
 			}
 		})
 	}
@@ -83,12 +91,12 @@ func TestSchemaInstanceValidationPreservesJSONNumbers(t *testing.T) {
 	}
 }
 
-func TestSchemaAccessPreservesReferenceListsAndMemberScalars(t *testing.T) {
+func TestSchemaPreservesReferenceListsAndMemberScalars(t *testing.T) {
 	definition, err := objectmodel.ParseSchemaDefinition("schema/sample/columns/v1", map[string]any{
 		"entity": "Sample", "aspect": "columns", "pattern": "keyed_collection",
 		"fields": map[string]any{
-			"name": map[string]any{"type": "string", "access": []any{"text", "filter"}},
-			"refs": map[string]any{"type": "object_ref_list", "access": []any{"filter", "sort"}},
+			"name": map[string]any{"type": "string"},
+			"refs": map[string]any{"type": "object_ref_list"},
 		},
 	})
 	if err != nil {
@@ -99,7 +107,7 @@ func TestSchemaAccessPreservesReferenceListsAndMemberScalars(t *testing.T) {
 		if err := objectmodel.ValidateSchemaInstance(address, map[string]any{
 			"name": member, "refs": []any{"sample/B", "sample/C"},
 		}, definition); err != nil {
-			t.Fatalf("defined multivalue scalar access must remain valid: %v", err)
+			t.Fatalf("defined multivalue scalar structure must remain valid: %v", err)
 		}
 	}
 }

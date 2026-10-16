@@ -221,7 +221,7 @@ func TestRemoteSearchPreservesEveryPublicOperator(t *testing.T) {
 	t.Setenv("KC_SERVER_URL", server.URL)
 	t.Setenv("KC_AS", "agent:test")
 	result := Run([]string{
-		"search", "--repo", "kr://acme/core", "--query", "runbook",
+		"search", "--dataset", "published", "--revision", "2", "--query", "runbook",
 		"--in", "owner=a,b", "--exists", "active", "--missing", "deleted",
 		"--prefix", "name=customer.", "--contains", "name=tomer", "--gt", "score=1", "--gte", "score=2",
 		"--lt", "score=9", "--lte", "score=8",

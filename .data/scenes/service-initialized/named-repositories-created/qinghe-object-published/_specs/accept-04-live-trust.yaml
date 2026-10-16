@@ -1,0 +1,39 @@
+# 插件重构验收：LiveAccess 身份与凭证。夹具见 _materials/acceptance/README.md；用例树见同文件“用例树”一节。
+# 每条从本节点前态独立开始，由 probe 显式创建所需仓与夹具，不传递其他用例的后态。
+
+- id: accept-live-untrusted-origin
+  title: 取值描述指向不可信 origin 时不扩大凭证范围
+  claims: ["liveaccess#U7"]
+  given:
+    - 成员级世界；untrusted-origin 已启动但不在部署 credentialOrigins 内；ops-shared 发布 ops/untrusted-monitor。
+    - 写入 variants/untrusted-freshness-lag.yaml，把 freshness-lag 改为引用 ops/untrusted-monitor。
+  when:
+    - 以带凭证的调用者读取 table/shop.orders 的 runtime。
+  then:
+    - untrusted-origin 收到 freshness-lag 的调用，但请求头中没有 Authorization 与 X-Tai-Identity，X-Resource-Principal 之外不带任何调用者证明。
+    - row-count 与 retention-days 照常返回；live-origin 的调用仍带调用者证明。
+  risk: 业务写一份取值描述就能把调用者凭证发往任意地址。
+
+- id: accept-live-identity-pass-through
+  title: 调用者身份逐值传给外部系统
+  claims: ["liveaccess#U16"]
+  given:
+    - 成员级世界；alice 与 bob 都能读 table-meta。
+  when:
+    - alice 与 bob 先后读取 table/shop.orders 的 runtime。
+  then:
+    - 测试源调用记录按顺序出现 X-Resource-Principal 为 alice 的两次调用和为 bob 的两次调用，没有后台身份替代。
+    - 每条记录带对应单元地址、取值描述与声明摘要，与读取结果里的观察一致。
+  risk: 外部系统看到的是服务账号或上一个调用者，无法按真实使用者授权。
+
+- id: accept-live-background-identity
+  title: 后台准备索引用服务身份，用户读取用用户身份
+  claims: ["liveaccess#U6", "discovery#U6"]
+  given:
+    - Dataset sales-analysis 发布修订 2 触发准备，table-row-count 需要 live-stats 外部值。
+  when:
+    - 等待准备完成；随后 alice 读取 table/shop.orders 的 live-stats；再触发一次后台准备。
+  then:
+    - 准备阶段的调用记录 principal 是部署配置的服务身份，与随后 alice 的读取不同；alice 读取之后的后台调用仍是服务身份。
+    - alice 的凭证不出现在后台调用里。
+  risk: 后台维护借用最近一次请求的用户身份，或用户读取冒用服务身份。

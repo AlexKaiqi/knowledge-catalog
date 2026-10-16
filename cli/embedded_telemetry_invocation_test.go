@@ -32,6 +32,15 @@ func invokeWithTelemetryAndStateAtHome(ctx context.Context, runtime *telemetry.R
 	if flags == nil {
 		flags = map[string]FlagValue{}
 	}
+	return invokeLocalApplicationWithTelemetry(ctx, runtime, command, flags, func(ctx context.Context, observation *invoke.ObservationTelemetry) (any, error) {
+		return dispatchWithStateAtHome(ctx, command, flags, state, home, observation)
+	})
+}
+
+func invokeLocalApplicationWithTelemetry(ctx context.Context, runtime *telemetry.Runtime, command string, flags map[string]FlagValue, run func(context.Context, *invoke.ObservationTelemetry) (any, error)) RunResult {
+	if flags == nil {
+		flags = map[string]FlagValue{}
+	}
 	operationStarted := inv.TelemetryStart{}
 	observation := &invoke.ObservationTelemetry{}
 	operationEnded := false
@@ -54,7 +63,7 @@ func invokeWithTelemetryAndStateAtHome(ctx context.Context, runtime *telemetry.R
 			flags["span-id"] = spanContext.SpanID().String()
 		}
 	}
-	result, err := dispatchWithStateAtHome(ctx, command, flags, state, home, observation)
+	result, err := run(ctx, observation)
 	domainElapsed := inv.TelemetrySince(operationStarted.At)
 	if home, homeErr := resolveHome(flags); homeErr == nil {
 		result, err = inv.EvidenceChain(ctx, runtime, home, command, flags, result, err)

@@ -24,29 +24,11 @@ func ConfiguredDiscoveryWorkspace(ws *home.Home) string {
 // inventoryDiscovery request flag. The public boolean expresses a request
 // context, never authority: only the Server can establish the typed marker,
 // after matching the deployment's configured discovery Workspace.
-func PrepareInventoryDiscovery(ws *home.Home, action string, flags map[string]invoke.FlagValue) error {
+func PrepareInventoryDiscovery(_ *home.Home, _ string, flags map[string]invoke.FlagValue) error {
 	delete(flags, VerifiedInventoryDiscoveryFlag)
-	if flags[InventoryDiscoveryFlag] != true {
-		return nil
+	if flags[InventoryDiscoveryFlag] == true {
+		return kernel.Fail(kernel.ErrUsageInvalid, "inventoryDiscovery is retired; select a Dataset from inventory and use its consumption permission")
 	}
-	if action != "dataset.resolve" && action != "object.search" {
-		return kernel.Fail(kernel.ErrUsageInvalid, "inventoryDiscovery is only valid for ResolveDataset and SEARCH")
-	}
-	workspace := invoke.FlagString(flags, "dataset")
-	if workspace == "" || invoke.FlagString(flags, "repo") != "" || invoke.FlagString(flags, "commit") != "" || invoke.FlagString(flags, "ref") != "" || SuppliedDataset(flags) != nil {
-		return kernel.Fail(kernel.ErrUsageInvalid, "inventoryDiscovery requires the configured published Dataset")
-	}
-	configured := ConfiguredDiscoveryWorkspace(ws)
-	if configured == "" {
-		return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "inventory has no configured discoveryWorkspaceId")
-	}
-	if workspace != configured {
-		return kernel.Fail(kernel.ErrForbidden, "Workspace is not the configured inventory discovery Workspace")
-	}
-	if action == "object.search" && invoke.FlagString(flags, "pin") == "" {
-		return kernel.Fail(kernel.ErrUsageInvalid, "inventory discovery SEARCH requires a fixed pin from ResolveDataset")
-	}
-	flags[VerifiedInventoryDiscoveryFlag] = InventoryDiscoveryContext{workspace}
 	return nil
 }
 

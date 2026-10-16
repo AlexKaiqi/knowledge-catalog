@@ -1,0 +1,9 @@
+{
+  "units": {
+    "table/shop.orders#/live-stats": {"value": {"table": "orders", "rowCount": 6}},
+    "table/shop.customers#/live-stats": {"value": {"table": "customers", "rowCount": 4}},
+    "table/shop.products#/live-stats": {"value": {"table": "products", "rowCount": 4}},
+    "table/shop.orders#/runtime/row-count": {"value": {"metric": "row_count", "value": 6, "unit": "rows", "status": "ok"}},
+    "table/shop.orders#/runtime/freshness-lag": {"value": {"metric": "freshness_lag", "value": 120, "unit": "seconds", "status": "ok"}}
+  }
+}

@@ -17,12 +17,24 @@ SPEC.loader.exec_module(tree)
 
 
 class SceneViewsTest(unittest.TestCase):
+    def test_yaml_indentless_sequences_belong_to_the_preceding_mapping_value(self):
+        text = ('fields:\n  name:\n    type: string\n    access:\n    - text\n'
+                '  other:\n    type: string\nitems:\n- one\n- two\nnext: null\n')
+        self.assertEqual(tree.load_yaml(text), {
+            'fields': {'name': {'type': 'string', 'access': ['text']}, 'other': {'type': 'string'}},
+            'items': ['one', 'two'], 'next': None})
+        with self.assertRaisesRegex(ValueError, 'duplicate key'):
+            tree.load_yaml('items:\n- id: first\n  id: second\n')
+        with self.assertRaisesRegex(ValueError, 'unexpected indent'):
+            tree.load_yaml('name:\n  value: first\n    misplaced: second\n')
+
     def test_yaml_rejects_duplicate_keys_in_each_mapping_scope(self):
         for text in (
             "views: first\nviews: second\n",
             "service:\n  gaps:\n    U2: first\n    U2: second\n",
             "evidence:\n  - id: first\n    id: second\n",
             "evidence:\n  - id: sample\n    title: first\n    title: second\n",
+            "key: first\n'key': second\n",
         ):
             with self.subTest(text=text), self.assertRaisesRegex(ValueError, "duplicate key"):
                 tree.load_yaml(text)
@@ -33,6 +45,38 @@ class SceneViewsTest(unittest.TestCase):
             "first": {"U2": "one"}, "second": {"U2": "two"},
             "evidence": [{"id": "a"}, {"id": "b"}],
         })
+
+    def test_yaml_keeps_fragments_urls_and_apostrophes_in_plain_scalars(self):
+        text = (
+            "items:\n"
+            "  - schema/table.live-stats#/fields/rowCount\n"
+            "  - 可信范围只有 http://live-origin:7400  # trailing comment\n"
+            "  - don't fall back\n"
+            "origin: http://h:1/p#frag\n"
+            "note: kept # dropped\n"
+        )
+        self.assertEqual(tree.load_yaml(text), {
+            "items": ["schema/table.live-stats#/fields/rowCount", "可信范围只有 http://live-origin:7400", "don't fall back"],
+            "origin": "http://h:1/p#frag",
+            "note": "kept",
+        })
+
+    def test_yaml_splits_mappings_only_on_colon_space(self):
+        self.assertEqual(tree.load_yaml("- id: a\n  url: http://x:1\n- http://y:2\n"),
+                         [{"id": "a", "url": "http://x:1"}, "http://y:2"])
+        self.assertEqual(tree.load_yaml("- 描述的 identity: shared\n"), [{"描述的 identity": "shared"}])
+
+    def test_yaml_parses_quoted_mapping_keys_without_splitting_quoted_values(self):
+        text = "'chapter':\n  \"key: with # text\": value\nitems:\n  - 'key': value\n  - 'text: value'\n"
+        self.assertEqual(tree.load_yaml(text), {
+            "chapter": {"key: with # text": "value"},
+            "items": [{"key": "value"}, "text: value"],
+        })
+
+    def test_yaml_rejects_text_after_a_closing_quote(self):
+        for text in ('- "customers" 返回零命中\n', "key: 'a' b\n"):
+            with self.subTest(text=text), self.assertRaisesRegex(ValueError, "quoted scalar"):
+                tree.load_yaml(text)
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

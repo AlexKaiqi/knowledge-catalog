@@ -6,7 +6,7 @@ path_hint: capabilities/search-object/definition.md
 ---
 # 搜索对象
 
-在明确仓或 Dataset 范围内按逻辑访问声明寻找候选，再按同依据回读正文。
+先从服务库存选择可消费的 Dataset，再在它的固定发布修订内按选入的索引声明寻找候选，最后按同一修订和来源版本回读正文。搜索、关系与遍历都要求 Dataset 范围，消费权不产生来源仓权限。
 
 相关说明：[Schema](../../concepts/schema/definition.md)、[派生投影](../../mechanisms/projection/definition.md)、[身份认证与授权](../../mechanisms/authorization/definition.md)。
 

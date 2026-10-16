@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	localauth "kc/identity/local"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -27,11 +28,11 @@ func TestSnapshotExternalFileViewMissingResultFailsBeforeDelivery(t *testing.T) 
 				t.Fatal(err)
 			}
 			called, released := 0, 0
-			fixture.resources.OpenView = func(context.Context, identity.HTTPIdentity, service.FileCoordinate, dataset.Service, dataset.Dataset, dataset.ResolvedDataset) (service.FileView, error) {
+			fixture.resources.OpenView = func(context.Context, identity.HTTPIdentity, service.FileCoordinate, dataset.Service, dataset.Dataset, dataset.ResolvedDataset, func(service.FileReadEvidence) error) (service.FileView, error) {
 				called++
 				return nil, nil
 			}
-			handler := service.NewHandler(service.Config{Identity: service.IdentityOptions{Local: true}, Acquire: func(context.Context, identity.HTTPIdentity, string) (service.Resources, func(), error) {
+			handler := service.NewHandler(service.Config{Identity: service.IdentityOptions{Authenticator: localauth.New()}, Acquire: func(context.Context, identity.HTTPIdentity, string) (service.Resources, func(), error) {
 				return fixture.resources, func() { released++ }, nil
 			}})
 			raw, err := json.Marshal(map[string]any{"dataset": "files", "pin": pin, "view": "semantic"})
@@ -72,11 +73,11 @@ func TestSnapshotExternalFileViewPreservesCallbackFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	called, released := 0, 0
-	fixture.resources.OpenView = func(context.Context, identity.HTTPIdentity, service.FileCoordinate, dataset.Service, dataset.Dataset, dataset.ResolvedDataset) (service.FileView, error) {
+	fixture.resources.OpenView = func(context.Context, identity.HTTPIdentity, service.FileCoordinate, dataset.Service, dataset.Dataset, dataset.ResolvedDataset, func(service.FileReadEvidence) error) (service.FileView, error) {
 		called++
 		return nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "external view unavailable")
 	}
-	handler := service.NewHandler(service.Config{Identity: service.IdentityOptions{Local: true}, Acquire: func(context.Context, identity.HTTPIdentity, string) (service.Resources, func(), error) {
+	handler := service.NewHandler(service.Config{Identity: service.IdentityOptions{Authenticator: localauth.New()}, Acquire: func(context.Context, identity.HTTPIdentity, string) (service.Resources, func(), error) {
 		return fixture.resources, func() { released++ }, nil
 	}})
 	failure := datasetHTTPCall(t, handler, http.MethodPost, "/snapshot/v1/files/file:read", map[string]any{"dataset": "files", "pin": pin, "view": "semantic"}, http.StatusServiceUnavailable)

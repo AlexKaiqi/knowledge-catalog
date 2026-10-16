@@ -64,6 +64,9 @@ func (e DatasetSearchExecutor) Execute(ctx context.Context, req retrieval.Search
 	if err := e.Authorize(ctx); err != nil {
 		return retrieval.SearchResult{}, err
 	}
+	if projection, ok := e.Projection.(datasetCorpusProjection); ok {
+		return e.executeCorpus(ctx, req, projection)
+	}
 	run, err := e.beginSearchRun(ctx, req)
 	if err != nil {
 		return retrieval.SearchResult{}, err
@@ -111,7 +114,9 @@ func (e DatasetSearchExecutor) beginSearchRun(ctx context.Context, req retrieval
 	}
 	plan, err := retrieval.PlanAccess(func(id kernel.RepositoryID) (objectmodel.Repository, error) {
 		return e.Repositories.Require(id, kernel.ErrObjectRefUnresolved)
-	}, pin, projectedAccessContracts(e.Projection))
+	}, pin, datasetAccessContracts(e.Projection, func(id kernel.RepositoryID) (objectmodel.Repository, error) {
+		return e.Repositories.Require(id, kernel.ErrObjectRefUnresolved)
+	}, pin))
 	if err != nil {
 		cancel()
 		return nil, err
@@ -132,7 +137,7 @@ func (r *datasetSearchRun) checkAccessContract() error {
 	for _, spec := range r.plan.Specs {
 		if err := retrieval.CheckSearch(r.req, spec); err != nil {
 			if kernel.CodeOf(err) == kernel.ErrCapabilityUnsatisfied {
-				return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "workspace member %s cannot satisfy SEARCH: %v; schema/* must declare the required text/filter/sort access within the dataset", spec.Repository, err)
+				return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "workspace member %s cannot satisfy SEARCH: %v; an index declaration selected into the dataset must declare the required text/filter/sort use; see searchable fields with kc schema describe --dataset %s --revision %d", spec.Repository, err, r.pin.SetID, r.pin.Revision)
 			}
 			return err
 		}
@@ -146,7 +151,7 @@ func (r *datasetSearchRun) checkAccessContract() error {
 func (r *datasetSearchRun) resolveStateMembers() error {
 	r.stateMembers = map[kernel.RepositoryID]bool{}
 	for _, member := range r.plan.Specs {
-		repo, err := r.serving.Member(member.Repository)
+		repo, err := r.member(member.Repository)
 		if err != nil {
 			return err
 		}
@@ -230,7 +235,7 @@ func (r *datasetSearchRun) restoreContinuation() error {
 // fetchMemberPage pulls one bounded page from a member, answering from the
 // State projection at its prepared revision when the member requires it.
 func (r *datasetSearchRun) fetchMemberPage(ctx context.Context, cursor *workspaceSearchCursor) (retrieval.SearchResult, error) {
-	repo, err := r.exec.Repositories.Require(cursor.spec.Repository, kernel.ErrUsageInvalid)
+	repo, err := r.member(cursor.spec.Repository)
 	if err != nil {
 		return retrieval.SearchResult{}, err
 	}
@@ -244,7 +249,7 @@ func (r *datasetSearchRun) fetchMemberPage(ctx context.Context, cursor *workspac
 		member, err = r.exec.Projection.SearchAtContext(ctx, repo, cursor.spec.Commit, memberReq)
 	}
 	if kernel.CodeOf(err) == kernel.ErrCapabilityUnsatisfied {
-		return member, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "workspace member %s cannot satisfy SEARCH: %v; schema/* must declare the required text/filter/sort access", cursor.spec.Repository, err)
+		return member, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "workspace member %s cannot satisfy SEARCH: %v; see searchable fields and readiness with kc schema describe --dataset %s --revision %d", cursor.spec.Repository, err, r.pin.SetID, r.pin.Revision)
 	}
 	return member, err
 }
@@ -378,6 +383,7 @@ func (r *datasetSearchRun) finish() (retrieval.SearchResult, error) {
 			Scope: "workspace", Query: r.queryDigest, SearchView: r.viewDigest, Members: members,
 		})
 	}
+	r.out.Dataset = datasetBasis(r.pin)
 	return r.out, nil
 }
 
@@ -587,85 +593,6 @@ func workspaceSearchHasMore(cursors []workspaceSearchCursor) bool {
 	return false
 }
 
-func bestWorkspaceHead(cursors []workspaceSearchCursor, req retrieval.SearchRequest) int {
-	best := -1
-	for i := range cursors {
-		if cursors[i].head == nil {
-			continue
-		}
-		if best < 0 || workspaceHitLess(*cursors[i].head, *cursors[best].head, req, cursors[i].sortType) {
-			best = i
-		}
-	}
-	return best
-}
-
-func workspaceHitLess(left, right retrieval.ObjectHit, req retrieval.SearchRequest, fieldTypes ...string) bool {
-	fieldType := "string"
-	if len(fieldTypes) > 0 {
-		fieldType = fieldTypes[0]
-	}
-	order, sorted := workspaceSortOrder(req)
-	if sorted {
-		leftValue, leftOK := providerOrderValue(left)
-		rightValue, rightOK := providerOrderValue(right)
-		if leftOK != rightOK {
-			return leftOK // missing values are last for both asc and desc
-		}
-		if leftOK {
-			if cmp, err := retrieval.CompareScalarValues(fieldType, leftValue, rightValue); err == nil && cmp != 0 {
-				if order == "desc" {
-					return cmp > 0
-				}
-				return cmp < 0
-			}
-		}
-	} else if workspaceHasMatch(req) {
-		leftRank, rightRank := localRank(left), localRank(right)
-		if leftRank != rightRank {
-			return leftRank < rightRank
-		}
-	}
-	if left.Object.Repository != right.Object.Repository {
-		return left.Object.Repository < right.Object.Repository
-	}
-	return left.Object.Address.ObjectID < right.Object.Address.ObjectID
-}
-
-func workspaceSortOrder(req retrieval.SearchRequest) (string, bool) {
-	clause, ok := retrieval.SearchSortClause(req)
-	if !ok {
-		return "", false
-	}
-	order := strings.ToLower(strings.TrimSpace(clause.Order))
-	if order == "" {
-		order = "asc"
-	}
-	return order, true
-}
-
-func workspaceHasMatch(req retrieval.SearchRequest) bool {
-	return retrieval.SearchHasOp(req, retrieval.OpMatch)
-}
-
-func providerOrderValue(hit retrieval.ObjectHit) (any, bool) {
-	for _, evidence := range hit.Evidence {
-		if len(evidence.ProviderOrder) > 0 && evidence.ProviderOrder[0] != nil {
-			return evidence.ProviderOrder[0], true
-		}
-	}
-	return nil, false
-}
-
-func localRank(hit retrieval.ObjectHit) int {
-	for _, evidence := range hit.Evidence {
-		if evidence.LocalRank > 0 {
-			return evidence.LocalRank
-		}
-	}
-	return int(^uint(0) >> 1)
-}
-
 func appendUniqueClaims(existing []string, claims ...string) []string {
 	for _, claim := range claims {
 		seen := false
@@ -688,6 +615,7 @@ func HydrateSearchHit(ctx context.Context, logical LogicalHydrator, hit retrieva
 		ObjectRef: raw.ObjectRef, Repository: raw.Repository, Commit: raw.Commit,
 		ObjectID: raw.Address.ObjectID, Address: raw.Address, Value: raw.Value,
 		Provenance: raw.Provenance, Units: raw.Units, Declarations: raw.Declarations,
+		Sources: raw.Sources,
 	}
 	hydrated, err := logical.Hydrate(ctx, federated, nil)
 	if err != nil {

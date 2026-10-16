@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	retrieval "kc/discovery"
 	"kc/discovery/client"
 	"kc/kernel"
 	"reflect"
@@ -39,6 +40,14 @@ func (c *recordingClient) DescribeAccessSpec(_ context.Context, r client.AccessS
 func (c *recordingClient) PluginHelp(_ context.Context, name string, _ client.RequestOptions, out any) error {
 	c.name = name
 	return c.record("plugin", nil, out)
+}
+func (c *recordingClient) PluginCapabilities(_ context.Context, name string, _ client.RequestOptions, out any) error {
+	c.name = name
+	return c.record("capabilities", nil, out)
+}
+func (c *recordingClient) TrialDeclarations(_ context.Context, name string, request retrieval.DeclarationTrialRequest, _ client.RequestOptions, out any) error {
+	c.name = name
+	return c.record("trial", request, out)
 }
 
 func TestDiscoveryCLIHelpIsLocalAndCommandDeclarationsAreIndependent(t *testing.T) {
@@ -79,35 +88,62 @@ func TestPluginCLIRejectsNonHelpTasksAndTargetsBeforeTransport(t *testing.T) {
 	}
 }
 
-func TestDiscoveryCLIUsesHostFixedContextAndKeepsRepositoryRequestsSeparate(t *testing.T) {
+func TestDiscoveryCLIUsesOnlyTheNamedDatasetAndKeepsItsFixedBasis(t *testing.T) {
 	remote := &recordingClient{}
 	pin := json.RawMessage(`{"setId":"fixed","repositories":{"kr://source":"old"}}`)
-	e := New(remote, Context{Dataset: "fixed", Pin: pin, InventoryDiscovery: true})
+	e := New(remote, Context{Dataset: "fixed", Pin: pin})
 	if _, err := e.Execute(context.Background(), "search", map[string]any{"query": "runbook", "eq": []string{"number=9007199254740993"}, "limit": "10", "continuation": "cursor"}, client.RequestOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	r := remote.request.(client.SearchRequest)
-	if r.Dataset != "fixed" || !reflect.DeepEqual(r.Pin, pin) || r.Continuation != "cursor" || r.Equal[0] != "number=9007199254740993" || !r.InventoryDiscovery {
-		t.Fatalf("fixed caller scope/operators changed: %#v", r)
+	if r.Dataset != "fixed" || !reflect.DeepEqual(r.Pin, pin) || r.Continuation != "cursor" || r.Equal[0] != "number=9007199254740993" {
+		t.Fatalf("fixed Dataset basis/operators changed: %#v", r)
 	}
-	if _, err := e.Execute(context.Background(), "search", map[string]any{"repo": "kr://direct", "commit": "c1", "query": "runbook"}, client.RequestOptions{}); err != nil {
-		t.Fatal(err)
-	}
-	r = remote.request.(client.SearchRequest)
-	if r.Repository != "kr://direct" || r.Commit != "c1" || r.Dataset != "" || len(r.Pin) != 0 || r.Definition != nil || r.InventoryDiscovery {
-		t.Fatalf("Dataset context contaminated direct repository: %#v", r)
-	}
-	for _, flags := range []map[string]any{{"repo": "r", "dataset": "d"}, {"dataset": "d", "commit": "c1"}} {
-		if err := e.Validate("search", flags); kernel.CodeOf(err) != kernel.ErrUsageInvalid {
-			t.Fatalf("mixed scope accepted: %#v err=%v", flags, err)
+	for _, path := range []string{"search", "relations", "traverse"} {
+		for _, scope := range []map[string]any{{"repo": "kr://direct"}, {"dataset": "fixed", "repo": "kr://direct"}, {"dataset": "fixed", "commit": "c1"}, {"dataset": "fixed", "ref": "release"}} {
+			flags := map[string]any{"query": "runbook", "object": "a/b", "max-hops": "1"}
+			if path == "search" {
+				delete(flags, "object")
+				delete(flags, "max-hops")
+			} else {
+				delete(flags, "query")
+				if path == "relations" {
+					delete(flags, "max-hops")
+				}
+			}
+			for name, value := range scope {
+				flags[name] = value
+			}
+			before := remote.calls
+			_, err := e.Execute(context.Background(), path, flags, client.RequestOptions{})
+			if kernel.CodeOf(err) != kernel.ErrUsageInvalid || remote.calls != before {
+				t.Fatalf("retired scope reached %s transport: %#v calls=%d err=%v", path, flags, remote.calls, err)
+			}
 		}
 	}
-	if _, err := e.Execute(context.Background(), "search", map[string]any{"repo": "r", "commit": "c1", "ref": "release", "query": "runbook"}, client.RequestOptions{}); err != nil {
-		t.Fatal(err)
+}
+
+func TestDiscoveryCLIRejectsImplicitAndTemporarySearchScopesBeforeTransport(t *testing.T) {
+	remote := &recordingClient{}
+	for _, ctx := range []Context{{}, {Pin: json.RawMessage(`{"setId":"forged"}`)}} {
+		for _, path := range []string{"search", "relations", "traverse"} {
+			flags := map[string]any{}
+			if path == "search" {
+				flags["query"] = "q"
+			} else {
+				flags["object"] = "a/b"
+				if path == "traverse" {
+					flags["max-hops"] = "1"
+				}
+			}
+			_, err := New(remote, ctx).Execute(context.Background(), path, flags, client.RequestOptions{})
+			if kernel.CodeOf(err) != kernel.ErrUsageInvalid {
+				t.Fatalf("implicit scope reached %s: %#v err=%v", path, ctx, err)
+			}
+		}
 	}
-	both := remote.request.(client.SearchRequest)
-	if both.Commit != "c1" || both.Ref != "release" {
-		t.Fatalf("existing explicit commit/ref request changed: %#v", both)
+	if remote.calls != 0 {
+		t.Fatalf("rejected implicit scopes performed %d HTTP requests", remote.calls)
 	}
 }
 

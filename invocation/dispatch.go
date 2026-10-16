@@ -86,7 +86,7 @@ func ExecuteApplicationOperation(ctx context.Context, name, action string, cmd C
 		if err := Authorize(home, action, AuthorizationFlags(cx), observation.Authorization, ws); err != nil {
 			return nil, err
 		}
-		return WithHooks(cx.WS, home, action, flags, observation, func() (any, error) { return cmd.Run(cx) })
+		return WithHooks(cx.WS, home, ActionOf(name, flags), flags, observation, func() (any, error) { return cmd.Run(cx) })
 	}
 	if cmd.Stage == invoke.StageOpen {
 		if err := Authorize(home, action, AuthorizationFlags(cx), observation.Authorization, ws); err != nil {
@@ -108,7 +108,7 @@ func ExecuteApplicationOperation(ctx context.Context, name, action string, cmd C
 		return nil, err
 	}
 	ObserveHome(ws, action, flags)
-	return WithHooks(ws, home, action, flags, observation, func() (any, error) {
+	return WithHooks(ws, home, ActionOf(name, flags), flags, observation, func() (any, error) {
 		return cmd.Run(cx)
 	})
 }
@@ -118,11 +118,11 @@ func observesInventory(name string) bool {
 }
 
 // invokeApplicationWithTelemetryAtHome is the typed-service application
-// boundary. Unlike the CLI dispatcher it receives an explicit operation and
-// therefore never consults the CLI command registry.
+// boundary. Unlike the local dispatcher it requires a verified Server
+// principal and receives an explicit operation without consulting a registry.
 func InvokeApplicationWithTelemetryAtHome(ctx context.Context, runtime *telemetry.Runtime, name, action string, op Command, flags map[string]invoke.FlagValue, state objectserving.StateLookup, opened *kchome.Home) invoke.RunResult {
-	if flags == nil {
-		flags = map[string]invoke.FlagValue{}
+	if strings.TrimSpace(invoke.FlagString(flags, "as")) == "" {
+		return ErrorResult(kernel.Fail(kernel.ErrUnauthenticated, "a verified Server principal is required"))
 	}
 	flags["_action"] = action
 	if ctx == nil {

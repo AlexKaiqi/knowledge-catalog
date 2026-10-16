@@ -13,13 +13,23 @@ const (
 )
 
 type LaneEvidence struct {
-	Provider      string     `json:"provider"`
-	Lane          string     `json:"lane"`
-	Guarantee     string     `json:"guarantee"`
-	LocalRank     int        `json:"localRank,omitempty"`
-	LocalScore    float64    `json:"localScore,omitempty"`
-	ProviderOrder []any      `json:"-"` // executor-only ordering tuple; not part of the public result protocol
-	MatchedFields []FieldRef `json:"matchedFields,omitempty"`
+	Provider      string                     `json:"provider"`
+	Lane          string                     `json:"lane"`
+	Guarantee     string                     `json:"guarantee"`
+	LocalRank     int                        `json:"localRank,omitempty"`
+	LocalScore    float64                    `json:"localScore,omitempty"`
+	ProviderOrder []any                      `json:"-"` // executor-only ordering tuple; not part of the public result protocol
+	MatchedFields []FieldRef                 `json:"matchedFields,omitempty"`
+	Members       []DeclarationParticipation `json:"members,omitempty"`
+}
+
+// DeclarationParticipation attributes a candidate to a selected declaration
+// member and the role it played at that member's fixed source version.
+type DeclarationParticipation struct {
+	Repository kernel.RepositoryID `json:"repository"`
+	Commit     kernel.CommitID     `json:"commit"`
+	Member     objectmodel.Address `json:"member"`
+	Role       string              `json:"role"`
 }
 
 type SearchView struct {
@@ -42,37 +52,50 @@ type ObjectVersion struct {
 	DeclarationCommit kernel.CommitID               `json:"declarationCommit"`
 	Units             []UnitVersion                 `json:"units"`
 	Observations      []objectmodel.UnitObservation `json:"observations,omitempty"`
+	Sources           []objectmodel.SourceBasis     `json:"sources,omitempty"`
 }
 
 type ObjectHit struct {
-	Object   objectmodel.ObjectValue `json:"object"`
-	Version  ObjectVersion           `json:"version"`
-	Evidence []LaneEvidence          `json:"evidence"`
+	Object            objectmodel.ObjectValue       `json:"object"`
+	Version           ObjectVersion                 `json:"version"`
+	Evidence          []LaneEvidence                `json:"evidence"`
+	IndexObservations []objectmodel.UnitObservation `json:"indexObservations,omitempty"`
 }
 
 type SearchResult struct {
-	RetrievalEvidenceID string               `json:"retrievalEvidenceId,omitempty"`
-	SearchView          SearchView           `json:"searchView"`
-	Completeness        Completeness         `json:"completeness"`
-	Claims              []string             `json:"claims,omitempty"`
-	Hits                []ObjectHit          `json:"hits"`
-	Continuation        string               `json:"continuation,omitempty"`
-	Stats               SearchExecutionStats `json:"-"`
+	RetrievalEvidenceID string       `json:"retrievalEvidenceId,omitempty"`
+	SearchView          SearchView   `json:"searchView"`
+	Completeness        Completeness `json:"completeness"`
+	Claims              []string     `json:"claims,omitempty"`
+	Hits                []ObjectHit  `json:"hits"`
+	Continuation        string       `json:"continuation,omitempty"`
+	// Dataset names the revision a Dataset search ran at. Later steps of the
+	// same task pass it as --revision to stay on the same frozen sources.
+	Dataset *DatasetBasis        `json:"dataset,omitempty"`
+	Stats   SearchExecutionStats `json:"-"`
+}
+
+// DatasetBasis is the named Dataset revision a consuming request resolved.
+type DatasetBasis struct {
+	ID       string `json:"id"`
+	Revision int    `json:"revision"`
 }
 
 func VersionOf(value objectmodel.ObjectValue) ObjectVersion {
 	version := ObjectVersion{
 		Repository: value.Repository, ObjectID: value.Address.ObjectID,
 		DeclarationCommit: value.Commit, Units: []UnitVersion{},
+		Sources: append([]objectmodel.SourceBasis(nil), value.Sources...),
 	}
 	declarations := value.Declarations
 	if len(declarations) == 0 {
 		declarations = []objectmodel.UnitDeclaration{{Address: value.Address, Digest: kernel.CanonicalDigest(value.Value)}}
 	}
 	for _, declaration := range declarations {
-		basis := "snapshot:" + string(value.Commit)
+		commit := observationDeclarationCommit(value, declaration)
+		basis := "snapshot:" + string(commit)
 		if declaration.ValueSource != nil && declaration.ValueSource.Kind == objectmodel.ValueSourceBinding {
-			basis = "binding-declaration:" + string(value.Commit) + ":" + string(declaration.DeclarationDigest)
+			basis = "binding-declaration:" + string(commit) + ":" + string(declaration.DeclarationDigest)
 		}
 		version.Units = append(version.Units, UnitVersion{
 			Address: declaration.Address, Digest: declaration.Digest,

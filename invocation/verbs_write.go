@@ -30,7 +30,15 @@ func VerbWriterHead(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"repository": repositoryID, "commit": commit}, nil
+	empty, known, err := snapshot.ProbeEmptyTree(repo, commit)
+	if err != nil {
+		return nil, err
+	}
+	result := map[string]any{"repository": repositoryID, "commit": commit}
+	if known {
+		result["empty"] = empty
+	}
+	return result, nil
 }
 
 func VerbDiff(cx *Invocation) (any, error) {
@@ -165,10 +173,10 @@ func CommitDesiredDir(cx *Invocation) (any, error) {
 	}
 	changeSet, _ := writer.OmitUnchanged(preview.ChangeSet, current)
 	if len(changeSet.Operations) == 0 {
-		if receipt, ok := ReplayedDesiredReceipt(cx, commandID); ok {
-			return receipt, nil
+		changeSet, err = rebuildDesiredReplay(cx, commandID, preview.ChangeSet)
+		if err != nil {
+			return nil, err
 		}
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "desired state already matches the current version")
 	}
 	SetTelemetryChangeCounts(cx.Observation, changeSet.Operations)
 	return (objectservice.CommitExecutor{Writer: cx.WS.Writer}).Execute(cx.Context,
@@ -297,16 +305,6 @@ func DesiredDiffResult(repository string, commit kernel.CommitID, ops []objectmo
 	}
 }
 
-func ReplayedDesiredReceipt(cx *Invocation, commandID string) (any, bool) {
-	entry, ok := cx.WS.Writer.Lookup(commandID)
-	if !ok || entry.Receipt.CommandID == "" {
-		return nil, false
-	}
-	receipt := entry.Receipt
-	receipt.Disposition = writer.DispositionReplayed
-	return receipt, true
-}
-
 func DecodeChangeSet(body []byte, label string) (objectmodel.CommitChangeSet, error) {
 	var raw objectmodel.CommitChangeSet
 	if err := kernel.UnmarshalJSON(body, &raw); err != nil {
@@ -349,6 +347,7 @@ func IngestDesired(flags map[string]invoke.FlagValue, dir, repoID, targetRef str
 	}
 	preview.ChangeSet.TargetRef = snapshot.RefOrDefault(targetRef)
 	preview.ChangeSet.ExpectedTargetCommit = base
+	preview.ChangeSet.BulkIngest = invoke.FlagBool(flags, "bulk")
 	return preview, nil
 }
 

@@ -1,0 +1,16 @@
+# 跨仓配套改动的前半：table-meta 的 Schema schema/table.live-stats 把 rowCount 改名为 rows（required）。
+# 只有这一半时，sales-analysis 的 table-row-count 成员指向的 #/fields/rowCount 无法解析，准备校验失败。
+# 配套的后半见 index-follows-schema.yaml。
+---
+object_id: schema/table.live-stats
+---
+entity: Table
+aspect: live-stats
+pattern: record
+fields:
+  table:
+    type: string
+    required: true
+  rows:
+    type: number
+    required: true

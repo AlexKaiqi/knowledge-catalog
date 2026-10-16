@@ -120,8 +120,12 @@ func (r *schemaResolver) resolveDescriptorRef(registry snapshot.Registry, change
 			continue
 		}
 		head, err := store.Head(snapshot.DefaultRef)
-		if err != nil || head == "" {
-			continue
+		if err != nil {
+			return err
+		}
+		if head == "" {
+			return kernel.Fail(kernel.ErrPreconditionFailed,
+				"repository %s has no published head while resolving descriptorRef %s", repoID, ref)
 		}
 		value, found, err := storeObjectValue(store, ref, head)
 		if err != nil {
@@ -164,15 +168,12 @@ func storeObjectValue(store snapshot.Store, id objectmodel.ObjectID, commit kern
 		}
 		return value.Value, true, nil
 	}
-	tree, ok := snapshot.TreeStoreOf(store)
+	tree, ok := snapshot.TreeReaderOf(store)
 	if !ok {
 		return nil, false, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
 			"repository %s has no immutable object access", store.ID())
 	}
 	units, err := readObject(tree, id, commit)
-	if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
-		return nil, false, nil
-	}
 	if err != nil {
 		return nil, false, err
 	}

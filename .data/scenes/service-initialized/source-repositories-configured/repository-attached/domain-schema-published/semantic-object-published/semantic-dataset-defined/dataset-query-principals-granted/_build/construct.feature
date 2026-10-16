@@ -1,4 +1,4 @@
-# dataset-query-principals-granted：三种人已按人配权；声明式投影已追上 HEAD。HTTP 扮演身份是停在本状态上的探。
+# dataset-query-principals-granted：三种人已按人配权；声明式投影已准备 Dataset 修订。HTTP 扮演身份是停在本状态上的探。
 
 Feature: dataset-query-principals-granted
 
@@ -8,18 +8,10 @@ Feature: dataset-query-principals-granted
       | principal | taihu:alice |
       | dataset | scene-set |
       | actions.0 | file.read |
-    When I run `kc grant add --principal taihu:alice --action object.search --repo kr://scene/object`
-    Then the output has:
-      | principal | taihu:alice |
-      | actions.0 | object.search |
     When I run `kc grant add --principal agent:copilot --action file.read --dataset scene-set`
     Then the output has:
       | principal | agent:copilot |
       | actions.0 | file.read |
-    When I run `kc grant add --principal agent:copilot --action object.search --repo kr://scene/object`
-    Then the output has:
-      | principal | agent:copilot |
-      | actions.0 | object.search |
     When I run `kc grant add --principal agent:copilot --action object.read --repo kr://scene/object`
     Then the output has:
       | principal | agent:copilot |
@@ -36,10 +28,6 @@ Feature: dataset-query-principals-granted
     Then the output has:
       | principal | agent:copilot |
       | actions.0 | object.read |
-    When I run `kc grant add --principal agent:copilot --action object.search --repo kr://scene/graph`
-    Then the output has:
-      | principal | agent:copilot |
-      | actions.0 | object.search |
     When I run `kc grant add --principal agent:copilot --action dataset.resolve --dataset scene-set`
     Then the output has:
       | principal | agent:copilot |
@@ -49,25 +37,22 @@ Feature: dataset-query-principals-granted
       | rules[].principal | taihu:alice |
       | rules[].principal | agent:copilot |
       | rules[].actions.0 | object.read |
-    When I run `kc operations projection sync --repo kr://scene/object`
+    When I run `kc operations projection sync --dataset scene-set --revision 1`
     Then the output has:
-      | repository  | kr://scene/object |
-      | basisCommit | nonempty |
-      | objectCount | nonempty |
-    When I run `kc operations projection describe --repo kr://scene/object`
+      | dataset | scene-set |
+      | revision | 1 |
+      | members.0.repository | kr://scene/graph |
+      | members.1.repository | kr://scene/object |
+      | members.0.commit | nonempty |
+      | members.1.commit | nonempty |
+    When I run `kc operations projection describe --dataset scene-set --revision 1`
     Then the output has:
-      | basisRepository | kr://scene/object |
-      | lagBehindHead   | false |
-    When I run `kc operations projection sync --repo kr://scene/graph`
-    Then the output has:
-      | repository  | kr://scene/graph |
-      | basisCommit | nonempty |
-      | objectCount | nonempty |
-    When I run `kc operations projection describe --repo kr://scene/graph`
-    Then the output has:
-      | basisRepository | kr://scene/graph |
-      | lagBehindHead   | false |
-    When I run `kc search --repo kr://scene/graph --query defines`
+      | dataset | scene-set |
+      | revision | 1 |
+      | members.0.repository | kr://scene/graph |
+      | snapshot.state | READY |
+      | members.1.repository | kr://scene/object |
+    When I run `kc search --dataset scene-set --revision 1 --query defines`
     Then 1 hit rel/defines/gmv
-    When I run `kc search --repo kr://scene/graph --query merchandise`
-    Then 0 hits
+    When I run `kc search --dataset scene-set --revision 1 --query merchandise`
+    Then 1 hit metric/gmv

@@ -10,13 +10,13 @@ schema_ref: schema/system/capability-entrypoints/v1
     {
       "action": "object.schema.read",
       "command": "kc schema describe",
-      "description": "查看 Schema 的结构、约束与附加访问声明",
+      "description": "查看 Schema 结构与约束的规范化展示；Dataset 下同时说明可检索字段与就绪状态",
       "help": "kc help schema describe"
     },
     {
       "action": "object.schema.read",
       "command": "kc schema list",
-      "description": "列出一个 Repository 已发布的对象类型，不是对象实例目录或合同正文",
+      "description": "列出一个 Repository 或 Dataset 已发布的对象类型，不是对象实例目录或合同正文",
       "help": "kc help schema list"
     }
   ]

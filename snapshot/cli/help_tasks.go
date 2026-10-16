@@ -27,8 +27,16 @@ const guideDataset = `Dataset 是命名、版本化的文件交付范围，保�
 完整旅程：kc help compose / kc help files；可复制输入：kc help recipe。
 定义查看权、管理权和文件消费权分开；固定版仍受当前权限、来源保留和退役状态约束。`
 
-const guideFiles = `消费 Dataset 的原始交付文件，不需要先学习对象、Schema 或建立检索索引。
---path 是交付树中的相对路径，不是原仓路径或对象 ID；只读已选入的材料。
+const guideFiles = `按仓和固定 commit 下载原始文件，或消费 Dataset 的交付文件；不需要 Schema、检索索引或图片处理器。
+
+对象 definition 中读到文件地址后，按其业务说明取得资源自己的仓和 commit，以及相对于原仓根目录的路径：
+  kc files read --repo <id> --commit <commit> --path <file> --out <local-file>
+仓身份使用服务中的逻辑 Repository ID；资源可以属于另一个仓，也可以采用独立于对象说明的版本。
+若正文只有相对路径，仅在业务说明明确资源与该方面同仓同版时采用该方面 sources 的 repository/commit；否则先取得完整资源坐标。
+这些字段是普通值，由 Agent 选择并调用文件命令；KC 不自动识别图片、下载或授予权限。
+按仓读取需要该仓的 file.read；object.read 不包含 file.read，不需要先创建 Dataset。
+
+按 Dataset 时，--path 是交付树中的相对路径，不是原仓路径或对象 ID；只读已选入的材料。
 
 从已有 Dataset 开始（示例 delivery，示例发布版 1）：
   kc show

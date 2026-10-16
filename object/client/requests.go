@@ -8,6 +8,7 @@ import (
 
 type ObjectDatasetIdentity struct {
 	Dataset    string           `json:"dataset,omitempty"`
+	Revision   int              `json:"revision,omitempty"`
 	Pin        json.RawMessage  `json:"pin,omitempty"`
 	Definition *dataset.Dataset `json:"definition,omitempty"`
 }
@@ -20,6 +21,7 @@ type ObjectRepoPin struct {
 
 type ObjectScope struct {
 	Dataset    string           `json:"dataset,omitempty"`
+	Revision   int              `json:"revision,omitempty"`
 	Pin        json.RawMessage  `json:"pin,omitempty"`
 	Definition *dataset.Dataset `json:"definition,omitempty"`
 	Repository string           `json:"repository,omitempty"`
@@ -56,6 +58,8 @@ type SchemaRequest struct {
 
 type SchemaPageRequest struct {
 	ObjectRepoPin
+	Dataset      string `json:"dataset,omitempty"`
+	Revision     int    `json:"revision,omitempty"`
 	Limit        int    `json:"limit,omitempty"`
 	Continuation string `json:"continuation,omitempty"`
 }

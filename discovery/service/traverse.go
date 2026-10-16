@@ -337,8 +337,8 @@ func (e DatasetTraverseExecutor) Execute(ctx context.Context, request retrieval.
 		}
 		return e.Serving.Contains(id, object)
 	})
-	// A relation object may be stored in any member, so every hop fans out
-	// across the fixed members exactly like one-hop RELATIONS does.
+	// Every hop uses the same fixed Dataset relation lane. Installed corpus
+	// providers query it once; low-level providers retain their member contract.
 	lane := DatasetRelationsExecutor{Serving: e.Serving, Repositories: e.Repositories, Projection: e.Projection}
 	return TraverseCore{Hop: lane.Execute}.Run(ctx, request, TraverseScope{
 		Snapshots: pin.Repositories, Contains: e.Serving.Holds,

@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"kc/identity"
+	_ "kc/identity/builtin"
 	"kc/internal/telemetry"
 	inv "kc/invocation"
 	"kc/invoke"
@@ -23,6 +25,7 @@ type ManagedHTTPHandler struct {
 	activate  func() error
 	lifeMu    sync.Mutex
 	closed    bool
+	started   bool
 	beginOnce sync.Once
 	once      sync.Once
 	err       error
@@ -30,15 +33,22 @@ type ManagedHTTPHandler struct {
 
 // Start activates the long-lived runtime after cold handler construction.
 // kc serve calls it before listening; embedded tasks use the same facade root.
+// A successful activation runs once; a failed activation remains retryable.
 func (h *ManagedHTTPHandler) Start() error {
 	h.lifeMu.Lock()
 	defer h.lifeMu.Unlock()
 	if h.closed {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "HTTP handler has closed")
 	}
-	if h.activate != nil {
-		return h.activate()
+	if h.started {
+		return nil
 	}
+	if h.activate != nil {
+		if err := h.activate(); err != nil {
+			return err
+		}
+	}
+	h.started = true
 	return nil
 }
 
@@ -90,32 +100,28 @@ func HTTPServerOptionsFromFlags(flags map[string]FlagValue) (HTTPServerOptions, 
 		options.StateLookup = NewHTTPStateLookup(nil)
 	}
 	mode := strings.ToLower(strings.TrimSpace(invoke.FlagString(flags, "auth")))
-	url := strings.TrimSpace(invoke.FlagString(flags, "auth-url"))
-	admins := invoke.FlagStrings(flags, "auth-admin")
-	hmac := strings.TrimSpace(invoke.FlagString(flags, "auth-hmac-secret"))
 	if mode == "" {
-		return HTTPServerOptions{}, fmt.Errorf("kc serve requires --auth %s", strings.Join(serveAuthModes(), ", "))
+		return HTTPServerOptions{}, fmt.Errorf("kc serve requires --auth %s", strings.Join(identity.Names(), ", "))
 	}
-	if mode == "local" {
-		if url != "" || len(admins) > 0 || hmac != "" {
-			return HTTPServerOptions{}, fmt.Errorf("--auth local does not accept --auth-url, --auth-admin, or --auth-hmac-secret")
-		}
-		options.AuthMode = "local"
-		return options, nil
-	}
-	authenticator, err := resolveAuthenticator(mode, flags)
+	authenticator, err := identity.Resolve(mode, serveSettings(flags))
 	if err != nil {
 		return HTTPServerOptions{}, err
 	}
 	options.AuthMode = mode
-	if mode == "lakefs" {
-		options.NativeAPIOrigin = url
-	}
 	options.Authenticator = authenticator
-	options.AdminPrincipals = admins
-
-	// Service identity (Taihu application registration)
-	options.ServiceIdentity = ResolveServiceIdentity(flags)
-
+	options.AdminPrincipals = invoke.FlagStrings(flags, "auth-admin")
+	options.LoginBroker = identity.BrokerOf(authenticator)
+	options.ServicePrincipal = identity.ServicePrincipalOf(authenticator)
 	return options, nil
+}
+
+// serveSettings adapts `kc serve` flags to the authenticator settings shape.
+type serveSettings map[string]FlagValue
+
+func (s serveSettings) String(name string) string {
+	return strings.TrimSpace(invoke.FlagString(map[string]FlagValue(s), name))
+}
+
+func (s serveSettings) Strings(name string) []string {
+	return invoke.FlagStrings(map[string]FlagValue(s), name)
 }

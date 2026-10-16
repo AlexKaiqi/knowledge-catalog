@@ -51,6 +51,20 @@ func limitFrom(flags map[string]any) (int, error) {
 	}
 	return value, nil
 }
+
+// revisionFrom reads --revision: a published Dataset revision that fixes every
+// member commit for this call, so consecutive calls see one consistent basis.
+func revisionFrom(flags map[string]any) (int, error) {
+	raw := flagString(flags, "revision")
+	if raw == "" {
+		return 0, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return 0, usage("--revision must be a positive integer")
+	}
+	return value, nil
+}
 func jsonValue(flags map[string]any) (any, error) {
 	raw := flagString(flags, "value")
 	file := flagString(flags, "file")

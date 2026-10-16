@@ -16,7 +16,7 @@ schema_ref: schema/system/capability-entrypoints/v1
     {
       "action": "inventory.read",
       "command": "kc plugin",
-      "description": "读取插件的用途、适用声明和已有任务用法",
+      "description": "读取插件说明、实例能力清单或只读试运行声明",
       "help": "kc help plugin"
     },
     {

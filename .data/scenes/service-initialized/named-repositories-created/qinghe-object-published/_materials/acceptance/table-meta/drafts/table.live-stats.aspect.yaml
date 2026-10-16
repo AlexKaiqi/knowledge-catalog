@@ -1,0 +1,13 @@
+---
+object_id: schema/table.live-stats
+---
+entity: Table
+aspect: live-stats
+pattern: record
+fields:
+  table:
+    type: string
+    required: true
+  rowCount:
+    type: number
+    required: true

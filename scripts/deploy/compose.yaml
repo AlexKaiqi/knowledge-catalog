@@ -48,6 +48,7 @@ services:
 
   lakefs:
     image: ${KC_LAKEFS_IMAGE:-treeverse/lakefs:1.86.0}
+    restart: on-failure:3
     depends_on:
       postgres:
         condition: service_healthy
@@ -56,6 +57,8 @@ services:
     ports:
       - "${KC_DEPLOY_BIND:-127.0.0.1}:${KC_DEPLOY_LAKEFS_PORT:-18000}:8000"
     environment:
+      GOMEMLIMIT: 1536MiB
+      LAKEFS_COMMITTED_SSTABLE_MEMORY_CACHE_SIZE_BYTES: "67108864"
       LAKEFS_DATABASE_TYPE: postgres
       LAKEFS_DATABASE_POSTGRES_CONNECTION_STRING: postgres://lakefs:${KC_POSTGRES_PASSWORD:-kc-lakefs-postgres}@postgres:5432/lakefs?sslmode=disable
       LAKEFS_BLOCKSTORE_TYPE: s3

@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="Knowledge Catalog 产品书：组织团队维护的对象，通过 Dataset 组合和分享内容，供人和 Agent 发现、理解与使用。">
+  <title>Knowledge Catalog · 产品书</title>
+  <style>
+    :root{--paper:#f8f9f6;--ink:#172c29;--text:#344b46;--muted:#677872;--line:#dce4df;--green:#176c52;--soft:#edf5ef;--amber:#856021;--amber-bg:#fbf5e8;--mono:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;--sans:"PingFang SC","Microsoft YaHei",system-ui,sans-serif}
+    *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:1.5rem}
+    body{margin:0;background:var(--paper);color:var(--text);font-family:var(--sans);font-size:15px;line-height:1.85;-webkit-font-smoothing:antialiased}
+    a{color:var(--green);text-underline-offset:4px}a:hover{color:var(--ink)}button{font:inherit;cursor:pointer}
+    a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid #3a9d79;outline-offset:3px;border-radius:3px}
+    h1,h2,h3,h4{color:var(--ink);line-height:1.4;margin-top:0}h2{font-size:28px;letter-spacing:-.02em;margin-bottom:12px}h3{font-size:18px;margin-bottom:8px}
+    p{margin:0 0 14px}ul{padding-left:1.3em;margin:8px 0 16px}li+li{margin-top:6px}
+    code{font-family:var(--mono);font-size:.88em;background:#eaf0eb;border-radius:4px;padding:2px 5px;overflow-wrap:anywhere}strong{color:var(--ink)}
+    .skip{position:fixed;left:16px;top:-100px;z-index:30;background:var(--ink);color:#fff;padding:8px 16px}.skip:focus{top:12px}
+    .layout{max-width:1320px;margin:auto;display:grid;grid-template-columns:220px minmax(0,1fr);gap:56px;padding:0 40px}
+    .sidebar{position:sticky;top:0;height:100vh;overflow:auto;padding:36px 0 24px;display:flex;flex-direction:column;border-right:1px solid var(--line)}
+    .brand{display:flex;align-items:center;gap:10px;margin-bottom:26px;color:var(--ink);font-weight:720;line-height:1.35}
+    .brand-mark{width:34px;height:34px;display:grid;place-items:center;background:var(--ink);color:#fff;border-radius:9px;font-size:13px}
+    .brand small{display:block;font-size:10px;letter-spacing:.16em;color:var(--muted);font-weight:500;margin-top:3px}
+    .nav-label{font-size:10px;letter-spacing:.14em;color:var(--muted);font-weight:650;margin:14px 12px 4px}
+    .toc{padding-right:18px}.toc a{display:flex;gap:12px;text-decoration:none;font-size:13px;color:var(--muted);padding:7px 12px;border-radius:6px;margin:1px 0}
+    .toc a span{font:11px var(--mono);color:#84938d;min-width:18px}.toc a:hover,.toc a[aria-current="true"]{color:var(--green);background:#eaf1eb}
+    .sidebar-foot{margin-top:auto;padding:28px 18px 0 12px;font-size:11px;color:var(--muted);line-height:1.8}
+    .main{min-width:0;padding:34px 0 60px;max-width:920px}
+    .topline{display:flex;justify-content:space-between;align-items:center;gap:16px;font-size:11px;color:var(--muted);margin-bottom:40px}
+    .edition{display:flex;align-items:center;gap:8px}.dot{width:6px;height:6px;border-radius:50%;background:var(--green)}
+    .toolbar button{background:transparent;border:1px solid var(--line);padding:5px 11px;border-radius:6px;font-size:11px;color:var(--text)}
+    .hero{border-bottom:1px solid var(--line);padding-bottom:36px}
+    .eyebrow{font-size:11px;letter-spacing:.14em;font-weight:650;color:var(--green);margin-bottom:14px}
+    h1{font-size:clamp(32px,4.2vw,48px);line-height:1.25;letter-spacing:-.04em;margin:0 0 20px;font-weight:720}
+    .intro{font-size:17px;line-height:1.9;color:var(--muted);max-width:780px;margin-bottom:26px}
+    .pillars{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+    .pillar{display:flex;flex-direction:column;padding:16px;border:1px solid var(--line);border-radius:9px;background:#fff;text-decoration:none;color:var(--text);font-size:12px;line-height:1.7}
+    .pillar:first-child{background:var(--ink);border-color:var(--ink);color:#c9dad4}
+    .pillar .n{font:11px var(--mono);color:var(--green);margin-bottom:6px}.pillar:first-child .n{color:#aac5b8}
+    .pillar b{display:block;color:var(--ink);font-size:15px;margin-bottom:6px;line-height:1.45}.pillar:first-child b{color:#fff}
+    .pillar:hover{border-color:var(--green)}
+    section{padding:46px 0 4px;scroll-margin-top:16px}
+    .heading{display:flex;align-items:baseline;gap:14px}.no{font:12px var(--mono);color:var(--green)}
+    .lead{color:var(--muted);max-width:780px;margin-bottom:22px}
+    .part{font-size:11px;letter-spacing:.16em;color:var(--green);font-weight:650;margin:56px 0 0;padding-top:18px;border-top:2px solid var(--ink)}
+    .pain{background:#fff;border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:0 8px 8px 0;padding:14px 18px;margin:14px 0 18px;font-size:13px}
+    .pain b{color:var(--amber);font-size:11px;letter-spacing:.1em;display:block;margin-bottom:4px}
+    .duo{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:16px 0}
+    .panel{background:#fff;border:1px solid var(--line);border-radius:8px;padding:18px 20px}
+    .panel h4{font-size:12px;letter-spacing:.12em;color:var(--green);margin-bottom:8px}
+    .panel ul{font-size:13px;margin:0}.panel p{font-size:13px;margin:0}
+    .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0}
+    .cell{background:#fff;border:1px solid var(--line);border-radius:8px;padding:14px 16px;font-size:13px;line-height:1.75}
+    .cell b{display:block;color:var(--ink);font-size:14px;margin-bottom:4px}
+    .cell .fix{display:block;color:var(--green);margin-top:6px;font-size:12px}
+    .table-scroll{overflow-x:auto;margin:16px 0 22px;border:1px solid var(--line);border-radius:8px;background:#fff}
+    table{border-collapse:collapse;width:100%;text-align:left;font-size:13px}
+    th{background:#eef2ed;color:var(--ink);font-size:11px;font-weight:650}th,td{padding:11px 16px;vertical-align:top;border-bottom:1px solid var(--line)}
+    tr:last-child td{border-bottom:0}td:first-child{width:20%;color:var(--ink);font-weight:550}
+    .note{padding:14px 18px;background:var(--soft);border:1px solid #dbe8de;border-radius:7px;font-size:13px;margin:16px 0}.note p:last-child{margin:0}
+    .note.warning{background:var(--amber-bg);border-color:#eadebd}.note.warning strong{color:var(--amber)}
+    .figure{margin:18px 0 22px;border:1px solid var(--line);border-radius:10px;background:#fff;padding:18px;overflow-x:auto}
+    .figure .cap{font-size:11px;color:var(--muted);margin-bottom:12px}.figure svg{width:100%;min-width:640px;height:auto;display:block}
+    .layer{display:grid;grid-template-columns:150px 1fr;gap:18px;padding:16px 0;border-bottom:1px solid var(--line)}
+    .layer:last-child{border-bottom:0}.layer .lname{font-weight:650;color:var(--ink);font-size:15px}
+    .layer .lname small{display:block;font:11px var(--mono);color:var(--green);font-weight:400}
+    .layer p{font-size:13px;margin-bottom:6px}
+    .step{position:relative;padding-left:44px;margin:24px 0 28px}
+    .step-no{position:absolute;left:0;top:2px;width:28px;height:28px;border:1px solid #bfd2c5;color:var(--green);border-radius:50%;display:grid;place-items:center;font:12px var(--mono);background:var(--soft)}
+    .step h3{font-size:17px}
+    .code{border:1px solid #263e37;border-radius:8px;overflow:hidden;margin:12px 0;background:#192f29;color:#e5ede5}
+    .code-head{display:flex;justify-content:space-between;align-items:center;padding:6px 14px;border-bottom:1px solid #355046;color:#a1bcb0;font-size:10px;letter-spacing:.08em}
+    .copy{border:0;background:transparent;color:#d3e2d7;font-size:11px;padding:2px 5px}.copy:hover{color:#fff}
+    pre{padding:14px 18px;margin:0;overflow:auto;line-height:1.75;font-size:12px}pre code{font:inherit;color:inherit;background:none;padding:0;overflow-wrap:normal}
+    .get{font-size:13px;border-left:3px solid #80ad94;padding:4px 0 4px 12px;margin:10px 0 0}.get b{color:var(--green);font-size:11px;letter-spacing:.1em;margin-right:8px}
+    details{background:#fff;border:1px solid var(--line);border-radius:8px;margin:10px 0}
+    summary{cursor:pointer;padding:12px 18px;color:var(--ink);font-weight:600;font-size:14px;list-style:none;display:flex;justify-content:space-between;gap:12px}
+    summary::-webkit-details-marker{display:none}summary::after{content:"+";color:var(--green);font-weight:400}details[open] summary::after{content:"−"}
+    details .body{padding:0 18px 12px;font-size:13px}details .body p:last-child{margin:0}
+    .not{columns:2;column-gap:32px;font-size:13px}.not li{break-inside:avoid}
+    footer{margin-top:50px;padding-top:20px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+    @media (max-width:1050px){.layout{grid-template-columns:1fr;padding:0 20px}.sidebar{display:none}.pillars{grid-template-columns:1fr 1fr}.grid3{grid-template-columns:1fr 1fr}}
+    @media (max-width:640px){.pillars,.duo,.grid3{grid-template-columns:1fr}.layer{grid-template-columns:1fr;gap:4px}.not{columns:1}h2{font-size:23px}.step{padding-left:38px}.toolbar{display:none}}
+    @media print{body{background:#fff;font-size:12px}.sidebar,.toolbar,.copy,.skip{display:none!important}.layout{display:block;padding:0}.main{max-width:none;padding:0}section{padding-top:22px}.panel,.cell,.step,details,.layer,tr,.figure{break-inside:avoid}pre{white-space:pre-wrap}a{color:var(--ink);text-decoration:none}}
+  </style>
+</head>
+<body>
+<a class="skip" href="#main">跳到正文</a>
+<div class="layout">
+  <aside class="sidebar" aria-label="目录">
+    <div class="brand"><span class="brand-mark">KC</span><span>Knowledge Catalog<small>产品书</small></span></div>
+    <nav class="toc">
+      <div class="nav-label">理解产品</div>
+      <a href="#v1"><span>01</span>把分散资料组织成对象</a>
+      <a href="#story"><span>02</span>值班场景</a>
+      <a href="#arch"><span>03</span>仓、对象与 Dataset</a>
+      <div class="nav-label">开始使用</div>
+      <a href="#agent"><span>04</span>让已有 Agent 学会使用</a>
+      <a href="#v2"><span>05</span>消费已有交付</a>
+      <a href="#howto"><span>06</span>发布并交付自己的内容</a>
+      <a href="#v3"><span>07</span>更新、反馈与复核</a>
+      <div class="nav-label">按需深入</div>
+      <a href="#v4"><span>08</span>搜索、实时值与工具</a>
+      <a href="#access"><span>09</span>权限与分享</a>
+      <a href="#not"><span>10</span>边界与阅读入口</a>
+    </nav>
+    <div class="sidebar-foot">主线：清河茶铺的订单服务告警。<br>公开指南说明完整旅程，<code>kc help</code> 给出当前命令用法。</div>
+  </aside>
+
+  <main class="main" id="main">
+    <div class="topline">
+      <div class="edition"><span class="dot"></span>面向接入方与消费方 · 从一个使用场景开始</div>
+      <div class="toolbar"><button type="button" id="expand">展开全部问答</button> <button type="button" onclick="window.print()">打印</button></div>
+    </div>
+    <header class="hero">
+      <div class="eyebrow">KNOWLEDGE CATALOG</div>
+      <h1>把业务对象说明白，<br>让人和 Agent 找得到、看得懂、用得上。</h1>
+      <p class="intro">Knowledge Catalog 让多个团队分别维护业务对象，再按用途把内容组合成 Dataset。使用者从一份交付出发，找到定义、说明和关联材料，按权限读取，并保留所用的对象与版本依据。需要搜索或外部当前状态时，再接入相应能力。</p>
+      <div class="pillars">
+        <a class="pillar" href="#v1"><span class="n">认识</span><b>同一个对象</b>身份、说明和关系一起维护</a>
+        <a class="pillar" href="#arch"><span class="n">交付</span><b>一份 Dataset</b>选定范围、固定版本、单独授权</a>
+        <a class="pillar" href="#agent"><span class="n">AI 友好</span><b>接上已有 Agent</b>从帮助逐步发现、理解和使用</a>
+        <a class="pillar" href="#v2"><span class="n">使用</span><b>按依据读取</b>核对内容、来源与版本</a>
+        <a class="pillar" href="#v3"><span class="n">持续维护</span><b>变化有据可查</b>反馈、修订、采用与复核</a>
+      </div>
+    </header>
+
+    <div class="part">第一部分 · 理解产品</div>
+    <section id="v1">
+      <div class="heading"><span class="no">01</span><h2>把分散资料组织成对象</h2></div>
+      <div class="pain"><b>从一个常见问题开始</b>订单服务告警了。服务定义在交易团队的文档里，活动安排在市场组，值班手册又是另一个文件。人和 Agent 都需要先弄清：说的是哪个服务，哪份说明有效，当前状态去哪里查。</div>
+      <p>给需要反复找到、使用和引用的东西一个稳定身份，把关于它的说明分成方面，再连接相关对象。团队继续维护自己的内容，使用者通过 Dataset 取得获准的一组材料。</p>
+      <div class="grid3">
+        <div class="cell"><b>身份稳定</b><code>service/qinghe.order-service</code> 指向下单服务。移动文件或更换来源仓不必更换对象身份；实际读取仍受范围、权限和版本可用性约束。</div>
+        <div class="cell"><b>说明可以分工</b>定义、值班手册、监控是不同方面，可以由不同团队维护。读取时只组装当前范围中选入的方面。</div>
+        <div class="cell"><b>关系带着业务含义</b>服务由哪个团队负责、受哪次活动影响、可以用哪个工具查询，都能作为有身份、有版本的关系发布。</div>
+      </div>
+      <h3>可以登记什么</h3>
+      <div class="table-scroll"><table>
+        <thead><tr><th>对象</th><th>登记的内容</th><th>对使用者的价值</th></tr></thead>
+        <tbody>
+          <tr><td>服务与告警</td><td>用途、负责人、接口、处置手册、告警条件</td><td>找到同一服务的说明，知道接下来查什么、找谁处理</td></tr>
+          <tr><td>业务概念、表与指标</td><td>概念含义、字段、作业、计算口径和生效日</td><td>查询数据前先确定对象和口径；实际计算仍需要获准的数据入口</td></tr>
+          <tr><td>商品、活动与素材</td><td>商品信息、活动安排、素材文件与使用限制</td><td>把业务背景和具体材料一起交付，复核当时采用的说明</td></tr>
+          <tr><td>CLI、MCP 服务、Skill</td><td>用途、取得方式、运行条件和操作说明</td><td>发现适合的工具，再按 Agent 的支持能力与外部系统权限安装或连接</td></tr>
+        </tbody>
+      </table></div>
+      <p>Schema 用来约束内容的结构：采用了 Schema，发布时就按它校验；没有采用时可以先保存普通说明。结构校验不能代替业务事实核实。</p>
+      <p>图片、视频、CSV、代码和文档也可以按原字节交付。只分享文件时无需先登记对象；需要让人和 Agent 理解它们时，再补身份、说明和关系。文件规模和性能取决于具体部署及实测范围。</p>
+      <div class="duo">
+        <div class="panel"><h4>谁来维护</h4><p>供给团队维护来源仓和对象，Dataset 发布者选择交付范围，授权管理者给实际使用身份发权。这些角色可以由同一人承担，也可以分工。</p></div>
+        <div class="panel"><h4>谁来使用</h4><p>人、应用和能调用 <code>kc</code> 的 Agent 共用公开入口。部署方提供服务地址、登录方式和可用能力，日常内容由团队自行维护。</p></div>
+      </div>
+    </section>
+
+    <section id="story">
+      <div class="heading"><span class="no">02</span><h2>值班场景：下单服务告警了</h2></div>
+      <p class="lead">清河茶铺秋季上新，值班同事问：“下单服务告警了，我该先看什么？”这个场景展示内容怎样被供给、交付、使用和修订。</p>
+      <div class="table-scroll"><table>
+        <thead><tr><th>环节</th><th>谁做什么</th><th>留下什么依据</th></tr></thead>
+        <tbody>
+          <tr><td>准备</td><td>交易组发布服务、处置手册、告警和工具说明；市场组发布活动首日提示</td><td>各自在来源仓形成独立版本</td></tr>
+          <tr><td>交付</td><td>发布者把值班需要的文件选入 <code>store-oncall</code>，取得各来源发布许可，并给值班身份消费权</td><td>一个固定来源版本组合的 Dataset 修订</td></tr>
+          <tr><td>读取</td><td>值班同事或 Agent 固定该修订，读取告警、服务手册和活动提示；有可用索引时也可先搜索</td><td>对象身份、所读方面、来源仓和版本</td></tr>
+          <tr><td>判断</td><td>发现活动期间预计流量上升，先核对当前流量、错误率和适用阈值，再提出处置建议</td><td>说明来自交付；当前运行数据须从获准的监控入口另取，带观察时间</td></tr>
+          <tr><td>改进</td><td>使用者反馈手册过时；维护者核实、修改并发布，再由发布者交付新修订</td><td>反馈关联旧依据，后续读取可采用新版，已有处理记录保留原依据</td></tr>
+        </tbody>
+      </table></div>
+      <div class="note"><p><strong>例子中的事实边界：</strong>随项目提供的清河茶铺材料里，健康状态是登记时的静态快照；<code>order-cli</code> 是工具交付示例，没有连接真实订单服务。读到这些材料可以理解处理步骤，不能据此断言现在的线上状态。</p></div>
+      <p>一份有用的回答会同时说清：采用哪版手册、活动提示改变了哪一步判断、哪些当前数据已经核实、哪些仍需查询。登记和引用让依据可追踪，业务结论还需要使用者核实。</p>
+      <h3>同一方式，也适用于其他场景</h3>
+      <div class="duo">
+        <div class="panel"><h4>销售分析 · qinghe-analysis</h4><p>表、字段、作业和 GMV 口径帮助分析者确定该查什么。比较口径修订可以解释统计范围变化；判断销售额为什么下降，还需查询实际订单数据并计算，不能只凭口径说明得出原因。</p></div>
+        <div class="panel"><h4>素材使用 · autumn-launch-kit</h4><p>成片、封面、字幕和渠道限制一起交付。更正字幕后发布新修订，已下发物料仍可按原修订核对。是否还能投放，要结合说明中的有效日期与实际授权判断。</p></div>
+      </div>
+      <p>清河茶铺是示例世界。只有部署方已发布这些 Dataset、且当前身份可消费时，后面的示例读取才成立；以目标服务返回的库存和修订为准。</p>
+    </section>
+
+    <section id="arch">
+      <div class="heading"><span class="no">03</span><h2>仓、对象与 Dataset 怎样配合</h2></div>
+      <p class="lead">先区分三个角色：仓是团队维护来源的边界；对象把内容解释为业务事物；Dataset 从来源文件中选择范围、固定版本并交付。Dataset 不依赖对象登记。</p>
+      <div class="figure">
+        <div class="cap">正式五层：所有 KC 请求经服务；对象解释和插件按需要使用</div>
+        <svg viewBox="0 0 860 525" role="img" aria-label="五层架构：入口、服务、可按需扩展的插件、对象、包含 Snapshot 与 Dataset 的存储底座；插件以声明式索引、LiveAccess 和扩展位三个并列竖向模块呈现，供给和消费都经过入口与服务">
+          <g font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="13" fill="#172c29">
+            <rect x="150" y="12" width="560" height="58" rx="8" fill="#172c29"/><text x="430" y="36" text-anchor="middle" fill="#fff" font-weight="600">入口层</text><text x="430" y="55" text-anchor="middle" fill="#c9dad4" font-size="11">kc · HTTP · Go SDK · 只读挂载 · 控制台</text>
+            <rect x="150" y="85" width="560" height="58" rx="8" fill="#edf5ef" stroke="#b4cebf"/><text x="430" y="109" text-anchor="middle" font-weight="600">服务层</text><text x="430" y="128" text-anchor="middle" fill="#677872" font-size="11">身份、授权、范围与版本、访问证据；装配与生命周期</text>
+            <text x="150" y="169" fill="#677872" font-size="11">插件层 · 按需扩展</text>
+            <rect x="150" y="184" width="144" height="172" rx="8" fill="#fff" stroke="#b4cebf"/>
+            <path d="M208 222H236M208 230H230M208 238H224" fill="none" stroke="#176c52" stroke-width="2" stroke-linecap="round"/>
+            <text x="222" y="278" text-anchor="middle" font-weight="600">声明式索引</text><text x="222" y="300" text-anchor="middle" fill="#677872" font-size="11">发现与查询</text>
+            <rect x="358" y="184" width="144" height="172" rx="8" fill="#fff" stroke="#b4cebf"/>
+            <path d="M416 230H444M438 224L444 230L438 236" fill="none" stroke="#176c52" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <text x="430" y="278" text-anchor="middle" font-weight="600">LiveAccess</text><text x="430" y="300" text-anchor="middle" fill="#677872" font-size="11">按需读取外部值</text>
+            <rect x="566" y="184" width="144" height="172" rx="8" fill="#fafcf9" stroke="#b4cebf" stroke-dasharray="5 5"/>
+            <path d="M628 230H648M638 220V240" fill="none" stroke="#799386" stroke-width="1.5" stroke-linecap="round"/>
+            <text x="638" y="278" text-anchor="middle" fill="#677872">扩展位</text><text x="638" y="300" text-anchor="middle" fill="#677872" font-size="16">…</text>
+            <rect x="150" y="371" width="560" height="58" rx="8" fill="#fff" stroke="#dce4df"/><text x="430" y="395" text-anchor="middle" font-weight="600">对象层</text><text x="430" y="414" text-anchor="middle" fill="#677872" font-size="11">身份、方面、关系、Schema；Writer 校验发布、Reader 按范围解释</text>
+            <rect x="150" y="444" width="560" height="68" rx="8" fill="#edf5ef" stroke="#b4cebf"/><text x="430" y="469" text-anchor="middle" font-weight="600">存储层 · Snapshot 与 Dataset</text><text x="430" y="490" text-anchor="middle" fill="#677872" font-size="11">仓与不可变版本（lakeFS）｜选文件、固定来源、组合交付</text>
+            <rect x="10" y="12" width="120" height="58" rx="8" fill="#fff" stroke="#dce4df"/><text x="70" y="36" text-anchor="middle" font-weight="600">供给方</text><text x="70" y="55" text-anchor="middle" font-size="11" fill="#677872">发布、组合、维护</text>
+            <rect x="730" y="12" width="120" height="58" rx="8" fill="#fff" stroke="#dce4df"/><text x="790" y="36" text-anchor="middle" font-weight="600">消费方</text><text x="790" y="55" text-anchor="middle" font-size="11" fill="#677872">人 · 应用 · Agent</text>
+            <path d="M130 41H150M710 41H730M430 70V85" stroke="#799386" stroke-width="1.5"/>
+          </g>
+        </svg>
+      </div>
+      <div class="layer"><div class="lname">仓<small>团队怎样维护</small></div><div><p>来源文件和提交历史保存在仓里。团队按读者、维护权限和发布节奏划分仓；一个团队可以管理多个仓，不要求一团队恰好一仓。</p></div></div>
+      <div class="layer"><div class="lname">对象<small>内容怎样被理解</small></div><div><p>对象身份不带仓，方面可以由多个团队维护。对象层只解释本次允许读取的文件，并记录每个方面的来源。对象发布经 Writer 校验；原始文件交付走文件路径，不要求先变成对象。</p></div></div>
+      <div class="layer"><div class="lname">Dataset<small>使用者拿到什么</small></div><div><p>选择一个或多个仓的目录、文件，映射成一份交付，发布时固定各来源版本。只交付文件也成立；交付对象时，应明确选入所需的方面与材料，关系不会自动把端点或其他方面补进来。</p></div></div>
+      <div class="layer"><div class="lname">插件<small>需要时怎样增强</small></div><div><p>部署安装插件，团队发布声明。索引声明随 Dataset 选入而生效，取值来源随方面或成员读取而生效。插件不发权、不改写来源；声明、能力可用与调用获权分别检查。</p></div></div>
+      <div class="layer"><div class="lname">服务与入口<small>每次访问怎样受控</small></div><div><p>使用者通过统一服务发起请求，由服务确定身份、范围与版本，检查权限并执行。命令行和 HTTP 共用动作语义；只读挂载提供文件视图，不是跨仓写入口。</p></div></div>
+      <div class="note"><p><strong>回到值班例子：</strong>交易组维护服务与手册，市场组维护活动；<code>store-oncall</code> 选入所需文件。值班同事有这份交付的消费权，不因此得到两组来源仓的维护权。只交付文件时，仍经过同一服务的范围与权限检查。</p></div>
+      <p>接下来先以消费方身份读一份已有交付，再走供给方的首次发布路径。分层职责详见<a href="architecture.md">架构</a>。</p>
+    </section>
+
+    <div class="part">第二部分 · 从读取到交付</div>
+    <section id="agent">
+      <div class="heading"><span class="no">04</span><h2>AI 友好：让已有 Agent 从帮助开始</h2></div>
+      <p class="lead">把 KC 接到你已经使用、能够执行命令并阅读结果的 Agent。KC 提供可逐步发现的帮助、业务说明和版本依据，让 Agent 按当前需要学习怎么用，再读取内容、形成判断。</p>
+      <h3>第一次，只需交代入口和目标</h3>
+      <p>先在 Agent 实际运行的环境中准备好 <code>kc</code>、服务地址与登录会话，并给实际请求身份授予所需权限。用户提供业务问题，Agent 从 <code>kc help</code> 开始；不必预先把每个对象、文件路径和命令参数都写进提示词。</p>
+      <div class="code"><div class="code-head"><span>给 Agent 的起始说明 · 环境已准备好</span><button class="copy" type="button">复制</button></div><pre><code>本机有 kc，已配置服务并登录。先运行 kc help 了解用法。
+请从可访问的内容中查明：下单服务告警后，应该先看什么？
+说明采用的资料与版本，以及还需要核实的信息。</code></pre></div>
+      <div class="grid3">
+        <div class="cell"><b>发现怎么用</b>根帮助提供入口，功能组帮助串起流程；执行前阅读叶子命令帮助，核对参数、前提、效果和失败处理。</div>
+        <div class="cell"><b>理解有什么</b>查看当前服务的库存，沿交付导读、Schema、对象说明和关系理解业务；需要扩展能力时，再读访问概览和插件帮助。</div>
+        <div class="cell"><b>按依据使用</b>选定范围与修订，读取材料并保留来源。需要当前数据时沿获准入口查询；缺内容、未就绪或无权时如实说明。</div>
+      </div>
+      <p>这条路径既服务人，也服务 Agent。已有<a href="../systemrepo/content/guides/first-read/guide.md">首次读取指南</a>与 <code>kc help consume</code> 衔接读取；准备发布自己的内容时，再沿 <code>kc help write</code> 进入<a href="../systemrepo/content/guides/first-publication/guide.md">首次发布指南</a>。</p>
+      <h3>Skill：熟悉以后，按需沉淀</h3>
+      <p>首次使用可以从这段引导直接开始，无需先创建 KC Skill。经常使用时，团队可以提供一份轻量的引导 Skill，记录何时使用 KC、从哪份帮助开始，以及团队要求的引用和输出方式；具体命令仍以当前 <code>kc help</code> 为准。</p>
+      <p>也可以让 Agent 把实际验证过的重复流程起草成 Skill，经使用者确认后，按该 Agent 支持的机制保存和复用。Skill 不存登录凭证，也不把一次读取的业务事实固化为长期规则；业务内容和版本仍在使用时从 KC 取得。</p>
+      <div class="note"><p><strong>怎样确认 Agent 已经用起来：</strong>在一个新会话里，只给入口、已有身份和业务问题，观察它能否找到相关帮助、读到获准内容，并给出可核对的答案。AI 友好描述的是这条可发现、可理解的使用路径；实际效果需要在选定的 Agent 和部署上验证。</p></div>
+      <p>CLI 自说明的设计见<a href="design/affordance.md">Affordance</a>。下面展开同一套消费流程，便于人或 Agent 逐步核对。</p>
+    </section>
+
+    <section id="v2">
+      <div class="heading"><span class="no">05</span><h2>先消费一份已有交付</h2></div>
+      <p class="lead">先准备能运行 <code>kc</code> 的环境、服务地址、受支持的登录方式和消费权限。人和 Agent 共用以下入口；示例中的内容须由目标服务提供。</p>
+      <div class="step"><span class="step-no">1</span><h3>登录，确认正在用谁的身份</h3>
+        <p>从部署方取得 <code>kc</code> 可执行文件并放入 <code>PATH</code>，把下面的示例地址换成实际服务地址。登录模式以该服务为准。</p>
+        <div class="code"><div class="code-head"><span>消费方 · 连接服务</span><button class="copy" type="button">复制</button></div><pre><code>export KC_SERVER_URL=https://kc.example.com
+kc help login
+kc login</code></pre></div>
+        <p>Taihu 登录若返回授权链接，先在浏览器完成授权，再按返回提示执行 <code>kc login --wait</code>。登录完成后用 <code>kc whoami</code> 核对身份；登录成功不等于已获业务权限。</p>
+      </div>
+      <div class="step"><span class="step-no">2</span><h3>选一份交付，固定修订再读</h3>
+        <p>用库存了解有哪些交付及其用途，再核对所选 Dataset 的消费权。下面以部署已公开的 <code>store-oncall</code> 第 1 版为例；实际使用时选定修订后，后续读取沿用同一个修订。</p>
+        <div class="code"><div class="code-head"><span>消费方 · 读取同一版</span><button class="copy" type="button">复制</button></div><pre><code>kc help consume
+kc show
+kc dataset show store-oncall --revision 1
+kc files list --dataset store-oncall --revision 1 --path services
+kc read 'urn:kc:object:service/qinghe.order-service#/runbook' --dataset store-oncall --revision 1
+kc read 'urn:kc:object:campaign/qinghe.autumn-2026' --dataset store-oncall --revision 1</code></pre></div>
+        <p>已知对象可以直接读；想查看原始文件，沿 <code>kc files list</code> 返回的路径使用 <code>kc files read</code>。搜索需要另外确认该 Dataset 的索引能力与就绪状态，见<a href="#v4">按需扩展</a>。</p>
+        <p class="get"><b>核对结果</b>读到所选修订里的手册和活动说明，并保留返回的对象、来源与版本。无权、版本不可用或缺少能力时先处理原因，不把它当成空内容。</p>
+      </div>
+      <div class="step"><span class="step-no">3</span><h3>核对答案与实际读取依据</h3>
+        <p>回到告警问题，检查回答是否引用了刚读取的手册与活动说明，并区分静态快照和当前运行数据。交给 Agent 执行时，可使用上一节的<a href="#agent">起始说明</a>；检查标准仍是实际读到的内容与依据。</p>
+        <p>KC 检查经过服务的每次访问；人或 Agent 下载工具后对外部系统的调用，还需遵守那个系统的身份与权限要求。</p>
+      </div>
+    </section>
+
+    <section id="howto">
+      <div class="heading"><span class="no">06</span><h2>发布自己的内容，并交给使用者</h2></div>
+      <p class="lead">消费路径跑通后，再准备自己的来源和交付。下面连接现有公开指南：每步说明由谁做、需要什么、怎样确认完成。尖括号中的值必须替换为自己的实际值。</p>
+      <div class="step"><span class="step-no">1</span><h3>来源维护者：确定自己的目标仓</h3>
+        <p>先确认已有仓及相应维护权。需要新仓时查看 <code>kc help create</code>；服务已能连接、但尚未登记的仓再查看 <code>kc help attach</code>。不要把公开例子的 <code>store-ops</code> 当成自己的写目标，也不要因看不到它就重复创建。</p>
+        <div class="code"><div class="code-head"><span>了解仓的准备方式</span><button class="copy" type="button">复制</button></div><pre><code>kc help repository
+kc help create
+kc help attach</code></pre></div>
+        <p class="get"><b>得到</b>自己的来源仓身份、可维护分支，以及本次发布和回读所需权限。</p>
+      </div>
+      <div class="step"><span class="step-no">2</span><h3>来源维护者：选择文件或对象的供给路径</h3>
+        <div class="duo">
+          <div class="panel"><h4>只交付文件</h4><p>已有普通文件仓、且维护者具备 lakeFS 原生写入权限时，用来源工具提交视频、CSV、代码等文件。KC 维护权不代替原生写入凭证；尚无这条供给路径时，先与来源负责人确认。取得仓、分支、路径和提交版本后，到第 4 步组合 Dataset；对象目录发布命令不负责上传任意原始文件。</p></div>
+          <div class="panel"><h4>发布对象说明</h4><p>先从公开 Dataset 取得完整的对象文件及匹配的 Schema，再整理自己的身份、正文与来源。首次发布指南已提供下载与复用路线；不要把读取响应信封或 Schema 展示结果直接当成发布文件。</p></div>
+        </div>
+        <div class="code"><div class="code-head"><span>打开已有的首次发布指南</span><button class="copy" type="button">复制</button></div><pre><code>kc help write
+kc read 'urn:kc:object:kc/guide/first-publication#/guide' --repo kr://kc/system
+kc help writer commit</code></pre></div>
+        <p>服务需已出版系统指南。也可阅读随项目提供的<a href="../systemrepo/content/guides/first-publication/guide.md">首次发布领域对象</a>：其中用公开商品样例演示“固定修订下载 Schema 和实例，再发布到自己的仓”。值班手册沿同一路径准备，所需类型与内容以自己的材料为准。</p>
+        <p class="get"><b>得到</b>一份输入完整的对象草稿，或一个已提交原始文件的来源版本。示例只用于学习格式，不替代自己的业务事实。</p>
+      </div>
+      <div class="step"><span class="step-no">3</span><h3>对象维护者：发布，并按本次回执读回</h3>
+        <p>仅对象路径需要这一步。按指南把文件放入 <code>./drafts</code>，取得当前基点后预览、提交；下面的对象 URN 要换成自己草稿中的身份。</p>
+        <div class="code"><div class="code-head"><span>对象发布 · 先替换实际值</span><button class="copy" type="button">复制</button></div><pre><code>kc writer head --repo &lt;your-repo&gt;
+kc diff --repo &lt;your-repo&gt; --base &lt;base-commit&gt; --dir ./drafts
+kc writer commit --command-id &lt;new-command-id&gt; --repo &lt;your-repo&gt; --base &lt;base-commit&gt; --dir ./drafts
+kc writer receipt --command-id &lt;new-command-id&gt;
+kc read &lt;your-object-urn&gt; --repo &lt;your-repo&gt; --commit &lt;new-commit&gt;</code></pre></div>
+        <p><code>base-commit</code> 来自 <code>writer head</code>；<code>new-commit</code> 来自提交回执的 <code>result.newCommit</code>，查回执时在 <code>receipt.result.newCommit</code>。响应丢失先查原命令标识；相同请求重试沿用原标识，修改内容后的新提交使用新标识。</p>
+        <p class="get"><b>核对结果</b>回读来自自己的仓和本次接受的提交，内容、身份与 Schema 匹配。预览成功不能代替发布成功。</p>
+      </div>
+      <div class="step"><span class="step-no">4</span><h3>Dataset 发布者：选择范围，发布交付</h3>
+        <p>先取得 Dataset 管理权和每个来源的发布许可。打开<a href="../systemrepo/content/guides/share-a-dataset/guide.md">向消费者交付 Dataset</a>，按交付用途挑选目录或文件。对象的方面、关联材料和使用说明需要明确选入，引用不会扩大交付范围。</p>
+        <div class="code"><div class="code-head"><span>进入组合指南</span><button class="copy" type="button">复制</button></div><pre><code>kc read 'urn:kc:object:kc/guide/share-a-dataset#/guide' --repo kr://kc/system
+kc help compose
+kc help dataset define
+kc help recipe</code></pre></div>
+        <p>最小例子：把来源仓中实际存在的一个目录交付到 <code>reference/</code>。替换来源仓、分支和目录；第 1 版只用于自己的全新 Dataset，后续修订应使用更大的版号。</p>
+        <div class="code"><div class="code-head"><span>选择目录 · 无需另造配方文件</span><button class="copy" type="button">复制</button></div><pre><code>kc dataset define &lt;your-dataset&gt; --revision 1 \
+  --source '&lt;your-repo&gt;=refs/heads/&lt;source-branch&gt;@reference@&lt;source-directory&gt;'
+kc dataset show &lt;your-dataset&gt; --revision 1</code></pre></div>
+        <p>对象跨多个目录时，按 <code>kc help recipe</code> 提供的完整配方继续选择所需范围。核对返回的来源提交、交付路径与修订号；需要固定预先核对的来源提交时，按帮助设置配方的版本条件。</p>
+        <p class="get"><b>得到</b>一份已经接受、范围明确的交付。发布失败先核对已接受结果和原因，不能假定全部操作都回滚了。</p>
+      </div>
+      <div class="step"><span class="step-no">5</span><h3>授权管理者：把消费权给实际使用身份</h3>
+        <p>使用者先用 <code>kc whoami</code> 确认用户名。下面由有权管理这份 Dataset 授权的人执行；查看库存或交付定义还需相应库存权限，已有权限无需重复授予。</p>
+        <div class="code"><div class="code-head"><span>授权给实际消费者</span><button class="copy" type="button">复制</button></div><pre><code>kc grant add --dataset &lt;your-dataset&gt; --principal &lt;consumer-username&gt; \
+  --action dataset.resolve,file.read</code></pre></div>
+        <p class="get"><b>得到</b>消费者可以读取这份交付，不因此取得来源整仓的读取权、维护权或重新发布权。</p>
+      </div>
+      <div class="step"><span class="step-no">6</span><h3>消费者：用自己的身份完成交接验证</h3>
+        <p>消费者在自己的已登录会话里读取发布者提供的修订。下面从刚才映射的 <code>reference/</code> 开始；遇到目录就沿其路径继续列举，选择文件条目的 <code>entries.path</code>。下载目标必须是尚不存在的本地文件。</p>
+        <div class="code"><div class="code-head"><span>消费者自己的会话</span><button class="copy" type="button">复制</button></div><pre><code>kc whoami
+kc files list --dataset &lt;your-dataset&gt; --revision 1 --path reference
+kc files read --dataset &lt;your-dataset&gt; --revision 1 --path &lt;entries.path&gt; --out &lt;new-local-file&gt;</code></pre></div>
+        <p>交付包含对象时，再按<a href="#v2">前面的对象读取例子</a>核对所需方面。对照双方约定的文件范围，确认应交付的内容可读、未选入的已知文件不能通过这个 Dataset 读取；不要用发布者的会话代替这一步。</p>
+        <p class="get"><b>完成交接</b>消费者读到了约定范围和修订，保存了来源依据，并知道反馈应交给谁。</p>
+      </div>
+    </section>
+
+    <section id="v3">
+      <div class="heading"><span class="no">07</span><h2>更新、反馈与复核</h2></div>
+      <p class="lead">一次内容更新有三个时刻：来源提交、Dataset 接受新修订、消费者采用新版。把它们分开，才知道别人究竟用到了哪一版。</p>
+      <div class="grid3">
+        <div class="cell"><b>1. 来源仓发布</b>维护者核实反馈，修改并提交。对象修改经 Writer 校验；基点已经变化时，重新读取和核对，避免覆盖他人的改动。</div>
+        <div class="cell"><b>2. 交付接受新修订</b>发布者把更新后的来源交付成新版，并核对接受结果。来源提交不会改写已有 Dataset 修订。</div>
+        <div class="cell"><b>3. 消费者采用</b>不指定修订的新请求使用当前已发布版；已固定修订的读取、已下载的文件或挂载不会因此自动换版，应明确采用更新。</div>
+      </div>
+      <p>自动跟随的设计也是“产生并接受新修订”，不会改写旧版；是否已在目标部署提供，应先确认。上面的接入流程使用显式发布，不把来源提交成功当成已交付。自动跟随及修订管理的能力进展见<a href="roadmap.md">路线</a>。</p>
+      <h3>把问题带着依据交回维护者</h3>
+      <p>反馈应包含对象、方面、所用 Dataset 修订或来源提交，以及具体问题。反馈本身不修改对象；维护者核实后再发布。需要评审时先在工作分支修订，校验和业务审核完成后再合并。</p>
+      <h3>复核时区分内容版本和外部观察</h3>
+      <p>静态内容按原版本读取，但仍检查当前权限与版本可用性。LiveAccess 的固定版本保存的是取值声明，不会把外部系统冻结在过去；复核当次状态应查原观察与证据，重新查询可能得到新值。证据保留与历史可用范围以部署策略为准。</p>
+      <h3>通过访问记录了解使用情况</h3>
+      <p>有审计权限的人可以按对象或追踪标识查经过 KC 服务的访问、来源和执行结果。记录帮助复核实际使用，不保证 Agent 的回答正确，也不覆盖绕过 KC 的底层访问和外部工具调用。</p>
+      <div class="code"><div class="code-head"><span>查看审计入口 · 需要对应权限</span><button class="copy" type="button">复制</button></div><pre><code>kc help operations audit access
+kc help operations audit trace
+kc help operations audit hitmap</code></pre></div>
+    </section>
+
+    <div class="part">第三部分 · 按需深入</div>
+    <section id="v4">
+      <div class="heading"><span class="no">08</span><h2>按需增加搜索、实时值与工具</h2></div>
+      <p class="lead">先完成基础交付，再增加实际需要的能力。部署方安装插件，团队发布声明；插件未安装、配置不支持、索引未就绪和实际无命中应分别处理。</p>
+      <h3>搜索：让使用者在交付范围里找对象</h3>
+      <p>索引声明描述要检索的字段及构建方式，选进哪个 Dataset，就为哪个范围提供检索依据。声明可被解析、插件可用、索引已就绪之后才能搜索；对象登记或 Dataset 发布本身不能代替这些条件。</p>
+      <div class="code"><div class="code-head"><span>先读部署提供的插件说明</span><button class="copy" type="button">复制</button></div><pre><code>kc help plugin
+kc help search</code></pre></div>
+      <p>从当前范围的访问概览取得实际插件名称，再用 <code>kc plugin &lt;名称&gt; help</code> 了解该实例支持的声明。搜索和回读应沿用同一个 Dataset 修订。声明形式、能力与交付状态以目标服务说明为准；设计与进展分别见<a href="design/discovery.md">发现</a>和<a href="roadmap.md">路线</a>。</p>
+      <h3>LiveAccess：按权限读取外部当前值</h3>
+      <p>健康状态、表行数等变化频繁的值，可以由方面或成员引用一份取值描述。部署具备相应能力时，平台读取外部系统返回的获准结果，并保留观察依据；某个值失败应单独说明，不能用旧快照冒充当前值。</p>
+      <div class="table-scroll"><table>
+        <thead><tr><th>谁负责</th><th>接入工作</th></tr></thead>
+        <tbody>
+          <tr><td>外部系统团队</td><td>按支持的取值协议提供入口，执行来源权限，返回值及观察依据</td></tr>
+          <tr><td>内容维护者</td><td>按插件帮助发布取值描述，再让相应方面或成员引用它</td></tr>
+          <tr><td>部署方</td><td>装配能力、确认可信目标和认证传递规则，并明确证据保留策略</td></tr>
+          <tr><td>消费者</td><td>在获准的 Dataset 中读取，核对观察时间与逐值结果</td></tr>
+        </tbody>
+      </table></div>
+      <p><strong>源库无需全量搬迁，查询结果会进入 KC 并返回使用者。</strong>当次采用的值或失败可按证据策略保存；只有明确声明结果可共享的外部值，才允许用于共享索引。凭证只传给部署信任的目标，不写入对象、索引或日志。接入前应确认这些条件符合来源系统要求。</p>
+      <div class="code"><div class="code-head"><span>外部取值说明 · 需部署提供该插件</span><button class="copy" type="button">复制</button></div><pre><code>kc plugin liveaccess help</code></pre></div>
+      <p>完整声明与身份规则见<a href="design/liveaccess.md">LiveAccess</a>；可复制的实际输入以当前插件公开指南为准。</p>
+      <h3>CLI、MCP 服务和 Skill：登记工具，再按条件使用</h3>
+      <div class="grid3">
+        <div class="cell"><b>CLI</b>说明与脚本可一起交付。使用者下载固定修订的文件，核对运行环境、帮助、配置与认证后调用。</div>
+        <div class="cell"><b>MCP 服务</b>登记用途、地址、传输与连接条件。Agent 是否支持动态添加、如何授权，由该 Agent 和服务的接入方式决定。</div>
+        <div class="cell"><b>Skill</b>交付技能说明与配套文件。使用者按目标 Agent 的技能机制安装，再核对脚本依赖和权限。</div>
+      </div>
+      <p>工具登记和文件交付提供了发现与取得的路径，不等于平台已经完成安装、连接或业务调用。清河茶铺的 <code>order-cli</code> 下载并加执行权限后，可以先运行 <code>./order-cli --help</code> 离线查看版本、用法与配置要求。执行查询前需设置 <code>ORDER_SERVICE_URL</code>；材料不预置真实订单服务或业务认证配置。工具自己的版本、认证和执行后果由工具及外部系统负责。</p>
+      <p>插件与业务工具是两类扩展：插件由部署方装配，为对象提供横切能力；业务工具作为内容发布。新增插件类型的开放范围、KC 自身的 MCP 入口等进展统一见<a href="roadmap.md">路线</a>。</p>
+    </section>
+
+    <section id="access">
+      <div class="heading"><span class="no">09</span><h2>权限与分享</h2></div>
+      <p class="lead">维护来源、组合交付、消费交付分别授权。范围和版本决定读什么，当前权限决定这次能不能读。</p>
+      <details><summary>看得到仓或 Dataset，就能读内容吗？</summary><div class="body"><p>不能这样推断。库存可见与内容可读是不同能力；实际读取仍检查当前授权。部署可以把某些 Dataset 声明为已认证用户默认可读，这不开放来源整仓或写权限。</p></div></details>
+      <details><summary>别人怎样把我的内容交付给他的用户？</summary><div class="body"><p>他需要 Dataset 管理权，并取得你对所选来源的发布许可。消费权按整份 Dataset 生效，发布者应先明确哪些文件可以交付，不能依赖来源仓的直读限制来隐藏已经选入的敏感内容。</p></div></details>
+      <details><summary>同一个对象的一部分是敏感信息，怎么办？</summary><div class="body"><p>把读者或维护权限不同的方面放到受限仓，发布 Dataset 时只选入允许交付的文件。Dataset 没选入的方面属于范围之外，不会从来源仓自动补齐。按仓范围读取时，无法读取的来源会在结果中说明，具体粒度以返回信息为准。</p></div></details>
+      <details><summary>撤回发布许可，等于收回已交付内容吗？</summary><div class="body"><p>不等于。来源发布许可控制后续发布；已有 Dataset 修订仍按其消费权限服务。要阻止后续读取，还需处理相应消费权限或交付的可用状态。已经下载到客户端的字节不能远程收回。</p></div></details>
+      <details><summary>撤销消费权以后，旧版本还能读吗？</summary><div class="body"><p>后续请求重新检查当前权限，旧版本坐标不提供通行权。已下载文件的本地副本与服务端的新读取是两回事。</p></div></details>
+      <details><summary>Agent 用谁的身份，外部系统认谁？</summary><div class="body"><p>KC 使用请求携带且经服务验证的身份；共享你的会话时就是你的身份，专用 Agent 身份需另行授权。LiveAccess 按目标规则传递认证，外部系统执行自己的权限。工具绕过 KC 的直接调用也由外部系统负责。</p></div></details>
+      <details><summary>谁能查看访问记录，权限又向谁申请？</summary><div class="body"><p>查看访问记录需要对应审计权限。业务申请走组织现有流程；可用 <code>kc admission show</code> 查看自身权限和部署提供的申请入口，平台不代替业务审批。</p></div></details>
+    </section>
+
+    <section id="not">
+      <div class="heading"><span class="no">10</span><h2>边界与下一步</h2></div>
+      <ul class="not">
+        <li>搜索用于发现对象；实际业务分析还需要事实数据、适用口径与计算依据。</li>
+        <li>文件与版本由 lakeFS 和对象存储承载。容量、吞吐、长历史与恢复能力应按具体部署验证。</li>
+        <li>多个团队各自提交，不做跨仓事务；Dataset 固定的是一组来源版本。</li>
+        <li>反馈和 Agent 推断不会自动成为权威内容，须经维护者核实并正常发布。</li>
+        <li>外部当前值有观察时间、来源权限与保留边界，不保证零延迟，也不自动保存全部历史。</li>
+        <li>当前专注发现与读取。对象可以说明怎样操作，实际操作通过外部系统自己的入口完成。</li>
+      </ul>
+      <h3 id="status">继续阅读与确认可用能力</h3>
+      <div class="table-scroll"><table>
+        <thead><tr><th>下一步</th><th>入口</th></tr></thead>
+        <tbody>
+          <tr><td>让已有 Agent 开始使用</td><td><a href="#agent">起始说明与可选 Skill</a>、<code>kc help</code>、<a href="design/affordance.md">CLI 自说明</a></td></tr>
+          <tr><td>读取已有交付</td><td><code>kc help consume</code>、<code>kc help files</code></td></tr>
+          <tr><td>首次发布对象</td><td><a href="../systemrepo/content/guides/first-publication/guide.md">首次发布领域对象</a>、<code>kc help write</code></td></tr>
+          <tr><td>组合并分享</td><td><a href="../systemrepo/content/guides/share-a-dataset/guide.md">向消费者交付 Dataset</a>、<code>kc help compose</code></td></tr>
+          <tr><td>理解概念与架构</td><td><a href="concepts.md">核心概念</a>、<a href="architecture.md">架构</a>、<a href="README.md">文档目录</a></td></tr>
+          <tr><td>核对能力与验证范围</td><td><a href="roadmap.md">路线</a>记录实现进展，目标服务的帮助与部署说明确认实际装配、可用范围和验证情况</td></tr>
+        </tbody>
+      </table></div>
+      <p>单独转发本 HTML 时，页内流程和命令入口仍可使用；关联文档链接需要一同提供仓库或文档站。已出版的系统指南也可直接通过文中的 <code>kc read</code> 入口读取。</p>
+    </section>
+    <footer>Knowledge Catalog 产品书 · 清河茶铺为示例世界 · 示例可读性以目标服务为准 · 命令以 <code>kc help</code> 的实际输出为准</footer>
+  </main>
+</div>
+<script>
+(function(){
+  document.querySelectorAll('.copy').forEach(function(b){
+    b.addEventListener('click',function(){
+      var t=b.closest('.code').querySelector('code').innerText;
+      var done=function(){b.textContent='已复制';setTimeout(function(){b.textContent='复制'},1500)};
+      function fallback(){var a=document.createElement('textarea');a.value=t;a.style.position='fixed';a.style.opacity='0';document.body.appendChild(a);a.select();try{document.execCommand('copy');done()}catch(e){b.textContent='请手动复制'}document.body.removeChild(a)}
+      if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(t).then(done,fallback)}else{fallback()}
+    });
+  });
+  var ds=document.querySelectorAll('details'),btn=document.getElementById('expand'),open=false;
+  btn.addEventListener('click',function(){open=!open;ds.forEach(function(d){d.open=open});btn.textContent=open?'收起全部问答':'展开全部问答'});
+  var saved=[];
+  window.addEventListener('beforeprint',function(){saved=[];ds.forEach(function(d){saved.push(d.open);d.open=true})});
+  window.addEventListener('afterprint',function(){ds.forEach(function(d,i){d.open=saved[i]})});
+  var links=document.querySelectorAll('.toc a'),secs=[].map.call(links,function(a){return document.querySelector(a.getAttribute('href'))});
+  if('IntersectionObserver' in window){
+    var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){var i=secs.indexOf(e.target);links.forEach(function(l,j){if(j===i){l.setAttribute('aria-current','true')}else{l.removeAttribute('aria-current')}})}})},{rootMargin:'-20% 0px -70% 0px'});
+    secs.forEach(function(s){if(s)io.observe(s)});
+  }
+})();
+</script>
+</body>
+</html>

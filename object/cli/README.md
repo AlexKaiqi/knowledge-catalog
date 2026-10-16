@@ -9,3 +9,5 @@
 `read`、`writer put/remove` 的目标只用位置参数传入对象 URN＋locator，不接受 `--reference` 或旧的 `--repo/--object/--aspect/--member/--include/--exclude`。`BindOperands()` 按模块声明绑定位置参数，使用私有类型保留其来源；`ValidateFlags()` 拒绝另行提供的目标 flag，执行器只将完整引用字符串写入 SDK 请求。不适配旧输入，也不拼装另一套 Address。读取保留显式 Dataset 消费范围及 commit/ref 版本限定；写入保留维护类型、Schema、来源与并发条件。读取选择由根 `object.Reference` 和 Reader 决定，写入维护范围由服务端与 Writer 决定。所有业务请求经 Server 和显式认证传输；帮助可本地使用。
 
 读取输出保留统一引用、实际 locator、维护坐标、摘要和逐单元来源依据。逻辑 State 结果保留 observations，来源观察不冒充固定对象正文或可写摘要。Schema describe 的完整 Definition 在 Schema 项内，不混入读取信封。resolve、log、provenance 与 Schema 命令按各自既有任务定义输入；本轮不改这些任务。
+
+`read`、`resolve`、`log`、`provenance`、`schema list`、`schema describe` 在 `--dataset` 下接受 `--revision <N>`（正整数），固定该 Dataset 已发布修订；无 `--dataset` 或同时给 `--pin` 时本地拒绝。`schema list --dataset` 返回 Dataset 交付的 Schema 页，续页须带首页同一修订。Dataset 下的 describe 视图保留每成员报告的 `dataset`、`revision` 与 `search`（就绪状态、原因与相关声明成员），字段 `access` 来自该 Dataset 选入的索引声明，形状由 `output_test.go` 钉住。

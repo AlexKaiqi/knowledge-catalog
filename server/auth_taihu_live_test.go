@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"kc/identity"
+	"kc/identity/taihu"
 )
 
 // TestLiveTaihuAuthentication talks to real Taihu introspection. It is
@@ -32,7 +33,7 @@ func TestLiveTaihuAuthentication(t *testing.T) {
 		clientID = "knowledge-catalog"
 	}
 
-	authenticator, err := NewTaihuAuthenticator("", authURL, clientID, secret, nil)
+	authenticator, err := taihu.New("", authURL, clientID, secret, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

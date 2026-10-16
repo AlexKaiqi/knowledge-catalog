@@ -23,6 +23,7 @@ type ResolvedBinding struct {
 	Mode                 objectmodel.BindingMode                 `json:"mode"`
 	Runtime              string                                  `json:"runtime"`
 	Protocol             string                                  `json:"protocol"`
+	Identity             objectmodel.ResultIdentity              `json:"identity"`
 	Operations           map[string]objectmodel.BindingOperation `json:"operations"`
 	SchemaRef            string                                  `json:"schemaRef,omitempty"`
 	Origin               string                                  `json:"origin"`
@@ -45,15 +46,22 @@ type DescriptorAt struct {
 type DescriptorScope func(objectmodel.ObjectID) (DescriptorAt, error)
 
 // ServingDescriptors resolves descriptorRef inside one fixed Serving scope.
-// The descriptor must be selected exactly once by that scope.
+// The descriptor must be selected exactly once by that scope; a descriptor the
+// scope does not select resolves at the dependency version frozen with the
+// Dataset revision, without entering the consumer-visible scope.
 func ServingDescriptors(scope *reader.Serving) DescriptorScope {
 	return func(id objectmodel.ObjectID) (DescriptorAt, error) {
 		values, err := scope.Read(id, nil)
 		if err != nil && kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 			return DescriptorAt{}, err
 		}
+		if len(values) == 0 {
+			if values, err = scope.ReadDependency(id); err != nil {
+				return DescriptorAt{}, err
+			}
+		}
 		switch {
-		case err != nil || len(values) == 0:
+		case len(values) == 0:
 			return DescriptorAt{}, kernel.Fail(kernel.ErrObjectRefUnresolved,
 				"descriptorRef %s is not readable in this request scope", id)
 		case len(values) > 1:
@@ -145,6 +153,7 @@ func ResolveDeclaration(descriptors DescriptorScope, repository kernel.Repositor
 		Mode:                 descriptor.Mode,
 		Runtime:              descriptor.Runtime,
 		Protocol:             descriptor.Protocol,
+		Identity:             descriptor.Identity,
 		Operations:           copyOperations(descriptor.Access),
 		SchemaRef:            declaration.SchemaRef,
 		Origin:               descriptor.Origin,

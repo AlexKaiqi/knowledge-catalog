@@ -17,7 +17,7 @@ var retiredRepositoryURN = regexp.MustCompile(`urn:kc:object:[a-z0-9.-]+:/`)
 
 func TestRetiredObjectIdentityShapesStayAbsent(t *testing.T) {
 	root := moduleRoot(t)
-	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+	err := walkRepositorySource(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -29,7 +29,7 @@ func TestRetiredObjectIdentityShapesStayAbsent(t *testing.T) {
 			return nil
 		}
 		ext := filepath.Ext(d.Name())
-		if rel == "TASK.md" || !identityShapeExtensions[ext] {
+		if strings.HasPrefix(filepath.ToSlash(rel), "tasks/done/") || !identityShapeExtensions[ext] {
 			return nil
 		}
 		body, readErr := os.ReadFile(path)

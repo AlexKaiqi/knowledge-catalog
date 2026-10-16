@@ -8,7 +8,15 @@
 （含 Schema 绑定方面）来自两个来源仓，以 `OBJECT_ID_CONFLICT` 拒绝，指出对象、方面与来源；
 检查由装配方经 `Conflicts` 注入（组合根 `home` 以 `reader.Serving.CheckHoldingConflicts` 装配，Dataset 解析到读取依据的唯一转换是 `home.DatasetPin`），不依赖插件配置；多来源而未注入时拒绝而不跳过。范围按 Dataset 读取的整对象规则判定。
 
-`Preparation` 对提供逐仓 `ConfiguredFor` 的贡献只准备已配置来源。未配置来源的基本发布
+`Preparation` 在冲突检查之前经必填的 `Dependencies` 冻结引用依赖：选入单元引用的取值描述不在任何
+选入仓时，找到唯一持有它的仓并把其当时的提交记入 `Dataset.Dependencies`（组合根以
+`reader.Serving.FreezeDependencies` 装配）；无持有者为 `OBJECT_REF_UNRESOLVED`，多个为
+`OBJECT_ID_CONFLICT`，未注入为 `CAPABILITY_UNSATISFIED`。`Execute` 返回带依赖的候选；`DatasetPublisher`
+只接受依赖的变化，SetID、修订与来源被改写时以 `PRECONDITION_FAILED` 拒绝。
+
+`Preparation.PrepareDataset` 把包含范围、来源版本和引用依赖的固定候选一次交给注入的准备口；
+组合根用 `home.DatasetPin` 转换并调用实例的 Dataset corpus 准备，不在发布执行器重复解释读取范围。
+仅逐仓贡献沿既有 `Provider` 路径；对提供 `ConfiguredFor` 的贡献只准备已配置来源。未配置来源的基本发布
 和固定文件/Object 读取独立；不可读或缺实现的配置仍属于必需准备，沿原错误拒绝新发布版。
 显式索引准备与查询不会因此获得未配置来源的能力。
 

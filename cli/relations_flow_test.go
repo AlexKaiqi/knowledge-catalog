@@ -62,11 +62,15 @@ func TestRelationsWithoutIndexNeverFallsBackToAuthorityScan(t *testing.T) {
 	body(t, kc(home, "store-set", "--index", "none"))
 	seedRepo(t, home, repository)
 	seedRelation(t, home, repository)
+	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", repository+"=refs/heads/main@"))
 
 	// The lakeFS authority stays Canonical and exact object reads still work.
-	body(t, kc(home, "read", testObjectReference(t, repository, "relation/owned", ""), "--repo", repository))
+	read := asMap(t, body(t, kc(home, "read", testObjectReference(t, repository, "relation/owned", ""), "--dataset", "agent", "--revision", "1")))
+	if read["objectId"] != "relation/owned" {
+		t.Fatalf("missing-index fixture must still deliver the fixed relation through its Dataset: %#v", read)
+	}
 	// Candidate discovery has no authority fallback when the local profile has index:none.
-	expectCode(t, kc(home, "relations", "--repo", repository, "--object", "table/orders"), "CAPABILITY_UNSATISFIED")
+	expectCode(t, kc(home, "relations", "--dataset", "agent", "--object", "table/orders"), "CAPABILITY_UNSATISFIED")
 	events, err := observability.NewFileStore(home).Retrieval(observability.RetrievalQuery{
 		Operator: observability.RetrievalOperatorRelation, Outcome: "ERROR",
 	})
@@ -75,7 +79,7 @@ func TestRelationsWithoutIndexNeverFallsBackToAuthorityScan(t *testing.T) {
 	}
 }
 
-func TestRelationRepositoryWorkspaceAndHTTPUseOneExactBasisExecutor(t *testing.T) {
+func TestRelationDatasetCLIAndHTTPUseOneExactBasisExecutor(t *testing.T) {
 	opensearchURL := strings.TrimSpace(os.Getenv("KC_TEST_OPENSEARCH_URL"))
 	if opensearchURL == "" {
 		if os.Getenv("KC_REQUIRE_LIVE_ADAPTERS") == "1" {
@@ -91,9 +95,9 @@ func TestRelationRepositoryWorkspaceAndHTTPUseOneExactBasisExecutor(t *testing.T
 	seedRepo(t, home, repository)
 	seedRelation(t, home, repository)
 	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", repository+"=refs/heads/main@"))
-	syncIndexes(t, home, repository)
+	syncIndexes(t, home, "agent")
 
-	repositoryResult := body(t, kc(home, "relations", "--repo", repository, "--object", "table/orders",
+	repositoryResult := body(t, kc(home, "relations", "--dataset", "agent", "--object", "table/orders",
 		"--relation-type", "owned-by", "--role", "subject", "--direction", "DIRECTED"))
 	// Contract lock: relation hits carry the Relation object's own coordinates;
 	// neighbor objects live only inside the relation endpoints, never at the
@@ -101,21 +105,20 @@ func TestRelationRepositoryWorkspaceAndHTTPUseOneExactBasisExecutor(t *testing.T
 	if id := relationHitID(t, repositoryResult); id != "relation/owned" {
 		t.Fatalf("relations hits must carry the relation object coordinate, got %q", id)
 	}
-	zeroLimit := body(t, kc(home, "relations", "--repo", repository, "--object", "table/orders",
+	zeroLimit := body(t, kc(home, "relations", "--dataset", "agent", "--object", "table/orders",
 		"--relation-type", "owned-by", "--role", "subject", "--direction", "DIRECTED", "--limit", "0"))
 	if relationHitID(t, zeroLimit) != relationHitID(t, repositoryResult) {
 		t.Fatalf("relations --limit 0 must mean the default page")
 	}
-	expectCode(t, kc(home, "relations", "--repo", repository, "--object", "table/orders", "--limit", "1001"), "USAGE_INVALID")
+	expectCode(t, kc(home, "relations", "--dataset", "agent", "--object", "table/orders", "--limit", "1001"), "USAGE_INVALID")
 	workspaceResult := body(t, kc(home, "relations", "--dataset", "agent", "--object", "table/orders",
 		"--relation-type", "owned-by", "--role", "subject", "--direction", "DIRECTED"))
 	if repositoryID, setID := relationHitID(t, repositoryResult), relationHitID(t, workspaceResult); repositoryID != setID {
-		t.Fatalf("repository/workspace relation executor drift: %q != %q", repositoryID, setID)
+		t.Fatalf("fixed Dataset relation executor drift: %q != %q", repositoryID, setID)
 	}
 
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--dataset", "agent"))
-	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "object.relations", "--repo", repository))
-	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "object.read", "--repo", repository))
+	expectCode(t, kc(home, "read", "urn:kc:object:relation/owned", "--repo", repository, "--as", "agent:http-test"), "FORBIDDEN")
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = closer.Close() })

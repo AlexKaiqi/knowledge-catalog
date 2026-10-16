@@ -9,7 +9,7 @@ aspect: interfaces
 pattern: keyed_collection
 additionalProperties: false
 fields:
-  interfaceRef: {type: string, required: true, access: [filter]}
+  interfaceRef: {type: string, required: true}
   runtime: {type: string, required: true}
   protocol: {type: string, required: true}
   origin: {type: string, required: true}

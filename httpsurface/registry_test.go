@@ -7,11 +7,14 @@ import (
 
 func TestRegistryIsTheReviewedPublicHTTPSurface(t *testing.T) {
 	got := Patterns()
-	if len(got) != 89 {
-		t.Fatalf("HTTP registry count changed from the reviewed 89 to %d", len(got))
+	if len(got) != 90 {
+		t.Fatalf("HTTP registry count changed from the reviewed 90 to %d", len(got))
 	}
 	seen := map[string]bool{}
 	for _, pattern := range got {
+		if pattern == "POST /operations/v1/projections:notice" {
+			t.Errorf("HTTP exposes retired public projection notice: %s", pattern)
+		}
 		if seen[pattern] {
 			t.Errorf("duplicate HTTP pattern %s", pattern)
 		}
@@ -28,6 +31,7 @@ func TestRegistryIsTheReviewedPublicHTTPSurface(t *testing.T) {
 	// as an unreviewed change in the total surface.
 	for _, pattern := range []string{
 		"GET /object/v1/plugins/{name}",
+		"GET /object/v1/plugins/{name}/capabilities", "POST /object/v1/plugins/{name}/declarations:trial",
 		"POST /object/v1/objects:put", "POST /object/v1/objects:remove",
 		"GET /repositories/{repository}", "GET /assets/repository.js",
 		"GET /console", "GET /assets/console.js",

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	retrieval "kc/discovery"
-	consumerplugin "kc/discovery/plugin"
 	index "kc/discovery/projection"
 	apphome "kc/home"
 	"kc/internal/testkit"
@@ -19,6 +18,7 @@ import (
 	"kc/kernel"
 	objectmodel "kc/object"
 	"kc/snapshot"
+	"kc/snapshot/dataset"
 )
 
 type connectedHandlerFixture struct {
@@ -57,15 +57,15 @@ func newConnectedHandlerFixture(t *testing.T) *connectedHandlerFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.writeConfig(t, []consumerplugin.PluginSelection{{Name: "declarative-index", Instance: "main"}})
 	repo := testkit.OpenRepository(t, f.source)
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
 	at, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: id, TargetRef: snapshot.DefaultRef, BaseCommit: root, ExpectedTargetCommit: root,
 		Operations: []objectmodel.Operation{
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/article"}, Value: map[string]any{
-				"entity": "Article", "fields": map[string]any{"body": map[string]any{"type": "string", "access": []any{"text"}}},
+				"entity": "Article", "fields": map[string]any{"body": map[string]any{"type": "string"}},
 			}},
+			testkit.IndexText("schema/article", "body"),
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "article/current"}, SchemaRef: "schema/article", Value: map[string]any{
 				"body": "runbook from connected authority", "detail": "canonical field outside the index declaration",
 			}},
@@ -81,7 +81,7 @@ func newConnectedHandlerFixture(t *testing.T) *connectedHandlerFixture {
 	cfg, path := declaredFileGateway(t)
 	f.configPath, f.principal = path, cfg.BootstrapPrincipal
 	cfg.Connections = &apphome.ConnectionPolicy{AllowedOrigins: []string{provider.Origin()}, CreatorActions: []string{
-		"repository.connections.manage", "repository.metadata.read", "object.read", "object.search",
+		"repository.connections.manage", "repository.metadata.read", "object.read",
 	}}
 	cfg.Stores.Index = "opensearch"
 	namespace := string(kernel.CanonicalDigest(t.TempDir()))
@@ -110,6 +110,11 @@ func newConnectedHandlerFixture(t *testing.T) *connectedHandlerFixture {
 	if err := ws.AttachRepository(id); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := ws.Datasets.DefineDataset("connected-articles", 1, []dataset.DatasetSource{{
+		Repository: id, Selector: snapshot.DefaultRef, BaseRev: string(at), Path: dataset.MountPath("articles"),
+	}}); err != nil {
+		t.Fatal(err)
+	}
 	if err := ws.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -121,19 +126,6 @@ func newConnectedHandlerFixture(t *testing.T) *connectedHandlerFixture {
 		t.Fatal(err)
 	}
 	return f
-}
-
-func (f *connectedHandlerFixture) writeConfig(t *testing.T, selections []consumerplugin.PluginSelection) {
-	t.Helper()
-	raw, err := json.Marshal(consumerplugin.RepositoryPluginConfig{Version: 1, Plugins: selections})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := f.source.(interface{ WriteRepositoryMetadata(map[string]string) error }).WriteRepositoryMetadata(map[string]string{
-		consumerplugin.RepositoryPluginsKey: string(raw),
-	}); err != nil {
-		t.Fatal(err)
-	}
 }
 
 func (f *connectedHandlerFixture) handler(t *testing.T) http.Handler {
@@ -149,7 +141,7 @@ func (f *connectedHandlerFixture) handler(t *testing.T) http.Handler {
 func (f *connectedHandlerFixture) query(t *testing.T, handler http.Handler) retrieval.SearchResult {
 	t.Helper()
 	response := fileGatewayRequest(t, handler, f.principal, "/object/v1/search", map[string]any{
-		"repository": f.canonical.Repository, "commit": f.canonical.Commit, "query": "runbook", "limit": 10,
+		"dataset": "connected-articles", "revision": 1, "query": "runbook", "limit": 10,
 	})
 	if response.Code != http.StatusOK {
 		t.Fatalf("activated handler query failed: status=%d body=%s", response.Code, response.Body.String())
@@ -175,15 +167,25 @@ func (f *connectedHandlerFixture) waitForStartedProjection(t *testing.T, handler
 	var last string
 	for time.Now().Before(deadline) {
 		response := fileGatewayRequest(t, handler, f.principal, "/operations/v1/projections:describe", map[string]any{
-			"repository": f.canonical.Repository, "commit": f.canonical.Commit,
+			"dataset": "connected-articles", "revision": 1,
 		})
 		last = response.Body.String()
-		var descriptor index.IndexDescriptor
-		if response.Code == http.StatusOK && json.Unmarshal(response.Body.Bytes(), &descriptor) == nil &&
-			descriptor.State == index.ProjectionStateReady && descriptor.BasisCommit == f.canonical.Commit {
+		var result struct {
+			Dataset  string `json:"dataset"`
+			Revision int    `json:"revision"`
+			Members  []struct {
+				Repository kernel.RepositoryID `json:"repository"`
+				Commit     kernel.CommitID     `json:"commit"`
+			} `json:"members"`
+			Snapshot index.IndexDescriptor `json:"snapshot"`
+		}
+		if response.Code == http.StatusOK && json.Unmarshal(response.Body.Bytes(), &result) == nil &&
+			result.Dataset == "connected-articles" && result.Revision == 1 && len(result.Members) == 1 &&
+			result.Members[0].Repository == f.canonical.Repository && result.Members[0].Commit == f.canonical.Commit &&
+			result.Snapshot.State == index.ProjectionStateReady {
 			return
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	t.Fatalf("started actual worker never prepared its fixed published basis: %s", last)
+	t.Fatalf("started runtime did not serve its fixed published Dataset basis: %s", last)
 }

@@ -135,3 +135,56 @@ func TestWriterResolvesDescriptorRefAcrossRepositories(t *testing.T) {
 	_, err := commitOps(t, s, head, bindingfixture.PutAspect("table/items", "stats", "", "resource/stats"))
 	testkit.ExpectCode(t, err, kernel.ErrObjectIDConflict)
 }
+
+// An Aspect stored as one bound unit cannot later gain Member units, and an
+// Aspect already stored as Members cannot later gain an Aspect-level
+// declaration: the exclusivity holds across commits, not only in one batch.
+func TestWriterKeepsAspectAndMemberDeclarationsExclusiveAcrossCommits(t *testing.T) {
+	staticMember := objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: "table/orders", AspectName: "stats", MemberKey: "note"},
+		Value: map[string]any{"rowCount": 1}}
+	cases := map[string]struct {
+		first, second objectmodel.Operation
+	}{
+		"member under aspect-level source": {bindingfixture.PutAspect("table/orders", "stats", "", "resource/stats"), staticMember},
+		"aspect-level source over members": {bindingfixture.PutMember("table/orders", "stats", "current", "", "resource/stats"), bindingfixture.PutAspect("table/orders", "stats", "", "resource/stats")},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			s := testkit.NewSetup(t, "")
+			commit, err := commitOps(t, s, s.RootCommitID, bindingfixture.PutDescriptor("resource/stats", bindingfixture.Descriptor("https://stats.example")), tc.first)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = commitOps(t, s, commit, tc.second)
+			testkit.ExpectCode(t, err, kernel.ErrObjectIDConflict)
+			if got := testkit.MustHead(t, s.Repo, snapshot.DefaultRef); got != commit {
+				t.Fatalf("rejected double declaration moved HEAD to %s", got)
+			}
+		})
+	}
+}
+
+func TestWriterRejectsUnknownValueSourceKind(t *testing.T) {
+	s := testkit.NewSetup(t, "")
+	op := bindingfixture.PutAspect("table/orders", "stats", "", "resource/stats")
+	op.ValueSource = &objectmodel.ValueSource{Kind: "script"}
+	_, err := commitOps(t, s, s.RootCommitID, bindingfixture.PutDescriptor("resource/stats", bindingfixture.Descriptor("https://stats.example")), op)
+	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
+	if got := testkit.MustHead(t, s.Repo, snapshot.DefaultRef); got != s.RootCommitID {
+		t.Fatalf("unknown valueSource kind moved HEAD to %s", got)
+	}
+}
+
+func TestWriterPublishesDescriptorIdentityAndRejectsUnknownOnes(t *testing.T) {
+	s := testkit.NewSetup(t, "")
+	shared := bindingfixture.Descriptor("https://stats.example")
+	shared["identity"] = "shared"
+	commit, err := commitOps(t, s, s.RootCommitID, bindingfixture.PutDescriptor("resource/stats", shared))
+	if err != nil {
+		t.Fatalf("shared descriptor rejected: %v", err)
+	}
+	unknown := bindingfixture.Descriptor("https://stats.example")
+	unknown["identity"] = "service-account"
+	_, err = commitOps(t, s, commit, bindingfixture.PutDescriptor("resource/other", unknown))
+	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
+}

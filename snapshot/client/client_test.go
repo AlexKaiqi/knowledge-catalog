@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"kc/identity"
+	"kc/identity/identitytest"
 	"kc/kernel"
 	"kc/snapshot/access"
 	snapshotclient "kc/snapshot/client"
@@ -40,15 +41,7 @@ func (t *currentProofTransport) Do(ctx context.Context, audience string, request
 	return t.http.Do(prepared)
 }
 
-type testIdentity struct{}
-
-func (testIdentity) Name() string { return "test" }
-func (testIdentity) Authenticate(_ context.Context, headers http.Header) (identity.HTTPIdentity, error) {
-	if headers.Get("Authorization") != "Bearer alice" {
-		return identity.HTTPIdentity{}, kernel.Fail(kernel.ErrUnauthenticated, "proof is revoked")
-	}
-	return identity.HTTPIdentity{Principal: "alice"}, nil
-}
+var testIdentity = identitytest.Bearer("test", map[string]identity.HTTPIdentity{"Bearer alice": {Principal: "alice"}})
 
 type testRules struct {
 	sync.Mutex
@@ -72,7 +65,7 @@ func (s *testRules) UpdateRules(_ context.Context, update func([]access.Rule) ([
 
 func TestStandaloneSDKUsesCurrentProofAndRevocationAgainstSnapshotHandler(t *testing.T) {
 	rules := &testRules{rules: []access.Rule{{Principal: "alice", Actions: []string{"admin.grants.read"}}}}
-	handler := service.NewHandler(service.Config{Identity: service.IdentityOptions{Authenticator: testIdentity{}}, Acquire: func(context.Context, identity.HTTPIdentity, string) (service.Resources, func(), error) {
+	handler := service.NewHandler(service.Config{Identity: service.IdentityOptions{Authenticator: testIdentity}, Acquire: func(context.Context, identity.HTTPIdentity, string) (service.Resources, func(), error) {
 		return service.Resources{Access: access.NewService(rules)}, func() {}, nil
 	}})
 	server := httptest.NewServer(handler)

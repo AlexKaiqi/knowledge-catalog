@@ -13,10 +13,11 @@ import (
 	"kc/snapshot"
 )
 
-func TestSchemaFieldAccessIsTheOnlyIndexDeclarationSource(t *testing.T) {
+func TestIndexDeclarationMembersAreTheOnlyRetrievalSource(t *testing.T) {
 	repo := testkit.MakeRepository(t, "kr://test/schema-field-access")
 	base := testkit.MustHead(t, repo, snapshot.DefaultRef)
-	first, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: base, ExpectedTargetCommit: base, Operations: []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/item"}, Value: map[string]any{"entity": "Item", "fields": map[string]any{"name": map[string]any{"type": "string", "access": []any{"text"}}, "secret": map[string]any{"type": "string", "access": []any{"filter"}}}}}}})
+	nameText, secretFilter, nameFilter := testkit.IndexText("schema/item", "name"), testkit.IndexField("schema/item", "secret", "keyword"), testkit.IndexField("schema/item", "name", "keyword")
+	first, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: base, ExpectedTargetCommit: base, Operations: []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/item"}, Value: map[string]any{"entity": "Item", "fields": map[string]any{"name": map[string]any{"type": "string"}, "secret": map[string]any{"type": "string"}}}}, nameText, secretFilter}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,11 +25,11 @@ func TestSchemaFieldAccessIsTheOnlyIndexDeclarationSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	old, err := specAtCommit(repo, first)
+	old, err := (&Index{}).specAtCommit(repo, first)
 	if err != nil {
 		t.Fatal(err)
 	}
-	spec, err := specAtCommit(repo, ordinary)
+	spec, err := (&Index{}).specAtCommit(repo, ordinary)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,25 +39,23 @@ func TestSchemaFieldAccessIsTheOnlyIndexDeclarationSource(t *testing.T) {
 	current, err := repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef,
 		BaseCommit: ordinary, ExpectedTargetCommit: ordinary,
-		Operations: []objectmodel.Operation{{
-			Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/item"},
-			Value: map[string]any{"entity": "Item", "fields": map[string]any{
-				"name":   map[string]any{"type": "string", "access": []any{"filter"}},
-				"secret": map[string]any{"type": "string"},
-			}},
-		}},
+		Operations: []objectmodel.Operation{
+			{Op: objectmodel.OpRemove, Address: nameText.Address},
+			{Op: objectmodel.OpRemove, Address: secretFilter.Address},
+			nameFilter,
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	spec, err = specAtCommit(repo, current)
+	spec, err = (&Index{}).specAtCommit(repo, current)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(spec.Fields) != 1 || spec.Fields[0].Path != "name" || !spec.Fields[0].Has(reader.HintFilter) || spec.Fields[0].Has(reader.HintText) {
-		t.Fatalf("field access must supply the current query contract: %#v", spec.Fields)
+		t.Fatalf("declaration members must supply the current query contract: %#v", spec.Fields)
 	}
-	old, err = specAtCommit(repo, first)
+	old, err = (&Index{}).specAtCommit(repo, first)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +64,7 @@ func TestSchemaFieldAccessIsTheOnlyIndexDeclarationSource(t *testing.T) {
 	}
 }
 
-func TestSchemaFieldAccessChangeRebuildsProjectionAndContentRemainsIncremental(t *testing.T) {
+func TestIndexDeclarationChangeRebuildsProjectionAndContentRemainsIncremental(t *testing.T) {
 	repo := testkit.MakeRepository(t, "kr://test/index-rebuild")
 	commit := func(base kernel.CommitID, ops ...objectmodel.Operation) kernel.CommitID {
 		t.Helper()
@@ -75,19 +74,21 @@ func TestSchemaFieldAccessChangeRebuildsProjectionAndContentRemainsIncremental(t
 		}
 		return next
 	}
-	putSchema := func(hints ...string) objectmodel.Operation {
-		return objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/article"}, Value: map[string]any{"entity": "Article", "fields": map[string]any{"body": map[string]any{"type": "string", "access": hints}}}}
+	schema := objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/article"}, Value: map[string]any{"entity": "Article", "fields": map[string]any{"body": map[string]any{"type": "string"}}}}
+	text, filter := testkit.IndexText("schema/article", "body"), testkit.IndexField("schema/article", "body", "keyword")
+	remove := func(op objectmodel.Operation) objectmodel.Operation {
+		return objectmodel.Operation{Op: objectmodel.OpRemove, Address: op.Address}
 	}
 	article := func(text string) objectmodel.Operation {
 		return objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "article/a"}, SchemaRef: "schema/article", Value: map[string]any{"body": text}}
 	}
-	first := commit(testkit.MustHead(t, repo, snapshot.DefaultRef), putSchema("text"), article("before"))
+	first := commit(testkit.MustHead(t, repo, snapshot.DefaultRef), schema, text, article("before"))
 	engine := &testfixture.StateEngine{}
 	idx := NewIndexEngine("", func(string, kernel.RepositoryID) (ports.Engine, error) { return engine, nil })
 	if _, err := idx.Ensure(repo, first); err != nil {
 		t.Fatal(err)
 	}
-	second := commit(first, putSchema("filter"))
+	second := commit(first, remove(text), filter)
 	result, err := idx.Ensure(repo, second)
 	if err != nil {
 		t.Fatal(err)
@@ -103,14 +104,14 @@ func TestSchemaFieldAccessChangeRebuildsProjectionAndContentRemainsIncremental(t
 	if result.Mode != ports.IndexModeIncremental || engine.Docs["article/a"].Cells[0].Value != "after" {
 		t.Fatalf("content edit unnecessarily rebuilt or stayed stale: %#v", result)
 	}
-	fourth := commit(third, putSchema())
+	fourth := commit(third, remove(filter))
 	result, err = idx.Ensure(repo, fourth)
 	if err != nil {
 		t.Fatal(err)
 	}
 	doc := engine.Docs["article/a"]
 	if result.Mode != ports.IndexModeRebuild || len(doc.Cells) != 0 || len(doc.EligibleFields) != 0 || doc.Text != "" {
-		t.Fatalf("removing all field access must rebuild and clear stale query fields: %#v %#v", result, doc)
+		t.Fatalf("removing every declaration member must rebuild and clear stale query fields: %#v %#v", result, doc)
 	}
 	_, err = idx.SearchAt(repo, fourth, retrieval.SearchOf(retrieval.SearchClause{
 		Op: retrieval.OpEQ, Field: &retrieval.FieldRef{Schema: "schema/article", Path: "body"}, Value: "after",

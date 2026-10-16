@@ -1,0 +1,142 @@
+# 插件重构验收：LiveAccess 读取、观察与逐值失败。夹具见 _materials/acceptance/README.md；用例树见同文件“用例树”一节。
+# 每条从本节点前态独立开始，由 probe 显式创建所需仓与夹具，不传递其他用例的后态。
+
+- id: accept-live-member-failure-isolated
+  title: 成员级外部取值失败只影响该成员
+  claims: ["liveaccess#U21", "liveaccess#U15"]
+  given:
+    - 测试源 live-origin 已启动且在部署 credentialOrigins 内；ops-shared 发布 ops/warehouse-stats 与 ops/pipeline-monitor。
+    - table-meta 写入 schema/table.runtime 与 table/shop.orders 的 runtime 三个成员：row-count、freshness-lag 引用取值描述，retention-days 为静态值。
+    - 测试源把 table/shop.orders
+  when:
+    - 经正式 Server 读取 table/shop.orders 的 runtime 方面。
+  then:
+    - row-count 原位返回 value 6，retention-days 原位返回 value 365。
+    - freshness-lag 在 failures 中按地址报 TEMPORARY_UNAVAILABLE，值位置不出现旧值、0 或占位 null。
+    - 测试源调用记录里只有 row-count 与 freshness-lag 两次调用，retention-days 没有外呼。
+  risk: 一个外部成员失败拖垮整个方面，或静态成员被误当作外部值去外呼。
+
+- id: accept-live-observation-beside-value
+  title: 每个外部成员一份观察依据，挂在值旁边
+  claims: ["liveaccess#U21"]
+  given:
+    - 与成员级失败用例相同的世界，测试源两个 runtime 外部成员均为 behavior ok。
+  when:
+    - 连续两次读取 table/shop.orders 的 runtime 方面，期间把 row-count 改写为相同值（sourceRevision 加一）。
+  then:
+    - observations 恰有两项，地址分别是 table/shop.orders
+    - 成员值只含 Schema 字段 metric、value、unit、status，不含 observedAt 或任何观察字段。
+    - 两次读取的观察时间与 sourceRevision 不同，但成员值的摘要相同。
+  risk: 观察依据混进值里，导致静态值与外部值形状不一致，或摘要与索引随观察时间抖动。
+
+- id: accept-live-aspect-level-source
+  title: 方面级外部取值与成员级并存于同一对象
+  claims: ["liveaccess#U21"]
+  given:
+    - table-meta 写入 schema/table.live-stats 与三张表的 live-stats 方面文件，方面头引用 ops/warehouse-stats，没有成员文件和正文。
+    - 同一对象 table/shop.orders 也有成员级声明的 runtime 方面。
+  when:
+    - 读取 table/shop.orders、table/shop.customers 的 live-stats 方面与 table/shop.orders 的全部方面。
+  then:
+    - live-stats 原位返回 rowCount 6 与 4，观察地址是方面地址（不带成员键）。
+    - 同一次读取中 runtime 的成员级观察与 live-stats 的方面级观察分别列出，互不覆盖。
+  risk: 只支持一种声明粒度，或方面级与成员级在同一对象上互相干扰。
+
+- id: accept-live-null-failure-nocapability
+  title: 业务空值、取值失败与没有取值能力分开呈现
+  claims: ["liveaccess#U2"]
+  given:
+    - 成员级世界；三个独立变体各自从前态开始。
+    - 变体 A 测试源把 row-count 设为 behavior null；变体 B 设为 behavior slow 且 delayMs 超过部署取值超时；变体 C 部署未装 LiveAccess 插件。
+  when:
+    - 各变体读取 table/shop.orders 的 runtime 方面。
+  then:
+    - A 中 row-count 值为 null 且带合法观察，不在 failures 里。
+    - B 中 row-count 在 failures 里报超时类错误，值位置没有观察。
+    - C 中 row-count、freshness-lag 在 failures 里报没有取值能力，测试源无调用；retention-days 照常返回。
+  risk: 合法 null、超时和缺能力被压成同一种空值，调用方无法判断该重试、该报警还是该装插件。
+
+- id: accept-live-invalid-value-and-basis
+  title: 违反 Schema 的值与非法依据都算该单元取值失败
+  claims: ["liveaccess#U15"]
+  given:
+    - 成员级世界；两个独立变体。
+    - 变体 A 测试源把 row-count 设为 behavior invalid，返回 value "six"；变体 B 设为 behavior bad-basis。
+  when:
+    - 各变体读取 table/shop.orders 的 runtime 方面。
+  then:
+    - row-count 在 failures 里说明原因（结构不符或依据缺 bindingGeneration），不返回该值。
+    - freshness-lag 与 retention-days 照常返回。
+  risk: 外部系统返回脏数据时被原样交付，或一个坏值让整次读取失败。
+
+- id: accept-live-unknown-unit-at-origin
+  title: 外部系统不认识该单元时算取值失败而不是空值
+  claims: ["liveaccess#U2"]
+  given:
+    - 成员级世界；测试源删除 table/shop.orders#/runtime/row-count 单元，对它返回 404 OBJECT_REF_UNRESOLVED。
+  when:
+    - 读取 table/shop.orders 的 runtime 方面。
+  then:
+    - row-count 在 failures 里带外部系统的错误码，值位置不出现 null。
+    - freshness-lag 与 retention-days 照常返回。
+  risk: 外部 404 被翻译成合法 null，调用方以为业务上确实没有值。
+
+- id: accept-live-origin-unreachable
+  title: 外部系统不可达时只影响外部单元
+  claims: ["liveaccess#U2", "liveaccess#U15"]
+  given:
+    - 成员级与方面级世界；停止 live-origin 进程。
+  when:
+    - 读取 table/shop.orders 的全部方面。
+  then:
+    - properties 等静态方面与 retention-days 照常返回；row-count、freshness-lag、live-stats 各自在 failures 中报不可达。
+    - 读取在部署取值超时内返回，不因连接失败挂起整个请求。
+  risk: 外部系统宕机让整个对象不可读，或读取无限等待。
+
+- id: accept-live-shared-descriptor-separate-units
+  title: 引用同一取值描述的两个成员各自调用、各自失败
+  claims: ["liveaccess#U15", "liveaccess#U21"]
+  given:
+    - 成员级世界；写入 variants/shared-descriptor/orders-error-rate.yaml，error-rate 与 row-count 都引用 ops/warehouse-stats。
+    - 测试源为 error-rate 设 behavior error，row-count 为 ok。
+  when:
+    - 读取 table/shop.orders 的 runtime 方面。
+  then:
+    - 测试源收到两次调用，地址分别是 row-count 与 error-rate。
+    - row-count 原位返回并有观察；error-rate 在 failures 中按地址报错；两者不共享观察或失败。
+  risk: 同一取值描述被当成一次调用，一个成员的失败连带另一个，或观察被复制到错的地址。
+
+- id: accept-live-precise-range
+  title: 只解释请求范围内的外部单元
+  claims: ["object#U11", "liveaccess#U15"]
+  given:
+    - 成员级世界；测试源调用记录已清空。
+  when:
+    - 依次读取 table/shop.orders#/runtime/row-count、table/shop.orders#/runtime/row-count/value、table/shop.orders#/properties。
+  then:
+    - "第一次只调用 row-count 一次；第二次返回 6，观察地址仍是成员地址 #/runtime/row-count；第三次测试源没有新调用。"
+  risk: 读一个成员或一个静态方面也把整个对象的外部值全部取一遍。
+
+- id: accept-live-stream-not-read
+  title: 普通读取不读 Stream 单元
+  claims: ["liveaccess#U9", "liveaccess#U2"]
+  given:
+    - 成员级世界；ops-shared 写入 variants/stream/pipeline-events.yaml，table-meta 写入 orders-recent-events.yaml。
+  when:
+    - 读取 table/shop.orders 的 runtime 方面。
+  then:
+    - recent-events 在 failures 中说明 Stream 不能经普通读取取值；测试源没有它的调用。
+    - 其他成员照常返回。
+  risk: Stream 被当作 State 取一个快照冒充当前状态。
+
+- id: accept-live-dataset-read-consume-only
+  title: 只有 Dataset 消费权的读者也能读到外部值
+  claims: ["object#U16", "liveaccess#U16"]
+  given:
+    - Dataset sales-analysis 就绪；reader 只有它的消费权，没有 table-meta 的仓读权。
+  when:
+    - reader 经 Dataset 读取 table/shop.orders 的 runtime；再不带 Dataset 直接按仓读取。
+  then:
+    - 经 Dataset 的读取返回外部值，测试源记录的 principal 是 reader。
+    - 直接按仓读取被拒绝，测试源没有新调用。
+  risk: 消费权不足以触发外部取值，或外部取值替读者扩大了仓读权。

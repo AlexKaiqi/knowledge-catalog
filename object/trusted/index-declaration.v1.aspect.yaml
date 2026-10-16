@@ -1,0 +1,29 @@
+---
+object_id: schema/core/index-declaration/v1
+path_hint: _schemas/index-declaration.v1.aspect.yaml
+---
+# Published System object schema/core/index-declaration/v1.
+# A protocol trust root: units adopting it are claimed by the declarative
+# index plugin by this Schema, never by the aspect name. Writer checks shape
+# and locators only; capability is checked by a plugin instance's manifest.
+metaSchema: schema/meta/schema-definition/v1
+entity: IndexDeclaration
+description: 索引声明：每个成员描述一个检索字段，包括输入（指向 Schema 字段的定位符）、构建方式、用途和所依据的能力清单版本；不写插件实例、引擎地址、分片或容量。
+aspect: index
+pattern: keyed_collection
+additionalProperties: false
+fields:
+  catalog:
+    type: string
+    required: true
+  description:
+    type: string
+  inputs:
+    type: array
+    required: true
+  build:
+    type: object
+    required: true
+  uses:
+    type: array
+    required: true

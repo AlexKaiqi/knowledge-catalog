@@ -22,7 +22,7 @@ func TestAdmissionCLIReportsCurrentGrantsAndExternalRequestRoute(t *testing.T) {
 	}
 	policy.Rules = append(policy.Rules,
 		inv.AllowRule{ID: "reader", Principal: "kaiqidong", Repo: "kr://acme/object", Actions: []string{"object.read"}},
-		inv.AllowRule{ID: "shared", Principal: "kaiqidong", Repo: "kr://acme/shared", Actions: []string{"object.search"}, SharedBy: "alice", ShareID: "share-1"},
+		inv.AllowRule{ID: "shared", Principal: "kaiqidong", Repo: "kr://acme/shared", Actions: []string{"object.read"}, SharedBy: "alice", ShareID: "share-1"},
 	)
 	if err := inv.WriteAllow(cfg.StateDir, policy); err != nil {
 		t.Fatal(err)

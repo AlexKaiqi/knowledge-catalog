@@ -92,7 +92,7 @@ func TestAssertProtocolSchemaPublication(t *testing.T) {
 		"metaSchema": string(objectmodel.MetaSchemaV1),
 		"entity":     "Other", "aspect": objectmodel.ReadmeAspect, "pattern": "record",
 		"additionalProperties": false,
-		"fields":               map[string]any{"body": map[string]any{"type": "string", "required": true, "access": []any{"text"}}},
+		"fields":               map[string]any{"body": map[string]any{"type": "string", "required": true}},
 	}
 	err := objectmodel.AssertProtocolSchemaPublication(objectmodel.CoreReadmeSchemaV1, drifted)
 	if err == nil {

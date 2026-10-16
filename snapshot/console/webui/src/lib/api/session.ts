@@ -1,8 +1,9 @@
 import { auth } from './index';
 import { jsonRequest, KCError } from './transport';
 import {userProof} from './sessionProof';
+import {acceptsUserProof, AuthPairing} from './sessionPairing';
 
-export type Discovery = { mode: string; localAssertion: boolean; accepts: string[]; providerURL?: string; browserLogin?: {oauth2Base: string; clientId: string} };
+export type Discovery = AuthPairing;
 export type LoginSession = { mode: string; principal: string };
 let current: LoginSession | null = null;
 let generation = 0;
@@ -10,6 +11,9 @@ const listeners = new Set<() => void>();
 function notify(): void { listeners.forEach(listener => listener()); }
 function changed(): KCError {
     return new KCError(401, {code: 'UNAUTHENTICATED', message: '登录已变更，请重新登录。'});
+}
+function requirePairing(discovery: Discovery): void {
+    if (!acceptsUserProof(discovery)) throw new KCError(503, {code: 'PRECONDITION_FAILED', message: '控制台尚未连接共享登录，请联系管理员。'});
 }
 
 export const session = {
@@ -30,6 +34,8 @@ export const session = {
     require(): LoginSession { if (!current) throw changed(); return current; },
     async authenticate(discovery: Discovery, accessToken: string, refreshToken?: string, expiresIn?: number, signal?: AbortSignal): Promise<void> {
         session.logout();
+        requirePairing(discovery);
+        userProof.bind(discovery);
         userProof.set({mode: discovery.mode, accessToken, refreshToken, expiresAt: expiresIn ? Date.now() + expiresIn * 1000 : undefined});
         const proofVersion = userProof.version();
         try {
@@ -43,12 +49,13 @@ export const session = {
         generation++; current = null;
         window.sessionStorage.removeItem(`kc.ui.session.v1:${window.location.origin}`);
         window.localStorage.removeItem('kc.ui.token'); window.localStorage.removeItem('kc.ui.as');
-        const external = discovery && ['taihu', 'gitea'].includes(discovery.mode) && discovery.accepts?.includes('Authorization');
-        if (!discovery || discovery.localAssertion || !Array.isArray(discovery.accepts) || !(external || discovery.mode === 'lakefs' && discovery.accepts.includes('Cookie'))) {
+        // The advertised proof shape controls login; its name is only an opaque pairing coordinate.
+        try { requirePairing(discovery); }
+        catch (error) {
             session.logout();
-            throw new KCError(503, {code: 'PRECONDITION_FAILED', message: '控制台尚未连接共享登录，请联系管理员。'});
+            throw error;
         }
-        if (userProof.get() && userProof.get()?.mode !== discovery.mode) userProof.clear();
+        userProof.bind(discovery);
         const version = generation;
         try {
             const who = await jsonRequest<{principal: string}>('/identity/v1/whoami', undefined, signal);

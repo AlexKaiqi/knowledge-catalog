@@ -58,5 +58,5 @@ func (r *treeRepository) ResolveAddressAtPaths(address objectmodel.Address, comm
 	if hint == "" {
 		hint = unit.Path
 	}
-	return objectmodel.Resolution{Repository: r.ID(), Commit: commit, ObjectID: address.ObjectID, Address: unit.Address, PathHint: hint, Digest: unit.Digest, DeclarationDigest: objectmodel.DeclarationDigest(unit.SchemaRef, unit.ValueSource), SchemaRef: unit.SchemaRef, ValueSource: unit.ValueSource, Status: objectmodel.StatusResolved}, nil
+	return objectmodel.Resolution{Repository: r.ID(), Commit: commit, ObjectID: address.ObjectID, Address: unit.Address, PathHint: hint, Digest: objectmodel.MaintenanceDigest(unit.Digest, unit.SchemaRef, unit.ValueSource), DeclarationDigest: objectmodel.DeclarationDigest(unit.SchemaRef, unit.ValueSource), SchemaRef: unit.SchemaRef, ValueSource: unit.ValueSource, Status: objectmodel.StatusResolved}, nil
 }

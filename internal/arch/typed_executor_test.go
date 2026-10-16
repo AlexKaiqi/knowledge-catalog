@@ -21,7 +21,7 @@ func typedExecutorWiringSignals(files map[string]*ast.File) []string {
 	var signals []string
 	for _, check := range []struct{ verb, group, command, handler, route, pkg, core string }{
 		{"VerbRead", "readVerbs", "object-read", "objectRead", "POST /object/v1/objects:read", "kc/liveaccess/service", "ReadRepository"},
-		{"VerbSearch", "indexVerbs", "object-search", "objectSearch", "POST /object/v1/search", "kc/discovery/service", "SearchExecutor"},
+		{"VerbSearch", "indexVerbs", "object-search", "objectSearch", "POST /object/v1/search", "kc/discovery/service", "DatasetSearchExecutor"},
 	} {
 		if !executorCLICommand(files, check.group, check.command, check.verb) || !executorHTTPRoute(files, check.handler, check.route, check.command, check.verb) {
 			signals = append(signals, "CLI/HTTP route is not bound to invocation."+check.verb)

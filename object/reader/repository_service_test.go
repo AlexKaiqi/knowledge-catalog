@@ -199,7 +199,7 @@ func TestTreeProviderSchemaIndexTracksSchemaWithoutRepositoryScan(t *testing.T) 
 			}, Value: map[string]any{
 				"entity": "Note", "pattern": "record",
 				"fields": map[string]any{"body": map[string]any{
-					"type": "string", "access": []any{"text"},
+					"type": "string",
 				}},
 			},
 		}},

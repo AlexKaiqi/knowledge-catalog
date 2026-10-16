@@ -18,8 +18,8 @@ var snapshotPublicDTOs = map[string]map[string]bool{
 	"kc/snapshot":         names("Advanced CommandEntry CommandRequest DirectoryCursor FileRef LakeFSEndpoint Receipt ReceiptResult"),
 	"kc/snapshot/dataset": names("Commit History LogQuery State DatasetItem Dataset DatasetCheck DatasetFileMount DatasetIssue DatasetMount DatasetOverlay DatasetRecipe DatasetSource ManagementOptions MountRoute ResolvedDataset Snapshot VirtualFile VirtualMount"),
 	"kc/snapshot/access":  names("GrantList Query Rule"),
-	"kc/snapshot/service": names("Authorization Config FileCoordinate FileDirectoryRequest FileDirectoryResponse FileMountsRequest FileMountsResponse FileReadEvidence FileReadRequest FileReadResponse IdentityOptions RequestMetadata Resources ViewOptions"),
-	"kc/snapshot/client":  names("Config RequestOptions DatasetRequest DatasetResolveRequest DatasetShowOptions RepositoryAttachRequest WorkspaceFileCoordinate WorkspaceFileMountsRequest WorkspaceFileDirectoryRequest WorkspaceFileReadRequest WorkspaceFileMountsResponse WorkspaceFileDirectoryResponse WorkspaceFileReadResponse GrantRequest GrantExpected GrantUpdateRequest AdmissionResult AdmissionGrant AdmissionRequest"),
+	"kc/snapshot/service": names("Authorization Config FileCoordinate FileDirectoryRequest FileDirectoryResponse FileMountsRequest FileMountsResponse FileReadEvidence FileReadRequest FileReadResponse RepositoryFileReadResponse IdentityOptions RequestMetadata Resources ViewOptions"),
+	"kc/snapshot/client":  names("Config RequestOptions DatasetRequest DatasetResolveRequest DatasetShowOptions RepositoryAttachRequest WorkspaceFileCoordinate WorkspaceFileMountsRequest WorkspaceFileDirectoryRequest WorkspaceFileReadRequest WorkspaceFileMountsResponse WorkspaceFileDirectoryResponse WorkspaceFileReadResponse RepositoryFileReadResponse GrantRequest GrantExpected GrantUpdateRequest AdmissionResult AdmissionGrant AdmissionRequest"),
 	"kc/snapshot/cli":     names("Command Context"),
 }
 
@@ -45,7 +45,6 @@ var snapshotFactoryResults = map[string]string{
 	"kc/snapshot/access.NewService":               "Service",
 	"kc/snapshot/service.NewHandler":              "Handler",
 	"kc/snapshot/service.NewFileView":             "FileView",
-	"kc/snapshot/service.NewLakeFSAuthenticator":  "identity.HTTPAuthenticator",
 	"kc/snapshot/console.Handler":                 "http.Handler",
 	"kc/snapshot/client.New":                      "Client",
 	"kc/snapshot/cli.New":                         "Executor",

@@ -197,3 +197,42 @@ func TestHTTPStateLookupRequiresDescriptorOrigin(t *testing.T) {
 		t.Fatalf("missing descriptor origin: %v", err)
 	}
 }
+
+// A source that does not know the unit names that failure; it is a lookup
+// failure with the source's code, never an empty value.
+func TestHTTPStateLookupKeepsSourceFailureCode(t *testing.T) {
+	for _, test := range []struct {
+		status int
+		body   string
+		code   kernel.ErrorCode
+	}{
+		{http.StatusNotFound, `{"error":{"code":"OBJECT_REF_UNRESOLVED","message":"unit is unknown at this source"}}`, kernel.ErrObjectRefUnresolved},
+		{http.StatusNotFound, `{"error":{"message":"no such route"}}`, kernel.ErrCapabilityUnsatisfied},
+		{http.StatusTooManyRequests, `{"error":{"message":"slow down"}}`, kernel.ErrTemporaryUnavailable},
+		{http.StatusBadGateway, `{"error":{"code":"TEMPORARY_UNAVAILABLE","message":"upstream"}}`, kernel.ErrTemporaryUnavailable},
+		{http.StatusForbidden, `{"error":{"code":"OBJECT_REF_UNRESOLVED","message":"denied"}}`, kernel.ErrForbidden},
+	} {
+		runtime := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(test.status)
+			_, _ = w.Write([]byte(test.body))
+		}))
+		lookup := NewHTTPStateLookup(runtime.Client())
+		observation, err := lookup.LookupState(context.Background(), policyRequest(runtime.URL, "alice"))
+		runtime.Close()
+		if kernel.CodeOf(err) != test.code || observation.Value != nil {
+			t.Fatalf("HTTP %d %s: got %v %#v, want %s", test.status, test.body, err, observation, test.code)
+		}
+	}
+}
+
+// An origin that refuses connections is a failed lookup for that unit, not a
+// null value and not a transport panic of the whole read.
+func TestHTTPStateLookupUnreachableOriginIsTemporaryFailure(t *testing.T) {
+	runtime := httptest.NewServer(http.NotFoundHandler())
+	address, client := runtime.URL, runtime.Client()
+	runtime.Close()
+	observation, err := NewHTTPStateLookup(client).LookupState(context.Background(), policyRequest(address, "alice"))
+	if kernel.CodeOf(err) != kernel.ErrTemporaryUnavailable || observation.Value != nil {
+		t.Fatalf("unreachable origin = %v %#v, want TEMPORARY_UNAVAILABLE without value", err, observation)
+	}
+}

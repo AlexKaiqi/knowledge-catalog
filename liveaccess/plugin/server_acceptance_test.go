@@ -96,7 +96,8 @@ func TestServerLiveAccessRepoSelectionMixedValuesAndDataset(t *testing.T) {
 	define("first", acceptanceR1)
 	define("second", acceptanceR2)
 	// G3: the same Aspect of one object ID held by two Repositories is a
-	// conflict reported at Dataset publication, never a silent pick.
+	// conflict reported at Dataset publication, never a silent pick. Fixture
+	// Schemas use distinct IDs so this is the only conflicting object.
 	sources := []dataset.DatasetSource{{Repository: acceptanceR1, Selector: snapshot.DefaultRef}, {Repository: acceptanceR2, Selector: snapshot.DefaultRef}}
 	err := f.client(t, "operator").SnapshotService().DefineDataset(context.Background(), snapshotclient.DatasetRequest{Dataset: "both", Revision: 1, Sources: sources}, snapshotclient.RequestOptions{}, &published)
 	if kernel.CodeOf(err) != kernel.ErrObjectIDConflict || !strings.Contains(err.Error(), string(acceptanceObject)) || !strings.Contains(err.Error(), string(acceptanceR1)) || !strings.Contains(err.Error(), string(acceptanceR2)) {
@@ -155,17 +156,22 @@ func TestServerLiveAccessRepoSelectionMixedValuesAndDataset(t *testing.T) {
 		t.Fatal("instance replacement changed declaration commit")
 	}
 	// Actual Entry.Open failures cover a missing instance and an installed
-	// runtime whose protocol cannot provide this entry's required contribution.
-	for _, selection := range []struct{ name, instance string }{{"liveaccess", "missing"}, {"unregistered-liveaccess", "missing"}, {"liveaccess", "incompatible"}} {
+	// runtime whose protocol cannot provide this entry's required contribution;
+	// an unmapped runtime has no instance at all. Each stays local to R1.
+	for _, selection := range []struct{ name, instance string }{{"liveaccess", "missing"}, {"liveaccess", ""}, {"liveaccess", "incompatible"}} {
 		f.selectInstance(t, acceptanceR1, selection.name, selection.instance)
 		f.stop(t)
 		f.start(t)
-		row, err = f.read(t, "reader", "unavailable-"+selection.name+"-"+selection.instance, readRequest)
+		label := selection.instance
+		if label == "" {
+			label = "unmapped"
+		}
+		row, err = f.read(t, "reader", "unavailable-"+label, readRequest)
 		if err != nil {
 			t.Fatalf("missing plugin erased static siblings or invented observations: %#v %v", row, err)
 		}
 		assertAcceptanceUnavailable(t, *row)
-		row, err = f.read(t, "reader", "independent-"+selection.name+"-"+selection.instance, kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR2, ""), Repository: string(acceptanceR2), Commit: string(f.commits[acceptanceR2])})
+		row, err = f.read(t, "reader", "independent-"+label, kcclient.ObjectReadRequest{Reference: acceptanceReference(t, acceptanceR2, ""), Repository: string(acceptanceR2), Commit: string(f.commits[acceptanceR2])})
 		if err != nil {
 			t.Fatalf("missing R1 plugin blocked R2: %#v %v", row, err)
 		}
@@ -174,4 +180,12 @@ func TestServerLiveAccessRepoSelectionMixedValuesAndDataset(t *testing.T) {
 	if fallback.calls.Load() != 0 || incompatible.calls.Load() != 0 || incompatible.attempts.Load() != 0 {
 		t.Fatal("unavailable contribution contacted its source or fell back to global adapter")
 	}
+	// An instance of an unknown plugin is a deployment error, not a missing value.
+	f.stop(t)
+	f.selectInstance(t, acceptanceR1, "unregistered-liveaccess", "missing")
+	if _, err := server.HTTPHandlerFromConfig(f.path, f.options); kernel.CodeOf(err) != kernel.ErrPreconditionFailed || !strings.Contains(err.Error(), "unregistered-liveaccess") {
+		t.Fatalf("deployment started with an unknown plugin instance: %v", err)
+	}
+	f.selectInstance(t, acceptanceR1, "liveaccess", "replacement")
+	f.start(t)
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"kc/declarativeindex/opensearch"
+	indexplugins "kc/discovery/plugin"
 )
 
 const (
@@ -33,6 +34,9 @@ type StoresFile struct {
 	Index          string                `json:"index,omitempty" yaml:"index,omitempty"`
 	OpenSearch     opensearch.Config     `json:"opensearch,omitempty" yaml:"opensearch,omitempty"`
 	HydrationCache *HydrationCacheConfig `json:"hydrationCache,omitempty" yaml:"hydrationCache,omitempty"`
+	// Plugins is the installed plugin instances. Nil installs the compiled
+	// defaults; an explicit empty map installs none.
+	Plugins *indexplugins.PluginsConfig `json:"plugins,omitempty" yaml:"plugins,omitempty"`
 }
 
 func StoresPath(home string) string {

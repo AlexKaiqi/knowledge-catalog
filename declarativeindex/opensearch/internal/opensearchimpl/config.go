@@ -112,18 +112,11 @@ func Open(cfg Config) index.EngineOpener {
 		// credentials: model identity comes from the environment and never
 		// enters persisted provider config. Unset model keeps the projection
 		// purely lexical.
-		if model := strings.TrimSpace(os.Getenv(EnvEmbeddingModel)); model != "" {
-			dims := 0
-			if raw := strings.TrimSpace(os.Getenv(EnvEmbeddingDims)); raw != "" {
-				parsed, err := strconv.Atoi(raw)
-				if err != nil || parsed < 1 || parsed > 16384 {
-					return nil, kernel.Fail(kernel.ErrUsageInvalid, "%s must be an integer between 1 and 16384", EnvEmbeddingDims)
-				}
-				dims = parsed
-			}
-			if dims == 0 {
-				return nil, kernel.Fail(kernel.ErrUsageInvalid, "%s requires %s so the knn mapping can pin a dimension", EnvEmbeddingModel, EnvEmbeddingDims)
-			}
+		model, dims, err := configuredEmbeddingModel()
+		if err != nil {
+			return nil, err
+		}
+		if model != "" {
 			embedder, err := llmhttp.NewEmbeddings(llmhttp.EmbeddingsConfig{
 				BaseURL: os.Getenv("OPENAI_BASE_URL"), APIKey: os.Getenv("OPENAI_API_KEY"), Model: model,
 			})
@@ -132,11 +125,37 @@ func Open(cfg Config) index.EngineOpener {
 			}
 			eng.embedder = embedder
 			eng.vectorDimension = dims
+			eng.vectorModel = model
 		}
 		// Opening a read handle is local. Network I/O is performed by the
 		// context-aware read methods or the explicit maintenance lifecycle.
 		return eng, nil
 	}
+}
+
+// ConfiguredEmbeddingModels reports only models whose engine configuration can
+// create the same pinned vector dimension. It performs no network call.
+func ConfiguredEmbeddingModels() ([]string, error) {
+	model, _, err := configuredEmbeddingModel()
+	if err != nil {
+		return nil, err
+	}
+	if model == "" {
+		return nil, nil
+	}
+	return []string{model}, nil
+}
+
+func configuredEmbeddingModel() (string, int, error) {
+	model := strings.TrimSpace(os.Getenv(EnvEmbeddingModel))
+	if model == "" {
+		return "", 0, nil
+	}
+	dims, err := strconv.Atoi(strings.TrimSpace(os.Getenv(EnvEmbeddingDims)))
+	if err != nil || dims < 1 || dims > 16384 {
+		return "", 0, kernel.Fail(kernel.ErrUsageInvalid, "%s requires %s between 1 and 16384", EnvEmbeddingModel, EnvEmbeddingDims)
+	}
+	return model, dims, nil
 }
 
 // Check verifies that the configured service endpoint is reachable and the

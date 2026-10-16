@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"kc/internal/bindingfixture"
 	"kc/internal/testkit"
 	serv "kc/server"
 	"net/http"
@@ -13,9 +14,9 @@ import (
 	"testing"
 )
 
-// Scene accessor containers serve Bound State. Observer notice must republish
-// the OpenSearch State projection when source.json changes, without moving HEAD.
-func TestSceneAccessorNoticeUpdatesSearchIndex(t *testing.T) {
+// Scene accessor containers serve Bound State. An explicit Dataset refresh must
+// replace its observation when source.json changes, without moving source HEAD.
+func TestSceneAccessorRefreshUpdatesSearchIndex(t *testing.T) {
 	runtimeURL := strings.TrimSpace(os.Getenv("KC_TEST_STATE_RUNTIME_URL"))
 	opensearchURL := strings.TrimSpace(os.Getenv("KC_TEST_OPENSEARCH_URL"))
 	sourcePath := strings.TrimSpace(os.Getenv("KC_TEST_STATE_SOURCE_PATH"))
@@ -34,18 +35,23 @@ func TestSceneAccessorNoticeUpdatesSearchIndex(t *testing.T) {
 	home := testkit.TempDir(t)
 	repositoryID := "kr://scene/accessor-index"
 	body(t, kc(home, "local", "init"))
-	body(t, kc(home, "store-set", "--index", "opensearch"))
-	body(t, kc(home, "store-set", "--driver", "opensearch", "--url", opensearchURL))
+	body(t, kc(home, "local", "store", "set", "--index", "opensearch"))
+	body(t, kc(home, "local", "store", "set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repositoryID)
-	adoptLiveAccessFixture(t, home, repositoryID)
-	body(t, kc(home, "put", testObjectReference(t, repositoryID, "schema/service.health", ""), "--repo", repositoryID, "--command-id", "state-schema", "--value", `{"entity":"Service","aspect":"health","fields":{"status":{"type":"string","access":["text","filter"]}}}`))
-	body(t, kc(home, "put", testObjectReference(t, repositoryID, "service/orders", "/properties"), "--repo", repositoryID, "--command-id", "state-entity", "--value", `{"name":"orders"}`))
-	putStateBinding(t, home, repositoryID, "service/orders", "health", "schema/service.health", runtimeURL)
-	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", repositoryID+"=refs/heads/main@"))
-	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read-workspace", "--dataset", "agent"))
-	body(t, kc(home, "allow", "--principal", "agent:http-test", "--cmd", "read,search", "--repo", repositoryID))
-	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "projection.manage", "--repo", repositoryID))
-	body(t, kc(home, "allow", "--principal", "agent:observer", "--action", "projection.manage", "--repo", repositoryID))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "schema/service.health", ""), "--repo", repositoryID, "--command-id", "state-schema", "--value", `{"entity":"Service","aspect":"health","fields":{"status":{"type":"string"}}}`))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repositoryID, "service/orders", "/properties"), "--repo", repositoryID, "--command-id", "state-entity", "--value", `{"name":"orders"}`))
+	descriptorID := putStateBinding(t, home, repositoryID, "service/orders", "health", "schema/service.health", runtimeURL)
+	descriptor := bindingfixture.Descriptor(runtimeURL)
+	descriptor["identity"] = "shared"
+	rawDescriptor, err := json.Marshal(descriptor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body(t, kc(home, "writer", "put", "urn:kc:object:"+descriptorID, "--repo", repositoryID, "--command-id", "state-shared-descriptor", "--value", string(rawDescriptor)))
+	seedTextDeclaration(t, home, repositoryID, "index/service-health", "schema/service.health", "status")
+	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", repositoryID))
+	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "file.read", "--dataset", "agent"))
+	body(t, kc(home, "allow", "--principal", "agent:observer", "--action", "dataset.manage", "--dataset", "agent"))
 	before := asMap(t, body(t, kc(home, "writer", "head", "--repo", repositoryID)))["commit"]
 
 	lookup := serv.NewHTTPStateLookup(nil)
@@ -56,16 +62,29 @@ func TestSceneAccessorNoticeUpdatesSearchIndex(t *testing.T) {
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
-	first := asMap(t, postAny(t, server.URL, "/operations/v1/projections:notice", map[string]any{
-		"repository":     repositoryID,
-		"address":        map[string]any{"kind": "Aspect", "objectId": "service/orders", "aspectName": "health"},
-		"sourceRevision": "docker-health-1",
-	}))
-	if first["revision"] == "" || first["basisCommit"] != before {
-		t.Fatalf("first notice did not publish State at HEAD: %#v want %v", first, before)
+	stateOf := func(payload any) map[string]any {
+		t.Helper()
+		receipt := asMap(t, payload)
+		members, ok := receipt["members"].([]any)
+		if receipt["dataset"] != "agent" || receipt["revision"] != float64(1) || !ok || len(members) != 1 || asMap(t, members[0])["repository"] != repositoryID || asMap(t, members[0])["commit"] != before {
+			t.Fatalf("refresh lost its accepted Dataset revision or source vector: %#v", receipt)
+		}
+		state := datasetProjectionState(t, receipt, repositoryID)
+		revision, _ := state["revision"].(string)
+		digest, _ := state["observationDigest"].(string)
+		if state["mode"] != "rebuild" || revision == "" || digest == "" {
+			t.Fatalf("refresh omitted its published observation facts: %#v", state)
+		}
+		return state
 	}
-	healthy := asMap(t, postAny(t, server.URL, "/object/v1/search", map[string]any{
-		"dataset": "agent", "query": "healthy",
+	refresh := func() map[string]any {
+		return stateOf(postAs(t, server.URL, "/operations/v1/projections:sync", "agent:observer", map[string]any{
+			"dataset": "agent", "revision": 1,
+		}))
+	}
+	first := refresh()
+	healthy := asMap(t, postAs(t, server.URL, "/object/v1/search", "agent:http-test", map[string]any{
+		"dataset": "agent", "revision": 1, "query": "healthy",
 	}))
 	if hits := healthy["hits"].([]any); len(hits) != 1 {
 		t.Fatalf("initial State index missed healthy: %#v", healthy)
@@ -85,30 +104,26 @@ func TestSceneAccessorNoticeUpdatesSearchIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	second := asMap(t, postAs(t, server.URL, "/operations/v1/projections:notice", "agent:observer", map[string]any{
-		"repository":     repositoryID,
-		"address":        map[string]any{"kind": "Aspect", "objectId": "service/orders", "aspectName": "health"},
-		"sourceRevision": "docker-health-2",
-	}))
-	if second["revision"] == "" || second["revision"] == first["revision"] || second["basisCommit"] != before {
-		t.Fatalf("observer notice must publish a new index revision on the same commit: first=%#v second=%#v", first, second)
+	second := refresh()
+	if second["revision"] == first["revision"] || second["observationDigest"] == first["observationDigest"] {
+		t.Fatalf("explicit refresh must publish a new observation on the same Dataset revision: first=%#v second=%#v", first, second)
 	}
 
-	degraded := asMap(t, postAny(t, server.URL, "/object/v1/search", map[string]any{
-		"dataset": "agent", "query": "degraded",
+	degraded := asMap(t, postAs(t, server.URL, "/object/v1/search", "agent:http-test", map[string]any{
+		"dataset": "agent", "revision": 1, "query": "degraded",
 	}))
 	if hits := degraded["hits"].([]any); len(hits) != 1 {
-		t.Fatalf("index did not pick up degraded after notice: %#v", degraded)
+		t.Fatalf("index did not pick up degraded after refresh: %#v", degraded)
 	}
-	stale := asMap(t, postAny(t, server.URL, "/object/v1/search", map[string]any{
-		"dataset": "agent", "query": "healthy",
+	stale := asMap(t, postAs(t, server.URL, "/object/v1/search", "agent:http-test", map[string]any{
+		"dataset": "agent", "revision": 1, "query": "healthy",
 	}))
 	if hits := stale["hits"].([]any); len(hits) != 0 {
 		t.Fatalf("old healthy hit survived index refresh: %#v", stale)
 	}
 	after := asMap(t, body(t, kc(home, "writer", "head", "--repo", repositoryID)))["commit"]
 	if after != before {
-		t.Fatalf("notice moved Repository HEAD: before=%v after=%v", before, after)
+		t.Fatalf("Dataset refresh moved Repository HEAD: before=%v after=%v", before, after)
 	}
 }
 

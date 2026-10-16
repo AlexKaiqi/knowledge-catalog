@@ -1,0 +1,16 @@
+---
+object_id: table/shop.orders
+aspect_name: runtime
+member_key: inline-lag
+kind: Member
+schema_ref: schema/table.runtime
+valueSource:
+  kind: binding
+  binding:
+    origin: http://live-origin:7400
+    mode: state
+    protocol: resource-access/v1
+    access:
+      lookup:
+        call: lookup
+---

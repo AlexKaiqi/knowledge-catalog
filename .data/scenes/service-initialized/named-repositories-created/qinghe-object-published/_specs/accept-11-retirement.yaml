@@ -1,0 +1,39 @@
+# 插件重构验收：旧路径退役（结构检查）。夹具见 _materials/acceptance/README.md；用例树见同文件“用例树”一节。
+# 每条从本节点前态独立开始，由 probe 显式创建所需仓与夹具，不传递其他用例的后态。
+
+- id: accept-retire-bound-schema-path
+  title: 代码里不再有从 Schema 读取取值声明的路径
+  claims: ["liveaccess#U21", "liveaccess#U13"]
+  given:
+    - 重构完成后的仓库。
+  when:
+    - 执行结构检查，查找从 Schema 读取 origin 或 binding 的解析路径、实例声明的旧回退路径，以及系统 Schema 中的 origin 与 access 字段。
+  then:
+    - 取值声明只从单元头的 valueSource 解析；不存在先查 Schema 再回落实例的分支。
+    - 系统仓发布的 Schema 与产品出版物不再出现字段级 access 或 Schema 级 origin。
+  risk: 旧路径残留成隐藏回退，新旧两种写法同时生效。
+
+- id: accept-retire-repository-plugin-selection
+  title: 代码与场景里不再有按仓选择插件
+  claims: ["liveaccess#U14", "discovery#U2"]
+  given:
+    - 重构完成后的仓库。
+  when:
+    - 执行结构检查，查找按仓选择插件实例的函数、仓元数据中的插件选择，以及场景 DSL 的按仓指定 LiveAccess 实例写法。
+  then:
+    - 三者都不存在；插件实例只由部署按清单名或协议对应。
+  risk: 按仓选择残留在测试夹具或装配代码里，掩盖解释器模型没有真正落地。
+
+- id: accept-retire-repository-scoped-search
+  title: 代码、夹具与场景里不再有按仓的检索与 Schema 访问声明
+  claims: ["discovery#U2", "discovery#U10"]
+  given:
+    - 重构完成后的仓库与部署。
+  when:
+    - 执行结构检查，查找搜索与索引维护命令的按仓范围参数、按仓授予的搜索动作、Schema 字段上的访问声明解析，以及场景树夹具 Schema 里的 access 字段和用按仓范围搜索的 construct 与 probe。
+    - 对一个已发布的业务 Schema 执行 kc schema describe。
+  then:
+    - 搜索、关系与遍历只接受 Dataset 范围；索引准备与状态只按 Dataset 修订查看；不存在按仓授予的搜索动作，能否搜索只看 Dataset 消费权。
+    - Schema 解释器不读取字段 access；场景树夹具里的业务 Schema 不带 access，检索能力只来自选进 Dataset 的索引声明。
+    - kc schema describe 只返回结构（字段路径、类型、约束），不返回访问能力，并指向索引声明的说明入口。
+  risk: 新入口落地了，旧的按仓搜索、按仓搜索授权或 Schema 访问声明作为第二条路径残留，场景夹具继续靠旧写法变绿，掩盖索引声明没有真正接管。

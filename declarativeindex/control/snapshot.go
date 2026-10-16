@@ -33,7 +33,7 @@ func (c *Controller) repository(id kernel.RepositoryID) (objectmodel.Repository,
 	return repo, nil
 }
 
-func (c *Controller) reconcile(ctx context.Context) (map[kernel.RepositoryID]repositoryHead, error) {
+func (c *Controller) reconcile(ctx context.Context, only kernel.RepositoryID) (map[kernel.RepositoryID]repositoryHead, error) {
 	heads := map[kernel.RepositoryID]repositoryHead{}
 	targets, err := c.store.List()
 	if err != nil {
@@ -44,7 +44,7 @@ func (c *Controller) reconcile(ctx context.Context) (map[kernel.RepositoryID]rep
 		known[target.Repository] = target
 	}
 	var joined error
-	for _, id := range c.demandRepositories() {
+	for _, id := range c.demandRepositories(only) {
 		if err := ctx.Err(); err != nil {
 			return heads, errors.Join(joined, err)
 		}
@@ -100,9 +100,9 @@ func (c *Controller) applyPending(ctx context.Context, heads map[kernel.Reposito
 	return joined
 }
 
-func (c *Controller) catchUpFixed(ctx context.Context) error {
+func (c *Controller) catchUpFixed(ctx context.Context, only kernel.RepositoryID) error {
 	var joined error
-	for _, id := range c.demandRepositories() {
+	for _, id := range c.demandRepositories(only) {
 		if len(c.demands[id]) == 0 {
 			continue
 		}

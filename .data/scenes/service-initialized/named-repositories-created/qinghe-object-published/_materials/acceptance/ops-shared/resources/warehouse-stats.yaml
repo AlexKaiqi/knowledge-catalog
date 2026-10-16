@@ -1,0 +1,14 @@
+---
+object_id: ops/warehouse-stats
+---
+kind: ResourceDescriptor
+name: Warehouse table statistics
+description: Current row counts served by the acceptance live origin.
+origin: http://live-origin:7400
+mode: state
+runtime: http
+protocol: resource-access/v1
+identity: shared
+access:
+  lookup:
+    call: lookup

@@ -50,27 +50,48 @@ func DecodeSchemaIndex(raw []byte) ([]objectmodel.ObjectID, error) {
 	return ids, nil
 }
 
-// BindingCoordinate is one binding unit and the Schema it adopts. The binding
-// index lists every binding unit so Writer maintains it exactly from the
-// objects a ChangeSet touches; BindingSchemaObjectIDs is derived from it.
+// BindingCoordinate is one binding unit, the Schema it adopts (if any) and
+// the ResourceDescriptor it references. The binding index lists every binding
+// unit so Writer maintains it exactly from the objects a ChangeSet touches;
+// BindingSchemaObjectIDs and BindingReferences are both derived from it.
 type BindingCoordinate struct {
-	Address objectmodel.Address  `json:"address"`
-	Schema  objectmodel.ObjectID `json:"schema"`
+	Address    objectmodel.Address  `json:"address"`
+	Schema     objectmodel.ObjectID `json:"schema,omitempty"`
+	Descriptor objectmodel.ObjectID `json:"descriptor,omitempty"`
 }
 
-// BindingCoordinates lists the binding units in tree that adopt a Schema.
+// BindingCoordinates lists every binding unit in tree.
 func BindingCoordinates(tree *Tree) []BindingCoordinate {
 	out := []BindingCoordinate{}
 	for _, units := range tree.ByObject {
 		for _, unit := range units {
-			parsed, ok := objectmodel.ParseSchemaRef(unit.SchemaRef)
-			if ok && unit.ValueSource.IsBinding() {
-				out = append(out, BindingCoordinate{Address: unit.Address, Schema: parsed.Object})
+			if !unit.ValueSource.IsBinding() {
+				continue
 			}
+			coordinate := BindingCoordinate{Address: unit.Address, Descriptor: unit.ValueSource.Binding.DescriptorRef}
+			if parsed, ok := objectmodel.ParseSchemaRef(unit.SchemaRef); ok {
+				coordinate.Schema = parsed.Object
+			}
+			out = append(out, coordinate)
 		}
 	}
 	sortBindingCoordinates(out)
 	return out
+}
+
+// BindingReferences derives the descriptor references from binding
+// coordinates. An index written before coordinates carried descriptors cannot
+// answer and requires an explicit locator rebuild instead of a scan.
+func BindingReferences(coordinates []BindingCoordinate) ([]objectmodel.BindingReference, error) {
+	out := make([]objectmodel.BindingReference, 0, len(coordinates))
+	for _, coordinate := range coordinates {
+		if coordinate.Descriptor == "" {
+			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+				"binding unit coordinates predate descriptor references; explicitly rebuild locators")
+		}
+		out = append(out, objectmodel.BindingReference{Address: coordinate.Address, DescriptorRef: coordinate.Descriptor})
+	}
+	return out, nil
 }
 
 func sortBindingCoordinates(coordinates []BindingCoordinate) {
@@ -91,8 +112,9 @@ func DecodeBindingIndex(raw []byte) ([]BindingCoordinate, error) {
 		return nil, err
 	}
 	for _, coordinate := range coordinates {
-		if !objectmodel.IsSchemaObject(coordinate.Schema) || coordinate.Address.ObjectID == "" {
-			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "binding index entry %s has no adopted schema", objectmodel.AddressKey(coordinate.Address))
+		schemaOK := coordinate.Schema == "" || objectmodel.IsSchemaObject(coordinate.Schema)
+		if !schemaOK || coordinate.Address.ObjectID == "" || (coordinate.Schema == "" && coordinate.Descriptor == "") {
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "binding index entry %s names neither an adopted schema nor a descriptor", objectmodel.AddressKey(coordinate.Address))
 		}
 	}
 	sortBindingCoordinates(coordinates)
@@ -104,6 +126,9 @@ func BindingSchemas(coordinates []BindingCoordinate) []objectmodel.ObjectID {
 	seen := map[objectmodel.ObjectID]struct{}{}
 	out := []objectmodel.ObjectID{}
 	for _, coordinate := range coordinates {
+		if coordinate.Schema == "" {
+			continue
+		}
 		if _, dup := seen[coordinate.Schema]; !dup {
 			seen[coordinate.Schema] = struct{}{}
 			out = append(out, coordinate.Schema)

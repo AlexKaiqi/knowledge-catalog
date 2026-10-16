@@ -8,18 +8,19 @@
 
 `ReadDeployment` 接受单个 YAML 或 JSON 文档，拒绝未知字段。`DeploymentConfig` 是配置合同；部署工具负责版本化和分发配置，服务凭证通过环境注入；用户显式连接凭证遵守下文的私有耐久账合同。
 
-`liveaccess.credentialOrigins` 是调用方证明的可信适用 HTTP origin 列表，不启用插件。
-Repo 原生 `kc.plugins` 另行选择 `liveaccess` 实例，Dataset 复用来源选择；根 Home 固定装配
-Index 与 LiveAccess 两类贡献，借用视图共享该选择。LiveAccess 的构造、取值和释放归
-模块入口，配置及结果合同见 [LiveAccess](../liveaccess/README.md)。
+`liveaccess.credentialOrigins` 是调用方证明的可信适用 HTTP origin 列表，不启用插件；
+`liveaccess.lookupTimeout`、`liveaccess.readTimeout` 是单元与单次读取的外部取值时限（正 Go duration）。
+顶层 `plugins` 按插件名安装实例（见下文“部署插件与运行装配”）；Repo 与 Dataset 不选择实例。
+根 Home 固定装配 Index 与 LiveAccess 两类贡献，借用视图共享同一运行视图。LiveAccess 的
+构造、取值和释放归模块入口，配置及结果合同见 [LiveAccess](../liveaccess/README.md)。
 
-`auth` 接受 `local`、`taihu`、`gitea` 或遗留 `lakefs`。组合多用户控制台沿用现有
-`taihu`/`gitea` 认证与 `authURL`，Repo、Dataset 均由 Snapshot 当前规则授权；
+`auth` 接受 identity 注册表中的认证方式：`local` 或 `taihu`。组合多用户控制台沿用现有
+`taihu` 认证与 `authURL`，Repo、Dataset 均由 Snapshot 当前规则授权；
 `KC_LAKEFS_CREDENTIAL` 只作为服务私有存储凭据。原 native origin 从显式 Registry lakeFS
 DSN 确定，不从认证来源或首个仓推断。若使用已有浏览器认证网关会话，`authLogoutURL`
 显式指定该网关的退出 URL（HTTP(S) 或同源绝对路径）；KC 不猜测或创建会话退出服务。
-遗留单主体接线可显式配置 `auth: lakefs`、`authURL: <原 lakeFS origin>`，仍按原证明验证。
-Cookie 防跨站边界、用户名绑定与原 API 秒精度身份回收限制见
+lakeFS 只作存储，不作身份来源；原 `auth: lakefs` 已退役。
+浏览器请求检查与用户名绑定见
 [`server/README.md`](../server/README.md)。登录不自动授予 登记表/Dataset 动作。
 
 ```yaml
@@ -85,7 +86,15 @@ LakeFS 业务仓的 Graveler 名、协议 `--repo` 和管理入口最后一段�
 ```yaml
 repositoryAccess:
   - id: kr://kc/system
-    authenticatedActions: [object.read, object.schema.read, object.search, object.history.read, object.provenance, object.relations, object.access.describe, file.read, projection.read]
+    authenticatedActions: [object.read, object.schema.read, object.history.read, object.provenance, object.relations, object.access.describe, file.read, projection.read]
+```
+
+`datasetAccess` 按 Dataset 声明已认证默认消费动作，闭集为 `dataset.resolve`、`file.read`。`deployment init`/`OpenDeployment` 把声明写入 `stateDir/dataset-access.json`；授权时为当前已认证 principal 派生只作用于该 Dataset 的规则，不写回 `allow.json`、不出现在 `grant list`，也不放行来源仓的 `--repo` 读取、`dataset define` 或写。未列出的 Dataset 仍要 grant。
+
+```yaml
+datasetAccess:
+  - id: qinghe-analysis
+    authenticatedActions: [dataset.resolve, file.read]
 ```
 
 `repositories` 只是运营者批准的连接绑定，不代表 登记表 成员关系。`attach --repo <id>` 使用静态绑定或已供给托管仓的耐久绑定，只读检查已有 Snapshot，再通过一次 登记表 Snapshot 提交完成接入；重复准入不创建新仓或重新发权。没有单独手工 register，也没有持久化的第二份 attached 状态。已有但不兼容的 authority 状态必须报错，不能在接入或恢复时迁移。
@@ -134,19 +143,35 @@ repositoryAccess:
 
 正式部署的并行读取通过 `ReadView` 隔离每个请求的 Reader、过程账身份和 登记表 已接受状态，不修改进程共享的 journal 或 Writer stamp。视图借用 Store、Writer、命令账本与 Index，保留回执查询能力，调用方不得关闭共享资源。登记表 视图不重新加载 Snapshot 权威、不订阅 Snapshot 事件，也不能持久化变更。只有保证读取不会隐式收养配方的正式部署路径使用该视图；组件夹具的显式装配语义保持独立。
 
-## Repo 插件与运行装配
+## 部署插件与运行装配
 
-插件启用来自各 Repo 的原生 `kc.plugins` metadata；格式与贡献合同归
-[`discovery/plugin`](../discovery/plugin/README.md)。Home 按来源构造真实插件入口，
-固定 Object 读取、Writer 和正文缓存保持独立；Dataset 使用来源仓的运行贡献。
+插件实例只来自部署配置的顶层 `plugins`（严格解码，本机夹具 `stores.yaml` 用同名字段）：
 
-自有连接的冷恢复只重建来源句柄，不读取远端插件配置。其尚未核验的配置显式保留为
-来源故障，不能当作未启用；连接详情和凭据修复仍可进入。Server 在激活后台维护前，
-由根 Home 调用一次 `VerifyIndexPlugins`，读取当前 Repo 配置并替换待核验运行视图。
-Handler 构造不触发这一步；显式 `ManagedHTTPHandler.Start`，或嵌入式第一条需要运行资源
-的 typed 任务，完成核验并激活同一个根。静态插件说明保持冷态。
-请求借用的 `ReadView` 无权装配；已核验视图不随请求、凭据轮换或 metadata 更新重新加载，
-运行实例激活后拒绝重新装配。配置变更或故障修复在下一次根装配生效。
+```yaml
+plugins:
+  declarative-index:
+    instances:
+      main: {catalog: declarative-index/opensearch@2026-10}
+  liveaccess:
+    instances:
+      main: {protocol: resource-access/v1}
+```
+
+索引实例声明它解释的能力清单名 `catalog`；LiveAccess 实例声明 `protocol` 与可选
+`runtimes`，按取值描述的 `runtime` + `protocol` 认领。不写 `plugins` 时安装编译默认
+（LiveAccess `main` 认领该协议全部 runtime，索引后端不为 `none` 时再装声明式索引 `main`）；
+写成空映射则什么都不装，声明照常读写，取值或搜索明确报没有能力。同一清单名对应多个实例、
+同一 runtime 被多个访问实例认领、未知插件或实例名、实例里的未知字段（包括不支持的 `endpoint`），
+以及残留的按仓 `kc.plugins` 选择，部署都拒绝启动。格式与贡献合同归
+[`discovery/plugin`](../discovery/plugin/README.md)。Home 构造真实插件入口，固定 Object 读取、
+Writer 和正文缓存保持独立。
+
+自有连接的冷恢复只重建来源句柄，不读取来源上的任何插件配置。Server 在激活后台维护前，
+由根 Home 调用一次 `VerifyIndexPlugins`，按当时已恢复的全部来源重新打开部署实例并替换
+冷态运行视图。Handler 构造不触发这一步；显式 `ManagedHTTPHandler.Start`，或嵌入式第一条
+需要运行资源的 typed 任务，完成装配并激活同一个根。静态插件说明保持冷态。
+请求借用的 `ReadView` 无权装配；运行视图不随请求、凭据轮换或来源 metadata 更新重新加载，
+运行实例激活后拒绝重新装配。部署配置变更在下一次根装配生效。
 
 `ExplainPlugin` 只读取实际入口登记的静态说明，不打开 Home、来源或引擎，不验证就绪。
 Server 的 `BeginShutdown` 先拒绝新工作，再调用 `StopMaintenance` 取消并等待维护；此时保留查询资源，
@@ -210,10 +235,12 @@ stores:
 
 ## 库存发现入口
 
-`RegistryBinding.discoveryWorkspaceId` 可指向本服务中一条普通、管理员维护的 Dataset。配置只选择发现入口，不创建或更改配方，也不自动收集全部已登记来源。`show` 返回该 identity；入口未配置时，库存范围搜索明确返回能力缺失。
+使用者从 `show` 的消费库存选择 Dataset，再用命名 Dataset 的固定发布修订搜索和回读；库存列举不经过对象索引。仓读权不代替 Dataset 消费权，查询也不依据调用者全部可读来源临时组范围。
 
-库存发现入口 由 Client 执行 show → 普通 ResolveDataset → 固定 pin SEARCH。已有 typed Resolve 与 Search 请求的 `inventoryDiscovery: true` 只表达发现语境，Server 必须校验它匹配本部署配置的精确发现 Dataset，禁止混入临时 definition 或单仓坐标，SEARCH 必须携带固定 pin。通过该验证后的准入只看当前 `inventory.read`；没有 `file.read` 或逐仓 `object.search` 不裁掉 discovery 成员。正文仍通过现有交付链按当前逐仓 `object.read` 屏蔽；其他 Workspace、READ、Schema、文件、rerank 等动作不使用这条例外。
+`RegistryBinding.discoveryWorkspaceId` 仍可作为既有部署的名称提示，不自动收集来源或提供授权例外。旧 `inventoryDiscovery: true` 请求明确拒绝，不能用库存权限绕过 Dataset 的完整 `file.read`。投影 describe 使用消费范围，sync 要求该 Dataset 的 `dataset.manage`，不由消费动作授予构建成本。
 
 旧单空间耐久回执可以只读恢复：原 deployment marker 必须恰含一个权威并与唯一 `registry.id` 一致；混合格式、多权威和重复别名拒绝。历史 managed allocation 按原 request 字节验证摘要，原 allocation、初始政策与 READY 回执不因公共选择字段退出而重算；重放不会补权或改写记录。未完成创建由显式重试迁到新格式，显式 `deployment init` 才写新版 marker。旧连接记录同样严格核对原登记权威。
+
+已完成的托管回执可以只读核验历史对象动作拼写，原动作和授权不变。未完成分配若仍含历史动作，必须使用原版本完成或显式处置；新版本拒绝恢复，不把失效动作传给发权回调后记成完成。新部署配置仍只接受当前动作拼写。
 
 原控制台托管创建复用当前耐久分配与登记流程。`creatorActions` 允许显式选择 `snapshot/access.IsRepositoryCreatorAction` 的原 Repo 动作；物理删除、import、创建与授权管理不会自动发给创建者。分享只允许 `IsRepositoryReadAction` 的原仓读动作，不自动扩大到写。

@@ -1,0 +1,15 @@
+# Dataset 定义：三个来源都不写跟随方式，按默认跟随。形状以重构后的 kc dataset define --help 为准。
+dataset: sales-analysis
+sources:
+  - repository: table-meta
+    selector: refs/heads/main
+    path: tables
+    subPath: tables
+  - repository: sales-semantic
+    selector: refs/heads/main
+    path: metrics
+    subPath: metrics
+  - repository: sales-analysis
+    selector: refs/heads/main
+    path: indexes
+    subPath: indexes

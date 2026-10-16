@@ -2,7 +2,7 @@ views:
   - "access-control"
 layer: "2"
 role: "operator"
-surface: feature
+surface: both
 publishes:
   - "snapshot.authority"
   - "dataset.registry"
@@ -18,5 +18,12 @@ probes:
     views:
       - "access-control"
     title: "已配置未登记的源可由 Writer 维护并回读"
-fixture: "两个既有业务 Snapshot 已配置到测试环境但尚未进入 登记空间；仓原生 Repo metadata 显式选择 LiveAccess/main，保留独立索引选择，关系仓不默认选择 LiveAccess。供未登记边界、接入与后续绑定访问复用。"
-summary: "仓与关系仓已配置，仓显式采用 LiveAccess/main；登记空间仍只登记 System Repository。"
+evidence:
+  - id: "empty-object-authority-locator-metadata"
+    source: "writer.snapshot"
+    views: ["publication", "lifecycle"]
+    title: "空对象来源及其独立克隆保留完整零 Schema referrers"
+    tests:
+      - "TestSceneExistingRepositoryHasCompleteEmptyObjectMetadata"
+fixture: "两个既有空对象 Snapshot 由 Writer 显式 locator 维护交付完整空协议元数据，已配置但尚未进入登记空间。供未登记边界、接入与后续绑定访问复用。"
+summary: "空对象仓与关系仓已配置；插件实例由部署采用，登记空间仍只登记 System Repository。"

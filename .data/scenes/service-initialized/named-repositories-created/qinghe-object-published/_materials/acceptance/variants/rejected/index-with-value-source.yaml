@@ -1,0 +1,11 @@
+---
+object_id: index/sales-search
+aspect_name: index
+member_key: remote-config
+kind: Member
+schema_ref: schema/core/index-declaration/v1
+valueSource:
+  kind: binding
+  binding:
+    descriptorRef: ops/warehouse-stats
+---

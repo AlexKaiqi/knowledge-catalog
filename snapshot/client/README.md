@@ -27,9 +27,10 @@ requests remain uncompressed and use native `message` / `code` errors.
 
 `Client` exposes three services. `Service` addresses inventory and audit,
 registered Repository membership, Dataset definitions and releases, and native
-metadata. `FilesService` provides Dataset mounts, bounded directory pages and
-file ranges. `AccessService` provides explicit grant inventory, add, atomic
-update, revoke and the current caller's admission overview. Provisioning,
+metadata. `FilesService` provides Dataset mounts and bounded directory pages,
+plus file ranges from a Dataset or fixed Repository commit. `AccessService`
+provides explicit grant inventory, add, atomic update, revoke and the current
+caller's admission overview. Provisioning,
 connection credentials, ownership recovery and sharing remain host application
 operations, not independent Snapshot SDK methods.
 
@@ -70,6 +71,17 @@ fixed pin. Mount-relative coordinates (`MountPath` plus `Directory` or `File`)
 and delivered-tree `Path` coordinates do not mix. Empty delivered `Path`
 addresses the root. The fixed commits determine directory entries and bytes;
 every read still uses current access policy.
+
+`WorkspaceFileReadRequest` also accepts `Repository`, `Commit` and `Path` for
+one raw source file. `Repository` is the logical ID already present in resource
+declarations, not a native lakeFS name; `Commit` must be an immutable commit,
+not a branch, ref or `HEAD`. This mode cannot carry Dataset, pin, view or
+mount-relative coordinates. Call the same `FilesService.Read` method with a
+`RepositoryFileReadResponse` output. It returns source coordinates, byte range,
+total size and binary content without a Dataset pin. No inventory query or
+Dataset publication is required; each request needs the current raw Repository
+`file.read` permission. Dataset consumption does not grant that permission.
+Directory and mount methods remain Dataset-only.
 
 `UpdateGrant` sends `PUT /admin/v1/grants/{id}` with a full editable replacement
 and its previously observed `GrantExpected`. It does not fetch a fresher rule

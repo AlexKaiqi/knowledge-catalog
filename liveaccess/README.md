@@ -7,14 +7,17 @@ HTTP SDK 归 `client/`。Object Reader 只读固定声明，宿主负责公共�
 
 ## 采用与读取
 
-Repo 原生 metadata 的 `kc.plugins` 选择 `liveaccess` 实例。Server 启动时固定配置，
-Dataset 沿每个来源 Repo 的选择组合；没有选中贡献时，外部值明确失败，不调用旧全局实现。
+部署配置的 `plugins.liveaccess` 安装实例；实例按取值描述的 `runtime` + `protocol` 认领声明，
+Repo 与 Dataset 不选择实例。Server 启动时固定配置；没有实例认领时，外部值明确报没有能力，
+声明照常读写，不调用旧全局实现。同一 runtime 被多个实例认领时部署拒绝启动。
 配置、登记和生命周期合同见 [插件入口](plugin/README.md)与[消费服务](service/README.md)。
 
 `ResolvedBinding`、`ResolveRepoBinding`、`ResolveBinding`、`ResolveBindingAt`、`ResolveDeclaration`
 是唯一一条解释路径：binding 单元的 `descriptorRef` 经 `DescriptorScope`（`RepositoryDescriptors` /
 `ServingDescriptors`）在请求范围内按 ID 解析并固定版本，origin 与 mode 取自 ResourceDescriptor，
 声明摘要组合单元与取值描述两个版本；范围内同一 ID 多处持有为 `OBJECT_ID_CONFLICT`。
+取值描述所在仓没选入 Dataset 时，`ServingDescriptors` 在范围内读不到后改用 `Serving.ReadDependency`，
+按发布时冻结的依赖版本解释；依赖仓不是成员，前进不改变解释，也不进入读取、文件范围与搜索。
 声明解释不调用来源，不重新读取兄弟单元或改用 HEAD。
 
 业务 `read` 的 Repo/Dataset 入口均采用[逻辑读取](service/README.md)：静态值保留，
@@ -47,10 +50,20 @@ Dataset 沿每个来源 Repo 的选择组合；没有选中贡献时，外部值
 State 与 Stream 沿已有声明区分，普通读取不将 Stream 隐式数组化。
 
 认证证明来自本次 Server 已验证调用，`HTTPStateLookupOptions.CredentialOrigins` / 部署配置
-`liveaccess.credentialOrigins` 指定其可信适用 HTTP origin。声明不能扩充这个范围；
-携带证明访问范围外目标会在出站前拒绝，跨 origin 重定向也拒绝。
+`liveaccess.credentialOrigins` 指定其可信适用 HTTP origin。声明不能扩充这个范围；origin 按
+scheme、host、port 精确比较（缺省端口按 scheme 补齐，host 大小写归一），不做通配或后缀放行。
+范围外目标照常外呼但不附任何调用者证明，只带主体与关联；跨 origin 重定向拒绝。
 证明只进入认证头，主体、request/trace 保留关联；源返回值、basis 和错误不得夹带证明。
 后台维护使用显式服务身份，不借用消费者请求。凭证不存入对象、日志或审计。
+
+源错误逐单元保留：401/403 为 `FORBIDDEN`；源给出的可识别错误码（如 404
+`OBJECT_REF_UNRESOLVED`）原样保留；其余 4xx 为 `CAPABILITY_UNSATISFIED`；429、408、5xx
+与不可达为 `TEMPORARY_UNAVAILABLE`。都不当 null。
+
+`liveaccess.lookupTimeout` 是单元时限，`liveaccess.readTimeout` 是一次读取中外部取值共用的
+剩余时限（Go duration，须为正）。`ReadLimits` 经 `ContextWithReadLimits` 随请求传入：每个单元取
+两者较小者；预算用尽后其余单元逐个报 `TEMPORARY_UNAVAILABLE` 超时，已取到的值照常返回。
+预算不作为请求 ctx 的 deadline，不截断快照读取与留证。
 
 ## 原结果审计与索引
 

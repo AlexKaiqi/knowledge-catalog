@@ -1,0 +1,22 @@
+---
+object_id: index/system
+aspect_name: index
+member_key: capability-usage-body
+kind: Member
+path_hint: index/system/capability-usage-body.yaml
+schema_ref: schema/core/index-declaration/v1
+---
+{
+  "catalog": "declarative-index/opensearch@2026-10",
+  "inputs": [
+    {
+      "from": "schema/system/capability-usage/v1#/fields/body"
+    }
+  ],
+  "build": {
+    "kind": "text"
+  },
+  "uses": [
+    "text"
+  ]
+}

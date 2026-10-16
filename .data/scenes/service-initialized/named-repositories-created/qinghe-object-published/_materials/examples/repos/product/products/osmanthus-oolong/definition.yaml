@@ -1,0 +1,15 @@
+---
+object_id: product/qinghe.osmanthus-oolong
+aspect_name: definition
+kind: Aspect
+schema_ref: schema/product.definition
+---
+name: 桂花乌龙
+sku: QH-TEA-0915
+category: Tea
+listPrice: 32
+currency: CNY
+launchDate: "2026-09-15"
+status: ON_SALE
+description: 秋季新品。乌龙茶底窨制桂花，热饮与冷泡都可。门店与小程序同步上架。
+owner: 商品组 Chen

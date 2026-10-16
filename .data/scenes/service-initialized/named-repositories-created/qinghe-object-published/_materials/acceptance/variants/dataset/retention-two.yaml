@@ -1,0 +1,22 @@
+# Dataset 定义：检索保留“至少 1 小时，且至少 2 个修订”；来源全部手动，修订由 probe 逐版发布。
+# probe 用测试部署的可控时钟推进时间，不真实等待。退役与续页宽限用例改这两个数即可，不另起文件。
+dataset: sales-analysis
+searchRetention:
+  minAge: 1h
+  minRevisions: 2
+sources:
+  - repository: table-meta
+    selector: refs/heads/main
+    path: tables
+    subPath: tables
+    follow: manual
+  - repository: sales-semantic
+    selector: refs/heads/main
+    path: metrics
+    subPath: metrics
+    follow: manual
+  - repository: sales-analysis
+    selector: refs/heads/main
+    path: indexes
+    subPath: indexes
+    follow: manual

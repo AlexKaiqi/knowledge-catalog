@@ -16,11 +16,13 @@ Dataset 与文件授权由 Snapshot Store 的应用面提供，上层 KC 负责�
 - `src/lib/components/navbar.jsx` 增加 Datasets 导航；Dataset 页面复用 Layout，
   原仓页保留原导航、仓内 tabs 和能力入口。恢复可达页面时修正了源码类型问题。
 - `src/lib/api/kc.ts` / `session.ts` / `transport.ts` 与原 `index.js`
-  共用现有认证证明。Taihu/Gitea 模式使用认证系统已签发的用户令牌，组织认证沿用
-  既有 PAR/PKCE 与续期；`whoami` 确认主体后才进入控制台。浏览器令牌仅保存在
+  共用现有认证证明。是否接受用户令牌只按服务配对的 `localAssertion` 与 `accepts` 判断，
+  不按认证器名字；组织认证及续期只在本次配对公开 `browserLogin` 时采用既有 PAR/PKCE 与 token 中转。
+  当前服务配对只保留在内存，本地证明不能自行声明登录或续期能力；`whoami` 确认主体后才进入控制台。
+  浏览器令牌仅保存在
   按 origin 隔离的 sessionStorage，不进入 URL、localStorage、pin 或资源定义。
   原 Repo、Dataset 与授权页没有第二次认证。退出、身份切换和迟到响应有代次保护，
-  续期必须再次确认同一主体。遗留 lakeFS 模式仍可显式使用原会话。
+  续期必须再次确认同一主体，且旧登录的续期不得覆盖或清除新登录。lakeFS 仅作存储，不作用户身份来源。
   `sharedLogin.tsx` 复用 Bootstrap 登录布局，不创建账号、组或签发用户令牌。
 - `src/pages/kc/` 在 `/datasets` 直接列出服务登记的 Dataset；名称在一套服务内唯一。
   新建、编辑与历史详情使用 `/datasets/actions/create`、`/datasets/:dataset/edit` 与 `/datasets/:dataset`，
@@ -93,7 +95,6 @@ DSN；不同认证系统的 issuer 不会被误当成存储地址。
 
 ```yaml
 auth: taihu
-# 或已有 Gitea 认证地址；不是 Gitea 存储 adapter
 authURL: https://identity.example.test/oauth2
 # 使用网关浏览器会话时必须声明其既有退出入口
 authLogoutURL: https://identity.example.test/logout
@@ -143,7 +144,7 @@ Cookie/签名网关浏览器请求保留 Fetch Metadata 和 `X-Kc-Console: 1`，
 私网 lakeFS 与原始介质必须仅能被服务访问；只在网关挂权限却允许用户直连数据 origin
 仍可绕过，不能算可用部署。本轮测试用随机 localhost 端口隔离容器，真实用户令牌直连
 native 被拒绝；生产网络防火墙与具体 Taihu SSO/SLO 仍需独立部署验收。
-遗留 `auth: lakefs` 接线保留其单用户与秒精度身份代际限制，不计多用户验收。
+原 `auth: lakefs` 接线已退役：lakeFS 只作存储，浏览器会话由部署的认证方式（如 Taihu）承接。
 
 ## 检查范围与已知限制
 
@@ -156,5 +157,5 @@ native 被拒绝；生产网络防火墙与具体 Taihu SSO/SLO 仍需独立部�
 前端回归与 Go 合同覆盖原路由保留、统一会话验证/失效/凭据边界、唯一登记空间、固定来源发布、
 JSON 拒绝与切换、预览失效、真实历史/比较、分页 pin、Base64 和迟到响应。
 实际浏览器与最终总门禁的本次证据见 [控制台验证记录](CONSOLE-VALIDATION.md)
-和 `TASK.md` DATASET-04。
+和 `tasks/done/DATASET-04.md`。
 Taihu 外部授权、生产代理配置和真实 lakeFS 部署均为独立验证入口。

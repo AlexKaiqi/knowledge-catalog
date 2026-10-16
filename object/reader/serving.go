@@ -20,6 +20,9 @@ type DatasetPin struct {
 	Revision     int                                     `json:"revision"`
 	Repositories map[kernel.RepositoryID]kernel.CommitID `json:"repositories"`
 	Items        []DatasetItem                           `json:"items,omitempty"`
+	// Dependencies are interpretation-only versions frozen with the revision.
+	// They are not members: Read, Holds, file scope and search never see them.
+	Dependencies map[kernel.RepositoryID]kernel.CommitID `json:"dependencies,omitempty"`
 }
 
 // DatasetItem is the consumer copy of a Dataset service file pointer. Serving uses it
@@ -88,6 +91,7 @@ type ObjectLog struct {
 
 func Open(lookup MemberLookup, pin DatasetPin) *Serving {
 	pin.Repositories = maps.Clone(pin.Repositories)
+	pin.Dependencies = maps.Clone(pin.Dependencies)
 	pin.Items = slices.Clone(pin.Items)
 	pin.Items = slices.DeleteFunc(pin.Items, func(item DatasetItem) bool {
 		return item.Commit == "" || pin.Repositories[item.Repository] != item.Commit || (item.Kind != "prefix" && item.Kind != "file")
@@ -119,6 +123,7 @@ func FederatedRead(lookup MemberLookup, pin DatasetPin, objectID objectmodel.Obj
 func (s *Serving) Pin() DatasetPin {
 	pin := s.pin
 	pin.Repositories = maps.Clone(pin.Repositories)
+	pin.Dependencies = maps.Clone(pin.Dependencies)
 	pin.Items = slices.Clone(pin.Items)
 	return pin
 }

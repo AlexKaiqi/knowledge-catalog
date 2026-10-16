@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"reflect"
 	"testing"
 )
 
@@ -75,5 +76,20 @@ func TestSearchDailyProductView(t *testing.T) {
 	}
 	if _, ok := hit["value"]; ok {
 		t.Fatalf("search hit kept body: %#v", hit)
+	}
+}
+
+func TestSearchProductViewPreservesDeclarationAndSourceVersionEvidence(t *testing.T) {
+	evidence := []any{map[string]any{"provider": "declarative-index", "lane": "lexical", "members": []any{map[string]any{"repository": "r-index", "commit": "c-index", "member": map[string]any{"objectId": "index/task", "aspectName": "index", "memberKey": "name"}, "role": "text"}}}}
+	sources := []any{map[string]any{"repository": "r-one", "commit": "c-one"}, map[string]any{"repository": "r-two", "commit": "c-two"}}
+	indexObservations := []any{map[string]any{"address": "urn:kc:object:service/orders#/health", "valueBasis": "snapshot:c-old", "observationId": "obs-old"}}
+	version := map[string]any{"objectId": "service/orders", "sources": sources, "units": []any{map[string]any{"valueBasis": "snapshot:c-one"}}}
+	result := Shape("search", map[string]any{"hits": []any{map[string]any{"object": map[string]any{"repository": "r-one", "commit": "c-one", "objectId": "service/orders", "reference": "urn:kc:object:service/orders", "sources": sources, "value": map[string]any{"body": "secret"}}, "version": version, "evidence": evidence, "indexObservations": indexObservations}}}).(map[string]any)
+	hit := result["hits"].([]any)[0].(map[string]any)
+	if !reflect.DeepEqual(hit["indexObservations"], indexObservations) || !reflect.DeepEqual(hit["evidence"], evidence) || !reflect.DeepEqual(hit["sources"], sources) || !reflect.DeepEqual(hit["version"], version) || hit["reference"] != "urn:kc:object:service/orders" {
+		t.Fatalf("fixed source/member evidence was lost: %#v", hit)
+	}
+	if hit["value"] != nil || hit["object"] != nil {
+		t.Fatalf("CLI search view included Canonical body: %#v", hit)
 	}
 }

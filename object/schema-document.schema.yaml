@@ -1,7 +1,7 @@
 # JSON Schema of a Domain Schema document (schema/* value).
 # The executable trust root is ParseSchemaDefinition + System Repository
 # digest; this file is the same contract for humans and equivalence tests.
-# Do not add types, access tokens, or pattern values that Go does not accept.
+# Do not add types or pattern values that Go does not accept.
 $schema: https://json-schema.org/draft/2020-12/schema
 $id: kc://object/schema-document
 title: SchemaDocument
@@ -35,9 +35,6 @@ properties:
     additionalProperties:
       $ref: "#/$defs/field"
 $defs:
-  access:
-    type: string
-    enum: [text, filter, sort]
   fieldType:
     type: string
     enum:
@@ -57,16 +54,9 @@ $defs:
   field:
     type: object
     additionalProperties: true
-    allOf:
-      - if:
-          required: [type]
-          properties:
-            type:
-              enum: [object, record, array, relation_endpoint_list]
-        then:
-          properties:
-            access:
-              maxItems: 0
+    # Schema describes structure only; retrieval belongs to an index declaration.
+    not:
+      required: [access]
     properties:
       type:
         $ref: "#/$defs/fieldType"
@@ -79,8 +69,3 @@ $defs:
           type: string
           minLength: 1
         uniqueItems: true
-      access:
-        type: array
-        uniqueItems: true
-        items:
-          $ref: "#/$defs/access"

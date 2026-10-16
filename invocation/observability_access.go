@@ -70,7 +70,7 @@ func objectAccessCommand(command string, flags map[string]invoke.FlagValue) bool
 	switch command {
 	case "pin", "object-resolve", "object-binding-show", "object-read", "object-access",
 		"object-relations", "object-traverse", "object-search", "rerank", "search-rerank", "object-provenance",
-		"object-schema-describe", "operations-access-spec-describe", "object-log", "object-invoke":
+		"object-schema-describe", "operations-access-spec-describe", "object-log", "object-invoke", "file-read":
 		return true
 	default:
 		return false
@@ -119,7 +119,7 @@ func RecordObjectAccess(home, command string, flags map[string]invoke.FlagValue,
 	if observed, ok := result.(ObservedAccessResult); ok {
 		event.LiveAccess = observed.LiveAccess
 	}
-	if command == "file-mounts" {
+	if command == "file-mounts" || (command == "file-read" && len(event.Files) == 0) {
 		event.Snapshots = SnapshotAccesses(accessOutput(result))
 	}
 	if len(event.Object) == 0 {
@@ -184,6 +184,9 @@ func ObjectAccesses(result any) []observability.ObjectAccess {
 				}
 				walk(joined)
 				return
+			}
+			for _, source := range composedAccessEnvelopes(current) {
+				walk(source)
 			}
 			repo := StringValue(current["repository"])
 			commit := StringValue(current["commit"])

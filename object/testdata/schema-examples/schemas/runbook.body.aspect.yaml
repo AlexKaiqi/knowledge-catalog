@@ -8,4 +8,3 @@ pattern: record
 fields:
   body:
     type: string
-    access: [text]

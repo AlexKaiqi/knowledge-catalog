@@ -1,0 +1,3 @@
+ARG KC_RUNTIME_IMAGE=kc-deploy-local:local
+FROM ${KC_RUNTIME_IMAGE}
+COPY kc fixture-deployment /usr/local/bin/

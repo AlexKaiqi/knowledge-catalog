@@ -6,7 +6,7 @@ path_hint: concepts/address/definition.md
 ---
 # 对象地址
 
-完整访问引用由对象 URN 与内容 locator 表达。URN 指认来源 Repository 与 object_id，JSON Pointer 从对象内容根选择节点，不指向文件路径或交付信封；版本及 Repo、Dataset 访问语境作为读取依据另行固定。READ、PUT、REMOVE 接受同一种引用，调用方不必拆成仓、对象、切面、成员参数。
+完整访问引用由对象 URN 与内容 locator 表达。URN 只包含 object_id，JSON Pointer 从对象内容根选择节点，不指向文件路径或交付信封；来源仓与固定 commit 由读取依据记录，Repo、Dataset 访问范围另行指定。READ、PUT、REMOVE 接受同一种引用；写入另行指定目标 Repository，不能把仓名编码进 URN。
 
 例如，`urn:kc:object:table/orders#/columns/order_id` 定位一个列 Member；再加 `/constraints/nullable` 可读取其中的数据。空 locator 指向对象根，`/` 选择空名称字段；键名中的 `/` 与 `~` 分别用 `~1` 与 `~0` 转义。不存在的节点与合法空值分别报告。
 

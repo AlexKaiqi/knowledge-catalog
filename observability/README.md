@@ -10,6 +10,11 @@
 - `AccessLog`：`GetAccess(evidenceId)` 与带时间窗的 `Access` 分页查询。
 - `FileStore`：本机 JSONL adapter，同时实现上述口。完整单行追加、文件 `Sync` 与 `Close` 均成功后才返回耐久 ack；同一 store 上随后可以按 evidence ID 读回。其它介质以自身耐久事务提交提供同一语义，不要求模拟文件调用。生命周期复用日志船 / Hive 日分区 / Elasticsearch ILM：新事件写入 `access/YYYY-MM-DD.jsonl`（UTC 日），保留空的 `access.jsonl` 作为旧部署 marker 并在首次读写时迁入分区；默认热窗 30 天（硬顶 180 天），闭日文件删除；查询未给 `since` 时即热窗；流字节上限默认 1GiB、磁盘 95% flood-stage 时 fail-closed `TEMPORARY_UNAVAILABLE`。不引入新日志依赖。部署可选 `evidence.hotRetention` / `evidence.maxBytes`。
 
+检索证据的一个组合命中仍是一名候选、一个 rank。`RetrievalCandidate.Sources` 保存各来源仓、固定
+提交及其互不重叠的 Aspects；组合候选只保留对象身份，不虚构单仓 Repository/Commit。它必须属于
+命名 Dataset，每个来源提交都精确匹配本次 `SearchView`；查询及训练样本重建原样保留来源向量。
+单仓候选沿既有 pinned ObjectRef 合同，不需要 `Sources`；没有来源向量的空仓或空提交仍拒绝留证。
+
 | 文件组 | 负责 |
 |---|---|
 | `observability.go` | Recorder / AccessLog / Receipt |

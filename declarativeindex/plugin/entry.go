@@ -4,7 +4,7 @@ package plugin
 import (
 	"path/filepath"
 
-	indexcli "kc/declarativeindex/cli"
+	indexcapability "kc/declarativeindex/capability"
 	"kc/declarativeindex/control"
 	projection "kc/declarativeindex/projection"
 	discoverydatasets "kc/discovery/datasets"
@@ -15,16 +15,34 @@ import (
 	"kc/snapshot/dataset"
 )
 
+// Catalog is the capability catalog this compiled entry answers. A deployment
+// maps it to one instance; declarations name it to choose their interpreter.
+const Catalog = indexcapability.ManifestName + "@" + indexcapability.ManifestVersion
+
 type Options struct {
-	Directory string
-	Engine    func(string) index.EngineOpener
-	Lookup    func(kernel.RepositoryID) (objectmodel.Repository, error)
-	Datasets  dataset.Service
-	Hydrator  objectmodel.Hydrator
+	// RegisteredModels comes from the same validated engine deployment configuration.
+	RegisteredModels []string
+	Directory        string
+	Engine           func(string) index.EngineOpener
+	Lookup           func(kernel.RepositoryID) (objectmodel.Repository, error)
+	Datasets         dataset.Service
+	Hydrator         objectmodel.Hydrator
+	// Manifest is this instance's capability manifest; nil uses the compiled
+	// default with the validated RegisteredModels.
+	Manifest *indexcapability.Manifest
+}
+
+// InstanceManifest is the manifest an instance opened with options publishes.
+func (options Options) InstanceManifest() indexcapability.Manifest {
+	if options.Manifest != nil {
+		return indexcapability.Manifest(options.Manifest.Describe())
+	}
+	return indexcapability.DefaultManifest(options.RegisteredModels...)
 }
 
 func Entry(options Options) indexplugins.IndexPluginEntry {
-	affordance := indexcli.Affordance()
+	manifest := options.InstanceManifest()
+	affordance := indexcapability.AffordanceFor(manifest)
 	return indexplugins.IndexPluginEntry{Affordance: affordance, Open: func(scope indexplugins.PluginScope) (indexplugins.IndexContribution, error) {
 		directory, namespace := options.Directory, ""
 		// main adopts the previously selected physical resources and validators.
@@ -35,13 +53,27 @@ func Entry(options Options) indexplugins.IndexPluginEntry {
 		idx := projection.NewIndexEngine(directory, options.Engine(namespace))
 		scope.Own(idx.Close)
 		idx.SetHydrator(options.Hydrator)
+		idx.SetDeclarationManifest(manifest.Check, manifest.Describe().Digest)
+		if options.Datasets != nil {
+			idx.SetDatasetRevisionLookup(func(id string) (int, error) {
+				definition, err := options.Datasets.Set(id)
+				if err == nil && definition.Retired {
+					return 0, kernel.Fail(kernel.ErrPreconditionFailed, "Dataset is retired")
+				}
+				return definition.Revision, err
+			})
+		}
 		repositories := append([]kernel.RepositoryID(nil), scope.Repositories...)
 		allowed := map[kernel.RepositoryID]bool{}
 		for _, id := range repositories {
 			allowed[id] = true
 		}
 		controller, err := control.NewController(idx, control.NewTargetStore(filepath.Join(directory, "controller.db")), func(id kernel.RepositoryID) (objectmodel.Repository, error) {
-			if !allowed[id] {
+			admitted := allowed[id]
+			if scope.ContainsRepository != nil {
+				admitted = scope.ContainsRepository(id)
+			}
+			if !admitted {
 				return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Repository is outside this plugin instance")
 			}
 			return options.Lookup(id)
@@ -50,10 +82,13 @@ func Entry(options Options) indexplugins.IndexPluginEntry {
 			return indexplugins.IndexContribution{}, err
 		}
 		controller.SetInventory(func() ([]kernel.RepositoryID, error) {
+			if scope.RepositoryInventory != nil {
+				return append([]kernel.RepositoryID(nil), scope.RepositoryInventory()...), nil
+			}
 			return append([]kernel.RepositoryID(nil), repositories...), nil
 		})
 		controller.SetServingBases(discoverydatasets.ServingBasisDemand{Datasets: options.Datasets}.Bases)
-		return indexplugins.IndexContribution{Queries: idx, Maintenance: controller,
+		return indexplugins.IndexContribution{Queries: idx, Maintenance: controller, Capabilities: manifest,
 			Start: controller.Start, Stop: controller.Close,
 		}, nil
 	}}

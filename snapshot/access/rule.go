@@ -74,6 +74,9 @@ func ValidateActions(actions []string) error {
 		return fmt.Errorf("grant add requires --action")
 	}
 	for _, action := range actions {
+		if action == "object.search" {
+			return fmt.Errorf("object.search is retired; grant file.read on the intended Dataset")
+		}
 		if !strings.Contains(action, ".") || strings.ContainsAny(action, " /?#") {
 			return fmt.Errorf("invalid semantic action %s", action)
 		}

@@ -20,10 +20,6 @@ func TestNativeRepositoryMetadataPreservesAuthorityPayloadAndProof(t *testing.T)
 	metadata := map[string]string{"description": "old", "retained": "yes"}
 	var bodies, proofs []string
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v1/user" {
-			(&nativeTestUpstream{}).ServeHTTP(w, r)
-			return
-		}
 		if r.URL.Path != "/api/v1/repositories/alpha/metadata" {
 			t.Errorf("metadata used a different resource: %s", r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
@@ -65,11 +61,7 @@ func TestNativeRepositoryMetadataPreservesAuthorityPayloadAndProof(t *testing.T)
 		}
 	}))
 	t.Cleanup(backend.Close)
-	verifier, err := NewLakeFSAuthenticator(backend.URL, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	gateway := NewHandler(Config{NativeOrigin: backend.URL, Identity: IdentityOptions{Authenticator: verifier}, Acquire: func(context.Context, identity.HTTPIdentity, string) (Resources, func(), error) {
+	gateway := NewHandler(Config{NativeOrigin: backend.URL, NativeCredential: func(context.Context) (string, error) { return nativeServiceCredential, nil }, Identity: IdentityOptions{Authenticator: basicVerifier}, Acquire: func(context.Context, identity.HTTPIdentity, string) (Resources, func(), error) {
 		return Resources{NativeRepositories: map[string]kernel.RepositoryID{"alpha": "kr://test/a"}, Access: access.NewService(rules)}, func() {}, nil
 	}})
 	path := "/api/v1/repositories/alpha/metadata"
@@ -95,11 +87,9 @@ func TestNativeRepositoryMetadataPreservesAuthorityPayloadAndProof(t *testing.T)
 	if !reflect.DeepEqual(bodies, []string{set, "", remove, ""}) {
 		t.Fatalf("metadata payload altered or extra native reads/writes: %#v", bodies)
 	}
-	wantProof := httptest.NewRequest("GET", "/", nil)
-	wantProof.SetBasicAuth("alice", "caller-secret")
 	for _, proof := range proofs {
-		if proof != wantProof.Header.Get("Authorization") {
-			t.Fatal("metadata request replaced the caller proof")
+		if proof != nativeServiceProof() {
+			t.Fatalf("metadata request forwarded caller proof instead of the service credential: %q", proof)
 		}
 	}
 }

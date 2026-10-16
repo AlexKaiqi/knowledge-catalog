@@ -50,9 +50,6 @@ func runServe(flags map[string]FlagValue) RunResult {
 	identityLine := "client must send X-Kc-As only"
 	if options.Authenticated() {
 		identityLine = "client must send Authorization only; X-Kc-As disabled"
-		if authMode == "lakefs" {
-			identityLine = "client must send Authorization or native session Cookie with X-Kc-Console: 1 and JSON mutations; X-Kc-As disabled"
-		}
 	}
 	stateRuntime := "disabled"
 	if options.StateLookup != nil {

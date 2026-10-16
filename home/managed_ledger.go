@@ -133,7 +133,7 @@ func decodeManagedRecord(raw []byte) (managedRecord, error) {
 			return record, kernel.Fail(kernel.ErrPreconditionFailed, "legacy managed registry authority is invalid")
 		}
 	}
-	if json.Unmarshal(raw, &record) != nil || record.AllocationID == "" || record.Request.RepositoryID == "" || record.Request.CommandID == "" || record.Request.Principal == "" || record.Binding.ID != record.Request.RepositoryID || record.Digest != kernel.CanonicalDigest(envelope.Request) || managedRank(record.Phase) == 0 || validateCreatorActions(record.Actions) != nil || validateShareActions(record.ShareActions) != nil {
+	if json.Unmarshal(raw, &record) != nil || record.AllocationID == "" || record.Request.RepositoryID == "" || record.Request.CommandID == "" || record.Request.Principal == "" || record.Binding.ID != record.Request.RepositoryID || record.Digest != kernel.CanonicalDigest(envelope.Request) || managedRank(record.Phase) == 0 || validateCreatorActions(managedReceiptActions(record.Actions, record.Phase)) != nil || validateShareActions(managedReceiptActions(record.ShareActions, record.Phase)) != nil {
 		return record, kernel.Fail(kernel.ErrPreconditionFailed, "managed repository ledger contains an invalid allocation")
 	}
 	record.legacyAuthority = legacyAuthority

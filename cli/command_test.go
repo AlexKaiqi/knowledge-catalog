@@ -59,7 +59,6 @@ func TestProductCLIRefactorDefinesTheExactPublicSurface(t *testing.T) {
 		"operations hook list",
 		"operations hook remove",
 		"operations projection describe",
-		"operations projection notice",
 		"operations projection sync",
 		"plugin",
 		"provenance",
@@ -83,6 +82,22 @@ func TestProductCLIRefactorDefinesTheExactPublicSurface(t *testing.T) {
 	}
 	if got := CLICommandsForTest(); !slices.Equal(got, want) {
 		t.Fatalf("public CLI surface\n got: %q\nwant: %q", got, want)
+	}
+}
+
+func TestRetiredProjectionNoticeIsAbsentFromPublicCLI(t *testing.T) {
+	const retired = "operations projection notice"
+	if CLICommandForTest(retired) || slices.Contains(CLICommandsForTest(), retired) {
+		t.Fatal("retired projection notice is still a public command")
+	}
+	if _, registered := CLICommandActionsForTest()[retired]; registered {
+		t.Fatal("retired projection notice still has a public semantic action")
+	}
+	for _, argv := range [][]string{{"operations", "projection", "notice"}, {"help", "operations", "projection", "notice"}} {
+		result := Run(argv)
+		if result.Status == 0 || !strings.Contains(result.Stdout, "USAGE_INVALID") {
+			t.Fatalf("retired projection notice must be rejected: %q %#v", argv, result)
+		}
 	}
 }
 

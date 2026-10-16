@@ -1,0 +1,117 @@
+# 插件重构验收：LiveAccess 取值声明的写入边界。夹具见 _materials/acceptance/README.md；用例树见同文件“用例树”一节。
+# 每条从本节点前态独立开始，由 probe 显式创建所需仓与夹具，不传递其他用例的后态。
+
+- id: accept-live-writer-rejects-declarations
+  title: 旧写法与双声明由 Writer 拒绝
+  claims: ["liveaccess#U21", "object#U1"]
+  given:
+    - 成员级世界已发布，记录 table-meta HEAD。
+    - 四个独立变体分别写入 variants/rejected 下的 schema-with-origin、schema-with-access、inline-value-source、runtime-aspect-declared（与已有成员声明构成双声明）。
+  when:
+    - 各变体经 Writer 写入对应文件。
+  then:
+    - 每个变体都被拒绝并给出指向违规位置的错误；table-meta HEAD 不变，回读不到被拒内容。
+  risk: 重构后仍接受 Schema 上的 origin 或 access，或方面与成员同时声明时按隐含优先级静默生效。
+
+- id: accept-live-reject-member-under-aspect-source
+  title: 方面已整体声明外部取值时不能再写成员
+  claims: ["liveaccess#U21"]
+  given:
+    - 方面级世界已发布，table/shop.orders 的 live-stats 方面头引用 ops/warehouse-stats；记录 table-meta HEAD。
+  when:
+    - 写入 variants/rejected/member-under-aspect-source.yaml，为 live-stats 增加一个静态成员。
+  then:
+    - Writer 拒绝并指出该方面已整体声明取值来源；HEAD 不变，live-stats 读取结果不变。
+  risk: 只拦住“成员上再声明”的方向，方面级声明下混入静态成员后按隐含优先级生效。
+
+- id: accept-live-reject-body-on-external
+  title: 外部取值单元不能同时带正文
+  claims: ["liveaccess#U21"]
+  given:
+    - 成员级世界已发布，记录 table-meta HEAD。
+  when:
+    - 写入 variants/rejected/external-unit-with-body.yaml，row-count 头部保留取值来源又写入正文。
+  then:
+    - Writer 拒绝并说明一个单元只有一种值来源；HEAD 不变，row-count 仍从测试源取值。
+  risk: 正文被当作缓存或回退值，取值失败时把手写旧值当作实际值交付。
+
+- id: accept-live-reject-unresolved-descriptor
+  title: 取值来源必须引用一份存在的取值描述
+  claims: ["liveaccess#U21"]
+  given:
+    - 成员级世界已发布，记录 table-meta HEAD；两个独立变体。
+  when:
+    - 变体 A 写入 variants/rejected/descriptor-ref-missing.yaml；变体 B 写入 descriptor-ref-wrong-kind.yaml（引用的是一张表）。
+  then:
+    - 两者都被 Writer 拒绝，错误指向 descriptorRef 并说明无法解析或类型不是取值描述；HEAD 不变。
+  risk: 坏引用到读取时才暴露，或把任意对象的正文当作取值方式解释。
+
+- id: accept-live-reject-field-level-source
+  title: 取值来源最细到成员，字段里写取值来源被拒绝
+  claims: ["liveaccess#U21"]
+  given:
+    - 成员级世界已发布，记录 table-meta HEAD。
+  when:
+    - 写入 variants/rejected/field-level-value-source.yaml，在成员正文的 value 字段里嵌入取值来源。
+  then:
+    - Writer 按 schema/table.runtime 拒绝（value 应为数值）；不把嵌入的结构识别为取值声明；HEAD 不变。
+  risk: 字段级声明被偷偷支持，值的形状随来源变化，Schema 校验形同虚设。
+
+- id: accept-live-reject-unknown-source-kind
+  title: 未知的取值来源类型被拒绝
+  claims: ["liveaccess#U21"]
+  given:
+    - 成员级世界已发布，记录 table-meta HEAD。
+  when:
+    - 写入 variants/rejected/unknown-value-source-kind.yaml（kind 为 script）。
+  then:
+    - Writer 拒绝并指出取值来源只支持引用取值描述；HEAD 不变；测试源无调用。
+  risk: 未知类型被静默当作静态值，或开出执行任意命令的口子。
+
+- id: accept-live-reject-descriptor-shape
+  title: 取值描述不能带凭证或非法字段
+  claims: ["liveaccess#U7", "liveaccess#U21"]
+  given:
+    - ops-shared 已发布三份取值描述，记录 HEAD；三个独立变体。
+  when:
+    - 分别写入 variants/rejected 下的 descriptor-with-credential、descriptor-origin-userinfo、descriptor-unknown-mode。
+  then:
+    - 三者都被 Writer 拒绝并指向违规字段；HEAD 不变。
+    - 错误信息、写入回执与访问证据都不含 acceptance-secret 字样。
+  risk: 凭证随取值描述进入仓和版本历史，或错误回显把密钥带进日志。
+
+- id: accept-live-maintenance-read-declaration
+  title: 维护读取拿到声明而不是外部值，按摘要条件更新
+  claims: ["object#U12", "liveaccess#U21"]
+  given:
+    - 成员级世界已发布；测试源调用记录已清空。
+  when:
+    - 维护者以维护读取取得 row-count 的头部、正文与维护摘要，再带该摘要把 descriptorRef 改为 ops/pipeline-monitor；随后用同一旧摘要再提交一次。
+  then:
+    - 维护读取返回 valueSource 与摘要，不含外部值，测试源无调用。
+    - 第一次更新成功，回读 row-count 引用 ops/pipeline-monitor；带旧摘要的第二次提交以摘要不匹配被拒绝。
+  risk: 维护读取触发外呼或把外部值写回仓，更新时覆盖别人刚改过的声明。
+
+- id: accept-live-history-declaration-only
+  title: 历史与差异只反映声明变化，不随外部值变化
+  claims: ["object#U18", "liveaccess#U21"]
+  given:
+    - 成员级世界已发布，记录 table/shop.orders 的历史。
+  when:
+    - 测试源把 row-count 依次改为 7、8 并各读取一次；再把 row-count 改为引用 ops/pipeline-monitor；读取对象历史与前后两个提交的差异。
+  then:
+    - 两次值变化不产生新修订；只有改引用那次产生一条修订。
+    - 差异只显示 descriptorRef 的变化，不包含 6、7、8 等观察值。
+  risk: 外部值被当作内容写进版本历史，仓随外部系统的每次变化膨胀。
+
+- id: accept-live-switch-static-and-external
+  title: 成员在静态值与外部取值之间切换是普通更新
+  claims: ["liveaccess#U21"]
+  given:
+    - 成员级世界已发布。
+  when:
+    - 把 retention-days 改为引用 ops/warehouse-stats（测试源为它返回 value 400）后读取；再改回带正文的静态值 365 后读取。
+  then:
+    - 第一次读取 retention-days 为 400 并带观察依据；第二次为 365 且没有观察，测试源不再收到它的调用。
+    - 两次切换都是同一成员的新版本，成员键与地址不变。
+  risk: 切换来源需要删建成员，导致地址、索引与使用记录断开。

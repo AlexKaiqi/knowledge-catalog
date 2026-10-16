@@ -34,9 +34,15 @@ func PolicyBodySchema() objectmodel.Operation {
 		Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/policy.body"},
 		Value: map[string]any{
 			"entity": "Policy", "pattern": "record",
-			"fields": map[string]any{"body": map[string]any{"access": []any{"text"}}},
+			"fields": map[string]any{"body": map[string]any{"type": "string"}},
 		},
 	}
+}
+
+// PolicyBodyIndex declares full-text retrieval over PolicyBodySchema's body;
+// the retrieval surface comes only from this declaration.
+func PolicyBodyIndex() objectmodel.Operation {
+	return testkit.IndexText("schema/policy.body", "body")
 }
 
 var indexTestSequence atomic.Uint64
@@ -84,6 +90,7 @@ func CommittedSearchablePolicy(t *testing.T) (*testkit.ObjectRepository, kernel.
 	root := testkit.MustHead(t, repo, snapshot.DefaultRef)
 	head := PutAt(t, repo, root, []objectmodel.Operation{
 		PolicyBodySchema(),
+		PolicyBodyIndex(),
 		testkit.PutEntity("policy/P-1", map[string]any{"body": "needs a runbook"}, "")[0],
 	})
 	return repo, root, head

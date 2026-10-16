@@ -130,11 +130,11 @@ func ApplyUnits(existing []Unit, operations []Operation, provenance *ProvenanceE
 						"object %s does not exist", operation.Address.ObjectID)
 				}
 				if operation.Precondition != nil && operation.Precondition.Digest != "" {
-					assembled, err := AssembleUnits(siblings)
+					digest, err := UnitSetMaintenanceDigest(siblings)
 					if err != nil {
 						return nil, nil, err
 					}
-					if kernel.CanonicalDigest(assembled) != operation.Precondition.Digest {
+					if digest != operation.Precondition.Digest {
 						return nil, nil, kernel.Fail(kernel.ErrPreconditionFailed,
 							"digest mismatch for %s", operation.Address.ObjectID)
 					}
@@ -152,7 +152,7 @@ func ApplyUnits(existing []Unit, operations []Operation, provenance *ProvenanceE
 					"address %s does not exist", key)
 			}
 			if operation.Precondition != nil && operation.Precondition.Digest != "" &&
-				operation.Precondition.Digest != current.Digest {
+				operation.Precondition.Digest != MaintenanceDigest(current.Digest, current.SchemaRef, current.ValueSource) {
 				return nil, nil, kernel.Fail(kernel.ErrPreconditionFailed,
 					"digest mismatch for %s", key)
 			}
@@ -169,7 +169,7 @@ func ApplyUnits(existing []Unit, operations []Operation, provenance *ProvenanceE
 				}
 			case IfObjectEquals, IfDigestEquals:
 				if operation.Precondition.Digest != "" &&
-					(!exists || current.Digest != operation.Precondition.Digest) {
+					(!exists || MaintenanceDigest(current.Digest, current.SchemaRef, current.ValueSource) != operation.Precondition.Digest) {
 					return nil, nil, kernel.Fail(kernel.ErrPreconditionFailed,
 						"digest mismatch for %s", key)
 				}

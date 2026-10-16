@@ -1,0 +1,75 @@
+# 插件重构验收：能力清单与试运行。夹具见 _materials/acceptance/README.md；用例树见同文件“用例树”一节。
+# 每条从本节点前态独立开始，由 probe 显式创建所需仓与夹具，不传递其他用例的后态。
+
+- id: accept-search-capability-catalog
+  title: 能力清单按实例公开并提供试运行校验
+  claims: ["discovery#U8", "affordance#U7"]
+  given:
+    - 部署装了 declarative-index，declarative-index/opensearch@2026-10 对应唯一实例。
+  when:
+    - 读 kc plugin declarative-index help；读机器可读清单；对默认四个成员与 variants/index 三个文件分别试运行。
+  then:
+    - 清单列出 text、keyword、number、vector 等构建方式、可选值、是否重建与上限，并带版本。
+    - 默认成员试运行逐个通过；不支持的分词器被逐成员标为不支持并说明原因；只改权重标为不重建。
+    - 试运行前后 sales-analysis HEAD 与索引都不变。
+  risk: 业务 Agent 只能靠试错写声明，或试运行带副作用。
+
+- id: accept-search-unsupported-member-isolated
+  title: 清单外的成员单独标为不支持，其他成员照常
+  claims: ["discovery#U8"]
+  given:
+    - 写入 variants/index/table-name-unsupported-analyzer.yaml 替换 table-name 后发布 Dataset 修订 2。
+  when:
+    - 准备修订 2 并搜索 "orders" 与 "discount"。
+  then:
+    - 修订 2 被接受；table-name 在概览中标为不支持并说明分词器不在清单内。
+    - 依赖 table-name 的查询报不支持；metric-text 照常命中 metric/shop.gmv。
+  risk: 一个成员写错让整个 Dataset 无法发布，或被静默忽略后返回不完整结果。
+
+- id: accept-search-vector-member
+  title: 向量成员按登记模型构建，结果标为近似
+  claims: ["discovery#U8", "discovery#U1"]
+  given:
+    - 测试部署为实例登记确定性模型 embed/test-hash@1；写入 variants/index/metric-semantic.yaml 并发布 Dataset 修订 2。
+    - 独立变体中实例未登记该模型。
+  when:
+    - 做语义搜索 "gross merchandise"。
+  then:
+    - 登记时命中 metric/shop.gmv，结果标为近似并标出 metric-semantic 以语义召回角色参与。
+    - 未登记时 metric-semantic 标为不支持，语义搜索明确失败，不降级成全文冒充。
+  risk: 向量能力缺失时偷偷降级，或语义结果被当成精确结果。
+
+- id: accept-index-catalog-version-ahead
+  title: 声明的清单版本与实例不一致时不偷偷换版本
+  claims: ["discovery#U8"]
+  given:
+    - 默认搜索世界；写入 variants/index/catalog-version-ahead.yaml，metric-unit 声明 declarative-index/opensearch@2027-01。
+  when:
+    - 试运行；发布 Dataset 修订 2 并按 unit 过滤。
+  then:
+    - 试运行与概览把 metric-unit 标为不支持并给出声明版本与实例版本。
+    - 按 unit 过滤报不支持，不按 2026-10 的规则代为构建。
+  risk: 清单版本对不上时按实例当前版本解释，同一声明在不同部署得到不同索引。
+
+- id: accept-index-catalog-upgrade-recheck
+  title: 清单升级后只重新核对受影响的成员
+  claims: ["discovery#U8", "discovery#U3"]
+  given:
+    - 默认搜索世界就绪；测试部署把实例清单升级为同名新版本，去掉 standard 分词器，其余不变。
+  when:
+    - 重启服务后读取概览并搜索。
+  then:
+    - table-name 与 metric-text 被重新核对并标为不支持；table-row-count 与 metric-unit 不重建，照常可用。
+    - 旧版本已建好的全文字段不冒充新清单下的结果。
+  risk: 清单变化不触发核对，或一次升级让全部成员重建。
+
+- id: accept-index-dry-run-matches-writer
+  title: 试运行对形状错误给出与 Writer 相同的判断
+  claims: ["discovery#U8"]
+  given:
+    - variants/rejected 下 index-missing-field、index-with-engine、index-raw-mapping 三个文件。
+  when:
+    - 对三个文件分别试运行，再分别经 Writer 写入。
+  then:
+    - 试运行与 Writer 对每个文件指出相同的违规位置；试运行不写入，Writer 拒绝后 HEAD 不变。
+  risk: 试运行通过而写入失败（或反之），业务 Agent 无法以试运行作为写前检查。

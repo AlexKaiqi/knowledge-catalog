@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-ACCESSOR="$ROOT/.data/scenes/catalog-initialized/source-repositories-configured/repository-attached/_materials/accessor"
+ACCESSOR="$ROOT/.data/scenes/service-initialized/source-repositories-configured/repository-attached/_materials/accessor"
 PROJECT="${KC_ACCESSOR_PROJECT:-kc-scene-accessor}"
 CMD="${1:-up}"
 

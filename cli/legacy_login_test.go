@@ -8,15 +8,23 @@ import (
 	"strings"
 	"time"
 
-	"kc/identity"
 	"kc/kernel"
 )
+
+// legacyTaihuTokenResult is the provider's OAuth token response shape.
+type legacyTaihuTokenResult struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ExpiresIn    int    `json:"expires_in"`
+	Error        string `json:"error"`
+	ErrorDesc    string `json:"error_description"`
+}
 
 // This retired direct OAuth exchange is legacy contract material. Current
 // products use client.IdentityService.ExchangeToken through the Server broker;
 // TestBrowserCodeCompletesThroughBrokerWithoutClientSecret verifies that path.
-func legacyExchangeTaihuAccessToken(pending taihuPendingAuth, code, redirectURI, clientSecret string, httpClient *http.Client) (identity.TaihuTokenResult, error) {
-	var zero identity.TaihuTokenResult
+func legacyExchangeTaihuAccessToken(pending taihuPendingAuth, code, redirectURI, clientSecret string, httpClient *http.Client) (legacyTaihuTokenResult, error) {
+	var zero legacyTaihuTokenResult
 	clientSecret = strings.TrimSpace(clientSecret)
 	if clientSecret == "" {
 		return zero, kernel.Fail(kernel.ErrUsageInvalid, "Taihu token exchange requires KC_SERVICE_CLIENT_SECRET")
@@ -44,7 +52,7 @@ func legacyExchangeTaihuAccessToken(pending taihuPendingAuth, code, redirectURI,
 	if err != nil {
 		return zero, fmt.Errorf("read token response: %v", err)
 	}
-	var tokenResult identity.TaihuTokenResult
+	var tokenResult legacyTaihuTokenResult
 	if err := json.Unmarshal(body, &tokenResult); err != nil {
 		return zero, fmt.Errorf("taihu token HTTP %d: unexpected response", resp.StatusCode)
 	}

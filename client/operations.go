@@ -20,11 +20,3 @@ type AccessSpecDescribeRequest = discoveryclient.AccessSpecDescribeRequest
 func (s OperationsService) SyncProjection(ctx context.Context, request ProjectionSyncRequest, options RequestOptions, output any) error {
 	return s.client.declarativeIndex.SyncProjection(ctx, request, declarativeindexclient.RequestOptions{RequestID: options.RequestID}, output)
 }
-
-type ProjectionNoticeAddress = declarativeindexclient.ProjectionNoticeAddress
-
-type ProjectionNotifyRequest = declarativeindexclient.ProjectionNotifyRequest
-
-func (s OperationsService) NotifyProjection(ctx context.Context, request ProjectionNotifyRequest, options RequestOptions, output any) error {
-	return s.client.declarativeIndex.NotifyProjection(ctx, request, declarativeindexclient.RequestOptions{RequestID: options.RequestID}, output)
-}

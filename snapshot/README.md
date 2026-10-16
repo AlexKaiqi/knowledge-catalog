@@ -6,6 +6,10 @@
 
 `command_contract.go` 提供跨写面的 CommandLedger/CommandStore；`write_contract.go` 提供基于 TreeStore 的 RawWriter，负责 CAS 与 Advanced 通知。构造返回接口，具体实现未导出。两者都不解释对象正文。Object PUT/REMOVE 由 `object/writer/` 编排。
 
+`ProbeEmptyTree` 只检查固定 commit 的字面根目录，每页最多请求一个条目；任何条目（包括隐藏路径）
+都代表非空。空页须沿有进展的游标读到同一 generation 的耗尽页才能证明为空。没有可选
+`DirectoryReader` 时返回未知，不降级成全树 `ListFiles`；读取错误和无效分页证据原样失败关闭。
+
 命令在进入写入前耐久预留，同 ID 同 digest 重放已保存回执，异 digest 拒绝。写入错误只有经
 `WriteNotApplied` 显式证明目标未发布才释放预留；未知结果保留 `PENDING`，重开 ledger 也不
 重新执行，须由 `ResolvePending` 或 `AbandonPending` 显式处置。该纯错误包装保留原错误码，

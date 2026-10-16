@@ -20,7 +20,7 @@ func memberUnitFixture(t *testing.T, readWrappers ...func(snapshot.Store) snapsh
 	operations := []objectmodel.Operation{{Op: objectmodel.OpPut,
 		Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/widget.readings"},
 		Value: map[string]any{"entity": "Widget", "aspect": "readings", "pattern": "keyed_collection",
-			"fields": map[string]any{"value": map[string]any{"type": "number", "required": true, "access": []any{"filter"}},
+			"fields": map[string]any{"value": map[string]any{"type": "number", "required": true},
 				"fresh": map[string]any{"type": "number"}}},
 	}, bindingfixture.PutDescriptor(widgetDescriptor, bindingfixture.Descriptor("https://source.example"))}
 	for _, key := range []string{"good", "empty", "broken"} {

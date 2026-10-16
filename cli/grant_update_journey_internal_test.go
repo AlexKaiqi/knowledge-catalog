@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	localauth "kc/identity/local"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -42,7 +43,7 @@ func TestGrantUpdatePublicCLIUsesAtomicServiceScopesAndObservedRule(t *testing.T
 	old := access.Rule{ID: "rule-A", Principal: "reader", Actions: []string{"file.read"}, Repo: "repo-A", Dataset: "published", Ref: "main", Object: "opaque/*", Aspect: "canonical", SharedBy: "publisher"}
 	store := &grantUpdatePolicyStore{rules: []access.Rule{{ID: "manager", Principal: "manager", Actions: []string{"admin.grants.manage"}, Repo: "repo-A"}, old}}
 	service := snapshotservice.NewHandler(snapshotservice.Config{
-		Identity: snapshotservice.IdentityOptions{Local: true},
+		Identity: snapshotservice.IdentityOptions{Authenticator: localauth.New()},
 		Acquire: func(context.Context, identity.HTTPIdentity, string) (snapshotservice.Resources, func(), error) {
 			return snapshotservice.Resources{Access: access.NewService(store)}, func() {}, nil
 		},

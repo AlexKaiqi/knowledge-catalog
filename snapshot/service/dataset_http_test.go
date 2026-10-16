@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	localauth "kc/identity/local"
 	"kc/internal/testkit"
 	"net/http"
 	"net/http/httptest"
@@ -114,7 +115,7 @@ func newDatasetHTTPFixture(t *testing.T) *datasetHTTPFixture {
 }
 
 func (f *datasetHTTPFixture) handler() service.Handler {
-	return service.NewHandler(service.Config{Identity: service.IdentityOptions{Mode: "local", Local: true},
+	return service.NewHandler(service.Config{Identity: service.IdentityOptions{Mode: "local", Authenticator: localauth.New()},
 		Acquire: func(context.Context, identity.HTTPIdentity, string) (service.Resources, func(), error) {
 			return f.resources, func() {}, nil
 		},
@@ -173,8 +174,13 @@ func TestDatasetHTTPStandaloneManagementLifecycle(t *testing.T) {
 	base := "/snapshot/v1/datasets"
 	var list map[string]any
 	created := datasetHTTPCall(t, h, "POST", base, datasetHTTPDefinition(1, f.source.ID()), 200)
-	if created["setId"] != "files" || created["revision"] != float64(1) || len(created) != 3 {
+	if created["setId"] != "files" || created["revision"] != float64(1) || created["disposition"] != "APPLIED" || len(created) != 4 {
 		t.Fatalf("publication wire changed: %#v", created)
+	}
+	// A retry after a lost response replays the accepted revision.
+	replayed := datasetHTTPCall(t, h, "POST", base, datasetHTTPDefinition(1, f.source.ID()), 200)
+	if replayed["disposition"] != "REPLAYED" || replayed["revision"] != float64(1) || len(replayed) != 4 {
+		t.Fatalf("retrying the accepted definition must replay it: %#v", replayed)
 	}
 	list = datasetHTTPCall(t, h, "GET", base, nil, 200)
 	rows := list["datasets"].([]any)
@@ -329,7 +335,7 @@ func TestDatasetHTTPPublicationPreparesThenSwitchesOnce(t *testing.T) {
 		f.source.head = "c2"
 		return definition, map[string]any{"recipeFile": ".kc-dataset.yaml", "setId": "hijack"}, nil
 	}
-	f.resources.PreparePublication = func(_ context.Context, _ identity.HTTPIdentity, definition dataset.Dataset) error {
+	f.resources.PreparePublication = func(_ context.Context, _ identity.HTTPIdentity, definition dataset.Dataset) (dataset.Dataset, error) {
 		candidate = definition
 		if definition.Sources[0].Commit != "c2" {
 			t.Fatal("publication missed the prepared source version")
@@ -337,7 +343,7 @@ func TestDatasetHTTPPublicationPreparesThenSwitchesOnce(t *testing.T) {
 		if _, err := f.catalog.Set("files"); err == nil {
 			t.Fatal("current pointer advanced during preparation")
 		}
-		return nil
+		return definition, nil
 	}
 	out := datasetHTTPCall(t, f.handler(), "POST", "/snapshot/v1/datasets", datasetHTTPDefinition(1, f.source.ID()), 200)
 	if out["setId"] != "files" || out["recipeFile"] != ".kc-dataset.yaml" || len(candidate.Items) != 1 {
@@ -352,8 +358,8 @@ func TestDatasetHTTPPublicationPreparesThenSwitchesOnce(t *testing.T) {
 func TestDatasetHTTPPreparationFailureKeepsServingVersion(t *testing.T) {
 	f := newDatasetHTTPFixture(t)
 	datasetHTTPCall(t, f.handler(), "POST", "/snapshot/v1/datasets", datasetHTTPDefinition(1, f.source.ID()), 200)
-	f.resources.PreparePublication = func(context.Context, identity.HTTPIdentity, dataset.Dataset) error {
-		return kernel.Fail(kernel.ErrTemporaryUnavailable, "capability not ready")
+	f.resources.PreparePublication = func(context.Context, identity.HTTPIdentity, dataset.Dataset) (dataset.Dataset, error) {
+		return dataset.Dataset{}, kernel.Fail(kernel.ErrTemporaryUnavailable, "capability not ready")
 	}
 	datasetHTTPCall(t, f.handler(), "POST", "/snapshot/v1/datasets", datasetHTTPDefinition(2, f.source.ID()), 503)
 	current, err := f.catalog.Set("files")
@@ -473,7 +479,7 @@ func TestDatasetHTTPDiagnosticBodyScopeDoesNotSelectTemporaryGrants(t *testing.T
 		return nil
 	}
 	h := service.NewHandler(service.Config{
-		Identity: service.IdentityOptions{Mode: "local", Local: true},
+		Identity: service.IdentityOptions{Mode: "local", Authenticator: localauth.New()},
 		Acquire: func(context.Context, identity.HTTPIdentity, string) (service.Resources, func(), error) {
 			return f.resources, func() {}, nil
 		},

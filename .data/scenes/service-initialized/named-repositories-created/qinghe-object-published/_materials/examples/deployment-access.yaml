@@ -1,0 +1,7 @@
+datasetAccess:
+  - id: qinghe-analysis
+    authenticatedActions: [dataset.resolve, file.read]
+  - id: autumn-launch-kit
+    authenticatedActions: [dataset.resolve, file.read]
+  - id: store-oncall
+    authenticatedActions: [dataset.resolve, file.read]

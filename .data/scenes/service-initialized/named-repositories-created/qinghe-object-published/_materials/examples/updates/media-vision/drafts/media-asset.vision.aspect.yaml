@@ -1,0 +1,17 @@
+---
+object_id: schema/media-asset.vision
+---
+entity: MediaAsset
+aspect: vision
+pattern: record
+fields:
+  labels:
+    type: array
+    required: true
+  dominantColors:
+    type: array
+  textDetected:
+    type: array
+  producedBy:
+    type: string
+    required: true

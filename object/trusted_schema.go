@@ -52,3 +52,23 @@ func SystemMetaSchemaDigest() kernel.Digest {
 	}
 	panic("Object trust root has no Meta Schema")
 }
+
+// ProtocolTrustRootSchema returns a protocol Schema that resolves from the
+// embedded trust root rather than from the adopting Repository. Only the
+// index declaration Schema is such a root: declarations live in a Dataset
+// maintainer's repository, which publishes no copy of the protocol Schema.
+func ProtocolTrustRootSchema(objectID ObjectID) (SchemaDefinition, bool) {
+	if objectID != IndexDeclarationSchemaV1 {
+		return SchemaDefinition{}, false
+	}
+	for _, operation := range TrustedSchemaOperations() {
+		if operation.Address.ObjectID == objectID {
+			definition, err := ParseSchemaDefinition(objectID, operation.Value)
+			if err != nil {
+				panic(err)
+			}
+			return definition, true
+		}
+	}
+	panic("Object trust root has no index declaration Schema")
+}

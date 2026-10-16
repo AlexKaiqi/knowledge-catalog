@@ -6,7 +6,7 @@ path_hint: capabilities/resource-access/definition.md
 ---
 # 访问动态资源
 
-读取访问声明，向独立 runtime 请求动态值。当前状态与已声明操作由 [LiveAccess](../../object-interfaces/live-access/definition.yaml) 插件统一组织，`kc invoke` 调用插件操作。
+读取方面或成员上的取值来源，按它引用的 ResourceDescriptor 向外部系统取得值。读取对象时，已安装的 [LiveAccess](../../object-interfaces/live-access/definition.yaml) 插件透明取值，失败按单元说明；已声明的资源操作沿 `kc invoke` 入口另行授权。
 
 相关说明：[动态资源访问](../../mechanisms/dynamic-access/definition.md)。
 

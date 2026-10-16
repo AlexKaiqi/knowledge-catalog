@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	indexcli "kc/declarativeindex/cli"
+	indexcli "kc/declarativeindex/capability"
 	serv "kc/server"
 )
 

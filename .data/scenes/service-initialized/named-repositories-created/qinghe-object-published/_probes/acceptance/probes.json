@@ -1,0 +1,5630 @@
+[
+  {
+    "id": "accept-live-writer-rejects-declarations",
+    "steps": [
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "before"
+      },
+      {
+        "writer": "$materials/acceptance/variants/rejected/schema-with-origin.yaml",
+        "repo": "table-meta",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "USAGE_INVALID"
+          },
+          "contains": {
+            "error.message": [
+              "origin"
+            ]
+          },
+          "excludes": {
+            "": [
+              "acceptance-secret"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "after"
+      },
+      {
+        "assert": {
+          "actual": "$saved.after.commit",
+          "equals": "$saved.before.commit"
+        }
+      },
+      {
+        "writer": "$materials/acceptance/variants/rejected/schema-with-access.yaml",
+        "repo": "table-meta",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "SCHEMA_UNSUPPORTED"
+          },
+          "contains": {
+            "error.message": [
+              "access"
+            ]
+          },
+          "excludes": {
+            "": [
+              "acceptance-secret"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "after"
+      },
+      {
+        "assert": {
+          "actual": "$saved.after.commit",
+          "equals": "$saved.before.commit"
+        }
+      },
+      {
+        "writer": "$materials/acceptance/variants/rejected/inline-value-source.yaml",
+        "repo": "table-meta",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "USAGE_INVALID"
+          },
+          "contains": {
+            "error.message": [
+              "--value-source",
+              "JSON"
+            ]
+          },
+          "excludes": {
+            "": [
+              "acceptance-secret"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "after"
+      },
+      {
+        "assert": {
+          "actual": "$saved.after.commit",
+          "equals": "$saved.before.commit"
+        }
+      },
+      {
+        "writer": "$materials/acceptance/variants/rejected/runtime-aspect-declared.yaml",
+        "repo": "table-meta",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "OBJECT_ID_CONFLICT"
+          },
+          "contains": {
+            "error.message": [
+              "runtime"
+            ]
+          },
+          "excludes": {
+            "": [
+              "acceptance-secret"
+            ]
+          }
+        },
+        "writerMode": "commit"
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "after"
+      },
+      {
+        "assert": {
+          "actual": "$saved.after.commit",
+          "equals": "$saved.before.commit"
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:schema/table.live-stats-bound",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "OBJECT_REF_UNRESOLVED"
+          }
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:schema/table.access-annotated",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "OBJECT_REF_UNRESOLVED"
+          }
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime/inline-lag",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "OBJECT_REF_UNRESOLVED"
+          }
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.retention-days.value": 365
+          },
+          "find": [
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "row-count"
+                }
+              },
+              "expect": {
+                "nonempty": [
+                  "declarationDigest",
+                  "basis.bindingGeneration",
+                  "basis.observedAt"
+                ]
+              }
+            },
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "freshness-lag"
+                }
+              },
+              "expect": {
+                "nonempty": [
+                  "declarationDigest",
+                  "basis.bindingGeneration",
+                  "basis.observedAt"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-live-reject-member-under-aspect-source",
+    "steps": [
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "before"
+      },
+      {
+        "writer": "$materials/acceptance/variants/rejected/member-under-aspect-source.yaml",
+        "repo": "table-meta",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "USAGE_INVALID"
+          },
+          "contains": {
+            "error.message": [
+              "Aspect",
+              "one complete value"
+            ]
+          },
+          "excludes": {
+            "": [
+              "acceptance-secret"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "afterPut"
+      },
+      {
+        "assert": {
+          "actual": "$saved.afterPut.commit",
+          "equals": "$saved.before.commit"
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/live-stats",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.rowCount": 6
+          },
+          "count": {
+            "observations": 1
+          }
+        }
+      },
+      {
+        "writer": "$materials/acceptance/variants/rejected/member-under-aspect-source.yaml",
+        "repo": "table-meta",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "OBJECT_ID_CONFLICT"
+          },
+          "contains": {
+            "error.message": [
+              "live-stats"
+            ]
+          },
+          "excludes": {
+            "": [
+              "acceptance-secret"
+            ]
+          }
+        },
+        "writerMode": "commit"
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "after"
+      },
+      {
+        "assert": {
+          "actual": "$saved.after.commit",
+          "equals": "$saved.before.commit"
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/live-stats",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.rowCount": 6
+          },
+          "count": {
+            "observations": 1
+          }
+        }
+      }
+    ],
+    "notes": "The public put locator rejects reinterpretation of an existing complete Aspect before Writer. Explicit Member file publication separately reaches the final Aspect/Member conflict. Both leave HEAD and the adopted Aspect value unchanged."
+  },
+  {
+    "id": "accept-live-reject-body-on-external",
+    "steps": [
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "before"
+      },
+      {
+        "writer": "$materials/acceptance/variants/rejected/external-unit-with-body.yaml",
+        "repo": "table-meta",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "USAGE_INVALID"
+          },
+          "contains": {
+            "error.message": [
+              "value"
+            ]
+          },
+          "excludes": {
+            "": [
+              "acceptance-secret"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "after"
+      },
+      {
+        "assert": {
+          "actual": "$saved.after.commit",
+          "equals": "$saved.before.commit"
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime/row-count",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.value": 6
+          },
+          "find": [
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "row-count"
+                }
+              },
+              "expect": {
+                "nonempty": [
+                  "declarationDigest",
+                  "basis.bindingGeneration",
+                  "basis.observedAt"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-live-reject-unresolved-descriptor",
+    "steps": [
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "before"
+      },
+      {
+        "writer": "$materials/acceptance/variants/rejected/descriptor-ref-missing.yaml",
+        "repo": "table-meta",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "OBJECT_REF_UNRESOLVED"
+          },
+          "contains": {
+            "error.message": [
+              "descriptorRef"
+            ]
+          },
+          "excludes": {
+            "": [
+              "acceptance-secret"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "after"
+      },
+      {
+        "assert": {
+          "actual": "$saved.after.commit",
+          "equals": "$saved.before.commit"
+        }
+      },
+      {
+        "writer": "$materials/acceptance/variants/rejected/descriptor-ref-wrong-kind.yaml",
+        "repo": "table-meta",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "USAGE_INVALID"
+          },
+          "contains": {
+            "error.message": [
+              "descriptor"
+            ]
+          },
+          "excludes": {
+            "": [
+              "acceptance-secret"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "after"
+      },
+      {
+        "assert": {
+          "actual": "$saved.after.commit",
+          "equals": "$saved.before.commit"
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-live-reject-field-level-source",
+    "steps": [
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "before"
+      },
+      {
+        "writer": "$materials/acceptance/variants/rejected/field-level-value-source.yaml",
+        "repo": "table-meta",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "SCHEMA_INSTANCE_INVALID"
+          },
+          "contains": {
+            "error.message": [
+              "value"
+            ]
+          },
+          "excludes": {
+            "": [
+              "acceptance-secret"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "after"
+      },
+      {
+        "assert": {
+          "actual": "$saved.after.commit",
+          "equals": "$saved.before.commit"
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-live-reject-unknown-source-kind",
+    "steps": [
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "before"
+      },
+      {
+        "writer": "$materials/acceptance/variants/rejected/unknown-value-source-kind.yaml",
+        "repo": "table-meta",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "USAGE_INVALID"
+          },
+          "contains": {
+            "error.message": [
+              "--value-source",
+              "JSON"
+            ]
+          },
+          "excludes": {
+            "": [
+              "acceptance-secret"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "after"
+      },
+      {
+        "assert": {
+          "actual": "$saved.after.commit",
+          "equals": "$saved.before.commit"
+        }
+      },
+      {
+        "origin": {
+          "name": "live",
+          "method": "GET",
+          "path": "/control/calls"
+        },
+        "expect": {
+          "count": {
+            "calls": 0
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-live-reject-descriptor-shape",
+    "steps": [
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "ops-shared"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "before"
+      },
+      {
+        "writer": "$materials/acceptance/variants/rejected/descriptor-with-credential.yaml",
+        "repo": "ops-shared",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "USAGE_INVALID"
+          },
+          "contains": {
+            "error.message": [
+              "headers"
+            ]
+          },
+          "excludes": {
+            "": [
+              "acceptance-secret"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "ops-shared"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "after"
+      },
+      {
+        "assert": {
+          "actual": "$saved.after.commit",
+          "equals": "$saved.before.commit"
+        }
+      },
+      {
+        "writer": "$materials/acceptance/variants/rejected/descriptor-origin-userinfo.yaml",
+        "repo": "ops-shared",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "USAGE_INVALID"
+          },
+          "contains": {
+            "error.message": [
+              "origin"
+            ]
+          },
+          "excludes": {
+            "": [
+              "acceptance-secret"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "ops-shared"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "after"
+      },
+      {
+        "assert": {
+          "actual": "$saved.after.commit",
+          "equals": "$saved.before.commit"
+        }
+      },
+      {
+        "writer": "$materials/acceptance/variants/rejected/descriptor-unknown-mode.yaml",
+        "repo": "ops-shared",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "USAGE_INVALID"
+          },
+          "contains": {
+            "error.message": [
+              "mode"
+            ]
+          },
+          "excludes": {
+            "": [
+              "acceptance-secret"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "ops-shared"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "after"
+      },
+      {
+        "assert": {
+          "actual": "$saved.after.commit",
+          "equals": "$saved.before.commit"
+        }
+      },
+      {
+        "kc": [
+          "operations",
+          "audit",
+          "access",
+          "--repo",
+          "ops-shared"
+        ],
+        "expect": {
+          "excludes": {
+            "": [
+              "acceptance-secret"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-search-writer-rejects-index",
+    "steps": [
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "sales-analysis"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "before"
+      },
+      {
+        "writer": "$materials/acceptance/variants/rejected/index-missing-field.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "OBJECT_REF_UNRESOLVED"
+          },
+          "contains": {
+            "error.message": [
+              "doesNotExist"
+            ]
+          },
+          "excludes": {
+            "": [
+              "acceptance-secret"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "sales-analysis"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "after"
+      },
+      {
+        "assert": {
+          "actual": "$saved.after.commit",
+          "equals": "$saved.before.commit"
+        }
+      },
+      {
+        "writer": "$materials/acceptance/variants/rejected/index-with-engine.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "USAGE_INVALID"
+          },
+          "contains": {
+            "error.message": [
+              "instance"
+            ]
+          },
+          "excludes": {
+            "": [
+              "acceptance-secret"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "sales-analysis"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "after"
+      },
+      {
+        "assert": {
+          "actual": "$saved.after.commit",
+          "equals": "$saved.before.commit"
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-index-reject-shape",
+    "steps": [
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "sales-analysis"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "before"
+      },
+      {
+        "writer": "$materials/acceptance/variants/rejected/index-empty-inputs.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "USAGE_INVALID"
+          },
+          "contains": {
+            "error.message": [
+              "inputs"
+            ]
+          },
+          "excludes": {
+            "": [
+              "acceptance-secret"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "sales-analysis"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "after"
+      },
+      {
+        "assert": {
+          "actual": "$saved.after.commit",
+          "equals": "$saved.before.commit"
+        }
+      },
+      {
+        "writer": "$materials/acceptance/variants/rejected/index-bad-locator.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "USAGE_INVALID"
+          },
+          "contains": {
+            "error.message": [
+              "from"
+            ]
+          },
+          "excludes": {
+            "": [
+              "acceptance-secret"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "sales-analysis"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "after"
+      },
+      {
+        "assert": {
+          "actual": "$saved.after.commit",
+          "equals": "$saved.before.commit"
+        }
+      },
+      {
+        "writer": "$materials/acceptance/variants/rejected/index-raw-mapping.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "USAGE_INVALID"
+          },
+          "contains": {
+            "error.message": [
+              "mapping"
+            ]
+          },
+          "excludes": {
+            "": [
+              "acceptance-secret"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "sales-analysis"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "after"
+      },
+      {
+        "assert": {
+          "actual": "$saved.after.commit",
+          "equals": "$saved.before.commit"
+        }
+      },
+      {
+        "writer": "$materials/acceptance/variants/rejected/index-with-value-source.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "USAGE_INVALID"
+          },
+          "contains": {
+            "error.message": [
+              "external value source",
+              "remote-config"
+            ]
+          },
+          "excludes": {
+            "": [
+              "acceptance-secret"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "sales-analysis"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "after"
+      },
+      {
+        "assert": {
+          "actual": "$saved.after.commit",
+          "equals": "$saved.before.commit"
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-interp-liveaccess-protocol-unmapped",
+    "steps": [
+      {
+        "writer": "$materials/acceptance/variants/protocol-v2/pipeline-monitor-v2.yaml",
+        "repo": "ops-shared",
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "writer": "$materials/acceptance/variants/protocol-v2/orders-freshness-lag-v2.yaml",
+        "repo": "table-meta",
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.row-count.value": 6,
+            "value.retention-days.value": 365,
+            "value.freshness-lag.error.code": "CAPABILITY_UNSATISFIED"
+          },
+          "find": [
+            {
+              "in": "failures",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "freshness-lag"
+                },
+                "code": "CAPABILITY_UNSATISFIED"
+              },
+              "expect": {
+                "contains": {
+                  "message": [
+                    "resource-access/v2"
+                  ]
+                },
+                "nonempty": [
+                  "message"
+                ]
+              }
+            },
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "freshness-lag"
+                }
+              },
+              "count": 0
+            }
+          ],
+          "nonempty": [
+            "value.freshness-lag.error.message"
+          ],
+          "count": {
+            "value.freshness-lag": 1
+          }
+        }
+      },
+      {
+        "origin": {
+          "name": "live",
+          "method": "GET",
+          "path": "/control/calls"
+        },
+        "expect": {
+          "count": {
+            "calls": 1
+          },
+          "includes": {
+            "calls": [
+              {
+                "address": "table/shop.orders#/runtime/row-count"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-live-invalid-value-and-basis",
+    "steps": [
+      {
+        "origin": {
+          "name": "live",
+          "method": "PUT",
+          "path": "/control/units/table%2Fshop.orders%23%2Fruntime%2Frow-count",
+          "body": {
+            "behavior": "invalid",
+            "value": "six"
+          }
+        },
+        "expect": {}
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.freshness-lag.value": 120,
+            "value.retention-days.value": 365,
+            "value.row-count.error.code": "SCHEMA_INSTANCE_INVALID"
+          },
+          "includes": {
+            "failures": [
+              {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "row-count"
+                },
+                "code": "SCHEMA_INSTANCE_INVALID"
+              }
+            ]
+          },
+          "nonempty": [
+            "value.row-count.error.message"
+          ],
+          "count": {
+            "value.row-count": 1
+          },
+          "find": [
+            {
+              "in": "failures",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "row-count"
+                },
+                "code": "SCHEMA_INSTANCE_INVALID"
+              },
+              "expect": {
+                "nonempty": [
+                  "message"
+                ]
+              }
+            },
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "row-count"
+                }
+              },
+              "count": 0
+            }
+          ]
+        }
+      },
+      {
+        "origin": {
+          "name": "live",
+          "method": "PUT",
+          "path": "/control/units/table%2Fshop.orders%23%2Fruntime%2Frow-count",
+          "body": {
+            "behavior": "bad-basis",
+            "value": {
+              "metric": "row_count",
+              "value": 6
+            }
+          }
+        },
+        "expect": {}
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.freshness-lag.value": 120,
+            "value.retention-days.value": 365,
+            "value.row-count.error.code": "CAPABILITY_UNSATISFIED"
+          },
+          "find": [
+            {
+              "in": "failures",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "row-count"
+                },
+                "code": "CAPABILITY_UNSATISFIED"
+              },
+              "expect": {
+                "contains": {
+                  "message": [
+                    "bindingGeneration"
+                  ]
+                },
+                "nonempty": [
+                  "message"
+                ]
+              }
+            },
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "row-count"
+                }
+              },
+              "count": 0
+            }
+          ],
+          "nonempty": [
+            "value.row-count.error.message"
+          ],
+          "count": {
+            "value.row-count": 1
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-live-unknown-unit-at-origin",
+    "steps": [
+      {
+        "origin": {
+          "name": "live",
+          "method": "DELETE",
+          "path": "/control/units/table%2Fshop.orders%23%2Fruntime%2Frow-count"
+        },
+        "expect": {}
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.freshness-lag.value": 120,
+            "value.retention-days.value": 365,
+            "value.row-count.error.code": "OBJECT_REF_UNRESOLVED"
+          },
+          "includes": {
+            "failures": [
+              {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "row-count"
+                },
+                "code": "OBJECT_REF_UNRESOLVED"
+              }
+            ]
+          },
+          "nonempty": [
+            "value.row-count.error.message"
+          ],
+          "count": {
+            "value.row-count": 1
+          },
+          "find": [
+            {
+              "in": "failures",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "row-count"
+                },
+                "code": "OBJECT_REF_UNRESOLVED"
+              },
+              "expect": {
+                "nonempty": [
+                  "message"
+                ]
+              }
+            },
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "row-count"
+                }
+              },
+              "count": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-live-aspect-level-source",
+    "steps": [
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "beforeStatsRemoval"
+      },
+      {
+        "kc": [
+          "writer",
+          "remove",
+          "urn:kc:object:table/shop.orders#/stats",
+          "--repo",
+          "table-meta",
+          "--command-id",
+          "$command"
+        ],
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        },
+        "save": "statsRemoval"
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "commit": "$saved.statsRemoval.result.newCommit"
+          }
+        }
+      },
+      {
+        "assert": {
+          "actual": "$saved.statsRemoval.result.newCommit",
+          "different": "$saved.beforeStatsRemoval.commit"
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/live-stats",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.rowCount": 6
+          },
+          "count": {
+            "observations": 1
+          },
+          "includes": {
+            "observations": [
+              {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "live-stats",
+                  "kind": "Aspect"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.customers#/live-stats",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.rowCount": 4
+          },
+          "count": {
+            "observations": 1
+          }
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.runtime.row-count.value": 6,
+            "value.runtime.retention-days.value": 365,
+            "value.live-stats.rowCount": 6
+          },
+          "count": {
+            "observations": 3
+          },
+          "includes": {
+            "observations": [
+              {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "row-count"
+                }
+              },
+              {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "freshness-lag"
+                }
+              },
+              {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "live-stats",
+                  "kind": "Aspect"
+                }
+              }
+            ]
+          },
+          "absent": [
+            "value.stats"
+          ],
+          "unitAddresses": [
+            {
+              "kind": "Member",
+              "objectId": "table/shop.orders",
+              "aspectName": "runtime",
+              "memberKey": "row-count"
+            },
+            {
+              "kind": "Member",
+              "objectId": "table/shop.orders",
+              "aspectName": "runtime",
+              "memberKey": "freshness-lag"
+            },
+            {
+              "kind": "Aspect",
+              "objectId": "table/shop.orders",
+              "aspectName": "live-stats"
+            }
+          ]
+        }
+      }
+    ],
+    "notes": " The probe removes only its own branch copy of the unrelated original SQL stats Aspect, verifies the removal commit, and accounts for exactly the three requested live units."
+  },
+  {
+    "id": "accept-live-shared-descriptor-separate-units",
+    "steps": [
+      {
+        "writer": "$materials/acceptance/variants/shared-descriptor/orders-error-rate.yaml",
+        "repo": "table-meta",
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "origin": {
+          "name": "live",
+          "method": "PUT",
+          "path": "/control/units/table%2Fshop.orders%23%2Fruntime%2Ferror-rate",
+          "body": {
+            "behavior": "error",
+            "errorCode": "TEMPORARY_UNAVAILABLE"
+          }
+        },
+        "expect": {}
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.row-count.value": 6,
+            "value.error-rate.error.code": "TEMPORARY_UNAVAILABLE"
+          },
+          "find": [
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "row-count"
+                }
+              },
+              "expect": {
+                "nonempty": [
+                  "declarationDigest",
+                  "basis.bindingGeneration",
+                  "basis.observedAt"
+                ]
+              }
+            },
+            {
+              "in": "failures",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "error-rate"
+                },
+                "code": "TEMPORARY_UNAVAILABLE"
+              },
+              "expect": {
+                "nonempty": [
+                  "message"
+                ]
+              }
+            },
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "error-rate"
+                }
+              },
+              "count": 0
+            }
+          ],
+          "includes": {
+            "failures": [
+              {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "error-rate"
+                },
+                "code": "TEMPORARY_UNAVAILABLE"
+              }
+            ]
+          },
+          "nonempty": [
+            "value.error-rate.error.message"
+          ],
+          "count": {
+            "value.error-rate": 1
+          }
+        }
+      },
+      {
+        "origin": {
+          "name": "live",
+          "method": "GET",
+          "path": "/control/calls"
+        },
+        "expect": {
+          "count": {
+            "calls": 3
+          },
+          "includes": {
+            "calls": [
+              {
+                "address": "table/shop.orders#/runtime/row-count",
+                "descriptorRef": "ops/warehouse-stats"
+              },
+              {
+                "address": "table/shop.orders#/runtime/error-rate",
+                "descriptorRef": "ops/warehouse-stats"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "notes": "runtime also contains independent freshness-lag; the shared-descriptor pair has two calls, the whole aspect has three."
+  },
+  {
+    "id": "accept-live-stream-not-read",
+    "steps": [
+      {
+        "writer": "$materials/acceptance/variants/stream/pipeline-events.yaml",
+        "repo": "ops-shared",
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "writer": "$materials/acceptance/variants/stream/orders-recent-events.yaml",
+        "repo": "table-meta",
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.row-count.value": 6,
+            "value.freshness-lag.value": 120,
+            "value.retention-days.value": 365,
+            "value.recent-events.error.code": "CAPABILITY_UNSATISFIED"
+          },
+          "find": [
+            {
+              "in": "failures",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "recent-events"
+                },
+                "code": "CAPABILITY_UNSATISFIED"
+              },
+              "expect": {
+                "contains": {
+                  "message": [
+                    "stream",
+                    "recent-events"
+                  ]
+                },
+                "nonempty": [
+                  "message"
+                ]
+              }
+            },
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "recent-events"
+                }
+              },
+              "count": 0
+            }
+          ],
+          "nonempty": [
+            "value.recent-events.error.message"
+          ],
+          "count": {
+            "value.recent-events": 1
+          }
+        }
+      },
+      {
+        "origin": {
+          "name": "live",
+          "method": "GET",
+          "path": "/control/calls"
+        },
+        "expect": {
+          "count": {
+            "calls": 2
+          },
+          "excludes": {
+            "calls": [
+              "recent-events"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-live-switch-static-and-external",
+    "steps": [
+      {
+        "origin": {
+          "name": "live",
+          "method": "PUT",
+          "path": "/control/units/table%2Fshop.orders%23%2Fruntime%2Fretention-days",
+          "body": {
+            "value": {
+              "metric": "retention_days",
+              "value": 400,
+              "unit": "days",
+              "status": "ok"
+            }
+          }
+        },
+        "expect": {}
+      },
+      {
+        "kc": [
+          "writer",
+          "put",
+          "urn:kc:object:table/shop.orders#/runtime/retention-days",
+          "--repo",
+          "table-meta",
+          "--command-id",
+          "$command",
+          "--value-source",
+          "{\"kind\":\"binding\",\"binding\":{\"descriptorRef\":\"ops/warehouse-stats\"}}",
+          "--value",
+          "null"
+        ],
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime/retention-days",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.value": 400,
+            "objectId": "table/shop.orders"
+          },
+          "find": [
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "retention-days"
+                }
+              },
+              "expect": {
+                "nonempty": [
+                  "declarationDigest",
+                  "basis.bindingGeneration",
+                  "basis.observedAt"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "writer": "$materials/acceptance/table-meta/tables/orders.runtime/retention-days.yaml",
+        "repo": "table-meta",
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime/retention-days",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.value": 365,
+            "objectId": "table/shop.orders"
+          },
+          "absent": [
+            "observations"
+          ]
+        }
+      },
+      {
+        "origin": {
+          "name": "live",
+          "method": "GET",
+          "path": "/control/calls"
+        },
+        "expect": {
+          "count": {
+            "calls": 1
+          },
+          "includes": {
+            "calls": [
+              {
+                "address": "table/shop.orders#/runtime/retention-days"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "liveaccess-plugin-help",
+    "steps": [
+      {
+        "kc": [
+          "plugin",
+          "liveaccess",
+          "help"
+        ],
+        "expect": {
+          "has": {
+            "name": "liveaccess"
+          },
+          "contains": {
+            "usage": [
+              "LookupState",
+              "认证",
+              "独立审计",
+              "requestId"
+            ]
+          },
+          "includes": {
+            "tasks": [
+              "read",
+              "operations audit access",
+              "operations audit trace"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "plugin",
+          "acceptance-not-installed",
+          "help"
+        ],
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "CAPABILITY_UNSATISFIED"
+          }
+        }
+      },
+      {
+        "origin": {
+          "name": "live",
+          "method": "GET",
+          "path": "/control/calls"
+        },
+        "expect": {
+          "count": {
+            "calls": 0
+          }
+        }
+      },
+      {
+        "origin": {
+          "name": "untrusted",
+          "method": "GET",
+          "path": "/control/calls"
+        },
+        "expect": {
+          "count": {
+            "calls": 0
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-search-repo-flag-retired",
+    "steps": [
+      {
+        "kc": [
+          "search",
+          "--repo",
+          "table-meta",
+          "--query",
+          "orders"
+        ],
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "USAGE_INVALID"
+          },
+          "contains": {
+            "error.message": [
+              "--dataset"
+            ]
+          },
+          "absent": [
+            "hits",
+            "results"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-live-identity-pass-through",
+    "steps": [
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--repo",
+          "table-meta",
+          "--principal",
+          "alice",
+          "--action",
+          "object.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--repo",
+          "table-meta",
+          "--principal",
+          "bob",
+          "--action",
+          "object.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--repo",
+          "ops-shared",
+          "--principal",
+          "alice",
+          "--action",
+          "object.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--repo",
+          "ops-shared",
+          "--principal",
+          "bob",
+          "--action",
+          "object.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.row-count.value": 6
+          },
+          "find": [
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "row-count"
+                }
+              },
+              "expect": {
+                "nonempty": [
+                  "declarationDigest",
+                  "basis.bindingGeneration",
+                  "basis.observedAt"
+                ]
+              }
+            },
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "freshness-lag"
+                }
+              },
+              "expect": {
+                "nonempty": [
+                  "declarationDigest",
+                  "basis.bindingGeneration",
+                  "basis.observedAt"
+                ]
+              }
+            }
+          ]
+        },
+        "save": "aliceRead",
+        "as": "alice"
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.row-count.value": 6
+          },
+          "find": [
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "row-count"
+                }
+              },
+              "expect": {
+                "nonempty": [
+                  "declarationDigest",
+                  "basis.bindingGeneration",
+                  "basis.observedAt"
+                ]
+              }
+            },
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "freshness-lag"
+                }
+              },
+              "expect": {
+                "nonempty": [
+                  "declarationDigest",
+                  "basis.bindingGeneration",
+                  "basis.observedAt"
+                ]
+              }
+            }
+          ]
+        },
+        "save": "bobRead",
+        "as": "bob"
+      },
+      {
+        "origin": {
+          "name": "live",
+          "method": "GET",
+          "path": "/control/calls"
+        },
+        "expect": {
+          "count": {
+            "calls": 4
+          },
+          "has": {
+            "calls.0.headers.X-Resource-Principal": "alice",
+            "calls.1.headers.X-Resource-Principal": "alice",
+            "calls.2.headers.X-Resource-Principal": "bob",
+            "calls.3.headers.X-Resource-Principal": "bob"
+          },
+          "find": [
+            {
+              "in": "calls",
+              "where": {
+                "address": "table/shop.orders#/runtime/row-count",
+                "headers": {
+                  "X-Resource-Principal": "alice"
+                }
+              },
+              "expect": {
+                "has": {
+                  "descriptorRef": "ops/warehouse-stats"
+                },
+                "nonempty": [
+                  "declarationDigest",
+                  "descriptorDigest"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-live-dataset-read-consume-only",
+    "steps": [
+      {
+        "kc": [
+          "dataset",
+          "define",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--source",
+          "table-meta=$branch@tables@tables",
+          "--source",
+          "sales-semantic=$branch@metrics@metrics",
+          "--source",
+          "table-meta=$branch@_schemas@_schemas/table-meta",
+          "--file-source",
+          "sales-semantic=$branch@_schemas/$prefixmetric.properties.aspect.yaml@_schemas/sales-semantic/metric.properties.aspect.yaml",
+          "--file-source",
+          "sales-semantic=$branch@_schemas/$prefixmetric.definition.aspect.yaml@_schemas/sales-semantic/metric.definition.aspect.yaml"
+        ],
+        "expect": {
+          "has": {
+            "revision": 1,
+            "setId": "$dataset"
+          }
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--dataset",
+          "$dataset",
+          "--principal",
+          "reader",
+          "--action",
+          "dataset.resolve"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--dataset",
+          "$dataset",
+          "--principal",
+          "reader",
+          "--action",
+          "file.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--dataset",
+          "$dataset"
+        ],
+        "expect": {
+          "has": {
+            "value.row-count.value": 6,
+            "value.freshness-lag.value": 120,
+            "value.retention-days.value": 365
+          }
+        },
+        "as": "reader"
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "FORBIDDEN"
+          }
+        },
+        "as": "reader"
+      },
+      {
+        "origin": {
+          "name": "live",
+          "method": "GET",
+          "path": "/control/calls"
+        },
+        "expect": {
+          "count": {
+            "calls": 2
+          },
+          "has": {
+            "calls.0.headers.X-Resource-Principal": "reader",
+            "calls.1.headers.X-Resource-Principal": "reader"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-live-pinned-dataset-unit-changed",
+    "steps": [
+      {
+        "kc": [
+          "dataset",
+          "define",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--source",
+          "table-meta=$branch@tables@tables",
+          "--source",
+          "sales-semantic=$branch@metrics@metrics",
+          "--source",
+          "table-meta=$branch@_schemas@_schemas/table-meta",
+          "--file-source",
+          "sales-semantic=$branch@_schemas/$prefixmetric.properties.aspect.yaml@_schemas/sales-semantic/metric.properties.aspect.yaml",
+          "--file-source",
+          "sales-semantic=$branch@_schemas/$prefixmetric.definition.aspect.yaml@_schemas/sales-semantic/metric.definition.aspect.yaml"
+        ],
+        "expect": {
+          "has": {
+            "revision": 1,
+            "setId": "$dataset"
+          }
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "put",
+          "urn:kc:object:table/shop.orders#/runtime/row-count",
+          "--repo",
+          "table-meta",
+          "--command-id",
+          "$command",
+          "--value",
+          "{\"metric\":\"row_count\",\"value\":0,\"unit\":\"rows\",\"status\":\"ok\"}"
+        ],
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--dataset",
+          "$dataset"
+        ],
+        "expect": {
+          "has": {
+            "value.row-count.value": 6
+          },
+          "find": [
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "row-count"
+                }
+              },
+              "expect": {
+                "nonempty": [
+                  "declarationDigest",
+                  "basis.bindingGeneration",
+                  "basis.observedAt"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.row-count.value": 0
+          },
+          "find": [
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "row-count"
+                }
+              },
+              "count": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-cross-descriptor-repo-not-selected",
+    "steps": [
+      {
+        "kc": [
+          "dataset",
+          "define",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--source",
+          "table-meta=$branch@tables@tables",
+          "--source",
+          "sales-semantic=$branch@metrics@metrics",
+          "--source",
+          "table-meta=$branch@_schemas@_schemas/table-meta",
+          "--file-source",
+          "sales-semantic=$branch@_schemas/$prefixmetric.properties.aspect.yaml@_schemas/sales-semantic/metric.properties.aspect.yaml",
+          "--file-source",
+          "sales-semantic=$branch@_schemas/$prefixmetric.definition.aspect.yaml@_schemas/sales-semantic/metric.definition.aspect.yaml"
+        ],
+        "expect": {
+          "has": {
+            "revision": 1,
+            "setId": "$dataset"
+          }
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/live-stats",
+          "--dataset",
+          "$dataset"
+        ],
+        "expect": {
+          "has": {
+            "value.rowCount": 6
+          },
+          "nonempty": [
+            "observations.0.descriptorDigest",
+            "observations.0.declarationDigest"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "files",
+          "list",
+          "--dataset",
+          "$dataset",
+          "--path",
+          ""
+        ],
+        "expect": {
+          "excludes": {
+            "": [
+              "ops/warehouse-stats",
+              "ops-shared"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:ops/warehouse-stats",
+          "--dataset",
+          "$dataset"
+        ],
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "FORBIDDEN"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-live-precise-range",
+    "steps": [
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime/row-count",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.value": 6
+          },
+          "count": {
+            "observations": 1
+          },
+          "includes": {
+            "observations": [
+              {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "row-count"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "origin": {
+          "name": "live",
+          "path": "/control/calls"
+        },
+        "expect": {
+          "count": {
+            "calls": 1
+          },
+          "has": {
+            "calls.0.address": "table/shop.orders#/runtime/row-count"
+          }
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime/row-count/value",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value": 6
+          },
+          "count": {
+            "observations": 1
+          },
+          "includes": {
+            "observations": [
+              {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "row-count"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "origin": {
+          "name": "live",
+          "path": "/control/calls"
+        },
+        "expect": {
+          "count": {
+            "calls": 2
+          },
+          "has": {
+            "calls.1.address": "table/shop.orders#/runtime/row-count"
+          }
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/properties",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.name": "orders"
+          },
+          "absent": [
+            "observations"
+          ]
+        }
+      },
+      {
+        "origin": {
+          "name": "live",
+          "path": "/control/calls"
+        },
+        "expect": {
+          "count": {
+            "calls": 2
+          }
+        }
+      }
+    ],
+    "notes": "Uses the complete original source line; pending spec-quote.patch protects its # address during YAML parsing."
+  },
+  {
+    "id": "accept-index-cross-repo-schema-ref",
+    "steps": [
+      {
+        "writer": "$materials/acceptance/sales-analysis/indexes/sales-search/table-name.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:index/sales-search#/index/table-name",
+          "--repo",
+          "sales-analysis"
+        ],
+        "expect": {
+          "has": {
+            "value.inputs.0.from": "schema/table.properties#/fields/name",
+            "schemaRef": "schema/core/index-declaration/v1"
+          }
+        }
+      },
+      {
+        "writer": "$materials/acceptance/sales-analysis/indexes/sales-search/metric-text.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:index/sales-search#/index/metric-text",
+          "--repo",
+          "sales-analysis"
+        ],
+        "expect": {
+          "has": {
+            "value.inputs.0.from": "schema/metric.properties#/fields/name",
+            "schemaRef": "schema/core/index-declaration/v1"
+          }
+        }
+      },
+      {
+        "writer": "$materials/acceptance/sales-analysis/indexes/sales-search/table-row-count.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:index/sales-search#/index/table-row-count",
+          "--repo",
+          "sales-analysis"
+        ],
+        "expect": {
+          "has": {
+            "value.inputs.0.from": "schema/table.live-stats#/fields/rowCount",
+            "schemaRef": "schema/core/index-declaration/v1"
+          }
+        }
+      },
+      {
+        "writer": "$materials/acceptance/sales-analysis/indexes/sales-search/metric-unit.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:index/sales-search#/index/metric-unit",
+          "--repo",
+          "sales-analysis"
+        ],
+        "expect": {
+          "has": {
+            "value.inputs.0.from": "schema/metric.definition#/fields/unit",
+            "schemaRef": "schema/core/index-declaration/v1"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-live-maintenance-read-declaration",
+    "steps": [
+      {
+        "kc": [
+          "resolve",
+          "--repo",
+          "table-meta",
+          "--object",
+          "table/shop.orders",
+          "--aspect",
+          "runtime",
+          "--member",
+          "row-count"
+        ],
+        "expect": {
+          "has": {
+            "status": "RESOLVED",
+            "objectId": "table/shop.orders",
+            "memberKey": "row-count"
+          },
+          "nonempty": [
+            "digest",
+            "commit"
+          ]
+        },
+        "save": "declaration"
+      },
+      {
+        "kc": [
+          "files",
+          "read",
+          "--repo",
+          "table-meta",
+          "--commit",
+          "$saved.declaration.commit",
+          "--path",
+          "tables/orders.runtime/row-count.yaml"
+        ],
+        "expect": {
+          "has": {
+            "eof": true
+          },
+          "nonempty": [
+            "content"
+          ]
+        },
+        "save": "raw",
+        "remember": {
+          "rawContent": {
+            "path": "content"
+          }
+        }
+      },
+      {
+        "assert": {
+          "actual": "$saved.rawContent",
+          "base64Contains": [
+            "valueSource: {\"kind\":\"binding\",\"binding\":{\"descriptorRef\":\"ops/warehouse-stats\"}}"
+          ],
+          "base64Excludes": [
+            "metric: row_count",
+            "value: 6"
+          ],
+          "base64EmptyBody": true
+        }
+      },
+      {
+        "origin": {
+          "name": "live",
+          "path": "/control/calls"
+        },
+        "expect": {
+          "count": {
+            "calls": 0
+          }
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "put",
+          "urn:kc:object:table/shop.orders#/runtime/row-count",
+          "--repo",
+          "table-meta",
+          "--command-id",
+          "$command",
+          "--value-source",
+          "{\"kind\": \"binding\", \"binding\": {\"descriptorRef\": \"ops/pipeline-monitor\"}}",
+          "--if-digest",
+          "$saved.declaration.digest",
+          "--value",
+          "null"
+        ],
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "newHead"
+      },
+      {
+        "kc": [
+          "files",
+          "read",
+          "--repo",
+          "table-meta",
+          "--commit",
+          "$saved.newHead.commit",
+          "--path",
+          "tables/orders.runtime/row-count.yaml"
+        ],
+        "expect": {
+          "has": {
+            "eof": true
+          },
+          "nonempty": [
+            "content"
+          ]
+        },
+        "save": "newRaw"
+      },
+      {
+        "assert": {
+          "actual": "$saved.newRaw.content",
+          "base64Contains": [
+            "valueSource: {\"kind\":\"binding\",\"binding\":{\"descriptorRef\":\"ops/pipeline-monitor\"}}"
+          ],
+          "base64EmptyBody": true
+        }
+      },
+      {
+        "kc": [
+          "files",
+          "read",
+          "--repo",
+          "table-meta",
+          "--commit",
+          "$saved.declaration.commit",
+          "--path",
+          "tables/orders.runtime/row-count.yaml"
+        ],
+        "expect": {
+          "has": {
+            "content": "$saved.rawContent"
+          }
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "put",
+          "urn:kc:object:table/shop.orders#/runtime/row-count",
+          "--repo",
+          "table-meta",
+          "--command-id",
+          "$command",
+          "--value-source",
+          "{\"kind\": \"binding\", \"binding\": {\"descriptorRef\": \"ops/warehouse-stats\"}}",
+          "--if-digest",
+          "$saved.declaration.digest",
+          "--value",
+          "null"
+        ],
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "PRECONDITION_FAILED"
+          }
+        }
+      }
+    ],
+    "notes": "Snapshot maintenance bytes + resolution digest; updating the same stale digest must be rejected. The frozen old file remains byte-identical."
+  },
+  {
+    "id": "liveaccess-independent-module",
+    "steps": [
+      {
+        "go": {
+          "package": "./internal/arch",
+          "tests": [
+            "TestLiveAccessConcreteImplementationsStayInModule",
+            "TestLiveAccessRuntimeDependencyBoundaries",
+            "TestLiveAccessCLILeafResponsibilitiesStayWithModule",
+            "TestLiveAccessLayerAssignmentsAreExplicit"
+          ]
+        },
+        "expect": {
+          "count": {
+            "tests": 4
+          },
+          "includes": {
+            "tests": [
+              {
+                "name": "TestLiveAccessConcreteImplementationsStayInModule",
+                "status": "pass"
+              },
+              {
+                "name": "TestLiveAccessRuntimeDependencyBoundaries",
+                "status": "pass"
+              },
+              {
+                "name": "TestLiveAccessCLILeafResponsibilitiesStayWithModule",
+                "status": "pass"
+              },
+              {
+                "name": "TestLiveAccessLayerAssignmentsAreExplicit",
+                "status": "pass"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-retire-repository-plugin-selection",
+    "steps": [
+      {
+        "go": {
+          "package": "./internal/arch",
+          "tests": [
+            "TestRepositoryPluginSelectionIsRetiredFromCodeAndScenes",
+            "TestRepositoryPluginSelectionGuardRejectsReintroduction"
+          ]
+        },
+        "expect": {
+          "count": {
+            "tests": 2
+          },
+          "includes": {
+            "tests": [
+              {
+                "name": "TestRepositoryPluginSelectionIsRetiredFromCodeAndScenes",
+                "status": "pass"
+              },
+              {
+                "name": "TestRepositoryPluginSelectionGuardRejectsReintroduction",
+                "status": "pass"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "liveaccess-mixed-values",
+    "steps": [
+      {
+        "writer": "$materials/acceptance/variants/shared-descriptor/orders-error-rate.yaml",
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "origin": {
+          "path": "/control/units/table%2Fshop.orders%23%2Fruntime%2Frow-count",
+          "method": "PUT",
+          "body": {
+            "value": {
+              "metric": "row_count",
+              "value": 31,
+              "unit": "rows",
+              "status": "ok"
+            }
+          }
+        }
+      },
+      {
+        "origin": {
+          "path": "/control/units/table%2Fshop.orders%23%2Fruntime%2Ffreshness-lag",
+          "method": "PUT",
+          "body": {
+            "behavior": "null"
+          }
+        }
+      },
+      {
+        "origin": {
+          "path": "/control/units/table%2Fshop.orders%23%2Fruntime%2Ferror-rate",
+          "method": "PUT",
+          "body": {
+            "behavior": "error",
+            "errorCode": "TEMPORARY_UNAVAILABLE"
+          }
+        }
+      },
+      {
+        "kc": [
+          "dataset",
+          "define",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--source",
+          "table-meta=$branch@tables@tables",
+          "--source",
+          "table-meta=$branch@_schemas@_schemas/table-meta"
+        ],
+        "expect": {
+          "has": {
+            "revision": 1
+          }
+        }
+      },
+      {
+        "origin": {
+          "path": "/control/units/table%2Fshop.orders%23%2Fruntime%2Ferror-rate",
+          "method": "PUT",
+          "body": {
+            "behavior": "error",
+            "errorCode": "TEMPORARY_UNAVAILABLE"
+          }
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.retention-days.value": 365,
+            "value.row-count.value": 31,
+            "value.freshness-lag": null,
+            "value.error-rate.error.code": "TEMPORARY_UNAVAILABLE"
+          },
+          "count": {
+            "observations": 2,
+            "failures": 1,
+            "value.error-rate": 1
+          },
+          "includes": {
+            "failures": [
+              {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "error-rate"
+                },
+                "code": "TEMPORARY_UNAVAILABLE"
+              }
+            ],
+            "observations": [
+              {
+                "address": {
+                  "memberKey": "row-count"
+                }
+              },
+              {
+                "address": {
+                  "memberKey": "freshness-lag"
+                }
+              }
+            ]
+          },
+          "excludes": {
+            "value": [
+              "descriptorRef",
+              "valueSource"
+            ]
+          },
+          "nonempty": [
+            "value.error-rate.error.message"
+          ],
+          "find": [
+            {
+              "in": "failures",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "error-rate"
+                },
+                "code": "TEMPORARY_UNAVAILABLE"
+              },
+              "expect": {
+                "nonempty": [
+                  "message"
+                ]
+              }
+            },
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "error-rate"
+                }
+              },
+              "count": 0
+            }
+          ]
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--dataset",
+          "$dataset"
+        ],
+        "expect": {
+          "has": {
+            "value.retention-days.value": 365,
+            "value.row-count.value": 31,
+            "value.freshness-lag": null,
+            "value.error-rate.error.code": "TEMPORARY_UNAVAILABLE"
+          },
+          "count": {
+            "observations": 2,
+            "failures": 1,
+            "value.error-rate": 1
+          },
+          "includes": {
+            "failures": [
+              {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "error-rate"
+                },
+                "code": "TEMPORARY_UNAVAILABLE"
+              }
+            ],
+            "observations": [
+              {
+                "address": {
+                  "memberKey": "row-count"
+                }
+              },
+              {
+                "address": {
+                  "memberKey": "freshness-lag"
+                }
+              }
+            ]
+          },
+          "excludes": {
+            "value": [
+              "descriptorRef",
+              "valueSource"
+            ]
+          },
+          "nonempty": [
+            "value.error-rate.error.message"
+          ],
+          "find": [
+            {
+              "in": "failures",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "error-rate"
+                },
+                "code": "TEMPORARY_UNAVAILABLE"
+              },
+              "expect": {
+                "nonempty": [
+                  "message"
+                ]
+              }
+            },
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "error-rate"
+                }
+              },
+              "count": 0
+            }
+          ]
+        }
+      },
+      {
+        "origin": {
+          "path": "/control/units/table%2Fshop.orders%23%2Fruntime%2Ferror-rate",
+          "method": "PUT",
+          "body": {
+            "behavior": "bad-basis",
+            "value": null
+          }
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.retention-days.value": 365,
+            "value.row-count.value": 31,
+            "value.freshness-lag": null,
+            "value.error-rate.error.code": "CAPABILITY_UNSATISFIED"
+          },
+          "count": {
+            "observations": 2,
+            "failures": 1,
+            "value.error-rate": 1
+          },
+          "includes": {
+            "failures": [
+              {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "error-rate"
+                },
+                "code": "CAPABILITY_UNSATISFIED"
+              }
+            ],
+            "observations": [
+              {
+                "address": {
+                  "memberKey": "row-count"
+                }
+              },
+              {
+                "address": {
+                  "memberKey": "freshness-lag"
+                }
+              }
+            ]
+          },
+          "excludes": {
+            "value": [
+              "descriptorRef",
+              "valueSource"
+            ]
+          },
+          "nonempty": [
+            "value.error-rate.error.message"
+          ],
+          "find": [
+            {
+              "in": "failures",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "error-rate"
+                },
+                "code": "CAPABILITY_UNSATISFIED"
+              },
+              "expect": {
+                "nonempty": [
+                  "message"
+                ]
+              }
+            },
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "error-rate"
+                }
+              },
+              "count": 0
+            }
+          ]
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--dataset",
+          "$dataset"
+        ],
+        "expect": {
+          "has": {
+            "value.retention-days.value": 365,
+            "value.row-count.value": 31,
+            "value.freshness-lag": null,
+            "value.error-rate.error.code": "CAPABILITY_UNSATISFIED"
+          },
+          "count": {
+            "observations": 2,
+            "failures": 1,
+            "value.error-rate": 1
+          },
+          "includes": {
+            "failures": [
+              {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "error-rate"
+                },
+                "code": "CAPABILITY_UNSATISFIED"
+              }
+            ],
+            "observations": [
+              {
+                "address": {
+                  "memberKey": "row-count"
+                }
+              },
+              {
+                "address": {
+                  "memberKey": "freshness-lag"
+                }
+              }
+            ]
+          },
+          "excludes": {
+            "value": [
+              "descriptorRef",
+              "valueSource"
+            ]
+          },
+          "nonempty": [
+            "value.error-rate.error.message"
+          ],
+          "find": [
+            {
+              "in": "failures",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "error-rate"
+                },
+                "code": "CAPABILITY_UNSATISFIED"
+              },
+              "expect": {
+                "nonempty": [
+                  "message"
+                ]
+              }
+            },
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "error-rate"
+                }
+              },
+              "count": 0
+            }
+          ]
+        }
+      },
+      {
+        "origin": {
+          "path": "/control/units/table%2Fshop.orders%23%2Fruntime%2Ferror-rate",
+          "method": "PUT",
+          "body": {
+            "behavior": "invalid",
+            "value": {
+              "metric": "error_rate",
+              "value": "bad"
+            }
+          }
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.retention-days.value": 365,
+            "value.row-count.value": 31,
+            "value.freshness-lag": null,
+            "value.error-rate.error.code": "SCHEMA_INSTANCE_INVALID"
+          },
+          "count": {
+            "observations": 2,
+            "failures": 1,
+            "value.error-rate": 1
+          },
+          "includes": {
+            "failures": [
+              {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "error-rate"
+                },
+                "code": "SCHEMA_INSTANCE_INVALID"
+              }
+            ],
+            "observations": [
+              {
+                "address": {
+                  "memberKey": "row-count"
+                }
+              },
+              {
+                "address": {
+                  "memberKey": "freshness-lag"
+                }
+              }
+            ]
+          },
+          "excludes": {
+            "value": [
+              "descriptorRef",
+              "valueSource"
+            ]
+          },
+          "nonempty": [
+            "value.error-rate.error.message"
+          ],
+          "find": [
+            {
+              "in": "failures",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "error-rate"
+                },
+                "code": "SCHEMA_INSTANCE_INVALID"
+              },
+              "expect": {
+                "nonempty": [
+                  "message"
+                ]
+              }
+            },
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "error-rate"
+                }
+              },
+              "count": 0
+            }
+          ]
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--dataset",
+          "$dataset"
+        ],
+        "expect": {
+          "has": {
+            "value.retention-days.value": 365,
+            "value.row-count.value": 31,
+            "value.freshness-lag": null,
+            "value.error-rate.error.code": "SCHEMA_INSTANCE_INVALID"
+          },
+          "count": {
+            "observations": 2,
+            "failures": 1,
+            "value.error-rate": 1
+          },
+          "includes": {
+            "failures": [
+              {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "error-rate"
+                },
+                "code": "SCHEMA_INSTANCE_INVALID"
+              }
+            ],
+            "observations": [
+              {
+                "address": {
+                  "memberKey": "row-count"
+                }
+              },
+              {
+                "address": {
+                  "memberKey": "freshness-lag"
+                }
+              }
+            ]
+          },
+          "excludes": {
+            "value": [
+              "descriptorRef",
+              "valueSource"
+            ]
+          },
+          "nonempty": [
+            "value.error-rate.error.message"
+          ],
+          "find": [
+            {
+              "in": "failures",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "error-rate"
+                },
+                "code": "SCHEMA_INSTANCE_INVALID"
+              },
+              "expect": {
+                "nonempty": [
+                  "message"
+                ]
+              }
+            },
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "error-rate"
+                }
+              },
+              "count": 0
+            }
+          ]
+        }
+      }
+    ],
+    "notes": "The fixed Dataset declarations are reused; each external behavior is restored at probe exit. Every variant checks both Repository and Dataset public READ."
+  },
+  {
+    "id": "liveaccess-audit-separate-authorization",
+    "steps": [
+      {
+        "writer": "$materials/acceptance/variants/shared-descriptor/orders-error-rate.yaml",
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "origin": {
+          "path": "/control/units/table%2Fshop.orders%23%2Fruntime%2Frow-count",
+          "method": "PUT",
+          "body": {
+            "value": {
+              "metric": "row_count",
+              "value": 31,
+              "unit": "rows",
+              "status": "ok"
+            }
+          }
+        }
+      },
+      {
+        "origin": {
+          "path": "/control/units/table%2Fshop.orders%23%2Fruntime%2Ffreshness-lag",
+          "method": "PUT",
+          "body": {
+            "behavior": "null"
+          }
+        }
+      },
+      {
+        "origin": {
+          "path": "/control/units/table%2Fshop.orders%23%2Fruntime%2Ferror-rate",
+          "method": "PUT",
+          "body": {
+            "behavior": "error",
+            "errorCode": "TEMPORARY_UNAVAILABLE"
+          }
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--repo",
+          "table-meta",
+          "--principal",
+          "alice",
+          "--action",
+          "object.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--principal",
+          "auditor",
+          "--action",
+          "audit.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--repo",
+          "ops-shared",
+          "--principal",
+          "alice",
+          "--action",
+          "object.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--repo",
+          "table-meta",
+          "--request-id",
+          "$prefix-audit-r1"
+        ],
+        "expect": {
+          "has": {
+            "value.retention-days.value": 365,
+            "value.row-count.value": 31,
+            "value.freshness-lag": null,
+            "value.error-rate.error.code": "TEMPORARY_UNAVAILABLE"
+          },
+          "absent": [
+            "results",
+            "entries",
+            "audit",
+            "liveAccess"
+          ],
+          "count": {
+            "observations": 2,
+            "failures": 1,
+            "value.error-rate": 1
+          },
+          "includes": {
+            "failures": [
+              {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "error-rate"
+                },
+                "code": "TEMPORARY_UNAVAILABLE"
+              }
+            ],
+            "observations": [
+              {
+                "address": {
+                  "memberKey": "row-count"
+                }
+              },
+              {
+                "address": {
+                  "memberKey": "freshness-lag"
+                }
+              }
+            ]
+          },
+          "excludes": {
+            "value": [
+              "descriptorRef",
+              "valueSource"
+            ]
+          },
+          "nonempty": [
+            "value.error-rate.error.message"
+          ],
+          "find": [
+            {
+              "in": "failures",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "error-rate"
+                },
+                "code": "TEMPORARY_UNAVAILABLE"
+              },
+              "expect": {
+                "nonempty": [
+                  "message"
+                ]
+              }
+            },
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "error-rate"
+                }
+              },
+              "count": 0
+            }
+          ]
+        },
+        "as": "alice"
+      },
+      {
+        "kc": [
+          "operations",
+          "audit",
+          "access",
+          "--filter-request-id",
+          "$prefix-audit-r1"
+        ],
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "FORBIDDEN"
+          }
+        },
+        "as": "alice"
+      },
+      {
+        "kc": [
+          "operations",
+          "audit",
+          "access",
+          "--filter-request-id",
+          "$prefix-audit-r1"
+        ],
+        "expect": {
+          "count": {
+            "entries": 1
+          },
+          "has": {
+            "entries.0.requestId": "$prefix-audit-r1",
+            "entries.0.identity.principal": "alice"
+          },
+          "absent": [
+            "entries.0.resultFailure"
+          ],
+          "find": [
+            {
+              "in": "entries.0.results.units",
+              "where": {
+                "address": {
+                  "memberKey": "row-count"
+                }
+              },
+              "expect": {
+                "has": {
+                  "value.value": 31,
+                  "outcome": "value"
+                }
+              }
+            },
+            {
+              "in": "entries.0.results.units",
+              "where": {
+                "address": {
+                  "memberKey": "freshness-lag"
+                }
+              },
+              "expect": {
+                "has": {
+                  "value": null,
+                  "outcome": "value"
+                }
+              }
+            },
+            {
+              "in": "entries.0.results.units",
+              "where": {
+                "address": {
+                  "memberKey": "error-rate"
+                }
+              },
+              "expect": {
+                "has": {
+                  "outcome": "failure",
+                  "failure.code": "TEMPORARY_UNAVAILABLE"
+                },
+                "absent": [
+                  "value",
+                  "observation"
+                ]
+              }
+            }
+          ]
+        },
+        "as": "auditor"
+      }
+    ]
+  },
+  {
+    "id": "accept-live-descriptor-deleted-at-head",
+    "steps": [
+      {
+        "kc": [
+          "dataset",
+          "define",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--source",
+          "table-meta=$branch@tables@tables",
+          "--source",
+          "table-meta=$branch@_schemas@_schemas/table-meta"
+        ],
+        "expect": {
+          "has": {
+            "revision": 1
+          }
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "remove",
+          "urn:kc:object:ops/pipeline-monitor",
+          "--repo",
+          "ops-shared",
+          "--command-id",
+          "$command"
+        ],
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--dataset",
+          "$dataset"
+        ],
+        "expect": {
+          "has": {
+            "value.freshness-lag.value": 120,
+            "value.row-count.value": 6,
+            "value.retention-days.value": 365
+          },
+          "includes": {
+            "observations": [
+              {
+                "address": {
+                  "memberKey": "freshness-lag"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.row-count.value": 6,
+            "value.retention-days.value": 365,
+            "value.freshness-lag.error.code": "OBJECT_REF_UNRESOLVED"
+          },
+          "includes": {
+            "failures": [
+              {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "freshness-lag"
+                },
+                "code": "OBJECT_REF_UNRESOLVED"
+              }
+            ]
+          },
+          "nonempty": [
+            "value.freshness-lag.error.message"
+          ],
+          "count": {
+            "value.freshness-lag": 1
+          },
+          "find": [
+            {
+              "in": "failures",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "freshness-lag"
+                },
+                "code": "OBJECT_REF_UNRESOLVED"
+              },
+              "expect": {
+                "nonempty": [
+                  "message"
+                ]
+              }
+            },
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "freshness-lag"
+                }
+              },
+              "count": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-live-descriptor-digest-fanout",
+    "steps": [
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.row-count.value": 6,
+            "value.freshness-lag.value": 120
+          }
+        },
+        "remember": {
+          "beforeRow": {
+            "in": "observations",
+            "where": {
+              "address": {
+                "memberKey": "row-count"
+              }
+            },
+            "path": "declarationDigest"
+          },
+          "beforeFresh": {
+            "in": "observations",
+            "where": {
+              "address": {
+                "memberKey": "freshness-lag"
+              }
+            },
+            "path": "declarationDigest"
+          },
+          "beforeDescriptor": {
+            "in": "observations",
+            "where": {
+              "address": {
+                "memberKey": "row-count"
+              }
+            },
+            "path": "descriptorDigest"
+          }
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/live-stats",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "nonempty": [
+            "observations.0.declarationDigest"
+          ]
+        },
+        "remember": {
+          "beforeorders": {
+            "path": "observations.0.declarationDigest"
+          }
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.customers#/live-stats",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "nonempty": [
+            "observations.0.declarationDigest"
+          ]
+        },
+        "remember": {
+          "beforecustomers": {
+            "path": "observations.0.declarationDigest"
+          }
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.products#/live-stats",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "nonempty": [
+            "observations.0.declarationDigest"
+          ]
+        },
+        "remember": {
+          "beforeproducts": {
+            "path": "observations.0.declarationDigest"
+          }
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "put",
+          "urn:kc:object:ops/warehouse-stats",
+          "--repo",
+          "ops-shared",
+          "--command-id",
+          "$command",
+          "--value",
+          "{\"kind\": \"ResourceDescriptor\", \"name\": \"Renamed acceptance statistics\", \"description\": \"Current row counts served by the acceptance live origin.\", \"origin\": \"http://live-origin:7400\", \"mode\": \"state\", \"runtime\": \"http\", \"protocol\": \"resource-access/v1\", \"identity\": \"shared\", \"access\": {\"lookup\": {\"call\": \"lookup\"}}}"
+        ],
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.row-count.value": 6,
+            "value.freshness-lag.value": 120
+          }
+        },
+        "remember": {
+          "afterRow": {
+            "in": "observations",
+            "where": {
+              "address": {
+                "memberKey": "row-count"
+              }
+            },
+            "path": "declarationDigest"
+          },
+          "afterFresh": {
+            "in": "observations",
+            "where": {
+              "address": {
+                "memberKey": "freshness-lag"
+              }
+            },
+            "path": "declarationDigest"
+          },
+          "afterDescriptor": {
+            "in": "observations",
+            "where": {
+              "address": {
+                "memberKey": "row-count"
+              }
+            },
+            "path": "descriptorDigest"
+          }
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/live-stats",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "nonempty": [
+            "observations.0.declarationDigest"
+          ]
+        },
+        "remember": {
+          "afterorders": {
+            "path": "observations.0.declarationDigest"
+          }
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.customers#/live-stats",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "nonempty": [
+            "observations.0.declarationDigest"
+          ]
+        },
+        "remember": {
+          "aftercustomers": {
+            "path": "observations.0.declarationDigest"
+          }
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.products#/live-stats",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "nonempty": [
+            "observations.0.declarationDigest"
+          ]
+        },
+        "remember": {
+          "afterproducts": {
+            "path": "observations.0.declarationDigest"
+          }
+        }
+      },
+      {
+        "assert": {
+          "actual": "$saved.afterRow",
+          "different": "$saved.beforeRow"
+        }
+      },
+      {
+        "assert": {
+          "actual": "$saved.afterFresh",
+          "equals": "$saved.beforeFresh"
+        }
+      },
+      {
+        "assert": {
+          "actual": "$saved.afterorders",
+          "different": "$saved.beforeorders"
+        }
+      },
+      {
+        "assert": {
+          "actual": "$saved.aftercustomers",
+          "different": "$saved.beforecustomers"
+        }
+      },
+      {
+        "assert": {
+          "actual": "$saved.afterproducts",
+          "different": "$saved.beforeproducts"
+        }
+      },
+      {
+        "origin": {
+          "path": "/control/calls"
+        },
+        "expect": {
+          "find": [
+            {
+              "in": "calls",
+              "where": {
+                "address": "table/shop.orders#/runtime/row-count",
+                "descriptorDigest": "$saved.beforeDescriptor"
+              },
+              "expect": {
+                "has": {
+                  "declarationDigest": "$saved.beforeRow"
+                }
+              }
+            },
+            {
+              "in": "calls",
+              "where": {
+                "address": "table/shop.orders#/runtime/row-count",
+                "descriptorDigest": "$saved.afterDescriptor"
+              },
+              "expect": {
+                "has": {
+                  "declarationDigest": "$saved.afterRow"
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-cross-request-deadline",
+    "steps": [
+      {
+        "deployment": {
+          "has": {
+            "liveaccess.lookupTimeout": "1s",
+            "liveaccess.readTimeout": "600ms"
+          }
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "beforeStatsRemoval"
+      },
+      {
+        "kc": [
+          "writer",
+          "remove",
+          "urn:kc:object:table/shop.orders#/stats",
+          "--repo",
+          "table-meta",
+          "--command-id",
+          "$command"
+        ],
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        },
+        "save": "statsRemoval"
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "commit": "$saved.statsRemoval.result.newCommit"
+          }
+        }
+      },
+      {
+        "assert": {
+          "actual": "$saved.statsRemoval.result.newCommit",
+          "different": "$saved.beforeStatsRemoval.commit"
+        }
+      },
+      {
+        "origin": {
+          "path": "/control/units/table%2Fshop.orders%23%2Fruntime%2Frow-count",
+          "method": "PUT",
+          "body": {
+            "behavior": "slow",
+            "delayMs": 400,
+            "value": {
+              "metric": "row_count",
+              "value": 6,
+              "unit": "rows",
+              "status": "ok"
+            }
+          }
+        }
+      },
+      {
+        "origin": {
+          "path": "/control/units/table%2Fshop.orders%23%2Fruntime%2Ffreshness-lag",
+          "method": "PUT",
+          "body": {
+            "behavior": "slow",
+            "delayMs": 400,
+            "value": {
+              "metric": "freshness_lag",
+              "value": 120,
+              "unit": "seconds",
+              "status": "ok"
+            }
+          }
+        }
+      },
+      {
+        "origin": {
+          "path": "/control/units/table%2Fshop.orders%23%2Flive-stats",
+          "method": "PUT",
+          "body": {
+            "behavior": "slow",
+            "delayMs": 400,
+            "value": {
+              "table": "orders",
+              "rowCount": 6
+            }
+          }
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--repo",
+          "table-meta",
+          "--principal",
+          "reader",
+          "--action",
+          "object.read"
+        ],
+        "expect": {
+          "exit": 0
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--repo",
+          "ops-shared",
+          "--principal",
+          "reader",
+          "--action",
+          "object.read"
+        ],
+        "expect": {
+          "exit": 0
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.runtime.retention-days.value": 365
+          },
+          "maxSeconds": 1.05,
+          "count": {
+            "observations": 1,
+            "failures": 2
+          },
+          "unitAddresses": [
+            {
+              "kind": "Member",
+              "objectId": "table/shop.orders",
+              "aspectName": "runtime",
+              "memberKey": "row-count"
+            },
+            {
+              "kind": "Member",
+              "objectId": "table/shop.orders",
+              "aspectName": "runtime",
+              "memberKey": "freshness-lag"
+            },
+            {
+              "kind": "Aspect",
+              "objectId": "table/shop.orders",
+              "aspectName": "live-stats"
+            }
+          ],
+          "forEach": {
+            "failures": {
+              "has": {
+                "code": "TEMPORARY_UNAVAILABLE"
+              },
+              "contains": {
+                "message": [
+                  "external lookup timed out"
+                ]
+              }
+            }
+          },
+          "absent": [
+            "value.stats"
+          ]
+        },
+        "as": "reader"
+      }
+    ],
+    "notes": "Reads the deployed limits before the request; missing/mismatched limits are fixture errors. The duration includes CLI transport overhead; 1.05s distinguishes the 600ms shared budget from three independent 400ms waits. The probe removes only its own branch copy of the unrelated original SQL stats Aspect, verifies the removal commit, and accounts for exactly the three requested live units. The request uses its unique reader with explicit read grants only for table-meta and ops-shared, so unrelated retained managed repositories cannot enlarge descriptor resolution in this timing fixture."
+  },
+  {
+    "id": "accept-search-capability-catalog",
+    "steps": [
+      {
+        "writer": "$materials/acceptance/sales-analysis/indexes/sales-search/table-name.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "writer": "$materials/acceptance/sales-analysis/indexes/sales-search/metric-text.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "writer": "$materials/acceptance/sales-analysis/indexes/sales-search/table-row-count.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "writer": "$materials/acceptance/sales-analysis/indexes/sales-search/metric-unit.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "sales-analysis"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "beforeHead"
+      },
+      {
+        "searchSnapshot": [
+          "sales-analysis"
+        ],
+        "save": "beforeSearch"
+      },
+      {
+        "kc": [
+          "plugin",
+          "declarative-index",
+          "help"
+        ],
+        "expect": {
+          "has": {
+            "name": "declarative-index"
+          },
+          "contains": {
+            "usage": [
+              "declarative-index/opensearch@2026-10",
+              "trial",
+              "describe"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "plugin",
+          "declarative-index",
+          "describe"
+        ],
+        "expect": {
+          "count": {
+            "": 1
+          },
+          "has": {
+            "0.plugin": "declarative-index",
+            "0.catalog": "declarative-index/opensearch@2026-10",
+            "0.manifest.name": "declarative-index/opensearch",
+            "0.manifest.version": "2026-10",
+            "0.manifest.limits.maxInputs": 8,
+            "0.manifest.limits.maxTokens": 8192
+          },
+          "nonempty": [
+            "0.instance",
+            "0.manifest.digest"
+          ],
+          "find": [
+            {
+              "in": "0.manifest.builds",
+              "where": {
+                "kind": "text"
+              },
+              "expect": {
+                "nonempty": [
+                  "inputTypes",
+                  "uses",
+                  "maxInputs"
+                ]
+              }
+            },
+            {
+              "in": "0.manifest.builds",
+              "where": {
+                "kind": "keyword"
+              },
+              "expect": {
+                "nonempty": [
+                  "inputTypes",
+                  "uses",
+                  "maxInputs"
+                ]
+              }
+            },
+            {
+              "in": "0.manifest.builds",
+              "where": {
+                "kind": "number"
+              },
+              "expect": {
+                "nonempty": [
+                  "inputTypes",
+                  "uses",
+                  "maxInputs"
+                ]
+              }
+            },
+            {
+              "in": "0.manifest.builds",
+              "where": {
+                "kind": "vector"
+              },
+              "expect": {
+                "nonempty": [
+                  "inputTypes",
+                  "uses",
+                  "maxInputs"
+                ]
+              }
+            },
+            {
+              "in": "0.manifest.builds",
+              "where": {
+                "kind": "text"
+              },
+              "expect": {
+                "includes": {
+                  "options": [
+                    {
+                      "name": "analyzer",
+                      "values": [
+                        "standard"
+                      ],
+                      "rebuild": true
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "in": "0.manifest.inputs",
+              "where": {
+                "name": "boost"
+              },
+              "expect": {
+                "has": {
+                  "rebuild": false,
+                  "type": "number"
+                }
+              }
+            }
+          ],
+          "includes": {
+            "0.manifest.notDeclarable": [
+              "mapping",
+              "settings",
+              "script",
+              "pipeline",
+              "shards",
+              "replicas"
+            ]
+          }
+        }
+      },
+      {
+        "trial": "$materials/acceptance/sales-analysis/indexes/sales-search/table-name.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "count": {
+            "members": 1
+          },
+          "has": {
+            "members.0.status": "supported"
+          }
+        }
+      },
+      {
+        "trial": "$materials/acceptance/sales-analysis/indexes/sales-search/metric-text.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "count": {
+            "members": 1
+          },
+          "has": {
+            "members.0.status": "supported"
+          }
+        }
+      },
+      {
+        "trial": "$materials/acceptance/sales-analysis/indexes/sales-search/table-row-count.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "count": {
+            "members": 1
+          },
+          "has": {
+            "members.0.status": "supported"
+          }
+        }
+      },
+      {
+        "trial": "$materials/acceptance/sales-analysis/indexes/sales-search/metric-unit.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "count": {
+            "members": 1
+          },
+          "has": {
+            "members.0.status": "supported"
+          }
+        }
+      },
+      {
+        "trial": "$materials/acceptance/variants/index/table-name-unsupported-analyzer.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "count": {
+            "members": 1
+          },
+          "has": {
+            "members.0.status": "unsupported"
+          },
+          "contains": {
+            "members.0.reason": [
+              "analyzer"
+            ]
+          }
+        }
+      },
+      {
+        "trial": "$materials/acceptance/variants/index/table-name-boost.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "count": {
+            "members": 1
+          },
+          "has": {
+            "members.0.rebuild": false
+          }
+        }
+      },
+      {
+        "trial": "$materials/acceptance/variants/index/metric-semantic.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "count": {
+            "members": 1
+          },
+          "has": {
+            "members.0.catalog": "declarative-index/opensearch@2026-10"
+          },
+          "nonempty": [
+            "members.0.status",
+            "members.0.instance"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "sales-analysis"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "afterHead"
+      },
+      {
+        "searchSnapshot": [
+          "sales-analysis"
+        ],
+        "save": "afterSearch"
+      },
+      {
+        "assert": {
+          "actual": "$saved.afterHead.commit",
+          "equals": "$saved.beforeHead.commit"
+        }
+      },
+      {
+        "assert": {
+          "actual": "$saved.afterSearch",
+          "equals": "$saved.beforeSearch"
+        }
+      }
+    ],
+    "notes": "Uses the four published default members and the analyzer/boost/vector trial variants. Trial does not prepare a Dataset. Shared cluster changes are excluded from the exact owned-generation comparison. Deployment execution remains required; default members are required to pass even if the current implementation reports an unavailable capability."
+  },
+  {
+    "id": "accept-index-dry-run-matches-writer",
+    "steps": [
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "sales-analysis"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "beforeHead"
+      },
+      {
+        "trial": "$materials/acceptance/variants/rejected/index-missing-field.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "count": {
+            "members": 1
+          },
+          "has": {
+            "members.0.status": "invalid",
+            "members.0.code": "OBJECT_REF_UNRESOLVED"
+          },
+          "nonempty": [
+            "members.0.reason"
+          ]
+        },
+        "save": "trial"
+      },
+      {
+        "writer": "$materials/acceptance/variants/rejected/index-missing-field.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "$saved.trial.members.0.code"
+          },
+          "nonempty": [
+            "error.message"
+          ]
+        },
+        "save": "rejected"
+      },
+      {
+        "assert": {
+          "actual": "$saved.trial.members.0",
+          "writerDiagnostic": "$saved.rejected.error"
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "sales-analysis"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "afterHead"
+      },
+      {
+        "assert": {
+          "actual": "$saved.afterHead.commit",
+          "equals": "$saved.beforeHead.commit"
+        }
+      },
+      {
+        "trial": "$materials/acceptance/variants/rejected/index-with-engine.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "count": {
+            "members": 1
+          },
+          "has": {
+            "members.0.status": "invalid",
+            "members.0.code": "USAGE_INVALID"
+          },
+          "nonempty": [
+            "members.0.reason"
+          ]
+        },
+        "save": "trial"
+      },
+      {
+        "writer": "$materials/acceptance/variants/rejected/index-with-engine.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "$saved.trial.members.0.code"
+          },
+          "nonempty": [
+            "error.message"
+          ]
+        },
+        "save": "rejected"
+      },
+      {
+        "assert": {
+          "actual": "$saved.trial.members.0",
+          "writerDiagnostic": "$saved.rejected.error"
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "sales-analysis"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "afterHead"
+      },
+      {
+        "assert": {
+          "actual": "$saved.afterHead.commit",
+          "equals": "$saved.beforeHead.commit"
+        }
+      },
+      {
+        "trial": "$materials/acceptance/variants/rejected/index-raw-mapping.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "count": {
+            "members": 1
+          },
+          "has": {
+            "members.0.status": "invalid",
+            "members.0.code": "USAGE_INVALID"
+          },
+          "nonempty": [
+            "members.0.reason"
+          ]
+        },
+        "save": "trial"
+      },
+      {
+        "writer": "$materials/acceptance/variants/rejected/index-raw-mapping.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "$saved.trial.members.0.code"
+          },
+          "nonempty": [
+            "error.message"
+          ]
+        },
+        "save": "rejected"
+      },
+      {
+        "assert": {
+          "actual": "$saved.trial.members.0",
+          "writerDiagnostic": "$saved.rejected.error"
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "sales-analysis"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "afterHead"
+      },
+      {
+        "assert": {
+          "actual": "$saved.afterHead.commit",
+          "equals": "$saved.beforeHead.commit"
+        }
+      }
+    ],
+    "notes": "Trial uploads the expanded original material; Writer publishes the same material. Compare error codes and full diagnostics in the kernel Error() format, then check HEAD after each rejection. No invalid input is normalized away."
+  },
+  {
+    "id": "accept-retire-bound-schema-path",
+    "steps": [
+      {
+        "go": {
+          "package": "./internal/arch",
+          "tests": [
+            "TestValueDeclarationResolvesOnlyFromUnitValueSource",
+            "TestValueDeclarationGuardRejectsSchemaFallbacks",
+            "TestPublishedSchemasDeclareNoSchemaLevelOrigin",
+            "TestSchemaLevelDeclarationScanRejectsOriginAndBinding",
+            "TestPublishedAndSceneSchemasCarryNoFieldAccess",
+            "TestSchemaFieldAccessScanFindsNestedDeclarations"
+          ]
+        },
+        "expect": {
+          "count": {
+            "tests": 6
+          },
+          "forEach": {
+            "tests": {
+              "has": {
+                "status": "pass"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "notes": "This specification asks for source structure checks. Run the existing unit-valueSource, Schema fallback, and published Schema guards with their counterexamples; build errors or skipped assertions remain harness errors."
+  },
+  {
+    "id": "accept-search-dataset-is-space",
+    "steps": [
+      {
+        "indexDataset": {
+          "metadata": {
+            "description": "sales tables and metrics"
+          }
+        },
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 1,
+            "disposition": "APPLIED"
+          },
+          "nonempty": [
+            "sources"
+          ]
+        }
+      },
+      {
+        "indexDataset": {
+          "name": "$dataset-plain",
+          "declarations": false
+        },
+        "expect": {
+          "has": {
+            "setId": "$dataset-plain",
+            "revision": 1,
+            "disposition": "APPLIED"
+          },
+          "nonempty": [
+            "sources"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--dataset",
+          "$dataset",
+          "--principal",
+          "reader",
+          "--action",
+          "dataset.resolve,file.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--dataset",
+          "$dataset-plain",
+          "--principal",
+          "reader",
+          "--action",
+          "dataset.resolve,file.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "help"
+        ],
+        "as": "reader",
+        "expect": {
+          "contains": {
+            "text": [
+              "kc help consume",
+              "kc help operations access-spec describe"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "help",
+          "consume"
+        ],
+        "as": "reader",
+        "expect": {
+          "contains": {
+            "text": [
+              "kc show",
+              "kc dataset show",
+              "kc search --dataset <id> --revision <N>",
+              "kc read --dataset <id> --revision <N>"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "show"
+        ],
+        "expect": {
+          "find": [
+            {
+              "in": "datasets",
+              "where": {
+                "id": "$dataset"
+              },
+              "expect": {
+                "has": {
+                  "revision": 1
+                }
+              }
+            }
+          ]
+        },
+        "as": "reader"
+      },
+      {
+        "kc": [
+          "dataset",
+          "show",
+          "$dataset",
+          "--revision",
+          "1"
+        ],
+        "as": "reader",
+        "expect": {
+          "has": {
+            "revision": 1,
+            "id": "$dataset"
+          },
+          "nonempty": [
+            "sources"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--query",
+          "orders"
+        ],
+        "expect": {
+          "has": {
+            "dataset.id": "$dataset",
+            "dataset.revision": 1,
+            "completeness": "complete"
+          },
+          "find": [
+            {
+              "in": "hits",
+              "where": {
+                "objectId": "table/shop.orders"
+              },
+              "expect": {
+                "has": {
+                  "repository": "table-meta"
+                },
+                "nonempty": [
+                  "commit",
+                  "evidence"
+                ],
+                "find": [
+                  {
+                    "in": "evidence.0.members",
+                    "where": {
+                      "repository": "sales-analysis",
+                      "member": {
+                        "objectId": "index/sales-search",
+                        "aspectName": "index",
+                        "memberKey": "table-name"
+                      },
+                      "role": "text"
+                    },
+                    "expect": {
+                      "nonempty": [
+                        "commit"
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "as": "reader",
+        "save": "search"
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/properties",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1"
+        ],
+        "expect": {
+          "has": {
+            "objectId": "table/shop.orders",
+            "value.name": "orders",
+            "repository": "table-meta"
+          },
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "as": "reader",
+        "save": "read"
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset-plain",
+          "--revision",
+          "1",
+          "--query",
+          "orders"
+        ],
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "CAPABILITY_UNSATISFIED"
+          },
+          "contains": {
+            "error.message": [
+              "index declaration",
+              "kc schema describe --dataset"
+            ]
+          }
+        },
+        "as": "reader"
+      },
+      {
+        "kc": [
+          "search",
+          "--query",
+          "orders"
+        ],
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "USAGE_INVALID"
+          },
+          "contains": {
+            "error.message": [
+              "--dataset"
+            ]
+          }
+        },
+        "as": "reader"
+      },
+      {
+        "kc": [
+          "search",
+          "--repo",
+          "table-meta",
+          "--query",
+          "orders"
+        ],
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "USAGE_INVALID"
+          }
+        },
+        "as": "reader"
+      }
+    ],
+    "notes": "Cross-repository default declarations are selected by a Dataset revision. The plain control uses the same source files without declarations; explicit missing scope and repository scope are rejected. Source coordinates, member evidence and canonical readback are observed through the public CLI."
+  },
+  {
+    "id": "accept-search-pinned-dataset-frozen",
+    "steps": [
+      {
+        "indexDataset": {
+          "metadata": {
+            "description": "sales tables and metrics"
+          }
+        },
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 1,
+            "disposition": "APPLIED"
+          },
+          "nonempty": [
+            "sources"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--dataset",
+          "$dataset",
+          "--principal",
+          "reader",
+          "--action",
+          "file.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--query",
+          "discount"
+        ],
+        "expect": {
+          "has": {
+            "completeness": "complete",
+            "dataset.revision": 1
+          },
+          "find": [
+            {
+              "in": "hits",
+              "where": {
+                "objectId": "metric/shop.gmv"
+              },
+              "expect": {
+                "nonempty": [
+                  "commit",
+                  "evidence"
+                ]
+              }
+            }
+          ]
+        },
+        "as": "reader",
+        "save": "first"
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:metric/shop.gmv#/definition",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1"
+        ],
+        "expect": {
+          "has": {
+            "value.expression": "SUM(qty * unit_price * (1 - discount))"
+          },
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "as": "reader",
+        "save": "firstRead"
+      },
+      {
+        "kc": [
+          "operations",
+          "access-spec",
+          "describe",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1"
+        ],
+        "expect": {
+          "nonempty": [
+            "specs"
+          ]
+        },
+        "as": "reader",
+        "save": "firstOverview"
+      },
+      {
+        "kc": [
+          "writer",
+          "remove",
+          "urn:kc:object:index/sales-search#/index/metric-text",
+          "--repo",
+          "sales-analysis",
+          "--command-id",
+          "$command"
+        ],
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--query",
+          "discount"
+        ],
+        "expect": {
+          "has": {
+            "completeness": "complete",
+            "dataset.revision": 1
+          },
+          "find": [
+            {
+              "in": "hits",
+              "where": {
+                "objectId": "metric/shop.gmv"
+              },
+              "expect": {
+                "nonempty": [
+                  "commit",
+                  "evidence"
+                ]
+              }
+            }
+          ]
+        },
+        "as": "reader"
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:metric/shop.gmv#/definition",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "as": "reader",
+        "save": "frozenRead"
+      },
+      {
+        "assert": {
+          "actual": "$saved.frozenRead",
+          "equals": "$saved.firstRead"
+        }
+      },
+      {
+        "kc": [
+          "operations",
+          "access-spec",
+          "describe",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1"
+        ],
+        "expect": {
+          "nonempty": [
+            "specs"
+          ]
+        },
+        "as": "reader",
+        "save": "frozenOverview"
+      },
+      {
+        "assert": {
+          "actual": "$saved.frozenOverview.specs",
+          "equals": "$saved.firstOverview.specs"
+        }
+      },
+      {
+        "kc": [
+          "dataset",
+          "define",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "2",
+          "--source",
+          "table-meta=$branch@tables@tables",
+          "--source",
+          "table-meta=$branch@_schemas@_schemas/table-meta",
+          "--source",
+          "sales-semantic=$branch@metrics@metrics",
+          "--file-source",
+          "sales-semantic=$branch@_schemas/$prefixmetric.properties.aspect.yaml@_schemas/sales-semantic/metric.properties.aspect.yaml",
+          "--file-source",
+          "sales-semantic=$branch@_schemas/$prefixmetric.definition.aspect.yaml@_schemas/sales-semantic/metric.definition.aspect.yaml",
+          "--source",
+          "sales-analysis=$branch@indexes@indexes"
+        ],
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 2,
+            "disposition": "APPLIED"
+          },
+          "nonempty": [
+            "sources"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "2",
+          "--query",
+          "discount"
+        ],
+        "expect": {
+          "has": {
+            "completeness": "complete",
+            "dataset.revision": 2
+          },
+          "count": {
+            "hits": 0
+          }
+        },
+        "as": "reader"
+      }
+    ],
+    "notes": "The maintenance branch removes one member after revision 1 publication. Search, readback and access overview remain frozen until explicit revision 2 publication. The second publication reuses the mutated declaration branch rather than restoring the original fixture."
+  }
+]

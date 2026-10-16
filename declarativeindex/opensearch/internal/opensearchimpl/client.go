@@ -45,6 +45,7 @@ type openSearchEngine struct {
 	// vector window, and semantic recall fails closed.
 	embedder        retrieval.Embedder
 	vectorDimension int
+	vectorModel     string
 }
 
 // VectorReady reports whether this engine derives a k-NN vector surface.
@@ -64,16 +65,19 @@ func (e *openSearchEngine) Close() error {
 
 func (e *openSearchEngine) ProviderID() string { return "opensearch" }
 func (e *openSearchEngine) ProviderRevision() string {
-	return "opensearch-v5-adopted-schema-access"
+	return "opensearch-v6-declaration-member-fields"
 }
 func (e *openSearchEngine) PhysicalDigest() kernel.Digest {
 	identity := map[string]any{
 		"provider": e.ProviderID(), "revision": e.ProviderRevision(),
-		"mapping": "typed-cells-v4-access-faces", "compiler": "object-units-v3-schema-adoption",
+		"mapping": "typed-cells-v4-access-faces", "compiler": "object-units-v4-member-construction",
 		"primaryShards": e.primaryShards, "replicas": e.replicas, "refreshInterval": e.refreshInterval,
 	}
 	if e.namespace != "" {
 		identity["namespace"] = e.namespace
+	}
+	if e.VectorReady() {
+		identity["embeddingModel"], identity["embeddingDimensions"] = e.vectorModel, e.vectorDimension
 	}
 	return kernel.CanonicalDigest(identity)
 }
@@ -157,11 +161,13 @@ func (e *openSearchEngine) projectionMapping() map[string]any {
 		"refresh_interval": e.refreshInterval,
 	}
 	properties := map[string]any{
-		"object_id":       map[string]any{"type": "keyword"},
-		"kind":            map[string]any{"type": "keyword"},
-		"eligible_fields": map[string]any{"type": "keyword"},
-		"all_text":        map[string]any{"type": "text"},
-		"object_digest":   map[string]any{"type": "keyword"},
+		"source_repository": map[string]any{"type": "keyword"},
+		"source_commit":     map[string]any{"type": "keyword"},
+		"object_id":         map[string]any{"type": "keyword"},
+		"kind":              map[string]any{"type": "keyword"},
+		"eligible_fields":   map[string]any{"type": "keyword"},
+		"all_text":          map[string]any{"type": "text"},
+		"object_digest":     map[string]any{"type": "keyword"},
 		"cells": map[string]any{
 			"type": "nested",
 			"properties": map[string]any{
@@ -187,10 +193,10 @@ func (e *openSearchEngine) projectionMapping() map[string]any {
 	}
 	if e.VectorReady() {
 		settings["knn"] = true
-		properties["semantic_vector"] = map[string]any{
-			"type": "knn_vector", "dimension": e.vectorDimension,
-			"method": map[string]any{"name": "hnsw", "space_type": "cosinesimil", "engine": "lucene"},
-		}
+		properties["semantic_vectors"] = map[string]any{"type": "nested", "properties": map[string]any{
+			"member": map[string]any{"type": "keyword"}, "model": map[string]any{"type": "keyword"},
+			"vector": map[string]any{"type": "knn_vector", "dimension": e.vectorDimension, "method": map[string]any{"name": "hnsw", "space_type": "cosinesimil", "engine": "lucene"}},
+		}}
 	}
 	return map[string]any{
 		"settings": map[string]any{"index": settings},

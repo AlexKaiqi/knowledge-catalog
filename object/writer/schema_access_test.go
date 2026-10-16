@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	retrieval "kc/discovery"
 	"kc/internal/testkit"
 	"kc/kernel"
 	objectmodel "kc/object"
@@ -31,8 +32,9 @@ func TestTemporalSchemaPublicationAndInstanceValidation(t *testing.T) {
 				Operations: []objectmodel.Operation{
 					{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: schemaID}, Value: map[string]any{
 						"entity": "Event", "aspect": "timing", "pattern": "record",
-						"fields": map[string]any{"at": map[string]any{"type": tc.kind, "required": true, "access": []any{"filter", "sort"}}},
+						"fields": map[string]any{"at": map[string]any{"type": tc.kind, "required": true}},
 					}},
+					testkit.IndexField(schemaID, "at", "date", objectmodel.IndexUseFilter, objectmodel.IndexUseSort),
 					{Op: objectmodel.OpPut, Address: address, SchemaRef: string(schemaID), Value: map[string]any{"at": tc.valid}},
 				},
 			})
@@ -44,9 +46,17 @@ func TestTemporalSchemaPublicationAndInstanceValidation(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			wantFields := []reader.FieldAccess{{Path: "at", Type: tc.kind, Access: []reader.AccessHint{reader.HintFilter, reader.HintSort}}}
+			wantFields := []reader.FieldAccess{{Path: "at", Type: tc.kind}}
 			if len(report.Schemas) != 1 || report.Commit != commit || !reflect.DeepEqual(report.Schemas[0].Fields, wantFields) {
-				t.Fatalf("published temporal access contract changed: %#v", report)
+				t.Fatalf("published temporal structure changed: %#v", report)
+			}
+			spec, err := retrieval.AccessSpecForRepository(s.Repo, commit)
+			if err != nil {
+				t.Fatal(err)
+			}
+			field, err := spec.ResolveField(retrieval.FieldRef{Schema: schemaID, Aspect: "timing", Path: "at"})
+			if err != nil || !field.Has(reader.HintFilter) || !field.Has(reader.HintSort) || field.Type != tc.kind {
+				t.Fatalf("declared temporal filter/sort contract changed: %#v %v", field, err)
 			}
 			value, err := s.Reader.ReadAddress(s.RepositoryID, address, commit)
 			if err != nil {

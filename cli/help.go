@@ -13,13 +13,15 @@ var rootHelp = `kc — Knowledge Catalog CLI
 身份        登录并查看当前身份与已有权限
 组合        查看登记空间、挂接 Repository、发权
 对象        发现对象类型、搜索和读取对象
-发布        把目录里的最终样子发布到一个 Repository
+发布        创建和修订对象，发布到自己的 Repository
 分支        在工作分支写入，校验后条件合并
 运维        投影、Hook 与审计
 部署        初始化、恢复并运行 Server
 
 最短旅程：kc help consume | kc help write | kc help compose
-仓与文件交付：kc help composition | kc help dataset | kc help files
+已有例子与首次发布：kc help write（先读公开 Dataset，再复用 Schema 与文件格式）
+下载文件：kc help files（按仓和 commit，或按 Dataset）
+仓与文件交付：kc help composition | kc help dataset
 文件与固定版本入门：kc help snapshot | kc help versions
 配方与自定义属性：kc help recipe | kc help metadata
 授权与登记历史：kc help grant | kc help registry
@@ -36,26 +38,49 @@ const consumeHelp = `kc help consume — 连接服务并读取对象
 
   kc login
   kc show
-  kc schema list --repo <id>
-  kc read <对象URN[#/locator]>
-  kc search --repo <id> --query 'merchandise'
+  kc dataset show <dataset-id>
+  kc files list --dataset <dataset-id> --revision <返回的revision>
+  kc files read --dataset <dataset-id> --revision <同一revision> --path <entries.path> --out <新文件>
 
-已定义 Dataset：
-  kc search --dataset <id> --query 'merchandise'
-  kc read --dataset <id> <对象URN[#/locator]>
-回执带 repository / objectId / commit。不要先造一份 pin 文件。
+先按 kc show 返回的用途选择 Dataset，沿 entries.path 读导读、对象与 Schema 原文件。
+后续列目录、翻页和读取均沿用同一 revision；--out 目标必须不存在。
+公开例子可从 qinghe-analysis、autumn-launch-kit、store-oncall 开始，以当前库存可见范围为准。
+按对象消费时同样沿用 dataset show 返回的 revision，各步看到同一组来源 commit：
+  kc schema list --dataset <id> --revision <N>
+  kc schema describe --dataset <id> --revision <N> --object <schemas[].objectId>
+  # fields[].access 说明可检索字段与用途（text 供 --query，filter 供 --eq，sort 供 --sort），由选入的索引声明计算；Schema 源文件不写 access。search.state 说明是否就绪。
+  kc search --dataset <id> --revision <N> --query '<关键词>'
+  kc read --dataset <id> --revision <N> <hits[].objectId 的对象URN[#/locator]>
+  kc relations --dataset <id> --revision <N> --object <objectId>
+  kc traverse --dataset <id> --revision <N> --object <objectId> --max-hops 2
+有来源仓读取权时，也可用 kc schema list --repo <id> 查看类型，再按已知 URN 读取。
+回执带 repository / objectId / commit，搜索结果的 dataset.revision 是实际所用修订。不要先造一份 pin 文件。
+definition 中的文件地址是普通值；按业务说明取得资源自己的仓、commit 和路径后，用 kc files read 下载。
+资源可在别仓、使用独立版本，不默认套用对象说明的 commit。调用方式和 file.read 条件：kc help files。
 `
 
-const writeHelp = `kc help write — 创建并发布一个 Repository
+const writeHelp = `kc help write — 复用已有说明，把资料发布到自己的 Repository
 
-  kc create --name <名称>
-  # 或：kc create --url <repository-url> --credential-file <path>
+1. 先读当前服务公开的例子，取得同一版的 Schema 与对象文件。
+  kc show
+  kc dataset show <dataset-id>
+  kc files list --dataset <dataset-id> --revision <返回的revision>
+  kc files read --dataset <dataset-id> --revision <同一revision> --path <entries.path> --out <新文件>
+  # qinghe-analysis 是销售分析，autumn-launch-kit 是上新素材，store-oncall 是值班交接。
+  # 沿导读和目录选择材料，查看对象的 schema_ref，并读取对应 Schema 原文件；不要照抄读取响应信封。
+  # 完整复用旅程：kc read 'urn:kc:object:kc/guide/first-publication#/guide'
+
+2. 选择自己的目标仓与写入方式。已有仓直接使用；只有尚无目标仓时才看 kc help create。
+  # 一个完整 JSON 值：kc writer put <对象URN[#/locator]> --repo <id> --command-id <id> --file <value.json>
+  # 多个带文件头的对象文件，或 Schema 与实例一起发布：
+  kc diff --repo <id> --dir <drafts>
   kc writer commit --command-id <id> --repo <id> --dir <drafts>
-  kc attach --repo <id>
-  kc grant add --repo <id> --principal <user> \
-    --action object.read,object.search,object.schema.read
+  # 目录文件格式、完整通用样例与校验规则：kc help writer commit。
+  # 单值输入、完整替换与并发条件：kc help writer put。diff 不替代发布校验。
 
-提交前可看：kc diff --repo <id> --dir <drafts>
+3. 按接受回执的 result.newCommit 显式读回 Schema 与对象，核对内容、身份和来源。
+  kc read <对象URN[#/locator]> --repo <id> --commit <newCommit>
+  # 已有仓不重复 create/attach；确需登记时看 kc help attach，交付与授权看 kc help compose。
 `
 
 const composeHelp = `kc help compose — 组合 Repository 并发权
@@ -75,6 +100,7 @@ Repository 保存来源文件和自己的 commit 历史；Dataset 引用其中�
   kc dataset define delivery --revision 1 --source 'docs=refs/heads/main@reference@handbook' --metadata '{"description":"项目材料"}'
   kc dataset show delivery --revision 1
   # 核对 sources 中的实际 commit、revision 和属性；以后源仓推进不改变这份发布。
+  # 中断后可原样重跑同一条 define：已接受时回答 disposition REPLAYED；同版号换配方仍拒绝。
   # selector 合法形式和来源版本取得办法：kc help versions；完整配方：kc help recipe。
 
 3. 授权管理者给消费者文件权；发布并不隐含发权，已有所需授权可跳过新增规则。

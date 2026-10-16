@@ -17,12 +17,12 @@ func TestIndexPluginScopeCallbackCannotRebindConfiguredRepository(t *testing.T) 
 	open := entry.Open
 	entry.Open = func(scope consumerplugin.PluginScope) (consumerplugin.IndexContribution, error) {
 		contribution, err := open(scope)
-		if err == nil && scope.Instance == "main-a" {
+		if err == nil && scope.Instance == "primary" {
 			scope.Repositories[0] = f.setups[2].RepositoryID
 		}
 		return contribution, err
 	}
-	plugins, err := consumerplugin.OpenIndexPlugins(f.configs(), map[string]consumerplugin.IndexPluginEntry{"declarative-index": entry})
+	plugins, err := consumerplugin.OpenIndexPlugins(f.configs(), consumerplugin.PluginScope{Repositories: f.repositories()}, map[string]consumerplugin.IndexPluginEntry{"declarative-index": entry})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,17 +48,17 @@ func TestIndexPluginScopeRetainedSliceCannotChangeControllerInventory(t *testing
 	var retained []kernel.RepositoryID
 	entry.Open = func(scope consumerplugin.PluginScope) (consumerplugin.IndexContribution, error) {
 		contribution, err := open(scope)
-		if err == nil && scope.Instance == "main-a" {
+		if err == nil && scope.Instance == "primary" {
 			retained = scope.Repositories
 		}
 		return contribution, err
 	}
-	plugins, err := consumerplugin.OpenIndexPlugins(f.configs(), map[string]consumerplugin.IndexPluginEntry{"declarative-index": entry})
+	plugins, err := consumerplugin.OpenIndexPlugins(f.configs(), consumerplugin.PluginScope{Repositories: f.repositories()}, map[string]consumerplugin.IndexPluginEntry{"declarative-index": entry})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = plugins.Close() })
-	if len(retained) != 1 {
+	if len(retained) != 2 {
 		t.Fatalf("fixture did not retain the actual source scope: %v", retained)
 	}
 	retained[0] = f.setups[2].RepositoryID

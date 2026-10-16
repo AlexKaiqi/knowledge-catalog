@@ -22,6 +22,10 @@ import (
 
 const modulePath = "kc"
 
+// authenticatorDenied is what every concrete authenticator under identity/ must
+// not reach: authentication answers "who is this request" and nothing else.
+var authenticatorDenied = []string{"snapshot", "object", "discovery", "declarativeindex", "hook", "cli", "httpsurface", "client", "home", "server", "invocation", "invoke"}
+
 // forbidden is "package X must not reach package Y, directly or transitively".
 var forbidden = []struct {
 	pkg    string
@@ -34,9 +38,11 @@ var forbidden = []struct {
 	{pkg: "object/writer", denied: []string{"liveaccess", "systemrepo"}, why: "basic publication does not require ability execution or complete platform publication"},
 
 	{pkg: "object/service", denied: []string{"liveaccess", "discovery", "declarativeindex", "systemrepo", "home", "cli", "server", "client"}, why: "basic object tasks use fixed read/write and injected delivery ports"},
-	{pkg: "liveaccess/handler", denied: []string{"liveaccess/dispatch", "liveaccess/service", "liveaccess/plugin", "liveaccess/cli", "liveaccess/client", "liveaccess/discovery", "liveaccess/fixture", "discovery", "declarativeindex", "systemrepo", "home", "cli", "server", "client", "object/writer"}, why: "the plugin-internal handler contract and dispatch stay independent of LiveAccess wiring, transports and other plugins"},
-	{pkg: "liveaccess/dispatch", denied: []string{"liveaccess/service", "liveaccess/plugin", "liveaccess/cli", "liveaccess/client", "liveaccess/discovery", "liveaccess/fixture", "discovery", "declarativeindex", "systemrepo", "home", "cli", "server", "client", "object/writer"}, why: "the plugin call task resolves, authorizes and checks one fixed handler call without source I/O or publication"},
+	{pkg: "liveaccess/handler", denied: []string{"liveaccess/dispatch", "liveaccess/service", "liveaccess/plugin", "liveaccess/cli", "liveaccess/client", "liveaccess/discovery", "discovery", "declarativeindex", "systemrepo", "home", "cli", "server", "client", "object/writer"}, why: "the plugin-internal handler contract and dispatch stay independent of LiveAccess wiring, transports and other plugins"},
+	{pkg: "liveaccess/dispatch", denied: []string{"liveaccess/service", "liveaccess/plugin", "liveaccess/cli", "liveaccess/client", "liveaccess/discovery", "discovery", "declarativeindex", "systemrepo", "home", "cli", "server", "client", "object/writer"}, why: "the plugin call task resolves, authorizes and checks one fixed handler call without source I/O or publication"},
 	{pkg: "discovery/projection", denied: []string{"liveaccess", "systemrepo"}, why: "projection consumes verified observations; the source bridge owns I/O"},
+	{pkg: "discovery/space", denied: []string{"home", "invocation", "invoke", "server", "client", "cli", "identity", "delivery", "liveaccess", "systemrepo", "object/writer", "discovery/plugin", "discovery/projection", "declarativeindex"}, why: "a frozen Dataset object namespace uses read and explicit maintenance ports, without engines, source I/O, writes or application lifecycle"},
+	{pkg: "discovery/datasets", denied: []string{"object/reader", "object/maintenance", "object/writer"}, why: "Dataset publication delegates frozen candidate preparation; the host owns reader pin conversion and implementations own their scans"},
 	{
 		pkg:    "kernel",
 		denied: []string{"snapshot", "object", "object/writer", "object/reader", "discovery", "declarativeindex", "discovery/projection"},
@@ -113,6 +119,11 @@ var forbidden = []struct {
 		why:    "Index task CLI provides static affordance and SDK adaptation without host state or backend lifecycle ownership",
 	},
 	{
+		pkg:    "declarativeindex/capability",
+		denied: []string{"home", "invocation", "invoke", "server", "client", "cli", "identity", "object/writer", "discovery/plugin", "declarativeindex/client", "declarativeindex/cli", "declarativeindex/control", "declarativeindex/projection", "declarativeindex/plugin", "declarativeindex/opensearch", "declarativeindex/internal"},
+		why:    "Index plugin affordance and capability manifest are static data without SDK transport, host state or backend lifecycle ownership",
+	},
+	{
 		pkg:    "internal/httpjson",
 		denied: []string{"snapshot", "object", "discovery", "declarativeindex", "identity", "home", "invocation", "invoke", "server", "client", "cli", "observability"},
 		why:    "shared HTTP encoding and bounded decoding are pure transport infrastructure, not typed domain or session authority",
@@ -134,7 +145,7 @@ var forbidden = []struct {
 	},
 	{
 		pkg:    "discovery/plugin",
-		denied: []string{"home", "invocation", "invoke", "server", "httpsurface", "client", "cli", "identity", "object/service", "object/writer", "object/client", "object/cli", "snapshot/service", "snapshot/client", "snapshot/cli", "discovery/service", "discovery/client", "discovery/cli", "discovery/llmhttp", "declarativeindex"},
+		denied: []string{"home", "invocation", "invoke", "server", "httpsurface", "client", "cli", "identity", "object/service", "object/writer", "object/client", "object/cli", "snapshot/service", "snapshot/client", "snapshot/cli", "discovery/service", "discovery/client", "discovery/cli", "discovery/llmhttp", "discovery/space", "declarativeindex"},
 		why:    "typed contribution selection consumes public query, observation and fixed-read ports; hosts and concrete entries assemble it, and transports, execution services, physical drivers and Object publication stay outside",
 	},
 	{
@@ -225,6 +236,16 @@ var forbidden = []struct {
 		pkg:    "identity",
 		denied: []string{"snapshot", "object", "discovery", "declarativeindex", "discovery/projection", "hook", "cli", "httpsurface", "client", "home"},
 		why:    "identity binding reads its own durable store and IdP results only; the strictest isolation set",
+	},
+	{
+		pkg:    "identity/builtin",
+		denied: authenticatorDenied,
+		why:    "authenticators are replaceable leaves under identity/: the builtin set (and every authenticator it links) depends on identity and kernel only, never on a transport or the protocol ring",
+	},
+	{
+		pkg:    "identity/identitytest",
+		denied: authenticatorDenied,
+		why:    "the shared test authenticator is a leaf like any provider, so every package test can use it without dragging a transport in",
 	},
 	{
 		pkg:    "datasetfs",
@@ -378,9 +399,9 @@ func architectureLayer(pkg string) (string, bool) {
 		return "dataset", true
 	case "object/format", "object", "object/maintenance", "object/reader", "object/semanticview", "object/writer", "object/cache", "internal/bindingfixture", "liveaccess/handler", "liveaccess/dispatch", "liveaccess/contract", "liveaccess/evidence":
 		return "object", true
-	case "discovery", "discovery/llmhttp", "liveaccess", "discovery/projection", "declarativeindex/projection", "declarativeindex/control", "declarativeindex/opensearch", "declarativeindex/opensearch/internal/opensearchimpl":
+	case "discovery", "discovery/space", "discovery/llmhttp", "liveaccess", "discovery/projection", "declarativeindex/projection", "declarativeindex/control", "declarativeindex/opensearch", "declarativeindex/opensearch/internal/opensearchimpl":
 		return "discovery", true
-	case "snapshot/service", "snapshot/console", "snapshot/client", "snapshot/cli", "object/client", "object/cli", "discovery/client", "discovery/cli", "declarativeindex/client", "declarativeindex/cli", "declarativeindex/plugin", "declarativeindex/internal/testfixture", "liveaccess/service", "liveaccess/discovery", "liveaccess/cli", "liveaccess/client", "liveaccess/plugin", "liveaccess/fixture", "cli", "client", "cmd/kc", "cmd/kcfs", "invoke", "identity", "hook", "home", "httpsurface", "server", "server/internal/readiness", "internal/telemetry", "internal/testkit", "datasetfs", "delivery", "object/service", "discovery/datasets", "discovery/service", "discovery/plugin", "systemrepo", "observability", "scripts/check-docs", "scripts/docs-serve", "scripts/fixture-deployment", "scripts/validation-inventory", "scripts/coupling", "scripts/export-audit":
+	case "snapshot/service", "snapshot/console", "snapshot/client", "snapshot/cli", "object/client", "object/cli", "discovery/client", "discovery/cli", "declarativeindex/client", "declarativeindex/cli", "declarativeindex/capability", "declarativeindex/plugin", "declarativeindex/internal/testfixture", "liveaccess/service", "liveaccess/discovery", "liveaccess/cli", "liveaccess/client", "liveaccess/plugin", "cli", "client", "cmd/kc", "cmd/kcfs", "invoke", "identity", "identity/local", "identity/taihu", "identity/builtin", "identity/identitytest", "hook", "home", "httpsurface", "server", "server/internal/readiness", "internal/telemetry", "internal/testkit", "datasetfs", "delivery", "object/service", "discovery/datasets", "discovery/service", "discovery/plugin", "systemrepo", "observability", "scripts/check-docs", "scripts/docs-serve", "scripts/fixture-deployment", "scripts/validation-inventory", "scripts/coupling", "scripts/export-audit":
 		return "app", true
 	default:
 		return "", false
@@ -586,7 +607,7 @@ func TestCapabilityConsumerSets(t *testing.T) {
 	allowed := map[string][]string{
 		"delivery":      {"invocation"},
 		"hook":          {"home", "invocation", "invoke"},
-		"identity":      {"cli", "home", "invocation", "server", "snapshot/service"},
+		"identity":      {"cli", "home", "identity/identitytest", "identity/local", "identity/taihu", "invocation", "server", "snapshot/service"},
 		"observability": {"cli", "client", "home", "invocation", "server", "liveaccess/service"},
 	}
 	for capability, consumers := range allowed {

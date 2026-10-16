@@ -77,7 +77,7 @@ func TestLiveAccessCompositionPreservesSharedExtensionsUnderConcurrency(t *testi
 	}
 }
 
-func TestLiveAccessTrustedPublicationMatchesStructureAndPreservesFullSchemaDigest(t *testing.T) {
+func TestLiveAccessTrustedPublicationMatchesStructure(t *testing.T) {
 	live := publishedLiveImplementation(t)
 	var definition objectmodel.SchemaDefinition
 	for _, operation := range systemrepo.SystemPublicationOperations() {
@@ -89,21 +89,13 @@ func TestLiveAccessTrustedPublicationMatchesStructureAndPreservesFullSchemaDiges
 			}
 		}
 	}
-	for i := range definition.Fields {
-		definition.Fields[i].Access = nil
+	if live.ImplementationSchemaStructureDigest != objectmodel.SchemaStructureDigest(definition) || live.ImplementationSchemaDigest != kernel.CanonicalDigest(definition) {
+		t.Fatal("published implementation must carry the complete schema digest and its structure digest")
+	}
+	if err := serving.RegisterLiveAccess(interfaces.NewInterfaceRegistry(), live, &integrationAccessor{}); err != nil {
+		t.Fatalf("trusted publication failed structure matching: %v", err)
 	}
 	withoutAccess := live
-	withoutAccess.ImplementationSchemaDigest = kernel.CanonicalDigest(definition)
-	withoutAccess.ImplementationSchemaStructureDigest = objectmodel.SchemaStructureDigest(definition)
-	if withoutAccess.ImplementationSchemaDigest == live.ImplementationSchemaDigest {
-		t.Fatal("published schema must exercise an access declaration")
-	}
-	if err := serving.RegisterLiveAccess(interfaces.NewInterfaceRegistry(), withoutAccess, &integrationAccessor{}); err != nil {
-		t.Fatalf("compatible historical schema required an access declaration: %v", err)
-	}
-	if withoutAccess.ImplementationSchemaDigest != kernel.CanonicalDigest(definition) || live.ImplementationSchemaDigest == withoutAccess.ImplementationSchemaDigest {
-		t.Fatal("trusted registration replaced the complete historical schema digest")
-	}
 	definition.Fields[0].Required = !definition.Fields[0].Required
 	changed := withoutAccess
 	changed.ImplementationSchemaDigest = kernel.CanonicalDigest(definition)

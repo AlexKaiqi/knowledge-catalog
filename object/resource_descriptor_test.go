@@ -44,7 +44,7 @@ func TestParseSchemaDefinitionRejectsOrigin(t *testing.T) {
 		}
 	}
 	if _, err := objectmodel.ParseSchemaDefinition("schema/table.stats", map[string]any{
-		"entity": "Table", "aspect": "stats", "fields": map[string]any{"rowCount": map[string]any{"type": "number", "access": []any{"filter"}}},
+		"entity": "Table", "aspect": "stats", "fields": map[string]any{"rowCount": map[string]any{"type": "number"}},
 	}); err != nil {
 		t.Fatalf("structure-only schema rejected: %v", err)
 	}
@@ -70,6 +70,21 @@ func TestParseResourceDescriptorDeclaresOriginAndMode(t *testing.T) {
 	}
 }
 
+func TestParseResourceDescriptorIdentityDefaultsToPerCaller(t *testing.T) {
+	got, err := objectmodel.ParseResourceDescriptor("resource/stats", bindingfixture.Descriptor("https://stats.example"))
+	if err != nil || got.Identity != objectmodel.IdentityPerCaller {
+		t.Fatalf("an undeclared identity must be per-caller: %#v %v", got, err)
+	}
+	for _, identity := range []objectmodel.ResultIdentity{objectmodel.IdentityPerCaller, objectmodel.IdentityShared} {
+		body := bindingfixture.Descriptor("https://stats.example")
+		body["identity"] = string(identity)
+		got, err := objectmodel.ParseResourceDescriptor("resource/stats", body)
+		if err != nil || got.Identity != identity {
+			t.Fatalf("identity %s: %#v %v", identity, got, err)
+		}
+	}
+}
+
 func TestParseResourceDescriptorFailsClosed(t *testing.T) {
 	mutate := map[string]func(map[string]any){
 		"missing origin":     func(b map[string]any) { delete(b, "origin") },
@@ -87,6 +102,8 @@ func TestParseResourceDescriptorFailsClosed(t *testing.T) {
 		"credential header":   func(b map[string]any) { b["headers"] = map[string]any{"Authorization": "Bearer x"} },
 		"nested access scope": func(b map[string]any) { b["scope"] = "shop" },
 		"wrong kind":          func(b map[string]any) { b["kind"] = "Table" },
+		"unknown identity":    func(b map[string]any) { b["identity"] = "service" },
+		"non-string identity": func(b map[string]any) { b["identity"] = true },
 	}
 	for name, change := range mutate {
 		t.Run(name, func(t *testing.T) {

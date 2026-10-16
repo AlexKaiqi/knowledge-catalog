@@ -19,13 +19,13 @@ func TestDiscoveryCLIRepeatedScalarFlagsKeepLastValue(t *testing.T) {
 		{
 			path: "search",
 			flags: map[string]any{
-				"repo": []string{"old-repo", "r"}, "commit": []string{"old-commit", "c"}, "ref": []string{"old-ref", "main"},
+				"dataset": []string{"old-set", "d"}, "revision": []string{"invalid-old-revision", "2"},
 				"query": []string{"old-query", "current"}, "match-mode": []string{"old-mode", "all"},
 				"eq": []string{"amount=1", "amount=2"}, "sort": []string{"name:asc", "amount:desc"},
 				"limit": []string{"invalid-old-limit", "7"}, "continuation": []string{"old-cursor", "current-cursor"},
 			},
 			request: client.SearchRequest{
-				ObjectScope: client.ObjectScope{Repository: "r", Commit: "c", Ref: "main"},
+				ObjectScope: client.ObjectScope{Dataset: "d", Revision: 2},
 				Query:       "current", MatchMode: "all", Equal: []string{"amount=1", "amount=2"}, Sort: []string{"name:asc", "amount:desc"},
 				Limit: 7, Continuation: "current-cursor",
 			},
@@ -33,12 +33,12 @@ func TestDiscoveryCLIRepeatedScalarFlagsKeepLastValue(t *testing.T) {
 		{
 			path: "relations",
 			flags: map[string]any{
-				"repo": []string{"old-repo", "r"}, "object": []string{"old-object", "table/orders"},
+				"dataset": []string{"old-set", "d"}, "object": []string{"old-object", "table/orders"},
 				"direction": []string{"old-direction", "DIRECTED"}, "limit": []string{"invalid-old-limit", "7"},
 				"continuation": []string{"old-cursor", "current-cursor"},
 			},
 			request: client.RelationsRequest{
-				ObjectScope: client.ObjectScope{Repository: "r"}, Endpoint: "table/orders", Direction: "DIRECTED", Limit: 7, Continuation: "current-cursor",
+				ObjectScope: client.ObjectScope{Dataset: "d"}, Endpoint: "table/orders", Direction: "DIRECTED", Limit: 7, Continuation: "current-cursor",
 			},
 		},
 		{

@@ -1,6 +1,6 @@
 - id: "walk-two-repos"
   suite: "product"
-  summary: "两个托管仓已建，发布清河对象后同步投影并检索"
+  summary: "两个托管仓已建，发布清河对象后组合并回读 Dataset"
   walk:
     - construct: "qinghe-object-published"
-    - process: "probe-sync-projections-and-search.feature"
+    - process: "probe-publish-dataset-with-scoped-members.feature"

@@ -22,13 +22,6 @@ type accessContractProjection interface {
 	AccessSpecAt(objectmodel.Repository, kernel.CommitID) (retrieval.AccessSpec, error)
 }
 
-func projectedAccessContracts(projection SearchProjection) retrieval.AccessContractProvider {
-	if declarations, ok := projection.(accessContractProjection); ok {
-		return declarations.AccessSpecAt
-	}
-	return nil
-}
-
 type SearchRequest struct {
 	Repository kernel.RepositoryID
 	Commit     kernel.CommitID

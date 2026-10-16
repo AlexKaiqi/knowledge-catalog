@@ -9,14 +9,11 @@ fields:
   title:
     type: string
     required: true
-    access: [text, filter]
   kind:
     type: string
     required: true
-    access: [filter]
   summary:
     type: string
-    access: [text]
   resources:
     type: array
   internalNote:

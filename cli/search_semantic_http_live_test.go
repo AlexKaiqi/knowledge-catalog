@@ -82,13 +82,14 @@ func TestHTTPDatasetSemanticRecallServesMemberVectorWindows(t *testing.T) {
 	body(t, kc(home, "store-set", "--index", "opensearch"))
 	body(t, kc(home, "store-set", "--driver", "opensearch", "--url", opensearchURL))
 	seedRepo(t, home, repository)
-	body(t, kc(home, "put", testObjectReference(t, repository, "schema/runbook.semantic", ""), "--repo", repository, "--command-id", "semantic-schema", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string","access":["text"]}}}`))
+	body(t, kc(home, "put", testObjectReference(t, repository, "schema/runbook.semantic", ""), "--repo", repository, "--command-id", "semantic-schema", "--value", `{"entity":"Runbook","pattern":"record","fields":{"body":{"type":"string"}}}`))
 	body(t, kc(home, "put", testObjectReference(t, repository, "runbook/refund", ""), "--repo", repository, "--command-id", "semantic-p1", "--schema-ref", "schema/runbook.semantic", "--value", `{"body":"refund timeout diagnosis"}`))
 	body(t, kc(home, "put", testObjectReference(t, repository, "runbook/deploy", ""), "--repo", repository, "--command-id", "semantic-p2", "--schema-ref", "schema/runbook.semantic", "--value", `{"body":"deployment checklist"}`))
+	seedTextDeclaration(t, home, repository, "index/runbook-semantic", "schema/runbook.semantic", "body")
+	seedIndexDeclaration(t, home, repository, "index/runbook-semantic", "semantic", map[string]any{"catalog": "declarative-index/opensearch@2026-10", "inputs": []any{map[string]any{"from": "schema/runbook.semantic#/fields/body"}}, "build": map[string]any{"kind": "vector", "model": "fake-embed-1"}, "uses": []any{"semantic"}})
 	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "1", "--source", repository+"=refs/heads/main@"))
 	body(t, kc(home, "allow", "--principal", "agent:semantic-http", "--cmd", "read-workspace", "--dataset", workspace))
-	body(t, kc(home, "allow", "--principal", "agent:semantic-http", "--action", "object.read,object.search", "--repo", repository))
-	syncIndexes(t, home, repository)
+	syncIndexes(t, home, workspace)
 
 	// Same constructor the kc serve entry applies to the declared
 	// environment (see verbServe).
@@ -168,5 +169,21 @@ func TestHTTPDatasetSemanticRecallServesMemberVectorWindows(t *testing.T) {
 	fault, _ := failClosed["error"].(map[string]any)
 	if code, _ := fault["code"].(string); code != "CAPABILITY_UNSATISFIED" {
 		t.Fatalf("semantic without provider must be CAPABILITY_UNSATISFIED: %#v", failClosed)
+	}
+
+	// An available model and lexical declaration cannot stand in for a removed
+	// semantic member: the next Dataset revision keeps lexical search only.
+	body(t, kc(home, "remove", testObjectReference(t, repository, "index/runbook-semantic", testObjectLocator("index", "semantic")), "--repo", repository, "--command-id", "remove-semantic-member"))
+	body(t, kc(home, "dataset", "define", "--dataset", workspace, "--revision", "2", "--source", repository+"=refs/heads/main@"))
+	syncIndexes(t, home, workspace)
+	updatedHandler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{Embedder: embedder})
+	if closer, ok := updatedHandler.(interface{ Close() error }); ok {
+		t.Cleanup(func() { _ = closer.Close() })
+	}
+	updatedServer := httptest.NewServer(updatedHandler)
+	t.Cleanup(updatedServer.Close)
+	status, undeclared := semanticHTTPAs(t, updatedServer, "/object/v1/search", "agent:semantic-http", map[string]any{"dataset": workspace, "revision": 2, "query": "refund timeout", "recall": "semantic"})
+	if status == http.StatusOK || asMap(t, undeclared["error"])["code"] != "CAPABILITY_UNSATISFIED" {
+		t.Fatalf("lexical text became an undeclared semantic index: status=%d payload=%#v", status, undeclared)
 	}
 }

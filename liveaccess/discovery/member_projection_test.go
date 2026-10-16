@@ -26,6 +26,7 @@ import (
 	"kc/object/reader"
 	"kc/object/writer"
 	"kc/snapshot"
+	"kc/snapshot/dataset"
 )
 
 type memberRuntimeRequest struct {
@@ -40,6 +41,155 @@ type memberRuntimeRequest struct {
 		Principal string `json:"principal"`
 		RequestID string `json:"requestId"`
 	} `json:"identity"`
+}
+
+func TestDatasetSearchRechecksSharedCandidateAgainstCurrentObservation(t *testing.T) {
+	f := newMemberProjectionFixture(t, "valid")
+	published, err := f.index.RefreshState(context.Background(), f.repo, f.commit, f.source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.origin.mu.Lock()
+	f.origin.value = float64(47)
+	f.origin.mu.Unlock()
+	lookup := func(id kernel.RepositoryID) (objectmodel.Repository, error) {
+		return f.reader.Require(id, kernel.ErrObjectRefUnresolved)
+	}
+	serving := reader.Open(lookup, f.pin)
+	executor := discoveryservice.DatasetSearchExecutor{Authorize: func(context.Context) error { return nil }, Repositories: f.reader, Projection: f.index,
+		Resolve: func(context.Context) (*reader.Serving, discoveryservice.LogicalHydrator, error) {
+			return serving, liveservice.OpenRequest(serving, f.access, objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "consumer"}, RequestID: "candidate-recheck"}), nil
+		},
+		Deliver: func(_ context.Context, hit retrieval.ObjectHit) (retrieval.ObjectHit, error) { return hit, nil },
+	}
+	result, err := executor.Execute(context.Background(), memberQuery("31"))
+	if err != nil || result.Completeness != retrieval.CompletenessComplete || len(result.Hits) != 0 || len(f.origin.calls()) != 2 {
+		t.Fatalf("stale external candidate survived current READ predicate: %#v calls=%d %v", result, len(f.origin.calls()), err)
+	}
+	retained, err := f.index.SearchDataset(context.Background(), lookup, f.pin, memberQuery("31"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertMemberObservation(t, f, retained, published.Revision)
+	if len(f.origin.calls()) != 2 {
+		t.Fatal("consumer recheck mutated the retained index observation")
+	}
+}
+
+func TestDatasetRetainedRevisionIsNeverRefreshed(t *testing.T) {
+	f := newMemberProjectionFixture(t, "valid")
+	old, err := f.index.RefreshState(context.Background(), f.repo, f.commit, f.source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.datasets.DefineDataset(f.pin.SetID, 2, []dataset.DatasetSource{{Repository: f.repo.ID(), Selector: snapshot.DefaultRef, BaseRev: string(f.commit)}}); err != nil {
+		t.Fatal(err)
+	}
+	f.origin.mu.Lock()
+	f.origin.value = float64(47)
+	f.origin.mu.Unlock()
+	before := len(f.origin.calls())
+	if _, err := f.index.RefreshState(context.Background(), f.repo, f.commit, f.source); kernel.CodeOf(err) != kernel.ErrPreconditionFailed || len(f.origin.calls()) != before {
+		t.Fatalf("retained Dataset revision refreshed external values: calls=%d %v", len(f.origin.calls()), err)
+	}
+	lookup := func(id kernel.RepositoryID) (objectmodel.Repository, error) {
+		return f.reader.Require(id, kernel.ErrObjectRefUnresolved)
+	}
+	current := f.pin
+	current.Revision = 2
+	if err := f.index.PrepareDatasetScope(context.Background(), lookup, current); err != nil {
+		t.Fatal(err)
+	}
+	member, err := f.index.DatasetMember(lookup, current, f.repo.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.index.RefreshState(context.Background(), member, f.commit, f.source); err != nil {
+		t.Fatal(err)
+	}
+	latest, err := f.index.SearchDataset(context.Background(), lookup, current, memberQuery("47"))
+	if err != nil || len(latest.Hits) != 1 {
+		t.Fatalf("current Dataset observation did not advance: %#v %v", latest, err)
+	}
+	retained, err := f.index.SearchDataset(context.Background(), lookup, f.pin, memberQuery("31"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertMemberObservation(t, f, retained, old.Revision)
+}
+
+func TestDatasetRevisionPublishedDuringObservationPreservesOldGeneration(t *testing.T) {
+	f := newMemberProjectionFixture(t, "valid")
+	old, err := f.index.RefreshState(context.Background(), f.repo, f.commit, f.source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.origin.mu.Lock()
+	f.origin.value = float64(47)
+	f.origin.mu.Unlock()
+	source := &revisionPublishingSource{Source: f.source, publish: func() error {
+		_, err := f.datasets.DefineDataset(f.pin.SetID, 2, []dataset.DatasetSource{{Repository: f.repo.ID(), Selector: snapshot.DefaultRef, BaseRev: string(f.commit)}})
+		return err
+	}}
+	if _, err := f.index.RefreshState(context.Background(), f.repo, f.commit, source); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
+		t.Fatalf("revision superseded during observation was published: %v", err)
+	}
+	if !source.published || len(f.origin.calls()) != 2 {
+		t.Fatalf("publication did not occur after candidate observation: published=%v calls=%d", source.published, len(f.origin.calls()))
+	}
+	lookup := func(id kernel.RepositoryID) (objectmodel.Repository, error) {
+		return f.reader.Require(id, kernel.ErrObjectRefUnresolved)
+	}
+	retained, err := f.index.SearchDataset(context.Background(), lookup, f.pin, memberQuery("31"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertMemberObservation(t, f, retained, old.Revision)
+	replacement, err := f.index.SearchDataset(context.Background(), lookup, f.pin, memberQuery("47"))
+	if err != nil || len(replacement.Hits) != 0 || replacement.SearchView.ProjectionRevisions[f.repo.ID()] != old.Revision {
+		t.Fatalf("rejected refresh changed retained generation or values: %#v %v", replacement, err)
+	}
+}
+
+func TestDatasetCurrentRevisionObservationRefreshPublishesNewGeneration(t *testing.T) {
+	f := newMemberProjectionFixture(t, "valid")
+	old, err := f.index.RefreshState(context.Background(), f.repo, f.commit, f.source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.origin.mu.Lock()
+	f.origin.value = float64(47)
+	f.origin.mu.Unlock()
+	next, err := f.index.RefreshState(context.Background(), f.repo, f.commit, f.source)
+	if err != nil || next.Revision == old.Revision || len(f.origin.calls()) != 2 {
+		t.Fatalf("same Dataset revision failed to accept a new observation: %#v calls=%d %v", next, len(f.origin.calls()), err)
+	}
+	lookup := func(id kernel.RepositoryID) (objectmodel.Repository, error) {
+		return f.reader.Require(id, kernel.ErrObjectRefUnresolved)
+	}
+	current, err := f.index.SearchDataset(context.Background(), lookup, f.pin, memberQuery("47"))
+	if err != nil || len(current.Hits) != 1 || current.SearchView.ProjectionRevisions[f.repo.ID()] != next.Revision {
+		t.Fatalf("new observation generation was not queryable: %#v %v", current, err)
+	}
+	stale, err := f.index.SearchDataset(context.Background(), lookup, f.pin, memberQuery("31"))
+	if err != nil || len(stale.Hits) != 0 || stale.SearchView.ProjectionRevisions[f.repo.ID()] != next.Revision {
+		t.Fatalf("replaced observation generation remained current: %#v %v", stale, err)
+	}
+}
+
+type revisionPublishingSource struct {
+	sourcebridge.Source
+	publish   func() error
+	published bool
+}
+
+func (s *revisionPublishingSource) ObserveDatasetValue(ctx context.Context, scope *reader.Serving, repo objectmodel.Repository, value objectmodel.ObjectValue) (objectmodel.ObservedValue, error) {
+	observed, err := s.Source.ObserveDatasetValue(ctx, scope, repo, value)
+	if err == nil && !s.published && len(observed.Observations) > 0 {
+		err = s.publish()
+		s.published = err == nil
+	}
+	return observed, err
 }
 
 type memberOrigin struct {
@@ -92,14 +242,16 @@ func (s *memberOrigin) calls() []memberRuntimeRequest {
 }
 
 type memberProjectionFixture struct {
-	repo    objectmodel.Repository
-	reader  *reader.Reader
-	commit  kernel.CommitID
-	address objectmodel.Address
-	access  *liveservice.Plugins
-	index   *common.IndexPlugins
-	source  sourcebridge.Source
-	origin  *memberOrigin
+	repo     objectmodel.Repository
+	reader   *reader.Reader
+	commit   kernel.CommitID
+	address  objectmodel.Address
+	access   *liveservice.Plugins
+	index    *common.IndexPlugins
+	source   sourcebridge.Source
+	pin      reader.DatasetPin
+	datasets dataset.Service
+	origin   *memberOrigin
 }
 
 func newMemberProjectionFixture(t *testing.T, mode string) memberProjectionFixture {
@@ -123,13 +275,16 @@ func newMemberProjectionFixture(t *testing.T, mode string) memberProjectionFixtu
 	}
 	root := testkit.MustHead(t, raw, snapshot.DefaultRef)
 	address := objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: "sensor/one", AspectName: "readings", MemberKey: "primary"}
+	descriptor := bindingfixture.Descriptor(runtime.URL)
+	descriptor["identity"] = "shared"
 	receipt, err := w.Commit("publish-live-member", objectmodel.ChangeSet{TargetRepository: raw.ID(), TargetRef: snapshot.DefaultRef,
 		BaseCommit: root, ExpectedTargetCommit: root, Operations: []objectmodel.Operation{
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/sensor.readings"}, Value: map[string]any{
 				"entity": "Sensor", "aspect": "readings", "pattern": "keyed_collection",
-				"fields": map[string]any{"value": map[string]any{"type": "number", "required": true, "access": []any{"filter", "sort"}}},
+				"fields": map[string]any{"value": map[string]any{"type": "number", "required": true}},
 			}},
-			bindingfixture.PutDescriptor("resource/sensor-readings", bindingfixture.Descriptor(runtime.URL)),
+			testkit.IndexField("schema/sensor.readings", "value", "number", "filter", "sort"),
+			bindingfixture.PutDescriptor("resource/sensor-readings", descriptor),
 			bindingfixture.Bind(address, "schema/sensor.readings", "resource/sensor-readings"),
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: address.ObjectID, AspectName: "definition"}, Value: map[string]any{"owner": "fixed"}},
 		}})
@@ -141,13 +296,19 @@ func newMemberProjectionFixture(t *testing.T, mode string) memberProjectionFixtu
 	if err != nil {
 		t.Fatal(err)
 	}
-	config := common.RepositoryPluginConfig{Version: 1, Plugins: []common.PluginSelection{{Name: "liveaccess", Instance: "main"}, {Name: "declarative-index", Instance: "main"}}}
-	if mode == "unselected-source" {
-		config.Plugins = config.Plugins[1:]
+	cat := testkit.OpenDatasets(t, registry)
+	if _, err := cat.DefineDataset("sensor-readings", 1, []dataset.DatasetSource{{Repository: repo.ID(), Selector: snapshot.DefaultRef, BaseRev: string(receipt.Result.NewCommit)}}); err != nil {
+		t.Fatal(err)
 	}
-	configs := common.RepositoryPluginConfigs{Repositories: map[kernel.RepositoryID]common.RepositoryPluginConfig{repo.ID(): config}}
-	known := []string{"liveaccess", "declarative-index"}
-	access, err := liveservice.OpenPlugins(common.SelectRepositoryPlugins(configs, []string{"liveaccess"}, known),
+	config := common.PluginsConfig{
+		"liveaccess":        {Instances: map[string]common.PluginInstanceConfig{"main": {Protocol: objectmodel.ProtocolResourceAccessV1}}},
+		"declarative-index": {Instances: map[string]common.PluginInstanceConfig{"main": {Catalog: indexplugin.Catalog}}},
+	}
+	if mode == "unselected-source" {
+		delete(config, "liveaccess")
+	}
+	repositories := []kernel.RepositoryID{repo.ID()}
+	access, err := liveservice.OpenPlugins(config, repositories,
 		map[string]liveservice.PluginEntry{"liveaccess": accessplugin.Entry(accessplugin.Options{})})
 	if err != nil {
 		t.Fatal(err)
@@ -155,17 +316,29 @@ func newMemberProjectionFixture(t *testing.T, mode string) memberProjectionFixtu
 	t.Cleanup(func() { _ = access.Close() })
 	entry := indexplugin.Entry(indexplugin.Options{Directory: t.TempDir(), Lookup: func(id kernel.RepositoryID) (objectmodel.Repository, error) {
 		return rd.Require(id, kernel.ErrObjectRefUnresolved)
-	}, Datasets: testkit.OpenDatasets(t, registry), Engine: func(instance string) ports.EngineOpener {
+	}, Datasets: cat, Engine: func(instance string) ports.EngineOpener {
 		return opensearch.Open(opensearch.Config{URL: endpoint, Namespace: namespace + "/" + instance, PrimaryShards: 1})
 	}})
-	index, err := common.OpenIndexPlugins(common.SelectRepositoryPlugins(configs, []string{"declarative-index"}, known),
+	index, err := common.OpenIndexPlugins(config, common.PluginScope{Repositories: repositories},
 		map[string]common.IndexPluginEntry{"declarative-index": entry})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = index.Close() })
+	pin := reader.DatasetPin{SetID: "sensor-readings", Revision: 1, Repositories: map[kernel.RepositoryID]kernel.CommitID{repo.ID(): receipt.Result.NewCommit}}
+	pin.Items = reader.WholeRepositoryItems(pin.Repositories)
+	lookup := func(id kernel.RepositoryID) (objectmodel.Repository, error) {
+		return rd.Require(id, kernel.ErrObjectRefUnresolved)
+	}
+	if err := index.PrepareDatasetScope(context.Background(), lookup, pin); err != nil {
+		t.Fatal(err)
+	}
+	repo, err = index.DatasetMember(lookup, pin, repo.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
 	return memberProjectionFixture{repo: repo, reader: rd, commit: receipt.Result.NewCommit, address: address, access: access,
-		index: index, origin: origin, source: sourcebridge.Source{Lookup: access, Request: objectmodel.RequestContext{
+		index: index, origin: origin, pin: pin, datasets: cat, source: sourcebridge.Source{Lookup: access, Request: objectmodel.RequestContext{
 			Identity: kernel.IdentityContext{Principal: "index-worker"}, RequestID: "member-index-observation",
 		}}}
 }
@@ -208,9 +381,11 @@ func TestSelectedLiveAccessMemberProjectionRetainsOriginalObservation(t *testing
 	if err != nil || published.Revision == "" {
 		t.Fatalf("actual selected Member projection did not publish: %#v %v", published, err)
 	}
-	executor := discoveryservice.SearchExecutor{Repositories: f.reader, Projection: f.index}
-	request := discoveryservice.SearchRequest{Repository: f.repo.ID(), Commit: f.commit, Query: memberQuery("31")}
-	result, err := executor.Execute(context.Background(), request)
+	lookup := func(id kernel.RepositoryID) (objectmodel.Repository, error) {
+		return f.reader.Require(id, kernel.ErrObjectRefUnresolved)
+	}
+	request := memberQuery("31")
+	result, err := f.index.SearchDataset(context.Background(), lookup, f.pin, request)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,12 +399,12 @@ func TestSelectedLiveAccessMemberProjectionRetainsOriginalObservation(t *testing
 	f.origin.mu.Lock()
 	f.origin.value = float64(47)
 	f.origin.mu.Unlock()
-	retained, err := f.index.SearchStateAtRevisionContext(context.Background(), f.repo, f.commit, published.Revision, request.Query)
+	retained, err := f.index.SearchDataset(context.Background(), lookup, f.pin, request)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertMemberObservation(t, f, retained, published.Revision)
-	current, err := executor.Execute(context.Background(), discoveryservice.SearchRequest{Repository: f.repo.ID(), Commit: f.commit, Query: memberQuery("47")})
+	current, err := f.index.SearchDataset(context.Background(), lookup, f.pin, memberQuery("47"))
 	if err != nil || current.Completeness != retrieval.CompletenessComplete || len(current.Hits) != 0 || len(f.origin.calls()) != len(calls) {
 		t.Fatalf("query reobserved the updated source instead of its published basis: %#v calls=%d %v", current, len(f.origin.calls()), err)
 	}
@@ -257,8 +432,9 @@ func TestFailedLiveAccessMemberCannotPublishStateProjection(t *testing.T) {
 			if revision, ready := f.index.StateView(f.repo.ID(), f.commit); ready || revision != "" {
 				t.Fatalf("failed first observation became a ready state view: %s %v", revision, ready)
 			}
-			result, err := (discoveryservice.SearchExecutor{Repositories: f.reader, Projection: f.index}).Execute(context.Background(),
-				discoveryservice.SearchRequest{Repository: f.repo.ID(), Commit: f.commit, Query: memberQuery("31")})
+			result, err := f.index.SearchDataset(context.Background(), func(id kernel.RepositoryID) (objectmodel.Repository, error) {
+				return f.reader.Require(id, kernel.ErrObjectRefUnresolved)
+			}, f.pin, memberQuery("31"))
 			if kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied || len(result.Hits) != 0 || result.Completeness == retrieval.CompletenessComplete {
 				t.Fatalf("failed Member became a business match or complete zero result: %#v %v", result, err)
 			}

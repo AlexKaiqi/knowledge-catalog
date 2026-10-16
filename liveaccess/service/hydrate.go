@@ -207,11 +207,20 @@ func (s *Service) hydrate(ctx context.Context, repositoryID kernel.RepositoryID,
 	if err != nil {
 		return hydratedUnit{}, false, err
 	}
-	observation, err := s.state.LookupState(ctx, liveaccess.StateLookupRequest{
+	lookupCtx, cancel, err := liveaccess.UnitLookupContext(ctx)
+	if err != nil {
+		return hydratedUnit{}, false, err
+	}
+	defer cancel()
+	observation, err := s.state.LookupState(lookupCtx, liveaccess.StateLookupRequest{
 		Binding: binding, SchemaRef: declaration.SchemaRef, Origin: binding.Origin,
 		Identity: s.request.Identity, Trace: s.request.Trace, RequestID: s.request.RequestID,
 	})
 	if err != nil {
+		if liveaccess.LookupTimedOut(ctx, lookupCtx) {
+			return hydratedUnit{}, false, kernel.Fail(kernel.ErrTemporaryUnavailable,
+				"external lookup timed out for %s", objectmodel.AddressKey(declaration.Address))
+		}
 		if kernel.AsIngress(err) != nil {
 			return hydratedUnit{}, false, err
 		}

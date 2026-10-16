@@ -17,8 +17,8 @@ func constrainedDescriptionSchema() map[string]any {
 		"entity": "Order", "aspect": "definition", "pattern": "record", "description": "Order definition",
 		"additionalProperties": false,
 		"fields": map[string]any{
-			"name":   map[string]any{"type": "string", "required": true, "access": []any{"text"}},
-			"target": map[string]any{"type": "object_ref", "required": true, "refTypes": []any{"Table", "Image"}, "access": []any{"filter"}},
+			"name":   map[string]any{"type": "string", "required": true},
+			"target": map[string]any{"type": "object_ref", "required": true, "refTypes": []any{"Table", "Image"}},
 		},
 	}
 }
@@ -70,8 +70,8 @@ func TestDescribeSchemaKeepsCompleteConstraintsAtFixedVersions(t *testing.T) {
 		ObjectID: id, MetaSchema: objectmodel.MetaSchemaV1, Entity: "Order", Aspect: "definition", Pattern: "record",
 		Description: "Order definition", AdditionalProperties: false,
 		Fields: []objectmodel.SchemaFieldDefinition{
-			{Path: "name", Type: "string", Required: true, Access: []string{"text"}},
-			{Path: "target", Type: "object_ref", Required: true, RefTypes: []string{"image", "table"}, Access: []string{"filter"}},
+			{Path: "name", Type: "string", Required: true},
+			{Path: "target", Type: "object_ref", Required: true, RefTypes: []string{"image", "table"}},
 		},
 	}
 	var previous reader.SchemaDescription

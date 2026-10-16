@@ -52,7 +52,7 @@ func AssertProtocolSchemaPublication(objectID ObjectID, value any) error {
 }
 
 func protocolSchemaDigest(objectID ObjectID) (kernel.Digest, bool) {
-	if objectID != CoreReadmeSchemaV1 {
+	if objectID != CoreReadmeSchemaV1 && objectID != IndexDeclarationSchemaV1 {
 		return "", false
 	}
 	for _, operation := range TrustedSchemaOperations() {

@@ -45,6 +45,7 @@ func (e *executor) scope(flags map[string]any) client.ObjectScope {
 	} else {
 		scope.Dataset = flagString(flags, "dataset")
 	}
+	scope.Revision, _ = revisionFrom(flags)
 	return scope
 }
 
@@ -54,7 +55,7 @@ func (e *executor) read(ctx context.Context, path string, flags map[string]any, 
 	scope := e.scope(flags)
 	switch path {
 	case "read":
-		err = e.client.Read(ctx, client.ReadRequest{ObjectDatasetIdentity: client.ObjectDatasetIdentity{Dataset: flagString(flags, "dataset")}, Reference: flagString(flags, "reference"), Repository: flagString(flags, "repo"), Commit: flagString(flags, "commit"), Ref: flagString(flags, "ref")}, options, &output)
+		err = e.client.Read(ctx, client.ReadRequest{ObjectDatasetIdentity: client.ObjectDatasetIdentity{Dataset: flagString(flags, "dataset"), Revision: scope.Revision}, Reference: flagString(flags, "reference"), Repository: flagString(flags, "repo"), Commit: flagString(flags, "commit"), Ref: flagString(flags, "ref")}, options, &output)
 	case "resolve":
 		err = e.client.Resolve(ctx, client.ResolveRequest{ObjectScope: scope, Object: flagString(flags, "object"), Aspect: flagString(flags, "aspect"), Member: flagString(flags, "member")}, options, &output)
 	case "provenance":
@@ -66,7 +67,7 @@ func (e *executor) read(ctx context.Context, path string, flags map[string]any, 
 		err = e.client.Schema(ctx, client.SchemaRequest{ObjectScope: scope, Object: flagString(flags, "object")}, options, &output)
 	case "schema list":
 		limit, _ := limitFrom(flags)
-		err = e.client.BrowseSchemas(ctx, client.SchemaPageRequest{ObjectRepoPin: client.ObjectRepoPin{Repository: scope.Repository, Commit: scope.Commit, Ref: scope.Ref}, Limit: limit, Continuation: flagString(flags, "continuation")}, options, &output)
+		err = e.client.BrowseSchemas(ctx, client.SchemaPageRequest{ObjectRepoPin: client.ObjectRepoPin{Repository: scope.Repository, Commit: scope.Commit, Ref: scope.Ref}, Dataset: flagString(flags, "dataset"), Revision: scope.Revision, Limit: limit, Continuation: flagString(flags, "continuation")}, options, &output)
 	}
 	return output, err
 }

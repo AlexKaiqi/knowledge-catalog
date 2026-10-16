@@ -1,0 +1,12 @@
+---
+object_id: service/qinghe.order-service
+aspect_name: runbook
+kind: Aspect
+schema_ref: schema/service.runbook
+---
+revision: "1"
+firstSteps:
+- 看告警对象的 condition 与 firedAt，确认是延迟还是错误率。
+- 用 order-cli health 查看当前状态。
+- 延迟高时重启下单服务实例。
+escalation: 15 分钟未恢复，找交易组 Ma。

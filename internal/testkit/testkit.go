@@ -120,6 +120,14 @@ func (r *ObjectRepository) ReadMany(objectIDs []objectmodel.ObjectID, commit ker
 	return r.Repository.(objectmodel.BatchReadStore).ReadMany(objectIDs, commit)
 }
 
+func (r *ObjectRepository) ReadAddressAtPaths(address objectmodel.Address, commit kernel.CommitID, paths []string) (objectmodel.ObjectValue, error) {
+	return r.Repository.(objectmodel.AddressPathsReader).ReadAddressAtPaths(address, commit, paths)
+}
+
+func (r *ObjectRepository) ResolveAddressAtPaths(address objectmodel.Address, commit kernel.CommitID, paths []string) (objectmodel.Resolution, error) {
+	return r.Repository.(objectmodel.AddressPathsReader).ResolveAddressAtPaths(address, commit, paths)
+}
+
 func (r *ObjectRepository) AdoptedSchemaRefs(id objectmodel.ObjectID, commit kernel.CommitID) ([]string, error) {
 	return r.Repository.(objectmodel.SchemaAdoptionLocator).AdoptedSchemaRefs(id, commit)
 }

@@ -1,0 +1,7 @@
+# 测试部署配置片段：lakeFS 回收规则对 table-meta 的所有分支只保留 0 天，且不承认系统持有的提交保留。
+# 部署检查必须据此拒绝启动，而不是等读取失败时才发现。
+lakefs:
+  gcRules:
+    table-meta:
+      default_retention_days: 0
+      honorCatalogHolds: false

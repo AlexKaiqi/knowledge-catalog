@@ -37,7 +37,7 @@ func TestHTTPTemporaryWorkspaceLabelCannotImpersonatePublishedWorkspace(t *testi
 	body(t, kc(home, "grant", "add", "--principal", namedSearcher,
 		"--action", "file.read"))
 	body(t, kc(home, "grant", "add", "--principal", namedSearcher,
-		"--action", "object.search", "--dataset", label))
+		"--action", "file.read", "--dataset", label))
 
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
 	if closer, ok := handler.(interface{ Close() error }); ok {
@@ -102,8 +102,8 @@ func TestHTTPTemporaryWorkspaceLabelCannotImpersonatePublishedWorkspace(t *testi
 	// into published authority, including at the object verb admission gate.
 	search := map[string]any{"dataset": label, "definition": definition, "pin": temporaryPin, "query": "label"}
 	status, rejected, _ = httpSurfaceRequest(t, server, http.MethodPost, "/object/v1/search", search, namedSearcher)
-	if status != http.StatusForbidden {
-		t.Fatalf("temporary definition borrowed a named object.search grant: %d %#v", status, rejected)
+	if status != http.StatusBadRequest || asMap(t, asMap(t, rejected)["error"])["code"] != "USAGE_INVALID" {
+		t.Fatalf("temporary definition borrowed a named Dataset consume grant: %d %#v", status, rejected)
 	}
 	search["inventoryDiscovery"] = true
 	status, rejected, _ = httpSurfaceRequest(t, server, http.MethodPost, "/object/v1/search", search, namedSearcher)

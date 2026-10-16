@@ -1,0 +1,18 @@
+---
+object_id: index/sales-search
+aspect_name: index
+member_key: metric-text
+kind: Member
+schema_ref: schema/core/index-declaration/v1
+---
+catalog: declarative-index/opensearch@2026-10
+inputs:
+  - from: schema/metric.properties#/fields/name
+  - from: schema/metric.definition#/fields/expression
+    missing: exclude
+build:
+  kind: text
+  analyzer: standard
+  template: "{name}\n{expression}"
+uses:
+  - text

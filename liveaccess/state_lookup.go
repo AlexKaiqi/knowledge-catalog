@@ -51,8 +51,8 @@ type ResourceOperationAccessor interface {
 const maxStateRuntimeResponseBytes = 8 << 20
 
 // HTTPStateLookup is the Object Server adapter for resource-access/v1.
-// Each request posts to the origin declared on that Binding's Domain Schema
-// (or ResourceDescriptor). The adapter does not pin a server-wide URL.
+// Each request posts to the fixed ResourceDescriptor origin adopted with
+// the unit's valueSource. The adapter does not pin a server-wide URL.
 type HTTPStateLookup struct {
 	client            *http.Client
 	credentialOrigins map[string]bool
@@ -141,7 +141,7 @@ func (h *HTTPStateLookup) AccessResource(ctx context.Context, request ResourceOp
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "resource runtime response exceeds %d bytes", maxStateRuntimeResponseBytes)
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return nil, SafeFailure(ctx, resourceRuntimeHTTPError(response.StatusCode, raw))
+		return nil, SafeFailure(ctx, runtimeHTTPError("resource runtime", response.StatusCode, raw))
 	}
 	var value any
 	decoder := json.NewDecoder(bytes.NewReader(raw))
@@ -214,7 +214,7 @@ func (h *HTTPStateLookup) LookupState(ctx context.Context, request StateLookupRe
 		return StateObservation{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "State runtime response exceeds %d bytes", maxStateRuntimeResponseBytes)
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return StateObservation{}, SafeFailure(ctx, stateRuntimeHTTPError(response.StatusCode, raw))
+		return StateObservation{}, SafeFailure(ctx, runtimeHTTPError("State runtime", response.StatusCode, raw))
 	}
 	var envelope stateRuntimeResponse
 	decoder := json.NewDecoder(bytes.NewReader(raw))
@@ -268,27 +268,10 @@ func stateReadOperation(binding ResolvedBinding) (string, string, error) {
 		"State Binding at %s must declare a lookup or read operation for ordinary READ", objectmodel.AddressKey(binding.Address))
 }
 
-func stateRuntimeHTTPError(status int, raw []byte) error {
-	message := strings.TrimSpace(http.StatusText(status))
-	var envelope struct {
-		Error struct {
-			Message string `json:"message"`
-		} `json:"error"`
-	}
-	if json.Unmarshal(raw, &envelope) == nil && strings.TrimSpace(envelope.Error.Message) != "" {
-		message = strings.TrimSpace(envelope.Error.Message)
-	}
-	switch status {
-	case http.StatusUnauthorized, http.StatusForbidden:
-		return kernel.Fail(kernel.ErrForbidden, "State runtime denied access: %s", message)
-	case http.StatusBadRequest, http.StatusNotFound, http.StatusConflict, http.StatusUnprocessableEntity:
-		return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "State runtime cannot satisfy the Binding: %s", message)
-	default:
-		return kernel.Fail(kernel.ErrTemporaryUnavailable, "State runtime returned HTTP %d: %s", status, message)
-	}
-}
-
-func resourceRuntimeHTTPError(status int, raw []byte) error {
+// runtimeHTTPError maps one source failure. A source error code that names a
+// stable public failure is kept, so a source that does not know the unit says
+// so instead of looking like an empty value; transport-shaped codes stay local.
+func runtimeHTTPError(subject string, status int, raw []byte) error {
 	message := strings.TrimSpace(http.StatusText(status))
 	code := kernel.ErrorCode("")
 	var envelope struct {
@@ -304,15 +287,15 @@ func resourceRuntimeHTTPError(status int, raw []byte) error {
 		}
 	}
 	if status == http.StatusUnauthorized || status == http.StatusForbidden {
-		return kernel.Fail(kernel.ErrForbidden, "resource runtime denied access: %s", message)
+		return kernel.Fail(kernel.ErrForbidden, "%s denied access: %s", subject, message)
 	}
 	switch code {
 	case kernel.ErrUsageInvalid, kernel.ErrPreconditionFailed, kernel.ErrObjectRefUnresolved,
 		kernel.ErrCapabilityUnsatisfied, kernel.ErrForbidden, kernel.ErrUnauthenticated:
-		return kernel.Fail(code, "resource runtime: %s", message)
+		return kernel.Fail(code, "%s: %s", subject, message)
 	}
-	if status >= 400 && status < 500 {
-		return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "resource runtime cannot satisfy the operation: %s", message)
+	if status >= 400 && status < 500 && status != http.StatusTooManyRequests && status != http.StatusRequestTimeout {
+		return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "%s cannot satisfy the request: %s", subject, message)
 	}
-	return kernel.Fail(kernel.ErrTemporaryUnavailable, "resource runtime returned HTTP %d: %s", status, message)
+	return kernel.Fail(kernel.ErrTemporaryUnavailable, "%s returned HTTP %d: %s", subject, status, message)
 }

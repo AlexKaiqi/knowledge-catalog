@@ -3,12 +3,12 @@ package cli
 import "strings"
 
 var commandEntries = []Command{
-	{Path: "read", Handler: "object-read", Action: "object.read", Flags: words("repo dataset commit ref"), Operands: []string{"reference"}, Groups: []string{"object"}},
-	{Path: "resolve", Handler: "object-resolve", Action: "object.read", Flags: words("repo dataset commit ref object aspect member"), Groups: []string{"object"}},
-	{Path: "log", Handler: "object-log", Action: "object.history.read", Flags: words("repo dataset commit ref object limit continuation"), Groups: []string{"object"}},
-	{Path: "provenance", Handler: "object-provenance", Action: "object.provenance", Flags: words("repo dataset commit ref object"), Groups: []string{"object"}},
-	{Path: "schema list", Handler: "object-schema-list", Action: "object.schema.read", Flags: words("repo commit ref limit continuation"), Groups: []string{"object"}},
-	{Path: "schema describe", Handler: "object-schema-describe", Action: "object.schema.read", Flags: words("repo dataset commit ref object"), Groups: []string{"object"}},
+	{Path: "read", Handler: "object-read", Action: "object.read", Flags: words("repo dataset revision commit ref"), Operands: []string{"reference"}, Groups: []string{"object"}},
+	{Path: "resolve", Handler: "object-resolve", Action: "object.read", Flags: words("repo dataset revision commit ref object aspect member"), Groups: []string{"object"}},
+	{Path: "log", Handler: "object-log", Action: "object.history.read", Flags: words("repo dataset revision commit ref object limit continuation"), Groups: []string{"object"}},
+	{Path: "provenance", Handler: "object-provenance", Action: "object.provenance", Flags: words("repo dataset revision commit ref object"), Groups: []string{"object"}},
+	{Path: "schema list", Handler: "object-schema-list", Action: "object.schema.read", Flags: words("repo dataset revision commit ref limit continuation"), Groups: []string{"object"}},
+	{Path: "schema describe", Handler: "object-schema-describe", Action: "object.schema.read", Flags: words("repo dataset revision commit ref object"), Groups: []string{"object"}},
 	{Path: "writer put", Handler: "writer-put", Action: "writer.commit", Flags: writeFlags("value file value-source schema-ref path-hint"), Operands: []string{"reference"}, Groups: []string{"writer", "publishing"}},
 	{Path: "writer remove", Handler: "writer-remove", Action: "writer.commit", Flags: writeFlags(""), Operands: []string{"reference"}, Groups: []string{"writer", "publishing"}},
 }
@@ -45,7 +45,7 @@ func command(path string) (Command, bool) {
 func ModelHelp() string {
 	return `对象模型：
   object_id 形如 <namespace>/<name>，只标识对象，不含 Repository；类型由 Schema 决定。
-  同一 object_id 出现在多个仓时是同一对象的不同 Aspect；同一范围内同一 Aspect 来自两个仓会报 OBJECT_ID_CONFLICT。
+  同一 object_id 在不同仓仍是同一对象；不同仓可分别维护不相交的 Aspect。同一范围内同一 Aspect 来自两个仓会报 OBJECT_ID_CONFLICT。
   Aspect 是对象的具名完整切面；集合 Aspect 的 Member 用稳定 key 标识。
   Address 指定可独立维护的整个对象、Aspect 或 Member；Relation 是有独立身份、角色端点并引用对象的关系声明。
   对象 URN 只编码 object_id；# 后的 JSON Pointer 定位内容。读取默认在你可读的全部仓里解析，指定仓或 Dataset 可缩小范围；依据里的 sources 记录每个方面来自哪个仓、哪个 commit。

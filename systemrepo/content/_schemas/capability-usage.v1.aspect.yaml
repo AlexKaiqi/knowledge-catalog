@@ -12,4 +12,3 @@ fields:
   body:
     type: string
     required: true
-    access: [text]

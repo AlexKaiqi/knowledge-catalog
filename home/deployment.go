@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	indexplugins "kc/discovery/plugin"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"kc/identity"
+	_ "kc/identity/builtin"
 	"kc/kernel"
 	"kc/liveaccess"
 	objectmodel "kc/object"
@@ -27,6 +30,7 @@ type DeploymentConfig struct {
 	Registry            RegistryBinding                    `json:"registry" yaml:"registry"`
 	Repositories        []RepositoryBinding                `json:"repositories,omitempty" yaml:"repositories,omitempty"`
 	RepositoryAccess    []RepositoryAccess                 `json:"repositoryAccess,omitempty" yaml:"repositoryAccess,omitempty"`
+	DatasetAccess       []DatasetAccess                    `json:"datasetAccess,omitempty" yaml:"datasetAccess,omitempty"`
 	ManagedRepositories *ManagedRepositoryConfig           `json:"managedRepositories,omitempty" yaml:"managedRepositories,omitempty"`
 	ManagedStores       map[string]ManagedRepositoryConfig `json:"managedStores,omitempty" yaml:"managedStores,omitempty"`
 	Admission           *AdmissionConfig                   `json:"admission,omitempty" yaml:"admission,omitempty"`
@@ -35,10 +39,12 @@ type DeploymentConfig struct {
 	Stores              StoresFile                         `json:"stores,omitempty" yaml:"stores,omitempty"`
 	Evidence            *EvidenceConfig                    `json:"evidence,omitempty" yaml:"evidence,omitempty"`
 	LiveAccess          liveaccess.RuntimeConfig           `json:"liveaccess,omitempty" yaml:"liveaccess,omitempty"`
-	Auth                string                             `json:"auth" yaml:"auth"`
-	AuthURL             string                             `json:"authURL,omitempty" yaml:"authURL,omitempty"`
-	AuthLogoutURL       string                             `json:"authLogoutURL,omitempty" yaml:"authLogoutURL,omitempty"`
-	Listen              string                             `json:"listen,omitempty" yaml:"listen,omitempty"`
+	// Plugins installs plugin instances and maps each catalog to one of them.
+	Plugins       *indexplugins.PluginsConfig `json:"plugins,omitempty" yaml:"plugins,omitempty"`
+	Auth          string                      `json:"auth" yaml:"auth"`
+	AuthURL       string                      `json:"authURL,omitempty" yaml:"authURL,omitempty"`
+	AuthLogoutURL string                      `json:"authLogoutURL,omitempty" yaml:"authLogoutURL,omitempty"`
+	Listen        string                      `json:"listen,omitempty" yaml:"listen,omitempty"`
 }
 
 // EvidenceConfig is the ILM-style hot window for access evidence on this
@@ -78,6 +84,9 @@ func ReadDeployment(path string) (DeploymentConfig, error) {
 	if err != nil {
 		return DeploymentConfig{}, err
 	}
+	if err := rejectRepositoryPluginSelection(raw); err != nil {
+		return DeploymentConfig{}, err
+	}
 	var config DeploymentConfig
 	decoder := yaml.NewDecoder(bytes.NewReader(raw))
 	decoder.KnownFields(true)
@@ -108,10 +117,8 @@ func (c DeploymentConfig) Validate() error {
 	if c.Registry.ID == "" {
 		return invalid("deployment must name one registry Snapshot authority")
 	}
-	switch c.Auth {
-	case "local", "taihu", "gitea", "lakefs":
-	default:
-		return invalid("deployment auth must be local, taihu, gitea, or lakefs")
+	if _, ok := identity.Lookup(c.Auth); !ok {
+		return invalid("deployment auth must be one of %s", strings.Join(identity.Names(), ", "))
 	}
 	if err := validateAuthLogoutURL(c.AuthLogoutURL); err != nil {
 		return err
@@ -128,8 +135,19 @@ func (c DeploymentConfig) Validate() error {
 	if err := validateRepositoryAccess(c.RepositoryAccess); err != nil {
 		return err
 	}
+	if err := validateDatasetAccess(c.DatasetAccess); err != nil {
+		return err
+	}
 	if err := c.validateSnapshotBindings(); err != nil {
 		return err
+	}
+	if c.Stores.Plugins != nil {
+		return invalid("deployment installs plugins at top-level plugins, not under stores")
+	}
+	if c.Plugins != nil {
+		if err := c.Plugins.Validate([]string{"declarative-index", "liveaccess"}); err != nil {
+			return err
+		}
 	}
 	if c.Stores.Layout != (LayoutFile{}) || c.Stores.Profile != "" || c.Stores.Repository != "" {
 		return invalid("deployment stores accepts index, opensearch and hydrationCache; configure source drivers in repositories and paths in stateDir/cacheDir")
@@ -240,6 +258,7 @@ func (b RepositoryBinding) homeRepo() HomeRepo {
 
 func (c DeploymentConfig) runtimeStores() StoresFile {
 	stores := c.Stores.withDefaults()
+	stores.Plugins = c.Plugins
 	stores.Layout.Registry = filepath.Join(c.CacheDir, "registry")
 	stores.Layout.Projections = filepath.Join(c.CacheDir, "projections")
 	stores.Layout.Checkouts = filepath.Join(c.CacheDir, "checkouts")
@@ -283,4 +302,35 @@ func deploymentRealPath(p string) string {
 		return p
 	}
 	return filepath.Join(deploymentRealPath(parent), filepath.Base(p))
+}
+
+// rejectRepositoryPluginSelection refuses the retired per-Repository plugin
+// choice instead of letting strict decoding report an unrelated shape error.
+func rejectRepositoryPluginSelection(raw []byte) error {
+	var document struct {
+		Repositories yaml.Node `yaml:"repositories"`
+	}
+	if err := yaml.Unmarshal(raw, &document); err != nil {
+		return nil
+	}
+	var nodes []*yaml.Node
+	switch document.Repositories.Kind {
+	case yaml.SequenceNode:
+		nodes = document.Repositories.Content
+	case yaml.MappingNode:
+		for i := 1; i < len(document.Repositories.Content); i += 2 {
+			nodes = append(nodes, document.Repositories.Content[i])
+		}
+	}
+	for _, node := range nodes {
+		if node.Kind != yaml.MappingNode {
+			continue
+		}
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			if node.Content[i].Value == "plugins" {
+				return kernel.Fail(kernel.ErrUsageInvalid, "per-Repository plugin selection is retired: install instances in top-level plugins and map each catalog to one instance")
+			}
+		}
+	}
+	return nil
 }

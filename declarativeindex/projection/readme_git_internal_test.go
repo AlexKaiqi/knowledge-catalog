@@ -29,7 +29,7 @@ func TestGitPushedReadmeCompilesIntoAccessSpecText(t *testing.T) {
 		Operations: []objectmodel.Operation{{
 			Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: objectmodel.CoreReadmeSchemaV1},
 			Value: schemaValue,
-		}},
+		}, testkit.IndexText(objectmodel.CoreReadmeSchemaV1, "body")},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -54,7 +54,7 @@ func TestGitPushedReadmeCompilesIntoAccessSpecText(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	spec, err := specAtCommit(s.Repo, head)
+	spec, err := (&Index{}).specAtCommit(s.Repo, head)
 	if err != nil {
 		t.Fatal(err)
 	}

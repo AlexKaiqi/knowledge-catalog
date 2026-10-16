@@ -60,11 +60,12 @@ else:
         return result, log
 
     def test_retired_gitea_entry_rejects_without_side_effects(self):
-        with tempfile.TemporaryDirectory() as temp:
-            root = pathlib.Path(temp)
-            result, log = self.isolated_testsuite(root, "gitea")
-            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
-            self.assertFalse(log.exists(), "retired driver must not run a provider or install dependencies")
+        for group in ("gitea", "service-e2e"):
+            with self.subTest(group=group), tempfile.TemporaryDirectory() as temp:
+                root = pathlib.Path(temp)
+                result, log = self.isolated_testsuite(root, group)
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                self.assertFalse(log.exists(), "retired driver must not run a provider or install dependencies")
 
     def test_taihu_suite_dispatch_requires_declared_owner_and_preserves_failures(self):
         name, package = "TestLiveTaihuAuthentication", "./server"

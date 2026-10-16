@@ -1,6 +1,7 @@
 import { vi } from 'vitest';
 
-export const cookieDiscovery = {mode: 'lakefs', localAssertion: false, accepts: ['Cookie']};
+// A Taihu gateway session: the browser reaches KC with the gateway's verified identity.
+export const sharedLoginDiscovery = {mode: 'taihu', localAssertion: false, accepts: ['Authorization']};
 export function mockKC() {
     let revision = 1, retired = false;
     let sources = [{ repository: 'kr://example/source', selector: 'refs/heads/main', commit: 'c1', path: 'docs', subPath: 'handbook' }];
@@ -19,7 +20,7 @@ export function mockKC() {
         if (path.pathname === '/api/v1/config/version') return json({version: 'v1.58.0', version_context: 'lakeFS', upgrade_recommended: false});
         if (path.pathname === '/api/v1/config') return json({storage_config: {blockstore_type: 'local', import_support: true}, version_config: {version: 'v1.58.0', version_context: 'lakeFS', upgrade_recommended: false}});
         if (path.pathname.startsWith('/api/v1/repositories')) return json({results: [], pagination: {has_more: false}});
-        if (path.pathname === '/identity/v1/auth') return json(cookieDiscovery);
+        if (path.pathname === '/identity/v1/auth') return json(sharedLoginDiscovery);
         if (path.pathname === '/identity/v1/whoami') {
             return identity && headers?.['X-Kc-Console'] === '1' && options?.credentials === 'same-origin'
                 ? json({principal: identity}) : fault('UNAUTHENTICATED', '需要原控制台登录', 401);

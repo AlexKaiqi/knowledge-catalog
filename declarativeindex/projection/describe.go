@@ -54,7 +54,7 @@ func (idx *Index) describe(repo objectmodel.Repository, commit kernel.CommitID) 
 		Coverage: meta.Coverage, Mode: meta.Mode, Cause: meta.Cause,
 	}
 	if meta.Basis != "" {
-		spec, err := specForProjection(repo, meta)
+		spec, err := idx.specForProjection(repo, meta)
 		if err != nil {
 			return ports.IndexDescriptor{}, err
 		}

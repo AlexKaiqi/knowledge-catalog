@@ -215,8 +215,14 @@ func TestDatasetConcurrentPublishersCannotOverwriteOrRollBack(t *testing.T) {
 		t.Fatalf("unknown winner label %q", winner.label)
 	}
 	f.assertRead(t, first.Pin, "reference/policies", "policy v1\n")
-	if err := f.publish(1, directoryDeliverySources("reference/policies", "reference/guides", "data/metrics")); kernel.CodeOf(err) != kernel.ErrNonFastForward {
+	if err := f.publish(1, sourcesB); kernel.CodeOf(err) != kernel.ErrNonFastForward {
 		t.Fatalf("rollback revision must be refused, got %v", err)
+	}
+	if err := f.publish(1, directoryDeliverySources("reference/policies", "reference/guides", "data/metrics")); err != nil {
+		t.Fatalf("retrying the accepted revision 1 definition must replay it: %v", err)
+	}
+	if replayed := f.mounts(t, nil); replayed.Pin.Revision != 2 {
+		t.Fatalf("replaying revision 1 must not roll the current revision back: %#v", replayed.Pin)
 	}
 	retrySources := sourcesA
 	if loser.label == "directory-mounts" {

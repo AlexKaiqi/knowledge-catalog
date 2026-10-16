@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"kc/cli"
 	kchome "kc/home"
 	inv "kc/invocation"
 	serv "kc/server"
@@ -20,11 +21,10 @@ import (
 	"unicode"
 
 	"gopkg.in/yaml.v3"
-	"kc/cli"
 	"kc/internal/testkit"
 	"kc/kernel"
-	livefixture "kc/liveaccess/fixture"
 	objectmodel "kc/object"
+	"kc/snapshot"
 )
 
 type sceneFeature struct {
@@ -46,23 +46,22 @@ type sceneScenario struct {
 }
 
 type sceneStep struct {
-	line           int
-	kind           string
-	text           string
-	table          [][]string
-	command        string
-	method         string
-	path           string
-	principal      string
-	onBehalfOf     string
-	object         string
-	errorCode      string
-	whoami         string
-	material       string
-	fixtureDir     string
-	accessInstance string
-	schema         *sceneSchemaSpec
-	instance       *sceneInstanceSpec
+	line       int
+	kind       string
+	text       string
+	table      [][]string
+	command    string
+	method     string
+	path       string
+	principal  string
+	onBehalfOf string
+	object     string
+	errorCode  string
+	whoami     string
+	material   string
+	fixtureDir string
+	schema     *sceneSchemaSpec
+	instance   *sceneInstanceSpec
 }
 
 type sceneSchemaSpec struct {
@@ -78,7 +77,6 @@ type sceneSchemaField struct {
 	name     string
 	typ      string
 	required bool
-	access   []string
 }
 
 type sceneInstanceSpec struct {
@@ -134,6 +132,10 @@ type frozenSceneHome struct {
 	canonical map[string]string
 	seq       int
 	http      bool
+	restore   func() error
+	// projection holds a write-blocked copy of the state's OpenSearch media;
+	// clones fork it instead of replaying the construct chain.
+	projection *sceneProjectionNamespace
 }
 
 var (
@@ -158,6 +160,38 @@ func TestMetricPermissionSceneFileParses(t *testing.T) {
 	if steps < 20 {
 		t.Fatalf("search tree executable steps=%d", steps)
 	}
+	for _, task := range tasks {
+		if task.principal == "" || strings.TrimSpace(task.brief) == "" {
+			t.Fatalf("invalid optional Agent brief: %#v", task)
+		}
+	}
+}
+
+// Brief syntax remains covered independently of the retired repository-search
+// scenarios. Optional annotations need not exist in the current product tree.
+func TestSceneAgentBriefParserRetainsIndependentRoles(t *testing.T) {
+	feature, err := parseSceneFeature(`Feature: optional briefs
+Scenario: independent roles
+"""
+Agent as taihu:alice (search-only)
+First independent brief.
+"""
+"""
+Agent as searcher (search-only)
+Second independent brief.
+"""
+"""
+Agent as searcher (search+read)
+Third independent brief.
+"""
+When I run ` + "`kc help`" + `
+Then the output has:
+  | fixture | optional |
+`)
+	if err != nil || len(feature.scenarios) != 1 {
+		t.Fatalf("parse independent Agent briefs: %#v %v", feature, err)
+	}
+	tasks := feature.scenarios[0].agentTasks
 	want := []sceneAgentTask{
 		{principal: "taihu:alice", fixture: "search-only"},
 		{principal: "searcher", fixture: "search-only"},
@@ -212,8 +246,14 @@ func TestMetricPermissionAgentBriefsStayOnSceneMaterials(t *testing.T) {
 	if !strings.Contains(schema, "kr://scene/object") || !strings.Contains(construct, "kr://scene/object") {
 		t.Fatal("metric schema and construct must target the scene object repository")
 	}
-	if !strings.Contains(schema, "access: [text, filter]") {
-		t.Fatal("metric schema lost the scene AccessHints witness")
+	if strings.Contains(schema, "access:") {
+		t.Fatal("metric schema must describe structure only; retrieval capability belongs to index declarations")
+	}
+	for member, witness := range map[string]string{"name-text": "kind: text", "name-filter": "- filter"} {
+		declaration := read(filepath.Join(schemaNode.Dir, "_materials", "drafts", "index.metric."+member+".yaml"))
+		if !strings.Contains(declaration, "schema/metric.definition#/fields/name") || !strings.Contains(declaration, witness) {
+			t.Fatalf("metric index declaration %s lost the scene text/filter witness", member)
+		}
 	}
 	var value map[string]any
 	if err := json.Unmarshal([]byte(instance), &value); err != nil {
@@ -279,6 +319,8 @@ func TestLiveLakeFSSceneDFS(t *testing.T) {
 	}
 	indexURL := strings.TrimSpace(os.Getenv("KC_TEST_OPENSEARCH_URL"))
 	stateURL := strings.TrimSpace(os.Getenv("KC_TEST_STATE_RUNTIME_URL"))
+	cache := newSceneHomeCacheWith(t, live)
+	executed := false
 	for _, node := range nodes {
 		node := node
 		t.Run(node.ID, func(t *testing.T) {
@@ -291,11 +333,12 @@ func TestLiveLakeFSSceneDFS(t *testing.T) {
 			if nodeNeedsIndex(node) && indexURL == "" {
 				t.Skip("index spine needs KC_TEST_OPENSEARCH_URL")
 			}
-			// Live Graveler cannot fork commit IDs, so each node replays from
-			// root on a fresh cache instead of cloning a parent home.
-			cache := newSceneHomeCacheWith(t, live)
 			runSceneNode(t, doc, node, cache)
+			executed = true
 		})
+	}
+	if executed && cache.inits != 1 {
+		t.Fatalf("live scene tree initialized %d times; all nodes must reuse one owned baseline", cache.inits)
 	}
 }
 
@@ -351,8 +394,6 @@ func TestSceneExistingRepositoryFixtureUsesLakeFS(t *testing.T) {
 		}
 		delete(wantRepositories, stamp.id)
 	}
-	assertSceneRepositoryAccessSelection(t, cache, frozen.dir, "kr://scene/object", "main")
-	assertSceneRepositoryAccessSelection(t, cache, frozen.dir, "kr://scene/graph", "")
 	homeA, _ := cache.cloneParent(t, attached)
 	homeB, _ := cache.cloneParent(t, attached)
 	stampsA := sceneRemoteStamps(t, homeA)
@@ -360,8 +401,6 @@ func TestSceneExistingRepositoryFixtureUsesLakeFS(t *testing.T) {
 	if len(stampsA) != 3 || len(stampsB) != 3 {
 		t.Fatalf("cloned stamps A=%#v B=%#v", stampsA, stampsB)
 	}
-	assertSceneRepositoryAccessSelection(t, cache, homeA, "kr://scene/object", "main")
-	assertSceneRepositoryAccessSelection(t, cache, homeB, "kr://scene/object", "main")
 	// Catalog authority pointers must fork too; copying a consumer home must
 	// never allow its registry writes to advance another clone or the parent.
 	openedA, err := kchome.Open(homeA)
@@ -484,12 +523,14 @@ func runSceneNode(t *testing.T, doc sceneCatalogFile, node sceneTreeNode, cache 
 		Test:              t.Name(),
 		StartedAt:         started.UTC().Format(time.RFC3339Nano),
 	}
+	initsBefore := cache.inits
 	if shouldRunSceneProbes(doc, node.ID) {
 		for _, probe := range node.Probes {
 			report.Probes = append(report.Probes, filepath.Base(probe))
 		}
 	}
 	defer func() {
+		report.DeploymentInits = cache.inits - initsBefore
 		report.ElapsedMS = time.Since(started).Milliseconds()
 		report.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		if err := writeSceneResult(node.Dir, report); err != nil {
@@ -499,7 +540,7 @@ func runSceneNode(t *testing.T, doc sceneCatalogFile, node sceneTreeNode, cache 
 	world := cache.worldAtParent(t, node, &report)
 	defer world.close()
 	runSceneConstruct(t, node, world, &report)
-	cache.snapshot(node.ID, world)
+	cache.snapshot(t, node.ID, world)
 	world.close()
 	if shouldRunSceneProbes(doc, node.ID) {
 		for _, probe := range node.Probes {
@@ -529,6 +570,9 @@ func runIsolatedSceneProbe(t *testing.T, node sceneTreeNode, probe string, cache
 
 func runSceneConstruct(t *testing.T, node sceneTreeNode, world *sceneWorld, report *sceneRunReport) {
 	t.Helper()
+	if report != nil {
+		report.ConstructRuns++
+	}
 	report.observeStep(node.ID, "load "+node.Construct)
 	for _, step := range nodeConstructSteps(t, node) {
 		report.observeStep(node.ID, step.text)
@@ -547,10 +591,7 @@ func newSceneHomeCacheWith(t *testing.T, lakefs sceneLakeFS) *sceneHomeCache {
 	for _, node := range discoverConstructableNodes(t) {
 		nodes[node.ID] = node
 	}
-	// Real Graveler cannot preserve a commit graph while copying a physical
-	// repository. Its probes and descendants must replay their prerequisites.
-	_, replay := lakefs.(*testkit.LakeFSLive)
-	return &sceneHomeCache{owner: t, nodes: nodes, frozen: map[string]frozenSceneHome{}, lakefs: lakefs, replay: replay}
+	return &sceneHomeCache{owner: t, nodes: nodes, frozen: map[string]frozenSceneHome{}, lakefs: lakefs}
 }
 
 func (c *sceneHomeCache) recordInit() {
@@ -559,7 +600,8 @@ func (c *sceneHomeCache) recordInit() {
 	c.mu.Unlock()
 }
 
-func (c *sceneHomeCache) snapshot(id string, world *sceneWorld) {
+func (c *sceneHomeCache) snapshot(t *testing.T, id string, world *sceneWorld) {
+	t.Helper()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if _, ok := c.frozen[id]; ok {
@@ -567,19 +609,37 @@ func (c *sceneHomeCache) snapshot(id string, world *sceneWorld) {
 	}
 	dst := testkit.TempDir(c.owner)
 	if err := copySceneHome(world.home, dst); err != nil {
-		c.owner.Fatalf("freeze %s: %v", id, err)
+		t.Fatalf("freeze %s: %v", id, err)
 	}
-	if !c.replay {
+	var restore func() error
+	checkpoint, canCheckpoint := c.lakefs.(interface {
+		SnapshotStamps(string) (func() error, error)
+	})
+	if !c.replay && canCheckpoint {
+		var err error
+		restore, err = checkpoint.SnapshotStamps(dst)
+		if err != nil {
+			t.Fatalf("checkpoint lakeFS stamps for %s: %v", id, err)
+		}
+	} else if !c.replay {
 		// A directory copy alone still points at mutable remote HEADs. Freeze
 		// those authorities before any probe can change the constructing world.
 		if err := c.lakefs.ForkStamps(dst); err != nil {
-			c.owner.Fatalf("freeze lakeFS stamps for %s: %v", id, err)
+			t.Fatalf("freeze lakeFS stamps for %s: %v", id, err)
 		}
 	}
-	c.frozen[id] = frozenSceneHome{
+	frozen := frozenSceneHome{
 		dir: dst, ids: remapSceneIDs(world.ids, world.home, dst),
 		canonical: remapSceneIDs(world.canonical, "", ""), seq: world.seq, http: world.httpServer != nil,
+		restore: restore,
 	}
+	if world.projection != nil && !c.replay {
+		frozen.projection = newSceneProjectionNamespace(c.owner, world.projection.upstream.String())
+		if err := world.projection.forkInto(frozen.projection); err != nil {
+			t.Fatalf("freeze projection media for %s: %v", id, err)
+		}
+	}
+	c.frozen[id] = frozen
 }
 
 func (c *sceneHomeCache) cloneParent(t *testing.T, node sceneTreeNode) (string, map[string]string) {
@@ -608,7 +668,11 @@ func (c *sceneHomeCache) cloneFrozen(t *testing.T, id string) (string, map[strin
 	if err := copySceneHome(src.dir, dst); err != nil {
 		t.Fatalf("clone state %s: %v", id, err)
 	}
-	if err := c.lakefs.ForkStamps(dst); err != nil {
+	if src.restore != nil {
+		if err := src.restore(); err != nil {
+			t.Fatalf("restore lakeFS checkpoint for %s: %v", id, err)
+		}
+	} else if err := c.lakefs.ForkStamps(dst); err != nil {
 		t.Fatalf("isolate lakeFS stamps for %s: %v", id, err)
 	}
 	return dst, remapSceneIDs(src.ids, src.dir, dst)
@@ -631,19 +695,10 @@ func (c *sceneHomeCache) worldAtParent(t *testing.T, node sceneTreeNode, report 
 	return c.cloneWorld(t, parentID)
 }
 
-func (c *sceneHomeCache) requiresReplay(node sceneTreeNode) bool {
-	if c.replay || nodeNeedsIndex(node) {
-		return true
-	}
-	// A new world has an empty, isolated OpenSearch namespace. Restore the
-	// indexed build chain before each consumer; a home copy cannot restore
-	// external projection media. Scene execution remains sequential.
-	for _, id := range node.Ancestors {
-		if nodeNeedsIndex(c.nodes[id]) {
-			return true
-		}
-	}
-	return false
+// requiresReplay is the fallback for authorities with neither physical cloning
+// nor owned sequential checkpoints. It is not needed by the live lakeFS fixture.
+func (c *sceneHomeCache) requiresReplay(sceneTreeNode) bool {
+	return c.replay
 }
 
 func (c *sceneHomeCache) cloneWorld(t *testing.T, id string) *sceneWorld {
@@ -656,6 +711,14 @@ func (c *sceneHomeCache) cloneWorld(t *testing.T, id string) *sceneWorld {
 	c.mu.Unlock()
 	world.seq = src.seq
 	world.canonical = remapSceneIDs(src.canonical, "", "")
+	if src.projection != nil {
+		if world.projection == nil {
+			t.Fatalf("state %s froze projection media but this world has no OpenSearch namespace", id)
+		}
+		if err := src.projection.forkInto(world.projection); err != nil {
+			t.Fatalf("fork projection media of %s: %v", id, err)
+		}
+	}
 	if src.http {
 		// Listening sockets and handler caches belong to this clone. Copying
 		// a URL would send requests back to the constructing state's home.
@@ -688,7 +751,7 @@ func (c *sceneHomeCache) ensureFrozen(t *testing.T, node sceneTreeNode, report *
 	world := c.worldAtParent(t, node, report)
 	defer world.close()
 	runSceneConstruct(t, node, world, report)
-	c.snapshot(node.ID, world)
+	c.snapshot(t, node.ID, world)
 }
 
 func remapSceneIDs(ids map[string]string, oldHome, newHome string) map[string]string {
@@ -754,6 +817,8 @@ type sceneRunReport struct {
 	State             string   `json:"state"`
 	OK                bool     `json:"ok"`
 	ElapsedMS         int64    `json:"elapsed_ms"`
+	ConstructRuns     int      `json:"construct_runs"`
+	DeploymentInits   int      `json:"deployment_initializations"`
 	Ancestors         []string `json:"ancestors"`
 	Probes            []string `json:"probes"`
 	LastStep          string   `json:"last_step,omitempty"`
@@ -768,6 +833,9 @@ func (r *sceneRunReport) observeStep(state, step string) {
 }
 
 func writeSceneResult(nodeDir string, report sceneRunReport) error {
+	if strings.TrimSpace(nodeDir) == "" {
+		return fmt.Errorf("scene result requires a node directory")
+	}
 	dir := filepath.Join(nodeDir, "_results")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
@@ -795,8 +863,20 @@ func writeSceneResult(nodeDir string, report sceneRunReport) error {
 			return err
 		}
 	}
-	tmp := filepath.Join(dir, "latest.json.tmp")
-	if err := os.WriteFile(tmp, append(raw, '\n'), 0o644); err != nil {
+	latest, err := os.CreateTemp(dir, "latest-*.tmp")
+	if err != nil {
+		return err
+	}
+	defer latest.Close()
+	tmp := latest.Name()
+	defer os.Remove(tmp)
+	if err := latest.Chmod(0o644); err != nil {
+		return err
+	}
+	if _, err := latest.Write(append(raw, '\n')); err != nil {
+		return err
+	}
+	if err := latest.Close(); err != nil {
 		return err
 	}
 	return os.Rename(tmp, filepath.Join(dir, "latest.json"))
@@ -1081,19 +1161,13 @@ func (w *sceneWorld) run(step sceneStep) {
 		for _, repo := range file.Repos {
 			bound = bound || repo.ID == string(objectmodel.SystemRepositoryID)
 		}
-		var newSystemDSN string
 		if !bound {
-			newSystemDSN = fake.DSN(fake.NewRepo())
+			newSystemDSN := fake.DSN(fake.NewRepo())
 			if _, err := kchome.PublishSystemRepository(w.home, "lakefs", newSystemDSN, ""); err != nil {
 				w.t.Fatal(err)
 			}
 		}
 		w.bindProjection()
-		if newSystemDSN != "" {
-			if err := cli.ConfigureFixtureIndexSource(w.home, objectmodel.SystemRepositoryID, newSystemDSN); err != nil {
-				w.t.Fatal(err)
-			}
-		}
 		if _, err := kchome.EnsureSystemRepository(w.home); err != nil {
 			w.t.Fatal(err)
 		}
@@ -1112,24 +1186,22 @@ func (w *sceneWorld) run(step sceneStep) {
 		if _, exists := ws.Store.Get(kernel.RepositoryID(step.object)); !exists {
 			name := w.cache.lakefs.NewRepo()
 			dsn := w.cache.lakefs.DSN(name)
-			if err := cli.ConfigureFixtureIndexSource(w.home, kernel.RepositoryID(step.object), dsn); err != nil {
-				w.t.Fatal(err)
-			}
-			if step.accessInstance != "" {
-				if err := livefixture.AdoptRepository(kernel.RepositoryID(step.object), dsn, step.accessInstance); err != nil {
-					w.t.Fatal(err)
-				}
-			}
 			if _, err := kchome.AddRepository(ws, step.object, "lakefs", dsn, "", ""); err != nil {
 				w.t.Fatal(err)
 			}
-		} else if step.accessInstance != "" {
-			for _, binding := range ws.File.Repos {
-				if binding.ID == step.object {
-					if err := livefixture.AdoptRepository(kernel.RepositoryID(step.object), binding.DSN, step.accessInstance); err != nil {
-						w.t.Fatal(err)
-					}
-				}
+			// The given source is an existing empty Object authority, with
+			// complete protocol metadata. Admission itself stays read-only.
+			source, err := ws.Store.Require(kernel.RepositoryID(step.object), kernel.ErrCapabilityUnsatisfied)
+			if err != nil {
+				w.t.Fatal(err)
+			}
+			at, err := source.Head(snapshot.DefaultRef)
+			if err != nil {
+				w.t.Fatal(err)
+			}
+			receipt, err := ws.Writer.RebuildTreeLocators(w.nextCommandID("empty-source-locators"), source.ID(), snapshot.DefaultRef, at)
+			if err != nil || receipt.ObjectCount != 0 {
+				w.t.Fatalf("prepare empty Object authority: receipt=%#v error=%v", receipt, err)
 			}
 		}
 	case "bootstrap-fixture":
@@ -1183,7 +1255,9 @@ func (w *sceneWorld) runCommand(command, fixtureDir string) {
 		args[i] = expanded
 	}
 	w.lastKind = "cli"
-	if sceneClientCredentialCommand(args) || (len(args) > 0 && (args[0] == "deployment" || args[0] == "local")) {
+	if len(args) > 0 && (args[0] == "deployment" || args[0] == "local") {
+		w.cli = kcRunResultFrom(cli.Run(args), publicCommandPath(args))
+	} else if sceneClientCredentialCommand(args) {
 		w.cli = kcClientLocal(args...)
 	} else {
 		w.cli = kc(w.home, args...)
@@ -1655,13 +1729,6 @@ func (w *sceneWorld) publishSchema(spec *sceneSchemaSpec) {
 		if field.required {
 			entry["required"] = true
 		}
-		if len(field.access) > 0 {
-			access := make([]any, len(field.access))
-			for i, token := range field.access {
-				access[i] = token
-			}
-			entry["access"] = access
-		}
 		fields[field.name] = entry
 	}
 	value, err := json.Marshal(map[string]any{
@@ -1716,11 +1783,6 @@ func (w *sceneWorld) publishMaterial(step sceneStep) {
 			field := sceneSchemaField{name: name, typ: yamlString(entry, "type")}
 			if req, ok := entry["required"].(bool); ok {
 				field.required = req
-			}
-			if access, ok := entry["access"].([]any); ok {
-				for _, token := range access {
-					field.access = append(field.access, fmt.Sprint(token))
-				}
 			}
 			fields = append(fields, field)
 		}
@@ -1956,14 +2018,10 @@ func classifySceneStep(line int, keyword, rest string, table [][]string) (sceneS
 	case strings.HasPrefix(rest, "existing repository "):
 		step.kind = "repository-fixture"
 		input := strings.TrimSpace(strings.TrimPrefix(rest, "existing repository "))
-		object, instance, selected := strings.Cut(input, " with LiveAccess instance ")
-		if len(strings.Fields(object)) != 1 || selected && len(strings.Fields(instance)) != 1 {
-			return step, fmt.Errorf("existing repository requires one id and an optional explicit LiveAccess instance")
+		if len(strings.Fields(input)) != 1 {
+			return step, fmt.Errorf("existing repository requires exactly one id; plugin instances are chosen by deployment")
 		}
-		step.object = strings.TrimSpace(object)
-		if selected {
-			step.accessInstance = strings.TrimSpace(instance)
-		}
+		step.object = input
 
 	case strings.HasPrefix(rest, "bootstrap principal "):
 		step.kind = "bootstrap-fixture"
@@ -2044,10 +2102,13 @@ func parseSchemaTable(table [][]string) ([]sceneSchemaField, error) {
 	for i, name := range header {
 		idx[name] = i
 	}
-	for _, col := range []string{"field", "type", "required", "access"} {
+	for _, col := range []string{"field", "type", "required"} {
 		if _, ok := idx[col]; !ok {
 			return nil, fmt.Errorf("Schema table missing column %s", col)
 		}
+	}
+	if _, ok := idx["access"]; ok {
+		return nil, fmt.Errorf("Schema table must not carry access; declare retrieval in an index declaration")
 	}
 	var fields []sceneSchemaField
 	for _, row := range table[1:] {
@@ -2059,14 +2120,6 @@ func parseSchemaTable(table [][]string) ([]sceneSchemaField, error) {
 			name:     row[idx["field"]],
 			typ:      row[idx["type"]],
 			required: required == "yes" || required == "true",
-		}
-		if access := row[idx["access"]]; access != "" {
-			for _, token := range strings.Split(access, ",") {
-				token = strings.TrimSpace(token)
-				if token != "" {
-					field.access = append(field.access, token)
-				}
-			}
 		}
 		fields = append(fields, field)
 	}

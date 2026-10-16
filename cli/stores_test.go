@@ -140,7 +140,7 @@ func TestLocalProfileHasNoSearchProjection(t *testing.T) {
 	if asMap(t, row["value"])["body"] != "exact read stays available" {
 		t.Fatalf("local exact read failed: %#v", row)
 	}
-	failed := kc(h, "search", "--repo", repo, "--query", "exact")
+	failed := kc(h, "search", "--dataset", "local", "--query", "exact")
 	expectCode(t, failed, "CAPABILITY_UNSATISFIED")
 	expectMsg(t, failed, "search projection is not available")
 }

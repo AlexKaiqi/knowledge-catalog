@@ -26,6 +26,11 @@
 来源或版本，再按实际范围过滤并保留分页进度。`CandidateScopeContains` 检查单个身份，
 `CandidateScopeDigest` 为续页提供同一范围摘要。它们共享同一个上下文范围，不保存索引。
 
+`WithCandidateRecheck` 携带已经授权、固定 Dataset 范围的消费方回读函数。
+`RecheckCandidate` 在观察候选占用结果名额之前调用它；提供方再用同一声明解释新观察并
+补判条件。淘汰后继续取候选，沿用同一个页数、候选数和时间预算，不让后置过滤悄悄把
+产品页缩短。该接缝不刷新共享索引，不把调用者身份放入后台维护配置。
+
 `ChangeNotice` / `ParseChangeNotice` / `ValidateChangeNotice` 只接受定位和版本提示，拒绝
 正文或实际值。`ObservationSource` 从固定声明取得已经验证的逻辑值；后台实际身份、
 控制调度和原子发布由具体贡献负责，不放入通用查询合同。

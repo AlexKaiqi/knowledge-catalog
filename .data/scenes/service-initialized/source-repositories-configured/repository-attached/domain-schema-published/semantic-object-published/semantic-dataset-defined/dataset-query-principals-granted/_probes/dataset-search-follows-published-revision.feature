@@ -3,7 +3,7 @@ Feature: Dataset 重新发布后搜索与回读使用服务版本
   Scenario: Dataset 重新发布后搜索与回读使用服务版本
     When I run `kc search --dataset scene-set --query merchandise`
     Then 1 hit metric/gmv
-    When I run `kc read urn:kc:object:metric/gmv#/definition --repo kr://scene/object --commit $last.hits.0.commit`
+    When I run `kc read urn:kc:object:metric/gmv#/definition --dataset scene-set --revision 1`
     Then the output has:
       | objectId | metric/gmv |
       | repository | kr://scene/object |
@@ -13,10 +13,12 @@ Feature: Dataset 重新发布后搜索与回读使用服务版本
       | disposition         | APPLIED |
       | result.repositoryId | kr://scene/object |
       | result.newCommit    | nonempty |
-    When I run `kc operations projection sync --repo kr://scene/object`
+    When I run `kc operations projection describe --dataset scene-set --revision 1`
     Then the output has:
-      | repository  | kr://scene/object |
-      | basisCommit | nonempty |
+      | dataset | scene-set |
+      | revision | 1 |
+      | members.1.commit | nonempty |
+      | snapshot.state | READY |
     When I run `kc read urn:kc:object:metric/gmv#/definition --dataset scene-set`
     Then the output has:
       | objectId | metric/gmv |
@@ -25,15 +27,19 @@ Feature: Dataset 重新发布后搜索与回读使用服务版本
     Then the output includes:
       | hits[].objectId | rel/defines/gmv |
       | hits[].repository | kr://scene/graph |
-    When I run `kc dataset define --dataset scene-set --revision 2 --source kr://scene/object=refs/heads/main@metrics/metric/gmv@metrics/metric/gmv --source kr://scene/graph=refs/heads/main@relations/rel@relations/rel --source kr://scene/object=refs/heads/main@schemas/metric@_schemas --source kr://scene/graph=refs/heads/main@schemas/relations@_schemas`
+    When I run `kc dataset define --dataset scene-set --revision 2 --source kr://scene/object=refs/heads/main@metrics/metric/gmv@metrics/metric/gmv --source kr://scene/graph=refs/heads/main@relations/rel@relations/rel --source kr://scene/object=refs/heads/main@schemas/metric@_schemas --source kr://scene/graph=refs/heads/main@schemas/relations@_schemas --source kr://scene/object=refs/heads/main@indexes/metric@indexes/metric --source kr://scene/graph=refs/heads/main@indexes/relation@indexes/relation`
     Then the output has:
       | setId | scene-set |
       | revision    | 2 |
       | sources.0.commit | nonempty |
-    When I run `kc operations projection sync --repo kr://scene/object`
+      | sources.4.subPath | indexes/metric |
+      | sources.5.subPath | indexes/relation |
+    When I run `kc operations projection describe --dataset scene-set --revision 2`
     Then the output has:
-      | repository  | kr://scene/object |
-      | basisCommit | nonempty |
+      | dataset | scene-set |
+      | revision | 2 |
+      | members.1.commit | nonempty |
+      | snapshot.state | READY |
     When I run `kc search --dataset scene-set --query merchandise`
     Then 1 hit metric/gmv
     When I run `kc read urn:kc:object:metric/gmv#/definition --dataset scene-set`

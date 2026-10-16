@@ -44,7 +44,7 @@ func strictPolicySchema() map[string]any {
 		"entity":     "Policy", "aspect": "structure", "pattern": "record",
 		"additionalProperties": false,
 		"fields": map[string]any{
-			"name":     map[string]any{"type": "string", "required": true, "access": []any{"text"}},
+			"name":     map[string]any{"type": "string", "required": true},
 			"priority": map[string]any{"type": "integer"},
 		},
 	}
@@ -77,7 +77,7 @@ func TestSchemaDefinitionMustConformToSystemMetaSchema(t *testing.T) {
 			Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/policy/structure/v1"},
 			Value: map[string]any{
 				"metaSchema": string(objectmodel.MetaSchemaV1), "entity": "Policy", "aspect": "structure",
-				"fields": map[string]any{"name": map[string]any{"type": "sql_varchar", "access": []any{"stored"}}},
+				"fields": map[string]any{"name": map[string]any{"type": "sql_varchar"}},
 			},
 		}},
 	})
@@ -188,7 +188,7 @@ func TestSchemaEvolutionRejectsBreakingReuseAndAllowsOptionalAddition(t *testing
 	}
 
 	compatible := strictPolicySchema()
-	compatible["fields"].(map[string]any)["description"] = map[string]any{"type": "string", "access": []any{"text"}}
+	compatible["fields"].(map[string]any)["description"] = map[string]any{"type": "string"}
 	updated, err := s.Writer.Commit("compatible-v1", objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
 		BaseCommit: first.Result.CommitID, ExpectedTargetCommit: first.Result.CommitID,
@@ -200,7 +200,7 @@ func TestSchemaEvolutionRejectsBreakingReuseAndAllowsOptionalAddition(t *testing
 		t.Fatal(err)
 	}
 	want := strictPolicySchema()
-	want["fields"].(map[string]any)["description"] = map[string]any{"type": "string", "access": []any{"text"}}
+	want["fields"].(map[string]any)["description"] = map[string]any{"type": "string"}
 	assertSchemaLifecycleValue(t, s, "schema/policy/structure/v1", updated.Result.NewCommit, want)
 	assertSchemaLifecycleValue(t, s, "schema/policy/structure/v1", first.Result.NewCommit, strictPolicySchema())
 }
@@ -280,7 +280,7 @@ func TestSchemaUpdateValidatesAlreadyPublishedInstances(t *testing.T) {
 		"entity":     "Policy", "aspect": "structure", "pattern": "record",
 		"additionalProperties": true,
 		"fields": map[string]any{
-			"name": map[string]any{"type": "string", "required": true, "access": []any{"text"}},
+			"name": map[string]any{"type": "string", "required": true},
 		},
 	}
 	published, err := s.Writer.Commit("publish", objectmodel.CommitChangeSet{
@@ -290,6 +290,7 @@ func TestSchemaUpdateValidatesAlreadyPublishedInstances(t *testing.T) {
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/policy/structure/v1"}, Value: permissive},
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "policy/A", AspectName: "structure"},
 				SchemaRef: "schema/policy/structure/v1", Value: map[string]any{"name": "freeze", "tier": "gold"}},
+			testkit.IndexText("schema/policy/structure/v1", "name"),
 		},
 	})
 	if err != nil {
@@ -303,7 +304,7 @@ func TestSchemaUpdateValidatesAlreadyPublishedInstances(t *testing.T) {
 		"entity":     "Policy", "aspect": "structure", "pattern": "record",
 		"additionalProperties": true,
 		"fields": map[string]any{
-			"name": map[string]any{"type": "string", "required": true, "access": []any{"text"}},
+			"name": map[string]any{"type": "string", "required": true},
 			"tier": map[string]any{"type": "integer"},
 		},
 	}
@@ -327,6 +328,7 @@ func TestSchemaUpdateValidatesAlreadyPublishedInstances(t *testing.T) {
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/policy/structure/v1"}, Value: retyped},
 			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "policy/A", AspectName: "structure"},
 				SchemaRef: "schema/policy/structure/v1", Value: map[string]any{"name": "freeze", "tier": 1}},
+			testkit.IndexText("schema/policy/structure/v1", "name"),
 		},
 	})
 	if err != nil {
@@ -336,7 +338,7 @@ func TestSchemaUpdateValidatesAlreadyPublishedInstances(t *testing.T) {
 		"metaSchema": string(objectmodel.MetaSchemaV1),
 		"entity":     "Policy", "aspect": "structure", "pattern": "record", "additionalProperties": true,
 		"fields": map[string]any{
-			"name": map[string]any{"type": "string", "required": true, "access": []any{"text"}},
+			"name": map[string]any{"type": "string", "required": true},
 			"tier": map[string]any{"type": "integer"},
 		},
 	}

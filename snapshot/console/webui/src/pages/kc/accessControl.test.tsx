@@ -216,7 +216,7 @@ test('an identity change resets the permission form and pending revoke target ev
     fireEvent.click(await screen.findByRole('button', {name: `撤销 ${rule.id}`}));
     await screen.findByRole('dialog');
     server.setIdentity('bob');
-    await act(async () => {await session.restore({mode: 'lakefs', localAssertion: false, accepts: ['Cookie']});});
+    await act(async () => {await session.restore({mode: 'taihu', localAssertion: false, accepts: ['Authorization']});});
     await screen.findByLabelText('授权主体');
     expect((screen.getByLabelText('授权主体') as HTMLInputElement).value).toBe('');
     expect(screen.queryByRole('dialog')).toBe(null);
@@ -275,7 +275,7 @@ test('the original menu re-reads the native profile after an in-place identity c
     const server = fixture('/ui/auth/grants'); render(<KCApp/>);
     await screen.findByRole('button', {name: /alice/});
     server.setIdentity('bob');
-    await act(async () => {await session.restore({mode: 'lakefs', localAssertion: false, accepts: ['Cookie']});});
+    await act(async () => {await session.restore({mode: 'taihu', localAssertion: false, accepts: ['Authorization']});});
     await screen.findByRole('button', {name: /bob/});
     expect(screen.queryByRole('button', {name: /alice/})).toBe(null);
 });
@@ -287,7 +287,7 @@ test('a previous native profile finishing late cannot change the menu back after
     render(<KCApp/>);
     await waitFor(() => expect(complete).toBeDefined());
     server.setIdentity('bob');
-    await act(async () => {await session.restore({mode: 'lakefs', localAssertion: false, accepts: ['Cookie']});});
+    await act(async () => {await session.restore({mode: 'taihu', localAssertion: false, accepts: ['Authorization']});});
     await screen.findByRole('button', {name: /bob/});
     await act(async () => {complete(json({user: {id: 'alice', friendly_name: 'alice'}}));});
     expect(screen.queryByRole('button', {name: /alice/})).toBe(null);

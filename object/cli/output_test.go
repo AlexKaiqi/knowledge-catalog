@@ -22,10 +22,19 @@ func TestSelectiveReadKeepsConditionalMaintenanceEvidence(t *testing.T) {
 
 func TestSchemaDescribeKeepsCompleteDefinition(t *testing.T) {
 	definition := map[string]any{"entity": "Order", "additionalProperties": false, "fields": map[string]any{"name": map[string]any{"type": "string", "required": true, "minLength": 1}}}
-	raw := map[string]any{"repository": "r", "commit": "c1", "schemas": []any{map[string]any{"objectId": "schema/order/v1", "definition": definition, "fields": []any{map[string]any{"path": "name", "type": "string", "access": []any{"text"}}}}}}
+	raw := map[string]any{"repository": "r", "commit": "c1", "schemas": []any{map[string]any{"objectId": "schema/order/v1", "definition": definition, "fields": []any{map[string]any{"path": "name", "type": "string"}}}}}
 	got := Shape("schema describe", raw).(map[string]any)["schemas"].([]any)[0].(map[string]any)
 	if !reflect.DeepEqual(got["definition"], definition) {
 		t.Fatalf("lost structural constraints: %#v", got)
+	}
+}
+
+func TestDatasetSchemaDescribeKeepsRevisionAndSearchReadiness(t *testing.T) {
+	search := map[string]any{"state": "unavailable", "reason": "projection is building", "declarations": []any{map[string]any{"member": "index/item#index/name", "status": "ready"}}}
+	raw := []any{map[string]any{"dataset": "agent", "revision": float64(3), "search": search, "repository": "r", "commit": "c1", "schemas": []any{}}}
+	got := Shape("schema describe", raw).([]any)[0].(map[string]any)
+	if got["dataset"] != "agent" || got["revision"] != float64(3) || !reflect.DeepEqual(got["search"], search) {
+		t.Fatalf("Dataset describe lost the answering revision or search readiness: %#v", got)
 	}
 }
 

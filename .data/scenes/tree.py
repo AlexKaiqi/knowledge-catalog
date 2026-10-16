@@ -555,22 +555,46 @@ def load_yaml(text: str):
 
 
 def _strip_comment(raw: str) -> str:
+    """Drop a YAML comment: only a `#` at line start or after whitespace starts one.
+
+    Quotes only open a quoted scalar at the start of a token, so apostrophes and
+    fragments such as `schema/x#/fields/y` stay part of a plain scalar.
+    """
     out = []
     quote = None
+    prev = " "
     for ch in raw:
         if quote:
             out.append(ch)
             if ch == quote:
                 quote = None
+            prev = ch
             continue
-        if ch in "'\"":
+        if ch in "'\"" and prev in " [,":
             quote = ch
-            out.append(ch)
-            continue
-        if ch == "#":
+        elif ch == "#" and prev in " \t":
             break
         out.append(ch)
+        prev = ch
     return "".join(out)
+
+
+def _split_key(content: str):
+    """Split `key: value` the way YAML does: the colon must end the line or be followed by a space."""
+    if content.startswith("["):
+        return None
+    if content.startswith(("'", '"')):
+        end = content.find(content[0], 1)
+        suffix = content[end + 1:] if end >= 0 else ""
+        if suffix == ":" or suffix.startswith(": "):
+            return content[1:end], suffix[1:].strip()
+        return None
+    if content.endswith(":") and ": " not in content:
+        return content[:-1], ""
+    at = content.find(": ")
+    if at < 0:
+        return None
+    return content[:at], content[at + 2:]
 
 
 def _parse_map(lines, i, indent):
@@ -583,10 +607,10 @@ def _parse_map(lines, i, indent):
             raise ValueError(f"line {no}: unexpected indent")
         if content.startswith("- "):
             break
-        if ":" not in content:
+        pair = _split_key(content)
+        if pair is None:
             raise ValueError(f"line {no}: expected key:")
-        key, rest = content.split(":", 1)
-        key, rest = key.strip(), rest.strip()
+        key, rest = pair[0].strip(), pair[1].strip()
         if key in result:
             raise ValueError(f"line {no}: duplicate key {key}")
         i += 1
@@ -613,8 +637,9 @@ def _parse_list(lines, i, indent):
             value, i = _parse_nested(lines, i, indent)
             result.append(value)
             continue
-        if ":" in rest and not rest.startswith(("'", '"')):
-            key, val = rest.split(":", 1)
+        pair = _split_key(rest)
+        if pair is not None:
+            key, val = pair
             item = {key.strip(): _scalar(val.strip()) if val.strip() else None}
             if i < len(lines) and lines[i][1] > indent:
                 nested, i = _parse_map(lines, i, lines[i][1])
@@ -629,7 +654,9 @@ def _parse_list(lines, i, indent):
 
 
 def _parse_nested(lines, i, parent_indent):
-    if i >= len(lines) or lines[i][1] <= parent_indent:
+    if i >= len(lines) or lines[i][1] < parent_indent:
+        return None, i
+    if lines[i][1] == parent_indent and not lines[i][2].startswith('- '):
         return None, i
     if lines[i][2].startswith("- "):
         return _parse_list(lines, i, lines[i][1])
@@ -648,7 +675,10 @@ def _scalar(text):
         return True
     if text in ("false", "False"):
         return False
-    if len(text) >= 2 and text[0] == text[-1] and text[0] in "'\"":
+    if text[:1] in ("'", '"'):
+        end = text.find(text[0], 1)
+        if end != len(text) - 1:
+            raise ValueError(f"quoted scalar must be the whole value: {text}")
         return text[1:-1]
     if text.isdigit() or (text.startswith("-") and text[1:].isdigit()):
         return int(text)

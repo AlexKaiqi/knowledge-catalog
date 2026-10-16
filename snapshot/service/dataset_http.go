@@ -73,7 +73,11 @@ func (h *handler) datasetList(w http.ResponseWriter, r *http.Request) {
 			return nil, err
 		}
 		state := dataset.NormalizeState(cat.DumpState())
-		return map[string]any{"datasets": dataset.PublicDatasets(state.Datasets)}, nil
+		datasets, err := consumableDatasets(ctx, caller, resources, state.Datasets)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"datasets": datasets}, nil
 	})
 }
 
@@ -140,6 +144,9 @@ func publishDataset(ctx context.Context, caller identity.HTTPIdentity, resources
 	if err := authorizePublication(ctx, caller, resources, request.Dataset, request.Sources); err != nil {
 		return nil, err
 	}
+	if accepted, ok := dataset.ReplayedDefinition(cat, request.Dataset, request.Revision, request.Sources, request.Metadata); ok {
+		return definedDataset(accepted, dataset.DefineReplayed, nil), nil
+	}
 	// Validate before an optional independent portable-recipe write. Its
 	// resulting source version is frozen again before the serving switch.
 	if _, err := cat.PrepareDataset(request.Dataset, request.Revision, request.Sources); err != nil {
@@ -172,9 +179,14 @@ func publishDataset(ctx context.Context, caller identity.HTTPIdentity, resources
 	definition.Metadata = metadata
 	frozenSources := clonePublicationSources(definition.Sources)
 	if resources.PreparePublication != nil {
-		if err := resources.PreparePublication(ctx, caller, definition); err != nil {
+		prepared, err := resources.PreparePublication(ctx, caller, definition)
+		if err != nil {
 			return nil, err
 		}
+		if prepared.SetID != definition.SetID || prepared.Revision != definition.Revision {
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "capability preparation changed the Dataset identity")
+		}
+		definition.Sources, definition.Dependencies = prepared.Sources, prepared.Dependencies
 	}
 	if !reflect.DeepEqual(definition.Sources, frozenSources) {
 		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "capability preparation changed frozen publication sources")
@@ -189,7 +201,11 @@ func publishDataset(ctx context.Context, caller identity.HTTPIdentity, resources
 	if err != nil {
 		return nil, err
 	}
-	out := map[string]any{"setId": accepted.SetID, "revision": accepted.Revision, "sources": accepted.Sources}
+	return definedDataset(accepted, dataset.DefineApplied, receipt), nil
+}
+
+func definedDataset(accepted dataset.Dataset, disposition string, receipt map[string]any) map[string]any {
+	out := map[string]any{"setId": accepted.SetID, "revision": accepted.Revision, "sources": accepted.Sources, "disposition": disposition}
 	if len(accepted.Metadata) > 0 {
 		out["metadata"] = maps.Clone(accepted.Metadata)
 	}
@@ -198,7 +214,7 @@ func publishDataset(ctx context.Context, caller identity.HTTPIdentity, resources
 			out[key] = value
 		}
 	}
-	return out, nil
+	return out
 }
 
 func authorizePublication(ctx context.Context, caller identity.HTTPIdentity, resources Resources, id string, sources []dataset.DatasetSource) error {

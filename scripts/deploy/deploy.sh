@@ -26,7 +26,7 @@ case "$PROFILE" in
     ENV_DIR="${KC_DEPLOY_HOME:-/tmp/kc-deploy-local}"
     WIPE_ON_DOWN=1
     ALLOW_SCENES=1
-    COMPOSE_FILES=(-f "$COMPOSE_FILE")
+    COMPOSE_FILES=(-f "$COMPOSE_FILE" -f "$ROOT/scripts/deploy/compose.accept.yaml")
     PORT_SERVER_CANDIDATES="7380 7381 7382 7383 7393 7394"
     PORT_LAKEFS_CANDIDATES="18000 18001 18002 18003 8001 8002"
     PORT_MINIO_CANDIDATES="19000 19001 19002 19003 9002 9003"
@@ -447,17 +447,35 @@ cmd_goto() {
   python3 "$ROOT/.data/scenes/goto.py" "$@"
 }
 
+cmd_accept() {
+  if [[ "$PROFILE" != "local" ]]; then
+    echo "FAIL: acceptance runs only on the existing local test stack" >&2
+    exit 2
+  fi
+  load_env
+  export KC_SERVER_URL="http://127.0.0.1:${KC_DEPLOY_SERVER_PORT:-7380}"
+  export KC_ACCEPT_LAKEFS_URL="http://127.0.0.1:${KC_DEPLOY_LAKEFS_PORT:-18000}"
+  export KC_ACCEPT_OPENSEARCH_URL="http://127.0.0.1:${KC_DEPLOY_OPENSEARCH_PORT:-19200}"
+  export KC_ACCEPT_ORIGIN_URL="http://127.0.0.1:7400"
+  export KC_ACCEPT_UNTRUSTED_ORIGIN_URL="http://127.0.0.1:7401"
+  export KC_ACCEPT_ALT_ORIGIN_URL="http://127.0.0.1:7402"
+  export KC_ACCEPT_CLI_CONTAINER="${PROJECT}-cli-1"
+  shift || true
+  "$ROOT/scripts/deploy/accept.sh" "$@"
+}
+
 case "$CMD" in
   up) cmd_up ;;
   status) cmd_status ;;
   access) cmd_access ;;
   smoke) cmd_smoke ;;
   scenes) cmd_scenes ;;
+  accept) cmd_accept "$@" ;;
   goto) cmd_goto "$@" ;;
   down) cmd_down ;;
   reset) cmd_reset ;;
   *)
-    echo "usage: $0 [local|dev] up|status|access|smoke|scenes|goto|down|reset" >&2
+    echo "usage: $0 [local|dev] up|status|access|smoke|scenes|accept|goto|down|reset" >&2
     exit 2
     ;;
 esac

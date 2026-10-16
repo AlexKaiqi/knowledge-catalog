@@ -38,7 +38,6 @@ func AuthenticatedRepositoryActions() []string {
 	return []string{
 		"object.read",
 		"object.schema.read",
-		"object.search",
 		"object.history.read",
 		"object.provenance",
 		"object.relations",

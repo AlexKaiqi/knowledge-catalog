@@ -3,9 +3,8 @@ package cli
 import "strings"
 
 var commandEntries = []Command{
-	{Path: "operations projection describe", Handler: "operations-projection-describe", Action: "projection.read", Flags: strings.Fields("repo commit ref"), Groups: []string{"operations"}},
-	{Path: "operations projection sync", Handler: "operations-projection-sync", Action: "projection.manage", Flags: strings.Fields("repo commit ref"), Groups: []string{"operations"}},
-	{Path: "operations projection notice", Handler: "operations-projection-notice", Action: "projection.manage", Flags: strings.Fields("repo ref object aspect kind source-revision"), Groups: []string{"operations"}},
+	{Path: "operations projection describe", Handler: "operations-projection-describe", Action: "file.read", Flags: strings.Fields("dataset revision"), Groups: []string{"operations"}},
+	{Path: "operations projection sync", Handler: "operations-projection-sync", Action: "dataset.manage", Flags: strings.Fields("dataset revision"), Groups: []string{"operations"}},
 }
 
 func Commands() []Command {

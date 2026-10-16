@@ -1,0 +1,13 @@
+---
+object_id: rel/recorded-in/osmanthus-oolong-products
+kind: Relation
+schema_ref: schema/relation.canonical
+---
+relationId: rel/recorded-in/osmanthus-oolong-products
+relationType: recorded-in
+direction: DIRECTED
+endpoints:
+- role: product
+  object: product/qinghe.osmanthus-oolong
+- role: table
+  object: table/shop.products

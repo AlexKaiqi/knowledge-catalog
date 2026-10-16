@@ -15,15 +15,17 @@ func tableStructureSchema() map[string]any {
 		"aspect":  "structure",
 		"pattern": "record",
 		"fields": map[string]any{
-			"db":              map[string]any{"type": "string", "access": []any{"filter"}},
-			"schema_name":     map[string]any{"type": "string", "access": []any{"filter"}},
-			"raw_description": map[string]any{"type": "string", "access": []any{"text"}},
-			"updated_at":      map[string]any{"type": "string", "access": []any{"sort"}},
+			"db":              map[string]any{"type": "string"},
+			"schema_name":     map[string]any{"type": "string"},
+			"raw_description": map[string]any{"type": "string"},
+			"updated_at":      map[string]any{"type": "string"},
 		},
 	}
 }
 
-func TestDescribeSchemaListsAccessHints(t *testing.T) {
+// DescribeSchema reports structure only; retrieval faces come from index
+// declarations compiled by discovery, never from the Schema report.
+func TestDescribeSchemaListsStructureWithoutAccess(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	head, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: "HEAD",
@@ -44,8 +46,10 @@ func TestDescribeSchemaListsAccessHints(t *testing.T) {
 	if len(got.Fields) != 4 || got.Fields[0].Path != "db" {
 		t.Fatalf("%#v", got.Fields)
 	}
-	if !hasHints(got.Fields[0].Access, reader.HintFilter) {
-		t.Fatalf("db hints %v", got.Fields[0].Access)
+	for _, field := range got.Fields {
+		if len(field.Access) != 0 {
+			t.Fatalf("structure-only Schema report carries retrieval faces: %#v", field)
+		}
 	}
 }
 
@@ -173,7 +177,7 @@ func TestDescribeSchemaOneObject(t *testing.T) {
 			testkit.PutEntity("schema/dw.table.structure", tableStructureSchema(), ""),
 			testkit.PutEntity("schema/dw.metric.definition", map[string]any{
 				"entity": "Metric", "aspect": "definition", "pattern": "record",
-				"fields": map[string]any{"expr": map[string]any{"access": []any{"text"}}},
+				"fields": map[string]any{"expr": map[string]any{}},
 			}, "")...,
 		),
 	})
@@ -184,17 +188,4 @@ func TestDescribeSchemaOneObject(t *testing.T) {
 	if err != nil || len(report.Schemas) != 1 || report.Schemas[0].Entity != "Metric" {
 		t.Fatalf("%#v %v", report, err)
 	}
-}
-
-func hasHints(got []reader.AccessHint, want ...reader.AccessHint) bool {
-	set := map[reader.AccessHint]struct{}{}
-	for _, h := range got {
-		set[h] = struct{}{}
-	}
-	for _, h := range want {
-		if _, ok := set[h]; !ok {
-			return false
-		}
-	}
-	return true
 }

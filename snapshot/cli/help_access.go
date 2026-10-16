@@ -24,7 +24,7 @@ const helpGrantAdd = `kc grant add --principal <id> --action <action[,action...]
   无权时申请该范围的授权管理能力；用法错误时核对主体、动作和资源范围。
   响应丢失先由有 grant read 权的管理者按主体/范围核对 grant list，不能盲目重发；误发时按回执 id 执行 grant remove。
 示例：
-  kc grant add --repo docs --principal healzhou --action object.read,object.search
+  kc grant add --repo docs --principal healzhou --action object.read
   kc grant add --dataset delivery --principal healzhou --action dataset.resolve,file.read
   kc grant add --repo docs --dataset delivery --ref refs/heads/main --principal publisher --action repository.dataset.publish`
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 
+	index "kc/discovery/projection"
 	"kc/kernel"
 	objectmodel "kc/object"
 )
@@ -37,6 +38,15 @@ func decodeJSON(body []byte, out any) error {
 }
 
 func decodeSearchResponse(body []byte, sortArity int) ([]objectmodel.ObjectID, [][]any, string, error) {
+	candidates, sorts, pit, err := decodeCandidateResponse(body, sortArity)
+	ids := make([]objectmodel.ObjectID, len(candidates))
+	for i, candidate := range candidates {
+		ids[i] = candidate.ObjectID
+	}
+	return ids, sorts, pit, err
+}
+
+func decodeCandidateResponse(body []byte, sortArity int) ([]index.CandidateRef, [][]any, string, error) {
 	var response struct {
 		PIT             string         `json:"pit_id"`
 		TimedOut        *bool          `json:"timed_out"`
@@ -45,7 +55,9 @@ func decodeSearchResponse(body []byte, sortArity int) ([]objectmodel.ObjectID, [
 		Hits            *struct {
 			Hits []struct {
 				Source struct {
-					ObjectID string `json:"object_id"`
+					ObjectID   string              `json:"object_id"`
+					Repository kernel.RepositoryID `json:"source_repository"`
+					Commit     kernel.CommitID     `json:"source_commit"`
 				} `json:"_source"`
 				Sort []any `json:"sort"`
 			} `json:"hits"`
@@ -60,14 +72,17 @@ func decodeSearchResponse(body []byte, sortArity int) ([]objectmodel.ObjectID, [
 	if response.TimedOut == nil || *response.TimedOut || response.TerminatedEarly || response.Hits == nil || response.Hits.Hits == nil {
 		return nil, nil, "", kernel.Fail(kernel.ErrTemporaryUnavailable, "opensearch search did not return a complete result")
 	}
-	ids := make([]objectmodel.ObjectID, 0, len(response.Hits.Hits))
+	candidates := make([]index.CandidateRef, 0, len(response.Hits.Hits))
 	sorts := make([][]any, 0, len(response.Hits.Hits))
 	for _, hit := range response.Hits.Hits {
 		if hit.Source.ObjectID == "" || len(hit.Sort) < sortArity {
 			return nil, nil, "", kernel.Fail(kernel.ErrTemporaryUnavailable, "opensearch search returned a candidate without identity or sort boundary")
 		}
-		ids = append(ids, objectmodel.ObjectID(hit.Source.ObjectID))
+		if (hit.Source.Repository == "") != (hit.Source.Commit == "") {
+			return nil, nil, "", kernel.Fail(kernel.ErrTemporaryUnavailable, "opensearch candidate has incomplete source coordinates")
+		}
+		candidates = append(candidates, index.CandidateRef{ObjectID: objectmodel.ObjectID(hit.Source.ObjectID), Repository: hit.Source.Repository, Basis: hit.Source.Commit})
 		sorts = append(sorts, hit.Sort)
 	}
-	return ids, sorts, response.PIT, nil
+	return candidates, sorts, response.PIT, nil
 }

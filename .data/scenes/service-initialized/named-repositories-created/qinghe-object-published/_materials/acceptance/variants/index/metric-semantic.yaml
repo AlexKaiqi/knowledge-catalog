@@ -1,0 +1,19 @@
+---
+object_id: index/sales-search
+aspect_name: index
+member_key: metric-semantic
+kind: Member
+schema_ref: schema/core/index-declaration/v1
+---
+catalog: declarative-index/opensearch@2026-10
+inputs:
+  - from: schema/metric.properties#/fields/name
+  - from: schema/metric.definition#/fields/expression
+    maxTokens: 256
+build:
+  kind: vector
+  model: embed/test-hash@1
+  distance: cosine
+  template: "{name}\n{expression}"
+uses:
+  - semantic

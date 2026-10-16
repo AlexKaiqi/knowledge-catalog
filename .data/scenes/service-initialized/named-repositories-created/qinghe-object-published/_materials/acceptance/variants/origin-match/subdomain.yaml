@@ -1,0 +1,14 @@
+---
+object_id: ops/warehouse-stats
+---
+# 替换 ops/warehouse-stats：子域名。可信范围是 http://live-origin:7400，按 scheme、host、port 精确匹配，必须不带凭证。
+kind: ResourceDescriptor
+name: Warehouse table statistics
+origin: http://api.live-origin:7400
+mode: state
+runtime: http
+protocol: resource-access/v1
+identity: shared
+access:
+  lookup:
+    call: lookup

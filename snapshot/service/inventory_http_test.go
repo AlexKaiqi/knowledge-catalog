@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"encoding/json"
+	localauth "kc/identity/local"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -179,7 +180,7 @@ func TestSnapshotStandaloneAuditPropagatesAuthorityFailureAndMissingCapability(t
 			rules := &datasetHTTPRules{rules: []access.Rule{{ID: "audit", Principal: "alice", Actions: []string{"registry.audit.read"}}}}
 			resources := service.Resources{Datasets: cat, Access: access.NewService(rules)}
 			released := 0
-			handler := service.NewHandler(service.Config{Identity: service.IdentityOptions{Local: true}, Acquire: func(context.Context, identity.HTTPIdentity, string) (service.Resources, func(), error) {
+			handler := service.NewHandler(service.Config{Identity: service.IdentityOptions{Authenticator: localauth.New()}, Acquire: func(context.Context, identity.HTTPIdentity, string) (service.Resources, func(), error) {
 				return resources, func() { released++ }, nil
 			}})
 			status, code := http.StatusServiceUnavailable, kernel.ErrTemporaryUnavailable
@@ -226,7 +227,7 @@ func TestSnapshotStandaloneRegistrationRechecksAfterHooksBeforeHostValidation(t 
 	before := dataset.NormalizeState(f.catalog.DumpState())
 	validated, hooks := 0, 0
 	f.resources.BeforeAttach = func(context.Context, identity.HTTPIdentity, kernel.RepositoryID) error { validated++; return nil }
-	handler := service.NewHandler(service.Config{Identity: service.IdentityOptions{Local: true}, Acquire: func(context.Context, identity.HTTPIdentity, string) (service.Resources, func(), error) {
+	handler := service.NewHandler(service.Config{Identity: service.IdentityOptions{Authenticator: localauth.New()}, Acquire: func(context.Context, identity.HTTPIdentity, string) (service.Resources, func(), error) {
 		return f.resources, func() {}, nil
 	},
 		Around: func(ctx context.Context, caller identity.HTTPIdentity, operation string, run func() (any, error)) (any, error) {
@@ -294,7 +295,7 @@ func TestIndependentSnapshotCLIUsesRealStandaloneManagementHandler(t *testing.T)
 	}
 	f.resources.Datasets = f.catalog
 	lease, released := 0, 0
-	h := service.NewHandler(service.Config{Identity: service.IdentityOptions{Local: true}, Acquire: func(ctx context.Context, caller identity.HTTPIdentity, _ string) (service.Resources, func(), error) {
+	h := service.NewHandler(service.Config{Identity: service.IdentityOptions{Authenticator: localauth.New()}, Acquire: func(ctx context.Context, caller identity.HTTPIdentity, _ string) (service.Resources, func(), error) {
 		lease++
 		f.catalog.SetStamp(caller.Principal, service.ContextMetadata(ctx).RequestID, "allowed")
 		return f.resources, func() { released++ }, nil

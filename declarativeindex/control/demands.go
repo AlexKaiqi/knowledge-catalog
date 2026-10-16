@@ -63,10 +63,14 @@ func (c *Controller) refreshDemands(ctx context.Context) error {
 	return nil
 }
 
-func (c *Controller) demandRepositories() []kernel.RepositoryID {
+// demandRepositories lists the demanded sources; a non-empty only keeps the
+// one lane a scoped catch-up owns.
+func (c *Controller) demandRepositories(only kernel.RepositoryID) []kernel.RepositoryID {
 	ids := make([]kernel.RepositoryID, 0, len(c.demands))
 	for id := range c.demands {
-		ids = append(ids, id)
+		if only == "" || id == only {
+			ids = append(ids, id)
+		}
 	}
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	return ids

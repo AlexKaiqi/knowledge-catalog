@@ -3,6 +3,7 @@ package reader
 import (
 	"kc/kernel"
 	objectmodel "kc/object"
+	repofile "kc/object/format"
 )
 
 // datasetRepository keeps secondary reads (Schema, Binding, Descriptor) under
@@ -169,14 +170,11 @@ func (r *datasetRepository) BindingSchemaObjectIDs(at kernel.CommitID) ([]object
 	if err != nil || len(allowed) == 0 {
 		return allowed, err
 	}
-	locator, ok := r.Repository.(bindingCoordinatesReader)
-	if !ok {
-		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "repository has no metadata-only binding namespace coordinates")
-	}
-	ids, err := locator.bindingSchemaCoordinates(at)
+	coordinates, err := r.selectedBindingCoordinates(at)
 	if err != nil {
 		return nil, err
 	}
+	ids := repofile.BindingSchemas(coordinates)
 	scoped := make(map[objectmodel.ObjectID]bool, len(allowed))
 	for _, id := range allowed {
 		scoped[id] = true
@@ -193,7 +191,68 @@ func (r *datasetRepository) BindingSchemaObjectIDs(at kernel.CommitID) ([]object
 // This private port marks Reader-owned metadata access. An arbitrary native
 // BindingLocator may classify bodies, so it cannot safely serve a file slice.
 type bindingCoordinatesReader interface {
-	bindingSchemaCoordinates(kernel.CommitID) ([]objectmodel.ObjectID, error)
+	bindingUnitCoordinates(kernel.CommitID) ([]repofile.BindingCoordinate, error)
+}
+
+// selectedBindingCoordinates intersects the binding namespace with the exact
+// units selected by the fixed Dataset. Planning uses maintenance metadata;
+// sibling bodies and external descriptors are never read to classify a unit.
+func (r *datasetRepository) selectedBindingCoordinates(at kernel.CommitID) ([]repofile.BindingCoordinate, error) {
+	if at != r.commit {
+		return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "binding coordinates are outside Dataset source basis")
+	}
+	locator, ok := r.Repository.(bindingCoordinatesReader)
+	if !ok {
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "repository %s has no metadata-only binding namespace coordinates", r.ID())
+	}
+	coordinates, err := locator.bindingUnitCoordinates(at)
+	if err != nil {
+		return nil, err
+	}
+	selected := map[objectmodel.ObjectID]map[string]bool{}
+	out := make([]repofile.BindingCoordinate, 0, len(coordinates))
+	for _, coordinate := range coordinates {
+		units, planned := selected[coordinate.Address.ObjectID]
+		if !planned {
+			units, err = r.selectedBindingUnits(coordinate.Address.ObjectID, at)
+			if err != nil {
+				return nil, err
+			}
+			selected[coordinate.Address.ObjectID] = units
+		}
+		if units == nil || units[objectmodel.AddressKey(coordinate.Address)] {
+			out = append(out, coordinate)
+		}
+	}
+	return out, nil
+}
+
+// Nil means the complete object's paths are selected. That proof does not
+// require newer per-unit locations; partial objects must provide those locations.
+func (r *datasetRepository) selectedBindingUnits(id objectmodel.ObjectID, at kernel.CommitID) (map[string]bool, error) {
+	if err := r.check(id, at); err == nil {
+		return nil, nil
+	} else if kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
+		return nil, err
+	}
+	addresses, err := r.PlanReference(objectmodel.Reference{Repository: r.ID(), Object: id}, at)
+	if err != nil {
+		return nil, err
+	}
+	units := make(map[string]bool, len(addresses))
+	for _, address := range addresses {
+		units[objectmodel.AddressKey(address)] = true
+	}
+	return units, nil
+}
+
+// bindingReferences lists the selected binding units and their descriptorRefs.
+func (r *datasetRepository) bindingReferences() ([]objectmodel.BindingReference, error) {
+	coordinates, err := r.selectedBindingCoordinates(r.commit)
+	if err != nil {
+		return nil, err
+	}
+	return repofile.BindingReferences(coordinates)
 }
 
 func (r *datasetRepository) ReadMany(ids []objectmodel.ObjectID, at kernel.CommitID) (map[objectmodel.ObjectID]objectmodel.ObjectValue, error) {

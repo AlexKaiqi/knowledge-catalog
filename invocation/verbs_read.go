@@ -102,7 +102,7 @@ func VerbResolve(cx *Invocation) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		resolved, err := ResolveOrReplay(cx.WS, cx.Home, cat, setID, cx.Flags)
+		resolved, err := ResolveAtRevision(cx.WS, cx.Home, cat, setID, cx.Flags)
 		if err != nil {
 			return nil, err
 		}
@@ -309,6 +309,9 @@ func VerbProvenance(cx *Invocation) (any, error) {
 // VerbRelations returns one-hop Canonical Relations touching --object. It does
 // not recursively traverse a graph; every hit is read at this command's pin.
 func VerbRelations(cx *Invocation) (any, error) {
+	if err := RequireDatasetDiscoveryScope(cx.Flags); err != nil {
+		return nil, err
+	}
 	object, err := cx.Require("object")
 	if err != nil {
 		return nil, err
@@ -325,22 +328,11 @@ func VerbRelations(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if ServingWorkspace(cx.Flags) {
-		serving, _, err := OpenCompleteServing(cx, string(endpoint))
-		if err != nil {
-			return nil, err
-		}
-		return (discoveryservice.DatasetRelationsExecutor{Serving: serving, Repositories: cx.WS.Reader, Projection: cx.WS.Index}).Execute(cx.Context, RelationPageRequest(endpoint, cx, limit, direction))
-	}
-	repositoryID, commitID, err := PinCommit(cx.WS, cx.Flags)
+	serving, _, err := OpenCompleteServing(cx, string(endpoint))
 	if err != nil {
 		return nil, err
 	}
-	repo, err := cx.WS.Reader.Require(repositoryID, kernel.ErrCapabilityUnsatisfied)
-	if err != nil {
-		return nil, err
-	}
-	return cx.WS.Index.RelationsAtContext(cx.Context, repo, commitID, RelationPageRequest(endpoint, cx, limit, direction))
+	return (discoveryservice.DatasetRelationsExecutor{Serving: serving, Repositories: cx.WS.Reader, Projection: cx.WS.Index}).Execute(cx.Context, RelationPageRequest(endpoint, cx, limit, direction))
 }
 
 func RelationPageRequest(endpoint objectmodel.ObjectID, cx *Invocation, limit int, direction objectmodel.RelationDirection) retrieval.RelationPageRequest {
@@ -358,6 +350,9 @@ func RelationPageRequest(endpoint objectmodel.ObjectID, cx *Invocation, limit in
 // with explicit boundaries, and pages are deltas of the closure. It never
 // enumerates paths, never promises shortest paths, and never widens scope.
 func VerbTraverse(cx *Invocation) (any, error) {
+	if err := RequireDatasetDiscoveryScope(cx.Flags); err != nil {
+		return nil, err
+	}
 	object, err := cx.Require("object")
 	if err != nil {
 		return nil, err
@@ -391,18 +386,11 @@ func VerbTraverse(cx *Invocation) (any, error) {
 		return nil, err
 	}
 	request.Query.Start = start
-	if ServingWorkspace(cx.Flags) {
-		serving, _, err := OpenCompleteServing(cx, string(start))
-		if err != nil {
-			return nil, err
-		}
-		return (discoveryservice.DatasetTraverseExecutor{Serving: serving, Repositories: cx.WS.Reader, Projection: cx.WS.Index}).Execute(cx.Context, request)
-	}
-	repositoryID, commitID, err := PinCommit(cx.WS, cx.Flags)
+	serving, _, err := OpenCompleteServing(cx, string(start))
 	if err != nil {
 		return nil, err
 	}
-	return (discoveryservice.RepoTraverseExecutor{Repositories: cx.WS.Reader, Projection: cx.WS.Index}).Execute(cx.Context, request, repositoryID, commitID)
+	return (discoveryservice.DatasetTraverseExecutor{Serving: serving, Repositories: cx.WS.Reader, Projection: cx.WS.Index}).Execute(cx.Context, request)
 }
 
 // RelationEndpointFlag reads --object for relations and traverse: an object
@@ -416,23 +404,14 @@ func RelationEndpointFlag(raw string) (objectmodel.ObjectID, error) {
 	return id, nil
 }
 
-// VerbDescribeSchema reports the AccessHints a schema declares, which is what
-// decides the logical retrieval surface compiled into AccessSpec.
+// VerbDescribeSchema reports Schema structure. Inside a Dataset it also gives
+// each field the uses the Dataset's own index declarations provide, the
+// declaration members' status and the member's search readiness.
 func VerbDescribeSchema(cx *Invocation) (any, error) {
 	objectID := objectmodel.ObjectID(cx.Flag("object"))
 	return OnTarget(cx,
 		func(serving *reader.Serving, _ dataset.Service) (any, error) {
-			reports, err := serving.DescribeSchema(objectID)
-			if err != nil {
-				return nil, err
-			}
-			out := []reader.SchemaReport{}
-			for _, report := range reports {
-				if AllowedRepoRead(cx.Home, cx.Flags, string(report.Repository), string(objectID)) {
-					out = append(out, report)
-				}
-			}
-			return out, nil
+			return describeDatasetSchemas(cx, serving, objectID)
 		},
 		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
 			return cx.WS.Reader.DescribeSchema(repositoryID, commitID, objectID)
@@ -561,7 +540,7 @@ func AspectSelectorFrom(flags map[string]invoke.FlagValue) *objectmodel.AspectSe
 func FilterObjectServingReads(home string, flags map[string]invoke.FlagValue, _ dataset.Service, values []objectmodel.ObservedValue) []objectmodel.ObservedValue {
 	out := []objectmodel.ObservedValue{}
 	for _, item := range values {
-		if AllowedRepoRead(home, flags, string(item.Repository), string(item.ObjectID)) {
+		if objectValueDeliveryAllowed(home, flags, observedObject(item), objectmodel.ObjectRef{Repository: item.Repository, Object: item.ObjectID}) {
 			out = append(out, item)
 		}
 	}

@@ -49,7 +49,7 @@ func TestSchemaDescribeDailyProductView(t *testing.T) {
 				"additionalProperties": false,
 				"digest":               "abc",
 				"fields": []any{
-					map[string]any{"path": "body", "type": "string", "access": []any{"text"}},
+					map[string]any{"path": "body", "type": "string"},
 				},
 			},
 		},

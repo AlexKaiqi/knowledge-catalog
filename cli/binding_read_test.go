@@ -2,9 +2,9 @@ package cli_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
-	inv "kc/invocation"
+	kcidentity "kc/identity"
+	"kc/identity/identitytest"
 	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
@@ -12,20 +12,10 @@ import (
 	"testing"
 
 	"kc/internal/testkit"
-	"kc/kernel"
 	"kc/liveaccess"
 )
 
-type taihuProofAuthenticator struct{}
-
-func (taihuProofAuthenticator) Name() string { return "taihu" }
-
-func (taihuProofAuthenticator) Authenticate(_ context.Context, headers http.Header) (inv.HTTPIdentity, error) {
-	if headers.Get("Authorization") == "" || headers.Get("X-Tai-Identity") == "" {
-		return inv.HTTPIdentity{}, kernel.Fail(kernel.ErrUnauthenticated, "missing Taihu caller proof")
-	}
-	return inv.HTTPIdentity{Principal: "alice", Provider: "taihu", Subject: "12345"}, nil
-}
+var taihuProofAuthenticator = identitytest.RequireHeaders("taihu", kcidentity.HTTPIdentity{Principal: "alice", Provider: "taihu", Subject: "12345"}, "Authorization", "X-Tai-Identity")
 
 func postAny(t *testing.T, base, path string, body map[string]any) any {
 	t.Helper()
@@ -59,7 +49,6 @@ func TestWorkspaceReadHydratesStateBindingThroughTypedObjectAPI(t *testing.T) {
 	repositoryID := "kr://acme/public/core"
 	body(t, kc(home, "init"))
 	seedRepo(t, home, repositoryID)
-	adoptLiveAccessFixture(t, home, repositoryID)
 	var runtimeCalls atomic.Int32
 	stateRuntime := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		runtimeCalls.Add(1)
@@ -88,7 +77,7 @@ func TestWorkspaceReadHydratesStateBindingThroughTypedObjectAPI(t *testing.T) {
 		})
 	}))
 	defer stateRuntime.Close()
-	body(t, kc(home, "put", testObjectReference(t, repositoryID, "schema/service.health", ""), "--repo", repositoryID, "--command-id", "binding-schema", "--value", `{"entity":"Service","aspect":"health","fields":{"status":{"type":"string","access":["filter"]}}}`))
+	body(t, kc(home, "put", testObjectReference(t, repositoryID, "schema/service.health", ""), "--repo", repositoryID, "--command-id", "binding-schema", "--value", `{"entity":"Service","aspect":"health","fields":{"status":{"type":"string"}}}`))
 	body(t, kc(home, "put", testObjectReference(t, repositoryID, "service/orders", "/properties"), "--repo", repositoryID, "--command-id", "binding-entity", "--value", `{"name":"orders"}`))
 	putStateBinding(t, home, repositoryID, "service/orders", "health", "schema/service.health", stateRuntime.URL)
 	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", repositoryID+"=refs/heads/main@"))
@@ -151,7 +140,6 @@ func TestTypedObjectReadForwardsTaihuCallerAuthentication(t *testing.T) {
 	repositoryID := "kr://acme/public/core"
 	body(t, kc(home, "init"))
 	seedRepo(t, home, repositoryID)
-	adoptLiveAccessFixture(t, home, repositoryID)
 	stateRuntime := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer taihu-token" || r.Header.Get("X-Tai-Identity") != "signed.identity" {
 			t.Fatalf("Taihu caller proof: %#v", r.Header)
@@ -168,7 +156,7 @@ func TestTypedObjectReadForwardsTaihuCallerAuthentication(t *testing.T) {
 		})
 	}))
 	defer stateRuntime.Close()
-	body(t, kc(home, "put", testObjectReference(t, repositoryID, "schema/service.health", ""), "--repo", repositoryID, "--command-id", "binding-schema", "--value", `{"entity":"Service","aspect":"health","fields":{"status":{"type":"string","access":["filter"]}}}`))
+	body(t, kc(home, "put", testObjectReference(t, repositoryID, "schema/service.health", ""), "--repo", repositoryID, "--command-id", "binding-schema", "--value", `{"entity":"Service","aspect":"health","fields":{"status":{"type":"string"}}}`))
 	body(t, kc(home, "put", testObjectReference(t, repositoryID, "service/orders", "/properties"), "--repo", repositoryID, "--command-id", "binding-entity", "--value", `{"name":"orders"}`))
 	putStateBinding(t, home, repositoryID, "service/orders", "health", "schema/service.health", stateRuntime.URL)
 	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", repositoryID+"=refs/heads/main@"))
@@ -182,7 +170,7 @@ func TestTypedObjectReadForwardsTaihuCallerAuthentication(t *testing.T) {
 		t.Fatal(err)
 	}
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{
-		Authenticator: taihuProofAuthenticator{}, StateLookup: lookup,
+		Authenticator: taihuProofAuthenticator, StateLookup: lookup,
 	})
 	if closer, ok := handler.(interface{ Close() error }); ok {
 		defer closer.Close()

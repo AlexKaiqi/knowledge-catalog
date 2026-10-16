@@ -1,0 +1,14 @@
+name: store-oncall
+metadata:
+  title: 下单服务值班包
+  question: 下单服务告警了，先做什么？
+  owner: 交易组 Ma
+mounts:
+- {repository: store-ops, selector: refs/heads/main, path: services, subPath: services}
+- {repository: store-ops, selector: refs/heads/main, path: tools, subPath: tools}
+- {repository: store-ops, selector: refs/heads/main, path: alerts, subPath: alerts}
+- {repository: store-ops, selector: refs/heads/main, path: relations-store-ops, subPath: relations}
+- {repository: campaign, selector: refs/heads/main, path: campaigns, subPath: campaigns}
+- {repository: store-ops, selector: refs/heads/main, path: _schemas, subPath: _schemas}
+files:
+- {repository: campaign, selector: refs/heads/main, file: _schemas/campaign.definition.aspect.yaml, target: _schemas/campaign.definition.aspect.yaml}

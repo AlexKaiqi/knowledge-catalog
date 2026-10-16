@@ -14,6 +14,7 @@ Dataset 不复制来源整仓、不拼接文件字节，也不自动发权。固
 发布需要目标的 dataset.manage 和每个来源的 repository.dataset.publish；普通读取与 Dataset 管理不能代替来源分享许可。许可可限制目标 Dataset 与来源 ref。SDK 显式固定 commit 时按该 commit 求值，CLI 配方则选择 ref 后由服务冻结。
 
 从任务开始：
+  已有仓、固定 commit 和文件路径，要下载单文件：kc help files read
   已有 Dataset，要读文件：kc help files
   已有来源仓，要发布一组文件：kc help composition，然后 kc help compose
   还没有来源仓：kc help repository
@@ -35,6 +36,7 @@ create 不自动 attach，attach 不把整仓加入任何 Dataset；两步也不
 来源准备：
   由来源管理者提供 Repository 身份、原仓相对路径、可用分支和完整 commit；查看原 lakeFS 的分支、提交历史与对象浏览器。
   KC 当前没有列举原仓分支/提交历史/原始目录树的业务命令。files list 只浏览已发布 Dataset 的交付树。
+  已知固定 commit 和文件路径时，可按仓下载单文件，无需发布 Dataset：kc help files read。
   普通文件仓可由原生来源工具维护；符合对象发布合同的仓才沿 KC Writer 发布对象，见 kc help write。
 
 Repository 自定义属性由原仓原生元数据管理，使用路径和权限见 kc help metadata。
@@ -62,6 +64,7 @@ const guideVersions = `区分可移动来源引用与固定交付版本：
   KC 当前不提供来源分支/历史/原始文件浏览。已经发布的固定来源可用 kc dataset show delivery --revision 1 回读核对。
 
 消费时：
+  按仓读取单文件必须提供 --repo 与 --commit；采用文件地址所指的资源版本，不自动采用对象说明的 commit 或分支当前值。
   files list/read 可显式选已接受的 Dataset revision；第一次默认当前版后，续页和后续读取沿用返回版号。
   dataset clone 只消费本次解析的当前版，重试可能采用更晚发布；需要历史材料用 files list/read。
   固定版本不冻结权限。pin 的含义见 kc help pin；完整配方写法见 kc help recipe。

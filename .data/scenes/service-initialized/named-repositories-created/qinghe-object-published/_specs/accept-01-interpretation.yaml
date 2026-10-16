@@ -1,0 +1,101 @@
+# 插件重构验收：插件是解释器：认领、缺席与实例对应。夹具见 _materials/acceptance/README.md；用例树见同文件“用例树”一节。
+# 每条从本节点前态独立开始，由 probe 显式创建所需仓与夹具，不传递其他用例的后态。
+
+- id: accept-live-plugin-absent-plain-content
+  title: 未装 LiveAccess 时声明只是普通内容
+  claims: ["liveaccess#U14"]
+  given:
+    - 部署不装 LiveAccess 插件；成员级夹具照常经 Writer 写入。
+  when:
+    - 写入成员与取值描述，读取成员文件头与 runtime 方面，读取访问概览。
+  then:
+    - Writer 照常按 Schema 校验并接受写入；成员头里的 valueSource 原样可读。
+    - 外部成员逐个报没有取值能力，静态成员照常；测试源无调用。
+    - 访问概览不声称这些单元由任何插件解释。
+  risk: 插件被当成内容合法性的前提，没装插件就无法维护声明，或声明被静默当成空值。
+
+- id: accept-search-plugin-absent
+  title: 未装声明式索引时索引声明只是普通方面
+  claims: ["discovery#U2"]
+  given:
+    - 部署不装 declarative-index；sales-analysis 仓照常发布 index/sales-search，Dataset sales-analysis 选入并发布。
+  when:
+    - 读取 index/sales-search 的 index 方面；在 sales-analysis 搜索 "orders"。
+  then:
+    - 写入与 Dataset 发布成功，index 方面四个成员原样可读。
+    - 搜索明确报没有检索能力，不返回零命中。
+  risk: 插件缺席时声明无法维护，或搜索以零命中掩盖缺能力。
+
+- id: accept-interp-claim-by-schema
+  title: 只有采用索引声明 Schema 的方面才被声明式索引认领
+  claims: ["discovery#U7", "discovery#U2"]
+  given:
+    - 默认搜索世界就绪；table-meta 另写入 variants/business-index-aspect 的 schema/table.index 与 table/shop.orders 的 index 方面（业务自己的物理索引清单）。
+    - Dataset sales-analysis 修订 2 同时选入该方面所在路径与 indexes。
+  when:
+    - 读取 table/shop.orders 的 index 方面；读取 Dataset 访问概览；在修订 2 搜索 "idx_orders_customer_id"。
+  then:
+    - 业务 index 方面按 schema/table.index 原样返回，不被当作索引声明解释，也不出现在概览的声明列表里。
+    - 概览只列出 index/sales-search 的成员；搜索按未声明处理该词所在字段，不因方面名叫 index 就建索引。
+  risk: 插件按方面名认领，把业务里同名的方面误当成索引配置执行。
+
+- id: accept-interp-unmapped-catalog
+  title: 声明的清单名没有对应实例时只影响该成员
+  claims: ["discovery#U2", "discovery#U8"]
+  given:
+    - 默认搜索世界就绪；sales-analysis 写入 variants/index/unmapped-catalog.yaml，成员 table-name-elastic 声明清单 declarative-index/elastic@2026-01，部署没有这个清单名。
+  when:
+    - 发布 Dataset 修订 2 并准备；读取访问概览；搜索 "orders"。
+  then:
+    - 修订 2 被接受；table-name-elastic 在概览中标为没有能力并给出清单名，其他四个成员由 opensearch 实例解释且照常可用。
+    - 搜索命中 table/shop.orders，依据只列出实际参与的成员，不把 table-name-elastic 交给 opensearch 实例代为解释。
+  risk: 清单名对不上时整批失败，或被静默交给另一个实例按不同规则构建。
+
+- id: accept-interp-duplicate-catalog-mapping
+  title: 同一清单名对应两个实例时部署拒绝启动
+  claims: ["discovery#U2"]
+  given:
+    - 测试部署配置合入 variants/deployment/duplicate-catalog-mapping.yaml，两个实例声明同一清单名。
+  when:
+    - 用该配置启动服务。
+  then:
+    - 启动失败并指出重复的清单名和两个实例名；没有任何实例开始构建或服务查询。
+    - 改回原配置后重新启动，已有仓与 Dataset 不受影响。
+  risk: 多实例时按装配顺序挑一个，声明由谁解释不可预测。
+
+- id: accept-interp-repository-selection-retired
+  title: 按仓选择插件的部署写法被拒绝
+  claims: ["liveaccess#U14", "discovery#U2"]
+  given:
+    - 测试部署配置合入 variants/deployment/repository-plugin-selection.yaml，按仓为 table-meta 指定 LiveAccess 与索引实例。
+  when:
+    - 用该配置启动服务。
+  then:
+    - 启动失败，错误指出按仓选择插件已退役，不静默忽略该配置后照常启动。
+  risk: 旧配置被悄悄忽略，维护者以为某仓用某实例，实际由另一套规则解释。
+
+- id: accept-interp-liveaccess-protocol-unmapped
+  title: 取值描述的协议没有对应实例时逐单元报没有取值能力
+  claims: ["liveaccess#U12", "liveaccess#U14"]
+  given:
+    - 成员级世界；ops-shared 写入 variants/protocol-v2/pipeline-monitor-v2.yaml（protocol 为 resource-access/v2，部署未装对应实例）。
+    - table-meta 写入 variants/protocol-v2/orders-freshness-lag-v2.yaml 改为引用它。
+  when:
+    - 读取 table/shop.orders 的 runtime 方面。
+  then:
+    - Writer 接受两次写入，协议能否执行不是写入期判断。
+    - freshness-lag 在 failures 里报没有取值能力并给出协议名；测试源没有收到 freshness-lag 的调用。
+    - row-count 与 retention-days 照常返回。
+  risk: 协议不匹配时被 v1 实例强行调用，或整个方面读取失败。
+
+- id: accept-overview-names-interpreters
+  title: 访问概览说明声明由谁解释
+  claims: ["affordance#U8"]
+  given:
+    - 部署装了 declarative-index 与 LiveAccess；Dataset sales-analysis 就绪，含成员级外部取值与索引声明。
+  when:
+    - reader 读取 Dataset sales-analysis 的访问概览，再沿给出的入口读插件说明。
+  then:
+    - 概览列出 index/sales-search 由哪个实例按哪个清单版本解释，以及引用 ops/warehouse-stats、ops/pipeline-monitor 的外部单元由 LiveAccess 解释。
+    - 概览不把“有声明”说成“已就绪”，就绪状态单独标出；读说明不触发构建或外呼。
+  risk: 调用者分不清声明、插件与就绪三者，或读说明带来副作用。

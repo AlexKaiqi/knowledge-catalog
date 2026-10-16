@@ -154,11 +154,7 @@ func absUnderRoot(root, urlPath string) (string, string, error) {
 	abs := filepath.Join(root, filepath.FromSlash(relSlash))
 	resolved, err := filepath.EvalSymlinks(abs)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return "", "", err
-		}
-		// dangling or not a symlink
-		resolved = abs
+		return "", "", err
 	}
 	rootResolved, err := filepath.EvalSymlinks(root)
 	if err != nil {
@@ -167,5 +163,9 @@ func absUnderRoot(root, urlPath string) (string, string, error) {
 	if !underRoot(rootResolved, resolved) || !underRoot(root, abs) {
 		return "", "", os.ErrPermission
 	}
-	return abs, relSlash, nil
+	resolvedRel, err := filepath.Rel(rootResolved, resolved)
+	if err != nil || !allowedRel(resolvedRel) {
+		return "", "", os.ErrPermission
+	}
+	return resolved, relSlash, nil
 }

@@ -1,0 +1,15 @@
+---
+object_id: index/relation
+aspect_name: index
+member_key: relation-type-filter
+kind: Member
+schema_ref: schema/core/index-declaration/v1
+path_hint: indexes/relation/relation-type-filter.yaml
+---
+catalog: declarative-index/opensearch@2026-10
+inputs:
+  - from: schema/core/relation/v1#/fields/relationType
+build:
+  kind: keyword
+uses:
+  - filter

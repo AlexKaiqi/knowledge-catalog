@@ -181,16 +181,13 @@ func (v *fileView) Read(request FileReadRequest) (FileReadResponse, error) {
 		request.Path, request.MountPath, request.File = path.Join(mount.Path, request.File), "", ""
 		return v.readDelivered(request)
 	}
-	if request.Offset < 0 || request.Length < 0 || request.Length > 4<<20 {
-		return FileReadResponse{}, kernel.Fail(kernel.ErrUsageInvalid, "file range must use a non-negative offset and length no greater than 4 MiB")
-	}
-	length := request.Length
-	if length == 0 {
-		length = 512 << 10
+	byteRange, err := requestedFileRange(request.Offset, request.Length)
+	if err != nil {
+		return FileReadResponse{}, err
 	}
 	content, readErr := v.readSource(mount, request.File)
 	if v.record != nil {
-		evidence := FileReadEvidence{Pin: v.pin, Repository: mount.Repository, Commit: mount.Commit, Path: path.Join(mount.Path, request.File), File: request.File, MountPath: mount.Path, Bytes: len(content), Err: readErr}
+		evidence := FileReadEvidence{Pin: v.pin, Repository: mount.Repository, Commit: mount.Commit, File: request.File, MountPath: mount.Path, Bytes: len(content), Err: readErr}
 		if err := v.record(evidence); err != nil && readErr == nil {
 			return FileReadResponse{}, err
 		}
@@ -198,17 +195,10 @@ func (v *fileView) Read(request FileReadRequest) (FileReadResponse, error) {
 	if readErr != nil {
 		return FileReadResponse{}, readErr
 	}
-	start := request.Offset
-	if start > int64(len(content)) {
-		start = int64(len(content))
-	}
-	end := start + int64(length)
-	if end > int64(len(content)) {
-		end = int64(len(content))
-	}
+	start, chunk, eof := byteRange.slice(content)
 	return FileReadResponse{
 		Pin: v.pin, Mount: mount, File: request.File, Offset: start, TotalBytes: int64(len(content)),
-		EOF: end == int64(len(content)), Content: content[start:end],
+		EOF: eof, Content: chunk,
 	}, nil
 }
 
@@ -221,8 +211,9 @@ func (v *fileView) readDelivered(request FileReadRequest) (FileReadResponse, err
 	if request.MountPath != "" || request.File != "" {
 		return FileReadResponse{}, kernel.Fail(kernel.ErrUsageInvalid, "delivered read takes path alone; mountPath and file address one mount")
 	}
-	if request.Offset < 0 || request.Length < 0 || request.Length > 4<<20 {
-		return FileReadResponse{}, kernel.Fail(kernel.ErrUsageInvalid, "file range must use a non-negative offset and length no greater than 4 MiB")
+	byteRange, err := requestedFileRange(request.Offset, request.Length)
+	if err != nil {
+		return FileReadResponse{}, err
 	}
 	delivered := dataset.NormalizeMountPath(request.Path)
 	if delivered == "" {
@@ -242,6 +233,7 @@ func (v *fileView) readDelivered(request FileReadRequest) (FileReadResponse, err
 	}
 	mount := dataset.VirtualMount{Path: deliveredParent(delivered), Repository: item.Repository, Commit: item.Commit}
 	file := item.File
+	sourcePath := item.File
 	var deliveredItem *dataset.DatasetItem
 	var content []byte
 	var readErr error
@@ -254,31 +246,22 @@ func (v *fileView) readDelivered(request FileReadRequest) (FileReadResponse, err
 		if mount.Path != "" {
 			file = strings.TrimPrefix(strings.TrimPrefix(delivered, mount.Path), "/")
 		}
+		sourcePath, err = RepositoryPath(mount.SubPath, file)
+		if err != nil {
+			return FileReadResponse{}, err
+		}
 		content, readErr = v.readSource(mount, file)
 	}
-	if err := v.recordDeliveredRead(delivered, item.Repository, item.Commit, content, readErr); err != nil && readErr == nil {
+	if err := v.recordDeliveredRead(sourcePath, item.Repository, item.Commit, content, readErr); err != nil && readErr == nil {
 		return FileReadResponse{}, err
 	}
 	if readErr != nil {
 		return FileReadResponse{}, readErr
 	}
-	start := request.Offset
-	if start > int64(len(content)) {
-		start = int64(len(content))
-	}
-	// Length 0 uses the same 512 KiB default as mount-relative reads.
-	length := request.Length
-	if length == 0 {
-		length = 512 << 10
-	}
-	end := start + int64(length)
-	if end > int64(len(content)) {
-		end = int64(len(content))
-	}
+	start, chunk, eof := byteRange.slice(content)
 	return FileReadResponse{
 		Pin: v.pin, Mount: mount, File: file, Path: delivered, Item: deliveredItem,
-		Offset: start, TotalBytes: int64(len(content)), EOF: end == int64(len(content)),
-		Content: content[start:end],
+		Offset: start, TotalBytes: int64(len(content)), EOF: eof, Content: chunk,
 	}, nil
 }
 
@@ -294,11 +277,11 @@ func (v *fileView) readMemberFile(repository kernel.RepositoryID, memberPath str
 	return tree.ReadFile(memberPath, commit)
 }
 
-func (v *fileView) recordDeliveredRead(delivered string, repository kernel.RepositoryID, commit kernel.CommitID, content []byte, readErr error) error {
+func (v *fileView) recordDeliveredRead(sourcePath string, repository kernel.RepositoryID, commit kernel.CommitID, content []byte, readErr error) error {
 	if v.record == nil {
 		return nil
 	}
-	return v.record(FileReadEvidence{Pin: v.pin, Repository: repository, Commit: commit, Path: delivered, Bytes: len(content), Err: readErr})
+	return v.record(FileReadEvidence{Pin: v.pin, Repository: repository, Commit: commit, Path: sourcePath, Bytes: len(content), Err: readErr})
 }
 
 func deliveredParent(delivered string) string {

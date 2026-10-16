@@ -97,7 +97,7 @@ func TestIngestFrontmatterObjectID(t *testing.T) {
 
 func TestIngestFrontmatterYAMLPayload(t *testing.T) {
 	dir := testkit.TempDir(t)
-	body := "---\nobject_id: schema/metric.definition\n---\nentity: Metric\naspect: definition\npattern: record\nfields:\n  expression:\n    type: string\n    access: [text]\n"
+	body := "---\nobject_id: schema/metric.definition\n---\nentity: Metric\naspect: definition\npattern: record\nfields:\n  expression:\n    type: string\n"
 	if err := os.WriteFile(filepath.Join(dir, "metric.definition.aspect.yaml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestIngestFrontmatterYAMLPayload(t *testing.T) {
 
 func TestIngestRejectsSchemaOriginFrontmatter(t *testing.T) {
 	dir := testkit.TempDir(t)
-	body := "---\nobject_id: schema/table.stats\norigin: http://127.0.0.1:7390\n---\nentity: Table\naspect: stats\npattern: record\nfields:\n  rowCount:\n    type: number\n    access: [filter]\n"
+	body := "---\nobject_id: schema/table.stats\norigin: http://127.0.0.1:7390\n---\nentity: Table\naspect: stats\npattern: record\nfields:\n  rowCount:\n    type: number\n"
 	if err := os.WriteFile(filepath.Join(dir, "table.stats.aspect.yaml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}

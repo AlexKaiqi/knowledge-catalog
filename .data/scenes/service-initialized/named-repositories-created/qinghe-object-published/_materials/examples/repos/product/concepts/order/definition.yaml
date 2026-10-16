@@ -1,0 +1,16 @@
+---
+object_id: concept/qinghe.order
+aspect_name: definition
+kind: Aspect
+schema_ref: schema/concept.definition
+---
+name: 订单
+meaning: 顾客一次下单的承诺。同一个词在门店、数仓和下单服务里指的东西不同，引用时说明是哪一种。
+contexts:
+- context: 门店收银
+  meaning: 一张小票。退单在原小票上冲销，不生成新订单。
+- context: 数仓
+  meaning: table/shop.orders 的一行，order_id 唯一；状态见 order_status，汇报口径见 metric/shop.gmv 的 caliber 方面。
+- context: 下单服务
+  meaning: service/qinghe.order-service 返回的订单号，形如 O-1042；支付回调前状态为 UNPAID。
+owner: 分析组 Lin

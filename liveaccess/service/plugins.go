@@ -28,105 +28,110 @@ type PluginEntry struct {
 
 type pluginInstance struct {
 	selection common.PluginSelection
+	protocol  string
+	runtimes  []string
 	services  PluginContribution
 	resources []func() error
+	failure   error
 }
 
-// Plugins is the immutable Repo selection used by access consumers. It owns
-// only access contributions, without index maintenance or a background worker.
+// catalog is the LiveAccess capability name: a descriptor's runtime and
+// protocol. An empty runtime is the protocol-wide instance.
+type catalog struct{ runtime, protocol string }
+
+// Plugins is the immutable set of deployed access instances. It owns only
+// access contributions, without index maintenance or a background worker.
 type Plugins struct {
-	byRepo      map[kernel.RepositoryID]*pluginInstance
-	unavailable map[kernel.RepositoryID]error
-	entries     map[string]PluginEntry
-	instances   []*pluginInstance
-	mu          sync.Mutex
-	started     bool
-	closed      bool
-	active      sync.WaitGroup
-	closeOnce   sync.Once
-	closeErr    error
+	byCatalog map[catalog]*pluginInstance
+	entries   map[string]PluginEntry
+	instances []*pluginInstance
+	mu        sync.Mutex
+	started   bool
+	closed    bool
+	active    sync.WaitGroup
+	closeOnce sync.Once
+	closeErr  error
 }
 
-func OpenPlugins(configs common.RepositoryPluginConfigs, entries map[string]PluginEntry) (*Plugins, error) {
-	p := &Plugins{byRepo: map[kernel.RepositoryID]*pluginInstance{}, unavailable: map[kernel.RepositoryID]error{}, entries: map[string]PluginEntry{}}
-	for repo, err := range configs.Unavailable {
-		if err == nil {
-			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "unavailable Repository configuration requires its failure")
-		}
-		if _, exists := configs.Repositories[repo]; exists {
-			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "Repository configuration cannot be both available and unavailable")
-		}
-		p.unavailable[repo] = err
-	}
+// OpenPlugins opens the deployed instances of the compiled access entries.
+// Each runtime and protocol maps to exactly one instance; an overlapping
+// mapping is a deployment failure, never an assembly-order choice.
+func OpenPlugins(config common.PluginsConfig, repositories []kernel.RepositoryID, entries map[string]PluginEntry) (*Plugins, error) {
+	p := &Plugins{byCatalog: map[catalog]*pluginInstance{}, entries: map[string]PluginEntry{}}
 	for name, entry := range entries {
 		entry.Affordance.Tasks = append([]string(nil), entry.Affordance.Tasks...)
 		p.entries[name] = entry
 	}
-	groups := map[common.PluginSelection][]kernel.RepositoryID{}
-	for repo, config := range configs.Repositories {
-		for _, selection := range config.Plugins {
-			if _, exists := entries[selection.Name]; !exists {
-				p.unavailable[repo] = kernel.Fail(kernel.ErrCapabilityUnsatisfied, "configured plugin %s has no entry", selection.Name)
-				break
-			}
-		}
-		if p.unavailable[repo] == nil {
-			for _, selection := range config.Plugins {
-				groups[selection] = append(groups[selection], repo)
-			}
-		}
-	}
-	selections := make([]common.PluginSelection, 0, len(groups))
-	for selection := range groups {
-		selections = append(selections, selection)
-	}
-	sort.Slice(selections, func(i, j int) bool {
-		if selections[i].Name != selections[j].Name {
-			return selections[i].Name < selections[j].Name
-		}
-		return selections[i].Instance < selections[j].Instance
-	})
-	for _, selection := range selections {
-		repositories := groups[selection]
-		sort.Slice(repositories, func(i, j int) bool { return repositories[i] < repositories[j] })
-		instance := &pluginInstance{selection: selection}
-		p.instances = append(p.instances, instance)
-		entry := entries[selection.Name]
-		if entry.Open == nil {
-			p.failInstance(instance, repositories, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "plugin entry %s is incomplete", selection.Name))
+	for _, name := range config.Names() {
+		if _, ok := entries[name]; !ok {
 			continue
 		}
-		services, err := entry.Open(common.PluginScope{Name: selection.Name, Instance: selection.Instance, Repositories: append([]kernel.RepositoryID(nil), repositories...), Own: func(close func() error) {
+		plugin := config[name]
+		for _, instanceName := range plugin.InstanceNames() {
+			declared := plugin.Instances[instanceName]
+			instance := &pluginInstance{selection: common.PluginSelection{Name: name, Instance: instanceName}, protocol: declared.Protocol, runtimes: append([]string(nil), declared.Runtimes...)}
+			if declared.Protocol == "" || declared.Catalog != "" {
+				return nil, kernel.Fail(kernel.ErrPreconditionFailed, "access instance %s/%s requires a protocol and no catalog", name, instanceName)
+			}
+			keys := []catalog{{protocol: declared.Protocol}}
+			if len(declared.Runtimes) != 0 {
+				keys = keys[:0]
+				for _, runtime := range declared.Runtimes {
+					keys = append(keys, catalog{runtime: runtime, protocol: declared.Protocol})
+				}
+			}
+			for _, key := range keys {
+				if err := p.claim(key, instance); err != nil {
+					return nil, err
+				}
+			}
+			p.instances = append(p.instances, instance)
+		}
+	}
+	repos := append([]kernel.RepositoryID(nil), repositories...)
+	sort.Slice(repos, func(i, j int) bool { return repos[i] < repos[j] })
+	for _, instance := range p.instances {
+		entry := p.entries[instance.selection.Name]
+		if entry.Open == nil {
+			p.failInstance(instance, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "plugin entry %s is incomplete", instance.selection.Name))
+			continue
+		}
+		services, err := entry.Open(common.PluginScope{Name: instance.selection.Name, Instance: instance.selection.Instance, Repositories: append([]kernel.RepositoryID(nil), repos...), Own: func(close func() error) {
 			if close != nil {
 				instance.resources = append(instance.resources, close)
 			}
 		}})
 		instance.services = services
 		if err == nil && missingPluginPort(services.Lookup) {
-			err = kernel.Fail(kernel.ErrCapabilityUnsatisfied, "plugin %s/%s has no State lookup contribution", selection.Name, selection.Instance)
+			err = kernel.Fail(kernel.ErrCapabilityUnsatisfied, "plugin %s/%s has no State lookup contribution", instance.selection.Name, instance.selection.Instance)
 		}
 		if err != nil {
-			p.failInstance(instance, repositories, err)
-			continue
-		}
-		for _, repo := range repositories {
-			if p.byRepo[repo] != nil {
-				return nil, errors.Join(kernel.Fail(kernel.ErrPreconditionFailed, "Repository has more than one access contribution"), p.Close())
-			}
-			p.byRepo[repo] = instance
+			p.failInstance(instance, err)
 		}
 	}
 	return p, nil
 }
 
-func (p *Plugins) failInstance(instance *pluginInstance, repositories []kernel.RepositoryID, failure error) {
+func (p *Plugins) claim(key catalog, instance *pluginInstance) error {
+	for existing, prior := range p.byCatalog {
+		if existing.protocol != key.protocol || prior == instance {
+			continue
+		}
+		if existing.runtime == key.runtime || existing.runtime == "" || key.runtime == "" {
+			return kernel.Fail(kernel.ErrPreconditionFailed, "protocol %s runtime %q maps to more than one instance: %s/%s and %s/%s", key.protocol, key.runtime, prior.selection.Name, prior.selection.Instance, instance.selection.Name, instance.selection.Instance)
+		}
+	}
+	p.byCatalog[key] = instance
+	return nil
+}
+
+// failInstance keeps the failure on its own catalog; other instances serve.
+func (p *Plugins) failInstance(instance *pluginInstance, failure error) {
 	for j := len(instance.resources) - 1; j >= 0; j-- {
 		failure = errors.Join(failure, instance.resources[j]())
 	}
 	instance.resources = nil
-	for _, repo := range repositories {
-		p.unavailable[repo] = failure
-	}
+	instance.failure = failure
 }
 
 func missingPluginPort(value any) bool {
@@ -166,14 +171,18 @@ func (p *Plugins) Unactivated() bool {
 }
 
 func (p *Plugins) Configured() bool {
-	return p != nil && (len(p.byRepo) != 0 || len(p.unavailable) != 0)
+	return p != nil && len(p.instances) != 0
 }
 
-func (p *Plugins) ConfiguredFor(repo kernel.RepositoryID) bool {
-	return p != nil && (p.byRepo[repo] != nil || p.unavailable[repo] != nil)
+func (p *Plugins) lookup(runtime, protocol string) *pluginInstance {
+	if instance := p.byCatalog[catalog{runtime: runtime, protocol: protocol}]; instance != nil {
+		return instance
+	}
+	return p.byCatalog[catalog{protocol: protocol}]
 }
 
-func (p *Plugins) take(repo kernel.RepositoryID) (*pluginInstance, func(), error) {
+// take leases the instance deployed for one descriptor runtime and protocol.
+func (p *Plugins) take(runtime, protocol string) (*pluginInstance, func(), error) {
 	if p == nil {
 		return nil, nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "access plugins are unavailable")
 	}
@@ -182,12 +191,12 @@ func (p *Plugins) take(repo kernel.RepositoryID) (*pluginInstance, func(), error
 	if p.closed {
 		return nil, nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "access plugins have stopped")
 	}
-	if err := p.unavailable[repo]; err != nil {
-		return nil, nil, err
-	}
-	instance := p.byRepo[repo]
+	instance := p.lookup(runtime, protocol)
 	if instance == nil {
-		return nil, nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Repository %s has no configured access plugin", repo)
+		return nil, nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "no access instance is deployed for runtime %q protocol %q", runtime, protocol)
+	}
+	if instance.failure != nil {
+		return nil, nil, instance.failure
 	}
 	p.active.Add(1)
 	return instance, p.active.Done, nil

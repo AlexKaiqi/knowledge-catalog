@@ -1,0 +1,16 @@
+---
+object_id: index/sales-search
+aspect_name: index
+member_key: table-row-count
+kind: Member
+schema_ref: schema/core/index-declaration/v1
+---
+# 跨仓配套改动的后半：sales-analysis 跟上改名。两半都到齐后，跟随自动重试并通过。
+catalog: declarative-index/opensearch@2026-10
+inputs:
+  - from: schema/table.live-stats#/fields/rows
+build:
+  kind: number
+uses:
+  - filter
+  - sort

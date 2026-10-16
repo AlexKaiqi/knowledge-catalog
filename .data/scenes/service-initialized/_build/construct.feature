@@ -15,7 +15,7 @@ Feature: service-initialized
       | repositories[].id | kr://kc/system |
     Then the output has:
       | repositories.0.id | kr://kc/system |
-      | repositories.0.schemaCount | 11 |
+      | repositories.0.schemaCount | 12 |
       | repositories.1.id | absent |
     When I run `kc grant list`
     Then the output has:

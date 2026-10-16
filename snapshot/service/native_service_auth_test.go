@@ -9,19 +9,14 @@ import (
 	"testing"
 
 	"kc/identity"
+	"kc/identity/identitytest"
 	"kc/kernel"
 	"kc/snapshot/access"
 )
 
-type nativeExternalTestIdentity struct{}
-
-func (nativeExternalTestIdentity) Name() string { return "gitea" }
-func (nativeExternalTestIdentity) Authenticate(_ context.Context, h http.Header) (identity.HTTPIdentity, error) {
-	if h.Get("Authorization") != "Bearer alice-user-token" {
-		return identity.HTTPIdentity{}, kernel.Fail(kernel.ErrUnauthenticated, "invalid user proof")
-	}
-	return identity.HTTPIdentity{Principal: "alice", Admin: true, User: &identity.VerifiedUser{Username: "alice", Provider: "gitea", Issuer: "https://identity.test", Subject: "123"}}, nil
-}
+var nativeExternalTestIdentity = identitytest.Bearer("taihu", map[string]identity.HTTPIdentity{
+	"Bearer alice-user-token": {Principal: "alice", Admin: true, User: &identity.VerifiedUser{Username: "alice", Provider: "taihu", Issuer: "https://identity.test", Subject: "123"}},
+})
 
 func externalNativeFixture(t *testing.T, actions ...string) (Handler, *nativeTestUpstream) {
 	t.Helper()
@@ -30,7 +25,7 @@ func externalNativeFixture(t *testing.T, actions ...string) (Handler, *nativeTes
 	t.Cleanup(backend.Close)
 	rules := &nativeTestRules{rules: []access.Rule{{Principal: "alice", Repo: "kr://test/a", Actions: actions}}}
 	h := NewHandler(Config{NativeOrigin: backend.URL, NativeCredential: func(context.Context) (string, error) { return "storage-key:private-storage-secret", nil },
-		Identity: IdentityOptions{Authenticator: nativeExternalTestIdentity{}, ProviderURL: "https://identity.test"},
+		Identity: IdentityOptions{Authenticator: nativeExternalTestIdentity, ProviderURL: "https://identity.test"},
 		Acquire: func(context.Context, identity.HTTPIdentity, string) (Resources, func(), error) {
 			return Resources{NativeRepositories: map[string]kernel.RepositoryID{"alpha": "kr://test/a"}, Access: access.NewService(rules)}, func() {}, nil
 		}})
@@ -94,7 +89,7 @@ func TestNativeExternalStartupAndMissingStorageProof(t *testing.T) {
 		writeJSON(w, 200, map[string]any{"state": "initialized"})
 	}))
 	defer backend.Close()
-	h := NewHandler(Config{NativeOrigin: backend.URL, Identity: IdentityOptions{Authenticator: nativeExternalTestIdentity{}, LogoutURL: "https://identity.test/end-session"}})
+	h := NewHandler(Config{NativeOrigin: backend.URL, Identity: IdentityOptions{Authenticator: nativeExternalTestIdentity, LogoutURL: "https://identity.test/end-session"}})
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/setup_lakefs", nil))
 	if w.Code != 200 || !strings.Contains(w.Body.String(), "https://identity.test/end-session") {

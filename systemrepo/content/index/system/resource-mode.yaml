@@ -1,0 +1,22 @@
+---
+object_id: index/system
+aspect_name: index
+member_key: resource-mode
+kind: Member
+path_hint: index/system/resource-mode.yaml
+schema_ref: schema/core/index-declaration/v1
+---
+{
+  "catalog": "declarative-index/opensearch@2026-10",
+  "inputs": [
+    {
+      "from": "schema/core/resource-descriptor/v1#/fields/mode"
+    }
+  ],
+  "build": {
+    "kind": "keyword"
+  },
+  "uses": [
+    "filter"
+  ]
+}

@@ -130,20 +130,10 @@ func TestHelperRejectsRetiredCatalogShow(t *testing.T) {
 	expectCode(t, kc(home, "catalog-show"), "USAGE_INVALID")
 }
 
-// seedRepo prepares the fixture's selected index capability on an object
-// source, then attaches and registers its Snapshot. With no index backend the
-// source stays unconfigured. Credentials remain in the process environment.
+// seedRepo attaches and registers an object source Snapshot. Plugin instances
+// are chosen by deployment, so the source carries no per-repository selection.
+// Credentials remain in the process environment.
 func seedRepo(t *testing.T, home, repo string, extra ...string) {
-	t.Helper()
-	seedSourceRepository(t, home, repo, true, extra...)
-}
-
-func seedUnindexedRepo(t *testing.T, home, repo string, extra ...string) {
-	t.Helper()
-	seedSourceRepository(t, home, repo, false, extra...)
-}
-
-func seedSourceRepository(t *testing.T, home, repo string, indexed bool, extra ...string) {
 	t.Helper()
 	if len(extra) == 0 {
 		fake := testkit.NewLakeFSFake(t)
@@ -151,19 +141,6 @@ func seedSourceRepository(t *testing.T, home, repo string, indexed bool, extra .
 		extra = []string{"--driver", "lakefs", "--dsn", fake.DSN(fake.NewRepo())}
 	}
 	args := append([]string{"local", "repository", "attach", "--repo", repo}, extra...)
-	if indexed {
-		parsed, err := cli.ParseArgs(args)
-		if err != nil {
-			t.Fatal(err)
-		}
-		dsn := invoke.FlagString(parsed.Flags, "dsn")
-		if dsn == "" {
-			dsn = invoke.FlagString(parsed.Flags, "link")
-		}
-		if err := cli.ConfigureFixtureIndexSource(home, kernel.RepositoryID(repo), dsn); err != nil {
-			t.Fatal(err)
-		}
-	}
 	body(t, kc(home, args...))
 	body(t, kc(home, "attach", "--repo", repo))
 }
@@ -285,10 +262,10 @@ func kcClientLocal(args ...string) kcRunResult {
 // Retrieval is an explicitly maintained projection. Consumer operations never
 // build it as a side effect, so journeys that expect SEARCH/RELATIONS first
 // publish the required exact-basis projection.
-func syncIndexes(t *testing.T, home string, repositories ...string) {
+func syncIndexes(t *testing.T, home string, datasets ...string) {
 	t.Helper()
-	for _, repository := range repositories {
-		body(t, kc(home, "index-sync", "--repo", repository))
+	for _, dataset := range datasets {
+		body(t, kc(home, "index-sync", "--dataset", dataset))
 	}
 }
 
@@ -338,7 +315,7 @@ func groupedTestArgs(args []string) []string {
 func legacyTestActions(raw string) string {
 	legacy := map[string]string{
 		"put": "writer.commit", "remove": "writer.commit", "commit": "writer.commit",
-		"read": "object.read", "read-workspace": "file.read", "read-catalog": "inventory.read", "search": "object.search",
+		"read": "object.read", "read-workspace": "file.read", "read-catalog": "inventory.read", "search": "file.read",
 		"relations": "object.relations", "resolve": "dataset.resolve",
 		"describe-access": "object.access.describe",
 		"branch":          "writer.branch", "merge": "writer.merge",
@@ -506,7 +483,7 @@ func TestShortHelpIsNotAPositional(t *testing.T) {
 	}
 
 	result := cli.Run([]string{"search", "-h"})
-	if result.Status != 0 || !strings.Contains(result.Stdout, "kc search (") {
+	if result.Status != 0 || !strings.Contains(result.Stdout, "kc search --dataset <id>") {
 		t.Fatalf("kc search -h must print search usage: %#v", result)
 	}
 	if strings.Contains(result.Stdout, "DATASET_INVALID") {
@@ -523,7 +500,7 @@ func TestUsageInvalidShowsReasonAndLeafUsage(t *testing.T) {
 		{[]string{"grant", "add"}, "kc grant add --principal"},
 		{[]string{"grant", "remove"}, "kc grant remove --id"},
 		{[]string{"detach"}, "kc detach --repo"},
-		{[]string{"search"}, "kc search ("},
+		{[]string{"search"}, "kc search --dataset <id>"},
 		{[]string{"read"}, "kc read <object-urn"},
 		{[]string{"schema", "list"}, "kc schema list --repo"},
 		{[]string{"writer", "put"}, "kc writer put <object-urn"},
@@ -546,8 +523,8 @@ func TestUsageInvalidShowsReasonAndLeafUsage(t *testing.T) {
 
 func TestRoleHelp(t *testing.T) {
 	for topic, needles := range map[string][]string{
-		"consume": {"kc login", "kc show", "schema list --repo", "search --repo", "search --dataset", "read --dataset", "回执"},
-		"write":   {"kc create --name", "kc create --url", "writer commit", "kc attach", "kc grant add"},
+		"consume": {"kc login", "kc show", "kc dataset show", "kc files list", "kc files read", "--revision", "schema list --repo", "search --dataset", "read --dataset", "回执"},
+		"write":   {"kc show", "kc dataset show", "kc files read", "Schema", "已有仓", "kc help create", "writer put", "writer commit", "kc help attach", "kc help compose", "result.newCommit"},
 		"compose": {"kc show", "kc attach", "dataset define", "grant add"},
 	} {
 		result := cli.Run([]string{"help", topic})
@@ -777,7 +754,7 @@ func TestWritePath(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(draft, "note.json"), []byte(canonical), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	schema := "---\nobject_id: schema/runbook.body\n---\n{\"entity\":\"Runbook\",\"pattern\":\"record\",\"fields\":{\"text\":{\"type\":\"string\",\"access\":[\"text\"]}}}\n"
+	schema := "---\nobject_id: schema/runbook.body\n---\n{\"entity\":\"Runbook\",\"pattern\":\"record\",\"fields\":{\"text\":{\"type\":\"string\"}}}\n"
 	if err := os.WriteFile(filepath.Join(draft, "schema.json"), []byte(schema), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -859,7 +836,7 @@ func TestDesiredDirCommitRequiresWriterCommit(t *testing.T) {
 	kc(h, "init")
 	repo := "kr://acme/public/core"
 	seedRepo(t, h, repo)
-	body(t, kc(h, "put", testObjectReference(t, repo, "schema/secret", ""), "--repo", repo, "--command-id", "schema-secret", "--value", `{"entity":"Secret","pattern":"record","fields":{"text":{"type":"string","access":["text"]}}}`))
+	body(t, kc(h, "put", testObjectReference(t, repo, "schema/secret", ""), "--repo", repo, "--command-id", "schema-secret", "--value", `{"entity":"Secret","pattern":"record","fields":{"text":{"type":"string"}}}`))
 
 	draft := filepath.Join(h, "untrusted-draft")
 	if err := os.MkdirAll(draft, 0o755); err != nil {

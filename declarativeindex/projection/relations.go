@@ -8,6 +8,7 @@ import (
 	retrieval "kc/discovery"
 	"kc/kernel"
 	objectmodel "kc/object"
+	"kc/object/reader"
 )
 
 // RequireRelationReadyAt is deliberately read-only. Consumer requests never
@@ -17,14 +18,14 @@ func (idx *Index) RequireRelationReadyAt(repository kernel.RepositoryID, commit 
 	if err != nil {
 		return nil, ports.Meta{}, err
 	}
-	return requireRelationReady(engine, repository, commit)
+	return idx.requireRelationReady(engine, repository, commit)
 }
 
-func requireRelationReady(engine ports.Engine, repository kernel.RepositoryID, commit kernel.CommitID) (retrieval.RelationRetriever, ports.Meta, error) {
-	return requireRelationReadyContext(context.Background(), engine, repository, commit)
+func (idx *Index) requireRelationReady(engine ports.Engine, repository kernel.RepositoryID, commit kernel.CommitID) (retrieval.RelationRetriever, ports.Meta, error) {
+	return idx.requireRelationReadyContext(context.Background(), engine, repository, commit)
 }
 
-func requireRelationReadyContext(ctx context.Context, engine ports.Engine, repository kernel.RepositoryID, commit kernel.CommitID) (retrieval.RelationRetriever, ports.Meta, error) {
+func (idx *Index) requireRelationReadyContext(ctx context.Context, engine ports.Engine, repository kernel.RepositoryID, commit kernel.CommitID) (retrieval.RelationRetriever, ports.Meta, error) {
 	meta, err := loadMetaContext(ctx, engine)
 	if err != nil {
 		return nil, ports.Meta{}, err
@@ -39,11 +40,8 @@ func requireRelationReadyContext(ctx context.Context, engine ports.Engine, repos
 		return nil, ports.Meta{}, kernel.Fail(kernel.ErrPreconditionFailed,
 			"relation projection basis %s does not match fixed commit %s", meta.Basis, commit)
 	}
-	if identity, ok := engine.(ports.ProviderIdentity); ok {
-		if meta.ProviderRevision != identity.ProviderRevision() || meta.PhysicalDigest != identity.PhysicalDigest() {
-			return nil, ports.Meta{}, kernel.Fail(kernel.ErrPreconditionFailed,
-				"relation projection physical identity does not match its provider")
-		}
+	if !idx.physicalMatches(engine, meta) {
+		return nil, ports.Meta{}, kernel.Fail(kernel.ErrPreconditionFailed, "relation projection physical identity does not match its provider and manifest")
 	}
 	retriever, ok := engine.(retrieval.RelationRetriever)
 	if !ok {
@@ -60,13 +58,18 @@ func (idx *Index) RelationsAt(repo objectmodel.Repository, commit kernel.CommitI
 }
 
 func (idx *Index) RelationsAtContext(ctx context.Context, repo objectmodel.Repository, commit kernel.CommitID, request retrieval.RelationPageRequest) (retrieval.RelationPage, error) {
+	if scoped, ok := repo.(interface {
+		DatasetScope() (reader.MemberLookup, reader.DatasetPin)
+	}); ok {
+		lookup, pin := scoped.DatasetScope()
+		return idx.RelationsDataset(ctx, lookup, pin, request)
+	}
 	ctx, cancel := ports.WithSearchBudget(ctx, ports.SearchBudget{})
 	defer cancel()
 	if err := objectmodel.ValidateObjectID(request.Query.Endpoint); err != nil {
 		return retrieval.RelationPage{}, kernel.Fail(kernel.ErrUsageInvalid, "relation lookup endpoint: %v", err)
 	}
-	limit, err := relationLimit(request.Limit)
-	if err != nil {
+	if _, err := relationLimit(request.Limit); err != nil {
 		return retrieval.RelationPage{}, err
 	}
 	engine, release, err := idx.acquireEngineForCommitContext(ctx, authorityEngineID(repo), commit)
@@ -74,17 +77,46 @@ func (idx *Index) RelationsAtContext(ctx context.Context, repo objectmodel.Repos
 		return retrieval.RelationPage{}, searchPreparationError(ctx, err)
 	}
 	defer release()
-	retriever, meta, err := requireRelationReadyContext(ctx, engine, repo.ID(), commit)
+	retriever, meta, err := idx.requireRelationReadyContext(ctx, engine, repo.ID(), commit)
 	if err != nil {
 		return retrieval.RelationPage{}, searchPreparationError(ctx, err)
 	}
+	return relationsOnEngine(ctx, repo.ID(), commit, request, retriever, meta, relationExecutionScope{
+		snapshots: map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit},
+		allow: func(ctx context.Context, candidate retrieval.RelationCandidate) (bool, error) {
+			if candidate.Repository != repo.ID() || candidate.Basis != commit {
+				return false, kernel.Fail(kernel.ErrPreconditionFailed, "relation candidate does not match repository and fixed basis")
+			}
+			return ports.CandidateScopeContains(ctx, repo.ID(), commit, candidate.ObjectID)
+		},
+		hydrate: func(ids []objectmodel.ObjectID) (map[objectmodel.ObjectID]objectmodel.ObjectValue, error) {
+			return idx.hydrateMany(repo, commit, ids)
+		},
+		hit: func(query retrieval.RelationQuery, value objectmodel.ObjectValue, evidence []retrieval.LaneEvidence) (retrieval.RelationHit, bool, error) {
+			return relationHitAt(repo.ID(), commit, query, value, evidence)
+		},
+	})
+}
+
+type relationExecutionScope struct {
+	snapshots map[kernel.RepositoryID]kernel.CommitID
+	allow     func(context.Context, retrieval.RelationCandidate) (bool, error)
+	hydrate   func([]objectmodel.ObjectID) (map[objectmodel.ObjectID]objectmodel.ObjectValue, error)
+	hit       func(retrieval.RelationQuery, objectmodel.ObjectValue, []retrieval.LaneEvidence) (retrieval.RelationHit, bool, error)
+}
+
+func relationsOnEngine(ctx context.Context, repository kernel.RepositoryID, commit kernel.CommitID, request retrieval.RelationPageRequest, retriever retrieval.RelationRetriever, meta ports.Meta, scope relationExecutionScope) (retrieval.RelationPage, error) {
+	limit, err := relationLimit(request.Limit)
+	if err != nil {
+		return retrieval.RelationPage{}, err
+	}
 	out := retrieval.RelationPage{
-		SearchView: retrieval.SearchView{Snapshots: map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit}},
+		SearchView: retrieval.SearchView{Snapshots: scope.snapshots},
 		Hits:       []retrieval.RelationHit{}, Generation: relationGeneration(meta),
 	}
 	continuation := ""
 	if request.Continuation != "" {
-		continuation, err = decodeRelationContinuation(request.Continuation, repo.ID(), commit, request.Query, out.Generation)
+		continuation, err = decodeRelationContinuation(request.Continuation, repository, commit, request.Query, out.Generation)
 		if err != nil {
 			return retrieval.RelationPage{}, err
 		}
@@ -93,7 +125,7 @@ func (idx *Index) RelationsAtContext(ctx context.Context, repo objectmodel.Repos
 	budgetStop := func(reason string) {
 		out.Exhausted = false
 		out.Claims = append(out.Claims, "relation execution budget exhausted: "+reason)
-		out.Continuation = encodeRelationContinuation(relationContinuation{Repository: repo.ID(), Basis: commit, Query: retrieval.RelationQueryDigest(request.Query), Generation: out.Generation, Position: continuation})
+		out.Continuation = encodeRelationContinuation(relationContinuation{Repository: repository, Basis: commit, Query: retrieval.RelationQueryDigest(request.Query), Generation: out.Generation, Position: continuation})
 	}
 	for len(out.Hits) < limit {
 		reserved, finish, reason, err := ports.ReserveSearchPage(ctx, limit-len(out.Hits))
@@ -105,7 +137,7 @@ func (idx *Index) RelationsAtContext(ctx context.Context, repo objectmodel.Repos
 			break
 		}
 		providerReq := retrieval.RelationRetrieveRequest{
-			Repository: repo.ID(), Basis: commit, Query: request.Query,
+			Repository: repository, Basis: commit, Query: request.Query,
 			Limit: reserved, Continuation: continuation,
 		}
 		var page retrieval.RelationCandidatePage
@@ -139,10 +171,7 @@ func (idx *Index) RelationsAtContext(ctx context.Context, repo objectmodel.Repos
 		ids := make([]objectmodel.ObjectID, 0, len(page.Candidates))
 		candidates := make(map[objectmodel.ObjectID]retrieval.RelationCandidate, len(page.Candidates))
 		for _, candidate := range page.Candidates {
-			if candidate.Repository != repo.ID() || candidate.Basis != commit {
-				return retrieval.RelationPage{}, kernel.Fail(kernel.ErrPreconditionFailed, "relation candidate does not match repository and fixed basis")
-			}
-			allowed, err := ports.CandidateScopeContains(ctx, repo.ID(), commit, candidate.ObjectID)
+			allowed, err := scope.allow(ctx, candidate)
 			if err != nil {
 				return retrieval.RelationPage{}, err
 			}
@@ -157,7 +186,7 @@ func (idx *Index) RelationsAtContext(ctx context.Context, repo objectmodel.Repos
 			candidates[candidate.ObjectID] = candidate
 		}
 		if len(ids) > 0 {
-			values, readErr := idx.hydrateMany(repo, commit, ids)
+			values, readErr := scope.hydrate(ids)
 			if readErr != nil {
 				return retrieval.RelationPage{}, readErr
 			}
@@ -167,7 +196,7 @@ func (idx *Index) RelationsAtContext(ctx context.Context, repo objectmodel.Repos
 					return retrieval.RelationPage{}, kernel.Fail(kernel.ErrPreconditionFailed,
 						"relation projection candidate %s is missing from canonical basis %s", id, commit)
 				}
-				hit, matched, checkErr := relationHitAt(repo.ID(), commit, request.Query, value, candidates[id].Evidence)
+				hit, matched, checkErr := scope.hit(request.Query, value, candidates[id].Evidence)
 				if checkErr != nil {
 					return retrieval.RelationPage{}, checkErr
 				}
@@ -191,7 +220,7 @@ func (idx *Index) RelationsAtContext(ctx context.Context, repo objectmodel.Repos
 			out.Exhausted = page.Exhausted
 			if !page.Exhausted && page.Continuation != "" {
 				out.Continuation = encodeRelationContinuation(relationContinuation{
-					Repository: repo.ID(), Basis: commit, Query: retrieval.RelationQueryDigest(request.Query),
+					Repository: repository, Basis: commit, Query: retrieval.RelationQueryDigest(request.Query),
 					Generation: out.Generation, Position: page.Continuation,
 				})
 			}

@@ -52,20 +52,67 @@ func TestHTTPPolicyUsesApplicableTargetAndOriginChangeCannotCarryProof(t *testin
 		t.Fatalf("registered target did not produce actual observation: %#v %v", result, err)
 	}
 	request.Origin = other.URL
-	if _, err := lookup.LookupState(ctx, request); kernel.CodeOf(err) != kernel.ErrForbidden {
-		t.Fatalf("origin override widened proof scope: %v", err)
+	if result, err := lookup.LookupState(ctx, request); err != nil || result.Value != "other-value" {
+		t.Fatalf("untrusted origin override was not called without proof: %#v %v", result, err)
 	}
 	request = policyRequest(other.URL, "alice")
 	request.Origin = ""
-	if _, err := lookup.LookupState(ctx, request); kernel.CodeOf(err) != kernel.ErrForbidden {
-		t.Fatalf("changed binding origin widened proof scope: %v", err)
+	if result, err := lookup.LookupState(ctx, request); err != nil || result.Value != "other-value" {
+		t.Fatalf("untrusted binding origin was not called without proof: %#v %v", result, err)
 	}
-	if otherCalls.Load() != 0 {
-		t.Fatal("changed target was contacted with inapplicable proof")
+	if otherCalls.Load() != 2 {
+		t.Fatalf("untrusted target calls = %d, want 2 proof-free calls", otherCalls.Load())
 	}
 	result, err = lookup.LookupState(context.Background(), policyRequest(other.URL, "alice"))
-	if err != nil || result.Value != "other-value" || otherCalls.Load() != 1 {
+	if err != nil || result.Value != "other-value" || otherCalls.Load() != 3 {
 		t.Fatalf("proof-free access incorrectly acquired or retained caller proof: %#v %v", result, err)
+	}
+}
+
+func TestHTTPPolicyTrustMatchesSchemeHostAndPortExactly(t *testing.T) {
+	for _, pair := range [][2]string{
+		{"http://Live-Origin", "http://live-origin:80"},
+		{"https://monitor.example.com/", "https://monitor.example.com:443"},
+	} {
+		left, err := credentialOrigin(pair[0])
+		right, err2 := credentialOrigin(pair[1])
+		if err != nil || err2 != nil || left != right {
+			t.Fatalf("default port or case was not normalized: %q=%q %q=%q %v %v", pair[0], left, pair[1], right, err, err2)
+		}
+	}
+	trusted, err := credentialOrigin("https://monitor.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, other := range []string{"https://monitor.example.com:8443", "http://monitor.example.com", "https://api.monitor.example.com", "https://example.com", "https://monitor.example.com."} {
+		got, err := credentialOrigin(other)
+		if err != nil || got == trusted {
+			t.Fatalf("%s matched trusted %s: %q %v", other, trusted, got, err)
+		}
+	}
+	var trustedProof, altPortProof atomic.Value
+	serve := func(store *atomic.Value) *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			store.Store(r.Header.Get("Authorization") + "|" + r.Header.Get("X-Tai-Identity"))
+			policyObservation(w, "ok")
+		}))
+	}
+	primary, alternate := serve(&trustedProof), serve(&altPortProof)
+	defer primary.Close()
+	defer alternate.Close()
+	// Same host, different port: only the configured port receives proof.
+	lookup, err := NewHTTPStateLookupWithOptions(HTTPStateLookupOptions{Client: primary.Client(), CredentialOrigins: []string{primary.URL}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := ContextWithCallerCredentials(context.Background(), callerCredentials{Authorization: "Bearer alice-proof", TaiIdentity: "alice-identity"})
+	for _, target := range []string{primary.URL, alternate.URL} {
+		if _, err := lookup.LookupState(ctx, policyRequest(target, "alice")); err != nil {
+			t.Fatalf("%s: %v", target, err)
+		}
+	}
+	if trustedProof.Load() != "Bearer alice-proof|alice-identity" || altPortProof.Load() != "|" {
+		t.Fatalf("proof by port: trusted=%v alternate=%v", trustedProof.Load(), altPortProof.Load())
 	}
 }
 

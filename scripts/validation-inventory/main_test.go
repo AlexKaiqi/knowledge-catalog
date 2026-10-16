@@ -94,13 +94,16 @@ func TestInventoryIncludesModuleAndServerProductionRoutes(t *testing.T) {
 		}
 		routes = append(routes, found...)
 	}
-	if owners["server"] != 61 || owners["snapshot/service"] != 28 || len(routes) != 89 {
+	if owners["server"] != 62 || owners["snapshot/service"] != 28 || len(routes) != 90 {
 		t.Fatalf("production routes omitted or assigned to stale owners: counts=%v, total=%d", owners, len(routes))
 	}
 	if err := validateRouteInventory(routes, httpsurface.Patterns()); err != nil {
 		t.Fatal(err)
 	}
 	for _, route := range routes {
+		if route.Pattern == "POST /operations/v1/projections:notice" {
+			t.Fatalf("retired public projection notice remains in the inventory: %#v", route)
+		}
 		if (route.Pattern == "GET /ui/" || route.Pattern == "GET /identity/v1/whoami" || route.Pattern == "POST /snapshot/v1/files/file:read" || route.Pattern == "POST /snapshot/v1/datasets" || route.Pattern == "PUT /admin/v1/grants/{grant}" || route.Pattern == "GET /snapshot/v1/inventory" || route.Pattern == "GET /snapshot/v1/audit" || route.Pattern == "POST /snapshot/v1/repositories" || route.Pattern == "DELETE /snapshot/v1/repositories/{repository}") && !strings.HasPrefix(route.File, "snapshot/service/") {
 			t.Fatalf("Snapshot Store route still points to an old Server owner: %#v", route)
 		}

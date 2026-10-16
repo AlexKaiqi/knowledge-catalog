@@ -17,12 +17,12 @@ func TestDatasetHTTPMetadataPublicationAndHistoricalRead(t *testing.T) {
 	f := newDatasetHTTPFixture(t)
 	want := map[string]string{"description": "plain delivery", "team/custom": "茶铺", "owner": "untrusted attribute", "empty": ""}
 	preparations := 0
-	f.resources.PreparePublication = func(_ context.Context, _ identity.HTTPIdentity, definition dataset.Dataset) error {
+	f.resources.PreparePublication = func(_ context.Context, _ identity.HTTPIdentity, definition dataset.Dataset) (dataset.Dataset, error) {
 		preparations++
 		if definition.Revision == 1 && !reflect.DeepEqual(definition.Metadata, want) {
 			t.Fatalf("publication preparation lost metadata: %#v", definition)
 		}
-		return nil
+		return definition, nil
 	}
 	f.resources.BeforePublish = func(_ context.Context, _ identity.HTTPIdentity, _ dataset.Service, definition dataset.Dataset) (dataset.Dataset, map[string]any, error) {
 		if definition.Revision == 1 && !reflect.DeepEqual(definition.Metadata, want) {

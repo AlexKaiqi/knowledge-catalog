@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"sort"
+	"strings"
 
 	common "kc/discovery/adoption"
 	"kc/kernel"
@@ -12,7 +13,7 @@ import (
 )
 
 func (p *Plugins) LookupState(ctx context.Context, request liveaccess.StateLookupRequest) (liveaccess.StateObservation, error) {
-	instance, done, err := p.take(request.Binding.Repository)
+	instance, done, err := p.take(request.Binding.Runtime, request.Binding.Protocol)
 	if err != nil {
 		return liveaccess.StateObservation{}, err
 	}
@@ -28,7 +29,7 @@ func (p *Plugins) LookupState(ctx context.Context, request liveaccess.StateLooku
 }
 
 func (p *Plugins) AccessResource(ctx context.Context, request liveaccess.ResourceOperationRequest) (any, error) {
-	instance, done, err := p.take(request.Descriptor.Repository)
+	instance, done, err := p.take(request.Runtime, request.Protocol)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +51,8 @@ func (p *Plugins) AccessResource(ctx context.Context, request liveaccess.Resourc
 // Repo and pinned contract. The private handler holds a lease throughout each
 // actual validation/execution, so an escaped registry cannot outlive Close.
 func (p *Plugins) InterfaceRegistryFor(implementation interfaces.ResolvedInterface) (*interfaces.InterfaceRegistry, error) {
-	instance, done, err := p.take(implementation.Repository)
+	runtime, protocol := implementationCatalog(implementation)
+	instance, done, err := p.take(runtime, protocol)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +72,7 @@ func (p *Plugins) InterfaceRegistryFor(implementation interfaces.ResolvedInterfa
 	if err != nil {
 		return nil, err
 	}
-	registration.Handler = &pluginInterfaceHandler{plugins: p, repository: implementation.Repository, instance: instance, handler: registration.Handler}
+	registration.Handler = &pluginInterfaceHandler{plugins: p, repository: implementation.Repository, runtime: runtime, protocol: protocol, instance: instance, handler: registration.Handler}
 	private := interfaces.NewInterfaceRegistry()
 	if err := private.Register(registration); err != nil {
 		return nil, err
@@ -78,9 +80,19 @@ func (p *Plugins) InterfaceRegistryFor(implementation interfaces.ResolvedInterfa
 	return private, nil
 }
 
+// implementationCatalog reads the runtime and protocol an implementation
+// declares; the deployment maps that pair to the interpreting instance.
+func implementationCatalog(implementation interfaces.ResolvedInterface) (string, string) {
+	runtime, _ := implementation.Implementation["runtime"].(string)
+	protocol, _ := implementation.Implementation["protocol"].(string)
+	return runtime, protocol
+}
+
 type pluginInterfaceHandler struct {
 	plugins    *Plugins
 	repository kernel.RepositoryID
+	runtime    string
+	protocol   string
 	instance   *pluginInstance
 	handler    interfaces.InterfaceHandler
 }
@@ -89,7 +101,7 @@ func (h *pluginInterfaceHandler) take(repository kernel.RepositoryID) (func(), e
 	if repository != h.repository {
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Repository is outside this plugin interface scope")
 	}
-	instance, done, err := h.plugins.take(repository)
+	instance, done, err := h.plugins.take(h.runtime, h.protocol)
 	if err != nil {
 		return nil, err
 	}
@@ -138,8 +150,8 @@ func (p *Plugins) Help(name string) (common.PluginAffordance, error) {
 	return affordance, nil
 }
 
-// Overview reports only selection facts for the already authorized pin; it
-// does not call a plugin, read Repo metadata, or expand the source scope.
+// Overview reports the deployed access instances for the already authorized
+// pin; it does not call a plugin, read Repo metadata, or expand the scope.
 func (p *Plugins) Overview(pin reader.DatasetPin) ([]common.SourcePlugin, error) {
 	if p == nil {
 		return nil, nil
@@ -151,15 +163,6 @@ func (p *Plugins) Overview(pin reader.DatasetPin) ([]common.SourcePlugin, error)
 	sort.Slice(repositories, func(i, j int) bool { return repositories[i] < repositories[j] })
 	out := []common.SourcePlugin{}
 	for _, repo := range repositories {
-		if !p.ConfiguredFor(repo) {
-			continue
-		}
-		instance, done, err := p.take(repo)
-		if err != nil {
-			return nil, err
-		}
-		selection := instance.selection
-		done()
 		files := []string{}
 		for _, item := range pin.Items {
 			if item.Repository == repo {
@@ -171,11 +174,21 @@ func (p *Plugins) Overview(pin reader.DatasetPin) ([]common.SourcePlugin, error)
 			}
 		}
 		sort.Strings(files)
-		row := common.SourcePlugin{Repository: repo, Commit: pin.Repositories[repo], Files: files, Name: selection.Name, Instance: selection.Instance}
-		if affordance, err := p.Help(selection.Name); err == nil {
-			row.Summary, row.Help = affordance.Summary, "kc plugin "+selection.Name+" help"
+		for _, instance := range p.instances {
+			selection := instance.selection
+			row := common.SourcePlugin{Repository: repo, Commit: pin.Repositories[repo], Files: append([]string(nil), files...), Name: selection.Name, Instance: selection.Instance, Catalog: instance.catalogName()}
+			if affordance, err := p.Help(selection.Name); err == nil {
+				row.Summary, row.Help = affordance.Summary, "kc plugin "+selection.Name+" help"
+			}
+			out = append(out, row)
 		}
-		out = append(out, row)
 	}
 	return out, nil
+}
+
+func (i *pluginInstance) catalogName() string {
+	if len(i.runtimes) == 0 {
+		return i.protocol
+	}
+	return strings.Join(i.runtimes, ",") + " " + i.protocol
 }

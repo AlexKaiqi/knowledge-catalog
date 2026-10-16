@@ -11,6 +11,8 @@ import (
 	"net/http/httptest"
 	"net/http/httputil"
 	"net/url"
+	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -42,7 +44,14 @@ func newSceneProjectionNamespace(t *testing.T, endpoint string) *sceneProjection
 	if _, err := rand.Read(random[:]); err != nil {
 		t.Fatal(err)
 	}
-	ns := &sceneProjectionNamespace{t: t, upstream: target, prefix: "kc-scene-" + hex.EncodeToString(random[:]) + "-", indices: map[string]bool{}}
+	prefix := "kc-scene-"
+	if runPrefix := os.Getenv("KC_TEST_OPENSEARCH_RUN_PREFIX"); runPrefix != "" {
+		if !regexp.MustCompile(`^kc-test-[0-9a-f]{32}-$`).MatchString(runPrefix) {
+			t.Fatalf("invalid owned scene OpenSearch prefix %q", runPrefix)
+		}
+		prefix = runPrefix
+	}
+	ns := &sceneProjectionNamespace{t: t, upstream: target, prefix: prefix + hex.EncodeToString(random[:]) + "-", indices: map[string]bool{}}
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	ns.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := ns.rewrite(r); err != nil {
@@ -133,6 +142,79 @@ func (ns *sceneProjectionNamespace) rememberIndex(index string) {
 	ns.mu.Lock()
 	ns.indices[index] = true
 	ns.mu.Unlock()
+}
+
+// forkInto copies every live index of this namespace into dst with the
+// OpenSearch _clone API, so a frozen indexed state can seed independent worlds
+// without replaying its construct chain. Sources are write-blocked first: a
+// frozen namespace must never change after it seeded a clone.
+func (ns *sceneProjectionNamespace) forkInto(dst *sceneProjectionNamespace) error {
+	ns.mu.Lock()
+	indices := make([]string, 0, len(ns.indices))
+	for index := range ns.indices {
+		indices = append(indices, index)
+	}
+	auth := ns.auth
+	ns.mu.Unlock()
+	sort.Strings(indices)
+	if auth != "" {
+		dst.mu.Lock()
+		if dst.auth == "" {
+			dst.auth = auth
+		}
+		dst.mu.Unlock()
+	}
+	for _, source := range indices {
+		status, body, err := ns.upstreamDo(http.MethodGet, "/"+source+"/_settings", "", auth)
+		if err != nil {
+			return err
+		}
+		if status == http.StatusNotFound {
+			continue // A replaced generation was already retired.
+		}
+		if status >= 300 {
+			return fmt.Errorf("read scene projection %s settings: HTTP %d: %s", source, status, body)
+		}
+		target := dst.prefix + strings.TrimPrefix(source, ns.prefix)
+		// A clone may be created even if its response is lost: own it before dispatch.
+		dst.rememberIndex(target)
+		steps := []struct{ method, path, body string }{
+			{http.MethodPost, "/" + source + "/_flush", ""},
+			{http.MethodPut, "/" + source + "/_settings", `{"index.blocks.write":true}`},
+			{http.MethodPost, "/" + source + "/_clone/" + target + "?wait_for_active_shards=1", `{"settings":{"index.blocks.write":false}}`},
+		}
+		for _, step := range steps {
+			status, body, err := ns.upstreamDo(step.method, step.path, step.body, auth)
+			if err != nil {
+				return err
+			}
+			if status >= 300 {
+				return fmt.Errorf("fork scene projection %s: %s %s HTTP %d: %s", source, step.method, step.path, status, body)
+			}
+		}
+	}
+	return nil
+}
+
+func (ns *sceneProjectionNamespace) upstreamDo(method, path, body, auth string) (int, string, error) {
+	request, err := http.NewRequest(method, strings.TrimRight(ns.upstream.String(), "/")+path, strings.NewReader(body))
+	if err != nil {
+		return 0, "", err
+	}
+	if body != "" {
+		request.Header.Set("Content-Type", "application/json")
+	}
+	if auth != "" {
+		request.Header.Set("Authorization", auth)
+	}
+	response, err := (&http.Client{Timeout: 60 * time.Second}).Do(request)
+	if err != nil {
+		return 0, "", err
+	}
+	raw, err := io.ReadAll(io.LimitReader(response.Body, 64<<10))
+	_, _ = io.Copy(io.Discard, response.Body)
+	_ = response.Body.Close()
+	return response.StatusCode, strings.TrimSpace(string(raw)), err
 }
 
 func (ns *sceneProjectionNamespace) close() {
@@ -245,5 +327,59 @@ func TestSceneProjectionNamespaceRewritesOnlyPhysicalCoordinates(t *testing.T) {
 		if request.method != http.MethodDelete || !strings.HasPrefix(request.path, "/"+first.prefix) || strings.ContainsAny(request.path, "*,") || request.auth != "Basic ZmFrZQ==" {
 			t.Fatalf("cleanup exceeded its own exact index names: %#v", request)
 		}
+	}
+}
+
+func TestSceneProjectionNamespaceForkIsolatesFrozenMedia(t *testing.T) {
+	endpoint := strings.TrimSpace(os.Getenv("KC_TEST_OPENSEARCH_URL"))
+	if endpoint == "" {
+		t.Fatal("KC_TEST_OPENSEARCH_URL is required: frozen scene media are forked on real OpenSearch")
+	}
+	count := func(ns *sceneProjectionNamespace) string {
+		t.Helper()
+		response, err := http.Get(ns.server.URL + "/kc-proj-fork/_count")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		var body struct{ Count int }
+		if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		return fmt.Sprint(body.Count)
+	}
+	put := func(ns *sceneProjectionNamespace, id string) int {
+		t.Helper()
+		request, _ := http.NewRequest(http.MethodPut, ns.server.URL+"/kc-proj-fork/_doc/"+id+"?refresh=true", strings.NewReader(`{"v":1}`))
+		request.Header.Set("Content-Type", "application/json")
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = response.Body.Close()
+		return response.StatusCode
+	}
+	built := newSceneProjectionNamespace(t, endpoint)
+	if status := put(built, "a"); status >= 300 {
+		t.Fatalf("seed HTTP %d", status)
+	}
+	frozen := newSceneProjectionNamespace(t, endpoint)
+	if err := built.forkInto(frozen); err != nil {
+		t.Fatal(err)
+	}
+	first, second := newSceneProjectionNamespace(t, endpoint), newSceneProjectionNamespace(t, endpoint)
+	for _, clone := range []*sceneProjectionNamespace{first, second} {
+		if err := frozen.forkInto(clone); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if status := put(first, "b"); status >= 300 {
+		t.Fatalf("clone must stay writable: HTTP %d", status)
+	}
+	if got := []string{count(frozen), count(first), count(second)}; got[0] != "1" || got[1] != "2" || got[2] != "1" {
+		t.Fatalf("fork leaked writes between worlds: frozen/first/second=%v", got)
+	}
+	if status := put(frozen, "c"); status < 400 {
+		t.Fatalf("frozen media accepted a write: HTTP %d", status)
 	}
 }

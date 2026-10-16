@@ -1,0 +1,90 @@
+# 插件重构验收：外部值与索引、时限、可信范围的交叉边界。夹具见 _materials/acceptance/README.md；用例树见同文件“用例树”一节。
+# 每条从本节点前态独立开始，由 probe 显式创建所需仓与夹具，不传递其他用例的后态。
+# 测试源的调用记录（地址、身份、请求头）用于判断凭证是否发出；不可达的目标以插件出站记录判断。
+
+- id: accept-cross-shared-only-indexed
+  title: 只有 shared 外部值能进索引
+  claims: ["liveaccess#U22", "discovery#U7"]
+  given:
+    - ops/warehouse-stats 为 shared，ops/pipeline-monitor 未写 identity（默认 per-caller）。
+    - Dataset sales-analysis 选入的声明含 table-row-count，并叠加 variants/index/runtime-value-mixed-identity.yaml。
+  when:
+    - 准备修订并读取访问概览；按 rowCount 过滤搜索；按 runtime value 过滤搜索。
+  then:
+    - table-row-count 正常构建，过滤成立。
+    - runtime-value 整条标为不支持，原因列出 table/shop.orders 的 runtime 成员 freshness-lag 与其 per-caller 取值描述；不逐单元跳过后照常构建。
+    - 按 runtime value 过滤明确报不支持，不返回只含 row-count 与 retention-days 的部分结果。
+  risk: 按调用者授权的外部值经服务身份进入共享索引，绕过外部系统授权；或跳过部分单元让过滤结果悄悄不完整。
+
+- id: accept-cross-per-caller-not-searchable
+  title: 外部系统拒绝的用户既读不到也搜不到
+  claims: ["liveaccess#U22", "liveaccess#U6"]
+  given:
+    - 测试源对 reader-b 拒绝 freshness-lag，对 reader-a 返回值；两人都有 Dataset sales-analysis 的消费权。
+  when:
+    - 两人分别读取 table/shop.orders 的 runtime 方面，并以 freshness-lag 中的值作为文本搜索。
+  then:
+    - reader-a 读到值，reader-b 在该成员上得到取值失败（来源拒绝），兄弟成员照常。
+    - 两人的搜索都不经 freshness-lag 命中，命中摘要中不出现它的值。
+  risk: 整体消费权限与外部系统的逐人授权叠加时，搜索成为旁路。
+
+- id: accept-cross-hit-recheck
+  title: 外部值变化后命中回读补判
+  claims: ["liveaccess#U22", "discovery#U5"]
+  given:
+    - 修订就绪时测试源给 table/shop.orders 行数 1200；索引按此建好。
+  when:
+    - 测试源把行数改为 800；搜索 rowCount >= 1000 并回读命中。
+  then:
+    - 候选阶段命中 table/shop.orders，回读取到 800 后淘汰，最终结果不含它。
+    - 结果标明 rowCount 条件用到外部值，并给出建索引时的观察时间。
+    - 只有行数变化不产生新的 Dataset 修订。
+  risk: 搜索返回已经不满足条件的对象，且没有任何标记说明结果可能过时。
+
+- id: accept-cross-retained-revision-not-refreshed
+  title: 保留的旧修订不再刷新外部值
+  claims: ["liveaccess#U22", "dataset#U12"]
+  given:
+    - 保留 minAge 0、minRevisions 2；修订 1 就绪后发布修订 2。
+  when:
+    - 测试源改变行数并发出变化通知；等待一个维护周期；查看测试源调用记录与两个修订的观察时间。
+  then:
+    - 只为修订 2 重新取值并更新索引；修订 1 沿用冻结时的观察，调用记录中没有为修订 1 发起的取值。
+  risk: 外部值刷新成本随保留的修订数成倍增长。
+
+- id: accept-cross-descriptor-repo-not-selected
+  title: 取值描述所在仓未选入 Dataset 时按引用版本解析
+  claims: ["liveaccess#U23"]
+  given:
+    - Dataset sales-analysis 选入 table-meta，不选入 ops-shared；live-stats 引用 ops/warehouse-stats。
+  when:
+    - 在 Dataset 中读取 table/shop.orders 的 live-stats；列出 Dataset 的文件树。
+  then:
+    - 外部值照常返回，依据中的声明摘要包含取值描述在引用版本上的摘要。
+    - 文件树与对象列表中不出现 ops/warehouse-stats。
+  risk: 取值描述被要求选入才能用，或因被引用而泄漏进消费者可见范围。
+
+- id: accept-cross-request-deadline
+  title: 多个慢成员共用请求剩余时限
+  claims: ["liveaccess#U23"]
+  given:
+    - 测试源让 row-count 延迟 0.4s、freshness-lag 延迟 0.4s、live-stats 延迟 0.4s；单元时限各 1s，请求时限 0.6s。
+  when:
+    - 读取 table/shop.orders 的 runtime 与 live-stats 方面。
+  then:
+    - 在请求时限内完成的单元照常返回；其余逐个报取值超时，并按地址列在值旁。
+    - 静态的 retention-days 照常返回；整次请求在约 0.6s 内结束，不等到各单元自己的 1s 时限。
+  risk: 单元时限累加使请求远超调用方时限，或一个单元超时让整次读取失败。
+
+- id: accept-cross-origin-exact-match
+  title: 可信范围按 scheme、host、port 精确匹配
+  claims: ["liveaccess#U23", "liveaccess#U7"]
+  given:
+    - 部署可信范围只有 http://live-origin:7400。
+  when:
+    - 分别以 variants/origin-match/alt-port.yaml、https-scheme.yaml、subdomain.yaml 替换 ops/warehouse-stats 后读取 live-stats。
+  then:
+    - alt-port 与 subdomain：测试源（7402 实例、api.live-origin 别名）收到请求，请求头不含调用者凭证。
+    - https-scheme：取值失败为不可达；插件出站记录显示该请求未附凭证。
+    - 原 http://live-origin:7400 仍带凭证，作为对照。
+  risk: 按 host 或域名后缀放行，凭证随端口或子域名扩散到不受信的服务。

@@ -35,11 +35,21 @@
 | 端口清单 | `/tmp/kc-deploy-local`，清盘即丢 | `$HOME/.kc/deploy-dev/compose.env`（值就是下表固定口） |
 | `down` | 默认清卷并删 env | 只停容器，卷和 env 留下 |
 | 清盘 | 与 `down` 相同 | `make deploy-dev-reset` |
-| 重启策略 | 默认不拉起 | `compose.dev.yaml`：`unless-stopped` |
+| 重启策略 | lakeFS 异常退出最多重试 3 次，其它默认不拉起 | `compose.dev.yaml`：`unless-stopped` |
 | 端口 | 每次从空选空闲口 | **固定**；被占则失败，不换口 |
 | scenes | 只挂在这套 | 拒绝 |
 
 必须一起留的是 `kc-data`、PostgreSQL 和 MinIO。OpenSearch 与可观测卷开发栈顺便留。两边都不持久 `/var/lib/kc/cache`。宿主机只持久化 compose.env，数据面用 Docker 命名卷，不 bind 进仓库。开发栈镜像标签是 `kc-deploy-dev:local` / `kc-deploy-dev-cli:local`，重建不会改写正在跑的 `kc-deploy-local` 镜像。
+
+local 的 lakeFS 用 `on-failure:3` 恢复异常退出后的进程，不重跑一次性的 bootstrap，不改变已有权威卷。
+这项策略不能替代内存预算：OOM 仍须核对 Docker VM 与同时运行的容器内存峰值；持续失败耗尽重试后需显式处理。
+修改 Compose 文件不改变正在运行的容器，下一次显式部署时才应用策略。验收入口仍只绑定已有测试栈。
+
+两套本地陪伴栈的 lakeFS 设置 `GOMEMLIMIT=1536MiB`，让 Go 在运行时管理的总内存接近预算时更早回收。
+这是软预算，不是 heap 或容器 RSS 的硬上限；保留普通 GC。SSTable 内存块缓存另设为 64MiB
+（`committed.sstable.memory.cache_size_bytes`）；它和本地磁盘缓存是不同的配置。该预算依据真实验收
+后的堆采样选取：默认块缓存及其索引元数据占据了大部分存活堆，单设 Go 软预算仍发生过共享 VM OOM。
+调整或扩量后仍需复跑实际负载，并核对 `/metrics`、堆/进程峰值、VM 余量和重启次数。
 
 开发栈页面绑 `0.0.0.0`，用主机 IP 访问；ttyd 有 basic auth，不是无认证 shell。local 测试栈仍只绑 `127.0.0.1`。被其它进程占用则 `up` 失败，不会改口。
 
@@ -100,3 +110,11 @@ make deploy-local-goto NODE=qinghe-object-published PROBE=probe-publish-dataset-
 ```
 
 `make deploy-local-scenes` 是独立的真实 lakeFS 部署场景入口，也包含在显式 `make test-all` 中。测试栈由调用者显式准备，测试不隐式重建或清盘。默认 `make test` / `make test-lakefs` 使用原有 lakeFS HTTP 夹具和真实 OpenSearch，不依赖本部署栈。组件/应用混合套件保留为 `make test-contracts`；三者不是相同覆盖范围。人手走查继续走 ttyd → `kc-server`。`make deploy-local-scenes` 可连跑：live Graveler 仓名按次唯一，测完删除。开发栈拒绝 scenes，避免 live DFS 写进长期权威。动态观察由独立 Go 用例配合 State runtime 验证，不再作为可跳过的场景节点。
+
+## 插件规格验收
+
+`make deploy-local-accept` 在现有 local 测试部署批跑清河验收；先用 `make deploy-local-status` 核对运行状态。
+入口不负责启动、重建或重置。`compose.accept.yaml` 随 local 部署声明两个验收外部源，端口 7400、7401、7402
+与 `api.live-origin` 别名；dev 不装这些夹具。墙外 accessor 承担产品树的 Resource Access、Collector 与 Observer，
+验收 live-origin 只提供可控制的取值与调用记录，两者分工不同。
+栈缺失、Server 未就绪或源缺失时验收非零退出，完整诊断和逐规格结果在 `.validation/runs/`。
