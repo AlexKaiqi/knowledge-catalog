@@ -70,6 +70,10 @@ func Ingest(dir string, repositoryID kernel.RepositoryID, baseCommit kernel.Comm
 	sort.Slice(operations, func(i, j int) bool {
 		return objectmodel.AddressKey(operations[i].Address) < objectmodel.AddressKey(operations[j].Address)
 	})
+	// Directory publication does not invent a provenance origin: the local
+	// directory is the caller's machine layout, not what the content is based
+	// on. Callers declare their own origin with the shared origin flags, which
+	// replace this envelope (see IngestDesired). DEBT-WRITER-SOURCE-PATH-01.
 	return IngestPreview{
 		Files: files,
 		ChangeSet: objectmodel.CommitChangeSet{
@@ -78,8 +82,7 @@ func Ingest(dir string, repositoryID kernel.RepositoryID, baseCommit kernel.Comm
 			BaseCommit:           baseCommit,
 			ExpectedTargetCommit: baseCommit,
 			Operations:           operations,
-			Message:              "ingest " + dir,
-			Provenance:           &objectmodel.ProvenanceEnvelope{OriginKind: objectmodel.OriginSource, SourceRefs: []string{dir}},
+			Message:              "ingest directory",
 		},
 	}, nil
 }

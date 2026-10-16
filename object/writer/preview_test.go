@@ -30,7 +30,11 @@ func TestT7Ingest(t *testing.T) {
 	if len(preview.Files) != 2 || len(preview.ChangeSet.Operations) != 2 {
 		t.Fatalf("%#v", preview)
 	}
-	if preview.ChangeSet.Provenance == nil || preview.ChangeSet.Provenance.OriginKind != objectmodel.OriginSource {
+	// Directory publication no longer invents a provenance envelope from the
+	// caller's local path; a declared origin comes from the shared origin
+	// flags (covered by TestIngestDoesNotRecordLocalDirectoryInProvenance and
+	// the CLI origin-flag regressions).
+	if preview.ChangeSet.Provenance != nil {
 		t.Fatal(preview.ChangeSet.Provenance)
 	}
 	if preview.ChangeSet.Operations[0].Op != objectmodel.OpPut {
