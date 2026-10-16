@@ -2317,7 +2317,7 @@
           "--source",
           "sales-semantic=$branch@metrics@metrics",
           "--source",
-          "table-meta=$branch@_schemas@_schemas/table-meta",
+          "table-meta=$branch@_schemas/table-meta@_schemas",
           "--file-source",
           "sales-semantic=$branch@_schemas/$prefixmetric.properties.aspect.yaml@_schemas/sales-semantic/metric.properties.aspect.yaml",
           "--file-source",
@@ -2429,7 +2429,7 @@
           "--source",
           "sales-semantic=$branch@metrics@metrics",
           "--source",
-          "table-meta=$branch@_schemas@_schemas/table-meta",
+          "table-meta=$branch@_schemas/table-meta@_schemas",
           "--file-source",
           "sales-semantic=$branch@_schemas/$prefixmetric.properties.aspect.yaml@_schemas/sales-semantic/metric.properties.aspect.yaml",
           "--file-source",
@@ -2536,7 +2536,7 @@
           "--source",
           "sales-semantic=$branch@metrics@metrics",
           "--source",
-          "table-meta=$branch@_schemas@_schemas/table-meta",
+          "table-meta=$branch@_schemas/table-meta@_schemas",
           "--file-source",
           "sales-semantic=$branch@_schemas/$prefixmetric.properties.aspect.yaml@_schemas/sales-semantic/metric.properties.aspect.yaml",
           "--file-source",
@@ -2594,8 +2594,13 @@
         "expect": {
           "exit": 1,
           "has": {
-            "error.code": "FORBIDDEN"
-          }
+            "error.code": "OBJECT_REF_UNRESOLVED"
+          },
+          "absent": [
+            "value",
+            "declarations",
+            "observations"
+          ]
         }
       }
     ]
@@ -3126,7 +3131,7 @@
           "--source",
           "table-meta=$branch@tables@tables",
           "--source",
-          "table-meta=$branch@_schemas@_schemas/table-meta"
+          "table-meta=$branch@_schemas/table-meta@_schemas"
         ],
         "expect": {
           "has": {
@@ -3955,7 +3960,7 @@
           "--source",
           "table-meta=$branch@tables@tables",
           "--source",
-          "table-meta=$branch@_schemas@_schemas/table-meta"
+          "table-meta=$branch@_schemas/table-meta@_schemas"
         ],
         "expect": {
           "has": {
@@ -5582,7 +5587,7 @@
           "--source",
           "table-meta=$branch@tables@tables",
           "--source",
-          "table-meta=$branch@_schemas@_schemas/table-meta",
+          "table-meta=$branch@_schemas/table-meta@_schemas",
           "--source",
           "sales-semantic=$branch@metrics@metrics",
           "--file-source",

@@ -50,7 +50,7 @@ class AcceptTest(unittest.TestCase):
             args = step['kc']
             sources = [args[i+1] for i, value in enumerate(args[:-1]) if value == '--source']
             self.assertIn('table-meta=$branch@tables@tables', sources)
-            self.assertIn('table-meta=$branch@_schemas@_schemas/table-meta', sources)
+            self.assertIn('table-meta=$branch@_schemas/table-meta@_schemas', sources)
             self.assertFalse(any(value.startswith('ops-shared=') for value in sources),
                              'descriptor dependencies must remain unselected and hidden')
             self.assertTrue(all('@' in value for value in sources), 'whole repositories must not replace selected slices')
@@ -62,6 +62,19 @@ class AcceptTest(unittest.TestCase):
                                   '.aspect.yaml@_schemas/sales-semantic/'+name+'.aspect.yaml', files)
                 self.assertFalse(any(value.startswith('sales-semantic=$branch@_schemas/')
                                      for value in sources), 'the common Schema must keep one selected holder')
+
+    def test_dependency_descriptor_denial_keeps_dataset_object_scope_hidden(self):
+        runner = load()
+        steps = runner.read_probes()['accept-cross-descriptor-repo-not-selected']['steps']
+        denied = steps[-1]['expect']
+        self.assertEqual(denied['exit'], 1)
+        self.assertEqual(denied['has']['error.code'], 'OBJECT_REF_UNRESOLVED')
+        expected = {key: value for key, value in denied.items() if key != 'exit'}
+        runner.check({'error': {'code': 'OBJECT_REF_UNRESOLVED'}}, expected)
+        for field in ('value', 'declarations', 'observations'):
+            self.assertIn(field, denied['absent'])
+            with self.subTest(field=field), self.assertRaises(runner.ContractFailure):
+                runner.check({'error': {'code': 'OBJECT_REF_UNRESOLVED'}, field: {'origin': 'private'}}, expected)
 
     def test_schema_draft_uses_writer_canonical_path_inside_selected_schema_tree(self):
         load()

@@ -401,7 +401,7 @@ class World:
         args = ['dataset', 'define', '--dataset', fixture.get('name', '$dataset'),
                 '--revision', str(fixture.get('revision', 1))]
         args += ['--source', 'table-meta=$branch@tables@tables',
-                 '--source', 'table-meta=$branch@_schemas@_schemas/table-meta',
+                 '--source', 'table-meta=$branch@_schemas/table-meta@_schemas',
                  '--source', 'sales-semantic=$branch@metrics@metrics']
         # Both input repositories hold the common Relation Schema. Deliver only
         # the Metric schemas from semantic, keeping one holder per Schema unit.
