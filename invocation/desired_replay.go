@@ -19,6 +19,7 @@ func rebuildDesiredReplay(cx *Invocation, commandID string, desired objectmodel.
 	}
 	request := entry.Request
 	if entry.Status != snapshot.StatusApplied || entry.Digest == "" || len(entry.Receipt) == 0 ||
+		request.Kind == "" || request.RepositoryID == "" || request.TargetRef == "" ||
 		request.BaseCommit == "" || request.ExpectedTargetCommit == "" || request.OperationCount < 1 {
 		return objectmodel.CommitChangeSet{}, kernel.Fail(kernel.ErrPreconditionFailed, "cannot verify directory retry %s without its applied request basis", commandID)
 	}

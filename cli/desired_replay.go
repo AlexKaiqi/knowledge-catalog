@@ -22,7 +22,8 @@ func replayRemoteDesired(ctx context.Context, client *kcclient.Client, flags map
 	}
 	stored := entry.Request
 	if entry.CommandID != commandID || entry.Status != snapshot.StatusApplied || entry.Digest == "" ||
-		len(entry.Receipt) == 0 || stored.BaseCommit == "" || stored.ExpectedTargetCommit == "" || stored.OperationCount < 1 {
+		len(entry.Receipt) == 0 || stored.Kind == "" || stored.RepositoryID == "" || stored.TargetRef == "" ||
+		stored.BaseCommit == "" || stored.ExpectedTargetCommit == "" || stored.OperationCount < 1 {
 		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "cannot verify directory retry %s without an applied command and its original basis", commandID)
 	}
 	if stored.Kind != string(objectmodel.SurfaceCommit) || stored.RepositoryID != string(desired.TargetRepository) || stored.TargetRef != desired.TargetRef ||
