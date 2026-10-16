@@ -7,7 +7,7 @@ OpenSearch managed projection，属于可丢弃、可重建的检索层，不是
 `declarativeindex/opensearch/internal/opensearchimpl`——实现体仅本 adapter 内部可达（A-01）；装配通过插件 Entry 使用本薄壳。
 
 - `declarativeindex/projection/` 将 Entity、Aspect、Member、Relation 编译为完整的类型化对象文档。
-- 本包拥有 OpenSearch provider 的完整实现；不提供 Elasticsearch 兼容路径或配置别名。
+- 本包拥有 OpenSearch provider 的完整实现，不另设驱动名。集群若拒绝 OpenSearch 的 PIT 路由和 `index.knn`，同一客户端改用 Elasticsearch 的 `/_pit` 与 `dense_vector`。
 - 物理数据使用 generation index；basis、active generation 和状态保存在独立 control index。
 - `Config.Namespace` 是稳定、非秘密的实例身份，分别隔离实际 control index、generation 与分页依据。
   私有工作目录不决定物理身份；同一 namespace 换目录仍接纳自己的资源，不同实例必须使用不同 namespace。

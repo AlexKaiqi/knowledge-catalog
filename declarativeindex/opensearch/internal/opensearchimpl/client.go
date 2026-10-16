@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	retrieval "kc/discovery"
@@ -46,6 +47,10 @@ type openSearchEngine struct {
 	embedder        retrieval.Embedder
 	vectorDimension int
 	vectorModel     string
+	// denseVector is set when the cluster rejects OpenSearch knn settings and
+	// serves Elasticsearch dense_vector plus /_pit instead.
+	denseVector atomic.Bool
+	vectorKnown atomic.Bool
 }
 
 // VectorReady reports whether this engine derives a k-NN vector surface.
@@ -78,6 +83,9 @@ func (e *openSearchEngine) PhysicalDigest() kernel.Digest {
 	}
 	if e.VectorReady() {
 		identity["embeddingModel"], identity["embeddingDimensions"] = e.vectorModel, e.vectorDimension
+		if e.denseVector.Load() {
+			identity["vectorStore"] = "dense_vector"
+		}
 	}
 	return kernel.CanonicalDigest(identity)
 }
@@ -192,10 +200,15 @@ func (e *openSearchEngine) projectionMapping() map[string]any {
 		},
 	}
 	if e.VectorReady() {
-		settings["knn"] = true
+		vector := map[string]any{"type": "knn_vector", "dimension": e.vectorDimension, "method": map[string]any{"name": "hnsw", "space_type": "cosinesimil", "engine": "lucene"}}
+		if e.denseVector.Load() {
+			vector = map[string]any{"type": "dense_vector", "dims": e.vectorDimension, "index": true, "similarity": "cosine"}
+		} else {
+			settings["knn"] = true
+		}
 		properties["semantic_vectors"] = map[string]any{"type": "nested", "properties": map[string]any{
 			"member": map[string]any{"type": "keyword"}, "model": map[string]any{"type": "keyword"},
-			"vector": map[string]any{"type": "knn_vector", "dimension": e.vectorDimension, "method": map[string]any{"name": "hnsw", "space_type": "cosinesimil", "engine": "lucene"}},
+			"vector": vector,
 		}}
 	}
 	return map[string]any{
@@ -208,14 +221,52 @@ func (e *openSearchEngine) projectionMapping() map[string]any {
 }
 
 func (e *openSearchEngine) createGeneration(name string) error {
+	e.detectVectorStore(context.Background())
 	status, body, err := e.do(http.MethodPut, "/"+name, e.projectionMapping())
 	if err != nil {
 		return err
+	}
+	if status >= 400 && e.VectorReady() && bytes.Contains(body, []byte("unknown setting [index.knn]")) {
+		e.denseVector.Store(true)
+		e.vectorKnown.Store(true)
+		status, body, err = e.do(http.MethodPut, "/"+name, e.projectionMapping())
+		if err != nil {
+			return err
+		}
 	}
 	if status >= 400 {
 		return fmt.Errorf("opensearch create generation: %s", body)
 	}
 	return nil
+}
+
+// detectVectorStore records whether this cluster is Elasticsearch. OpenSearch
+// keeps knn_vector. Elasticsearch rejects index.knn and serves dense_vector.
+func (e *openSearchEngine) detectVectorStore(ctx context.Context) {
+	if e.vectorKnown.Load() || !e.VectorReady() {
+		return
+	}
+	status, body, err := e.doContext(ctx, http.MethodGet, "/", nil)
+	if err != nil || status >= 400 {
+		return
+	}
+	var info struct {
+		Tagline string `json:"tagline"`
+		Version struct {
+			Distribution string `json:"distribution"`
+		} `json:"version"`
+	}
+	if json.Unmarshal(body, &info) != nil {
+		return
+	}
+	e.vectorKnown.Store(true)
+	if info.Version.Distribution != "opensearch" && strings.Contains(info.Tagline, "You Know, for Search") {
+		e.denseVector.Store(true)
+	}
+}
+
+func pitRouteMissing(body []byte) bool {
+	return bytes.Contains(body, []byte("no handler found"))
 }
 
 func (e *openSearchEngine) refresh(name string) error {

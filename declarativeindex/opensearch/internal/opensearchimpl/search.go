@@ -202,24 +202,35 @@ func (e *openSearchEngine) openPITContext(ctx context.Context, physicalIndex str
 	if err != nil {
 		return "", err
 	}
+	if status >= 400 && pitRouteMissing(body) {
+		status, body, err = e.doContext(ctx, http.MethodPost, "/"+physicalIndex+"/_pit?keep_alive=2m", nil)
+		if err != nil {
+			return "", err
+		}
+	}
 	if status >= 400 {
 		return "", fmt.Errorf("opensearch open PIT: %s", body)
 	}
 	var response struct {
 		PIT    string         `json:"pit_id"`
+		ID     string         `json:"id"`
 		Shards *shardResponse `json:"_shards"`
 	}
 	if err := decodeJSON(body, &response); err != nil {
 		return "", err
 	}
+	pit := response.PIT
+	if pit == "" {
+		pit = response.ID
+	}
 	if err := response.Shards.check("open PIT"); err != nil {
-		e.closePITContext(ctx, response.PIT)
+		e.closePITContext(ctx, pit)
 		return "", err
 	}
-	if response.PIT == "" {
+	if pit == "" {
 		return "", kernel.Fail(kernel.ErrTemporaryUnavailable, "opensearch open PIT returned no pit_id")
 	}
-	return response.PIT, nil
+	return pit, nil
 }
 
 func (e *openSearchEngine) closePITContext(ctx context.Context, pit string) {
@@ -228,7 +239,13 @@ func (e *openSearchEngine) closePITContext(ctx context.Context, pit string) {
 	}
 	cleanup, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
-	_, _, _ = e.doContext(cleanup, http.MethodDelete, "/_search/point_in_time", map[string]any{"pit_id": pit})
+	status, body, err := e.doContext(cleanup, http.MethodDelete, "/_search/point_in_time", map[string]any{"pit_id": pit})
+	if err != nil || status < 400 {
+		return
+	}
+	if pitRouteMissing(body) {
+		_, _, _ = e.doContext(cleanup, http.MethodDelete, "/_pit", map[string]any{"id": pit})
+	}
 }
 
 func (e *openSearchEngine) searchPIT(state pitContinuation, req retrieval.SearchRequest, spec retrieval.AccessSpec, size int) ([]objectmodel.ObjectID, [][]any, string, error) {
@@ -538,7 +555,28 @@ func continuationDigest(state pitContinuation) kernel.Digest {
 // lane evidence so no caller can mistake it for the exact lexical lane. The
 // projection must have been built by this engine's embedding provider; a
 // rebuilt lexical generation fails closed here.
+func (e *openSearchEngine) semanticQuery(req index.RetrieveRequest, queryVector []float32, size int) map[string]any {
+	members := req.Spec.SemanticMembers()
+	if e.denseVector.Load() {
+		return map[string]any{"nested": map[string]any{
+			"path": "semantic_vectors", "score_mode": "max",
+			"query": map[string]any{"script_score": map[string]any{
+				"query": map[string]any{"terms": map[string]any{"semantic_vectors.member": members}},
+				"script": map[string]any{
+					"source": "cosineSimilarity(params.q, 'semantic_vectors.vector') + 1.0",
+					"params": map[string]any{"q": queryVector},
+				},
+			}},
+		}}
+	}
+	return map[string]any{"nested": map[string]any{"path": "semantic_vectors", "score_mode": "max", "query": map[string]any{"knn": map[string]any{"semantic_vectors.vector": map[string]any{
+		"vector": queryVector, "k": size,
+		"filter": map[string]any{"terms": map[string]any{"semantic_vectors.member": members}},
+	}}}}}
+}
+
 func (e *openSearchEngine) SemanticWindowContext(ctx context.Context, req index.RetrieveRequest, queryVector []float32) (index.CandidatePage, error) {
+	e.detectVectorStore(ctx)
 	if !e.VectorReady() {
 		return index.CandidatePage{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "semantic recall requires a vector projection")
 	}
@@ -572,10 +610,7 @@ func (e *openSearchEngine) SemanticWindowContext(ctx context.Context, req index.
 	}
 	payload := map[string]any{
 		"size": size, "_source": []string{"object_id", "source_repository", "source_commit"}, "track_total_hits": false,
-		"query": map[string]any{"nested": map[string]any{"path": "semantic_vectors", "score_mode": "max", "query": map[string]any{"knn": map[string]any{"semantic_vectors.vector": map[string]any{
-			"vector": queryVector, "k": size,
-			"filter": map[string]any{"terms": map[string]any{"semantic_vectors.member": req.Spec.SemanticMembers()}},
-		}}}}},
+		"query": e.semanticQuery(req, queryVector, size),
 	}
 	status, body, err := e.doContext(ctx, http.MethodPost, "/"+control.ActiveIndex+"/_search?allow_partial_search_results=false", payload)
 	if err != nil {
