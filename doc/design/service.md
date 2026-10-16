@@ -109,7 +109,7 @@
 | 目录 | 负责 |
 |---|---|
 | `server/` | HTTP 路由、处理器、调用认证判定与授权强制 |
-| `httpsurface/` | 公开路由清单（与 `server/routes.go` 合并为一份，见[路线](../roadmap.md)） |
+| `httpsurface/` | 已退役（ROUTE-MANIFEST-01）：封闭路由清单只留在 `server/routes.go`，金样为 `server/routes_golden.txt` |
 | `invocation/` | 一次已解析调用的载体，连接授权、固定范围、证据与所属服务 |
 | `invoke/` | 命令行与 HTTP 共用的调用词汇 |
 | `home/` | 部署装配：连接存储、装配 Writer、Reader、插件，统一启停 |

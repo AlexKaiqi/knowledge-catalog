@@ -17,9 +17,27 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
-
-	"kc/httpsurface"
 )
+
+// goldenRoutesPath is the server-owned golden manifest of the closed HTTP
+// surface. The registry package (httpsurface) was retired: the server literal
+// table and this manifest are the two faces of one list, and both change
+// together in the same commit.
+const goldenRoutesPath = "server/routes_golden.txt"
+
+func goldenRoutes() ([]string, error) {
+	return goldenRoutesFrom(".")
+}
+
+func goldenRoutesFrom(root string) ([]string, error) {
+	raw, err := os.ReadFile(filepath.Join(root, goldenRoutesPath))
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", goldenRoutesPath, err)
+	}
+	entries := strings.Split(strings.TrimSuffix(string(raw), "\n"), "\n")
+	sort.Strings(entries)
+	return entries, nil
+}
 
 type testEntry struct {
 	Name    string `json:"name"`
@@ -264,7 +282,11 @@ func generate(check bool) error {
 	if len(commands) == 0 || len(routes) == 0 {
 		return fmt.Errorf("public surface inventory is empty")
 	}
-	if err := validateRouteInventory(routes, httpsurface.Patterns()); err != nil {
+	patterns, err := goldenRoutes()
+	if err != nil {
+		return err
+	}
+	if err := validateRouteInventory(routes, patterns); err != nil {
 		return err
 	}
 	view, err := loadSceneView()

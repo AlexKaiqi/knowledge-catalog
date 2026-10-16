@@ -1,6 +1,6 @@
 # home/
 
-部署装配入口：按声明配置连接独立登记表 Snapshot 权威和已有对象 Snapshot，把 Writer / Reader / Index 装配到 Server。Snapshot 后端只经 `kc/snapshot` 公开构造与能力契约接入；lakeFS 实现归私有 `snapshot/internal/lakefsimpl`（A-01）；`declarativeindex/opensearch` 只允许在 stores 族与就绪端口绑定（`readiness_ports.go`：`NewSearchBackendProbe` 把具体索引探测绑定成端口函数，CAP-ORG-01 B7）。本包不得 import `cli`、`client` 或 `httpsurface`。
+部署装配入口：按声明配置连接独立登记表 Snapshot 权威和已有对象 Snapshot，把 Writer / Reader / Index 装配到 Server。Snapshot 后端只经 `kc/snapshot` 公开构造与能力契约接入；lakeFS 实现归私有 `snapshot/internal/lakefsimpl`（A-01）；`declarativeindex/opensearch` 只允许在 stores 族与就绪端口绑定（`readiness_ports.go`：`NewSearchBackendProbe` 把具体索引探测绑定成端口函数，CAP-ORG-01 B7）。本包不得 import `cli`、`client` 或 `server`。
 
 业务 CLI 经 Server 和显式 principal。`kc deployment init --config` 显式初始化；`kc serve --config` 与 `OpenDeployment` 仅恢复。没有公开 `local` 命令或由实例目录扫描得到的部署清单。
 

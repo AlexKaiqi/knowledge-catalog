@@ -30,12 +30,12 @@ out := invoke.JSONOut(map[string]any{"dataset": ds, "ok": err == nil})
 
 可以依赖（现值）：`kernel`、`hook`、`internal/telemetry` 与标准库（含 `net/http`
 信封原语）。
-禁止 import：`kc/cli`、`kc/httpsurface`、`kc/client`、`kc/home`——transport 中立性即本能力的存在意义
+禁止 import：`kc/cli`、`kc/client`、`kc/home`——transport 中立性即本能力的存在意义
 （R1 起四者全部可钉，B2 落 denylist 钉死）。
 
 ## 验证
 
-- arch guard：`internal/arch` denylist `invoke ↛ {cli, httpsurface, client, home}`（B2 落地）；
+- arch guard：`internal/arch` denylist `invoke ↛ {cli, client, home}`（B2 落地）；
   `TestApplicationPackageBoundaries`（R1 起绿）；
 - coupling unit：`invoke`（R1 收紧：instability 0.88→0.80，propagation 38.22%→37.86%）；
 - 行为：`invoke/http_test.go`；CLI 与 HTTP 共用 typed executor 的 `API-01` 合同

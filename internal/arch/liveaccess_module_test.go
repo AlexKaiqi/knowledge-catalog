@@ -192,7 +192,7 @@ func liveAccessDependencySignals(graph depGraph) []string {
 		}
 	}
 	for _, owner := range []string{"liveaccess/service", "liveaccess/plugin", "liveaccess/evidence", "liveaccess/handler"} {
-		for _, target := range []string{"home", "invocation", "server", "httpsurface", "cli", "client", "identity", "object/writer", "discovery/plugin"} {
+		for _, target := range []string{"home", "invocation", "server", "cli", "client", "identity", "object/writer", "discovery/plugin"} {
 			if trail, blocked := reachDenied(graph.reachable(owner), target); blocked {
 				signals = append(signals, fmt.Sprintf("LiveAccess owner %s depends on host %s through %v", owner, target, trail))
 			}

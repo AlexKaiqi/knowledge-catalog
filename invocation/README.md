@@ -50,7 +50,7 @@ result, err := cmd.Run(cx)
 可以依赖：`invoke`、`home`（只引用句柄类型，绝不 Open）、`kernel`、`object`、
 `discovery`、`interfaces`、`liveaccess`、`snapshot` 的所属公开合同与任务服务，
 以及 `controlplane` 和标准库；具体闭集由架构守卫维护。
-禁止 import：`cli`、`server`、`httpsurface`、`client`（denylist 已钉，
+禁止 import：`cli`、`server`、`client`（denylist 已钉，
 `TestForbiddenDependencies`）。
 
 ## 验证

@@ -12,8 +12,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-
-	"kc/httpsurface"
 )
 
 type httpRouteEvidence struct {
@@ -52,6 +50,7 @@ var httpOnlyRouteEvidence = []httpRouteEvidence{
 	{http.MethodGet, "/assets/repository.js", "TestRepositoryManagementPageLoadsWithoutExposingAuthority"},
 	{http.MethodGet, "/console", "TestConsolePageLoadsWithoutExposingAuthority"},
 	{http.MethodGet, "/assets/console.js", "TestConsolePageLoadsWithoutExposingAuthority"},
+	{http.MethodGet, "/ui", "TestDatasetUILoadsBuildHintWithoutExposingAuthority"},
 	{http.MethodGet, "/ui/", "TestDatasetUILoadsBuildHintWithoutExposingAuthority"},
 	{http.MethodGet, "/operations/v1/stores", "TestStoresObservationOmitsSecretsAndHomeLayout"},
 	{http.MethodGet, "/snapshot/v1/connections", "TestManagedProductHumanSelfServiceOnLakeFS"},
@@ -90,20 +89,20 @@ var registeredRoutePattern = regexp.MustCompile(`mux\.Handle(?:Func)?\("((?:GET|
 // HTTP/host journey. Domain semantics stay in their application-level journeys.
 func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 	registered := productionHTTPRoutePatterns(t)
-	if len(registered) != 90 {
+	if len(registered) != 91 {
 		t.Fatalf("public HTTP route count changed to %d; add protocol evidence for the new surface", len(registered))
 	}
-	want := httpsurface.Patterns()
+	want := goldenRouteManifest(t)
 	if len(want) != len(registered) {
-		t.Fatalf("HTTP registry package has %d patterns, production mux has %d", len(want), len(registered))
+		t.Fatalf("golden manifest has %d patterns, production mux has %d", len(want), len(registered))
 	}
 	for i := range registered {
 		if registered[i] != want[i] {
-			t.Fatalf("HTTP registry drifted from production mux at %d: registry %q mux %q", i, want[i], registered[i])
+			t.Fatalf("golden manifest drifted from production mux at %d: manifest %q mux %q", i, want[i], registered[i])
 		}
 	}
-	if len(remoteDispatchRoutes) != 39 || len(httpOnlyRouteEvidence) != 52 {
-		t.Fatalf("HTTP evidence partition changed: remote=%d direct-journey=%d, want 39+52", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
+	if len(remoteDispatchRoutes) != 39 || len(httpOnlyRouteEvidence) != 53 {
+		t.Fatalf("HTTP evidence partition changed: remote=%d direct-journey=%d, want 39+53", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
 	}
 	tests := httpEvidenceTestFunctions(t)
 
@@ -145,6 +144,20 @@ func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 			t.Errorf("evidence owns a route absent from production: %s", pattern)
 		}
 	}
+}
+
+// goldenRouteManifest reads the server-owned golden manifest of the closed
+// HTTP surface; the httpsurface registry package is retired and the manifest
+// is the single exported face of the list.
+func goldenRouteManifest(t *testing.T) []string {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("..", "server", "routes_golden.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries := strings.Split(strings.TrimSuffix(string(raw), "\n"), "\n")
+	sort.Strings(entries)
+	return entries
 }
 
 func productionHTTPRoutePatterns(t *testing.T) []string {

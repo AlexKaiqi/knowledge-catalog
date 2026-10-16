@@ -2,7 +2,7 @@
 
 产品 argv、help 与操作数的应然设计见 [CLI 交互](../doc/design/affordance.md)。
 公开路径闭集以 [`surface.go`](surface.go) 为权威；HTTP 闭集以
-[`httpsurface`](../httpsurface/README.md) 为权威。本文解释产品操作，不复制协议字段。
+[`server`](../server/README.md) 的路由闭集（`routes.go` 与 `routes_golden.txt`）为权威。本文解释产品操作，不复制协议字段。
 
 ## 上下文与操作数
 

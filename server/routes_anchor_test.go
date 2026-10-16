@@ -1,31 +1,50 @@
 package server
 
 import (
-	"kc/httpsurface"
+	"reflect"
 	"testing"
 )
 
-// TestRoutesMatchHTTPSurfaceRegistry reconciles the implementation-side closed
-// set against the formal HTTP surface contract: every route the server declares
-// must appear in httpsurface.Patterns(), and every formal pattern must be
-// declared here. A change on either side without the other fails this test, so
-// the two faces of the access surface cannot drift apart.
-func TestRoutesMatchHTTPSurfaceRegistry(t *testing.T) {
-	formal := map[string]bool{}
-	for _, pattern := range httpsurface.Patterns() {
-		formal[pattern] = true
-	}
+// TestRoutesMatchGoldenManifest reconciles the in-package closed set with the
+// exported golden manifest (routes_golden.txt): the manifest is what external
+// scripts (validation-inventory) and tests (the CLI evidence inventory) read,
+// so a route change on either side without the other fails here. The manifest
+// and the literal table live in the same package and change together.
+func TestRoutesMatchGoldenManifest(t *testing.T) {
 	declared := map[string]bool{}
 	for _, r := range Routes() {
-		key := r.Method + " " + r.Pattern
-		if !formal[key] {
-			t.Errorf("server route %q is absent from httpsurface.Patterns(); update the formal registry in the same change", key)
-		}
-		declared[key] = true
+		declared[r.Method+" "+r.Pattern] = true
 	}
-	for key := range formal {
-		if !declared[key] {
-			t.Errorf("formal surface entry %q is not declared in server routes; implement or retire it on both sides in the same change", key)
+	golden := GoldenRoutes()
+	if len(golden) == 0 {
+		t.Fatal("golden manifest is empty; the closed set must have entries")
+	}
+	for _, entry := range golden {
+		if !declared[entry] {
+			t.Errorf("golden manifest entry %q is absent from routes.go; update both in the same change", entry)
+		}
+	}
+	for entry := range declared {
+		found := false
+		for _, goldenEntry := range golden {
+			if goldenEntry == entry {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("routes.go entry %q is absent from the golden manifest; update both in the same change", entry)
+		}
+	}
+}
+
+// TestGoldenManifestIsSortedAndUnique keeps the exported file in stable lexical
+// order so external readers can compare element-wise without re-sorting.
+func TestGoldenManifestIsSortedAndUnique(t *testing.T) {
+	golden := GoldenRoutes()
+	for i := 1; i < len(golden); i++ {
+		if golden[i-1] >= golden[i] {
+			t.Errorf("golden manifest must be strictly sorted and unique: %q then %q", golden[i-1], golden[i])
 		}
 	}
 }
@@ -57,4 +76,26 @@ func TestRoutesStaySorted(t *testing.T) {
 			t.Errorf("routes literal is out of order at %q; keep the table sorted by (pattern, method)", ordered[i].Method+" "+ordered[i].Pattern)
 		}
 	}
+}
+
+// TestGoldenRoutesExportedShape freezes the exported accessor's result so an
+// accidental change to the embedding or parsing is caught at the owner.
+func TestGoldenRoutesExportedShape(t *testing.T) {
+	golden := GoldenRoutes()
+	if len(golden) != len(routes) {
+		t.Fatalf("golden manifest has %d entries, routes.go has %d", len(golden), len(routes))
+	}
+	if !reflect.DeepEqual(golden, mustSortedCopy(golden)) {
+		t.Fatal("GoldenRoutes must return lexically sorted entries")
+	}
+}
+
+func mustSortedCopy(values []string) []string {
+	out := append([]string{}, values...)
+	for i := 1; i < len(out); i++ {
+		for j := i; j > 0 && out[j-1] > out[j]; j-- {
+			out[j-1], out[j] = out[j], out[j-1]
+		}
+	}
+	return out
 }

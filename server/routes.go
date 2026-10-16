@@ -10,9 +10,10 @@ import (
 )
 
 // Route is one formal entry of the service surface: an HTTP method plus a
-// ServeMux pattern. The set is closed and must stay in exact agreement with
-// httpsurface.Patterns(); routes_anchor_test.go enforces the reconciliation
-// in both directions.
+// ServeMux pattern. The set is closed and exported both as this table and as
+// the golden manifest (routes_golden.txt); routes_anchor_test.go enforces the
+// reconciliation in both directions, and validation-inventory checks the
+// manifest against the production HandleFunc/Handle registrations.
 type Route struct {
 	Method  string
 	Pattern string
@@ -104,6 +105,7 @@ var routes = []Route{
 	{Method: "DELETE", Pattern: "/snapshot/v1/repositories/{repository}"},
 	{Method: "POST", Pattern: "/snapshot/v1/repositories/{repository}/archive"},
 	{Method: "POST", Pattern: "/snapshot/v1/repositories:create"},
+	{Method: "GET", Pattern: "/ui"},
 	{Method: "GET", Pattern: "/ui/"},
 	{Method: "GET", Pattern: "/writer/v1/receipts/{command}"},
 	{Method: "POST", Pattern: "/writer/v1/repositories/{repository}/branches"},

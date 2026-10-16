@@ -44,7 +44,7 @@
 
 | 改动 | 原因 |
 |---|---|
-| HTTP 路由表只保留一份（`httpsurface` 与 `server/routes.go` 二选一） | 现在有三处路由清单需要对账 |
+| HTTP 路由表只保留一份（已收口：`httpsurface` 退役，清单留在 `server/routes.go` + `server/routes_golden.txt`） | 原来有三处路由清单需要对账 |
 | 命令行里的会话与登录代码收进 `client/` | 会话属于调用方，不属于命令行 |
 | `cli/` 里的合同测试按所测模块搬回各自目录 | `cli` 测试代码约是生产代码的 6 倍 |
 | 拆分 `home/` | 装配入口承担了过多职责 |

@@ -24,7 +24,7 @@ const modulePath = "kc"
 
 // authenticatorDenied is what every concrete authenticator under identity/ must
 // not reach: authentication answers "who is this request" and nothing else.
-var authenticatorDenied = []string{"snapshot", "object", "discovery", "declarativeindex", "hook", "cli", "httpsurface", "client", "home", "server", "invocation", "invoke"}
+var authenticatorDenied = []string{"snapshot", "object", "discovery", "declarativeindex", "hook", "cli", "client", "home", "server", "invocation", "invoke"}
 
 // forbidden is "package X must not reach package Y, directly or transitively".
 var forbidden = []struct {
@@ -145,12 +145,12 @@ var forbidden = []struct {
 	},
 	{
 		pkg:    "discovery/plugin",
-		denied: []string{"home", "invocation", "invoke", "server", "httpsurface", "client", "cli", "identity", "object/service", "object/writer", "object/client", "object/cli", "snapshot/service", "snapshot/client", "snapshot/cli", "discovery/service", "discovery/client", "discovery/cli", "discovery/llmhttp", "discovery/space", "declarativeindex"},
+		denied: []string{"home", "invocation", "invoke", "server", "client", "cli", "identity", "object/service", "object/writer", "object/client", "object/cli", "snapshot/service", "snapshot/client", "snapshot/cli", "discovery/service", "discovery/client", "discovery/cli", "discovery/llmhttp", "discovery/space", "declarativeindex"},
 		why:    "typed contribution selection consumes public query, observation and fixed-read ports; hosts and concrete entries assemble it, and transports, execution services, physical drivers and Object publication stay outside",
 	},
 	{
 		pkg:    "discovery/service",
-		denied: []string{"home", "cli", "httpsurface", "client", "declarativeindex/opensearch", "declarativeindex/projection", "declarativeindex/control", "declarativeindex/plugin", "declarativeindex/internal"},
+		denied: []string{"home", "cli", "client", "declarativeindex/opensearch", "declarativeindex/projection", "declarativeindex/control", "declarativeindex/plugin", "declarativeindex/internal"},
 		why:    "the typed application core composes protocol ports; it must not parse transports, open deployments, or select concrete providers",
 	},
 	{
@@ -160,7 +160,7 @@ var forbidden = []struct {
 	},
 	{
 		pkg:    "invocation",
-		denied: []string{"cli", "server", "httpsurface", "client"},
+		denied: []string{"cli", "server", "client"},
 		why:    "the operation layer is import-neutral between the transports: verbs consume the use-case cores (object/service, discovery/service) and the carrier holds the transport-opened *home.Home, but the seam never knows an argv front end or a service surface (CAP-ORG-01 B5a carrier, B6 operation layer)",
 	},
 	{
@@ -224,17 +224,17 @@ var forbidden = []struct {
 	// dependency-direction section; denied entries cover subpackages.
 	{
 		pkg:    "invoke",
-		denied: []string{"cli", "httpsurface", "client", "home"},
+		denied: []string{"cli", "client", "home"},
 		why:    "transport neutrality is invoke's reason to exist; transports call the vocabulary, never the reverse (R1 removed the last home import)",
 	},
 	{
 		pkg:    "client",
-		denied: []string{"cli", "httpsurface", "home"},
+		denied: []string{"cli", "home"},
 		why:    "callers borrow identity/session from the client; the client never knows a transport, a route table, or a deployment",
 	},
 	{
 		pkg:    "identity",
-		denied: []string{"snapshot", "object", "discovery", "declarativeindex", "discovery/projection", "hook", "cli", "httpsurface", "client", "home"},
+		denied: []string{"snapshot", "object", "discovery", "declarativeindex", "discovery/projection", "hook", "cli", "client", "home"},
 		why:    "identity binding reads its own durable store and IdP results only; the strictest isolation set",
 	},
 	{
@@ -249,12 +249,12 @@ var forbidden = []struct {
 	},
 	{
 		pkg:    "datasetfs",
-		denied: []string{"kernel", "snapshot", "object", "discovery", "declarativeindex", "discovery/projection", "hook", "delivery", "identity", "observability", "invoke", "client", "discovery/service", "cli", "httpsurface", "home"},
+		denied: []string{"kernel", "snapshot", "object", "discovery", "declarativeindex", "discovery/projection", "hook", "delivery", "identity", "observability", "invoke", "client", "discovery/service", "cli", "home"},
 		why:    "the local read-only consumption view mounts what a plan hands it; it never calls back into the protocol ring or any transport",
 	},
 	{
 		pkg:    "observability",
-		denied: []string{"discovery", "declarativeindex", "discovery/projection", "hook", "cli", "httpsurface", "client", "home"},
+		denied: []string{"discovery", "declarativeindex", "discovery/projection", "hook", "cli", "client", "home"},
 		why:    "evidence and telemetry are consumed by object/serving and the transports; they must not reach retrieval, index, hooks, or transports (object stays allowed: object/serving imports it)",
 	},
 }
@@ -329,7 +329,7 @@ func TestProtocolLayersDoNotDependOnClient(t *testing.T) {
 		"kernel", "snapshot", "snapshot/dataset", "snapshot/access", "object", "object/writer", "object/reader", "liveaccess",
 		"discovery", "discovery/projection", "hook",
 		"declarativeindex/projection", "declarativeindex/control", "declarativeindex/opensearch", "declarativeindex/opensearch/internal/opensearchimpl", "discovery/llmhttp", "observability",
-		"httpsurface", "home",
+		"home",
 	} {
 		if path, ok := graph.reachable(pkg)["client"]; ok {
 			t.Errorf("%s must not depend on client login or transport state\n  path: %s", pkg, strings.Join(path, " -> "))
@@ -401,7 +401,7 @@ func architectureLayer(pkg string) (string, bool) {
 		return "object", true
 	case "discovery", "discovery/space", "discovery/llmhttp", "liveaccess", "discovery/projection", "declarativeindex/projection", "declarativeindex/control", "declarativeindex/opensearch", "declarativeindex/opensearch/internal/opensearchimpl":
 		return "discovery", true
-	case "snapshot/service", "snapshot/console", "snapshot/client", "snapshot/cli", "object/client", "object/cli", "discovery/client", "discovery/cli", "declarativeindex/client", "declarativeindex/cli", "declarativeindex/capability", "declarativeindex/plugin", "declarativeindex/internal/testfixture", "liveaccess/service", "liveaccess/discovery", "liveaccess/cli", "liveaccess/client", "liveaccess/plugin", "cli", "client", "cmd/kc", "cmd/kcfs", "invoke", "identity", "identity/local", "identity/taihu", "identity/builtin", "identity/identitytest", "hook", "home", "httpsurface", "server", "server/internal/readiness", "internal/telemetry", "internal/testkit", "datasetfs", "delivery", "object/service", "discovery/datasets", "discovery/service", "discovery/plugin", "systemrepo", "observability", "scripts/check-docs", "scripts/docs-serve", "scripts/fixture-deployment", "scripts/validation-inventory", "scripts/coupling", "scripts/export-audit":
+	case "snapshot/service", "snapshot/console", "snapshot/client", "snapshot/cli", "object/client", "object/cli", "discovery/client", "discovery/cli", "declarativeindex/client", "declarativeindex/cli", "declarativeindex/capability", "declarativeindex/plugin", "declarativeindex/internal/testfixture", "liveaccess/service", "liveaccess/discovery", "liveaccess/cli", "liveaccess/client", "liveaccess/plugin", "cli", "client", "cmd/kc", "cmd/kcfs", "invoke", "identity", "identity/local", "identity/taihu", "identity/builtin", "identity/identitytest", "hook", "home", "server", "server/internal/readiness", "internal/telemetry", "internal/testkit", "datasetfs", "delivery", "object/service", "discovery/datasets", "discovery/service", "discovery/plugin", "systemrepo", "observability", "scripts/check-docs", "scripts/docs-serve", "scripts/fixture-deployment", "scripts/validation-inventory", "scripts/coupling", "scripts/export-audit":
 		return "app", true
 	default:
 		return "", false
@@ -523,30 +523,24 @@ func TestApplicationPackageBoundaries(t *testing.T) {
 		"declarativeindex/projection", "declarativeindex/control", "declarativeindex/opensearch", "declarativeindex/opensearch/internal/opensearchimpl", "discovery/llmhttp", "observability",
 	}
 	for _, pkg := range protocol {
-		for _, denied := range []string{"home", "httpsurface", "cli"} {
+		for _, denied := range []string{"home", "cli"} {
 			if path, ok := graph.reachable(pkg)[denied]; ok {
 				t.Errorf("%s must not depend on application package %s\n  path: %s", pkg, denied, strings.Join(path, " -> "))
 			}
 		}
 	}
-	for _, denied := range []string{"cli", "client", "httpsurface"} {
+	for _, denied := range []string{"cli", "client"} {
 		if path, ok := graph.reachable("home")[denied]; ok {
 			t.Errorf("home must not depend on %s\n  path: %s", denied, strings.Join(path, " -> "))
 		}
 	}
-	if deps := graph["httpsurface"]; len(deps) != 0 {
-		t.Errorf("httpsurface must not import other kc packages, got %v", deps)
-	}
-	for _, denied := range []string{"cli", "home", "httpsurface"} {
+	for _, denied := range []string{"cli", "home"} {
 		if path, ok := graph.reachable("client")[denied]; ok {
 			t.Errorf("client must not depend on %s\n  path: %s", denied, strings.Join(path, " -> "))
 		}
 	}
 	for pkg, deps := range graph {
 		if pkg == "cli" {
-			if slices.Contains(deps, "httpsurface") {
-				t.Errorf("production cli must not import httpsurface; argv tables stay independent of the HTTP registry")
-			}
 			continue
 		}
 		if pkg == "scripts/fixture-deployment" {
@@ -687,7 +681,7 @@ func TestApplicationCoreHasNoTransportOrProviderImports(t *testing.T) {
 	graph := loadGraph(t)
 	reachable := graph.reachable("discovery/service")
 	for _, denied := range []string{
-		"home", "cli", "httpsurface", "client",
+		"home", "cli", "client",
 		"declarativeindex/projection", "declarativeindex/control", "declarativeindex/opensearch", "declarativeindex/opensearch/internal/opensearchimpl",
 	} {
 		if path, ok := reachable[denied]; ok {
@@ -907,5 +901,49 @@ func TestEveryTopLevelCapabilityHasAReadme(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(root, name, "README.md")); err != nil {
 			t.Errorf("%s/ has Go packages but no README.md: a capability without its identity card (§1.3)", name)
 		}
+	}
+}
+
+// TestRetiredHTTPSurfaceStaysAbsent keeps the retired httpsurface registry
+// package from returning (ROUTE-MANIFEST-01): the closed route list lives in
+// server/routes.go with its golden manifest, and no production code may
+// import the old package path.
+func TestRetiredHTTPSurfaceStaysAbsent(t *testing.T) {
+	root := moduleRoot(t)
+	if entries, err := os.ReadDir(filepath.Join(root, "httpsurface")); err == nil {
+		for _, entry := range entries {
+			if strings.HasSuffix(entry.Name(), ".go") {
+				t.Fatalf("httpsurface/ still has Go sources (%s); the closed route list lives in server/routes.go and server/routes_golden.txt", entry.Name())
+			}
+			if entry.Name() != "README.md" {
+				t.Fatalf("httpsurface/ may only keep the retirement README, found %s", entry.Name())
+			}
+		}
+	}
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil || d.IsDir() {
+			if d != nil && d.IsDir() && (d.Name() == "node_modules" || d.Name() == "vendor" || d.Name() == ".git" || d.Name() == ".validation") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+		file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly)
+		if err != nil {
+			return err
+		}
+		for _, imported := range file.Imports {
+			importedPath, err := strconv.Unquote(imported.Path.Value)
+			if err == nil && importedPath == "kc/httpsurface" {
+				rel, _ := filepath.Rel(root, path)
+				t.Errorf("%s still imports the retired kc/httpsurface package; use server.Routes()/server/routes_golden.txt", rel)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }

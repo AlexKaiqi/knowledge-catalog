@@ -3,17 +3,17 @@
 KC Client 与部署管理的 **transport**：公开 argv、远程 typed Client 调用、产品输出及 `serve`
 进程入口。typed HTTP handler 在 [`server/`](../server/README.md)，共享应用操作、授权与证据
 在 [`invocation/`](../invocation/README.md)。读取部署配置、恢复权威与耐久状态在
-[`home/`](../home/README.md)；HTTP method+pattern 闭集在 [`httpsurface/`](../httpsurface/README.md)。
+[`home/`](../home/README.md)；HTTP method+pattern 闭集由 [`server`](../server/README.md) 持有（`routes.go` 字面表与 `routes_golden.txt` 金样）。
 协议实现仍在各自包。
 
-应然设计见 [CLI 交互](../doc/design/affordance.md)。公开命令的操作语义（审查用）见 [`SURFACE.md`](SURFACE.md)。路径闭集由 `surface.go` 静态装配 KC 命令及 Snapshot、Object、Discovery、Declarative Index、LiveAccess 五个模块的 `Commands()`；HTTP 路由分母是 `httpsurface.Patterns()`，与 mux 登记对账。
+应然设计见 [CLI 交互](../doc/design/affordance.md)。公开命令的操作语义（审查用）见 [`SURFACE.md`](SURFACE.md)。路径闭集由 `surface.go` 静态装配 KC 命令及 Snapshot、Object、Discovery、Declarative Index、LiveAccess 五个模块的 `Commands()`；HTTP 路由分母是 `server/routes_golden.txt` 金样，与 mux 登记对账。
 
 生产 CLI 与 HTTP 的注册表独立，`deployment` 与 `serve` 读取显式 `--config`；业务 CLI 只经 Server：
 
 | 表 | 文件 | 用途 |
 |---|---|---|
 | 分组 CLI | `surface.go` 与五个模块的 `cli/commands.go` | 静态装配公开命令路径与输入；产品命令经 typed SDK 调 API |
-| HTTP namespace | `server/service_routes.go` | 显式登记 typed route；调用相同应用操作体，不解析 argv、不读 CLI 表；闭集由 `server/routes.go` 与 `httpsurface` 对账 |
+| HTTP namespace | `server/service_routes.go` | 显式登记 typed route；调用相同应用操作体，不解析 argv、不读 CLI 表；闭集由 `server/routes.go` 字面表与 `routes_golden.txt` 金样对账 |
 
 组件测试另外在 `_test.go` 中登记内部 handler 与 stage，通过 `Invocation` 调用同一服务操作。
 这份嵌入装配不进入产品二进制；正式 `Run` 没有本机业务执行分支，也不持有第二份业务 registry。
@@ -26,7 +26,7 @@ surface.go  ──产品命令──►  remote_*.go  ──►  client/  ──
             ├─索引运维──► declarativeindex/cli/ ──► declarativeindex/client/ ──► HTTP
             └─当前态────► liveaccess/cli/ ──► liveaccess/client/ ──► HTTP
 server/service_routes.go  ──typed HTTP──►  同一组应用操作（不经 CLI parser）
-httpsurface.Patterns()  ──测试对账──►  mux 已登记的 method+pattern
+server/routes_golden.txt  ──测试对账──►  mux 已登记的 method+pattern
 仅 _test.go 内部操作表 ──► invocation/verbs_*.go ──► 同一组应用操作
 ```
 
