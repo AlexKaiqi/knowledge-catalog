@@ -2,7 +2,6 @@ package cli
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -118,17 +117,21 @@ func TestRemoteDesiredReplayRebuildsOriginalIncrementalSelection(t *testing.T) {
 }
 
 func TestRemoteDesiredReplayRejectsIncompleteOrPendingEvidence(t *testing.T) {
-	for _, pending := range []bool{false, true} {
-		t.Run(fmt.Sprint(pending), func(t *testing.T) {
+	for name, damage := range map[string]func(*snapshot.CommandEntry){
+		"missing request":    func(e *snapshot.CommandEntry) { e.Request = snapshot.CommandRequest{} },
+		"pending":            func(e *snapshot.CommandEntry) { e.Status = snapshot.StatusPending },
+		"missing kind":       func(e *snapshot.CommandEntry) { e.Request.Kind = "" },
+		"missing repository": func(e *snapshot.CommandEntry) { e.Request.RepositoryID = "" },
+		"missing ref":        func(e *snapshot.CommandEntry) { e.Request.TargetRef = "" },
+	} {
+		t.Run(name, func(t *testing.T) {
 			f, server := newInitialUploadRemote(t, `{"commit":"current","empty":false}`)
 			f.current["note/item-0"] = kernel.CanonicalDigest(map[string]any{"body": "item-0"})
 			f.entry = snapshot.CommandEntry{CommandID: "unverifiable", Status: snapshot.StatusApplied,
-				Digest: "digest", Receipt: json.RawMessage(`{"commandId":"unverifiable"}`)}
-			if pending {
-				f.entry.Status = snapshot.StatusPending
-				f.entry.Request = snapshot.CommandRequest{Kind: "COMMIT", RepositoryID: initialUploadRepository,
-					TargetRef: snapshot.DefaultRef, BaseCommit: "old", ExpectedTargetCommit: "old", OperationCount: 1}
-			}
+				Digest: "digest", Receipt: json.RawMessage(`{"commandId":"unverifiable"}`),
+				Request: snapshot.CommandRequest{Kind: "COMMIT", RepositoryID: initialUploadRepository,
+					TargetRef: snapshot.DefaultRef, BaseCommit: "old", ExpectedTargetCommit: "old", OperationCount: 1}}
+			damage(&f.entry)
 			result := runInitialUpload(server, initialUploadDirectory(t, 1), "unverifiable")
 			if result.Status == 0 || !strings.Contains(result.Stdout, string(kernel.ErrPreconditionFailed)) {
 				t.Fatalf("incomplete or uncertain receipt was replayed: %#v", result)

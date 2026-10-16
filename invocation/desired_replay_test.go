@@ -112,3 +112,34 @@ func TestEmbeddedDesiredReplayRetainsOriginalIncrementalRequest(t *testing.T) {
 	_, err = CommitDesiredDir(cx)
 	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
 }
+
+type desiredReplayEntryLedger struct {
+	snapshot.CommandLedger
+	entry snapshot.CommandEntry
+}
+
+func (l desiredReplayEntryLedger) Lookup(string) (snapshot.CommandEntry, bool) { return l.entry, true }
+
+func TestEmbeddedDesiredReplayRejectsIncompleteTargetMetadata(t *testing.T) {
+	for name, damage := range map[string]func(*snapshot.CommandRequest){
+		"kind":       func(r *snapshot.CommandRequest) { r.Kind = "" },
+		"repository": func(r *snapshot.CommandRequest) { r.RepositoryID = "" },
+		"ref":        func(r *snapshot.CommandRequest) { r.TargetRef = "" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			cx, s := desiredReplayInvocation(t)
+			if _, err := CommitDesiredDir(cx); err != nil {
+				t.Fatal(err)
+			}
+			entry, _ := cx.WS.Commands.Lookup(cx.Flag("command-id"))
+			damage(&entry.Request)
+			cx.WS.Commands = desiredReplayEntryLedger{CommandLedger: cx.WS.Commands, entry: entry}
+			before := testkit.MustHead(t, s.Repo, snapshot.DefaultRef)
+			_, err := CommitDesiredDir(cx)
+			testkit.ExpectCode(t, err, kernel.ErrPreconditionFailed)
+			if after := testkit.MustHead(t, s.Repo, snapshot.DefaultRef); after != before {
+				t.Fatalf("incomplete replay metadata advanced target: %s -> %s", before, after)
+			}
+		})
+	}
+}
