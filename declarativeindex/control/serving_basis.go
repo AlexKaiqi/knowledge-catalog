@@ -35,7 +35,7 @@ func (c *Controller) PrepareServingBasis(ctx context.Context, repo objectmodel.R
 			}
 		}
 	}
-	if _, err := c.index.EnsureAt(repo, commit); err != nil {
+	if _, err := c.index.EnsureAt(ctx, repo, commit); err != nil {
 		return err
 	}
 	// Live observations are not frozen Dataset content. Their authenticated

@@ -61,7 +61,7 @@ func (p *IndexPlugins) DescribeAt(repo objectmodel.Repository, at kernel.CommitI
 	return instance.services.Queries.DescribeAt(repo, at)
 }
 
-func (p *IndexPlugins) EnsureAt(repo objectmodel.Repository, at kernel.CommitID) (index.IndexSync, error) {
+func (p *IndexPlugins) EnsureAt(ctx context.Context, repo objectmodel.Repository, at kernel.CommitID) (index.IndexSync, error) {
 	instance, done, err := p.takeRepository(repo)
 	if err != nil {
 		return index.IndexSync{}, err
@@ -74,24 +74,24 @@ func (p *IndexPlugins) EnsureAt(repo objectmodel.Repository, at kernel.CommitID)
 			PrepareDataset(context.Context, reader.MemberLookup, reader.DatasetPin) (index.IndexSync, error)
 		}); ok {
 			lookup, pin := scoped.DatasetScope()
-			return queries.PrepareDataset(context.Background(), lookup, pin)
+			return queries.PrepareDataset(ctx, lookup, pin)
 		}
 	}
-	return instance.services.Queries.EnsureAt(repo, at)
+	return instance.services.Queries.EnsureAt(ctx, repo, at)
 }
 
-func (p *IndexPlugins) Ensure(repo objectmodel.Repository, at kernel.CommitID) (index.IndexSync, error) {
+func (p *IndexPlugins) Ensure(ctx context.Context, repo objectmodel.Repository, at kernel.CommitID) (index.IndexSync, error) {
 	if _, ok := repo.(interface {
 		DatasetScope() (reader.MemberLookup, reader.DatasetPin)
 	}); ok {
-		return p.EnsureAt(repo, at)
+		return p.EnsureAt(ctx, repo, at)
 	}
 	instance, done, err := p.takeRepository(repo)
 	if err != nil {
 		return index.IndexSync{}, err
 	}
 	defer done()
-	return instance.services.Queries.Ensure(repo, at)
+	return instance.services.Queries.Ensure(ctx, repo, at)
 }
 
 func (p *IndexPlugins) RefreshState(ctx context.Context, repo objectmodel.Repository, at kernel.CommitID, source index.ObservationSource) (index.StateSync, error) {

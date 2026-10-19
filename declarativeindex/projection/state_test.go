@@ -48,7 +48,7 @@ func TestStateRefreshFindsDynamicValueWithoutChangingSnapshot(t *testing.T) {
 	}
 	request := retrieval.SearchOf(retrieval.SearchMATCH("running"))
 	// Declarations reach the query side through a maintained projection.
-	if _, err := idx.Ensure(repo, commit); err != nil {
+	if _, err := idx.Ensure(context.Background(), repo, commit); err != nil {
 		t.Fatal(err)
 	}
 	required, err := idx.RequiresState(repo, commit, request)

@@ -94,7 +94,12 @@ func (c *Controller) applyPending(ctx context.Context, heads map[kernel.Reposito
 		if target.Status == index.TargetReady && target.AppliedCommit == head.commit {
 			continue
 		}
-		result, applyErr := c.index.Ensure(head.repository, head.commit)
+		result, applyErr := c.index.Ensure(ctx, head.repository, head.commit)
+		if err := ctx.Err(); err != nil && applyErr != nil {
+			// Shutdown interrupted this attempt; the durable target keeps its
+			// pending status so the next start resumes it, not a failure record.
+			return errors.Join(joined, err)
+		}
 		joined = errors.Join(joined, applyErr, c.store.finish(target.Repository, head.commit, result, applyErr))
 	}
 	return joined

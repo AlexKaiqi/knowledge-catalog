@@ -15,8 +15,8 @@ import (
 // MaintenanceIndex is the complete index port consumed by the Controller.
 // Query execution and physical provider ownership remain outside control.
 type MaintenanceIndex interface {
-	Ensure(objectmodel.Repository, kernel.CommitID) (index.IndexSync, error)
-	EnsureAt(objectmodel.Repository, kernel.CommitID) (index.IndexSync, error)
+	Ensure(context.Context, objectmodel.Repository, kernel.CommitID) (index.IndexSync, error)
+	EnsureAt(context.Context, objectmodel.Repository, kernel.CommitID) (index.IndexSync, error)
 	Describe(objectmodel.Repository) (index.IndexDescriptor, error)
 	HasStateBindings(objectmodel.Repository, kernel.CommitID) (bool, error)
 	StateProjectionReady(context.Context, objectmodel.Repository, kernel.CommitID) (bool, error)

@@ -26,8 +26,8 @@ type ProjectionDescriber interface {
 }
 
 type ProjectionSynchronizer interface {
-	EnsureAt(objectmodel.Repository, kernel.CommitID) (index.IndexSync, error)
-	Ensure(objectmodel.Repository, kernel.CommitID) (index.IndexSync, error)
+	EnsureAt(context.Context, objectmodel.Repository, kernel.CommitID) (index.IndexSync, error)
+	Ensure(context.Context, objectmodel.Repository, kernel.CommitID) (index.IndexSync, error)
 	RefreshState(context.Context, objectmodel.Repository, kernel.CommitID, index.ObservationSource) (index.StateSync, error)
 }
 

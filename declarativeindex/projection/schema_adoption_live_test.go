@@ -1,6 +1,7 @@
 package projection_test
 
 import (
+	"context"
 	"kc/declarativeindex/internal/testfixture"
 	"testing"
 
@@ -58,7 +59,7 @@ func TestPinnedSchemaDiscoveryRetainsVerifiedAccessAfterProjectionReopen(t *test
 		item("asset/current", currentRef, map[string]any{"title": "current"}),
 		item("asset/current-missing", currentRef, map[string]any{}))
 	idx := liveIndex(t)
-	if _, err := idx.EnsureAt(repo, head); err != nil {
+	if _, err := idx.EnsureAt(context.Background(), repo, head); err != nil {
 		t.Fatal(err)
 	}
 	meta, err := idx.CheckSearchProjectionAt(repo, head)

@@ -1,6 +1,8 @@
 package projection
 
 import (
+	"context"
+
 	retrieval "kc/discovery"
 	ports "kc/discovery/projection"
 	"kc/kernel"
@@ -8,9 +10,18 @@ import (
 	objectmaintenance "kc/object/maintenance"
 )
 
-func (idx *Index) Ensure(repo objectmodel.Repository, commit kernel.CommitID) (ports.IndexSync, error) {
+// Ensure brings the live projection to commit. Cancellation is honoured
+// between object reads and write batches; a cancelled rebuild is aborted and
+// leaves the previous READY meta in place.
+func (idx *Index) Ensure(ctx context.Context, repo objectmodel.Repository, commit kernel.CommitID) (ports.IndexSync, error) {
+	if err := ctx.Err(); err != nil {
+		return ports.IndexSync{}, err
+	}
 	spec, err := idx.specAtCommit(repo, commit)
 	if err != nil {
+		return ports.IndexSync{}, err
+	}
+	if err := ctx.Err(); err != nil {
 		return ports.IndexSync{}, err
 	}
 	eng, err := idx.engine(authorityEngineID(repo))
@@ -25,29 +36,29 @@ func (idx *Index) Ensure(repo objectmodel.Repository, commit kernel.CommitID) (p
 		return idx.readySync(repo.ID(), commit, spec.AccessDigest, eng)
 	}
 	if meta.Basis == "" {
-		return idx.rebuild(eng, repo, commit, spec, ports.IndexCauseCold)
+		return idx.rebuild(ctx, eng, repo, commit, spec, ports.IndexCauseCold)
 	}
 	if meta.AccessDigest != spec.AccessDigest || !idx.physicalMatches(eng, meta) {
-		return idx.rebuild(eng, repo, commit, spec, ports.IndexCauseSchema)
+		return idx.rebuild(ctx, eng, repo, commit, spec, ports.IndexCauseSchema)
 	}
 	if !repo.HasCommit(meta.Basis) {
 		// The projection belongs to a prior authority generation that reused
 		// the logical repository identity. This is a proven divergence, not a
 		// failed change-capability call, so an explicit rebuild is safe.
-		return idx.rebuild(eng, repo, commit, spec, ports.IndexCauseDiverged)
+		return idx.rebuild(ctx, eng, repo, commit, spec, ports.IndexCauseDiverged)
 	}
 	if changed, ok := repo.(objectmodel.FastObjectChanges); ok {
 		objects, err := changed.FastChangedObjects(meta.Basis, commit)
 		if err != nil {
 			return ports.IndexSync{}, err
 		}
-		return idx.applyChangedObjects(eng, repo, meta.Basis, commit, spec, objects, ports.IndexCauseContent)
+		return idx.applyChangedObjects(ctx, eng, repo, meta.Basis, commit, spec, objects, ports.IndexCauseContent)
 	}
 	ids, err := objectmaintenance.ChangedObjectIDs(repo, meta.Basis, commit)
 	if err != nil {
 		return ports.IndexSync{}, err
 	}
-	sync, err := idx.apply(eng, repo, meta.Basis, commit, spec, ids, ports.IndexCauseContent)
+	sync, err := idx.apply(ctx, eng, repo, meta.Basis, commit, spec, ids, ports.IndexCauseContent)
 	if err != nil {
 		return ports.IndexSync{}, err
 	}
@@ -55,7 +66,10 @@ func (idx *Index) Ensure(repo objectmodel.Repository, commit kernel.CommitID) (p
 }
 
 // EnsureAt builds a projection at commit without moving the live engine.
-func (idx *Index) EnsureAt(repo objectmodel.Repository, commit kernel.CommitID) (ports.IndexSync, error) {
+func (idx *Index) EnsureAt(ctx context.Context, repo objectmodel.Repository, commit kernel.CommitID) (ports.IndexSync, error) {
+	if err := ctx.Err(); err != nil {
+		return ports.IndexSync{}, err
+	}
 	idx.fixedBuildMu.Lock()
 	defer idx.fixedBuildMu.Unlock()
 	if commit == "" {
@@ -80,7 +94,7 @@ func (idx *Index) EnsureAt(repo objectmodel.Repository, commit kernel.CommitID) 
 	if meta.Basis != "" {
 		cause = ports.IndexCauseContent
 	}
-	return idx.rebuild(eng, repo, commit, spec, cause)
+	return idx.rebuild(ctx, eng, repo, commit, spec, cause)
 }
 
 func (idx *Index) Apply(repo objectmodel.Repository, from, to kernel.CommitID, objectIDs []objectmodel.ObjectID) (ports.IndexSync, error) {
@@ -98,7 +112,7 @@ func (idx *Index) Apply(repo objectmodel.Repository, from, to kernel.CommitID, o
 	}
 	cause, needRebuild := idx.classify(eng, meta, from, spec.AccessDigest)
 	if needRebuild {
-		return idx.rebuild(eng, repo, to, spec, cause)
+		return idx.rebuild(context.Background(), eng, repo, to, spec, cause)
 	}
 	if meta.Basis == to {
 		return idx.readySync(repo.ID(), to, spec.AccessDigest, eng)
@@ -106,10 +120,10 @@ func (idx *Index) Apply(repo objectmodel.Repository, from, to kernel.CommitID, o
 	if from == "" {
 		from = meta.Basis
 	}
-	return idx.apply(eng, repo, from, to, spec, objectIDs, ports.IndexCauseContent)
+	return idx.apply(context.Background(), eng, repo, from, to, spec, objectIDs, ports.IndexCauseContent)
 }
 
-func (idx *Index) applyChangedObjects(eng ports.Engine, repo objectmodel.Repository, from, to kernel.CommitID, spec retrieval.AccessSpec, changes []objectmodel.ChangedObject, cause string) (ports.IndexSync, error) {
+func (idx *Index) applyChangedObjects(ctx context.Context, eng ports.Engine, repo objectmodel.Repository, from, to kernel.CommitID, spec retrieval.AccessSpec, changes []objectmodel.ChangedObject, cause string) (ports.IndexSync, error) {
 	ids := make([]objectmodel.ObjectID, 0, len(changes))
 	fromPaths := map[objectmodel.ObjectID][]string{}
 	toPaths := map[objectmodel.ObjectID][]string{}
@@ -118,7 +132,7 @@ func (idx *Index) applyChangedObjects(eng ports.Engine, repo objectmodel.Reposit
 		fromPaths[change.ObjectID] = change.FromPaths
 		toPaths[change.ObjectID] = change.ToPaths
 	}
-	return idx.applyHydrated(eng, repo, from, to, spec, ids, fromPaths, toPaths, cause)
+	return idx.applyHydrated(ctx, eng, repo, from, to, spec, ids, fromPaths, toPaths, cause)
 }
 
 func (idx *Index) classify(eng ports.Engine, meta ports.Meta, from kernel.CommitID, digest kernel.Digest) (cause string, rebuild bool) {
@@ -151,7 +165,7 @@ func (idx *Index) Rebuild(repo objectmodel.Repository, commit kernel.CommitID) (
 			cause = ports.IndexCauseContent
 		}
 	}
-	return idx.rebuild(eng, repo, commit, spec, cause)
+	return idx.rebuild(context.Background(), eng, repo, commit, spec, cause)
 }
 
 func (idx *Index) readySync(id kernel.RepositoryID, commit kernel.CommitID, digest kernel.Digest, eng ports.Engine) (ports.IndexSync, error) {
@@ -203,7 +217,7 @@ func (idx *Index) projectionMatches(eng ports.Engine, meta ports.Meta, basis ker
 	return meta.Basis == basis && meta.AccessDigest == access && idx.physicalMatches(eng, meta)
 }
 
-func (idx *Index) rebuild(eng ports.Engine, repo objectmodel.Repository, commit kernel.CommitID, spec retrieval.AccessSpec, cause string) (ports.IndexSync, error) {
+func (idx *Index) rebuild(ctx context.Context, eng ports.Engine, repo objectmodel.Repository, commit kernel.CommitID, spec retrieval.AccessSpec, cause string) (ports.IndexSync, error) {
 	meta := idx.projectionMeta(eng, commit, spec, ports.IndexModeRebuild, cause)
 	if streaming, ok := eng.(ports.StreamingProjectionMaintainer); ok {
 		session, err := streaming.BeginRebuild(meta)
@@ -225,6 +239,9 @@ func (idx *Index) rebuild(eng ports.Engine, repo objectmodel.Repository, commit 
 			return nil
 		}
 		err = objectmaintenance.WalkRepository(repo, commit, func(value objectmodel.ObjectValue) error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			doc, include, err := compileValue(repo, value, spec)
 			if err != nil {
 				return err
@@ -237,6 +254,9 @@ func (idx *Index) rebuild(eng ports.Engine, repo objectmodel.Repository, commit 
 			}
 			return nil
 		})
+		if err == nil {
+			err = ctx.Err()
+		}
 		if err == nil {
 			err = flush()
 		}
@@ -254,6 +274,9 @@ func (idx *Index) rebuild(eng ports.Engine, repo objectmodel.Repository, commit 
 	}
 	var docs []ports.CompiledDoc
 	err := objectmaintenance.WalkRepository(repo, commit, func(value objectmodel.ObjectValue) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		doc, ok, err := compileValue(repo, value, spec)
 		if err != nil {
 			return err
@@ -263,6 +286,9 @@ func (idx *Index) rebuild(eng ports.Engine, repo objectmodel.Repository, commit 
 		}
 		return nil
 	})
+	if err == nil {
+		err = ctx.Err()
+	}
 	if err != nil {
 		return ports.IndexSync{}, err
 	}
@@ -275,11 +301,11 @@ func (idx *Index) rebuild(eng ports.Engine, repo objectmodel.Repository, commit 
 	}, nil
 }
 
-func (idx *Index) apply(eng ports.Engine, repo objectmodel.Repository, from, to kernel.CommitID, spec retrieval.AccessSpec, objectIDs []objectmodel.ObjectID, cause string) (ports.IndexSync, error) {
-	return idx.applyHydrated(eng, repo, from, to, spec, objectIDs, nil, nil, cause)
+func (idx *Index) apply(ctx context.Context, eng ports.Engine, repo objectmodel.Repository, from, to kernel.CommitID, spec retrieval.AccessSpec, objectIDs []objectmodel.ObjectID, cause string) (ports.IndexSync, error) {
+	return idx.applyHydrated(ctx, eng, repo, from, to, spec, objectIDs, nil, nil, cause)
 }
 
-func (idx *Index) applyHydrated(eng ports.Engine, repo objectmodel.Repository, from, to kernel.CommitID, spec retrieval.AccessSpec, objectIDs []objectmodel.ObjectID, fromPaths, toPaths map[objectmodel.ObjectID][]string, cause string) (ports.IndexSync, error) {
+func (idx *Index) applyHydrated(ctx context.Context, eng ports.Engine, repo objectmodel.Repository, from, to kernel.CommitID, spec retrieval.AccessSpec, objectIDs []objectmodel.ObjectID, fromPaths, toPaths map[objectmodel.ObjectID][]string, cause string) (ports.IndexSync, error) {
 	var upserts []ports.CompiledDoc
 	var deletes []objectmodel.ObjectID
 	seen := map[objectmodel.ObjectID]struct{}{}
@@ -298,6 +324,9 @@ func (idx *Index) applyHydrated(eng ports.Engine, repo objectmodel.Repository, f
 		end := start + batchSize
 		if end > len(ids) {
 			end = len(ids)
+		}
+		if err := ctx.Err(); err != nil {
+			return ports.IndexSync{}, err
 		}
 		batch := ids[start:end]
 		before, err := compileProjectionBatch(repo, from, batch, spec, fromPaths)
@@ -318,6 +347,9 @@ func (idx *Index) applyHydrated(eng ports.Engine, repo objectmodel.Repository, f
 				deletes = append(deletes, id)
 			}
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return ports.IndexSync{}, err
 	}
 	meta := idx.projectionMeta(eng, to, spec, ports.IndexModeIncremental, cause)
 	if err := eng.Apply(upserts, deletes, meta); err != nil {

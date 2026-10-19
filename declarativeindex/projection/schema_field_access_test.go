@@ -1,6 +1,7 @@
 package projection
 
 import (
+	"context"
 	"kc/declarativeindex/internal/testfixture"
 	ports "kc/discovery/projection"
 	"testing"
@@ -85,11 +86,11 @@ func TestIndexDeclarationChangeRebuildsProjectionAndContentRemainsIncremental(t 
 	first := commit(testkit.MustHead(t, repo, snapshot.DefaultRef), schema, text, article("before"))
 	engine := &testfixture.StateEngine{}
 	idx := NewIndexEngine("", func(string, kernel.RepositoryID) (ports.Engine, error) { return engine, nil })
-	if _, err := idx.Ensure(repo, first); err != nil {
+	if _, err := idx.Ensure(context.Background(), repo, first); err != nil {
 		t.Fatal(err)
 	}
 	second := commit(first, remove(text), filter)
-	result, err := idx.Ensure(repo, second)
+	result, err := idx.Ensure(context.Background(), repo, second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +98,7 @@ func TestIndexDeclarationChangeRebuildsProjectionAndContentRemainsIncremental(t 
 		t.Fatalf("declaration changed without reinterpreting documents: %#v %#v", result, engine.Docs["article/a"])
 	}
 	third := commit(second, article("after"))
-	result, err = idx.Ensure(repo, third)
+	result, err = idx.Ensure(context.Background(), repo, third)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +106,7 @@ func TestIndexDeclarationChangeRebuildsProjectionAndContentRemainsIncremental(t 
 		t.Fatalf("content edit unnecessarily rebuilt or stayed stale: %#v", result)
 	}
 	fourth := commit(third, remove(filter))
-	result, err = idx.Ensure(repo, fourth)
+	result, err = idx.Ensure(context.Background(), repo, fourth)
 	if err != nil {
 		t.Fatal(err)
 	}

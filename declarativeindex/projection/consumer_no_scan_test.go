@@ -1,6 +1,7 @@
 package projection_test
 
 import (
+	"context"
 	"kc/declarativeindex/internal/testfixture"
 	ports "kc/discovery/projection"
 	"testing"
@@ -45,7 +46,7 @@ func TestConsumerReadSchemaSearchAndRelationsNeverCallMaintenanceScanner(t *test
 	}
 	engine := &staleCandidateEngine{candidates: []ports.CandidateRef{{ObjectID: "policy/a", Basis: commit}}}
 	idx := index.NewIndexEngine("", func(string, kernel.RepositoryID) (ports.Engine, error) { return engine, nil })
-	if _, err := idx.Ensure(repo, commit); err != nil {
+	if _, err := idx.Ensure(context.Background(), repo, commit); err != nil {
 		t.Fatal(err)
 	}
 	poison := &panicScannerRepository{ObjectRepository: repo}

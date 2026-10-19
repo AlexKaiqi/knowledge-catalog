@@ -131,7 +131,7 @@ func TestIndexPluginsPartialOpenAndStartFailureCloseActualResources(t *testing.T
 					if err != nil {
 						return contribution, err
 					}
-					if _, err := contribution.Queries.Ensure(repo, at); err != nil {
+					if _, err := contribution.Queries.Ensure(context.Background(), repo, at); err != nil {
 						return contribution, err
 					}
 				}

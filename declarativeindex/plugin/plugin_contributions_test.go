@@ -210,7 +210,7 @@ func TestIndexPluginsExecuteRealSourceContributionsAndKeepDatasetMappings(t *tes
 	for name, err := range map[string]error{
 		"query":   func() error { _, e := plugins.SearchAtContext(context.Background(), repo, at, query); return e }(),
 		"prepare": plugins.PrepareServingBasis(context.Background(), repo, at),
-		"sync":    func() error { _, e := plugins.EnsureAt(repo, at); return e }(),
+		"sync":    func() error { _, e := plugins.EnsureAt(context.Background(), repo, at); return e }(),
 	} {
 		if kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
 			t.Errorf("unconfigured source %s did not fail closed: %v", name, err)

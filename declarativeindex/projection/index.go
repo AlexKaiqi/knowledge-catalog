@@ -1,6 +1,7 @@
 package projection
 
 import (
+	"context"
 	retrieval "kc/discovery"
 	ports "kc/discovery/projection"
 	"regexp"
@@ -53,7 +54,7 @@ func (idx *Index) AfterSnapshot(repo objectmodel.Repository, from, to kernel.Com
 		return nil
 	}
 	if objectIDs == nil {
-		_, err := idx.Ensure(repo, to)
+		_, err := idx.Ensure(context.Background(), repo, to)
 		return err
 	}
 	_, err := idx.Apply(repo, from, to, objectIDs)

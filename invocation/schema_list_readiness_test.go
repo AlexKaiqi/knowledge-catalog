@@ -47,11 +47,11 @@ func (p *countingIndexPlugin) DescribeAt(_ objectmodel.Repository, _ kernel.Comm
 	return index.IndexDescriptor{}, errors.New("not implemented in this fixture")
 }
 
-func (p *countingIndexPlugin) EnsureAt(_ objectmodel.Repository, _ kernel.CommitID) (index.IndexSync, error) {
+func (p *countingIndexPlugin) EnsureAt(_ context.Context, _ objectmodel.Repository, _ kernel.CommitID) (index.IndexSync, error) {
 	return index.IndexSync{}, errors.New("not implemented in this fixture")
 }
 
-func (p *countingIndexPlugin) Ensure(_ objectmodel.Repository, _ kernel.CommitID) (index.IndexSync, error) {
+func (p *countingIndexPlugin) Ensure(_ context.Context, _ objectmodel.Repository, _ kernel.CommitID) (index.IndexSync, error) {
 	return index.IndexSync{}, errors.New("not implemented in this fixture")
 }
 

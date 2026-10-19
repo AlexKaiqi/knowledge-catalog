@@ -1,6 +1,7 @@
 package projection_test
 
 import (
+	"context"
 	"kc/declarativeindex/internal/testfixture"
 	ports "kc/discovery/projection"
 	"testing"
@@ -35,13 +36,13 @@ func TestEnsureFailsClosedWhenIncrementalChangeLookupFails(t *testing.T) {
 		return engine, nil
 	})
 	t.Cleanup(func() { _ = idx.Close() })
-	if _, err := idx.Ensure(setup.Repo, first); err != nil {
+	if _, err := idx.Ensure(context.Background(), setup.Repo, first); err != nil {
 		t.Fatal(err)
 	}
 	second := testfixture.PutAt(t, setup.Repo, first,
 		testkit.PutEntity("policy/A", map[string]any{"version": 2}, ""))
 	poison := &failingIncrementalRepository{ObjectRepository: setup.Repo}
-	_, err := idx.Ensure(poison, second)
+	_, err := idx.Ensure(context.Background(), poison, second)
 	if kernel.CodeOf(err) != kernel.ErrTemporaryUnavailable {
 		t.Fatalf("incremental capability failure must be preserved, got %v", err)
 	}
