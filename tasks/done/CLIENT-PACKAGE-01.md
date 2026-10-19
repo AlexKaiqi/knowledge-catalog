@@ -62,3 +62,18 @@ Go 工具链即可连接 KC Server；构建不发布、不启动服务。
   不把这次部分执行计为完整合同通过。
 - 通用合同中按独立入口显式启用的外部 live 测试不计为本轮打包专项验收；没有新增 skip。
   由于完整合同尚未全绿，任务保持 doing；本地安装包已交付不等于完整协议或部署验收通过。
+
+## 进展（2026-10-16）
+
+- `DEBT-UI-REDIRECT-STATUS-01` 已由 `ROUTE-MANIFEST-01` 收口（提交 5e280349）：`GET /ui` 显式注册并固定 307，Go 1.23.6 与当前工具链各验证通过，断言未放宽。本任务的该已知阻塞解除，见 `done/ROUTE-MANIFEST-01.md`。
+- 剩余闭环：一次全绿的 `make test-contracts`（含 `DEBT-TEST-OPENSEARCH-TIMING-01`，已并入 `ACCEPT-HARNESS-01`）。当前多条并行线在途改动工作区源码且共享 OpenSearch 需独占，按并行编排规则（源码稳定时跑全量门禁），待并行线收束后单独执行，不与在途改动叠加。
+
+## 收口（2026-10-19）
+
+- 主工作区并行线在途改动未收束，按既有冻结候选先例在独立工作树（`/tmp/kc-closeout-20261019`，detached
+  at `4f12b4b6`）执行全量合同：`passed-with-skips`、exitCode 0、`sourceChanged=false`，
+  4964 项测试通过、0 失败、14 项测试级跳过均为既有外部 live 用例（Luna / Taihu / live lakeFS /
+  scale），公开命令覆盖 54/54 成功且满足风险边界；未复现 `DEBT-TEST-OPENSEARCH-TIMING-01` 的
+  就绪/清理等待超时。证据已复制至主工作区 `.validation/runs/20261019T061931Z-e755e8e4fd69/`。
+- `TestShapeCLIProductHostCommands` 等形状读取用例在合同中通过；`kc/cli` 包 644s 全绿。
+- 打包实现与产物证据不变；本任务全部验收项闭合，移入 `done/`。

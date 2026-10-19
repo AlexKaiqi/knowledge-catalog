@@ -44,6 +44,15 @@
 - `make test` 未执行：执行时另一条线正占用共享 OpenSearch 跑 `make test-contracts`。
 - 证据：`.validation/runs/20261016-upload-perf/`。真实 lakeFS 与业务大仓耗时未测。
 
+### 收口（2026-10-19）
+
+- 并行线已全部停止、主工作区源码静止后补跑：`make test` exit 0（OpenSearch 夹具自动预算充足）、
+  `make check-docs` PASS（19 documents）、`make quality` 通过（coupling ratchet held，delta +0.00pp）、
+  `make test-contracts` exit 0（`passed-with-skips`、`sourceChanged=false`、5010 项通过、0 失败，
+  14 项测试级跳过均为既有外部 live 用例，报告 `.validation/runs/20261019T091635Z-12c55ff2bf3e/`）。
+- 验收项闭合（64 对象无重复基点读、点读并发>1、路径占用拒绝、连接复用≤1.25×并发度、
+  race 回归与全部门禁），移入 `done/`。
+
 ### 第二轮：大仓规划线性化与未变文件不重写
 
 - 先红（真实 lakeFS 1.86 + MinIO，容器网络内，1 万对象）：首传 16.6s、全量更新 21.0s；

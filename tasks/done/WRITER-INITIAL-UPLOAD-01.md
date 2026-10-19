@@ -64,3 +64,18 @@
 - 完整合同报告：`.validation/runs/20261016-writer-upload-resumed/frozen/20261016T090945Z-b0103150116a/report.json`。依任务规则，本条仍留在 `doing/`，不把上述广域合同结果写成全量无跳过验收。
 - 另将广域入口未绑定环境的 `TestLiveBulkApplyAgainstRealLakeFS` 在现有部署网络单独补跑：原测试上传、回读、删除和陈旧基点 CAS 全部通过，1 项通过、0 跳过，源码未漂移；自有仓已核验 404，独有 S3 前缀与一次性测试进程均已清理。证据：`.validation/runs/20261016-writer-upload-resumed/live-native-bulk/summary.json`。首轮宿主无法解析 MinIO 内网地址的环境失败保留为独立尝试，不计为通过；不改写原广域报告的 11 项跳过。
 - 本轮未上传整理后的真实业务仓，未验证其全量容量或耗时。
+
+## 交付
+
+- 实现范围：目录输入自动构造 ChangeSet、`--bulk` 透传 Writer、空仓首传快路（省逐对象旧值读取）、
+  零变化重放摘要核对、缺失 APPLIED 元数据拒绝回归；主机新终端 client 与 ttyd 持久镜像更新。
+- 已验证范围：真实 lakeFS 两条目录上传路径 16 项无跳过通过；完整 contracts 在冻结候选
+  `8b762331` 执行为 `passed-with-skips`（4940 通过、0 失败、11 项测试级外部 live 跳过），
+  `TestLiveBulkApplyAgainstRealLakeFS` 在现有部署网络单独补跑 1 项通过、源码未漂移。
+- 收口核对（2026-10-19）：复核冻结报告
+  `.validation/runs/20261016-writer-upload-resumed/frozen/20261016T090945Z-b0103150116a/report.json`
+  为 `passed-with-skips`、exitCode 0、`sourceChanged=false`（指纹 7e45b205…，2739 文件）；
+  go-test 事件逐项核对，跳过均为既有外部 live 用例（live lakeFS / Luna / Taihu / scale 及
+  需独立配置的 fixture 包），无本任务新增 skip，与 done/ 既有收口口径一致。
+  证据核对不改写原报告。
+- 提交：实现随主分支既有提交交付；未整理业务仓容量验收归 `WRITER-UPLOAD-PERF-01` 线。
