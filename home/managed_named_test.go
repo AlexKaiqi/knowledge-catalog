@@ -13,7 +13,7 @@ func TestExplicitManagedHumanUsesUsername(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Owner != "kaiqidong" || !strings.HasPrefix(result.ManagementURL, cfg.ManagedRepositories.PublicURL+"/repositories/") {
+	if result.Owner != "kaiqidong" || !strings.HasPrefix(result.ManagementURL, cfg.ManagedRepositories.PublicURL+"/ui/repositories/") {
 		t.Fatalf("MANAGED-USER-NAME: explicit user create still uses platform account: %s", result.ManagementURL)
 	}
 }
@@ -29,7 +29,7 @@ func TestNamedLakeFSBindingUsesOriginAndStoragePrefix(t *testing.T) {
 	if err != nil || binding.Driver != "lakefs" || binding.DSN != "http://lakefs.example/physical" || binding.Dir != "" {
 		t.Fatalf("LakeFS binding: %#v err=%v", binding, err)
 	}
-	want := pool.PublicURL + "/repositories/physical"
+	want := pool.PublicURL + "/ui/repositories/physical"
 	if got := driver.managedURL(pool, binding); got != want {
 		t.Fatalf("LakeFS management URL: %s want %s", got, want)
 	}
@@ -79,7 +79,7 @@ func TestNamedLakeFSBindingUsesGravelerNameAndExplicitManagementURL(t *testing.T
 		t.Fatal("Graveler name disappeared from allocated tenant")
 	}
 	managementURL := driver.managedURL(pool, binding)
-	if !strings.HasPrefix(managementURL, pool.PublicURL+"/repositories/") {
+	if !strings.HasPrefix(managementURL, pool.PublicURL+"/ui/repositories/") {
 		t.Fatalf("LakeFS management URL ignored the explicit PublicURL: %s", managementURL)
 	}
 }
@@ -95,7 +95,7 @@ func TestNamedManagedRepositoryDistinctStoresAndUsersStaySeparate(t *testing.T) 
 			if err != nil {
 				t.Fatal(err)
 			}
-			if ids[result.RepositoryID] || result.Owner != principal || result.Store != store || !strings.HasPrefix(result.ManagementURL, cfg.ManagedRepositories.PublicURL+"/repositories/") {
+			if ids[result.RepositoryID] || result.Owner != principal || result.Store != store || !strings.HasPrefix(result.ManagementURL, cfg.ManagedRepositories.PublicURL+"/ui/repositories/") {
 				t.Fatalf("store or owner collision: %#v", result)
 			}
 			ids[result.RepositoryID] = true

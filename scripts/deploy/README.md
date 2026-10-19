@@ -56,7 +56,7 @@ local 的 lakeFS 用 `on-failure:3` 恢复异常退出后的进程，不重跑�
 | 面 | 端口 |
 |---|---|
 | ttyd | 7692 |
-| kc-server /console | 7385 |
+| kc-server /ui/ | 7385 |
 | lakeFS | 18010 |
 | MinIO S3 | 19010 |
 | MinIO Console | 19021 |
@@ -68,7 +68,7 @@ local 的 lakeFS 用 `on-failure:3` 恢复异常退出后的进程，不重跑�
 
 ## 入口
 
-只把 **ttyd** 当作敲 `kc` 的页面。产品观察前端是同一台 `kc serve` 的 `/console`（Catalog、Dataset、检索投影、Snapshot 权威）。根路径 `/` 仍是 404。远程 Cursor 只把**当前这套**访问卡上的 ttyd URL 当敲 `kc` 入口。
+只把 **ttyd** 当作敲 `kc` 的页面。浏览器控制台是同一台 `kc serve` 的 `/ui/`（原仓浏览、Dataset 管理、Repository 元数据）；检索投影、对象检索等观察只走 `kc`。根路径 `/` 仍是 404。远程 Cursor 只把**当前这套**访问卡上的 ttyd URL 当敲 `kc` 入口。
 
 ```bash
 # 可清盘的测试栈（down 默认清卷）
@@ -98,7 +98,7 @@ kc show
 kc schema list --repo kr://kc/system
 ```
 
-观察台（浏览器，不是 CLI）：`http://127.0.0.1:<kc-server>/console`，本地登录用户名 `admin`。lakeFS / MinIO / OpenSearch Dashboards 是陪伴件控制台，不是 Dataset 和统一索引这一层。
+浏览器控制台（不是 CLI）：`http://127.0.0.1:<kc-server>/ui/`，本地登录用户名 `admin`。lakeFS / MinIO / OpenSearch Dashboards 是陪伴件控制台，不是 Dataset 和统一索引这一层。
 
 地址和账号以对应 profile 的 `up` / `status` / `access` 打出的访问卡为准（含 lakeFS Access Key ID / Secret、MinIO、OpenSearch Dashboards、Grafana 面板）。测试栈每次清盘后端口可能不同；开发栈用上表固定口。这些是本机代替默认值，不是生产密钥。
 

@@ -5,9 +5,6 @@ DELETE /snapshot/v1/connections/{repository}/shares/{share}
 DELETE /snapshot/v1/repositories/{repository}
 GET /admin/v1/grants
 GET /api/v1/
-GET /assets/console.js
-GET /assets/repository.js
-GET /console
 GET /health
 GET /identity/v1/admission
 GET /identity/v1/auth
@@ -20,7 +17,6 @@ GET /operations/v1/hooks
 GET /operations/v1/stores
 GET /readyz
 GET /readyz/{surface}
-GET /repositories/{repository}
 GET /snapshot/v1/audit
 GET /snapshot/v1/connections
 GET /snapshot/v1/connections/{repository}

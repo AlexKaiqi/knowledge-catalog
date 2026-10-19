@@ -102,7 +102,7 @@ const guideMetadata = `Repository 和 Dataset 都可承载可选自定义资源�
 
 Repository：
   使用 lakeFS 原仓的原生元数据，表示当前原仓属性，不随 commit 冻结。
-  本服务 /console → Repositories → 目标仓 → Settings → General → Repository 自定义元数据。
+  本服务 /ui/ → Repositories → 目标仓 → Settings → General → Repository 自定义元数据。
   读取需 repository.metadata.read，增改或删键需 repository.metadata.write；进入页面另受原仓浏览权限检查，无法进入时联系来源管理者。
   KC CLI 的 show 当前不展示原仓属性，create 不接收 --metadata，attach 不读写或复制它们。
   保存可能包含多次增改/删除操作；失败先回读当前值，不把部分失败当作全部未写入。

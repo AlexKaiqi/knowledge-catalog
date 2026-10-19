@@ -120,7 +120,7 @@ var authorityDrivers = map[string]authorityDriver{
 			if ep, err := snapshot.ParseLakeFSDSN(binding.DSN); err == nil && ep.Repository != "" {
 				name = ep.Repository
 			}
-			return strings.TrimRight(pool.PublicURL, "/") + "/repositories/" + url.PathEscape(name)
+			return strings.TrimRight(pool.PublicURL, "/") + "/ui/repositories/" + url.PathEscape(name)
 		},
 		managedCreate: func(pool ManagedRepositoryConfig, binding RepositoryBinding, allocation string) (snapshot.Store, string, error) {
 			return snapshot.CreateManagedLakeFS(kernel.RepositoryID(binding.ID), binding.DSN, os.Getenv(snapshot.LakeFSCredentialEnv), allocation, pool.Root)

@@ -12,7 +12,7 @@ Dataset 组织版本化文件，不要求解析对象、Schema 或检索索引�
 
 本包不执行数据 API，不验证身份或发放权限，不实现 lakeFS 后端。调用方在同一 origin 装配
 原 lakeFS API 与 Snapshot Store 应用 API；身份与授权仍由对应 API 检查。
-KC Server 是一个挂载方，原 KC 观察台仍由 `server/web/` 提供。
+KC Server 是一个挂载方，也是 `kc serve` 唯一的浏览器入口（`/ui/`）。
 
 ## 最小用法
 

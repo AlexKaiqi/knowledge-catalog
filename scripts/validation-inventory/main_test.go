@@ -92,7 +92,7 @@ func TestInventoryIncludesModuleAndServerProductionRoutes(t *testing.T) {
 		}
 		routes = append(routes, found...)
 	}
-	if owners["server"] != 62 || owners["snapshot/service"] != 29 || len(routes) != 91 {
+	if owners["server"] != 58 || owners["snapshot/service"] != 29 || len(routes) != 87 {
 		t.Fatalf("production routes omitted or assigned to stale owners: counts=%v, total=%d", owners, len(routes))
 	}
 	patterns, err := goldenRoutesFrom(filepath.Join("..", ".."))

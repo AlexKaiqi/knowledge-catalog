@@ -16,7 +16,7 @@
 
 ## 0. 怎么用
 
-根协议套件由 `scripts/testsuite.sh` 分组；文档/结构、Server Web 与部署验收各有显式入口：
+根协议套件由 `scripts/testsuite.sh` 分组；文档/结构与部署验收各有显式入口：
 
 ```bash
 make test           # 默认：lakeFS HTTP 夹具的普通/索引场景 + 真实 OpenSearch
@@ -28,11 +28,10 @@ make test-race      # command log / hook / Reader / Index / CLI 并发路径
 make test-cover     # 文档/surface + short suite + statement coverage 最低阈值
 make validation-inventory # 只生成声明库存 JSON，不跑测试或启动外部服务
 make check-validation # 文档/脚本/库存/结果工具回归，不启动外部服务
-make test-server-web # Server 浏览器登录与 Web 入口测试
 make test-taihu-live # 真实 Taihu introspection；需 KC_LIVE_TAIHU=1 与资源方密钥 / Bearer
 make test-adapters  # OpenSearch
 make test-docker    # adapters + State runtime + Linux/FUSE
-make test-all       # lakeFS 夹具及真实部署场景 + contracts + docker + Server Web；不含真实模型/Taihu/规模资格
+make test-all       # lakeFS 夹具及真实部署场景 + contracts + docker；不含真实模型/Taihu/规模资格
 ```
 
 `make test`、`make test-lakefs` 和 `scripts/testsuite.sh` 的无参数 / `lakefs` / `local` 入口

@@ -46,10 +46,6 @@ var httpOnlyRouteEvidence = []httpRouteEvidence{
 	{http.MethodPost, "/identity/v1/token", "TestIdentityTokenBrokerKeepsApplicationSecretOnServer"},
 	{http.MethodPost, "/identity/v1/authorize", "TestBrowserAuthorizationUsesFixedDeploymentUpstream"},
 	{http.MethodPost, "/identity/v1/authorize:poll", "TestBrowserAuthorizationUsesFixedDeploymentUpstream"},
-	{http.MethodGet, "/repositories/kr:%2F%2Fkaiqidong%2Fnotes", "TestRepositoryManagementPageLoadsWithoutExposingAuthority"},
-	{http.MethodGet, "/assets/repository.js", "TestRepositoryManagementPageLoadsWithoutExposingAuthority"},
-	{http.MethodGet, "/console", "TestConsolePageLoadsWithoutExposingAuthority"},
-	{http.MethodGet, "/assets/console.js", "TestConsolePageLoadsWithoutExposingAuthority"},
 	{http.MethodGet, "/ui", "TestDatasetUILoadsBuildHintWithoutExposingAuthority"},
 	{http.MethodGet, "/ui/", "TestDatasetUILoadsBuildHintWithoutExposingAuthority"},
 	{http.MethodGet, "/operations/v1/stores", "TestStoresObservationOmitsSecretsAndHomeLayout"},
@@ -89,7 +85,7 @@ var registeredRoutePattern = regexp.MustCompile(`mux\.Handle(?:Func)?\("((?:GET|
 // HTTP/host journey. Domain semantics stay in their application-level journeys.
 func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 	registered := productionHTTPRoutePatterns(t)
-	if len(registered) != 91 {
+	if len(registered) != 87 {
 		t.Fatalf("public HTTP route count changed to %d; add protocol evidence for the new surface", len(registered))
 	}
 	want := goldenRouteManifest(t)
@@ -101,8 +97,8 @@ func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 			t.Fatalf("golden manifest drifted from production mux at %d: manifest %q mux %q", i, want[i], registered[i])
 		}
 	}
-	if len(remoteDispatchRoutes) != 39 || len(httpOnlyRouteEvidence) != 53 {
-		t.Fatalf("HTTP evidence partition changed: remote=%d direct-journey=%d, want 39+53", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
+	if len(remoteDispatchRoutes) != 39 || len(httpOnlyRouteEvidence) != 49 {
+		t.Fatalf("HTTP evidence partition changed: remote=%d direct-journey=%d, want 39+49", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
 	}
 	tests := httpEvidenceTestFunctions(t)
 
