@@ -28,20 +28,10 @@ const (
 	MetaSchemaV1                   ObjectID = "schema/meta/schema-definition/v1"
 	CoreResourceDescriptorSchemaV1 ObjectID = "schema/core/resource-descriptor/v1"
 	CoreRelationSchemaV1           ObjectID = "schema/core/relation/v1"
-	CoreReadmeSchemaV1             ObjectID = "schema/core/readme/v1"
-
-	// ReadmeAspect is the Aspect name required by schema/core/readme/v1.
-	// Identity is the entity in frontmatter; the conventional path_hint is
-	// RepositoryReadmePath. Path is not identity.
-	ReadmeAspect = "readme"
-	// RepositoryReadmePath is the bounded tree path Dataset service inventory reads.
-	RepositoryReadmePath = "README.md"
 	// CanonicalSchemaDir is the single Canonical tree directory for schema/*
 	// files. Identity remains the schema/* object_id; this path_hint sorts
 	// before instance type directories.
 	CanonicalSchemaDir = "_schemas"
-	// SystemReadmeObjectID is the System Repository description entity.
-	SystemReadmeObjectID ObjectID = "kc/system"
 )
 
 var supportedSchemaTypes = map[string]struct{}{

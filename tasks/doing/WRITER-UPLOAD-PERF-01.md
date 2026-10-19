@@ -83,8 +83,8 @@
   使失败总耗时约 11 分钟。
 - 结论：`--bulk` 在本机栈上不比默认路径更快（97–110s 对 76–117s，机器有他线负载），默认路径
   仍是首选；`--bulk` 保留给无法使用 presign 的介质。
-- 业务包 `business.tar.gz` 含 43 个 readme 方面，而协议规定仓根 `README.md` 唯一，原包直传
-  报 `OBJECT_ID_CONFLICT`；仅在 /tmp 副本去掉 42 个非根 README 后测速（65.6s），未改协议和数据。
-  数据如何处理待用户决定。
+- 业务包 `business.tar.gz` 含 43 个 readme 方面，当时实现把 readme 方面强制改址到仓根 `README.md`，原包直传
+  报 `OBJECT_ID_CONFLICT`；仅在 /tmp 副本去掉 42 个非根 README 后测速（65.6s），未改数据。
+  该改址来自已否决的 `README-01`，用户裁决 readme 没有特殊语义，移除见 `README-ORDINARY-01`，原包已可直接提交。
 - 无变化重传需沿用原命令号：新命令号得到 `unknown command-id` 是目录重放合同
   （`cli/desired_replay.go`），不是缺陷。

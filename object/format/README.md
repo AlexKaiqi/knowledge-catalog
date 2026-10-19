@@ -12,4 +12,4 @@
 
 `ReadSchemaReferrers` 从每 Schema 的派生条目返回固定版本引用者 Address；完整性标记使不存在条目可明确表示零引用。它不扫描仓、不读取 Schema 或实例正文来发现引用；旧完整 reverse metadata 可读，缺少证明须显式 `RebuildTreeLocators`。`ReadAddressUnit` 沿单元坐标只读一个维护单元，供 Schema 校验精确取得引用实例。
 
-实例草稿用 `*.yaml`；`*.aspect.yaml` 适合 Schema 草稿。YAML/JSON 使用 frontmatter `object_id`、可选的 `aspect_name` / `member_key`、`kind`、`schema_ref`，正文可写 JSON 或结构化 YAML。Markdown 对象单元（仓根 `README.md`）用 `entity` / `aspect` 承载 Address，正文是 markdown，不是 JSON 信封。`kc writer commit --repo <仓> --command-id <命令身份> --dir <草稿目录>` 机械编译并发布这些文件，不引入领域转换；可先用 `kc diff --repo <仓> --dir <草稿目录>` 查看对照。已入库的 `*.okf` 仍可读取。
+实例草稿用 `*.yaml`；`*.aspect.yaml` 适合 Schema 草稿。YAML/JSON 使用 frontmatter `object_id`、可选的 `aspect_name` / `member_key`、`kind`、`schema_ref`，正文可写 JSON 或结构化 YAML。Markdown 对象单元（任意 `.md` 路径，未声明 `path_hint` 时取文件自身路径）用 `entity` / `aspect` 承载 Address，正文是 markdown，不是 JSON 信封；文件名与方面名没有特殊路径。`kc writer commit --repo <仓> --command-id <命令身份> --dir <草稿目录>` 机械编译并发布这些文件，不引入领域转换；可先用 `kc diff --repo <仓> --dir <草稿目录>` 查看对照。已入库的 `*.okf` 仍可读取。

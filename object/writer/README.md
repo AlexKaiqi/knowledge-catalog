@@ -66,8 +66,8 @@ Relation PUT 可以引用其他仓的对象；仅校验 `CanonicalRelation` 的�
 每个 `schema/*` PUT 先按 System Meta Schema 归一化；未知逻辑 type、字段 `access` 或错误
 形状返回 `SCHEMA_UNSUPPORTED`。复用同一 Schema object ID 时先做兼容性 diff；字段删除、
 改类型、新增必填、归属/模式变化或约束收紧返回 `SCHEMA_INCOMPATIBLE`，接入方必须发布新
-major。`schema/core/readme/v1` 是平台 README Aspect：副本必须与 System 出版物 digest 一致，
-实例必须是 Aspect `readme`，正文为 markdown `body`。兼容的文档变化还必须对固定 basis 上全部引用实例成立：Writer 经有界
+major。只有索引声明 Schema 是协议信任根，副本必须与 System 出版物 digest 一致；
+`schema/core/readme/v1` 与方面名 `readme` 都是普通内容，不保留、不改址。兼容的文档变化还必须对固定 basis 上全部引用实例成立：Writer 经有界
 `SchemaReferrerLocator` 取回引用者并逐个校验，失配返回 `SCHEMA_INSTANCE_INVALID`；同批
 PUT/REMOVE 的 Address 由本批结果承担。REMOVE 一个仍被引用的 `schema/*` 返回
 `SCHEMA_INCOMPATIBLE`。带 `schema_ref` 的实例 PUT 使用同批 Schema 草稿或目标仓固定 basis

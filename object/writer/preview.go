@@ -99,7 +99,7 @@ func OmitUnchanged(cs objectmodel.CommitChangeSet, current map[string]string) (o
 }
 
 func ingestFile(rel string, content []byte) (objectmodel.Operation, IngestFile, error) {
-	if unit := repofile.Parse(string(content)); unit != nil {
+	if unit := repofile.ParseAt(string(content), rel); unit != nil {
 		if err := unit.DeclarationError(); err != nil {
 			return objectmodel.Operation{}, IngestFile{}, err
 		}

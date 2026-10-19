@@ -61,13 +61,13 @@ func TestIngestMarkdownReadmeFrontmatter(t *testing.T) {
 		t.Fatalf("%#v", preview.ChangeSet.Operations)
 	}
 	op := preview.ChangeSet.Operations[0]
-	if op.Address.Kind != objectmodel.KindAspect || op.Address.ObjectID != "payments" || op.Address.AspectName != objectmodel.ReadmeAspect {
+	if op.Address.Kind != objectmodel.KindAspect || op.Address.ObjectID != "payments" || op.Address.AspectName != "readme" {
 		t.Fatalf("%#v", op.Address)
 	}
-	if op.PathHint != objectmodel.RepositoryReadmePath {
+	if op.PathHint != "README.md" {
 		t.Fatalf("path hint %#v", op.PathHint)
 	}
-	got, ok := objectmodel.ReadmeBody(op.Value)
+	got, ok := testkit.MarkdownBody(op.Value)
 	if !ok || !strings.Contains(got, "Payments warehouse") {
 		t.Fatalf("value %#v", op.Value)
 	}

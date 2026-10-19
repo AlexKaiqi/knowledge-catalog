@@ -48,7 +48,7 @@ func TestReaderReturnsActualReadOnlyRepositoryViews(t *testing.T) {
 		{
 			name: "native",
 			open: func(t *testing.T) (snapshot.Store, objectmodel.ObjectID) {
-				return testkit.MakeNativeSystemRepository(t), objectmodel.SystemReadmeObjectID
+				return testkit.MakeNativeSystemRepository(t), objectmodel.ObjectID("kc/system")
 			},
 		},
 	}

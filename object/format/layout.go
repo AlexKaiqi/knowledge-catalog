@@ -16,9 +16,6 @@ func ObjectPath(rel string) bool {
 }
 
 func DefaultPath(address objectmodel.Address, schemaRef string) string {
-	if objectmodel.IsReadmeAddress(address, schemaRef) {
-		return objectmodel.RepositoryReadmePath
-	}
 	if objectmodel.IsSchemaObject(address.ObjectID) && address.AspectName == "" && address.MemberKey == "" {
 		return DefaultSchemaPath(address.ObjectID)
 	}
@@ -70,8 +67,6 @@ func pluralizeType(entity string) string {
 		return "relations"
 	case "resource-descriptor":
 		return "resources"
-	case "readme":
-		return "readmes"
 	}
 	if strings.HasSuffix(entity, "s") {
 		return entity
@@ -110,9 +105,6 @@ func isSchemaVersionSegment(value string) bool {
 func PathHintForIngest(address objectmodel.Address, declared, rel string) string {
 	if objectmodel.IsSchemaObject(address.ObjectID) {
 		return DefaultSchemaPath(address.ObjectID)
-	}
-	if address.Kind == objectmodel.KindAspect && address.AspectName == objectmodel.ReadmeAspect && address.MemberKey == "" {
-		return objectmodel.RepositoryReadmePath
 	}
 	hint := strings.TrimSpace(declared)
 	if hint == "" {

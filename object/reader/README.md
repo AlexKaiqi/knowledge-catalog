@@ -82,10 +82,9 @@ tree-backed authority 的 Writer 在同一 commit 写入每对象的维护坐标
 命名空间目录。它们只保存身份及单元坐标，用于有界读取，不含 Relation endpoint/type/role、
 正文或过滤字段，因此不是检索投影。旧 `.kc/object-units.index` 保持固定读取兼容，
 目录升级通过显式维护完成，消费请求不读正文推导缺失目录。业务直推 published
-ref 时，Reader 仍按文件 frontmatter 解释（仓根 `README.md` 是有界约定路径）；增量投影用
-`ChangedPaths` 上的单元路径 hydrate，不要求该 commit 先有 Writer locator。两种 authority 由同一 Reader/Writer conformance 验收。
-合法 README 的精确 Address 与内部字段引用也沿这一个固定路径读取；先检查发表路径，
-再核对该 commit 的实际 Schema 和 Address。此入口不补推普通单元坐标，也不吞掉定位元数据错误。
+ref 时，增量投影用 `ChangedPaths` 上的单元路径 hydrate，不要求该 commit 先有 Writer
+locator。两种 authority 由同一 Reader/Writer conformance 验收。没有任何文件名或方面名有
+特殊读取路径：仓根 `README.md` 与其它文件一样，只有经维护坐标找到时才是对象单元。
 
 索引在 **Repository 之上**，实现在独立包 `discovery/projection/`（不进 Writer / Dataset 服务 核心）。逻辑查询与结果合同在 `discovery/`；OpenSearch provider 逐 clause Probe 再返回 CandidateRef，命中后回读这次解开的 Canonical。未配置 provider 时只保留精确读取能力。完整边界见 `discovery/README.md` 与 `discovery/projection/README.md`。
 

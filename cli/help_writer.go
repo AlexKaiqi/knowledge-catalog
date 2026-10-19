@@ -48,7 +48,7 @@ func hostWriterHelpEntries() map[string]helpEntry {
     Schema 原始 fields 是按字段名组织的对象映射；schema describe 的 fields 数组是规范化展示，不能作为输入。
     优先从公开 Dataset 下载已有 Schema 与对象文件复用格式，入口见 kc help write。
     path_hint 是仓内相对路径，不是对象身份；普通单元省略时采用目录中的相对路径，目录名不替代文件头。
-    Schema 固定放入 _schemas/ 规范路径，readme 方面固定放入仓根 README.md，不由 path_hint 改址。
+    Schema 固定放入 _schemas/ 规范路径；其它单元（包括任意多个 readme 方面）按各自 path_hint 存放。
     Markdown 说明方面用 entity / aspect，正文直接写 Markdown，不包 JSON；以下是 drafts/README.md 的完整内容，复制时去掉四格缩进。
     该示例复用系统 schema/core/readme/v1；准备自己的说明时换 entity，引用的 Schema 必须可解析。
     ---

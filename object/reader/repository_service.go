@@ -319,17 +319,6 @@ func (r *treeRepository) objectUnitPathsMany(objectIDs []objectmodel.ObjectID, c
 		}
 		paths[objectID] = unitPaths
 	}
-	if raw, err := r.tree.ReadFile(objectmodel.RepositoryReadmePath, commit); err == nil {
-		if unit := repofile.Parse(string(raw)); unit != nil {
-			if _, wanted := paths[unit.ObjectID]; wanted {
-				if !containsPath(paths[unit.ObjectID], objectmodel.RepositoryReadmePath) {
-					paths[unit.ObjectID] = append(paths[unit.ObjectID], objectmodel.RepositoryReadmePath)
-				}
-			}
-		}
-	} else if kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
-		return nil, err
-	}
 	return paths, nil
 }
 
@@ -374,7 +363,7 @@ func (r *treeRepository) ObjectIDsPage(commit kernel.CommitID, limit int, contin
 			// therefore represents an empty live object set, not a corrupt
 			// locator layout. Other provider failures still fail closed.
 			if continuation == "" && kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
-				return r.mergeReadmeObjectID(objectmodel.ObjectIDPage{Exhausted: true}, commit)
+				return objectmodel.ObjectIDPage{Exhausted: true}, nil
 			}
 			return objectmodel.ObjectIDPage{}, err
 		}
@@ -398,7 +387,7 @@ func (r *treeRepository) ObjectIDsPage(commit kernel.CommitID, limit int, contin
 			}
 			page.ObjectIDs = append(page.ObjectIDs, locatorEntry.ObjectID)
 		}
-		return r.mergeReadmeObjectID(page, commit)
+		return page, nil
 	}
 	manifest, err := (&treeManifestLocator{tree: r.tree}).load(commit)
 	if err != nil {
@@ -419,42 +408,6 @@ func (r *treeRepository) ObjectIDsPage(commit kernel.CommitID, limit int, contin
 	if !page.Exhausted && len(pageIDs) > 0 {
 		page.Continuation = string(pageIDs[len(pageIDs)-1])
 	}
-	return r.mergeReadmeObjectID(page, commit)
-}
-
-func (r *treeRepository) readmeObjectID(commit kernel.CommitID) (objectmodel.ObjectID, bool, error) {
-	raw, err := r.tree.ReadFile(objectmodel.RepositoryReadmePath, commit)
-	if err != nil {
-		if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {
-			return "", false, nil
-		}
-		return "", false, err
-	}
-	unit := repofile.Parse(string(raw))
-	if unit == nil || !objectmodel.IsReadmeAddress(unit.Address, unit.SchemaRef) {
-		return "", false, nil
-	}
-	return unit.ObjectID, true, nil
-}
-
-func (r *treeRepository) mergeReadmeObjectID(page objectmodel.ObjectIDPage, commit kernel.CommitID) (objectmodel.ObjectIDPage, error) {
-	objectID, ok, err := r.readmeObjectID(commit)
-	if err != nil || !ok {
-		return page, err
-	}
-	for _, id := range page.ObjectIDs {
-		if id == objectID {
-			return page, nil
-		}
-	}
-	located, err := repofile.ReadObjectLocator(r.tree, objectID, commit)
-	if err != nil {
-		return objectmodel.ObjectIDPage{}, err
-	}
-	if len(located) > 0 || !page.Exhausted {
-		return page, nil
-	}
-	page.ObjectIDs = append(page.ObjectIDs, objectID)
 	return page, nil
 }
 

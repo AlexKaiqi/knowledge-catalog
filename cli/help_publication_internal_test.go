@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"kc/internal/testkit"
 	"strings"
 	"testing"
 
@@ -45,10 +46,10 @@ func TestWriterCommitHelpContainsValidCompleteReadmeFile(t *testing.T) {
 		lines = append(lines, strings.TrimPrefix(line, "    "))
 	}
 	unit := objectformat.Parse(strings.Join(lines, "\n"))
-	if unit == nil || unit.Address.Kind != objectmodel.KindAspect || unit.Address.AspectName != objectmodel.ReadmeAspect || unit.SchemaRef != string(objectmodel.CoreReadmeSchemaV1) {
+	if unit == nil || unit.Address.Kind != objectmodel.KindAspect || unit.Address.AspectName != "readme" || unit.SchemaRef != string(objectmodel.ObjectID("schema/core/readme/v1")) {
 		t.Fatalf("help file does not describe a complete README Aspect: %#v", unit)
 	}
-	if body, ok := objectmodel.ReadmeBody(unit.Value); !ok || !strings.HasPrefix(body, "# ") {
+	if body, ok := testkit.MarkdownBody(unit.Value); !ok || !strings.HasPrefix(body, "# ") {
 		t.Fatalf("help file must retain Markdown as the body, not a JSON envelope: %#v", unit.Value)
 	}
 	if !strings.Contains(Run([]string{"help", "diff"}).Stdout, "kc help writer commit") {
