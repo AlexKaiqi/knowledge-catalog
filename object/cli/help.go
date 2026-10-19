@@ -8,7 +8,7 @@ type helpEntry struct {
 var leafHelp = map[string]helpEntry{
 	"read": {
 		Description: "按固定声明依据读取对象或 URN 指定的数据",
-		Usage: `kc read <object-urn[#/json/pointer]> [--repo <id> | --dataset <id> [--revision <N>]] [--commit <id> | --ref <name>]
+		Usage: `kc read <object-urn[#/json/pointer]> [--shape '<graphql>'] [--repo <id> | --dataset <id> [--revision <N>]] [--commit <id> | --ref <name>]
 
 用途：
   读取来源对象的完整内容或指定数据；同一个引用可随后交给 writer put/remove 维护完整单元。
@@ -16,6 +16,9 @@ var leafHelp = map[string]helpEntry{
   位置参数接受对象 URN；# 后是 JSON Pointer，空 locator 选整个对象。
   /columns/order_id 选 Member；/columns/order_id/constraints/nullable 选其中的字段；/tags/0 选数组首项。
   键中的 / 写 ~1，~ 写 ~0；不支持通配、过滤或把点当层级。深层读取不会新增写粒度。
+  --shape 用 GraphQL selection set 写出要的结果形状：顶层是方面，方面上 keys:["k"] 选成员，下层是字段；
+  不写子选择返回该处完整值。只做投影，别名、fragment、directive、变量一律拒绝；URN 带 # 时不能再加 --shape。
+  每个所选方面或成员先按维护坐标规划、只读所选单元并只为它们取外部值，字段在单元读出后即裁剪。
   --dataset 限制统一引用的交付范围；此时 --commit 须匹配发布版中的来源 commit，不接受 --ref。
   --revision <N> 固定 Dataset 的已发布修订，与 search/relations/traverse/schema 沿用同一个 N 时各步看到同一组来源 commit；省略时用当前修订。
   省略 --repo 与 --dataset 时，在你可读的全部仓里按 ID 解析：多个仓各持有不同方面时组合返回，同一方面来自两个仓时报 OBJECT_ID_CONFLICT，无权的仓列在 withheld。
@@ -27,6 +30,8 @@ var leafHelp = map[string]helpEntry{
  Dataset 选中 Bound State 时，沿既有 logical READ 通路，还需相应 Runtime 可用并允许实际源访问。
 结果：
   统一引用的 JSON 保留 reference/locator/repository/objectId/commit/value、sources/withheld、维护 Address/digest 和逐单元 declarations/provenance。
+  --shape 返回 data 与 errors：缺失、无权、冲突或范围外的位置为 null，并按 path 给出错误码；合法 null 没有错误条目。
+  采用封闭 Schema 时选了未声明字段整批拒绝；declarations 里每个所读单元的 digest 仍是完整维护摘要。
   适用的 digest 属于已保存的完整维护单元，可作写入条件；叶值为 null 与定位不存在分别处理。
  Dataset 的动态值另保留 observations：commit 固定声明依据，源观察及其版本不能当作该 commit 的固定正文。
 后果：
@@ -43,6 +48,7 @@ var leafHelp = map[string]helpEntry{
   例：kc read 'urn:kc:object:table/orders#/columns/order_id/constraints/nullable'
   例：kc read 'urn:kc:object:table/orders#/columns/order_id' --dataset scene-set
   例：kc read 'urn:kc:object:table/orders' --dataset scene-set --revision 2
+  例：kc read 'urn:kc:object:table/orders' --shape '{ definition columns(keys: ["order_id"]) { type } }'
   例：kc read 'urn:kc:object:kc/system#/readme'
   例：kc read 'urn:kc:object:kc/concept/object#/definition'
   系统对象示例仅在该服务已出版相应对象且当前主体有读取权时可用；理解本地 kc help 不需要这个前提。

@@ -34,7 +34,7 @@ func (s *Service) readPartialReference(ctx context.Context, ref objectmodel.Refe
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		ref.Locator = pointerOf(unitPointerTokens(address))
+		ref.Locator = objectmodel.FormatPointer(unitPointerTokens(address))
 		if ref.Locator == "" {
 			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "partial object plan contains a whole-object unit")
 		}

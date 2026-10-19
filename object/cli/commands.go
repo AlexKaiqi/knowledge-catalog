@@ -3,7 +3,7 @@ package cli
 import "strings"
 
 var commandEntries = []Command{
-	{Path: "read", Handler: "object-read", Action: "object.read", Flags: words("repo dataset revision commit ref"), Operands: []string{"reference"}, Groups: []string{"object"}},
+	{Path: "read", Handler: "object-read", Action: "object.read", Flags: words("repo dataset revision commit ref shape"), Operands: []string{"reference"}, Groups: []string{"object"}},
 	{Path: "resolve", Handler: "object-resolve", Action: "object.read", Flags: words("repo dataset revision commit ref object aspect member"), Groups: []string{"object"}},
 	{Path: "log", Handler: "object-log", Action: "object.history.read", Flags: words("repo dataset revision commit ref object limit continuation"), Groups: []string{"object"}},
 	{Path: "provenance", Handler: "object-provenance", Action: "object.provenance", Flags: words("repo dataset revision commit ref object"), Groups: []string{"object"}},

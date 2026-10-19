@@ -32,6 +32,7 @@ type ObjectScope struct {
 type ReadRequest struct {
 	ObjectDatasetIdentity
 	Reference  string `json:"reference"`
+	Shape      string `json:"shape,omitempty"`
 	Repository string `json:"repository,omitempty"`
 	Commit     string `json:"commit,omitempty"`
 	Ref        string `json:"ref,omitempty"`

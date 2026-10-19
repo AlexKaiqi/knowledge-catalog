@@ -17,6 +17,7 @@ import (
 type surfaceAnchorSuite []string
 
 var surfaceAnchor = surfaceAnchorSuite{
+	"AdoptedSchema",
 	"CanonicalReader",
 	"CommitExecutor",
 	"CommitRequest",
@@ -41,6 +42,8 @@ var surfaceAnchor = surfaceAnchorSuite{
 	"SchemaEntityName",
 	"SchemaPageCursor",
 	"SchemaPageResponse",
+	"ShapeReadExecutor",
+	"ShapeReadRequest",
 }
 
 // TestExportedSurfaceMatchesAnchor parses the package's production files and

@@ -89,3 +89,15 @@ func pointerArrayIndex(token string, length int, locator string) (int, error) {
 func pointerMissing(locator string) error {
 	return kernel.Fail(kernel.ErrObjectRefUnresolved, "locator %q does not select an existing node", locator)
 }
+
+// FormatPointer renders decoded tokens as a JSON Pointer; no tokens is root.
+func FormatPointer(tokens []string) string {
+	parts := make([]string, len(tokens))
+	for i, token := range tokens {
+		parts[i] = strings.ReplaceAll(strings.ReplaceAll(token, "~", "~0"), "/", "~1")
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "/" + strings.Join(parts, "/")
+}
