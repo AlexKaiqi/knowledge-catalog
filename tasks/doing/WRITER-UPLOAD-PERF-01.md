@@ -63,3 +63,28 @@
 - 未做：import 零拷贝（LAKEFS-02 否决）、跨请求缓存（CA-01）、presign 数据面（I-53）；
   批量 Resolve、Writer/CLI 共用对照计划、locator 合并登记在 `DEBT-WRITER-UPLOAD-SCALE-01`。
 - 证据：`.validation/runs/20261016-write-perf/`。
+
+### 第三轮：真实仓包实测、归档输入、连接池与批量通路重试
+
+- 数据：`.data/realcase/prepared-v3/` 两个真实仓包，`base_mini.tar.gz`（87078 文件）与 `business.tar.gz`
+  （45634 文件）；本机 lakeFS 1.86 + MinIO，服务端在容器内、客户端在宿主。
+- 先红：目录输入逐个读小文件，客户端读目录 24s；Go 默认每主机仅 2 条空闲连接，预检并发拉高后
+  宿主临时端口耗尽报 `EOF`；`base_mini` 首传 669s。
+- 实现：`object/writer/ingest_source.go` 支持 `.tar/.tar.gz/.tgz[//子目录]` 输入与有界并发解析
+  （读目录 24s→1.3s）；`internal/httpjson/transport.go` 共用连接池，`client`、`cli/remote_session.go`
+  与 lakeFS adapter 共用；`--bulk` 的 `uploadObject` 对 5xx、429 与传输错误做 6 次退避重试并保留 lakeFS 响应体。
+- 后绿：`base_mini` 首传默认路径 669s→HEAD 107s→76s；`--bulk` 连续 3 次 97–110s 成功；
+  写后零差异；回归 `TestUploadObjectRetriesTransientServerErrors`、`TestUploadObjectGivesUpAfterBoundedAttempts`、
+  `TestUploadObjectDoesNotRetryClientErrors`（先把重试次数改 1 确认变红再还原）。
+- 根因（`--bulk` 此前在完整仓稳定 500）：服务端日志为 lakeFS 到 MinIO 的 `PutObject` 报
+  `dial tcp ...:9000: cannot assign requested address`，即 lakeFS 容器出站临时端口耗尽；
+  与 KC 逻辑、文件大小、路径长度、规模无关。Go 客户端并发 32 的瞬时速率高于 Python 探针故先触发。
+  随后客户端因回执恢复把"明确未应用"也当成结果未知，空等 `KC_COMMIT_RECEIPT_WAIT`（默认 10 分钟），
+  使失败总耗时约 11 分钟。
+- 结论：`--bulk` 在本机栈上不比默认路径更快（97–110s 对 76–117s，机器有他线负载），默认路径
+  仍是首选；`--bulk` 保留给无法使用 presign 的介质。
+- 业务包 `business.tar.gz` 含 43 个 readme 方面，而协议规定仓根 `README.md` 唯一，原包直传
+  报 `OBJECT_ID_CONFLICT`；仅在 /tmp 副本去掉 42 个非根 README 后测速（65.6s），未改协议和数据。
+  数据如何处理待用户决定。
+- 无变化重传需沿用原命令号：新命令号得到 `unknown command-id` 是目录重放合同
+  （`cli/desired_replay.go`），不是缺陷。

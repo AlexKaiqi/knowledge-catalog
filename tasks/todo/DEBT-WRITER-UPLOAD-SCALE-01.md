@@ -13,6 +13,10 @@
   剩余三项都要新公开形状或存储布局：批量 Resolve 端点、Writer 与 CLI 共用一份对照计划、
   分片或合并 locator。lakeFS import 零拷贝维持 LAKEFS-02 的否决（字节必须经 Writer）；
   Snapshot 层跨请求文件缓存受 CA-01 约束不做。
+- 2026-10-19 真实仓包补充：`base_mini`（87078 文件）无变化重传 111–142s，服务端 CPU 约 200%，
+  绝大部分是逐对象预检 Resolve；首传已降到 76s。批量 Resolve 是该规模下剩余的主要线性成本。
+- 另记：服务端已明确返回"未应用"的 `TEMPORARY_UNAVAILABLE` 时，客户端仍按结果未知轮询回执至
+  `KC_COMMIT_RECEIPT_WAIT`（默认 10 分钟）。需要回执账区分"明确未应用"与"结果未知"，属服务端合同，未改。
 - 处置：先在 [对象写入](../../doc/design/object.md) 裁定 locator 是否可合并/分片及其并发冲突代价，
   再评估批量 Resolve（或固定 commit 分页列举携带摘要）替代逐对象预检。
 - 触发条件：万级以上非空仓上传耗时验收不达标，或下一次修改目录发布链路 / locator 格式时。

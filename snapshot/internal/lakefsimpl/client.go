@@ -87,24 +87,25 @@ func newAPIClient(endpoint Endpoint, credential string) (*apiClient, error) {
 	}, nil
 }
 
-// minIdleConnsPerHost keeps headroom over the default staging fan-out.
-const minIdleConnsPerHost = 64
-
-// pooledTransport sizes the idle pool to the adapter's own fan-out. Go's
-// default keeps only two idle connections per host, so concurrent staging and
-// planning reads would reopen a TCP connection on almost every request.
+// pooledTransport sizes the idle pool to the adapter's own fan-out; staging
+// and planning reads each hold API and data-plane connections. Go's default
+// keeps two idle connections per host, so a bounded fan-out would reopen TCP
+// on almost every request and exhaust local ephemeral ports on large uploads.
+// Kept local so the adapter does not depend on internal/httpjson.
 func pooledTransport() *http.Transport {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
 	perHost := stageConcurrency() * 2
 	if perHost < minIdleConnsPerHost {
 		perHost = minIdleConnsPerHost
 	}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.MaxIdleConnsPerHost = perHost
 	if transport.MaxIdleConns < perHost*2 {
 		transport.MaxIdleConns = perHost * 2
 	}
 	return transport
 }
+
+const minIdleConnsPerHost = 64
 
 func (c *apiClient) repositoryPath(suffix string) string {
 	base := "/repositories/" + url.PathEscape(c.repository)
@@ -252,26 +253,60 @@ func (c *apiClient) stage(branch, objectPath string, content []byte) error {
 // staging dance for one round trip per object on many-small-object commits;
 // large objects stay on the presigned path so their bytes never cross the
 // lakeFS server.
+// lakeFS answers 5xx when its own backing-store hop fails transiently (for
+// example local ephemeral-port exhaustion under a burst of small PUTs). The
+// upload targets a private hidden wip branch and overwrites one path, so
+// repeating it is idempotent; a bounded backoff lets the pressure drain.
+const (
+	uploadAttempts   = 6
+	uploadMaxBackoff = 4 * time.Second
+)
+
+// uploadBaseDelay is the first retry wait; tests shorten it.
+var uploadBaseDelay = 250 * time.Millisecond
+
 func (c *apiClient) uploadObject(branch, objectPath string, content []byte) error {
 	endpoint := c.repositoryPath("branches/"+url.PathEscape(branch)+"/objects") +
 		"?path=" + url.QueryEscape(objectPath)
+	delay := uploadBaseDelay
+	var err error
+	for attempt := 0; attempt < uploadAttempts; attempt++ {
+		var retry bool
+		retry, err = c.uploadObjectOnce(endpoint, content)
+		if err == nil || !retry {
+			return err
+		}
+		if attempt < uploadAttempts-1 {
+			time.Sleep(delay)
+			if delay *= 2; delay > uploadMaxBackoff {
+				delay = uploadMaxBackoff
+			}
+		}
+	}
+	return err
+}
+
+// uploadObjectOnce performs one upload attempt and reports whether a failure
+// is transient enough to repeat.
+func (c *apiClient) uploadObjectOnce(endpoint string, content []byte) (retry bool, err error) {
 	req, err := http.NewRequest(http.MethodPost, c.api+endpoint, bytes.NewReader(content))
 	if err != nil {
-		return err
+		return false, err
 	}
 	req.SetBasicAuth(c.accessKey, c.secretKey)
 	req.Header.Set("Content-Type", "application/octet-stream")
 	req.ContentLength = int64(len(content))
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return kernel.Fail(kernel.ErrTemporaryUnavailable, "lakefs object upload: %v", err)
+		return true, kernel.Fail(kernel.ErrTemporaryUnavailable, "lakefs object upload: %v", err)
 	}
 	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode >= 400 {
-		return &apiError{Method: http.MethodPost, Path: endpoint, Status: resp.StatusCode}
+		transient := resp.StatusCode >= 500 || resp.StatusCode == http.StatusTooManyRequests
+		return transient, &apiError{Method: http.MethodPost, Path: endpoint, Status: resp.StatusCode, Body: string(body)}
 	}
-	return nil
+	return false, nil
 }
 
 type pagination struct {

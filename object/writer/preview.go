@@ -1,9 +1,6 @@
 package writer
 
 import (
-	"io/fs"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -31,40 +28,19 @@ type IngestFile struct {
 }
 
 func Ingest(dir string, repositoryID kernel.RepositoryID, baseCommit kernel.CommitID) (IngestPreview, error) {
-	var operations []objectmodel.Operation
-	var files []IngestFile
-	err := filepath.WalkDir(dir, func(full string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if strings.HasPrefix(d.Name(), ".") {
-			if d.IsDir() && full != dir {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if d.IsDir() {
-			return nil
-		}
-		rel, err := filepath.Rel(dir, full)
-		if err != nil {
-			return err
-		}
-		rel = filepath.ToSlash(rel)
-		content, err := os.ReadFile(full)
-		if err != nil {
-			return err
-		}
-		op, file, err := ingestFile(rel, content)
-		if err != nil {
-			return err
-		}
-		operations = append(operations, op)
-		files = append(files, file)
-		return nil
-	})
+	entries, err := ingestSource(dir)
 	if err != nil {
 		return IngestPreview{}, err
+	}
+	parsed, err := ingestEntries(entries)
+	if err != nil {
+		return IngestPreview{}, err
+	}
+	var operations []objectmodel.Operation
+	var files []IngestFile
+	for _, item := range parsed {
+		operations = append(operations, item.op)
+		files = append(files, item.file)
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
 	sort.Slice(operations, func(i, j int) bool {

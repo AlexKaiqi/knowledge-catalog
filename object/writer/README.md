@@ -31,6 +31,11 @@ PUT 替换一个完整 Address 单元，可携带 `schema_ref`、provenance 与 
 
 `Ingest` / `Reconcile` 只产生 ChangeSet 预览，不是采集框架，也不是 ingestion control（面 3 只追 published HEAD 的派生投影）。产品 CLI 的目录写入是 `writer commit --dir`；一次性接入大量文件时可加 `--bulk` 显式请求介质的批量写通路——只换对象传输原语，CAS 与 commit 语义不变，介质未提供该能力时整条确定性拒绝；可选 `kc diff --dir` 看同一对照，不把 ChangeSet 交给调用方。HTTP Writer 仍收 ChangeSet（含 `bulkIngest`）。PROPOSAL 只推进 candidate Ref；ControlPlane merge 才推进发布 Ref。人在自有 git 上改 frontmatter 不经过本 CLI 时，进 published 的对象发布仍须过与 COMMIT 相同的校验（CI 代发或只验不写，见 `tasks/done/WRITE-VALIDATE.md`，方向在 `doc/roadmap.md` 的“未到”）；本包本轮不新增 validate-only 命令。部署发布 `systemrepo/content` 完整出版物由 `systemrepo.PublishSystem` 聚合并调用专用 Writer：只写入空的实际 `kr://kc/system` Snapshot，已有内容、Address、Schema 绑定和路径必须与当前版本一致，额外或缺失内容文件拒绝。运行时 Writer 保持拒绝系统仓写入。
 
+目录输入（`Ingest`）可以是目录，也可以是 `.tar` / `.tar.gz` / `.tgz` 归档，用 `archive//子目录`
+指定归档内充当仓根的目录。归档按顺序流式读取，文件由有界并发读取并解析，第一个错误按文件顺序报告，
+结果与读取同一棵目录树逐字节一致。归档中的越界路径、符号链接等非常规文件、重复条目、空子目录拒绝；
+隐藏文件/目录与目录输入一样不参与。大仓目录中逐个打开小文件是本机文件系统往返的主要成本，归档输入把它降为一次顺序读取。
+
 首次上传的空树快路自动生效：Writer 通过可选 `DirectoryReader` 独立确认固定 `BaseCommit`
 的根目录为空，对这一不可变基点的规划读取直接返回缺失，省去逐对象旧值读取。任何已有条目
 （包括 `.kc`）都使基点按非空处理；不具备目录读取能力时保留原流程，读取失败则拒绝。

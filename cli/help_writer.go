@@ -36,6 +36,7 @@ func hostWriterHelpEntries() map[string]helpEntry {
     把目录中声明的正文变更作为一次单仓发布；不把未出现在目录中的对象当成删除。
   用法与参数：
     --dir 是期望正文。Client 对照当前版本求差后提交。--command-id 由你本次提供，Client 不代填。
+    --dir 也可指向 .tar / .tar.gz / .tgz 归档，用 archive.tar.gz//子目录 指定归档内充当仓根的目录；归档在本机流式读取并并发解析，拒绝越界、符号链接、重复条目和空子目录。
     --ref 默认 refs/heads/main；可用 --base 固定基点，省略时读取当前 HEAD；隐藏文件/目录不参与。
     首次上传到空仓时自动省去逐对象旧值查询；目录直接生成提交，无需手写 ChangeSet。
     也可用 --changeset <file> 提交明确 ChangeSet，与 --dir 互斥；目标、操作和前置条件来自该文件。
