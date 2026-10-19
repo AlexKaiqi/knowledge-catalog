@@ -16,7 +16,7 @@
 | [权限](design/permissions.md) | 统一用户名、三种资源分开授权、撤权即生效 | 拒绝空身份 | 改名回收、准入方式、转授上限 |
 | [对象](design/object.md) | 模型、Schema、Writer、固定读取、系统仓 | 统一对象引用；供给写法 | 不兼容 Schema 迁移；直接改仓的检查 |
 | [插件](design/plugins.md) | 登记、部署安装实例、说明入口 | 声明移出 Schema；索引声明按清单名路由；能力清单按实例公开 | 插件间优先级 |
-| [发现](design/discovery.md) | 全文、过滤、排序、关系、同版本回读、后台维护 | 选进 Dataset 的细粒度索引声明；只按 Dataset 搜索；查询归因、采纳反馈与使用数据 | 跨 Dataset 复用分段；分面 |
+| [发现](design/discovery.md) | 全文、过滤、排序、关系、同版本回读、后台维护 | 选进 Dataset 的细粒度索引声明；只按 Dataset 搜索；查询归因、采纳反馈与使用数据 | 跨 Dataset 复用分段；分面；检索轨迹与意图；可选发现包 |
 | [LiveAccess](design/liveaccess.md) | 精确读取、动态索引、双依据 | 声明落在方面或成员上并引用取值描述；透明取值、逐值失败、身份传递 | 部署恢复、时效、保留期 |
 | [Affordance](design/affordance.md) | 分层帮助、插件说明入口、系统仓 | `kc help` 与系统仓一致 | wield、MCP 网关 |
 | [服务](design/service.md) | 统一执行器、文件网关、可恢复单实例、证据 | 路由清单合一、拆分 `home/` | 多实例、多语言 SDK、SLI |
