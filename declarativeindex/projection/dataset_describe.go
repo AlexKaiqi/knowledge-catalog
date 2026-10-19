@@ -4,6 +4,8 @@ import (
 	"context"
 	retrieval "kc/discovery"
 	ports "kc/discovery/projection"
+	"kc/kernel"
+	objectmodel "kc/object"
 	"kc/object/reader"
 )
 
@@ -16,6 +18,22 @@ func (idx *Index) DatasetAccessSpec(lookup reader.MemberLookup, pin reader.Datas
 	}
 	defer release()
 	return s.spec, nil
+}
+
+// DeclaredDatasetAccessSpec compiles the declarations the revision selects,
+// with the same binding-identity check preparation and search apply, without
+// touching an engine. Explanations therefore report a per-caller member as
+// unsupported before any preparation.
+func (idx *Index) DeclaredDatasetAccessSpec(repo objectmodel.Repository, at kernel.CommitID, lookup reader.MemberLookup, pin reader.DatasetPin) (retrieval.AccessSpec, error) {
+	s, err := idx.openDatasetSpace(lookup, pin)
+	if err != nil {
+		return retrieval.AccessSpec{}, err
+	}
+	check, _, err := idx.datasetCheck(s)
+	if err != nil {
+		return retrieval.AccessSpec{}, err
+	}
+	return retrieval.AccessSpecForRepositoryChecked(repo, at, check)
 }
 
 // CheckDatasetProjection observes the same readiness gate search uses.

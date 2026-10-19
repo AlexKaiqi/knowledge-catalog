@@ -51,24 +51,11 @@ type DescriptorScope func(objectmodel.ObjectID) (DescriptorAt, error)
 // Dataset revision, without entering the consumer-visible scope.
 func ServingDescriptors(scope *reader.Serving) DescriptorScope {
 	return func(id objectmodel.ObjectID) (DescriptorAt, error) {
-		values, err := scope.Read(id, nil)
-		if err != nil && kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
+		value, err := scope.ReadDescriptor(id)
+		if err != nil {
 			return DescriptorAt{}, err
 		}
-		if len(values) == 0 {
-			if values, err = scope.ReadDependency(id); err != nil {
-				return DescriptorAt{}, err
-			}
-		}
-		switch {
-		case len(values) == 0:
-			return DescriptorAt{}, kernel.Fail(kernel.ErrObjectRefUnresolved,
-				"descriptorRef %s is not readable in this request scope", id)
-		case len(values) > 1:
-			return DescriptorAt{}, kernel.Fail(kernel.ErrObjectIDConflict,
-				"descriptorRef %s is held by several repositories in this request scope", id)
-		}
-		return DescriptorAt{Repository: values[0].Repository, Commit: values[0].Commit, Value: values[0].Value}, nil
+		return DescriptorAt{Repository: value.Repository, Commit: value.Commit, Value: value.Value}, nil
 	}
 }
 

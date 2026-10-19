@@ -56,6 +56,16 @@ func (p *IndexPlugins) DeclaredAccessSpecAt(repo objectmodel.Repository, at kern
 		return retrieval.AccessSpec{}, err
 	}
 	defer done()
+	if scoped, ok := repo.(interface {
+		DatasetScope() (reader.MemberLookup, reader.DatasetPin)
+	}); ok {
+		if queries, ok := instance.services.Queries.(interface {
+			DeclaredDatasetAccessSpec(objectmodel.Repository, kernel.CommitID, reader.MemberLookup, reader.DatasetPin) (retrieval.AccessSpec, error)
+		}); ok {
+			lookup, pin := scoped.DatasetScope()
+			return queries.DeclaredDatasetAccessSpec(repo, at, lookup, pin)
+		}
+	}
 	var check retrieval.DeclarationCheck
 	if !nilContribution(instance.services.Capabilities) {
 		check = instance.services.Capabilities.Check
