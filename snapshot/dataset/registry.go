@@ -2,6 +2,7 @@ package dataset
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"kc/kernel"
 	"kc/snapshot"
@@ -10,13 +11,27 @@ import (
 // registry persists service metadata/membership, current Dataset definitions,
 // and immutable releases as flat registry.yaml, dataset-*.yaml, release-*.yaml.
 // The independent Snapshot authority is not an Object Repository.
+//
+// Reads never take a lock: the accepted head is an atomic value and every
+// read addresses an immutable commit. writeMu serializes only commits of the
+// registry document; the authority CAS (ExpectedTargetCommit) still guards
+// other processes.
 type registry struct {
 	authority snapshot.Store
 	tree      snapshot.TreeStore
-	mu        sync.Mutex
-	head      string
+	writeMu   sync.Mutex
+	head      atomic.Pointer[string]
 	ref       string
 }
+
+func (g *registry) acceptedHead() string {
+	if head := g.head.Load(); head != nil {
+		return *head
+	}
+	return ""
+}
+
+func (g *registry) accept(head string) { g.head.Store(&head) }
 
 func (g *registry) AuthorityID() string { return string(g.authority.ID()) }
 
@@ -33,12 +48,11 @@ func (g *registry) Close() error {
 
 // Head is the registry commit the current combination space was read from.
 func (g *registry) Head() (string, error) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	if g.head == "" {
+	head := g.acceptedHead()
+	if head == "" {
 		return "", kernel.Fail(kernel.ErrVersionUnresolved, "service registry has no accepted commit")
 	}
-	return g.head, nil
+	return head, nil
 }
 
 // Load reads the current flat Workspace registry YAML from the accepted commit.
@@ -48,21 +62,20 @@ func (g *registry) Load() (State, error) {
 }
 
 func (g *registry) loadSnapshot() (State, string, error) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	state, err := g.load()
-	return state, g.head, err
+	head := g.acceptedHead()
+	state, err := g.loadAt(head)
+	return state, head, err
 }
 
-func (g *registry) load() (State, error) {
-	files, err := g.snapshotYAML()
+func (g *registry) loadAt(head string) (State, error) {
+	files, err := g.snapshotYAML(head)
 	if err != nil {
 		return State{}, err
 	}
 	if len(files) > 0 {
 		return g.stateFromYAML(files)
 	}
-	if err := g.requireVirginAuthority(); err != nil {
+	if err := g.requireVirginAuthority(head); err != nil {
 		return State{}, err
 	}
 	return EmptyState, nil
@@ -71,26 +84,38 @@ func (g *registry) load() (State, error) {
 // Save publishes state against this handle's last accepted authority commit.
 // A stale handle must be reopened; Save never merges or overwrites newer state.
 func (g *registry) Save(state State, message, author, requestID, ruleID string) error {
-	g.mu.Lock()
-	defer g.mu.Unlock()
+	g.writeMu.Lock()
+	defer g.writeMu.Unlock()
 	return g.saveSnapshot(state, message, author, requestID, ruleID)
 }
 
 func (g *registry) saveExpected(expected string, state State, message, author, requestID, ruleID string) (string, error) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	if expected != g.head {
-		return "", kernel.Fail(kernel.ErrNonFastForward, "service authority moved: expected %s, actual %s", expected, g.head)
+	g.writeMu.Lock()
+	defer g.writeMu.Unlock()
+	if head := g.acceptedHead(); expected != head {
+		return "", kernel.Fail(kernel.ErrNonFastForward, "service authority moved: expected %s, actual %s", expected, head)
 	}
 	err := g.saveSnapshot(state, message, author, requestID, ruleID)
-	return g.head, err
+	return g.acceptedHead(), err
 }
 
 // CheckAuthority verifies the accepted branch without refreshing or publishing.
 // Snapshot adapters must fail closed when that authority is gone or advanced.
+// The common case reads without a lock. A mismatch may be this process's own
+// commit between the authority advancing and acceptance, so only then is it
+// settled behind the commit lock.
 func (g *registry) CheckAuthority() error {
-	g.mu.Lock()
-	defer g.mu.Unlock()
+	err := g.checkAuthority()
+	if kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
+		return err
+	}
+	g.writeMu.Lock()
+	defer g.writeMu.Unlock()
+	return g.checkAuthority()
+}
+
+func (g *registry) checkAuthority() error {
+	accepted := g.acceptedHead()
 	actual, err := g.authority.Head(g.ref)
 	if err != nil {
 		return err
@@ -98,7 +123,7 @@ func (g *registry) CheckAuthority() error {
 	if actual == "" {
 		return kernel.Fail(kernel.ErrVersionUnresolved, "service authority ref is unavailable")
 	}
-	if string(actual) != g.head {
+	if string(actual) != accepted {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "service authority advanced; reopen the deployment")
 	}
 	return nil

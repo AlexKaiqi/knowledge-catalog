@@ -92,7 +92,7 @@ func ExecuteApplicationOperation(ctx context.Context, name, action string, cmd C
 		if err := Authorize(home, action, AuthorizationFlags(cx), observation.Authorization, ws); err != nil {
 			return nil, err
 		}
-		ObserveHome(ws, action, flags)
+		cx.WS = observeInvocationHome(ws, opened != nil, action, flags)
 		return cmd.Run(cx)
 	}
 	// Bind the pin context before authorization so verbs such as receipt can
@@ -107,10 +107,21 @@ func ExecuteApplicationOperation(ctx context.Context, name, action string, cmd C
 	if err := Authorize(home, action, AuthorizationFlags, observation.Authorization, ws); err != nil {
 		return nil, err
 	}
-	ObserveHome(ws, action, flags)
-	return WithHooks(ws, home, ActionOf(name, flags), flags, observation, func() (any, error) {
+	cx.WS = observeInvocationHome(ws, opened != nil, action, flags)
+	return WithHooks(cx.WS, home, ActionOf(name, flags), flags, observation, func() (any, error) {
 		return cmd.Run(cx)
 	})
+}
+
+// observeInvocationHome stamps the Home this invocation runs on. A Home the
+// caller handed in is shared by concurrent requests, so the stamp lives on a
+// request view; a Home opened for this call alone can carry it directly.
+func observeInvocationHome(ws *kchome.Home, shared bool, action string, flags map[string]invoke.FlagValue) *kchome.Home {
+	if shared {
+		return ObserveRequest(ws, action, flags)
+	}
+	ObserveHome(ws, action, flags)
+	return ws
 }
 
 func observesInventory(name string) bool {

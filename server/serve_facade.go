@@ -35,7 +35,7 @@ type httpFacade struct {
 	options        HTTPServerOptions
 	runtime        *telemetry.Runtime
 	ready          *readiness.Cache
-	invoke         sync.RWMutex
+	inflight       sync.WaitGroup
 	homeMu         sync.Mutex
 	readHome       *Home
 	workersStarted bool
@@ -82,8 +82,11 @@ func newHTTPHandlerWithRuntime(home string, options HTTPServerOptions, opened *H
 		facade.openHome = func() (*Home, error) { return apphome.OpenDeployment(*facade.deployment) }
 		facade.readHome = opened
 		facade.ready.BindProbe(func(surface string) readiness.Result {
-			facade.invoke.RLock()
-			defer facade.invoke.RUnlock()
+			release, admitted := facade.admitRequest()
+			defer release()
+			if !admitted {
+				return readiness.Result{Status: "not_ready", Surface: surface, ReasonCode: "REGISTRY_STATE_UNAVAILABLE"}
+			}
 			{
 				registry := opened.Registry
 				if err := registry.CheckAuthority(); err != nil {
@@ -268,9 +271,9 @@ func (f *httpFacade) stopReadHome() {
 
 func (f *httpFacade) closeReadHome() error {
 	f.stopReadHome()
-	// Shutdown must not close adapters borrowed by an in-flight typed or file read.
-	f.invoke.Lock()
-	defer f.invoke.Unlock()
+	// Shutdown must not close adapters borrowed by an in-flight typed or file
+	// read. stopReadHome closed admission, so the in-flight count only drains.
+	f.inflight.Wait()
 	f.homeMu.Lock()
 	defer f.homeMu.Unlock()
 	if f.readHome == nil {

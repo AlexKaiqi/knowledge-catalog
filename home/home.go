@@ -29,8 +29,11 @@ import (
 // is home_mount.go. Per-verb behaviour stays in cli/verbs_*.go.
 
 type Home struct {
-	inventory          *homeInventory
-	readOnly           bool
+	inventory *homeInventory
+	readOnly  bool
+	// borrowed marks a request view: it shares the process's resources and
+	// must never close, stop or reassemble them.
+	borrowed           bool
 	closeOnce          sync.Once
 	closeErr           error
 	indexDirectory     string
@@ -240,7 +243,7 @@ func OpenDatasets(home string, file HomeFile, store snapshot.Registry) (dataset.
 
 // StopMaintenance joins workers while preserving resources for accepted tasks.
 func (ws *Home) StopMaintenance() {
-	if ws == nil || ws.readOnly {
+	if ws == nil || ws.readOnly || ws.borrowed {
 		return
 	}
 	ws.Plugins.StopBackground()
@@ -251,7 +254,7 @@ func (ws *Home) StopMaintenance() {
 
 // Close releases projection engines and member store adapters opened for this process.
 func (ws *Home) Close() error {
-	if ws == nil || ws.readOnly {
+	if ws == nil || ws.readOnly || ws.borrowed {
 		return nil
 	}
 	ws.closeOnce.Do(func() {

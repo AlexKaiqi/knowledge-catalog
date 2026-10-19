@@ -26,6 +26,7 @@ type Service interface {
 	PrepareDataset(setID string, revision int, sources []DatasetSource) (Dataset, error)
 	PublishDataset(def Dataset) (Dataset, error)
 	ReadView(j Observer) Service
+	RequestView(j Observer, as, requestID, ruleID string) Service
 	ReadVirtualFile(setID, path string) (VirtualFile, error)
 	ReadVirtualFileAt(def Dataset, resolved ResolvedDataset, path string) (VirtualFile, error)
 	ReadVirtualFileOf(def Dataset, path string) (VirtualFile, error)
@@ -56,7 +57,7 @@ type Registry interface {
 	CheckAuthority() error
 	loadSnapshot() (State, string, error)
 	saveExpected(string, State, string, string, string, string) (string, error)
-	history(int, string) ([]Commit, error)
+	history(string, int, string) ([]Commit, error)
 }
 
 func observe(observer Observer, operation string, refs map[string]any, err error) error {

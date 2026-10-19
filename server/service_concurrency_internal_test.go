@@ -8,60 +8,51 @@ import (
 	apphome "kc/home"
 )
 
-// Deployment serving serves read-only actions on the immutable per-request
-// view (ws.ReadView with a private request journal), so independent reads
-// share the read lock.
-func TestTypedReadInvocationsShareTheReadLock(t *testing.T) {
-	facade := &httpFacade{deployment: &apphome.DeploymentConfig{}}
-	firstUnlock := facade.lockTypedInvocation("object.read")
-	defer firstUnlock()
-
-	acquired := make(chan func(), 1)
-	go func() { acquired <- facade.lockTypedInvocation("object.search") }()
-	select {
-	case unlock := <-acquired:
-		unlock()
-	case <-time.After(time.Second):
-		t.Fatal("independent typed reads were serialized")
+// Admission is a shutdown barrier, not a mutual exclusion: concurrent
+// mutations are decided by authority CAS, and stamps live on request views,
+// so in-flight requests of any kind never wait for each other.
+func TestTypedInvocationsDoNotWaitForEachOther(t *testing.T) {
+	for _, facade := range []*httpFacade{{}, {deployment: &apphome.DeploymentConfig{}}} {
+		first, admitted := facade.admitRequest()
+		if !admitted {
+			t.Fatal("open facade refused a request")
+		}
+		entered := make(chan func(), 1)
+		go func() { entered <- facade.enterRequest() }()
+		select {
+		case release := <-entered:
+			release()
+		case <-time.After(time.Second):
+			t.Fatal("a second in-flight request waited for the first")
+		}
+		first()
 	}
 }
 
-// Component/fixture serving installs the request journal on the shared Home
-// for every invocation, so reads must serialize with each other and with
-// mutations (race detector: observeHome → SetJournal data race).
-func TestTypedFixtureReadsSerializeWithEachOther(t *testing.T) {
+func TestCloseWaitsForInFlightRequests(t *testing.T) {
 	facade := &httpFacade{}
-	firstUnlock := facade.lockTypedInvocation("object.read")
-	defer firstUnlock()
-
-	acquired := make(chan func(), 1)
-	go func() { acquired <- facade.lockTypedInvocation("object.search") }()
+	release, admitted := facade.admitRequest()
+	if !admitted {
+		t.Fatal("open facade refused a request")
+	}
+	closed := make(chan error, 1)
+	go func() { closed <- facade.closeReadHome() }()
 	select {
-	case unlock := <-acquired:
-		unlock()
-		t.Fatal("fixture-mode read crossed another read on the shared home")
+	case <-closed:
+		t.Fatal("close finished while a request was still in flight")
 	case <-time.After(25 * time.Millisecond):
 	}
-}
-
-func TestTypedMutationExcludesReadsUntilItFinishes(t *testing.T) {
-	facade := &httpFacade{}
-	writeUnlock := facade.lockTypedInvocation("writer.commit")
-	acquired := make(chan func(), 1)
-	go func() { acquired <- facade.lockTypedInvocation("object.read") }()
-
-	select {
-	case unlock := <-acquired:
-		unlock()
-		t.Fatal("read crossed an in-process mutation")
-	case <-time.After(25 * time.Millisecond):
+	if _, admitted := facade.admitRequest(); admitted {
+		t.Fatal("a closing facade admitted a new request")
 	}
-	writeUnlock()
+	release()
 	select {
-	case unlock := <-acquired:
-		unlock()
+	case err := <-closed:
+		if err != nil {
+			t.Fatal(err)
+		}
 	case <-time.After(time.Second):
-		t.Fatal("read stayed blocked after mutation completed")
+		t.Fatal("close stayed blocked after the in-flight request finished")
 	}
 }
 
@@ -79,7 +70,7 @@ func TestTypedInvocationReadOnlyClassification(t *testing.T) {
 	}
 	for _, action := range []string{"writer.commit", "repositories.create", "dataset.manage", "projection.manage", "feedback.write"} {
 		if inv.TypedInvocationReadOnly(action) {
-			t.Errorf("%s should exclude concurrent reads", action)
+			t.Errorf("%s should not run on the immutable read view", action)
 		}
 	}
 }

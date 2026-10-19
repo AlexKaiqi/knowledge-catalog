@@ -143,6 +143,8 @@ datasetAccess:
 
 正式部署的并行读取通过 `ReadView` 隔离每个请求的 Reader、过程账身份和 登记表 已接受状态，不修改进程共享的 journal 或 Writer stamp。视图借用 Store、Writer、命令账本与 Index，保留回执查询能力，调用方不得关闭共享资源。登记表 视图不重新加载 Snapshot 权威、不订阅 Snapshot 事件，也不能持久化变更。只有保证读取不会隐式收养配方的正式部署路径使用该视图；组件夹具的显式装配语义保持独立。
 
+其它共享 Home 上的请求走 `RequestView`：Store、命令账本、登记表已接受状态、库存与插件共享，已接受的写对其他请求立即可见；journal、Writer、TreeWriter、Reader 与 Dataset 服务的身份印记归本请求所有。并发写因此不需要进程级锁：版本化写由预期提交核对裁决，命令账本按命令 ID 串行，登记文档由 Dataset 服务串行读改写，本机策略文件按路径串行读改写。借用视图的 `Close`、`StopMaintenance` 是空操作，也不能装配插件；进程独占的 Home（本地 CLI 单次打开）仍直接盖印。
+
 ## 部署插件与运行装配
 
 插件实例只来自部署配置的顶层 `plugins`（严格解码，本机夹具 `stores.yaml` 用同名字段）：

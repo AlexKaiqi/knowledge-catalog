@@ -38,7 +38,7 @@ func (ws *Home) configureIndexPlugins(directory string) error {
 // SetLiveAccessEntries supplies compiled factories. The deployment's plugins
 // configuration still decides which instances are installed.
 func (ws *Home) SetLiveAccessEntries(entries map[string]liveservice.PluginEntry) error {
-	if ws.readOnly || ws.pluginsVerified || !ws.Plugins.Unactivated() {
+	if ws.readOnly || ws.borrowed || ws.pluginsVerified || !ws.Plugins.Unactivated() {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "running plugin entries are immutable")
 	}
 	ws.liveAccessEntries = make(map[string]liveservice.PluginEntry, len(entries))
@@ -53,7 +53,7 @@ func (ws *Home) SetLiveAccessEntries(entries map[string]liveservice.PluginEntry)
 // deployed instances over the verified Repositories before activating workers.
 // It is not a request-time refresh or a hot-loading operation.
 func (ws *Home) VerifyIndexPlugins() error {
-	if ws.readOnly {
+	if ws.readOnly || ws.borrowed {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "borrowed views cannot assemble plugins")
 	}
 	if !ws.Plugins.Unactivated() {

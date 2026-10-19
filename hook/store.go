@@ -67,6 +67,21 @@ func Write(home string, file File) error {
 	return jsonfile.Write(Path(home), file)
 }
 
+// Update derives the next bindings from the current file under the file's
+// read-modify-write lock, so concurrent add and remove cannot drop each other.
+func Update(home string, update func(*File) error) error {
+	return jsonfile.Locked(Path(home), func(string) error {
+		file, err := Read(home)
+		if err != nil {
+			return err
+		}
+		if err := update(&file); err != nil {
+			return err
+		}
+		return Write(home, file)
+	})
+}
+
 func NextID(bindings []Binding) string {
 	return fmt.Sprintf("hk_%d", len(bindings)+1)
 }

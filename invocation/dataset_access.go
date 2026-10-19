@@ -12,6 +12,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -42,11 +43,64 @@ type semanticProjectionKey struct {
 	scope      kernel.Digest
 }
 
-var semanticProjections = struct {
-	sync.Mutex
-	entries map[semanticProjectionKey]*SemanticProjection
+// semanticProjections caches projections of immutable commits. The mutex
+// guards only the map; a build runs outside it, and concurrent requests for
+// the same key wait for that one build instead of every request waiting.
+var semanticProjections = newSemanticProjectionCache(32)
+
+type semanticProjectionCache struct {
+	mu      sync.Mutex
+	limit   int
+	entries map[semanticProjectionKey]*semanticProjectionBuild
 	order   []semanticProjectionKey
-}{entries: map[semanticProjectionKey]*SemanticProjection{}}
+}
+
+type semanticProjectionBuild struct {
+	done       chan struct{}
+	projection *SemanticProjection
+	err        error
+}
+
+func newSemanticProjectionCache(limit int) *semanticProjectionCache {
+	return &semanticProjectionCache{limit: limit, entries: map[semanticProjectionKey]*semanticProjectionBuild{}}
+}
+
+func (c *semanticProjectionCache) get(key semanticProjectionKey, build func() (*SemanticProjection, error)) (*SemanticProjection, error) {
+	c.mu.Lock()
+	if pending := c.entries[key]; pending != nil {
+		c.mu.Unlock()
+		<-pending.done
+		return pending.projection, pending.err
+	}
+	pending := &semanticProjectionBuild{done: make(chan struct{})}
+	c.entries[key] = pending
+	c.order = append(c.order, key)
+	if len(c.order) > c.limit {
+		oldest := c.order[0]
+		c.order = c.order[1:]
+		delete(c.entries, oldest)
+	}
+	c.mu.Unlock()
+
+	pending.projection, pending.err = build()
+	close(pending.done)
+	if pending.err != nil {
+		c.forget(key, pending)
+	}
+	return pending.projection, pending.err
+}
+
+// forget drops a failed build so a later request retries; waiters already
+// holding it still receive its error.
+func (c *semanticProjectionCache) forget(key semanticProjectionKey, pending *semanticProjectionBuild) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.entries[key] != pending {
+		return
+	}
+	delete(c.entries, key)
+	c.order = slices.DeleteFunc(c.order, func(k semanticProjectionKey) bool { return k == key })
+}
 
 func (p *SemanticProjection) indexDirectories() {
 	children := map[string]map[string]string{}
@@ -342,23 +396,9 @@ func SemanticMounts(def dataset.Dataset, pin dataset.ResolvedDataset) []dataset.
 func SemanticProjectionFor(store snapshot.Store, repo objectmodel.Repository, pin dataset.ResolvedDataset) (*SemanticProjection, error) {
 	commit := pin.Repositories[repo.ID()]
 	key := semanticProjectionKey{repository: repo.ID(), commit: commit, scope: kernel.CanonicalDigest(pin.Items)}
-	semanticProjections.Lock()
-	defer semanticProjections.Unlock()
-	if cached := semanticProjections.entries[key]; cached != nil {
-		return cached, nil
-	}
-	projection, err := BuildSemanticProjection(store, repo, pin)
-	if err != nil {
-		return nil, err
-	}
-	semanticProjections.entries[key] = projection
-	semanticProjections.order = append(semanticProjections.order, key)
-	if len(semanticProjections.order) > 32 {
-		oldest := semanticProjections.order[0]
-		semanticProjections.order = semanticProjections.order[1:]
-		delete(semanticProjections.entries, oldest)
-	}
-	return projection, nil
+	return semanticProjections.get(key, func() (*SemanticProjection, error) {
+		return BuildSemanticProjection(store, repo, pin)
+	})
 }
 
 func BuildSemanticProjection(store snapshot.Store, repo objectmodel.Repository, pin dataset.ResolvedDataset) (*SemanticProjection, error) {

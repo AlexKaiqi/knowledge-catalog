@@ -25,21 +25,21 @@ func VerbAllow(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	file, err := ReadAllow(cx.Home)
-	if err != nil {
-		return nil, err
-	}
-	updated, rule, err := access.AddRule(file.Rules, AllowRule{
-		Principal: principal, Actions: SplitCmds(cx.Flag("action")),
-		Repo: cx.Flag("repo"),
-		Ref:  cx.Flag("ref"), Object: cx.Flag("object"), Aspect: cx.Flag("aspect"),
-		Dataset: invoke.DatasetOf(cx.Flags),
+	var rule AllowRule
+	err = UpdateAllow(cx.Home, func(file *AllowFile) error {
+		updated, added, err := access.AddRule(file.Rules, AllowRule{
+			Principal: principal, Actions: SplitCmds(cx.Flag("action")),
+			Repo: cx.Flag("repo"),
+			Ref:  cx.Flag("ref"), Object: cx.Flag("object"), Aspect: cx.Flag("aspect"),
+			Dataset: invoke.DatasetOf(cx.Flags),
+		})
+		if err != nil {
+			return err
+		}
+		file.Rules, rule = updated, added
+		return nil
 	})
 	if err != nil {
-		return nil, err
-	}
-	file.Rules = updated
-	if err := WriteAllow(cx.Home, file); err != nil {
 		return nil, err
 	}
 	return rule, nil
@@ -50,16 +50,15 @@ func VerbRevoke(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	file, err := ReadAllow(cx.Home)
+	err = UpdateAllow(cx.Home, func(file *AllowFile) error {
+		updated, err := access.RemoveRule(file.Rules, id)
+		if err != nil {
+			return err
+		}
+		file.Rules = updated
+		return nil
+	})
 	if err != nil {
-		return nil, err
-	}
-	updated, err := access.RemoveRule(file.Rules, id)
-	if err != nil {
-		return nil, err
-	}
-	file.Rules = updated
-	if err := WriteAllow(cx.Home, file); err != nil {
 		return nil, err
 	}
 	return map[string]any{"revoked": id}, nil

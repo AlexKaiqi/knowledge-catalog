@@ -17,7 +17,10 @@ type catalogMem struct {
 	parents  map[kernel.CommitID]kernel.CommitID
 	metadata map[kernel.CommitID]snapshot.CommitMetadata
 	applyErr error
-	seq      int
+	// beforeApply runs before a commit takes the fixture lock, so a test can
+	// hold a registry write at the authority boundary.
+	beforeApply func()
+	seq         int
 }
 
 func newCatalogMem(id string) *catalogMem {
@@ -96,6 +99,9 @@ func (s *catalogMem) ListFiles(commit kernel.CommitID) ([]string, error) {
 	return out, nil
 }
 func (s *catalogMem) ApplyTreeCommit(cs snapshot.TreeChangeSet) (kernel.CommitID, error) {
+	if s.beforeApply != nil {
+		s.beforeApply()
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.applyErr != nil {

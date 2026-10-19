@@ -70,6 +70,23 @@ func WriteAllow(home string, file AllowFile) error {
 	return jsonfile.Write(AllowPath(home), file)
 }
 
+// UpdateAllow derives the next policy from the current file while holding the
+// policy file's read-modify-write lock, so concurrent grant, revoke, share and
+// provisioning updates cannot drop each other. update may refuse by returning
+// an error; nothing is written then.
+func UpdateAllow(home string, update func(*AllowFile) error) error {
+	return jsonfile.Locked(AllowPath(home), func(string) error {
+		file, err := ReadAllow(home)
+		if err != nil {
+			return err
+		}
+		if err := update(&file); err != nil {
+			return err
+		}
+		return WriteAllow(home, file)
+	})
+}
+
 func ValidateActions(actions []string) error { return access.ValidateActions(actions) }
 
 func MatchAllow(rules []AllowRule, q AllowQuery) (AllowRule, bool) {

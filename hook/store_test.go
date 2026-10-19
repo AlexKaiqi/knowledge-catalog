@@ -1,12 +1,48 @@
 package hook_test
 
 import (
+	"sync"
 	"testing"
 
 	"kc/hook"
 	"kc/internal/testkit"
 	"kc/kernel"
 )
+
+func TestConcurrentUpdatesKeepEveryBinding(t *testing.T) {
+	home := testkit.TempDir(t)
+	const adds = 16
+	var wg sync.WaitGroup
+	errs := make(chan error, adds)
+	for i := 0; i < adds; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs <- hook.Update(home, func(file *hook.File) error {
+				file.Bindings = append(file.Bindings, hook.Binding{ID: hook.NextID(file.Bindings), On: "writer.commit", Phase: hook.PhasePost, Run: "a.sh"})
+				return nil
+			})
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	file, err := hook.Read(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := map[string]bool{}
+	for _, binding := range file.Bindings {
+		ids[binding.ID] = true
+	}
+	if len(file.Bindings) != adds || len(ids) != adds {
+		t.Fatalf("concurrent hook updates lost or reused bindings: %+v", file.Bindings)
+	}
+}
 
 func TestReadMissingHooksIsEmpty(t *testing.T) {
 	home := testkit.TempDir(t)

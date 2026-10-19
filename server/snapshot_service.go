@@ -94,33 +94,35 @@ func (f *httpFacade) acquireSnapshotResources(ctx context.Context, caller identi
 	if err != nil {
 		return snapshotservice.Resources{}, nil, err
 	}
-	unlock := f.lockTypedInvocation(action)
+	release := f.enterRequest()
 	opened, err := f.readHomeForRequest()
 	if err != nil {
-		return snapshotservice.Resources{}, unlock, err
+		return snapshotservice.Resources{}, release, err
 	}
 	flags := snapshotRequestFlags(ctx, caller, access.Query{Action: action})
 	flags["home"] = opened.Dir
 	requestJournal, err := inv.RequestHomeJournal(opened.Dir, operation, flags)
 	if err != nil {
-		return snapshotservice.Resources{}, unlock, err
+		return snapshotservice.Resources{}, release, err
 	}
 	readOnly := inv.TypedInvocationReadOnly(action)
 	immutable := readOnly && opened.Deployment != nil
+	// The served Home is shared by concurrent leases; every lease stamps only
+	// its own view. Version conflicts are decided by the authority's CAS.
 	if immutable {
 		opened = opened.ReadView(requestJournal)
 	} else {
-		opened.SetJournal(requestJournal)
+		opened = opened.RequestView(requestJournal, "", "", "")
 	}
 	if operation == "inventory-show" || operation == "repository-list" || operation == "dataset-list" || operation == "dataset-show" {
 		if err := inv.AuthorizeInventory(opened.Dir, flags, f.snapshotAuthorizationObserver(ctx, operation), opened); err != nil {
-			return snapshotservice.Resources{}, unlock, err
+			return snapshotservice.Resources{}, release, err
 		}
 	}
 	if lease, ok := ctx.Value(snapshotLeaseKey{}).(*snapshotLease); ok {
 		lease.opened = opened
 	}
-	return f.snapshotResources(opened, caller, operation, readOnly, immutable), unlock, nil
+	return f.snapshotResources(opened, caller, operation, readOnly, immutable), release, nil
 }
 
 func (f *httpFacade) snapshotResources(opened *Home, caller identity.HTTPIdentity, operation string, readOnly, immutable bool) snapshotservice.Resources {
@@ -356,9 +358,9 @@ func (f *httpFacade) aroundSnapshotOperation(ctx context.Context, caller identit
 }
 
 // snapshotGrantStore preserves the application's complete allow.json ledger.
-// The facade holds its write lock across UpdateRules and the HTTP operation,
-// so a module update cannot drop private admission/provisioning receipts or
-// race another HTTP policy mutation.
+// UpdateRules runs inside the policy file's read-modify-write lock, so a module
+// update cannot drop private admission/provisioning receipts or race another
+// policy mutation.
 type snapshotGrantStore struct {
 	home     string
 	writable bool
@@ -379,19 +381,17 @@ func (s snapshotGrantStore) UpdateRules(ctx context.Context, update func([]acces
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	file, err := inv.ReadAllow(s.home)
-	if err != nil {
-		return err
-	}
-	rules, err := update(file.Rules)
-	if err != nil {
-		return err
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	file.Rules = rules
-	return inv.WriteAllow(s.home, file)
+	return inv.UpdateAllow(s.home, func(file *inv.AllowFile) error {
+		rules, err := update(file.Rules)
+		if err != nil {
+			return err
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		file.Rules = rules
+		return nil
+	})
 }
 
 func snapshotDatasetObserver(j journal.Journal) dataset.Observer {

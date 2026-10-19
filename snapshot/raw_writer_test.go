@@ -129,6 +129,28 @@ func TestRawWriteRefusesTargetWithoutCapability(t *testing.T) {
 // method set is exactly what snapshot.Store declares.
 type plainRawSnapshot struct{ snapshot.Store }
 
+// A request writer reports to its own observer; the shared writer keeps its.
+func TestRawWriterForRequestKeepsObserversApart(t *testing.T) {
+	shared, err := snapshot.NewRawWriter(snapshot.NewRegistry(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sharedCalls, requestCalls int
+	shared.SetObserver(func(string, map[string]any, error) error { sharedCalls++; return nil })
+	request := shared.ForRequest(func(string, map[string]any, error) error { requestCalls++; return nil }, "alice", "req-1", "rule-1")
+	denied := snapshot.TreeChangeSet{
+		TargetRepository: "kr://missing", TargetRef: snapshot.DefaultRef,
+		Changes: []snapshot.TreeChange{{Path: "file.txt", Content: []byte("ignored")}},
+	}
+	_, err = request.Commit("request", denied)
+	testkit.ExpectCode(t, err, kernel.ErrTargetRepositoryDenied)
+	_, err = shared.Commit("shared", denied)
+	testkit.ExpectCode(t, err, kernel.ErrTargetRepositoryDenied)
+	if sharedCalls != 1 || requestCalls != 1 {
+		t.Fatalf("observer calls: shared = %d, request = %d", sharedCalls, requestCalls)
+	}
+}
+
 func TestRawWriteObserverCannotChangePublicationOutcome(t *testing.T) {
 	for _, tc := range []struct {
 		name string

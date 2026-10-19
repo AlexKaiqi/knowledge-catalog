@@ -66,8 +66,8 @@ func (f *httpFacade) executePluginRead(w http.ResponseWriter, r *http.Request, n
 	flags["home"] = f.home
 	f.addIdentityFlags(flags, r, identity)
 	addHTTPTraceFlags(flags, r)
-	unlock := f.lockTypedInvocation(action)
-	defer unlock()
+	release := f.enterRequest()
+	defer release()
 	opened, err := f.pluginReadHome()
 	if err != nil {
 		invoke.WriteInvoke(w, inv.ErrorResult(err))
