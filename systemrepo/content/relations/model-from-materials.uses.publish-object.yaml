@@ -1,0 +1,14 @@
+---
+object_id: kc/relation/model-from-materials.uses.publish-object
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: relations/model-from-materials.uses.publish-object.yaml
+---
+relationId: kc/relation/model-from-materials.uses.publish-object
+relationType: uses
+direction: DIRECTED
+endpoints:
+  - role: from
+    object: kc/guide/model-from-materials
+  - role: to
+    object: kc/capability/publish-object

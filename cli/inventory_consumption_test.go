@@ -45,7 +45,8 @@ func TestInventoryDatasetsHonorPublicDefaultsAndCurrentGrants(t *testing.T) {
 				t.Fatalf("inventory did not honor current Dataset consumption: got=%v want=%v", ids, want)
 			}
 			for _, row := range result.Datasets {
-				if row.Revision != 2 || row.Metadata["title"] == "" {
+				wantRevision := map[string]int{"qinghe-analysis": 3, "store-oncall": 3}[row.ID]
+				if row.Revision != wantRevision || row.Metadata["title"] == "" {
 					t.Fatalf("consumer inventory lost its current revision or purpose: %#v", row)
 				}
 			}
@@ -75,8 +76,8 @@ func TestInventoryDatasetsHonorPublicDefaultsAndCurrentGrants(t *testing.T) {
 		t.Fatalf("fixed-member fixture did not span multiple repositories: %#v", pin.Repositories)
 	}
 	assertLists([]string{"qinghe-analysis", "store-oncall"})
-	control := asMap(t, body(t, d.as(t, d.operator, "files", "read", "--dataset", "qinghe-analysis", "--revision", "2", "--path", "metrics/shop.gmv/caliber.yaml")))
-	read := asMap(t, body(t, d.as(t, "agent:inventory-viewer", "files", "read", "--dataset", "qinghe-analysis", "--revision", "2", "--path", "metrics/shop.gmv/caliber.yaml")))
+	control := asMap(t, body(t, d.as(t, d.operator, "files", "read", "--dataset", "qinghe-analysis", "--revision", "3", "--path", "metrics/shop.gmv/caliber.yaml")))
+	read := asMap(t, body(t, d.as(t, "agent:inventory-viewer", "files", "read", "--dataset", "qinghe-analysis", "--revision", "3", "--path", "metrics/shop.gmv/caliber.yaml")))
 	if control["content"] == "" || !reflect.DeepEqual(read, control) {
 		t.Fatalf("listed fixed-member delivery differs from the accepted bytes and basis: read=%#v control=%#v", read, control)
 	}

@@ -22,17 +22,46 @@ kc read 'urn:kc:object:kc/system#/readme'
 kc read 'urn:kc:object:kc/concept/object#/definition'
 ```
 
-第一次使用，先阅读 [第一次读取对象](guides/first-read/guide.md)。准备建模时从 [对象](concepts/object/definition.md)、[切面](concepts/aspect/definition.md)、[关系](concepts/relation/definition.md)、[Schema](concepts/schema/definition.md)和 [声明式索引](concepts/index-declaration/definition.md) 开始。做具体工作时直接选择下方使用指南。
+要试读已有内容，阅读 [第一次读取对象](guides/first-read/guide.md)。建模需要的概念可查 [对象](concepts/object/definition.md)、[切面](concepts/aspect/definition.md)、[关系](concepts/relation/definition.md)、[Schema](concepts/schema/definition.md)和 [声明式索引](concepts/index-declaration/definition.md)。做具体工作时直接选择下方使用指南。
+
+手上已有一批资料、要决定切成哪些对象与切面时，先读 [从资料到模型](guides/model-from-materials/guide.md)：它给出候选实体、对象边界、切面与成员、关系、Schema 复用的判断顺序和判据，再进入[首次发布领域对象](guides/first-publication/guide.md)执行。概念说明解释"是什么"，方法论解释"怎么判断"。
 
 ## 从公开例子开始
 
-先运行 `kc show`，按用途选择自己能消费的 Dataset：`qinghe-analysis` 展示销售分析，`autumn-launch-kit` 展示上新素材，`store-oncall` 展示值班交接。用 `kc dataset show <id>` 核对交付范围和 revision；搜索用 `kc search --dataset <id> --revision <N>`，命中用 `kc read <对象URN> --dataset <id> --revision <N>` 同版本回读。也可沿 `kc files list` 返回的路径，用 `kc files read` 读取导读、Schema 和对象原文件。列目录、翻页与读取显式沿用同一 revision；具体参数见对应叶子 help。
+按学习任务选择下面的固定入口。导读和练习随 Dataset 交付，消费权不要求开放来源仓。
+
+| 我想弄清楚什么 | 公开入口 | 会完成什么 |
+|---|---|---|
+| 第一次发布；Schema 复用；素材文件与方面 | `autumn-launch-kit` r4：`example/autumn-launch-kit#/readme` | 对照字幕与 vision 修订，再发布自己的资料 |
+| 列该做对象还是 member；关系还是引用 | `qinghe-analysis` r3：`example/qinghe-analysis#/readme` | 按维护需求解释选择，核对一个成员的修改范围 |
+| 是否用 LiveAccess；静态与动态如何共存 | `store-oncall` r3：`example/store-oncall#/readme` | 下载练习，发布静态成员，再接外部值并检查失败 |
+
+```sh
+kc read 'urn:kc:object:example/autumn-launch-kit#/readme' --dataset autumn-launch-kit --revision 4
+kc read 'urn:kc:object:example/qinghe-analysis#/readme' --dataset qinghe-analysis --revision 3
+kc read 'urn:kc:object:example/store-oncall#/readme' --dataset store-oncall --revision 3
+```
+
+想判断“普通字段、成员、独立对象、关系、快照还是实时值”，读[从资料到模型](guides/model-from-materials/guide.md)；
+想知道“失败后怎么继续”，读[恢复发布](guides/recover-a-write/guide.md)或[动态取值](guides/use-dynamic-values/guide.md)；
+想“只分享一部分、允许同事消费”，读[Dataset 交付](guides/share-a-dataset/guide.md)。
+这些是按意图的导航；系统仓可读不代表部署已提供系统内容检索 Dataset。
+
+先运行 `kc show`，按用途选择自己能消费的 Dataset：`qinghe-analysis` 展示销售分析，`autumn-launch-kit` 展示上新素材，`store-oncall` 展示值班交接。用 `kc dataset show <id>` 核对交付范围和 revision，再按上面的已知对象入口读取；也可沿 `kc files list` 返回的路径，用 `kc files read` 读取导读、Schema 和对象原文件。列目录、翻页与读取显式沿用同一 revision；具体参数见对应叶子 help。
+
+这组基础样例未选入索引声明，不能把可读等同于可搜索。需要搜索时，在自己的交付中选入适用声明并核对索引就绪，再用 `kc search --dataset <id> --revision <N>` 查询，命中用 `kc read <对象URN> --dataset <id> --revision <N>` 同版本回读。缺声明或未就绪不等于零命中，见[搜索对象](capabilities/search-object/usage.md)。
 
 准备发布自己的资料时，先复用适合的已发布 Schema 与文件格式，再确定自己的对象身份和业务正文。[首次发布领域对象](guides/first-publication/guide.md) 给出从公开示例下载、单仓发布到固定版本读回的完整旅程。已有目标仓直接使用；不因读例子而创建或重建来源仓。
 
 ## 使用指南
 
-这些指南说明如何使用已有能力，例如读取、发布和修订对象。
+先用建模方法判断要发布什么，再用操作指南完成读取、发布或修订。
+
+### 建模方法
+
+- [从资料到模型](guides/model-from-materials/guide.md) — `kc/guide/model-from-materials`；先形成对象边界、切面与成员、关系和 Schema 的选择，再进入[首次发布领域对象](guides/first-publication/guide.md)。
+
+### 操作指南
 
 - [第一次读取对象](guides/first-read/guide.md) — `kc/guide/first-read`
 - [接入一个来源](guides/connect-source/guide.md) — `kc/guide/connect-source`
@@ -122,8 +151,10 @@ kc read 'urn:kc:object:kc/concept/object#/definition'
 
 能力说明不表示当前部署已启用、投影就绪或当前主体获权。按调用入口查询实际身份、权限、投影或部署状态，以服务返回为依据。无投影时精确读取仍可使用；关系与检索需要满足各自查询合同。
 
-系统仓由平台版本发布，运行时不可写。已认证默认发现与读取由部署授权声明保证；业务 Dataset 显式选择采用系统文件，并选入解释所需 Schema。领域对象与自己的 Schema 发布到目标业务仓，系统基础 Schema 的副本保持与出版物一致。
+系统仓由平台版本发布，运行时不可写。已认证默认发现与读取由部署授权声明保证；业务 Dataset 显式选择采用系统文件，并选入解释所需 Schema。
+领域对象与自己的 Schema 发布到目标业务仓。Meta Schema 与索引声明 Schema 的副本保持与出版物一致，
+其余类型按普通兼容规则演进，具体范围见 [Schema](concepts/schema/definition.md)。
 
 ## 文件与对象
 
-`concepts/` 解释模型与依据，`interfaces/` 解释操作入口，`mechanisms/` 解释运行机制，`capabilities/` 说明用途，`guides/` 提供使用步骤。主体与权限、声明与观察、工作分支与条件合并放在相应机制中解释；目录划分只组织说明内容，不增加 登记空间 的领域类型。模型、入口与机制说明使用同一种正文 Schema。内容按一对象一目录、一切面一文件发布；`_schemas/` 发布 Schema，`object-interfaces/` 发布插件合同，`relations/` 发布独立导航关系。文件路径用于阅读，frontmatter 中的对象标识与切面名确定身份；相关对象也可以按稳定身份精确读取。关系文件可作为对象读取，图查询需要可用的同依据投影。
+`concepts/` 解释模型与依据，`interfaces/` 解释操作入口，`mechanisms/` 解释运行机制，`capabilities/` 说明用途，`guides/` 按导读标签区分建模方法与操作指南。主体与权限、声明与观察、工作分支与条件合并放在相应机制中解释；目录划分只组织说明内容，不增加 登记空间 的领域类型。模型、入口与机制说明使用同一种正文 Schema。内容按一对象一目录、一切面一文件发布；`_schemas/` 发布 Schema，`object-interfaces/` 发布插件合同，`relations/` 发布独立导航关系。文件路径用于阅读，frontmatter 中的对象标识与切面名确定身份；相关对象也可以按稳定身份精确读取。关系文件可作为对象读取，图查询需要可用的同依据投影。

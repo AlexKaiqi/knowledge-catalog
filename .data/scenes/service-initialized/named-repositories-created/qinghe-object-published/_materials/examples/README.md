@@ -41,7 +41,30 @@ Dataset 都按修订号固定，答案能说清自己基于哪一版。
 公开消费权只覆盖 Dataset 选中的内容，不授予来源仓读写权。复用的是结构和表达方式；示例中的价格、
 口径与健康状态是该示例的声明，自己的资料应使用自己的对象身份、真实正文与来源。
 
-## 文件
+## 接入教学修订
+
+在原发布计划末尾追加三个导读，不改写已有修订。旧部署重跑 `publish.py` 时按原回执继续；
+新部署从头执行仍产生相同的历史顺序。来源仓继续私有，导读采用系统仓的
+`schema/core/readme/v1`。当前 Writer 校验目标仓内的 Schema，三个仓经同一份
+`updates/onboarding-schema` 导入系统原文，不另造身份；各 Dataset 只交付一份，
+一致性回归核对该材料与系统出版物。
+
+| Dataset 修订 | 导读对象 | 交付文件 |
+|---|---|---|
+| qinghe-analysis r3 | example/qinghe-analysis | semantic-models/onboarding/readme.md |
+| autumn-launch-kit r4 | example/autumn-launch-kit | assets/autumn-launch/readme.md |
+| store-oncall r3 | example/store-oncall | services/onboarding/readme.md |
+
+前两个导读分别解释对象/member/关系取舍与文件/方面/修订；第三个导读交付
+`tools/live-lab/` 的静态和动态声明以及 Python 测试源，指导接入方在自己的仓练习。
+公开服务 health 保持原有静态快照，练习源由使用者在隔离测试环境显式启动。
+源只演示实时变化、503 和 403，不实现生产身份验证。
+
+新回归从公开服务下载这些文件，验证同一成员从静态改为动态、源变化不改变声明、
+失败不回退旧值、静态方面仍可读及旧修订不回填。进程内测试不代表真实部署已安装或
+陌生接入方已经完成教学任务。
+
+## 文件布局
 
 - `world.json`：发布计划的唯一来源，列出六个仓的接入方式和按顺序执行的步骤。
 - `repos/`：各仓基础对象，含 `drafts/` 下的 Schema。

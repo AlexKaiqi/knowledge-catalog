@@ -22,4 +22,9 @@ READ、PUT、REMOVE 共用对象 URN 与 locator。Writer 创建、替换或删�
 
 对象不等于文件。定义可以描述含义、边界和组成，引用分散的内部对象、固定文件或领域外部标识；definition 是推荐组织约定，不强制统一资源集合结构。插件按已发布的方面或成员声明增加能力，Schema 只描述结构；基础精确读取与维护不以插件为前提。
 
+## 划分对象边界
+
+同一个对象的多个方面，与用关系连接的多个对象，都是合法建模。具体判据与推导顺序见
+[从资料到模型](../../guides/model-from-materials/guide.md)；形成模型后再按指南进入首次发布。
+
 相关说明：[切面](../aspect/definition.md)、[关系](../relation/definition.md)、[对象地址](../address/definition.md)、[Schema](../schema/definition.md)。

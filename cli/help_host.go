@@ -179,6 +179,7 @@ func hostEnvironmentHelpEntries() map[string]helpEntry {
   用法与参数：
     --name 与 --url 互斥。--name 是平台供给空仓；--url 是连接已有仓。
     多个托管 Store 时用 --store 选择；连接模式必须给 --credential-file，不能带 --store。
+    凭证文件须为普通文本文件，最多 64 KiB；去掉首尾空白后只有一条非空凭证，不含内嵌换行。
     LakeFS 上 --name 就是仓 ID，与 lakeFS 仓库名相同。
     kc create 不接受 --metadata，也不设置原仓属性；该参数只用于 dataset define 的可选 Dataset 属性。
   条件：

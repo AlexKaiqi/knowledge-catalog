@@ -1,0 +1,11 @@
+---
+object_id: schema/learning.health
+---
+entity: Service
+aspect: runtime
+pattern: keyed_collection
+additionalProperties: false
+fields:
+  status:
+    type: string
+    required: true

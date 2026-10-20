@@ -1,0 +1,13 @@
+---
+object_id: learning/health-source
+---
+kind: ResourceDescriptor
+name: Isolated onboarding health source
+origin: http://127.0.0.1:7391
+mode: state
+runtime: onboarding-health
+protocol: resource-access/v1
+identity: per-caller
+access:
+  lookup:
+    call: lookup

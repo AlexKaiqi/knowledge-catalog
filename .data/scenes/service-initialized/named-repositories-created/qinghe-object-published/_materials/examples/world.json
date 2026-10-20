@@ -30,6 +30,16 @@
     {"kind": "commit", "repository": "media", "dir": "updates/media-vision", "commandId": "examples-media-vision"},
     {"kind": "define", "dataset": "autumn-launch-kit", "revision": 3, "recipe": "datasets/autumn-launch-kit.yaml"},
     {"kind": "commit", "repository": "store-ops", "dir": "updates/store-ops-runbook-v2", "commandId": "examples-store-ops-runbook-v2"},
-    {"kind": "define", "dataset": "store-oncall", "revision": 2, "recipe": "datasets/store-oncall.yaml"}
+    {"kind": "define", "dataset": "store-oncall", "revision": 2, "recipe": "datasets/store-oncall.yaml"},
+    {"kind": "commit", "repository": "sales-semantic", "dir": "updates/onboarding-schema", "commandId": "examples-onboarding-schema-sales-semantic"},
+    {"kind": "commit", "repository": "media", "dir": "updates/onboarding-schema", "commandId": "examples-onboarding-schema-media"},
+    {"kind": "commit", "repository": "store-ops", "dir": "updates/onboarding-schema", "commandId": "examples-onboarding-schema-store-ops"},
+    {"kind": "commit", "repository": "sales-semantic", "dir": "updates/onboarding-analysis", "commandId": "examples-onboarding-analysis"},
+    {"kind": "commit", "repository": "media", "dir": "updates/onboarding-media", "commandId": "examples-onboarding-media"},
+    {"kind": "commit", "repository": "store-ops", "dir": "updates/onboarding-oncall", "commandId": "examples-onboarding-oncall"},
+    {"kind": "files", "repository": "store-ops", "dir": "files/store-ops/onboarding", "message": "公开 LiveAccess 接入练习材料"},
+    {"kind": "define", "dataset": "qinghe-analysis", "revision": 3, "recipe": "datasets/qinghe-analysis.yaml"},
+    {"kind": "define", "dataset": "autumn-launch-kit", "revision": 4, "recipe": "datasets/autumn-launch-kit.yaml"},
+    {"kind": "define", "dataset": "store-oncall", "revision": 3, "recipe": "datasets/store-oncall.yaml"}
   ]
 }

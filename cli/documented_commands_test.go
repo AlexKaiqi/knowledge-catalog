@@ -19,6 +19,8 @@ func TestProductDocumentationUsesCurrentCommands(t *testing.T) {
 	groups := map[string][]string{
 		"README.md":           {"README.md"},
 		"doc":                 documentationMarkdown(t, filepath.Join("..", "doc")),
+		"system guides":       documentationMarkdown(t, filepath.Join("..", "systemrepo", "content", "guides")),
+		"public onboarding":   documentationMarkdown(t, filepath.Join("..", ".data", "scenes", "service-initialized", "named-repositories-created", "qinghe-object-published", "_materials", "examples", "updates")),
 		"product.html":        {"doc/product.html"},
 		"object/reader guide": {"object/reader/README.md"},
 	}
