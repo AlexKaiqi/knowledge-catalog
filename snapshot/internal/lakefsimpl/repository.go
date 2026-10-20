@@ -82,6 +82,13 @@ func (r *Repository) WithContext(ctx context.Context) *Repository {
 // must be writable only by KC's service identity: the adapter serializes
 // publication with an atomic hidden lock branch before using hard_reset.
 func OpenExisting(id kernel.RepositoryID, dsn, credential string) (*Repository, error) {
+	return OpenExistingContext(context.Background(), id, dsn, credential)
+}
+
+// OpenExistingContext binds both the initial authority checks and subsequent
+// requests to ctx. Binding only after OpenExisting returns cannot cancel an
+// opening request that is already waiting on the provider.
+func OpenExistingContext(ctx context.Context, id kernel.RepositoryID, dsn, credential string) (*Repository, error) {
 	if strings.TrimSpace(string(id)) == "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "repository id is required")
 	}
@@ -96,6 +103,7 @@ func OpenExisting(id kernel.RepositoryID, dsn, credential string) (*Repository, 
 	if err != nil {
 		return nil, err
 	}
+	client = client.withContext(ctx)
 	var info struct {
 		DefaultBranch string `json:"default_branch"`
 	}

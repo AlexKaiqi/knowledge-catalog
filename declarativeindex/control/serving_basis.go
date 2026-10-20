@@ -17,6 +17,7 @@ func (c *Controller) PrepareServingBasis(ctx context.Context, repo objectmodel.R
 	if c.index == nil {
 		return nil
 	}
+	repo = objectmodel.BindContext(ctx, repo)
 	report, err := reader.DescribeRepoSchema(repo, commit, "")
 	if err != nil {
 		return err

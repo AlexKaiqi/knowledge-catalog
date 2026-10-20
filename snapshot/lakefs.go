@@ -29,11 +29,25 @@ var (
 	_ CommitMetadataReader = (*lakefsimpl.Repository)(nil)
 )
 
+// ContextBoundStore lets a Store wrapper forward cancellation without exposing
+// its inner authority. The returned view must preserve identity, optional
+// capabilities and restrictions, and must not mutate the original Store.
+type ContextBoundStore interface {
+	WithContext(context.Context) Store
+}
+
 // BindStoreContext returns a view of store whose network reads are canceled
-// with ctx. Stores that never leave the process, and a nil ctx, come back
-// unchanged. The view shares connections and caches with store.
+// with ctx. Wrappers forward the binding through ContextBoundStore. Stores
+// without this capability, and a nil ctx, come back unchanged; absence of the
+// capability does not imply that a Store performs no network I/O.
 func BindStoreContext(store Store, ctx context.Context) Store {
-	if repo, ok := store.(*lakefsimpl.Repository); ok && ctx != nil {
+	if ctx == nil {
+		return store
+	}
+	if wrapper, ok := store.(ContextBoundStore); ok {
+		return wrapper.WithContext(ctx)
+	}
+	if repo, ok := store.(*lakefsimpl.Repository); ok {
 		return repo.WithContext(ctx)
 	}
 	return store
@@ -42,7 +56,13 @@ func BindStoreContext(store Store, ctx context.Context) Store {
 // OpenLakeFS attaches an existing lakeFS authority. Optional file capabilities
 // remain discoverable through the root capability interfaces.
 func OpenLakeFS(id kernel.RepositoryID, dsn, credential string) (Store, error) {
-	repo, err := lakefsimpl.OpenExisting(id, dsn, credential)
+	return OpenLakeFSContext(context.Background(), id, dsn, credential)
+}
+
+// OpenLakeFSContext also binds the authority's opening requests to ctx, so
+// cancellation applies before a Store view is available.
+func OpenLakeFSContext(ctx context.Context, id kernel.RepositoryID, dsn, credential string) (Store, error) {
+	repo, err := lakefsimpl.OpenExistingContext(ctx, id, dsn, credential)
 	if err != nil {
 		return nil, err
 	}

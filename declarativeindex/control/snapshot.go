@@ -16,7 +16,7 @@ type repositoryHead struct {
 	failure    error
 }
 
-func (c *Controller) repository(id kernel.RepositoryID) (objectmodel.Repository, error) {
+func (c *Controller) repository(ctx context.Context, id kernel.RepositoryID) (objectmodel.Repository, error) {
 	if c.lookup == nil {
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "projection controller requires a repository lookup")
 	}
@@ -30,7 +30,7 @@ func (c *Controller) repository(id kernel.RepositoryID) (objectmodel.Repository,
 	if repo.ID() != id {
 		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "projection repository lookup changed source identity")
 	}
-	return repo, nil
+	return objectmodel.BindContext(ctx, repo), nil
 }
 
 func (c *Controller) reconcile(ctx context.Context, only kernel.RepositoryID) (map[kernel.RepositoryID]repositoryHead, error) {
@@ -48,7 +48,7 @@ func (c *Controller) reconcile(ctx context.Context, only kernel.RepositoryID) (m
 		if err := ctx.Err(); err != nil {
 			return heads, errors.Join(joined, err)
 		}
-		repo, err := c.repository(id)
+		repo, err := c.repository(ctx, id)
 		var head kernel.CommitID
 		if err == nil {
 			head, err = repo.Head(snapshot.DefaultRef)
@@ -56,13 +56,20 @@ func (c *Controller) reconcile(ctx context.Context, only kernel.RepositoryID) (m
 				err = kernel.Fail(kernel.ErrVersionUnresolved, "projection controller requires a published HEAD")
 			}
 		}
+		if err := ctx.Err(); err != nil {
+			return heads, errors.Join(joined, err)
+		}
 		if err != nil {
 			heads[id] = repositoryHead{repository: repo, failure: err}
 			joined = errors.Join(joined, err, c.store.failHead(id, err))
 			continue
 		}
 		heads[id] = repositoryHead{repository: repo, commit: head}
-		if c.needsHead(repo, head, known[id]) {
+		needed := c.needsHead(repo, head, known[id])
+		if err := ctx.Err(); err != nil {
+			return heads, errors.Join(joined, err)
+		}
+		if needed {
 			joined = errors.Join(joined, c.Desire(id, head))
 		}
 	}
@@ -95,7 +102,7 @@ func (c *Controller) applyPending(ctx context.Context, heads map[kernel.Reposito
 			continue
 		}
 		result, applyErr := c.index.Ensure(ctx, head.repository, head.commit)
-		if err := ctx.Err(); err != nil && applyErr != nil {
+		if err := ctx.Err(); err != nil {
 			// Shutdown interrupted this attempt; the durable target keeps its
 			// pending status so the next start resumes it, not a failure record.
 			return errors.Join(joined, err)
@@ -111,7 +118,7 @@ func (c *Controller) catchUpFixed(ctx context.Context, only kernel.RepositoryID)
 		if len(c.demands[id]) == 0 {
 			continue
 		}
-		repo, err := c.repository(id)
+		repo, err := c.repository(ctx, id)
 		if err != nil {
 			joined = errors.Join(joined, err)
 			continue

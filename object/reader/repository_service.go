@@ -92,7 +92,7 @@ func (r *treeRepository) ID() kernel.RepositoryID { return r.base.ID() }
 
 // WithContext binds the repository's reads to ctx. The tree and the manifest
 // locator are rebuilt over the bound store; a locator the store provides itself
-// follows the store, and a store without remote reads returns r unchanged.
+// follows the store. A store that cannot bind a context returns r unchanged.
 func (r *treeRepository) WithContext(ctx context.Context) objectmodel.Repository {
 	base := snapshot.BindStoreContext(r.base, ctx)
 	if base == r.base {

@@ -33,7 +33,8 @@
 
 - 回归：后台 rebuild 正在逐对象读取时触发 `BeginShutdown`，worker 在有界时间内返回 `context.Canceled`，
   `server.Shutdown` 随后完成，引擎 meta 未前移；原 `server/plugin_shutdown_http_test.go` 两条断言不削弱。
-- 预览服务实测：sync 进行中 `systemctl --user stop kc-dev-server` 在 15 秒内结束，无需 SIGKILL。
+- 本地隔离服务实测：维护同步进行中向 `kc serve` 子进程发送 SIGTERM，15 秒内正常退出、端口释放，
+  无需 SIGKILL；中断目标保留待恢复状态，重启后可继续准备。
 - 受影响完整回归、`make check-docs`、`make quality`、`make test` 全绿且无 skip。
 
 ## 前置
@@ -76,3 +77,43 @@
   登记为 `tasks/todo/DEBT-LAKEFS-READ-CTX-01.md`。
 - 验收里的预览服务实测（`systemctl --user stop kc-dev-server` 15 秒内退出）未做：本机为 macOS，没有该预览服务与
   systemd；需在预览服务所在主机上执行后才能移到 `done/`。
+
+## 进展（2026-10-20）
+
+复核当前实现及 `DEBT-LAKEFS-READ-CTX-01` 的交付：单次 lakeFS 读取取消已完成，任务在 `done/`；
+上节指向 `todo/` 的路径是当时状态。用户明确本轮只在 local 修复与验证，之后由用户部署到开发机；
+因此原预览主机实测改为本地隔离服务的同风险验收，不操作开发机。
+当前还需把真实 SIGTERM、维护中取消、正常进程退出与重启恢复连成一条本地证据，完成前保留 doing。
+
+## 交付（2026-10-20）
+
+本地子进程先复现了 15 秒仍未退出：实际读取经遥测包装后，`BindStoreContext` 没有把取消传到
+lakeFS。补齐可选 `ContextBoundStore`、遥测与系统仓的读端口绑定；系统仓仍保留只读限制与可选
+metadata 读取。自有连接从首次打开请求、初始 commit 核验到正文读取都接收同一 ctx，取消/超时保留
+标准错误而不泄露来源详情，原句柄及凭据轮换不受影响。历史读取的 commit 核验取消不再误报版本不存在。
+
+投影控制器、对象维护 consumer、固定版本准备及缓存预热在 HEAD/回源之前绑定来源视图；
+取消后不把目标或 notice 写成失败或成功。新增回归覆盖这些阻塞入口、共享视图隔离、只读能力和凭据轮换；
+同类取消检查纳入自动测试，未改变关闭顺序。
+
+`TestServeSIGTERMCancelsMaintenanceAndRecoversOnRestart` 运行真实 `serve` 子进程和隔离 OpenSearch，
+在 HTTP 已监听、实际 lakeFS 对象 GET 挂起后发送 SIGTERM：普通运行约 1 毫秒退出，race 运行约 1 秒退出；
+均正常退出并释放端口，服务端请求被取消，没有手动放行或 SIGKILL。目标保持 PENDING、无 applied commit
+及错误，未发布半成品 meta；重启后不调用显式同步，原目标自主恢复 READY，applied commit 与公开固定版本
+读取均为原 c5。测试精确清理独占 namespace，并加入 CLI race 清单。测试覆盖维护 spec 读取阶段，
+重建 Abort/已有 meta 不前移由既有 server/projection 回归另行覆盖。
+
+验证：
+
+- 受影响范围 `-race`：26 个包通过，1478 个测试/子测试通过。扩展扫描另遇 4 个显式外部 live 测试跳过，
+  分别为 Taihu 认证、Luna 排序和 lakeFS 写入吞吐/批量写；它们不属于本次维护读取任务，未宣称已验证。
+  将这四项逐名记录为范围外后，对所在三个包的完整本地用例另跑 `-race`，336 个测试/子测试通过，无跳过。
+- CLI 子进程和 race 范围守卫通过，无跳过；既有 shutdown、取消不推进 meta、重启恢复回归保留并通过。
+- `make quality`（含 `make check-docs`）通过；最终 `make test` 通过，18 个测试/子测试无失败、无跳过，
+  源码指纹在执行期间一致。首轮场景虽通过，但其他文档并发变化导致证据门禁拒绝，已重跑，未将该轮算作通过。
+- 证据：`.validation/remaining-20261020/maintenance-affected-race.jsonl`、
+  `maintenance-local-scope.json`、`maintenance-local-scoped-race.jsonl`、`maintenance-cli-sigterm-6.log`、
+  `maintenance-cli-race.jsonl`、`maintenance-quality-final.log`、`maintenance-make-test-final.log`；
+  正式场景记录 `.validation/runs/20261020T073927Z-f359c71c57dc/`。
+
+仅本地修复与隔离验证；未部署或操作开发机，未提交。

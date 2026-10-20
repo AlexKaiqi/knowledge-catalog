@@ -1,6 +1,8 @@
 package home
 
 import (
+	"context"
+
 	"kc/kernel"
 	objectmodel "kc/object"
 	"kc/snapshot"
@@ -87,10 +89,27 @@ func readOnlySystemAuthority(source snapshot.Store) (snapshot.Store, error) {
 		return nil, err
 	}
 	authority := &systemAuthority{source, tree, directory, history, changes}
+	return withSystemMetadata(authority), nil
+}
+
+func withSystemMetadata(authority *systemAuthority) snapshot.Store {
+	source := authority.Store
 	if metadata, ok := source.(nativeRepositoryMetadataReader); ok {
-		return &systemMetadataAuthority{authority, metadata}, nil
+		return &systemMetadataAuthority{authority, metadata}
 	}
-	return authority, nil
+	return authority
+}
+
+func (s *systemAuthority) WithContext(ctx context.Context) snapshot.Store {
+	source := snapshot.BindStoreContext(s.Store, ctx)
+	// Binding preserves the source's capabilities. Rebind every read port;
+	// retaining the old embedded ports would silently keep their original I/O.
+	return withSystemMetadata(&systemAuthority{
+		Store: source, TreeReader: source.(snapshot.TreeReader),
+		DirectoryReader: source.(snapshot.DirectoryReader),
+		HistoryStore:    source.(snapshot.HistoryStore),
+		ChangeStore:     source.(snapshot.ChangeStore),
+	})
 }
 
 func (*systemAuthority) CreateRef(string, kernel.CommitID) error {

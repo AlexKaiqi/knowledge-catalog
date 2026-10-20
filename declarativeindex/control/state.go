@@ -37,7 +37,7 @@ func (c *Controller) catchUpState(ctx context.Context, heads map[kernel.Reposito
 	// the full declaration basis, so the readiness pass need not observe twice.
 	joined := c.applyStateNotices(ctx, heads, source, only)
 	for _, id := range c.demandRepositories(only) {
-		repo, err := c.repository(id)
+		repo, err := c.repository(ctx, id)
 		if err != nil {
 			joined = errors.Join(joined, err)
 			continue
@@ -88,7 +88,7 @@ func (c *Controller) applyStateNotices(ctx context.Context, heads map[kernel.Rep
 			continue
 		}
 		head, known := heads[notice.Repository]
-		repo, lookupErr := c.repository(notice.Repository)
+		repo, lookupErr := c.repository(ctx, notice.Repository)
 		applyErr := errors.Join(head.failure, lookupErr)
 		if !known {
 			applyErr = errors.Join(applyErr, kernel.Fail(kernel.ErrPreconditionFailed, "State notice HEAD authority has not been resolved"))
@@ -108,6 +108,9 @@ func (c *Controller) applyStateNotices(ctx context.Context, heads map[kernel.Rep
 				}
 			}
 		}
+		if err := ctx.Err(); err != nil {
+			return errors.Join(joined, err)
+		}
 		joined = errors.Join(joined, applyErr, c.store.finishNotice(record, applyErr))
 	}
 	return joined
@@ -123,7 +126,7 @@ func (c *Controller) refreshStateBasis(ctx context.Context, repo objectmodel.Rep
 // Explicit request-local notice keeps its selected ref. Background notices
 // instead refresh every effective declaration basis through refreshStateBasis.
 func (c *Controller) refreshNotice(ctx context.Context, notice index.ChangeNotice, source index.ObservationSource) (index.StateSync, error) {
-	repo, err := c.repository(notice.Repository)
+	repo, err := c.repository(ctx, notice.Repository)
 	if err != nil {
 		return index.StateSync{}, err
 	}

@@ -1,8 +1,10 @@
 package home
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"net/url"
 	"path"
 	"path/filepath"
@@ -120,6 +122,14 @@ func connectionFailure(err error) error {
 	if err == nil {
 		return nil
 	}
+	// Preserve cancellation without exposing provider URLs or private inputs
+	// from an error wrapping the standard context sentinel.
+	if errors.Is(err, context.Canceled) {
+		return context.Canceled
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return context.DeadlineExceeded
+	}
 	code := kernel.CodeOf(err)
 	if code == "" || code == kernel.ErrUnauthenticated {
 		code = kernel.ErrPreconditionFailed
@@ -128,16 +138,26 @@ func connectionFailure(err error) error {
 }
 
 func openConnectionRecord(r connectionRecord, credential string) (snapshot.Store, error) {
+	return openConnectionRecordContext(context.Background(), r, credential)
+}
+
+func openConnectionRecordContext(ctx context.Context, r connectionRecord, credential string) (snapshot.Store, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	driver, err := authorityFor(r.Binding.Driver)
 	if err != nil || driver.connectionOpen == nil {
 		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "connection driver is unavailable")
 	}
-	source, _, err := driver.connectionOpen(r.Binding, credential, r.BackendID)
+	source, _, err := driver.connectionOpen(ctx, r.Binding, credential, r.BackendID)
 	if err != nil {
 		return nil, connectionFailure(err)
 	}
 	if !source.HasCommit(r.InitialHead) {
 		closeManagedSource(source)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "connected initial published commit is unavailable")
 	}
 	return source, nil
@@ -212,7 +232,7 @@ func (ws *Home) ConnectRepository(req ConnectionRequest, grant func(RepositoryIn
 		}
 		binding := RepositoryBinding{ID: req.Repository, Driver: req.Driver, DSN: req.URL}
 		driver, _ := authorityFor(req.Driver)
-		source, backend, err := driver.connectionOpen(binding, req.Credential, "")
+		source, backend, err := driver.connectionOpen(context.Background(), binding, req.Credential, "")
 		if err != nil {
 			return result, connectionFailure(err)
 		}

@@ -29,6 +29,11 @@ fencing token，因此必须维持停写直到恢复结束，不能把该函数�
 生产后端只有 lakeFS，由 `OpenLakeFS`、`CreateManagedLakeFS`、`OpenManagedLakeFS` 返回 `Store`；私有实现在 `internal/lakefsimpl`。Gitea/filegit 存储接线和旧注册薄壳删除，身份认证不属于存储 adapter。
 
 lakeFS 返回的 Store 还可经可选接口读写原生仓属性：
+维护读取通过 `BindStoreContext` 取得可取消视图；lakeFS 的打开阶段用 `OpenLakeFSContext`
+将取消传入首次请求。包装层通过可选 `ContextBoundStore` 继续绑定内部来源，并保留原身份、
+可选能力与只读限制；不能只替换基础 `Store` 而保留未绑定的文件、目录或历史读端口。
+取消只影响该视图，原来源仍可使用。没有绑定能力的来源保持原值，不据此推断它没有网络读取。
+
 `ReadRepositoryMetadata() (map[string]string, error)` 读取当前属性，
 `WriteRepositoryMetadata(map[string]string) error` 只增加或更新所供键，保留其他键。
 属性保存在原生仓权威，不创建 Snapshot commit，不是固定历史版本的属性，

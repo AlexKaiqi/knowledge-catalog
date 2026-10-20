@@ -1,6 +1,8 @@
 package home
 
 import (
+	"context"
+
 	"kc/kernel"
 	"kc/snapshot"
 )
@@ -12,15 +14,34 @@ import (
 type connectedSource struct {
 	dir string
 	id  kernel.RepositoryID
+	ctx context.Context
+}
+
+// WithContext preserves the durable connection and reads its current
+// credential on each operation; cancellation belongs only to the returned view.
+func (s *connectedSource) WithContext(ctx context.Context) snapshot.Store {
+	if ctx == nil {
+		return s
+	}
+	view := *s
+	view.ctx = ctx
+	return &view
 }
 
 func connectionCall[T any](s *connectedSource, fn func(snapshot.Store) (T, error)) (T, error) {
 	var zero T
+	ctx := s.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return zero, err
+	}
 	r, credential, err := readConnection(s.dir, string(s.id))
 	if err != nil {
 		return zero, err
 	}
-	source, err := openConnectionRecord(r, credential)
+	source, err := openConnectionRecordContext(ctx, r, credential)
 	if err != nil {
 		return zero, err
 	}
@@ -166,3 +187,4 @@ var _ snapshot.Store = (*connectedSource)(nil)
 var _ snapshot.TreeStore = (*connectedSource)(nil)
 var _ snapshot.DirectoryReader = (*connectedSource)(nil)
 var _ snapshot.HistoryStore = (*connectedSource)(nil)
+var _ snapshot.ContextBoundStore = (*connectedSource)(nil)
