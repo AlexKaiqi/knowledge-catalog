@@ -151,6 +151,9 @@ DIFF             两个 pinned commit 上这个对象的值差是什么？     �
 GET_PROVENANCE   这个对象在该 commit 上各单元贴了什么信封？     → ProvenanceTrace.chain
 ```
 
+应用层查询 LOG 单独检查来源仓的 `object.history.read`，每页重新授权；Dataset 文件消费权不能替代它，
+即使 Dataset 交付整个仓。文件切片的 Repository 视图仍拒绝 LOG，不把固定提交的文件交付扩成历史交付。
+
 `GET_PROVENANCE` 不做 PROV 推理。Application 若要沿 `sourceRefs` / `evidence_refs` 再读，必须另发 `RESOLVE` / `READ` / `GET_PROVENANCE`。
 
 `kc catalog audit` 是登记表 git 历史（`Dataset 服务.Log`），不是成员 `LOG`。Dataset 服务 当前态是 `kc show`。

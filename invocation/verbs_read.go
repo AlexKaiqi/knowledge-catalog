@@ -460,9 +460,10 @@ func VerbLog(cx *Invocation) (any, error) {
 				return nil, err
 			}
 			id := objectmodel.ObjectID(objectID)
-			return (objectservice.ObjectLogExecutor{Allow: func(repo kernel.RepositoryID, id objectmodel.ObjectID) bool {
-				return AllowedRepoRead(cx.Home, cx.Flags, string(repo), string(id))
-			}, ReadLog: func(repositoryID kernel.RepositoryID, commitID kernel.CommitID, query objectmodel.ObjectLogQuery) ([]objectmodel.ObjectRevision, error) {
+			return (objectservice.ObjectLogExecutor{ReadLog: func(repositoryID kernel.RepositoryID, commitID kernel.CommitID, query objectmodel.ObjectLogQuery) ([]objectmodel.ObjectRevision, error) {
+				if err := authorizeRepositoryHistory(cx, repositoryID, id); err != nil {
+					return nil, err
+				}
 				allowed, err := serving.Contains(repositoryID, id)
 				if err != nil || !allowed {
 					return nil, err
@@ -481,9 +482,10 @@ func VerbLog(cx *Invocation) (any, error) {
 			}
 			id := objectmodel.ObjectID(objectID)
 			pin := map[kernel.RepositoryID]kernel.CommitID{repositoryID: commitID}
-			return (objectservice.ObjectLogExecutor{Allow: func(repo kernel.RepositoryID, id objectmodel.ObjectID) bool {
-				return AllowedRepoRead(cx.Home, cx.Flags, string(repo), string(id))
-			}, ReadLog: func(member kernel.RepositoryID, commit kernel.CommitID, query objectmodel.ObjectLogQuery) ([]objectmodel.ObjectRevision, error) {
+			return (objectservice.ObjectLogExecutor{ReadLog: func(member kernel.RepositoryID, commit kernel.CommitID, query objectmodel.ObjectLogQuery) ([]objectmodel.ObjectRevision, error) {
+				if err := authorizeRepositoryHistory(cx, member, id); err != nil {
+					return nil, err
+				}
 				return cx.WS.Reader.Log(member, id, commit, query)
 			}}).Execute(cx.Context, objectservice.ObjectLogRequest{Object: id, Pin: pin, Limit: limit, Continuation: cx.Flag("continuation")})
 		})

@@ -119,8 +119,8 @@ var leafHelp = map[string]helpEntry{
   --object 是对象 id，不接受 --aspect 或 --member；--limit 默认 50、最大 200。
   单仓可用 --commit 或 --ref 指定历史起点；Dataset 可加 --revision <N>；--continuation 续页时保持对象和来源依据。
 条件：
-  已认证；单仓需 object.history.read，命名 Dataset 以其 file.read 准入，不另要求来源仓 history/read 动作。
- Dataset 须通过所需对象与选择范围的完整读取检查，不能借历史越过交付切片；另行解析 pin 需 dataset.resolve。
+  已认证；每个来源仓均需 object.history.read，Dataset 另需其 file.read；消费权或正文读权不替代来源历史权。
+ Dataset 须通过所需对象与选择范围的完整读取检查，文件切片不提供来源历史；每次续页重新检查来源历史权。另行解析 pin 需 dataset.resolve。
   来源须支持修订历史读取。
 结果：
   JSON logs 按来源给出对象修订和 commit，并返回适用的续页游标。
