@@ -2,9 +2,11 @@ package object_test
 
 import (
 	"kc/internal/testkit"
+	"maps"
 	"strings"
 	"testing"
 
+	"kc/kernel"
 	objectmodel "kc/object"
 	repofile "kc/object/format"
 )
@@ -56,18 +58,18 @@ func TestSystemRepositoryPublishesReadmeSchemaAndInstance(t *testing.T) {
 }
 
 func TestAssertProtocolSchemaPublication(t *testing.T) {
-	var published any
+	published := map[objectmodel.ObjectID]bool{}
 	for _, operation := range objectmodel.TrustedSchemaOperations() {
-		if operation.Address.ObjectID == objectmodel.IndexDeclarationSchemaV1 {
-			published = operation.Value
-			break
+		id := operation.Address.ObjectID
+		published[id] = true
+		t.Run(string(id), func(t *testing.T) {
+			assertProtocolSchemaCopy(t, operation)
+		})
+	}
+	for _, id := range []objectmodel.ObjectID{objectmodel.MetaSchemaV1, objectmodel.IndexDeclarationSchemaV1} {
+		if !published[id] {
+			t.Fatalf("protocol Schema %s is absent from the trust root", id)
 		}
-	}
-	if published == nil {
-		t.Fatal("index declaration schema is not in the trust root")
-	}
-	if err := objectmodel.AssertProtocolSchemaPublication(objectmodel.IndexDeclarationSchemaV1, published); err != nil {
-		t.Fatal(err)
 	}
 	drifted := map[string]any{
 		"metaSchema": string(objectmodel.MetaSchemaV1),
@@ -85,6 +87,33 @@ func TestAssertProtocolSchemaPublication(t *testing.T) {
 			t.Fatalf("%s is not a protocol schema: %v", id, err)
 		}
 	}
+}
+
+func assertProtocolSchemaCopy(t *testing.T, operation objectmodel.Operation) {
+	t.Helper()
+	id := operation.Address.ObjectID
+	if err := objectmodel.AssertProtocolSchemaPublication(id, operation.Value); err != nil {
+		t.Fatalf("identical protocol Schema copy was rejected: %v", err)
+	}
+	body, ok := operation.Value.(map[string]any)
+	if !ok {
+		t.Fatalf("protocol Schema has unexpected value %T", operation.Value)
+	}
+	drifted := maps.Clone(body)
+	description, _ := body["description"].(string)
+	drifted["description"] = description + " 本地修改的说明。"
+	previous, err := objectmodel.ParseSchemaDefinition(id, body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	next, err := objectmodel.ParseSchemaDefinition(id, drifted)
+	if err != nil {
+		t.Fatalf("description-only drift must still be a valid Schema: %v", err)
+	}
+	if changes := objectmodel.BreakingSchemaChanges(previous, next); len(changes) != 0 {
+		t.Fatalf("description-only drift must not depend on structural incompatibility: %v", changes)
+	}
+	testkit.ExpectCode(t, objectmodel.AssertProtocolSchemaPublication(id, drifted), kernel.ErrSchemaIncompatible)
 }
 
 func TestReadmeSchemaIsNotInTheTrustRoot(t *testing.T) {

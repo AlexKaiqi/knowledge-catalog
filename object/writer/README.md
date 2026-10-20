@@ -71,8 +71,12 @@ Relation PUT 可以引用其他仓的对象；仅校验 `CanonicalRelation` 的�
 每个 `schema/*` PUT 先按 System Meta Schema 归一化；未知逻辑 type、字段 `access` 或错误
 形状返回 `SCHEMA_UNSUPPORTED`。复用同一 Schema object ID 时先做兼容性 diff；字段删除、
 改类型、新增必填、归属/模式变化或约束收紧返回 `SCHEMA_INCOMPATIBLE`，接入方必须发布新
-major。只有索引声明 Schema 是协议信任根，副本必须与 System 出版物 digest 一致；
-`schema/core/readme/v1` 与方面名 `readme` 都是普通内容，不保留、不改址。兼容的文档变化还必须对固定 basis 上全部引用实例成立：Writer 经有界
+major。`TrustedSchemaOperations` 定义的 Meta Schema（`schema/meta/schema-definition/v1`）与
+索引声明 Schema（`schema/core/index-declaration/v1`）是不可演进的内置协议数据，副本必须与其
+System 出版物 digest 一致。其余系统出版的 Schema 按普通兼容规则演进，包括 `schema/core/readme/v1`、
+`schema/core/relation/v1`；方面名 `readme` 也是普通内容，不保留、不改址。
+副本一致性与实例解析是两项规则：只有索引声明 Schema 可经 `ProtocolTrustRootSchema` 免仓内副本解析。
+兼容的文档变化还必须对固定 basis 上全部引用实例成立：Writer 经有界
 `SchemaReferrerLocator` 取回引用者并逐个校验，失配返回 `SCHEMA_INSTANCE_INVALID`；同批
 PUT/REMOVE 的 Address 由本批结果承担。REMOVE 一个仍被引用的 `schema/*` 返回
 `SCHEMA_INCOMPATIBLE`。带 `schema_ref` 的实例 PUT 使用同批 Schema 草稿或目标仓固定 basis
@@ -101,5 +105,5 @@ Writer 检查声明形状及输入定位符在所引用 Schema 上能否解析�
 由实例能力清单核对。删除或收窄索引成员不改变值结构，旧 pin 保留旧声明。
 `CheckIndexDeclaration` 复用 COMMIT 的结构和 Schema 校验并返回按输入顺序解析的字段，
 不写 Snapshot、回执账本或 evidence；它不预判存储路径准入或未来 CAS，也不判断实例能力。
-字段删除、改类型、新增必填、归属/模式和引用约束等结构守卫保持；平台 Schema 副本
-仍须精确匹配系统出版物。仅名为 `index` 而未采用声明 Schema 的业务内容不产生查询能力。
+字段删除、改类型、新增必填、归属/模式和引用约束等结构守卫保持；上述两份内置协议 Schema
+副本仍须精确匹配系统出版物。仅名为 `index` 而未采用声明 Schema 的业务内容不产生查询能力。

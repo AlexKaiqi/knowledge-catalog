@@ -44,13 +44,10 @@ func TrustedSchemaOperations() []Operation {
 	return out
 }
 
-// AssertProtocolSchemaPublication refuses a drifted copy of a protocol Schema
-// object ID. Repositories may republish the same document so schema_ref stays
-// in-repo; they may not evolve it in place.
+// AssertProtocolSchemaPublication refuses drifted copies of every protocol
+// Schema in TrustedSchemaOperations. Repositories may republish those documents
+// unchanged; other Schema IDs retain ordinary compatible evolution.
 func AssertProtocolSchemaPublication(objectID ObjectID, value any) error {
-	if objectID != IndexDeclarationSchemaV1 {
-		return nil
-	}
 	for _, operation := range TrustedSchemaOperations() {
 		if operation.Address.ObjectID == objectID {
 			if kernel.CanonicalDigest(value) != kernel.CanonicalDigest(operation.Value) {
@@ -60,7 +57,7 @@ func AssertProtocolSchemaPublication(objectID ObjectID, value any) error {
 			return nil
 		}
 	}
-	panic("Object trust root has no index declaration Schema")
+	return nil
 }
 
 func SystemMetaSchemaDigest() kernel.Digest {
