@@ -68,11 +68,37 @@
 | 4：主流程之后 | `INDEX-USAGE-01`、`DATASET-RETENTION-01`、`DATASET-REVISION-01`、`DATASET-STORAGE-01`、`ROUTE-MANIFEST-01`、`ARCH-LAYOUT-01`、`DEBT-SCHEMA-LIST-COST-01`、`DEBT-WRITER-SOURCE-PATH-01` | 依原任务前置推进。统计、自动跟随、生命周期和目录调整不作为本轮手动流程的开工前置；Writer 本机路径在对外演示前处理 |
 | 5：完整重构验收 | `FINAL-ACCEPTANCE-01` | 保留全部规格、外部 live 环境及无 skip 的原验收要求；MVP 流程通过与完整重构通过分别记录 |
 
+目录工作在 2026-10-20 重划：`ARCH-LAYOUT-01` 是七项目录子任务的总验收，实施入口和依赖见该任务。
+项目推进优先级按下文“Object、索引与 ARCH 推进安排”，不把 ARCH 内部的实施顺序当成项目主线顺序。
+原错误码清理独立为 `ARCH-ERROR-CODES-01`，与目录总验收共同作为 `FINAL-ACCEPTANCE-01` 的前置。
+
 已归档范围包括文件交付、发布安全、根映射、文件及组合访问账、库存消费、控制台配对、出版物同步、
 供给试跑、产品说明边界、术语、场景测试名和架构扫描边界。各条的交付末节记录实现、证据来源和未验范围；本轮收口清单（`.validation/runs/20261016-mvp-task-closeout/manifest.json`）保留移动与门禁记录。
 
 所有实现与材料变更完成后冻结源码，统一执行受影响回归、`make check-docs`、`make quality`、`make test`、
 `make test-contracts`。真实部署入口独立记录；任务只有达到自身验收才移入 `done/`。
+
+## Object、索引与 ARCH 推进安排（2026-10-20）
+
+本轮主线先做 `OBJECT-VERSIONING-01` 与 `INDEX-PHYSICAL-01`，再按稳定下来的接口推进 ARCH 主要迁移。
+此安排只更新规划，不改变任务状态；已有在途缺陷修复和各任务原验收范围继续按其合同推进。
+
+| 顺序 | 工作与前置 | 放行结果 |
+|---|---|---|
+| 1 | Object 与 Index 共同审查接口；核对 `INDEX-SEARCH-SPACE-01` 的重叠批次 | 固定读取依据、范围和解释依赖明确；读取依据、观察证据与查询资源的保留责任分清 |
+| 2 | `OBJECT-VERSIONING-01` 先交付固定读取依据基础 | 实现可被索引消费，固定回读、跨重启解析、范围及当前授权回归通过；具体交付条件由该任务维护 |
+| 3 | `INDEX-PHYSICAL-01` 消费上述交付，推进资源保护、恢复与成员产物复用；Object 继续比较、无变化写入和历史 | 不重叠部分可分别推进，重叠文件按固定候选顺序接入；索引接入与接口稳定交付条件由索引任务维护 |
+| 4 | 达到上述交付点后，推进 `ARCH-DATASET-PIN-01`、`ARCH-HOME-REPOSITORIES-01`、`ARCH-INVOCATION-01`、`ARCH-INVOKE-01` | 每批待迁职责的实际接口与回归已稳定，再做归位；不靠迁移替行为任务补实现 |
+| 5 | `ARCH-TEST-OWNERSHIP-01` 收尾，再由 `ARCH-LAYOUT-01` 联合验收 | 测试归属、实际依赖和覆盖映射一致；各实现任务自己的测试仍须同批完成 |
+
+`ARCH-CLIENT-SESSION-01` 可提前做；`ARCH-HOME-CONFIG-01` 可在共同审查后穿插，须确认不与索引的
+新增持久状态、恢复及生命周期配置重叠，否则等该批配置交付后再迁。两项均不作为 Object 或 Index 开工前置。
+错误码可先审计，实际删除须等对应行为合同与生产路径稳定，也不阻塞主线。
+
+只有一条执行线时，按“共同审查 → Object 固定读取依据基础 → 索引物理重构与 Object 剩余交付 →
+ARCH 主要迁移”推进；会话可提前做不表示应占用主线优先级。
+交付点用于放行下游，须记录接口 owner、源码候选和通过的回归，不等于整项任务验收通过；
+不要求两个行为任务整项互等，也不要求全部 Dataset 生命周期工作结束后才能开始所有 ARCH 工作。
 
 ## 历史
 

@@ -20,8 +20,10 @@
 | [Dataset](design/dataset.md) | 组合、发布、消费与交付方式 |
 | [权限](design/permissions.md) | 身份、三种资源、为什么不做对象级权限 |
 | [对象](design/object.md) | 对象模型、对象引用、Schema、Writer、读取、系统仓 |
+| [对象版本与读写（待重构）](design/object-versioning.md) | 对象状态的比较范围、条件写与无变化写入、固定坐标读取、历史及 Dataset 的版本关系 |
 | [插件](design/plugins.md) | 插件与 AOP 的对应、作用域、建议的目标 |
 | [发现](design/discovery.md) | 搜索、完整性、翻页、声明式索引维护 |
+| [索引物理布局（待重构）](design/index-physical.md) | 构建值与查询结构的复用条件、成员增量、发布保护与回收 |
 | [LiveAccess](design/liveaccess.md) | 外部取值、逐值失败、身份传递、证据 |
 | [Affordance](design/affordance.md) | 对象与系统的说明、命令行规则 |
 | [服务](design/service.md) | 请求入口、跨模块任务、恢复、证据、部署 |
