@@ -15,19 +15,7 @@ func (r *treeRepository) Log(objectID objectmodel.ObjectID, commit kernel.Commit
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "repository %s has no commit history", r.ID())
 	}
 	limit := query.PageSize()
-	commits, err := history.CommitHistory(commit, 10000)
-	if err != nil {
-		return nil, err
-	}
-	unitsAt := make([][]repofile.Unit, len(commits))
-	olderHasObject := make([]bool, len(commits)+1)
-	for i := len(commits) - 1; i >= 0; i-- {
-		unitsAt[i], err = r.objectUnits(objectID, commits[i])
-		if err != nil {
-			return nil, err
-		}
-		olderHasObject[i] = olderHasObject[i+1] || len(unitsAt[i]) > 0
-	}
+
 	var out []objectmodel.ObjectRevision
 	previous := ""
 	var introducing *objectmodel.ObjectRevision
@@ -42,59 +30,47 @@ func (r *treeRepository) Log(objectID objectmodel.ObjectID, commit kernel.Commit
 		out = append(out, revision)
 		return len(out) >= limit
 	}
-	for i, candidate := range commits {
-		units := unitsAt[i]
-		if len(units) == 0 {
-			if !olderHasObject[i+1] {
-				if introducing != nil {
-					appendRevision(*introducing)
-					introducing = nil
-				}
-				break
-			}
-			revision := objectmodel.ObjectRevision{Commit: candidate, Status: objectmodel.StatusRemoved}
-			key := string(revision.Status)
-			if key == previous {
-				copyRevision := revision
-				introducing = &copyRevision
-				continue
-			}
-			if introducing != nil && appendRevision(*introducing) {
-				return out, nil
-			}
-			previous = key
-			copyRevision := revision
-			introducing = &copyRevision
-			continue
-		}
-		value, err := assembleObjectValue(r.ID(), objectID, candidate, units)
+	err := walkCommitHistory(history, commit, func(candidate kernel.CommitID) (bool, error) {
+		revision, err := r.objectRevisionAt(objectID, candidate)
 		if err != nil {
-			return nil, err
-		}
-		revision := objectmodel.ObjectRevision{
-			Commit: candidate, Status: objectmodel.StatusResolved,
-			Digest:            kernel.CanonicalDigest(value.Value),
-			DeclarationDigest: repofile.TreeDeclarationDigest(units),
+			return false, err
 		}
 		key := string(revision.Status) + ":" + string(revision.Digest) + ":" + string(revision.DeclarationDigest)
-		if key == previous {
-			copyRevision := revision
-			introducing = &copyRevision
-			continue
-		}
-		if introducing != nil {
-			if appendRevision(*introducing) {
-				return out, nil
-			}
+		if introducing != nil && key != previous && appendRevision(*introducing) {
+			return true, nil
 		}
 		previous = key
-		copyRevision := revision
-		introducing = &copyRevision
+		introducing = &revision
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
 	}
-	if introducing != nil && len(out) < limit {
+	// An absent oldest state is the time before the first creation, not a
+	// deletion. All intermediate absent states were proved by an older value.
+	if introducing != nil && introducing.Status == objectmodel.StatusResolved && len(out) < limit {
 		appendRevision(*introducing)
 	}
 	return out, nil
+}
+
+func (r *treeRepository) objectRevisionAt(objectID objectmodel.ObjectID, commit kernel.CommitID) (objectmodel.ObjectRevision, error) {
+	units, err := r.objectUnits(objectID, commit)
+	if err != nil {
+		return objectmodel.ObjectRevision{}, err
+	}
+	revision := objectmodel.ObjectRevision{Commit: commit, Status: objectmodel.StatusRemoved}
+	if len(units) == 0 {
+		return revision, nil
+	}
+	value, err := assembleObjectValue(r.ID(), objectID, commit, units)
+	if err != nil {
+		return objectmodel.ObjectRevision{}, err
+	}
+	revision.Status = objectmodel.StatusResolved
+	revision.Digest = kernel.CanonicalDigest(value.Value)
+	revision.DeclarationDigest = repofile.TreeDeclarationDigest(units)
+	return revision, nil
 }
 
 func (r *treeRepository) Diff(objectID objectmodel.ObjectID, from, to kernel.CommitID) (objectmodel.ObjectDiff, error) {
@@ -230,21 +206,23 @@ func (r *treeRepository) missingStatus(objectID objectmodel.ObjectID, commit ker
 	if !ok {
 		return objectmodel.StatusUnresolved, nil
 	}
-	commits, err := history.CommitHistory(commit, 10000)
-	if err != nil {
-		return "", err
-	}
-	for _, prior := range commits {
+	status := objectmodel.StatusUnresolved
+	err := walkCommitHistory(history, commit, func(prior kernel.CommitID) (bool, error) {
 		if prior == commit {
-			continue
+			return false, nil
 		}
 		units, err := r.objectUnits(objectID, prior)
 		if err != nil {
-			return "", err
+			return false, err
 		}
 		if len(units) > 0 {
-			return objectmodel.StatusRemoved, nil
+			status = objectmodel.StatusRemoved
+			return true, nil
 		}
+		return false, nil
+	})
+	if err != nil {
+		return "", err
 	}
-	return objectmodel.StatusUnresolved, nil
+	return status, nil
 }

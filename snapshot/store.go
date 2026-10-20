@@ -64,6 +64,9 @@ type DirectoryPage = storecontract.DirectoryPage
 
 // HistoryStore is an optional layer ⓪ capability. It returns first-parent
 // reachable commits newest first, starting at the supplied immutable commit.
+// Results include the supplied commit. Providers may return short batches;
+// callers continue from the last immutable commit to obtain its parent. With
+// limit >= 2, a singleton result proves that commit is the chain root.
 // The adapter does not interpret paths or file contents.
 type HistoryStore interface {
 	CommitHistory(commit kernel.CommitID, limit int) ([]kernel.CommitID, error)
