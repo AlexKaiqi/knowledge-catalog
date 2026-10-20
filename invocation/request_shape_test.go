@@ -46,3 +46,20 @@ func TestAddressCoordinatesRejectMemberWithoutAspect(t *testing.T) {
 		t.Fatalf("member without aspect: %v", err)
 	}
 }
+
+func TestSortFlagKeepsFieldLocatorWithoutDirection(t *testing.T) {
+	for raw, want := range map[string]string{
+		"schema/table.live-stats::live-stats::rowCount":      "asc",
+		"schema/table.live-stats::live-stats::rowCount:desc": "desc",
+		"schema/table.live-stats::live-stats::rowCount:asc":  "asc",
+	} {
+		req, err := SearchRequestFromFlags(map[string]invoke.FlagValue{"sort": raw})
+		if err != nil || len(req.Clauses) != 1 {
+			t.Fatalf("%s: %#v %v", raw, req, err)
+		}
+		clause := req.Clauses[0]
+		if clause.Field == nil || clause.Field.Path != "rowCount" || clause.Field.Aspect != "live-stats" || clause.Order != want {
+			t.Fatalf("%s: field locator split as a direction: %#v", raw, clause)
+		}
+	}
+}

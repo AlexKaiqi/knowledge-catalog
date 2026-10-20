@@ -183,7 +183,7 @@ var leafHelp = map[string]helpEntry{
 结果：
   JSON 给出 repository/commit、Schema objectId、规范化 definition 和字段 path/type；fields 是数组。
  Dataset 下按成员仓各给一份报告，另有 dataset/revision；fields[].access 是选入 Dataset 的索引声明给该字段的用途：text 供 --query，filter 供 --eq 等条件，sort 供 --sort。
-  search.state 为 ready 或 unavailable（附 reason，如投影未就绪或无索引插件）；search.declarations 逐条给出声明的 status（ready/unsupported/invalid）、reason、inputs 与 uses。
+  search.state 为 ready 或 unavailable（附 reason，如投影未就绪或无索引插件）；search.declarations 逐条给出声明的 status（ready/unsupported/invalid/inapplicable，后者表示输入 Schema 不在本范围、范围内没有适用对象，查询它得到完整零命中）、reason、inputs 与 uses。
   这是供理解的规范化展示，不能把 definition 或整个响应直接当作 Schema 发布输入；原始 fields 必须是对象映射。
   要复用原始 Schema，用 kc read 读取相同 objectId 与 commit，取返回的 value，而非整个读取信封。
   也可经 kc files list / kc files read 从 Dataset 取得含文件头的 Schema 原文件，列目录与读取固定同一 revision。

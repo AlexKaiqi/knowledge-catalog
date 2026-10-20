@@ -128,12 +128,19 @@ func (idx *Index) SearchDataset(ctx context.Context, lookup reader.MemberLookup,
 		return retrieval.SearchResult{}, err
 	}
 	defer release()
-	required, err := s.requiresState(req)
+	req, empty, err := retrieval.PruneInapplicable(req, s.spec)
 	if err != nil {
 		return retrieval.SearchResult{}, err
 	}
-	if required {
-		return idx.searchDatasetState(ctx, s, req)
+	if empty {
+		return retrieval.SearchResult{SearchView: retrieval.SearchView{Snapshots: pin.Repositories}, Completeness: retrieval.CompletenessComplete, Hits: []retrieval.ObjectHit{}, Dataset: &retrieval.DatasetBasis{ID: pin.SetID, Revision: pin.Revision}}, nil
+	}
+	external, err := s.stateFields(req)
+	if err != nil {
+		return retrieval.SearchResult{}, err
+	}
+	if len(external) > 0 {
+		return idx.searchDatasetState(ctx, s, req, external)
 	}
 	physical := s.spec
 	physical.Repository = s.id

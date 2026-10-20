@@ -22,7 +22,7 @@ func (e DatasetSearchExecutor) executeCorpus(ctx context.Context, request retrie
 	if serving == nil || logical == nil {
 		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Dataset serving is unavailable")
 	}
-	queryContext := ports.WithCandidateRecheck(ctx, func(ctx context.Context, hit retrieval.ObjectHit) (retrieval.ObjectHit, error) {
+	queryContext := ports.WithCandidateRecheck(ctx, func(ctx context.Context, hit retrieval.ObjectHit) (retrieval.ObjectHit, []objectmodel.UnitReadFailure, error) {
 		return hydrateDatasetCorpusHit(ctx, serving, logical, hit)
 	})
 	result, err := projection.SearchDataset(queryContext, func(id kernel.RepositoryID) (objectmodel.Repository, error) {
@@ -36,9 +36,16 @@ func (e DatasetSearchExecutor) executeCorpus(ctx context.Context, request retrie
 	}
 	for i, hit := range result.Hits {
 		if len(hit.Version.Observations) == 0 {
-			hit, err = hydrateDatasetCorpusHit(ctx, serving, logical, hit)
+			// The hit matched on fixed values; a delivered external unit that
+			// failed is named beside the result, not shown as absent
+			// (discovery#U1). The hit set itself stays as matched.
+			var failures []objectmodel.UnitReadFailure
+			hit, failures, err = hydrateDatasetCorpusHit(ctx, serving, logical, hit)
 			if err != nil {
 				return retrieval.SearchResult{}, err
+			}
+			for _, failure := range failures {
+				result.Claims = append(result.Claims, retrieval.UnitFailureClaim(failure))
 			}
 		}
 		hit, err = e.Deliver(ctx, hit)
@@ -50,47 +57,49 @@ func (e DatasetSearchExecutor) executeCorpus(ctx context.Context, request retrie
 	return result, nil
 }
 
-func hydrateDatasetCorpusHit(ctx context.Context, serving *reader.Serving, logical LogicalHydrator, hit retrieval.ObjectHit) (retrieval.ObjectHit, error) {
+func hydrateDatasetCorpusHit(ctx context.Context, serving *reader.Serving, logical LogicalHydrator, hit retrieval.ObjectHit) (retrieval.ObjectHit, []objectmodel.UnitReadFailure, error) {
 	sources := hit.Object.Sources
 	if len(sources) == 0 {
 		sources = []objectmodel.SourceBasis{{Repository: hit.Object.Repository, Commit: hit.Object.Commit}}
 	}
 	values := make([]objectmodel.ObjectValue, 0, len(sources))
 	observations := []objectmodel.UnitObservation{}
+	var failures []objectmodel.UnitReadFailure
 	seen := map[kernel.RepositoryID]bool{}
 	pin := serving.Pin()
 	for _, source := range sources {
 		if source.Repository == "" || source.Commit == "" || pin.Repositories[source.Repository] != source.Commit || seen[source.Repository] {
-			return retrieval.ObjectHit{}, kernel.Fail(kernel.ErrPreconditionFailed, "Dataset hit source does not match its fixed revision")
+			return retrieval.ObjectHit{}, nil, kernel.Fail(kernel.ErrPreconditionFailed, "Dataset hit source does not match its fixed revision")
 		}
 		seen[source.Repository] = true
 		if err := ctx.Err(); err != nil {
-			return retrieval.ObjectHit{}, err
+			return retrieval.ObjectHit{}, nil, err
 		}
 		member, err := serving.Member(source.Repository)
 		if err != nil {
-			return retrieval.ObjectHit{}, err
+			return retrieval.ObjectHit{}, nil, err
 		}
 		complete, err := serving.Contains(source.Repository, hit.Object.Address.ObjectID)
 		if err != nil {
-			return retrieval.ObjectHit{}, err
+			return retrieval.ObjectHit{}, nil, err
 		}
 		observed, err := hydrateDatasetCorpusSource(ctx, member, logical, hit.Object.Address.ObjectID, source.Commit, complete)
 		if err != nil {
-			return retrieval.ObjectHit{}, err
+			return retrieval.ObjectHit{}, nil, err
 		}
 		values = append(values, objectmodel.ObjectValue{Reference: observed.Reference, ObjectRef: observed.ObjectRef, Repository: observed.Repository, Commit: observed.Commit, Address: observed.Address, Value: observed.Value, Digest: observed.Digest, Provenance: observed.Provenance, Units: observed.Units, Declarations: observed.Declarations})
 		observations = append(observations, observed.Observations...)
+		failures = append(failures, observed.Failures...)
 	}
 	value, err := objectmodel.ComposeHoldingValues(hit.Object.Reference, values)
 	if err != nil {
-		return retrieval.ObjectHit{}, err
+		return retrieval.ObjectHit{}, nil, err
 	}
 	value.Reference, value.Locator = hit.Object.Reference, hit.Object.Locator
 	hit.Object = value
 	hit.Version = retrieval.VersionOf(value)
 	hit.Version.Observations = observations
-	return hit, nil
+	return hit, failures, nil
 }
 
 // Corpus hits and direct READ use the same logical root reference. Legacy

@@ -97,6 +97,25 @@ func (ws *Home) pluginsConfig() indexplugins.PluginsConfig {
 	return config
 }
 
+// indexMaintenanceInventory is the set of sources whose index cost the
+// deployment accepted by registering them. A detached source keeps its
+// content and history but leaves continuous projection maintenance, so its
+// physical resources stay retired once removed (doc/design/discovery.md,
+// 插件与作用域: 来源仓只提供内容).
+func (ws *Home) indexMaintenanceInventory() []kernel.RepositoryID {
+	ids := ws.Store.IDs()
+	if ws.Datasets == nil {
+		return ids
+	}
+	registered := ids[:0]
+	for _, id := range ids {
+		if ws.Datasets.HasRepository(id) {
+			registered = append(registered, id)
+		}
+	}
+	return registered
+}
+
 // openPlugins opens the deployed instances for every Repository of this
 // deployment. No Repository or Dataset selects an instance.
 func (ws *Home) openPlugins(directory string) (*indexplugins.IndexPlugins, *liveservice.Plugins, error) {
@@ -149,7 +168,7 @@ func (ws *Home) openPlugins(directory string) (*indexplugins.IndexPlugins, *live
 	}
 	plugins, err := indexplugins.OpenIndexPlugins(config, indexplugins.PluginScope{Repositories: repositories,
 		ContainsRepository:  func(id kernel.RepositoryID) bool { _, ok := ws.Store.Get(id); return ok },
-		RepositoryInventory: ws.Store.IDs,
+		RepositoryInventory: ws.indexMaintenanceInventory,
 	}, map[string]indexplugins.IndexPluginEntry{"declarative-index": entry})
 	if err != nil {
 		return nil, nil, err

@@ -269,6 +269,7 @@ func accessSpecWithCurrentForms(report reader.SchemaReport, declared declaredAcc
 	spec.Declarations = declared.statuses
 	spec.builds = declared.builds
 	spec.declarationSchemas = declared.schemas
+	spec.inapplicable = declared.inapplicable
 	spec.currentFields = append([]AccessField(nil), spec.Fields...)
 	spec.schemaForms = map[string][]AccessField{}
 	for _, schema := range report.Schemas {

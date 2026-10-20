@@ -19,6 +19,10 @@ type stateProjection struct {
 	accessDigest      kernel.Digest
 	observationDigest kernel.Digest
 	store             *stateServingStore
+	// oldestObservedAt is the earliest observation time among the values a
+	// Dataset revision was indexed from; results report it beside each
+	// condition answered from external values.
+	oldestObservedAt string
 }
 
 // RequiresState reports whether the request touches AccessSpec fields supplied

@@ -71,8 +71,20 @@ type SearchResult struct {
 	Continuation        string       `json:"continuation,omitempty"`
 	// Dataset names the revision a Dataset search ran at. Later steps of the
 	// same task pass it as --revision to stay on the same frozen sources.
-	Dataset *DatasetBasis        `json:"dataset,omitempty"`
-	Stats   SearchExecutionStats `json:"-"`
+	Dataset *DatasetBasis `json:"dataset,omitempty"`
+	// ExternalConditions names each condition answered from indexed external
+	// values and how old those observations may be; candidates are rechecked
+	// against current observations (discovery 完整性, liveaccess#U22).
+	ExternalConditions []ExternalCondition  `json:"externalConditions,omitempty"`
+	Stats              SearchExecutionStats `json:"-"`
+}
+
+// ExternalCondition is one search condition evaluated on external values as
+// observed when the index was built. OldestObservedAt is the earliest
+// observation time among the indexed values.
+type ExternalCondition struct {
+	Field            FieldRef `json:"field"`
+	OldestObservedAt string   `json:"oldestObservedAt,omitempty"`
 }
 
 // DatasetBasis is the named Dataset revision a consuming request resolved.
@@ -105,4 +117,10 @@ func VersionOf(value objectmodel.ObjectValue) ObjectVersion {
 		})
 	}
 	return version
+}
+
+// UnitFailureClaim names an external unit whose value could not be read, so
+// a result keeps "failed" apart from "missing" (discovery#U1).
+func UnitFailureClaim(failure objectmodel.UnitReadFailure) string {
+	return "observation failed for " + objectmodel.AddressLabel(failure.Address) + ": " + string(failure.Code) + ": " + failure.Message
 }
