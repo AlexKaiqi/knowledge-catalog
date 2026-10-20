@@ -17,6 +17,7 @@ func (idx *Index) Ensure(ctx context.Context, repo objectmodel.Repository, commi
 	if err := ctx.Err(); err != nil {
 		return ports.IndexSync{}, err
 	}
+	repo = objectmodel.BindContext(ctx, repo)
 	spec, err := idx.specAtCommit(repo, commit)
 	if err != nil {
 		return ports.IndexSync{}, err
@@ -70,6 +71,7 @@ func (idx *Index) EnsureAt(ctx context.Context, repo objectmodel.Repository, com
 	if err := ctx.Err(); err != nil {
 		return ports.IndexSync{}, err
 	}
+	repo = objectmodel.BindContext(ctx, repo)
 	idx.fixedBuildMu.Lock()
 	defer idx.fixedBuildMu.Unlock()
 	if commit == "" {

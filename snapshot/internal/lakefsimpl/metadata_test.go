@@ -31,7 +31,7 @@ func TestCommitMetadataRejectsAnIncorrectImmutableBasis(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			repo := &Repository{client: client}
+			repo := &Repository{client: client, repoState: &repoState{}}
 			if metadata, err := repo.ReadCommitMetadata("requested"); err == nil || metadata.Commit != "" {
 				t.Fatalf("accepted unreliable commit basis: %#v err=%v", metadata, err)
 			}
@@ -43,7 +43,7 @@ func TestCommitMetadataRejectsAnIncorrectImmutableBasis(t *testing.T) {
 }
 
 func TestCommitMetadataRejectsEmptyCoordinateBeforeTransport(t *testing.T) {
-	repo := &Repository{}
+	repo := &Repository{repoState: &repoState{}}
 	if _, err := repo.ReadCommitMetadata(""); kernel.CodeOf(err) != kernel.ErrVersionUnresolved {
 		t.Fatalf("empty coordinate: %v", err)
 	}

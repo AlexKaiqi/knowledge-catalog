@@ -39,7 +39,7 @@ func TestContenderNeverDeletesAnotherPublishersLock(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			repo := &Repository{id: "kr://conformance/publisher-owner", client: client}
+			repo := &Repository{id: "kr://conformance/publisher-owner", client: client, repoState: &repoState{}}
 			err = repo.publishBranch("main", kernel.CommitID(row.candidate), "c0")
 			if kernel.CodeOf(err) != row.code {
 				t.Fatalf("contender result %v, want %s", err, row.code)

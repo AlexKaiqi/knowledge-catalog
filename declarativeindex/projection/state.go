@@ -106,6 +106,7 @@ func (idx *Index) HasStateBindings(repo objectmodel.Repository, commit kernel.Co
 }
 
 func (idx *Index) refreshState(ctx context.Context, repo objectmodel.Repository, commit kernel.CommitID, source ports.ObservationSource, objectIDs []objectmodel.ObjectID) (ports.StateSync, error) {
+	repo = objectmodel.BindContext(ctx, repo)
 	idx.stateBuildMu.Lock()
 	defer idx.stateBuildMu.Unlock()
 	if source == nil {

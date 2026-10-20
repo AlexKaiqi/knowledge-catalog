@@ -1,6 +1,7 @@
 package lakefsimpl
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -51,8 +52,14 @@ type Repository struct {
 	ep     Endpoint
 	client *apiClient
 	branch string
-	mu     sync.Mutex
-	wip    uint64
+	*repoState
+}
+
+// repoState is the mutable state every context-bound view of one Repository
+// shares, so WithContext can copy the Repository value safely.
+type repoState struct {
+	mu  sync.Mutex
+	wip uint64
 	// Positive commit-existence cache. lakeFS commits are immutable and never
 	// deleted, so a known commit never needs re-probing; negative results are
 	// never cached because a commit may be created concurrently. This holds
@@ -60,6 +67,15 @@ type Repository struct {
 	verifiedMu   sync.Mutex
 	verified     map[kernel.CommitID]struct{}
 	verifiedFIFO []kernel.CommitID
+}
+
+// WithContext returns a view whose requests are canceled with ctx: a read
+// blocked on lakeFS or its data plane returns when ctx ends instead of when
+// the client timeout fires. The view shares connections and caches with r.
+func (r *Repository) WithContext(ctx context.Context) *Repository {
+	view := *r
+	view.client = r.client.withContext(ctx)
+	return &view
 }
 
 // OpenExisting attaches an initialized lakeFS repository. Published branches
@@ -86,7 +102,7 @@ func OpenExisting(id kernel.RepositoryID, dsn, credential string) (*Repository, 
 	if _, _, err := client.doJSON(http.MethodGet, client.repositoryPath(""), nil, &info); err != nil {
 		return nil, err
 	}
-	r := &Repository{id: id, ep: ep, client: client, branch: defaultBranch}
+	r := &Repository{id: id, ep: ep, client: client, branch: defaultBranch, repoState: &repoState{}}
 	if info.DefaultBranch != "" {
 		r.branch = info.DefaultBranch
 	}
@@ -414,6 +430,9 @@ func (r *Repository) ReadFile(filePath string, commit kernel.CommitID) ([]byte, 
 		return nil, err
 	}
 	if !r.HasCommit(commit) {
+		if err := r.client.canceled(); err != nil {
+			return nil, err
+		}
 		return nil, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s does not exist", commit)
 	}
 	content, err := r.client.getObject(string(commit), clean)
@@ -438,6 +457,9 @@ func (r *Repository) listObjects(commit kernel.CommitID, prefix, delimiter strin
 
 func (r *Repository) ListFiles(commit kernel.CommitID) ([]string, error) {
 	if !r.HasCommit(commit) {
+		if err := r.client.canceled(); err != nil {
+			return nil, err
+		}
 		return nil, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s does not exist", commit)
 	}
 	var files []string
@@ -491,6 +513,9 @@ func decodeDirectoryContinuation(token string) (directoryContinuation, error) {
 
 func (r *Repository) ReadDirectory(request storecontract.DirectoryRequest) (storecontract.DirectoryPage, error) {
 	if !r.HasCommit(request.Commit) {
+		if err := r.client.canceled(); err != nil {
+			return storecontract.DirectoryPage{}, err
+		}
 		return storecontract.DirectoryPage{}, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s does not exist", request.Commit)
 	}
 	directory := strings.Trim(strings.TrimSpace(request.Directory), "/")

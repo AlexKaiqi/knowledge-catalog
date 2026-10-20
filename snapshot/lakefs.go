@@ -1,6 +1,8 @@
 package snapshot
 
 import (
+	"context"
+
 	"kc/kernel"
 	"kc/snapshot/internal/lakefsimpl"
 	"kc/snapshot/internal/stamp"
@@ -26,6 +28,16 @@ var (
 	_ BulkTreeIngester     = (*lakefsimpl.Repository)(nil)
 	_ CommitMetadataReader = (*lakefsimpl.Repository)(nil)
 )
+
+// BindStoreContext returns a view of store whose network reads are canceled
+// with ctx. Stores that never leave the process, and a nil ctx, come back
+// unchanged. The view shares connections and caches with store.
+func BindStoreContext(store Store, ctx context.Context) Store {
+	if repo, ok := store.(*lakefsimpl.Repository); ok && ctx != nil {
+		return repo.WithContext(ctx)
+	}
+	return store
+}
 
 // OpenLakeFS attaches an existing lakeFS authority. Optional file capabilities
 // remain discoverable through the root capability interfaces.

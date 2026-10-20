@@ -34,6 +34,7 @@ func (s datasetSpace) valuesBySource(ctx context.Context, source ports.Observati
 		if err != nil {
 			return nil, nil, err
 		}
+		member = objectmodel.BindContext(ctx, member)
 		if err := maintenance.WalkRepository(member, at, func(raw objectmodel.ObjectValue) error {
 			nonempty[id] = true
 			if objectmodel.IsSchemaObject(raw.Address.ObjectID) {

@@ -3,6 +3,8 @@
 package object
 
 import (
+	"context"
+
 	"kc/kernel"
 )
 
@@ -15,6 +17,23 @@ type ReadStore interface {
 	GetProvenance(objectID ObjectID, commitID kernel.CommitID) (ProvenanceTrace, error)
 	Log(objectID ObjectID, commitID kernel.CommitID, query ObjectLogQuery) ([]ObjectRevision, error)
 	Diff(objectID ObjectID, from, to kernel.CommitID) (ObjectDiff, error)
+}
+
+// ContextBound is the optional capability of a Repository whose reads reach a
+// remote authority. WithContext returns a view of the same Repository whose
+// reads are canceled with ctx; a Repository that never leaves the process has
+// no use for it and does not implement it.
+type ContextBound interface {
+	WithContext(ctx context.Context) Repository
+}
+
+// BindContext binds repo's reads to ctx when repo can be bound and otherwise
+// returns repo unchanged.
+func BindContext(ctx context.Context, repo Repository) Repository {
+	if bound, ok := repo.(ContextBound); ok && ctx != nil {
+		return bound.WithContext(ctx)
+	}
+	return repo
 }
 
 // BatchReadStore is the optional object-layer hydration capability used by

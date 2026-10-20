@@ -1,6 +1,7 @@
 package reader
 
 import (
+	"context"
 	"sort"
 	"strings"
 
@@ -88,6 +89,31 @@ var (
 )
 
 func (r *treeRepository) ID() kernel.RepositoryID { return r.base.ID() }
+
+// WithContext binds the repository's reads to ctx. The tree and the manifest
+// locator are rebuilt over the bound store; a locator the store provides itself
+// follows the store, and a store without remote reads returns r unchanged.
+func (r *treeRepository) WithContext(ctx context.Context) objectmodel.Repository {
+	base := snapshot.BindStoreContext(r.base, ctx)
+	if base == r.base {
+		return r
+	}
+	tree, ok := snapshot.TreeReaderOf(base)
+	if !ok {
+		return r
+	}
+	view := &treeRepository{base: base, tree: tree, locator: r.locator}
+	switch r.locator.(type) {
+	case *treeManifestLocator:
+		directory, _ := snapshot.DirectoryReaderOf(base)
+		view.locator = &treeManifestLocator{tree: tree, directory: directory}
+	default:
+		if provided, ok := base.(objectmodel.UnitLocator); ok {
+			view.locator = provided
+		}
+	}
+	return view
+}
 
 // StoreDigest binds this object view to its concrete authority instance:
 // two deployments of one logical repository id (two lakeFS endpoints serving

@@ -2,6 +2,7 @@ package lakefsimpl
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -29,6 +30,39 @@ type apiClient struct {
 	secretKey  string
 	http       *http.Client
 	direct     *http.Client
+	// ctx, when set, cancels every read this client issues. A nil ctx is the
+	// unbound client used for writes and for callers without a lifecycle.
+	ctx context.Context
+}
+
+func (c *apiClient) withContext(ctx context.Context) *apiClient {
+	if c == nil || ctx == nil {
+		return c
+	}
+	bound := *c
+	bound.ctx = ctx
+	return &bound
+}
+
+func (c *apiClient) context() context.Context {
+	if c.ctx == nil {
+		return context.Background()
+	}
+	return c.ctx
+}
+
+// canceled reports the bound context's error once it has ended, so a probe
+// that folds every failure into "absent" cannot turn cancellation into a
+// missing commit.
+func (c *apiClient) canceled() error { return c.context().Err() }
+
+// requestError reports a failed request. A canceled or expired bound context
+// is returned as that context error, not as a retryable lakeFS failure.
+func (c *apiClient) requestError(what string, err error) error {
+	if ctxErr := c.context().Err(); ctxErr != nil {
+		return ctxErr
+	}
+	return kernel.Fail(kernel.ErrTemporaryUnavailable, "lakefs %s: %v", what, err)
 }
 
 type apiError struct {
@@ -124,7 +158,7 @@ func (c *apiClient) doJSON(method, path string, body, out any) (int, http.Header
 		}
 		reader = bytes.NewReader(raw)
 	}
-	req, err := http.NewRequest(method, c.api+path, reader)
+	req, err := http.NewRequestWithContext(c.context(), method, c.api+path, reader)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -135,12 +169,12 @@ func (c *apiClient) doJSON(method, path string, body, out any) (int, http.Header
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return 0, nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "lakefs %s: %v", path, err)
+		return 0, nil, c.requestError(path, err)
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
 	if err != nil {
-		return resp.StatusCode, resp.Header, kernel.Fail(kernel.ErrTemporaryUnavailable, "lakefs read response: %v", err)
+		return resp.StatusCode, resp.Header, c.requestError("read response", err)
 	}
 	if len(raw) > maxResponseBytes {
 		return resp.StatusCode, resp.Header, kernel.Fail(kernel.ErrTemporaryUnavailable,
@@ -161,14 +195,14 @@ func (c *apiClient) doJSON(method, path string, body, out any) (int, http.Header
 func (c *apiClient) getObject(ref, objectPath string) ([]byte, error) {
 	path := c.repositoryPath("refs/"+url.PathEscape(ref)+"/objects") +
 		"?path=" + url.QueryEscape(objectPath) + "&presign=true"
-	req, err := http.NewRequest(http.MethodGet, c.api+path, nil)
+	req, err := http.NewRequestWithContext(c.context(), http.MethodGet, c.api+path, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.SetBasicAuth(c.accessKey, c.secretKey)
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "lakefs read object: %v", err)
+		return nil, c.requestError("read object", err)
 	}
 	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
 		location := resp.Header.Get("Location")
@@ -179,15 +213,19 @@ func (c *apiClient) getObject(ref, objectPath string) ([]byte, error) {
 		if location == "" {
 			return nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "lakefs presigned read omitted Location")
 		}
-		resp, err = c.direct.Get(location)
+		direct, err := http.NewRequestWithContext(c.context(), http.MethodGet, location, nil)
 		if err != nil {
-			return nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "lakefs direct read: %v", err)
+			return nil, err
+		}
+		resp, err = c.direct.Do(direct)
+		if err != nil {
+			return nil, c.requestError("direct read", err)
 		}
 	}
 	defer resp.Body.Close()
 	raw, readErr := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
 	if readErr != nil {
-		return nil, kernel.Fail(kernel.ErrTemporaryUnavailable, "lakefs read object body: %v", readErr)
+		return nil, c.requestError("read object body", readErr)
 	}
 	if resp.StatusCode >= 400 {
 		return nil, &apiError{Method: http.MethodGet, Path: path, Status: resp.StatusCode, Body: string(raw)}
