@@ -106,13 +106,21 @@ func isSchemaVersionSegment(value string) bool {
 }
 
 // PathHintForIngest chooses the stored tree path for one ingested unit.
-// schema/* always lands in the single _schemas/ directory.
+// schema/* always lands in the single _schemas/ directory. A readme aspect
+// with no declared path lands at the repository root; an explicit path is kept.
 func PathHintForIngest(address objectmodel.Address, declared, rel string) string {
 	if objectmodel.IsSchemaObject(address.ObjectID) {
 		return DefaultSchemaPath(address.ObjectID)
 	}
 	if address.Kind == objectmodel.KindAspect && address.AspectName == objectmodel.ReadmeAspect && address.MemberKey == "" {
-		return objectmodel.RepositoryReadmePath
+		hint := strings.TrimSpace(declared)
+		if hint == "" {
+			hint = strings.TrimSpace(rel)
+		}
+		if hint == "" {
+			return objectmodel.RepositoryReadmePath
+		}
+		return hint
 	}
 	hint := strings.TrimSpace(declared)
 	if hint == "" {

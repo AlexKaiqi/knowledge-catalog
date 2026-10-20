@@ -80,8 +80,10 @@ func TestPathHintForIngestPutsSchemaDraftsInOneDirectory(t *testing.T) {
 
 func TestPathHintForIngestPlacesReadmeAtRepositoryRoot(t *testing.T) {
 	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "fixture/payments", AspectName: objectmodel.ReadmeAspect}
-	got := PathHintForIngest(address, "notes/about.md", "notes/about.md")
-	if got != objectmodel.RepositoryReadmePath {
-		t.Fatalf("got %s", got)
+	if got := PathHintForIngest(address, "", ""); got != objectmodel.RepositoryReadmePath {
+		t.Fatalf("omitted path: got %s", got)
+	}
+	if got := PathHintForIngest(address, "notes/about.md", "notes/about.md"); got != "notes/about.md" {
+		t.Fatalf("declared path: got %s", got)
 	}
 }
