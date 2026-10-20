@@ -41,6 +41,7 @@ func leafHelpEntries() map[string]helpEntry {
 用法与参数：
   --dataset 必填；--revision 固定已接受修订，省略采用当前版。所有后续读取和翻页沿用结果中的修订。
   用 kc schema describe --dataset <id> [--revision <N>] --object <schema> 查看声明支持的字段用途；过滤与排序按 Schema 字段定位符写，不传声明成员键。
+  路径在这个 Dataset 里唯一时可写 --eq name=orders。同一路径出现在多个 Schema 或方面时，改写 schema::<aspect>::<path>=value。
   --query 是关键词文本，不是文件 glob；多个条件共同约束结果。--limit 默认 100，范围 1-1000；--continuation 用同查询、同修订续页。
   --recall lexical|semantic；semantic 需要查询文本和已配置向量能力，返回近似候选窗口，不支持续页。
 条件：
@@ -58,7 +59,8 @@ func leafHelpEntries() map[string]helpEntry {
   未声明、不支持、失效、未就绪与零命中分别处理；按错误定位修声明或向维护者查 operations projection describe --dataset <id>。
   续页须保持查询与修订，撤权后下一页拒绝；游标失效时在同一修订重新开始。
 示例：
-  kc search --dataset scene-set --revision 1 --query merchandise`,
+  kc search --dataset scene-set --revision 1 --query merchandise
+  kc search --dataset scene-set --revision 1 --eq schema/sr.table.properties.v2::properties::name=orders`,
 		},
 		"relations": {
 			Description: "在 Dataset 固定修订内列出连接指定对象的关系",

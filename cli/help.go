@@ -49,6 +49,7 @@ const consumeHelp = `kc help consume — 连接服务并读取对象
   kc schema list --dataset <id> --revision <N>
   kc schema describe --dataset <id> --revision <N> --object <schemas[].objectId>
   # fields[].access 说明可检索字段与用途（text 供 --query，filter 供 --eq，sort 供 --sort），由选入的索引声明计算；Schema 源文件不写 access。search.state 说明是否就绪。
+  # 同一 path 出现在多个 Schema 或方面时，--eq 写成 schema::<aspect>::<path>=value；歧义错误会列出可直接粘贴的定位符。
   kc search --dataset <id> --revision <N> --query '<关键词>'
   kc read --dataset <id> --revision <N> <hits[].objectId 的对象URN[#/locator]>
   kc relations --dataset <id> --revision <N> --object <objectId>

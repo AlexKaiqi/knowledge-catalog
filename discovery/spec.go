@@ -174,9 +174,27 @@ func (s AccessSpec) ResolveField(ref FieldRef) (AccessField, error) {
 		return AccessField{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "field %s is not in AccessSpec", displayFieldRef(ref))
 	}
 	if len(matches) > 1 {
-		return AccessField{}, kernel.Fail(kernel.ErrUsageInvalid, "field path %s is ambiguous; specify schema and aspect", ref.Path)
+		return AccessField{}, kernel.Fail(kernel.ErrUsageInvalid, "field path %s is ambiguous; use one of %s", ref.Path, qualifiedFieldChoices(matches))
 	}
 	return matches[0], nil
+}
+
+// qualifiedFieldChoices lists the flag spelling a caller can paste into --eq.
+// Aspect may be empty; schema::::path still parses as three segments.
+func qualifiedFieldChoices(matches []AccessField) string {
+	ordered := append([]AccessField(nil), matches...)
+	for i := 0; i < len(ordered); i++ {
+		for j := i + 1; j < len(ordered); j++ {
+			if indexFieldLess(ordered[j], ordered[i]) {
+				ordered[i], ordered[j] = ordered[j], ordered[i]
+			}
+		}
+	}
+	choices := make([]string, len(ordered))
+	for i, field := range ordered {
+		choices[i] = string(field.Schema) + "::" + field.Aspect + "::" + field.Path
+	}
+	return strings.Join(choices, ", ")
 }
 
 func displayFieldRef(ref FieldRef) string {

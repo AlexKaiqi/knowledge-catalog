@@ -2,6 +2,7 @@ package discovery_test
 
 import (
 	retrieval "kc/discovery"
+	"strings"
 	"testing"
 
 	"kc/kernel"
@@ -115,8 +116,15 @@ func TestCheckSearchRejectsAmbiguousBarePath(t *testing.T) {
 		{ObjectID: "schema/table.owner", Aspect: "owner", Fields: []reader.FieldAccess{{Path: "name", Access: []reader.AccessHint{reader.HintFilter}}}},
 	}})
 	bare := retrieval.SearchOf(retrieval.SearchEQ("name", "alice"))
-	if code := kernel.CodeOf(retrieval.CheckSearch(bare, spec)); code != kernel.ErrUsageInvalid {
+	err := retrieval.CheckSearch(bare, spec)
+	if code := kernel.CodeOf(err); code != kernel.ErrUsageInvalid {
 		t.Fatalf("ambiguous bare path must be rejected, got %s", code)
+	}
+	message := err.Error()
+	for _, choice := range []string{"schema/table.owner::owner::name", "schema/table.structure::structure::name"} {
+		if !strings.Contains(message, choice) {
+			t.Fatalf("ambiguous path must name %s, got %s", choice, message)
+		}
 	}
 	explicit := retrieval.FieldRef{Schema: "schema/table.owner", Aspect: "owner", Path: "name"}
 	request := retrieval.SearchOf(retrieval.SearchClause{Op: retrieval.OpEQ, Field: &explicit, Value: "alice"})
