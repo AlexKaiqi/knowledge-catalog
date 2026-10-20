@@ -22,6 +22,7 @@ type EmbeddingsConfig struct {
 	BaseURL    string
 	APIKey     string
 	Model      string
+	Dimensions int
 	Timeout    time.Duration
 	HTTPClient *http.Client
 }
@@ -31,11 +32,12 @@ type EmbeddingsConfig struct {
 // through the same provider contract; batching belongs to one request, never
 // to a silent retry loop.
 type EmbeddingsProvider struct {
-	endpoint string
-	apiKey   string
-	model    string
-	timeout  time.Duration
-	client   *http.Client
+	endpoint   string
+	apiKey     string
+	model      string
+	dimensions int
+	timeout    time.Duration
+	client     *http.Client
 }
 
 func NewEmbeddings(config EmbeddingsConfig) (*EmbeddingsProvider, error) {
@@ -44,6 +46,9 @@ func NewEmbeddings(config EmbeddingsConfig) (*EmbeddingsProvider, error) {
 	model := strings.TrimSpace(config.Model)
 	if baseURL == "" || apiKey == "" || model == "" {
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "embedding provider requires base URL, API key and model")
+	}
+	if config.Dimensions < 0 || config.Dimensions > 16384 {
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "embedding dimensions must be between 1 and 16384")
 	}
 	parsed, err := url.Parse(strings.TrimRight(baseURL, "/") + "/embeddings")
 	if err != nil {
@@ -57,12 +62,13 @@ func NewEmbeddings(config EmbeddingsConfig) (*EmbeddingsProvider, error) {
 	if client == nil {
 		client = &http.Client{}
 	}
-	return &EmbeddingsProvider{endpoint: parsed.String(), apiKey: apiKey, model: model, timeout: timeout, client: client}, nil
+	return &EmbeddingsProvider{endpoint: parsed.String(), apiKey: apiKey, model: model, dimensions: config.Dimensions, timeout: timeout, client: client}, nil
 }
 
 type embeddingsRequest struct {
-	Model string   `json:"model"`
-	Input []string `json:"input"`
+	Model      string   `json:"model"`
+	Input      []string `json:"input"`
+	Dimensions int      `json:"dimensions,omitempty"`
 }
 
 type embeddingsResponse struct {
@@ -87,7 +93,7 @@ func (p *EmbeddingsProvider) Embed(ctx context.Context, request retrieval.Embedd
 			return retrieval.EmbeddingResult{}, kernel.Fail(kernel.ErrUsageInvalid, "embedding request text %d is empty", i)
 		}
 	}
-	payload, err := json.Marshal(embeddingsRequest{Model: p.model, Input: append([]string(nil), request.Texts...)})
+	payload, err := json.Marshal(embeddingsRequest{Model: p.model, Input: append([]string(nil), request.Texts...), Dimensions: p.dimensions})
 	if err != nil {
 		return retrieval.EmbeddingResult{}, err
 	}

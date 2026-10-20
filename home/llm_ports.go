@@ -1,7 +1,10 @@
 package home
 
 import (
+	"fmt"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	retrieval "kc/discovery"
@@ -26,8 +29,24 @@ func NewRerankerProvider(model string, timeout time.Duration) (retrieval.Reranke
 // NewEmbedderProvider binds the HTTP embeddings provider for the declared
 // model, sourced from the same deployment environment.
 func NewEmbedderProvider(model string) (retrieval.Embedder, error) {
+	dimensions, err := embeddingDimensions()
+	if err != nil {
+		return nil, err
+	}
 	return llmhttp.NewEmbeddings(llmhttp.EmbeddingsConfig{
 		BaseURL: os.Getenv("OPENAI_BASE_URL"), APIKey: os.Getenv("OPENAI_API_KEY"),
-		Model: model,
+		Model: model, Dimensions: dimensions,
 	})
+}
+
+func embeddingDimensions() (int, error) {
+	raw := strings.TrimSpace(os.Getenv("KC_EMBEDDING_DIMENSIONS"))
+	if raw == "" {
+		return 0, nil
+	}
+	dimensions, err := strconv.Atoi(raw)
+	if err != nil || dimensions < 1 || dimensions > 16384 {
+		return 0, fmt.Errorf("KC_EMBEDDING_DIMENSIONS requires an integer between 1 and 16384")
+	}
+	return dimensions, nil
 }

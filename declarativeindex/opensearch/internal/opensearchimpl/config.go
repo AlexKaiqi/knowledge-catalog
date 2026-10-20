@@ -118,7 +118,7 @@ func Open(cfg Config) index.EngineOpener {
 		}
 		if model != "" {
 			embedder, err := llmhttp.NewEmbeddings(llmhttp.EmbeddingsConfig{
-				BaseURL: os.Getenv("OPENAI_BASE_URL"), APIKey: os.Getenv("OPENAI_API_KEY"), Model: model,
+				BaseURL: os.Getenv("OPENAI_BASE_URL"), APIKey: os.Getenv("OPENAI_API_KEY"), Model: model, Dimensions: dims,
 			})
 			if err != nil {
 				return nil, err

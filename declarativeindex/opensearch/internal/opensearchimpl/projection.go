@@ -555,14 +555,21 @@ func (e *openSearchEngine) embedBatch(docs []index.CompiledDoc) ([][][]float32, 
 	if len(texts) == 0 {
 		return vectors, nil
 	}
-	result, err := e.embedder.Embed(context.Background(), retrieval.EmbeddingRequest{Texts: texts})
-	if err != nil {
-		return nil, err
+	// The provider rejects a request whose combined input exceeds its context.
+	// Each call stays inside that limit and the provider timeout. Order is the
+	// request order; a failed slice is not retried.
+	resultVectors := make([][]float32, 0, len(texts))
+	for _, batch := range embeddingRequests(texts) {
+		result, err := e.embedder.Embed(context.Background(), retrieval.EmbeddingRequest{Texts: batch})
+		if err != nil {
+			return nil, err
+		}
+		if len(result.Vectors) != len(batch) {
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "embedding batch returned %d vectors for %d texts", len(result.Vectors), len(batch))
+		}
+		resultVectors = append(resultVectors, result.Vectors...)
 	}
-	if len(result.Vectors) != len(texts) {
-		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "embedding batch returned %d vectors for %d texts", len(result.Vectors), len(texts))
-	}
-	for i, vector := range result.Vectors {
+	for i, vector := range resultVectors {
 		if len(vector) != e.vectorDimension {
 			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "embedding model returned %d dimensions, projection pins %d", len(vector), e.vectorDimension)
 		}

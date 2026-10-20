@@ -58,6 +58,37 @@ func TestEmbeddingsProviderSendsOneBatchedRequestInOrder(t *testing.T) {
 	}
 }
 
+func TestEmbeddingsProviderRequestsConfiguredDimensions(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Model      string   `json:"model"`
+			Input      []string `json:"input"`
+			Dimensions int      `json:"dimensions"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body.Dimensions != 1024 || body.Model != "embed-1" || len(body.Input) != 1 {
+			t.Fatalf("body = %#v", body)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"model":"embed-1","data":[{"index":0,"embedding":[0.1]}]}`))
+	}))
+	defer server.Close()
+	provider, err := llmhttp.NewEmbeddings(llmhttp.EmbeddingsConfig{
+		BaseURL: server.URL, APIKey: "k", Model: "embed-1", Dimensions: 1024,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.Embed(context.Background(), retrieval.EmbeddingRequest{Texts: []string{"小说"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := llmhttp.NewEmbeddings(llmhttp.EmbeddingsConfig{BaseURL: server.URL, APIKey: "k", Model: "embed-1", Dimensions: 16385}); err == nil {
+		t.Fatal("dimensions above 16384 must be rejected")
+	}
+}
+
 func TestEmbeddingsProviderFailsClosedOnShortBatch(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"model":"embed-1","data":[{"index":0,"embedding":[0.1]}]}`))

@@ -83,9 +83,8 @@ func (e *openSearchEngine) PhysicalDigest() kernel.Digest {
 	}
 	if e.VectorReady() {
 		identity["embeddingModel"], identity["embeddingDimensions"] = e.vectorModel, e.vectorDimension
-		if e.denseVector.Load() {
-			identity["vectorStore"] = "dense_vector"
-		}
+		// The knn versus dense_vector choice is learned from the cluster while
+		// a generation is created, after this digest has already been fixed.
 	}
 	return kernel.CanonicalDigest(identity)
 }
