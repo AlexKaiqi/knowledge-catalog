@@ -75,6 +75,7 @@ func hostWriterHelpEntries() map[string]helpEntry {
   风险与成本：
     目录全量读取、校验和远端写入，时间与内存随参与内容增长；非空基点仍逐 Address 对照。
     网络中断后客户端只轮询原回执，默认最多十分钟；同 id 异摘要为 IDEMPOTENCY_CONFLICT。
+    服务端明确证明未应用时立即返回原错误，不轮询、不自动重发。
   失败恢复：
     先按原 command-id 查询回执；等待结束或 PENDING 不能解释为未提交，保留原请求供对账。
     并发冲突重新 diff 并选择新基点；内容变化后的新发布使用新 id，不能借旧 id 提交另一份目录。

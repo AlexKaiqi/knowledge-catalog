@@ -58,6 +58,11 @@ ChangeSet 无需声明“首次上传”，服务端不信任客户端的空树�
 
 Relation PUT 可以引用其他仓的对象；仅校验 `CanonicalRelation` 的结构化信封，不读取或写入端点仓，不为端点发权。单仓 target、CAS、幂等与失败原子性不变。端点是否存在和是否允许读取留给消费上下文处理。
 
+已证明未发布的失败，经错误信封保留 `writeOutcome: "NOT_APPLIED"`；
+客户端立即返回原错误，不查不存在的回执，也不自动重发。命令占用释放失败时证明仍保留，
+但账本保持 PENDING 和摘要保护，须显式处置，不能把未发布当作已释放占用。
+无法确定的发布、原结果无法读取或接受后回执保存失败不附加该证明，保留原恢复边界。
+
 账本先持久化 `PENDING` 再触碰 authority。提交后回执丢失时不得重放；运维以原 digest
 `ResolvePending` 写回已核对回执，或以 `AbandonPending` 明确放弃。`Prune` 只删除超过部署
 保留窗口的 `APPLIED`/`ABANDONED`，永不推断 `PENDING`；Bolt 实现游标删除，不在启动时加载

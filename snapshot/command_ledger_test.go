@@ -176,6 +176,9 @@ func TestReceiptSaveFailureDoesNotAllowDuplicateAfterRestart(t *testing.T) {
 	if kernel.CodeOf(err) != kernel.ErrTemporaryUnavailable || applied != 1 {
 		t.Fatalf("first result code=%s applied=%d err=%v", kernel.CodeOf(err), applied, err)
 	}
+	if kernel.IsWriteNotApplied(err) || kernel.Normalize(err).WriteOutcome != "" {
+		t.Fatal("receipt persistence failure after apply was mislabeled as unapplied")
+	}
 
 	restarted, err := snapshot.NewCommandLedger(store)
 	if err != nil {
@@ -351,6 +354,9 @@ func TestUnknownApplyFailureKeepsDurableCommandClaim(t *testing.T) {
 	if !errors.Is(err, outcome) {
 		t.Fatalf("unknown error was replaced: %v", err)
 	}
+	if kernel.IsWriteNotApplied(err) || kernel.Normalize(err).WriteOutcome != "" {
+		t.Fatal("unknown publication outcome was relabeled as unapplied")
+	}
 	restarted, err := snapshot.NewCommandLedger(store)
 	if err != nil {
 		t.Fatal(err)
@@ -385,8 +391,18 @@ func TestUnappliedCommandDeleteFailureKeepsPendingClaim(t *testing.T) {
 	if kernel.CodeOf(err) != kernel.ErrTemporaryUnavailable {
 		t.Fatalf("failed durable release = %v", err)
 	}
+	if !kernel.IsWriteNotApplied(err) || kernel.Normalize(err).WriteOutcome != kernel.WriteOutcomeNotApplied {
+		t.Fatalf("claim cleanup failure erased the proven publication outcome: %v", err)
+	}
 	if entry, ok := ledger.Lookup("cmd"); !ok || entry.Status != snapshot.StatusPending {
 		t.Fatalf("failed durable release discarded in-memory claim: %+v, found = %v", entry, ok)
+	}
+	_, _, retryErr := ledger.Execute("cmd", "digest", snapshot.CommandRequest{Kind: "TEST"}, func() (any, error) {
+		t.Fatal("unapplied proof is not permission to replay a retained claim")
+		return nil, nil
+	})
+	if kernel.CodeOf(retryErr) != kernel.ErrPreconditionFailed {
+		t.Fatalf("retained command allowed same-request retry: %v", retryErr)
 	}
 	_, _, err = ledger.Execute("cmd", "different", snapshot.CommandRequest{Kind: "TEST"}, func() (any, error) {
 		t.Fatal("failed claim release must not execute a new payload")
@@ -469,5 +485,33 @@ func TestBoltStoreDoesNotImportLegacyJSON(t *testing.T) {
 	}
 	if _, ok := ledger.Lookup("legacy"); ok {
 		t.Fatal("new keyed ledger imported unsupported legacy JSON")
+	}
+}
+
+func TestUnappliedProofSurvivesProtocolErrorEnvelope(t *testing.T) {
+	original := kernel.Fail(kernel.ErrTemporaryUnavailable, "pre-publication staging failed")
+	ledger, err := snapshot.NewCommandLedger(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = ledger.Execute("unapplied-wire", "digest", snapshot.CommandRequest{Kind: "TEST"}, func() (any, error) { return nil, snapshot.WriteNotApplied(original) })
+	if !errors.Is(err, original) {
+		t.Fatalf("original failure lost: %v", err)
+	}
+	encoded, marshalErr := json.Marshal(kernel.FaultJSON(err))
+	if marshalErr != nil {
+		t.Fatal(marshalErr)
+	}
+	var fault struct {
+		Error struct {
+			Code         kernel.ErrorCode `json:"code"`
+			WriteOutcome string           `json:"writeOutcome"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(encoded, &fault) != nil || fault.Error.Code != kernel.ErrTemporaryUnavailable || fault.Error.WriteOutcome != "NOT_APPLIED" {
+		t.Fatalf("proof lost across protocol boundary: %s", encoded)
+	}
+	if _, exists := ledger.Lookup("unapplied-wire"); exists {
+		t.Fatal("proven unapplied command claim was not released")
 	}
 }

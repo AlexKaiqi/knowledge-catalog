@@ -27,7 +27,7 @@ func submitWithReceiptRecovery(ctx context.Context, remote Client, id string, op
 	var output any
 	err := submit(&output)
 	code := kernel.CodeOf(err)
-	if err == nil || wait <= 0 || (code != "" && code != kernel.ErrTemporaryUnavailable) {
+	if err == nil || kernel.IsWriteNotApplied(err) || wait <= 0 || (code != "" && code != kernel.ErrTemporaryUnavailable) {
 		return output, err
 	}
 	deadline := time.Now().Add(wait)

@@ -13,6 +13,7 @@ import (
 	kcclient "kc/client"
 	"kc/kernel"
 	"kc/object/writer"
+	"kc/snapshot"
 )
 
 // TestRemoteCommitRecoversReceiptAfterPOSTTimeout pins the receipt-recovery
@@ -120,5 +121,45 @@ func TestRemoteCommitDoesNotPollDeterministicRejection(t *testing.T) {
 	defer mu.Unlock()
 	if queries != 0 {
 		t.Fatalf("deterministic rejection polled the receipt ledger %d times", queries)
+	}
+}
+
+func TestRemoteCommitReturnsProvenUnappliedFailureWithoutReceiptLookup(t *testing.T) {
+	ledger, err := snapshot.NewCommandLedger(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	posts, queries := 0, 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/commits") {
+			posts++
+			_, _, err := ledger.Execute("unapplied", "digest", snapshot.CommandRequest{Kind: "COMMIT"}, func() (any, error) {
+				return nil, snapshot.WriteNotApplied(kernel.Fail(kernel.ErrTemporaryUnavailable, "staging unavailable"))
+			})
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_ = json.NewEncoder(w).Encode(kernel.FaultJSON(err))
+			return
+		}
+		if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/receipts/") {
+			queries++
+			_ = json.NewEncoder(w).Encode(map[string]any{"receipt": map[string]any{"commandId": "unapplied", "disposition": "APPLIED"}})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+	remote, err := kcclient.New(kcclient.Config{BaseURL: server.URL, HTTPClient: server.Client()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := remote.Login(context.Background(), kcclient.LoginRequest{Identity: kcclient.Identity{Principal: "writer"}}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = remoteCommitWithReceiptRecovery(context.Background(), remote, "kr://test/unapplied", kcclient.CommitRequest{CommandID: "unapplied"}, kcclient.RequestOptions{}, 10*time.Minute)
+	if kernel.CodeOf(err) != kernel.ErrTemporaryUnavailable || !kernel.IsWriteNotApplied(err) || posts != 1 || queries != 0 {
+		t.Fatalf("proven rejection: posts=%d queries=%d error=%v", posts, queries, err)
+	}
+	if _, exists := ledger.Lookup("unapplied"); exists {
+		t.Fatal("proven unapplied command retained its claim")
 	}
 }

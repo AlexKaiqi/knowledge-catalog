@@ -97,8 +97,9 @@ const (
 
 // IngressError is the protocol error. Callers switch on Code, not strings.
 type IngressError struct {
-	Code    ErrorCode `json:"code"`
-	Message string    `json:"message"`
+	Code         ErrorCode `json:"code"`
+	Message      string    `json:"message"`
+	WriteOutcome string    `json:"writeOutcome,omitempty"`
 }
 
 func (e *IngressError) Error() string {
@@ -133,13 +134,19 @@ func Normalize(err error) *IngressError {
 	if err == nil {
 		return nil
 	}
-	if e := AsIngress(err); e != nil {
-		return e
+	fault := AsIngress(err)
+	if fault == nil {
+		fault = &IngressError{Code: ErrUsageInvalid, Message: err.Error()}
 	}
-	return &IngressError{Code: ErrUsageInvalid, Message: err.Error()}
+	if IsWriteNotApplied(err) && fault.WriteOutcome != WriteOutcomeNotApplied {
+		copy := *fault
+		copy.WriteOutcome = WriteOutcomeNotApplied
+		return &copy
+	}
+	return fault
 }
 
-// FaultJSON is the single error envelope: {"error":{"code","message"}}.
+// FaultJSON is the single error envelope, including optional proven write outcome.
 func FaultJSON(err error) map[string]any {
 	return map[string]any{"error": Normalize(err)}
 }

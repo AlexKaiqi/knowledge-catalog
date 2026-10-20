@@ -16,6 +16,9 @@ type writeNotAppliedError struct{ err error }
 func (e *writeNotAppliedError) Error() string { return e.err.Error() }
 func (e *writeNotAppliedError) Unwrap() error { return e.err }
 
+// The protocol normalizer consumes this proof without importing Snapshot.
+func (e *writeNotAppliedError) WriteNotApplied() bool { return true }
+
 func IsWriteNotApplied(err error) bool {
 	var outcome *writeNotAppliedError
 	return errors.As(err, &outcome)

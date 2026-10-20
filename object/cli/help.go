@@ -227,6 +227,7 @@ var leafHelp = map[string]helpEntry{
   风险与成本：
     完整替换可能丢掉未提供的字段，需要网络写入与校验；不要把 --command-id 改成自动随机重试。
     网络中断可能已经提交，客户端只查询原回执，默认等待最多十分钟，不自动再次提交。
+    服务端明确证明未应用时立即返回原错误，不查询回执。
   失败恢复：
     先 kc writer receipt 查询原 --command-id；同 id 异请求为 IDEMPOTENCY_CONFLICT。
     NON_FAST_FORWARD 要重新核对基点并构造新请求；Schema/权限拒绝先修正原因。
@@ -257,6 +258,7 @@ var leafHelp = map[string]helpEntry{
   风险与成本：
     新的读者会失去该单元，历史读取仍需当前权限；多条命令中前条成功不会被后条失败回滚。
     网络中断不表示删除未发生，客户端默认只轮询原回执最多十分钟。
+    服务端明确证明未应用时立即返回原错误，不轮询、不自动重发。
   失败恢复：
     用原 command-id 查 writer receipt；同 id 换内容会冲突，结果未明先对账。
     并发冲突先重新读取，Schema 仍被引用先处理依赖；恢复内容需要一次新的明确 PUT，不倒退历史。

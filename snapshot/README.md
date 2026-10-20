@@ -13,7 +13,8 @@
 命令在进入写入前耐久预留，同 ID 同 digest 重放已保存回执，异 digest 拒绝。写入错误只有经
 `WriteNotApplied` 显式证明目标未发布才释放预留；未知结果保留 `PENDING`，重开 ledger 也不
 重新执行，须由 `ResolvePending` 或 `AbandonPending` 显式处置。该纯错误包装保留原错误码，
-不按 HTTP 状态或临时错误推断发布结果。`WriteObserver` 接收真实结果，已有领域错误
+并经统一错误信封保留明确未应用的证明；占用释放失败仍保留证明及原 PENDING 占用，
+不能据此自动重试。不按 HTTP 状态或临时错误推断发布结果。`WriteObserver` 接收真实结果，已有领域错误
 原样保留；成功后若留证失败，同时返回记录错误与原 `APPLIED` / `REPLAYED` 回执，命令账
 仍为 `APPLIED`。调用方可据回执核对已成立的提交；重试重放原回执，不重新提交。
 
