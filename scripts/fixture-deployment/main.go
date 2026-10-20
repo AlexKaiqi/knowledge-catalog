@@ -38,6 +38,8 @@ func run() error {
 	managedLakefsDSN := flag.String("managed-lakefs-dsn", "", "LakeFS origin for managedStores (http(s)://host, no repository path)")
 	managedLakefsNamespace := flag.String("managed-lakefs-namespace", "", "s3:// prefix for managed Graveler storage namespaces")
 	managedPublicURL := flag.String("managed-public-url", "", "public KC URL returned as managementURL")
+	liveLookupTimeout := flag.String("live-lookup-timeout", "", "optional liveaccess.lookupTimeout (Go duration)")
+	liveReadTimeout := flag.String("live-read-timeout", "", "optional liveaccess.readTimeout (Go duration)")
 	flag.Parse()
 	if *root == "" || *registryID == "" || *principal == "" || flag.NArg() != 0 {
 		return fmt.Errorf("require --root, --registry-id and --principal")
@@ -101,6 +103,8 @@ func run() error {
 			return err
 		}
 	}
+	config.LiveAccess.LookupTimeout = *liveLookupTimeout
+	config.LiveAccess.ReadTimeout = *liveReadTimeout
 	if err := config.Validate(); err != nil {
 		return err
 	}

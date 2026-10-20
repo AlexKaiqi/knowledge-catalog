@@ -115,6 +115,24 @@ func TestUnitLookupLimitFailsOnlyThatUnit(t *testing.T) {
 	}
 }
 
+func TestPreparationReleasesReadBudgetButKeepsUnitLimit(t *testing.T) {
+	ctx := liveaccess.ContextWithReadLimits(context.Background(), liveaccess.ReadLimits{Lookup: 50 * time.Millisecond, Read: time.Millisecond})
+	time.Sleep(5 * time.Millisecond)
+	if _, _, err := liveaccess.UnitLookupContext(ctx); kernel.CodeOf(err) != kernel.ErrTemporaryUnavailable {
+		t.Fatalf("exhausted read budget still admitted a unit: %v", err)
+	}
+	prepare := liveaccess.WithoutReadBudget(ctx)
+	unit, cancel, err := liveaccess.UnitLookupContext(prepare)
+	if err != nil {
+		t.Fatalf("preparation inherited the spent read budget: %v", err)
+	}
+	defer cancel()
+	deadline, ok := unit.Deadline()
+	if !ok || time.Until(deadline) > 50*time.Millisecond {
+		t.Fatalf("preparation dropped the unit limit: deadline=%v ok=%v", deadline, ok)
+	}
+}
+
 func TestReadWithoutLimitsKeepsTransportCancellationFatal(t *testing.T) {
 	base, _, _, id := mixedUnitFixture(t)
 	lookup := &slowLookup{delay: func(objectmodel.Address) time.Duration { return time.Second }}

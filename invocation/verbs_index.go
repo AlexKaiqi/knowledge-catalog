@@ -109,7 +109,10 @@ func datasetProjectionOperation(cx *Invocation, sync bool) (any, error) {
 			return nil, err
 		}
 	}
-	result, err := (discoveryservice.ProjectionSyncExecutor{Repositories: lookup, Projection: cx.WS.Index, Observe: func() func() { return ObserveProjectionExecution(cx) }}).Execute(cx.Context, discoveryservice.ProjectionSyncRequest{Repository: ids[0], Commit: pin.Repositories[ids[0]], State: state, StateRequest: func() (objectmodel.RequestContext, error) { return stateRequestContextFrom(cx) }})
+	// Preparation is maintenance: unit limits still apply, a read's shared
+	// budget does not (doc/design/liveaccess.md: 索引由服务身份准备).
+	prepare := objectserving.WithoutReadBudget(cx.Context)
+	result, err := (discoveryservice.ProjectionSyncExecutor{Repositories: lookup, Projection: cx.WS.Index, Observe: func() func() { return ObserveProjectionExecution(cx) }}).Execute(prepare, discoveryservice.ProjectionSyncRequest{Repository: ids[0], Commit: pin.Repositories[ids[0]], State: state, StateRequest: func() (objectmodel.RequestContext, error) { return stateRequestContextFrom(cx) }})
 	if err != nil {
 		return nil, err
 	}
