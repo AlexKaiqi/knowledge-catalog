@@ -15,8 +15,12 @@ class DatasetSearchProbeTest(unittest.TestCase):
         with patch('accept_world.subprocess.run', return_value=result):
             status, value = world.call(['help'])
             self.assertEqual((status, value), (0, {'text': result.stdout}))
+            status, value = world.call(['help', 'schema', 'describe'])
+            self.assertEqual((status, value), (0, {'text': result.stdout}))
             with self.assertRaises(runner.HarnessError):
                 world.call(['show'])
+            with self.assertRaises(runner.HarnessError):
+                world.call(['schema', 'describe', '--help'])
         result.returncode = 1
         with patch('accept_world.subprocess.run', return_value=result):
             with self.assertRaises(runner.HarnessError):
@@ -49,6 +53,22 @@ class DatasetSearchProbeTest(unittest.TestCase):
                                          ('disposition', 'REPLAYED'), ('sources', [])]:
                         with self.assertRaises(runner.ContractFailure):
                             runner.check(dict(receipt, **{field: wrong}), step['expect'])
+
+    def test_per_caller_value_is_not_searchable_by_either_reader(self):
+        runner = load()
+        searches = [step for step in runner.read_probes()['accept-cross-per-caller-not-searchable']['steps']
+                    if step.get('kc', [None])[0] == 'search']
+        self.assertCountEqual([step['as'] for step in searches], ['reader-a', 'reader-b'])
+        empty = {'dataset': {'revision': 1}, 'completeness': 'complete', 'hits': []}
+        for step in searches:
+            with self.subTest(principal=step['as']):
+                expected = step['expect']
+                runner.check(empty, expected)
+                for leak in ({'hits': [{'objectId': 'table/shop.orders'}]},
+                             {'claims': ['freshness_lag = 120']},
+                             {'claims': ['freshness-lag = 120']}):
+                    with self.assertRaises(runner.ContractFailure):
+                        runner.check(dict(empty, **leak), expected)
 
     def test_inventory_reader_has_both_resolution_and_content_consumption(self):
         steps = load().read_probes()['accept-search-dataset-is-space']['steps']

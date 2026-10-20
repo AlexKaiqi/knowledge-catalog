@@ -75,7 +75,7 @@ class World:
             value = json.loads(raw)
         except ValueError as exc:
             reason, separator, usage = raw.partition('\n\n')
-            if result.returncode == 0 and args in (['help'], ['help', 'consume']):
+            if result.returncode == 0 and args and args[0] == 'help':
                 value = {'text': raw}
             elif result.returncode and reason.startswith('USAGE_INVALID: ') and separator and usage:
                 # The public CLI decorates this one FaultJSON with leaf help.
@@ -285,7 +285,10 @@ class World:
                              sorted(self.datasets))
             check(value, self.expand(step.get('expect', {})))
         elif 'origin' in step:
-            action = step['origin']
+            action = copy.deepcopy(step['origin'])
+            if isinstance(action.get('body'), dict) and 'denyPrincipals' in action['body']:
+                # Origin bodies are literal scripts; only principal names are per-run.
+                action['body']['denyPrincipals'] = self.expand(action['body']['denyPrincipals'])
             url = self.origin_url(action.get('name', 'live')) + action['path']
             method = action.get('method', 'GET')
             name = action.get('name', 'live')

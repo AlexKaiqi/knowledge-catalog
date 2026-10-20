@@ -67,6 +67,26 @@ class CapabilityProbeTest(unittest.TestCase):
                     execute_plan()
         self.assertEqual(written[:3], ['doesNotExist', 'instance', 'mapping'])
 
+    def test_origin_deny_list_names_this_runs_principals_and_restores_that_script(self):
+        load()
+        from accept_world import World
+        world = World({})
+        world.dataset = world.prefix+'case'
+        world.principals = {'reader-b': world.dataset+'-reader-b'}
+        world.origin_offsets = {'live': 0}
+        sent = []
+        def fake(url, method='GET', body=None):
+            sent.append((method, body))
+            return {'units': {}} if method == 'GET' else {'revision': 2}
+        path = '/control/units/table%2Fshop.orders%23%2Fruntime%2Ffreshness-lag'
+        with patch.dict('os.environ', {'KC_ACCEPT_ORIGIN_URL': 'http://origin'}), \
+                patch('accept_world.get_json', side_effect=fake):
+            world.step({'origin': {'name': 'live', 'method': 'PUT', 'path': path,
+                                   'body': {'value': {'value': 120}, 'denyPrincipals': ['reader-b']}}, 'expect': {}})
+        expanded = {'value': {'value': 120}, 'denyPrincipals': [world.dataset+'-reader-b']}
+        self.assertEqual(sent[-1], ('PUT', expanded))
+        self.assertEqual(world.origin_changes[('live', 'table/shop.orders#/runtime/freshness-lag')], [None, expanded])
+
     def test_trial_uses_expanded_original_material_at_the_probe_ref(self):
         runner = load()
         from accept_world import World

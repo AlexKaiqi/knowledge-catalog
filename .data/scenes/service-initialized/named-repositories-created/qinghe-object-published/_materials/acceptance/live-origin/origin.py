@@ -16,13 +16,14 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
+import socket
 import threading
 import time
 from typing import Any
 from urllib.parse import unquote
 
 PROTOCOL = "resource-access/v1"
-BEHAVIORS = {"ok", "null", "error", "slow", "invalid", "bad-basis"}
+BEHAVIORS = {"ok", "null", "error", "slow", "invalid", "bad-basis", "unreachable"}
 RECORDED_HEADERS = (
     "Authorization",
     "X-Tai-Identity",
@@ -30,6 +31,10 @@ RECORDED_HEADERS = (
     "X-Resource-On-Behalf-Of",
     "X-Resource-Request-Id",
 )
+
+
+class Unreachable(Exception):
+    """The unit drops the connection without any HTTP response."""
 
 
 class LookupError_(Exception):
@@ -126,6 +131,8 @@ class Origin:
             raise LookupError_(422, "CAPABILITY_UNSATISFIED", f"unsupported protocol {request.get('protocol')!r}")
         if unit is None:
             raise LookupError_(404, "OBJECT_REF_UNRESOLVED", f"unit {address} is unknown to origin {self.name}")
+        if headers.get("X-Resource-Principal", "").strip() in unit.get("denyPrincipals", []):
+            raise LookupError_(403, "FORBIDDEN", f"origin {self.name} denies this principal for unit {address}")
         return respond(unit, self.generation, revision)
 
 
@@ -139,10 +146,15 @@ def validate_unit(address: str, unit: Any) -> None:
         raise ValueError(f"unit {address} behavior {behavior!r} not in {sorted(BEHAVIORS)}")
     if behavior in {"ok", "slow", "invalid"} and "value" not in unit:
         raise ValueError(f"unit {address} behavior {behavior} requires value")
+    deny = unit.get("denyPrincipals", [])
+    if not isinstance(deny, list) or not all(isinstance(name, str) and name for name in deny):
+        raise ValueError(f"unit {address} denyPrincipals must be a list of principal names")
 
 
 def respond(unit: dict[str, Any], generation: str, revision: int) -> dict[str, Any]:
     behavior = unit.get("behavior", "ok")
+    if behavior == "unreachable":
+        raise Unreachable()
     if behavior == "error":
         raise LookupError_(int(unit.get("status", 503)), str(unit.get("errorCode", "TEMPORARY_UNAVAILABLE")),
                            str(unit.get("message", "scripted source failure")))
@@ -186,6 +198,12 @@ def make_handler(origin: Origin) -> type[BaseHTTPRequestHandler]:
                 result = origin.lookup(request, {name: self.headers.get(name, "") for name in RECORDED_HEADERS})
             except LookupError_ as error:
                 self._json(error.status, {"error": {"code": error.code, "message": str(error)}})
+                return
+            except Unreachable:
+                # Like a stopped process seen mid-request: no status line, the
+                # connection just ends, so the caller sees a transport failure.
+                self.close_connection = True
+                self.connection.shutdown(socket.SHUT_RDWR)
                 return
             except ValueError as error:
                 self._json(400, {"error": {"code": "USAGE_INVALID", "message": str(error)}})

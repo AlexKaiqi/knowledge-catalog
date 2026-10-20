@@ -105,7 +105,7 @@ docker compose -f live-origin/compose.yaml up -d   # 部署拓扑：live-origin:
 
 | 接口 | 作用 |
 |---|---|
-| `POST /v1/access` | 取值；缺 `X-Resource-Principal` 返回 401，未知单元返回 404 `OBJECT_REF_UNRESOLVED` |
+| `POST /v1/access` | 取值；缺 `X-Resource-Principal` 返回 401，未知单元返回 404 `OBJECT_REF_UNRESOLVED`，主体在单元 `denyPrincipals` 中返回 403 `FORBIDDEN` |
 | `GET /health` | 名称与代际 |
 | `GET /control/units`、`PUT /control/units/<地址>`、`DELETE /control/units/<地址>` | 查看、改写、删除单元；每次改写使 `sourceRevision` 加一 |
 | `GET /control/calls`、`DELETE /control/calls` | 读取、清空调用记录：地址、取值描述、声明摘要、身份头 |
@@ -114,7 +114,10 @@ docker compose -f live-origin/compose.yaml up -d   # 部署拓扑：live-origin:
 控制接口里的地址要把 `#` 编码成 `%23`，例如 `/control/units/table/shop.orders%23/runtime/freshness-lag`。
 
 单元行为 `behavior`：`ok`（默认）、`null`（合法空值）、`error`（`status`、`errorCode`、`message`）、
-`slow`（`delayMs` 后返回）、`invalid`（返回 `value` 原样，用来违反 Schema）、`bad-basis`（依据缺 `bindingGeneration`）。
+`slow`（`delayMs` 后返回）、`invalid`（返回 `value` 原样，用来违反 Schema）、`bad-basis`（依据缺 `bindingGeneration`）、
+`unreachable`（不回任何 HTTP 响应直接断开连接，调用方看到的与进程已停相同，是传输失败）。
+单元可另带 `denyPrincipals`（主体名数组）：`X-Resource-Principal` 在其中时返回 403 `FORBIDDEN`，其余主体照常；
+验收用例里的主体名按本次运行展开。
 用 `--generation` 启动不同代际的实例，可以区分“换了实例”。
 
 ## 用例树

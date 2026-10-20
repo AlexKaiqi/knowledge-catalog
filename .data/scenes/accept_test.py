@@ -26,6 +26,23 @@ def load():
 
 
 class AcceptTest(unittest.TestCase):
+    def test_probe_assertions_use_typed_operator_containers(self):
+        def check_assertion(expected):
+            for operator in ('has', 'includes', 'count', 'contains', 'excludes', 'forEach'):
+                if operator in expected:
+                    self.assertIsInstance(expected[operator], dict, operator)
+            for operator in ('nonempty', 'absent', 'find', 'unitAddresses'):
+                if operator in expected:
+                    self.assertIsInstance(expected[operator], list, operator)
+            for condition in expected.get('find', []):
+                check_assertion(condition.get('expect', {}))
+            for assertion in expected.get('forEach', {}).values():
+                check_assertion(assertion)
+        for probe in load().read_probes().values():
+            for index, step in enumerate(probe['steps']):
+                with self.subTest(probe=probe['id'], step=index):
+                    check_assertion(step.get('expect', {}))
+
     def test_deadline_probe_uses_a_reader_with_only_its_required_repository_grants(self):
         steps = load().read_probes()['accept-cross-request-deadline']['steps']
         read_index = next(i for i, step in enumerate(steps) if step.get('kc', [None])[0] == 'read')
@@ -236,7 +253,7 @@ class AcceptTest(unittest.TestCase):
                                             row['where'].get('address') == {'objectId': 'table/shop.orders',
                                              'aspectName': 'runtime', 'memberKey': member}
                                             for row in expected.get('find', [])))
-        self.assertEqual(checked, 14)
+        self.assertEqual(checked, 16)
 
     def test_dependency_repository_reads_are_explicit_in_principal_probe_prestate(self):
         plans = load().read_probes()
