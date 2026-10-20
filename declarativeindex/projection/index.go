@@ -20,21 +20,28 @@ type Index struct {
 	mu   sync.Mutex
 	// stateBuildMu serializes refresh publishers without blocking searches while
 	// a new warm generation is compiled.
-	stateBuildMu           sync.Mutex
-	fixedBuildMu           sync.Mutex
-	stateMu                sync.RWMutex
-	engs                   map[engineKey]ports.Engine
-	states                 map[engineKey]*stateProjection
-	hydrator               objectmodel.Hydrator
-	check                  retrieval.DeclarationCheck
-	manifestDigest         kernel.Digest
-	currentDatasetRevision func(string) (int, error)
+	stateBuildMu         sync.Mutex
+	fixedBuildMu         sync.Mutex
+	stateMu              sync.RWMutex
+	engs                 map[engineKey]ports.Engine
+	states               map[engineKey]*stateProjection
+	hydrator             objectmodel.Hydrator
+	check                retrieval.DeclarationCheck
+	manifestDigest       kernel.Digest
+	datasetRevisionFence DatasetRevisionFence
 }
 
-// SetDatasetRevisionLookup supplies the publication authority for observation
+// DatasetRevisionFence is the publication authority for observation refresh:
+// it runs accept while revision stays the current, unretired revision of the
+// Dataset, and fails with PRECONDITION_FAILED otherwise. Publication of that
+// Dataset waits for accept, so a refresh is never accepted for a revision
+// that was replaced while it committed.
+type DatasetRevisionFence func(setID string, revision int, accept func() error) error
+
+// SetDatasetRevisionFence supplies the publication authority for observation
 // refresh. Retained revisions remain queryable, but only current is refreshed.
-func (idx *Index) SetDatasetRevisionLookup(current func(string) (int, error)) {
-	idx.currentDatasetRevision = current
+func (idx *Index) SetDatasetRevisionFence(fence DatasetRevisionFence) {
+	idx.datasetRevisionFence = fence
 }
 
 // NewIndexEngine builds one working projection using the supplied physical engine.

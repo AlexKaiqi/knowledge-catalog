@@ -44,6 +44,7 @@ type Service interface {
 	SetObserver(j Observer)
 	SetStamp(as, requestID, ruleID string)
 	UnregisterRepository(repositoryID kernel.RepositoryID) error
+	WithCurrentRevision(setID string, revision int, fn func() error) error
 }
 
 // Registry is the accepted metadata authority opened through Snapshot.

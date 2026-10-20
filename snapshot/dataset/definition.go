@@ -163,7 +163,7 @@ func (c *service) PublishDataset(def Dataset) (Dataset, error) {
 		return Dataset{}, err
 	}
 	def = Dataset{SetID: def.SetID, Revision: def.Revision, Sources: frozen, Items: items, Metadata: maps.Clone(def.Metadata), Dependencies: maps.Clone(def.Dependencies)}
-	err = c.commit("dataset-define "+def.SetID, func(s *acceptedState) (State, error) {
+	err = c.commitDataset(def.SetID, "dataset-define "+def.SetID, func(s *acceptedState) (State, error) {
 		// The accepted version may have advanced since validation.
 		if err := c.checkPublication(s, def); err != nil {
 			return State{}, err

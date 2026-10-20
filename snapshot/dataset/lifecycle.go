@@ -75,7 +75,7 @@ func (c *service) RetireDataset(setID string) error {
 	if err := c.ensureWritable(); err != nil {
 		return err
 	}
-	return c.commit("dataset-retire "+setID, func(s *acceptedState) (State, error) {
+	return c.commitDataset(setID, "dataset-retire "+setID, func(s *acceptedState) (State, error) {
 		if _, ok := s.datasets[setID]; !ok {
 			return State{}, kernel.Fail(kernel.ErrDatasetInvalid, "dataset %s is not defined in this service", setID)
 		}

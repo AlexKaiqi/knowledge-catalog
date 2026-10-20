@@ -55,6 +55,7 @@ type registryState struct {
 	registry *registry
 	current  atomic.Pointer[acceptedState]
 	hooks    []Hook
+	fence    revisionFence
 }
 
 // acceptedState is one accepted registry version. It is never modified after

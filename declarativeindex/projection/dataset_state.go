@@ -131,20 +131,29 @@ func (idx *Index) RefreshDatasetState(ctx context.Context, lookup reader.MemberL
 		_ = session.Abort(err)
 		return ports.StateSync{}, err
 	}
-	idx.stateMu.Lock()
-	if err := idx.requireCurrentDataset(pin); err != nil {
-		idx.stateMu.Unlock()
-		_ = session.Abort(err)
+	// Engine commit and the serving swap happen inside the revision fence, so
+	// a publication of this Dataset cannot land between the last check and
+	// the generation switch; it waits and replaces the revision afterwards.
+	var previous *stateProjection
+	attempted := false
+	accept := func() error {
+		attempted = true
+		idx.stateMu.Lock()
+		defer idx.stateMu.Unlock()
+		if err := session.Commit(); err != nil {
+			return err
+		}
+		previous = idx.states[key]
+		idx.states[key] = next
+		keep = true
+		return nil
+	}
+	if err := idx.withCurrentDataset(pin, accept); err != nil {
+		if !attempted {
+			_ = session.Abort(err)
+		}
 		return ports.StateSync{}, err
 	}
-	if err := session.Commit(); err != nil {
-		idx.stateMu.Unlock()
-		return ports.StateSync{}, err
-	}
-	previous := idx.states[key]
-	idx.states[key] = next
-	keep = true
-	idx.stateMu.Unlock()
 	if previous != nil {
 		_ = previous.store.CloseAndRemove()
 	}
@@ -152,17 +161,28 @@ func (idx *Index) RefreshDatasetState(ctx context.Context, lookup reader.MemberL
 }
 
 func (idx *Index) requireCurrentDataset(pin reader.DatasetPin) error {
-	if idx.currentDatasetRevision == nil {
-		return nil
+	return idx.withCurrentDataset(pin, nil)
+}
+
+func (idx *Index) withCurrentDataset(pin reader.DatasetPin, accept func() error) error {
+	if idx.datasetRevisionFence == nil {
+		if accept == nil {
+			return nil
+		}
+		return accept()
 	}
-	revision, err := idx.currentDatasetRevision(pin.SetID)
-	if err != nil {
-		return err
+	ran := false
+	err := idx.datasetRevisionFence(pin.SetID, pin.Revision, func() error {
+		ran = true
+		if accept == nil {
+			return nil
+		}
+		return accept()
+	})
+	if err != nil && !ran && kernel.CodeOf(err) == kernel.ErrPreconditionFailed {
+		return kernel.Fail(kernel.ErrPreconditionFailed, "only the current Dataset revision may refresh external observations: %v", err)
 	}
-	if revision != pin.Revision {
-		return kernel.Fail(kernel.ErrPreconditionFailed, "only the current Dataset revision may refresh external observations")
-	}
-	return nil
+	return err
 }
 
 func (idx *Index) searchDatasetState(ctx context.Context, s datasetSpace, request retrieval.SearchRequest) (retrieval.SearchResult, error) {

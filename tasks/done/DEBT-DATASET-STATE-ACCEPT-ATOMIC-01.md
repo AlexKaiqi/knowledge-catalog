@@ -27,3 +27,23 @@
 ## 不做
 
 不把修订权威搬进 Index（保持进程外）；不为撤回引入跨仓事务；不放宽既有观察期守卫断言。
+
+## 交付
+
+方案：修订围栏。不改引擎公开形状，也不搬动修订权威，按 setID 在进程内排序发布与观察的最终接受。
+任务原文的两个处置（引擎 CAS 条件、恢复旧控制文档）都要扩张引擎公开形状；围栏在提交前后让发布排序，
+达到同样的目标（Commit 完成时修订仍为目标修订，否则不提交、旧代际保留服务），因此选围栏。
+
+实现范围：
+- `snapshot/dataset/revision_fence.go`：按 setID 的互斥；`WithCurrentRevision(setID, revision, fn)` 持围栏检查“存在、未退役、修订相等”，不满足返回 `ErrPreconditionFailed` 且不执行 fn。发布（`dataset-define`）与退役（`dataset-retire`）经 `commitDataset` 先取围栏再进入 registry 提交；读与其它 Dataset 不受影响。
+- `declarativeindex/projection/dataset_state.go`：`session.Commit()` 与写入 `idx.states` 在围栏内完成；围栏拒绝且未进入提交时 `Abort`，旧代际保留服务。
+- `declarativeindex/plugin/entry.go`：注入 `options.Datasets.WithCurrentRevision`，替换原先的修订查询 lookup。
+
+局限：围栏是进程内的。跨进程的并发发布仍由 registry head CAS 兜底，不在本债范围；`DATASET-REVISION-01` 实现时无需再改此处。
+
+已验证：
+- `snapshot/dataset/revision_fence_test.go`：同 Dataset 发布被排序在持有围栏之后；围栏拒绝时不执行 fn。
+- `declarativeindex/plugin/dataset_revision_fence_test.go`：发布钩子注入 `Commit` 执行期间，发布被排序在接受之后；被取代修订再刷新返回 `ErrPreconditionFailed` 且不再提交。先红后绿，`-race` 通过。
+- 既有 `TestDatasetRevisionPublishedDuringObservationPreservesOldGeneration`、`TestDatasetCurrentRevisionObservationRefreshPublishesNewGeneration` 保持绿。
+- `make check-docs`、`make quality`、`make test` 通过，`make test` 无 skip；`make test-contracts` 退出码 0，其中的 skip 均为外部 live 环境用例。
+- 未验：真实部署入口（`make deploy-local-scenes`）未运行。

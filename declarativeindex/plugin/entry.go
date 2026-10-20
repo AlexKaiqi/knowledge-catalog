@@ -55,13 +55,7 @@ func Entry(options Options) indexplugins.IndexPluginEntry {
 		idx.SetHydrator(options.Hydrator)
 		idx.SetDeclarationManifest(manifest.Check, manifest.Describe().Digest)
 		if options.Datasets != nil {
-			idx.SetDatasetRevisionLookup(func(id string) (int, error) {
-				definition, err := options.Datasets.Set(id)
-				if err == nil && definition.Retired {
-					return 0, kernel.Fail(kernel.ErrPreconditionFailed, "Dataset is retired")
-				}
-				return definition.Revision, err
-			})
+			idx.SetDatasetRevisionFence(options.Datasets.WithCurrentRevision)
 		}
 		repositories := append([]kernel.RepositoryID(nil), scope.Repositories...)
 		allowed := map[kernel.RepositoryID]bool{}
