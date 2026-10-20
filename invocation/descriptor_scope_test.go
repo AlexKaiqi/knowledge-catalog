@@ -1,8 +1,10 @@
 package invocation
 
 import (
+	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"kc/kernel"
 	objectmodel "kc/object"
@@ -157,5 +159,58 @@ func TestRequestDescriptorsConcurrentLookupsShareOneFixedDeclaration(t *testing.
 	workers.Wait()
 	if heads, reads := f.ops.counts("ops/stats"); heads != 1 || reads != 1 {
 		t.Fatalf("concurrent request repeated authority access: heads=%d reads=%d", heads, reads)
+	}
+}
+
+// A read's descriptor resolution must not wait on every other Repository in
+// turn: the Head probes overlap, and the overlap stays within the bound.
+func TestRequestDescriptorsProbeOtherRepositoriesConcurrentlyWithinBound(t *testing.T) {
+	const overlap = 4
+	var mu sync.Mutex
+	inFlight, peak := 0, 0
+	released := make(chan struct{})
+	var release sync.Once
+	gate := func() {
+		mu.Lock()
+		inFlight++
+		peak = max(peak, inFlight)
+		if inFlight == overlap {
+			release.Do(func() { close(released) })
+		}
+		mu.Unlock()
+		select {
+		case <-released:
+		case <-time.After(2 * time.Second):
+		}
+		mu.Lock()
+		inFlight--
+		mu.Unlock()
+	}
+	others := []*descriptorScopeStore{}
+	ids := []kernel.RepositoryID{}
+	for i := 0; i < 2*descriptorScanWorkers; i++ {
+		other := newDescriptorScopeStore(kernel.RepositoryID(fmt.Sprintf("kr://descriptor/other-%02d", i)), nil)
+		other.gate = gate
+		others, ids = append(others, other), append(ids, other.id)
+	}
+	f := newDescriptorScopeFixture(t, others...)
+	f.ops.gate = gate
+	f.allow(t, append([]kernel.RepositoryID{f.primary.id, f.ops.id}, ids...)...)
+	at, err := requestDescriptors(f.cx, f.primary.id, "v1")("ops/stats")
+	if err != nil || at.Repository != f.ops.id {
+		t.Fatalf("concurrent probes changed the unique holder: %#v %v", at, err)
+	}
+	select {
+	case <-released:
+	default:
+		t.Fatalf("other Repositories were probed one at a time: peak in-flight Head calls %d, want %d", peak, overlap)
+	}
+	if peak > descriptorScanWorkers {
+		t.Fatalf("probe fan-out %d exceeded its bound %d", peak, descriptorScanWorkers)
+	}
+	for _, other := range others {
+		if heads, reads := other.counts("ops/stats"); heads != 1 || reads != 1 {
+			t.Fatalf("%s was not probed exactly once: heads=%d reads=%d", other.id, heads, reads)
+		}
 	}
 }

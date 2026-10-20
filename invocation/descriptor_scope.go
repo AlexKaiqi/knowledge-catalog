@@ -62,21 +62,43 @@ func (s *requestDescriptorScope) resolveUncached(id objectmodel.ObjectID) (livea
 	if at, found, err := descriptorAt(s.cx, s.repository, s.commit, id); err != nil || found {
 		return at, err
 	}
-	held := []liveaccess.DescriptorAt{}
+	others := make([]kernel.RepositoryID, 0, len(s.repositories))
 	for _, other := range s.repositories {
-		if other == s.repository || other == objectmodel.SystemRepositoryID || !AllowedRepoRead(s.cx.Home, s.cx.Flags, string(other), string(id)) {
-			continue
+		if other != s.repository && other != objectmodel.SystemRepositoryID {
+			others = append(others, other)
 		}
-		head, err := s.head(other)
-		if err != nil {
-			return liveaccess.DescriptorAt{}, err
+	}
+	// Uniqueness needs every readable candidate, so the probes run with a
+	// bounded fan-out: a read's latency must not grow serially with the
+	// number of Repositories in the deployment. Results are evaluated in
+	// Repository order, so the reported error is the one a serial scan reports.
+	probes := make([]descriptorProbe, len(others))
+	work := make(chan int)
+	var workers sync.WaitGroup
+	for w := 0; w < min(descriptorScanWorkers, len(others)); w++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for i := range work {
+				probes[i] = s.probe(others[i], id)
+			}
+		}()
+	}
+	for i := range others {
+		work <- i
+	}
+	close(work)
+	workers.Wait()
+	held := []liveaccess.DescriptorAt{}
+	for i, probe := range probes {
+		if probe.fetched {
+			s.heads[others[i]] = probe.head
 		}
-		at, found, err := descriptorAt(s.cx, other, head, id)
-		if err != nil {
-			return liveaccess.DescriptorAt{}, err
+		if probe.err != nil {
+			return liveaccess.DescriptorAt{}, probe.err
 		}
-		if found {
-			held = append(held, at)
+		if probe.found {
+			held = append(held, probe.at)
 		}
 	}
 	switch len(held) {
@@ -91,20 +113,47 @@ func (s *requestDescriptorScope) resolveUncached(id objectmodel.ObjectID) (livea
 	}
 }
 
-func (s *requestDescriptorScope) head(repository kernel.RepositoryID) (kernel.CommitID, error) {
-	if head, found := s.heads[repository]; found {
-		return head.commit, head.err
+// descriptorScanWorkers bounds the concurrent Repository probes of one
+// descriptorRef resolution.
+const descriptorScanWorkers = 16
+
+type descriptorProbe struct {
+	head    descriptorHead
+	fetched bool
+	at      liveaccess.DescriptorAt
+	found   bool
+	err     error
+}
+
+// probe checks one other Repository. It only reads s.heads, which is written
+// after every probe of the resolution has finished.
+func (s *requestDescriptorScope) probe(repository kernel.RepositoryID, id objectmodel.ObjectID) descriptorProbe {
+	if !AllowedRepoRead(s.cx.Home, s.cx.Flags, string(repository), string(id)) {
+		return descriptorProbe{}
 	}
+	head, cached := s.heads[repository]
+	probe := descriptorProbe{head: head}
+	if !cached {
+		probe.head, probe.fetched = s.fetchHead(repository), true
+	}
+	if probe.head.err != nil {
+		probe.err = probe.head.err
+		return probe
+	}
+	probe.at, probe.found, probe.err = descriptorAt(s.cx, repository, probe.head.commit, id)
+	return probe
+}
+
+func (s *requestDescriptorScope) fetchHead(repository kernel.RepositoryID) descriptorHead {
 	store, ok := s.cx.WS.Store.Get(repository)
 	if !ok {
-		return "", kernel.Fail(kernel.ErrObjectRefUnresolved, "Repository %s is no longer in the request scope", repository)
+		return descriptorHead{err: kernel.Fail(kernel.ErrObjectRefUnresolved, "Repository %s is no longer in the request scope", repository)}
 	}
 	commit, err := store.Head(snapshot.DefaultRef)
 	if err == nil && commit == "" {
 		err = kernel.Fail(kernel.ErrVersionUnresolved, "Repository %s has no published head", repository)
 	}
-	s.heads[repository] = descriptorHead{commit: commit, err: err}
-	return commit, err
+	return descriptorHead{commit: commit, err: err}
 }
 
 func descriptorAt(cx *Invocation, repository kernel.RepositoryID, commit kernel.CommitID, id objectmodel.ObjectID) (liveaccess.DescriptorAt, bool, error) {

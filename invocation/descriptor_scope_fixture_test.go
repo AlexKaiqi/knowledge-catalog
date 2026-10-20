@@ -23,6 +23,8 @@ type descriptorScopeStore struct {
 	heads    int
 	reads    map[objectmodel.ObjectID]int
 	versions map[kernel.CommitID]map[objectmodel.ObjectID]any
+	// gate, when set, runs before Head answers and outside the store lock.
+	gate func()
 }
 
 func newDescriptorScopeStore(id kernel.RepositoryID, values map[objectmodel.ObjectID]any) *descriptorScopeStore {
@@ -43,6 +45,9 @@ func (s *descriptorScopeStore) HasCommit(at kernel.CommitID) bool {
 	return found
 }
 func (s *descriptorScopeStore) Head(ref string) (kernel.CommitID, error) {
+	if s.gate != nil {
+		s.gate()
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if ref != snapshot.DefaultRef {
