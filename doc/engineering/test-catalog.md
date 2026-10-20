@@ -24,7 +24,7 @@ make deploy-local-scenes # 独立真实 lakeFS 部署场景；需已有 local �
 make test-contracts # 显式旧混合套件：component + boundary + 应用/transport 合同
 make quality        # gofmt/tidy/vet/staticcheck + 复杂度/文件体积/重复门禁
 make test-e2e       # 共享应用语义 + typed Client/HTTP/登记空间 边界
-make test-race      # command log / hook / Reader / Index / CLI 并发路径
+make test-race      # command log / hook / Reader / Index / Server / 调用并发路径；cli 只跑 scripts/race-cli-tests.txt 所列并发用例
 make test-cover     # 文档/surface + short suite + statement coverage 最低阈值
 make validation-inventory # 只生成声明库存 JSON，不跑测试或启动外部服务
 make check-validation # 文档/脚本/库存/结果工具回归，不启动外部服务

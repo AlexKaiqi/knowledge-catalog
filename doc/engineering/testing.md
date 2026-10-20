@@ -22,7 +22,7 @@
 | `make deploy-local-scenes` | 独立的真实 lakeFS 部署验收，需要已有的本地测试栈 |
 | `make test-contracts` | 组件、架构与应用合同组合 |
 | `make test-all` | 夹具、真实部署、混合合同、插件与其它入口 |
-| `make test-race`、`make test-cover` | 并发路径；覆盖率最低阈值 |
+| `make test-race`、`make test-cover` | 并发路径（`cli` 只跑清单内的并发用例，清单由守卫对账）；覆盖率最低阈值 |
 
 lakeFS 夹具与真实部署是不同入口，不因缺少部署配置而要求重建用例环境。真实部署验收按各自合同
 单独进行，不为验证以外的目的启动服务或容器。
