@@ -38,7 +38,7 @@ func (r *schemaResolver) validateIndexDeclarations(registry snapshot.Registry, c
 }
 
 func (r *schemaResolver) checkIndexDeclaration(registry snapshot.Registry, unit objectmodel.Unit, drafts map[objectmodel.ObjectID]objectmodel.SchemaDefinition) (objectmodel.IndexDeclaration, []objectmodel.SchemaFieldDefinition, error) {
-	key := objectmodel.AddressKey(unit.Address)
+	key := objectmodel.AddressLabel(unit.Address)
 	if unit.ValueSource != nil && unit.ValueSource.Kind != "" && unit.ValueSource.Kind != objectmodel.ValueSourceSnapshot {
 		return objectmodel.IndexDeclaration{}, nil, kernel.Fail(kernel.ErrUsageInvalid,
 			"index declaration %s cannot declare an external value source; a declaration is catalog data", key)

@@ -21,16 +21,16 @@ func (s AccessSpec) selectDeclarationBuild(field AccessField, op SearchOp) (*dec
 		for _, input := range build.inputs {
 			if input.Field == field.FieldRef {
 				candidates = append(candidates, build)
-				members = append(members, objectmodel.AddressKey(build.member))
+				members = append(members, objectmodel.AddressLabel(build.member))
 				break
 			}
 		}
 	}
 	if len(candidates) > 1 {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "field %s has ambiguous members for %s: %s", field.FieldRef.Key(), op, strings.Join(members, ", "))
+		return nil, kernel.Fail(kernel.ErrUsageInvalid, "field %s has ambiguous members for %s: %s", displayFieldRef(field.FieldRef), op, strings.Join(members, ", "))
 	}
 	if len(candidates) == 0 {
-		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "field %s has no declaration member for %s", field.FieldRef.Key(), op)
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "field %s has no declaration member for %s", displayFieldRef(field.FieldRef), op)
 	}
 	return candidates[0], nil
 }

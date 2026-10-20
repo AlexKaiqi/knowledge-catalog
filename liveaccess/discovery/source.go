@@ -34,7 +34,7 @@ func (s Source) ObserveDatasetValue(ctx context.Context, scope *reader.Serving, 
 			return objectmodel.ObservedValue{}, err
 		}
 		if binding.Identity != objectmodel.IdentityShared {
-			return objectmodel.ObservedValue{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "unit %s is per-caller and cannot enter a shared Dataset index", objectmodel.AddressKey(unit.Address))
+			return objectmodel.ObservedValue{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "unit %s is per-caller and cannot enter a shared Dataset index", objectmodel.AddressLabel(unit.Address))
 		}
 	}
 	return liveservice.HydrateRepositoryValue(ctx, repo, value, s.Lookup, s.Request, descriptors)

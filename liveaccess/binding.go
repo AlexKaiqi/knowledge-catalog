@@ -87,7 +87,7 @@ func ResolveRepoBinding(repo objectmodel.Repository, commit kernel.CommitID, add
 	}
 	if resolution.Status != objectmodel.StatusResolved {
 		return ResolvedBinding{}, kernel.Fail(kernel.ErrObjectRefUnresolved,
-			"binding address %s is not resolved at %s", objectmodel.AddressKey(address), commit)
+			"binding address %s is not resolved at %s", objectmodel.AddressLabel(address), commit)
 	}
 	return ResolveDeclaration(descriptors, repo.ID(), commit, objectmodel.UnitDeclaration{
 		Address: address, ValueSource: resolution.ValueSource,
@@ -109,14 +109,14 @@ func ResolveDeclaration(descriptors DescriptorScope, repository kernel.Repositor
 	source := declaration.ValueSource
 	if !source.IsBinding() {
 		return ResolvedBinding{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-			"address %s declares no binding valueSource", objectmodel.AddressKey(address))
+			"address %s declares no binding valueSource", objectmodel.AddressLabel(address))
 	}
 	if err := objectmodel.ValidateValueSource(source); err != nil {
 		return ResolvedBinding{}, err
 	}
 	if descriptors == nil {
 		return ResolvedBinding{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-			"address %s has no request scope for its ResourceDescriptor", objectmodel.AddressKey(address))
+			"address %s has no request scope for its ResourceDescriptor", objectmodel.AddressLabel(address))
 	}
 	ref := source.Binding.DescriptorRef
 	at, err := descriptors(ref)

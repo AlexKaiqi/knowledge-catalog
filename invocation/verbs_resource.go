@@ -288,7 +288,7 @@ func resourceAccessAt(cx *Invocation, declarations *reader.Serving, address obje
 			return nil, kernel.Fail(failure.Code, "%s", failure.Message)
 		}
 		if len(value.Observations) != 1 {
-			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "access requires one observed Binding value at %s", objectmodel.AddressKey(address))
+			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "access requires one observed Binding value at %s", objectmodel.AddressLabel(address))
 		}
 		results = append(results, objectserving.StateObservation{Value: value.Value, Basis: value.Observations[0].Basis})
 	}

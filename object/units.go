@@ -171,12 +171,12 @@ func ApplyUnits(existing []Unit, operations []Operation, provenance *ProvenanceE
 			}
 			if !exists {
 				return nil, nil, kernel.Fail(kernel.ErrPreconditionFailed,
-					"address %s does not exist", key)
+					"address %s does not exist", AddressLabel(operation.Address))
 			}
 			if operation.Precondition != nil && operation.Precondition.Digest != "" &&
 				operation.Precondition.Digest != MaintenanceDigest(current.Digest, current.SchemaRef, current.ValueSource) {
 				return nil, nil, kernel.Fail(kernel.ErrPreconditionFailed,
-					"digest mismatch for %s", key)
+					"digest mismatch for %s", AddressLabel(operation.Address))
 			}
 			deleted = append(deleted, current.Address)
 			delete(units, key)
@@ -188,13 +188,13 @@ func ApplyUnits(existing []Unit, operations []Operation, provenance *ProvenanceE
 			case IfAbsent:
 				if exists {
 					return nil, nil, kernel.Fail(kernel.ErrPreconditionFailed,
-						"address %s already exists", key)
+						"address %s already exists", AddressLabel(operation.Address))
 				}
 			case IfObjectEquals, IfDigestEquals:
 				if operation.Precondition.Digest != "" &&
 					(!exists || MaintenanceDigest(current.Digest, current.SchemaRef, current.ValueSource) != operation.Precondition.Digest) {
 					return nil, nil, kernel.Fail(kernel.ErrPreconditionFailed,
-						"digest mismatch for %s", key)
+						"digest mismatch for %s", AddressLabel(operation.Address))
 				}
 			}
 		}

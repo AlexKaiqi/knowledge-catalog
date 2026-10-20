@@ -287,7 +287,7 @@ func indexNumber(raw any) (float64, bool) {
 }
 
 func indexInvalid(address Address, at, format string, args ...any) error {
-	where := AddressKey(address)
+	where := AddressLabel(address)
 	if at != "" {
 		where += " " + at
 	}

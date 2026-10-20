@@ -186,7 +186,7 @@ func (s *Service) hydrate(ctx context.Context, repositoryID kernel.RepositoryID,
 		return hydratedUnit{}, false, nil
 	}
 	if !source.IsBinding() {
-		return hydratedUnit{}, false, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "address %s has an invalid valueSource", objectmodel.AddressKey(declaration.Address))
+		return hydratedUnit{}, false, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "address %s has an invalid valueSource", objectmodel.AddressLabel(declaration.Address))
 	}
 	binding, err := s.resolveHydrationBinding(repositoryID, declaration)
 	if err != nil {
@@ -194,14 +194,14 @@ func (s *Service) hydrate(ctx context.Context, repositoryID kernel.RepositoryID,
 	}
 	if binding.Mode == objectmodel.BindingStream {
 		return hydratedUnit{}, false, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-			"ordinary READ cannot hydrate stream Binding at %s; use an explicit window/query surface", objectmodel.AddressKey(declaration.Address))
+			"ordinary READ cannot hydrate stream Binding at %s; use an explicit window/query surface", objectmodel.AddressLabel(declaration.Address))
 	}
 	if binding.Mode != objectmodel.BindingState {
-		return hydratedUnit{}, false, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "address %s is not a State Binding", objectmodel.AddressKey(declaration.Address))
+		return hydratedUnit{}, false, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "address %s is not a State Binding", objectmodel.AddressLabel(declaration.Address))
 	}
 	if s.state == nil {
 		return hydratedUnit{}, false, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-			"State Binding at %s requires a Materialization Runtime", objectmodel.AddressKey(declaration.Address))
+			"State Binding at %s requires a Materialization Runtime", objectmodel.AddressLabel(declaration.Address))
 	}
 	schema, err := s.observedSchema(binding)
 	if err != nil {
@@ -219,13 +219,13 @@ func (s *Service) hydrate(ctx context.Context, repositoryID kernel.RepositoryID,
 	if err != nil {
 		if liveaccess.LookupTimedOut(ctx, lookupCtx) {
 			return hydratedUnit{}, false, kernel.Fail(kernel.ErrTemporaryUnavailable,
-				"external lookup timed out for %s", objectmodel.AddressKey(declaration.Address))
+				"external lookup timed out for %s", objectmodel.AddressLabel(declaration.Address))
 		}
 		if kernel.AsIngress(err) != nil {
 			return hydratedUnit{}, false, err
 		}
 		return hydratedUnit{}, false, kernel.Fail(kernel.ErrTemporaryUnavailable,
-			"State lookup failed for %s: %v", objectmodel.AddressKey(declaration.Address), err)
+			"State lookup failed for %s: %v", objectmodel.AddressLabel(declaration.Address), err)
 	}
 	if err := liveaccess.CheckCredentialDisclosure(ctx, observation); err != nil {
 		return hydratedUnit{}, false, err
@@ -283,7 +283,7 @@ func replaceUnit(root any, address objectmodel.Address, value any) (any, error) 
 	}
 	object, ok := root.(map[string]any)
 	if !ok {
-		return nil, kernel.Fail(kernel.ErrObjectIDConflict, "bound unit %s cannot be assembled into a non-object", objectmodel.AddressKey(address))
+		return nil, kernel.Fail(kernel.ErrObjectIDConflict, "bound unit %s cannot be assembled into a non-object", objectmodel.AddressLabel(address))
 	}
 	out := make(map[string]any, len(object))
 	for key, item := range object {
@@ -295,14 +295,14 @@ func replaceUnit(root any, address objectmodel.Address, value any) (any, error) 
 	}
 	rawBucket, ok := object[address.AspectName]
 	if !ok {
-		return nil, kernel.Fail(kernel.ErrObjectIDConflict, "bound member %s has no assembled aspect", objectmodel.AddressKey(address))
+		return nil, kernel.Fail(kernel.ErrObjectIDConflict, "bound member %s has no assembled aspect", objectmodel.AddressLabel(address))
 	}
 	bucket, ok := rawBucket.(map[string]any)
 	if !ok {
-		return nil, kernel.Fail(kernel.ErrObjectIDConflict, "bound member %s is not assembled as a member map", objectmodel.AddressKey(address))
+		return nil, kernel.Fail(kernel.ErrObjectIDConflict, "bound member %s is not assembled as a member map", objectmodel.AddressLabel(address))
 	}
 	if _, ok := bucket[address.MemberKey]; !ok {
-		return nil, kernel.Fail(kernel.ErrObjectIDConflict, "bound member %s is missing from its assembled value", objectmodel.AddressKey(address))
+		return nil, kernel.Fail(kernel.ErrObjectIDConflict, "bound member %s is missing from its assembled value", objectmodel.AddressLabel(address))
 	}
 	updated := make(map[string]any, len(bucket))
 	for key, item := range bucket {

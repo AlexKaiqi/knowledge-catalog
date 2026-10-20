@@ -107,7 +107,7 @@ func inspectSystemUnits(store snapshot.Store, head kernel.CommitID, operations [
 			}
 		}
 		return nil, kernel.Fail(kernel.ErrObjectRefUnresolved,
-			"system address %s is missing at commit %s", objectmodel.AddressKey(address), head)
+			"system address %s is missing at commit %s", objectmodel.AddressLabel(address), head)
 	})
 }
 
@@ -140,7 +140,7 @@ func inspectSystemValues(head kernel.CommitID, operations []objectmodel.Operatio
 		if got != want {
 			return 0, kernel.Fail(kernel.ErrPreconditionFailed,
 				"system address %s digest %s does not match the binary publication %s",
-				objectmodel.AddressKey(operation.Address), got, want)
+				objectmodel.AddressLabel(operation.Address), got, want)
 		}
 	}
 	switch missing {

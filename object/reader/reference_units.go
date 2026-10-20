@@ -49,11 +49,11 @@ func readRepositoryReferenceUnits(repo objectmodel.Repository, ref objectmodel.R
 		}
 		key := objectmodel.AddressKey(unit.Address)
 		if _, ok := seen[key]; ok {
-			return nil, kernel.Fail(kernel.ErrObjectIDConflict, "duplicate selected reference unit %s", key)
+			return nil, kernel.Fail(kernel.ErrObjectIDConflict, "duplicate selected reference unit %s", objectmodel.AddressLabel(unit.Address))
 		}
 		seen[key] = struct{}{}
 		if unit.Digest != kernel.CanonicalDigest(unit.Value) {
-			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "selected reference unit %s has an invalid complete value digest", key)
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "selected reference unit %s has an invalid complete value digest", objectmodel.AddressLabel(unit.Address))
 		}
 	}
 	if _, err := objectmodel.AssembleUnits(units); err != nil {

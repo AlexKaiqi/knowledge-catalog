@@ -26,12 +26,13 @@ func (idx *Index) datasetCheck(s datasetSpace) (retrieval.DeclarationCheck, map[
 	units := map[string]bool{}
 	for _, binding := range identities {
 		unit := string(binding.Repository) + ":" + objectmodel.AddressKey(binding.Address)
+		label := string(binding.Repository) + ":" + objectmodel.AddressLabel(binding.Address)
 		var reason string
 		switch {
 		case binding.Reason != "":
-			reason = fmt.Sprintf("unit %s cannot be interpreted: %s", unit, binding.Reason)
+			reason = fmt.Sprintf("unit %s cannot be interpreted: %s", label, binding.Reason)
 		case binding.Identity != objectmodel.IdentityShared:
-			reason = fmt.Sprintf("unit %s uses %s ResourceDescriptor %s", unit, binding.Identity, binding.Descriptor)
+			reason = fmt.Sprintf("unit %s uses %s ResourceDescriptor %s", label, binding.Identity, binding.Descriptor)
 		default:
 			continue
 		}

@@ -395,7 +395,7 @@ func refTypesNarrowed(previous, next []string) bool {
 }
 
 func schemaInstanceInvalid(address Address, format string, args ...any) error {
-	return kernel.Fail(kernel.ErrSchemaInstanceInvalid, "address %s: %s", AddressKey(address), fmt.Sprintf(format, args...))
+	return kernel.Fail(kernel.ErrSchemaInstanceInvalid, "address %s: %s", AddressLabel(address), fmt.Sprintf(format, args...))
 }
 
 func displaySchemaType(value string) string {

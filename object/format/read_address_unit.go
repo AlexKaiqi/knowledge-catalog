@@ -23,7 +23,7 @@ func ReadAddressUnit(tree snapshot.TreeReader, address objectmodel.Address, comm
 		}
 		unit := Parse(string(raw))
 		if unit == nil || objectmodel.AddressKey(unit.Address) != objectmodel.AddressKey(address) {
-			return Unit{}, false, kernel.Fail(kernel.ErrPreconditionFailed, "unit coordinates for %s contain a mismatched unit", objectmodel.AddressKey(address))
+			return Unit{}, false, kernel.Fail(kernel.ErrPreconditionFailed, "unit coordinates for %s contain a mismatched unit", objectmodel.AddressLabel(address))
 		}
 		idx := NewTree()
 		if err := Ingest(idx, unit, location.Path); err != nil {

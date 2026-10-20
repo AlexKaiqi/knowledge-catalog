@@ -512,7 +512,7 @@ func (r *treeRepository) ReadAddress(address objectmodel.Address, commit kernel.
 		return objectmodel.ObjectValue{}, err
 	}
 	if !ok {
-		return objectmodel.ObjectValue{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "address %s is missing at commit %s", objectmodel.AddressKey(address), commit)
+		return objectmodel.ObjectValue{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "address %s is missing at commit %s", objectmodel.AddressLabel(address), commit)
 	}
 	return objectmodel.ObjectValue{
 		ObjectRef:  objectmodel.ObjectRef{Repository: r.ID(), Object: address.ObjectID},

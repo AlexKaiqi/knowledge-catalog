@@ -52,7 +52,7 @@ func (w *Writer) CheckIndexDeclaration(cs objectmodel.ChangeSet, address objectm
 	}
 	unit, found := resolver.final[objectmodel.AddressKey(address)]
 	if !selected || !found || !objectmodel.IsIndexDeclarationRef(unit.SchemaRef) {
-		return objectmodel.IndexDeclaration{}, nil, kernel.Fail(kernel.ErrUsageInvalid, "check requires a PUT adopting the index declaration Schema at %s", objectmodel.AddressKey(address))
+		return objectmodel.IndexDeclaration{}, nil, kernel.Fail(kernel.ErrUsageInvalid, "check requires a PUT adopting the index declaration Schema at %s", objectmodel.AddressLabel(address))
 	}
 	return resolver.checkIndexDeclaration(w.store, unit, drafts)
 }

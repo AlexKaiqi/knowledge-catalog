@@ -24,7 +24,7 @@ func privateMemberQuery(value string) retrieval.SearchRequest {
 // the index worker's identity.
 func TestDatasetIndexIsolatesPerCallerMemberAndKeepsSharedMembers(t *testing.T) {
 	f := newMemberProjectionFixture(t, "mixed")
-	unit := string(f.repo.ID()) + ":" + objectmodel.AddressKey(privateMemberAddress)
+	unit := string(f.repo.ID()) + ":" + objectmodel.AddressLabel(privateMemberAddress)
 	assertIsolated := func(label string, spec retrieval.AccessSpec) {
 		t.Helper()
 		var shared, private bool

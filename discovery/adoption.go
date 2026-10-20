@@ -238,7 +238,7 @@ func (s *AccessSpec) mergeAccessFields(fields []AccessField) error {
 		}
 		current := &s.Fields[position]
 		if current.Type != field.Type {
-			return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "adopted Schema releases disagree on scalar type for %s", field.FieldRef.Key())
+			return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "adopted Schema releases disagree on scalar type for %s", displayFieldRef(field.FieldRef))
 		}
 		for _, hint := range field.Access {
 			if !current.Has(hint) {
