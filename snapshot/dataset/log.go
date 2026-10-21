@@ -31,7 +31,7 @@ func (c *service) Log(query LogQuery) (History, error) {
 	if limit == 0 {
 		limit = 20
 	}
-	commits, err := c.registry.history(limit, path)
+	commits, err := c.registry.history(c.accepted().head, limit, path)
 	if err != nil {
 		return history, err
 	}
@@ -41,8 +41,8 @@ func (c *service) Log(query LogQuery) (History, error) {
 	return history, nil
 }
 
-func (g *registry) history(limit int, path string) ([]Commit, error) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	return g.snapshotHistory(limit, path)
+// history walks immutable commits from the caller's accepted head, so a read
+// view lists the registry version it was frozen at and never waits for a write.
+func (g *registry) history(head string, limit int, path string) ([]Commit, error) {
+	return g.snapshotHistory(head, limit, path)
 }

@@ -221,28 +221,6 @@ func (r *Repository) applyChangeWith(write objectWriter, branch string, change s
 	return write(branch, clean, change.Content)
 }
 
-func (r *Repository) CommitHistory(commit kernel.CommitID, limit int) ([]kernel.CommitID, error) {
-	if !r.HasCommit(commit) {
-		return nil, kernel.Fail(kernel.ErrVersionUnresolved, "commit %s does not exist", commit)
-	}
-	query := url.Values{"first_parent": {"true"}, "limit": {"true"}}
-	addPage(query, limit, "")
-	var page struct {
-		Results []struct {
-			ID string `json:"id"`
-		} `json:"results"`
-	}
-	endpoint := r.client.repositoryPath("refs/"+url.PathEscape(string(commit))+"/commits") + "?" + query.Encode()
-	if _, _, err := r.client.doJSON(http.MethodGet, endpoint, nil, &page); err != nil {
-		return nil, err
-	}
-	out := make([]kernel.CommitID, 0, len(page.Results))
-	for _, item := range page.Results {
-		out = append(out, kernel.CommitID(item.ID))
-	}
-	return out, nil
-}
-
 func (r *Repository) ChangedPaths(from, to kernel.CommitID) ([]string, error) {
 	if from == "" || to == "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "changed paths require from and to commits")

@@ -5,6 +5,7 @@ package home
 // adapter package.
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"os"
@@ -16,7 +17,7 @@ import (
 )
 
 type authorityDriver struct {
-	connectionOpen  func(RepositoryBinding, string, string) (snapshot.Store, string, error)
+	connectionOpen  func(context.Context, RepositoryBinding, string, string) (snapshot.Store, string, error)
 	openExisting    func(string, HomeRepo) (snapshot.Store, error)
 	open            func(string, HomeRepo) (snapshot.Store, error)
 	discover        func(string, string) (HomeRepo, bool)
@@ -34,7 +35,7 @@ type authorityDriver struct {
 
 var authorityDrivers = map[string]authorityDriver{
 	"lakefs": {
-		connectionOpen: func(binding RepositoryBinding, credential, expected string) (snapshot.Store, string, error) {
+		connectionOpen: func(ctx context.Context, binding RepositoryBinding, credential, expected string) (snapshot.Store, string, error) {
 			if strings.TrimSpace(credential) == "" {
 				return nil, "", kernel.Fail(kernel.ErrUnauthenticated, "repository connection requires its own credential")
 			}
@@ -45,7 +46,7 @@ var authorityDrivers = map[string]authorityDriver{
 			if expected != "" && expected != endpoint.Repository {
 				return nil, "", kernel.Fail(kernel.ErrPreconditionFailed, "connected LakeFS authority identity changed")
 			}
-			repo, err := snapshot.OpenLakeFS(kernel.RepositoryID(binding.ID), binding.DSN, credential)
+			repo, err := snapshot.OpenLakeFSContext(ctx, kernel.RepositoryID(binding.ID), binding.DSN, credential)
 			return repo, endpoint.Repository, err
 		},
 		openExisting: func(_ string, item HomeRepo) (snapshot.Store, error) {
@@ -120,7 +121,7 @@ var authorityDrivers = map[string]authorityDriver{
 			if ep, err := snapshot.ParseLakeFSDSN(binding.DSN); err == nil && ep.Repository != "" {
 				name = ep.Repository
 			}
-			return strings.TrimRight(pool.PublicURL, "/") + "/repositories/" + url.PathEscape(name)
+			return strings.TrimRight(pool.PublicURL, "/") + "/ui/repositories/" + url.PathEscape(name)
 		},
 		managedCreate: func(pool ManagedRepositoryConfig, binding RepositoryBinding, allocation string) (snapshot.Store, string, error) {
 			return snapshot.CreateManagedLakeFS(kernel.RepositoryID(binding.ID), binding.DSN, os.Getenv(snapshot.LakeFSCredentialEnv), allocation, pool.Root)

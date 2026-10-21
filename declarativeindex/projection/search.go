@@ -2,6 +2,7 @@ package projection
 
 import (
 	"context"
+	"fmt"
 	ports "kc/discovery/projection"
 	"time"
 
@@ -220,6 +221,13 @@ func (idx *Index) searchEngineAtContext(ctx context.Context, repo objectmodel.Re
 	if provider, ok := eng.(ports.ProviderIdentity); ok {
 		identity = provider
 	}
+	req, empty, err := retrieval.PruneInapplicable(req, spec)
+	if err != nil {
+		return retrieval.SearchResult{}, err
+	}
+	if empty {
+		return result, nil
+	}
 	plan, err := PlanRetrieval(eng, identity, req, spec)
 	if err != nil {
 		return retrieval.SearchResult{}, err
@@ -230,6 +238,7 @@ func (idx *Index) searchEngineAtContext(ctx context.Context, repo objectmodel.Re
 	if err != nil {
 		return retrieval.SearchResult{}, err
 	}
+	applyDeclarationCoverage(resolved, spec, &result)
 	matchVerifier := matchVerifierForContext(ctx, eng)
 	if needsResidual && retrieval.SearchHasOp(resolved, retrieval.OpMatch) {
 		if matchVerifier == nil {
@@ -242,13 +251,9 @@ func (idx *Index) searchEngineAtContext(ctx context.Context, repo objectmodel.Re
 	if digest, ok := ports.CandidateScopeDigest(ctx); ok {
 		projectionDigest = kernel.CanonicalDigest([]any{projectionDigest, digest})
 	}
-	continuation := ""
-	if resolved.Continuation != "" {
-		state, err := retrieval.DecodeContinuation(resolved.Continuation)
-		if err != nil || state.Scope != "repository" || state.Query != queryDigest || state.SearchView != viewDigest || state.Projection != projectionDigest {
-			return retrieval.SearchResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "continuation does not match this SearchView")
-		}
-		continuation = state.Position
+	continuation, err := searchContinuationPosition(resolved.Continuation, queryDigest, viewDigest, projectionDigest)
+	if err != nil {
+		return retrieval.SearchResult{}, err
 	}
 	resolved.Continuation = ""
 	result.Stats.PlanDuration = time.Since(planStarted)
@@ -360,6 +365,17 @@ func (idx *Index) searchEngineAtContext(ctx context.Context, repo objectmodel.Re
 	return result, nil
 }
 
+func searchContinuationPosition(token string, queryDigest, viewDigest, projectionDigest kernel.Digest) (string, error) {
+	if token == "" {
+		return "", nil
+	}
+	state, err := retrieval.DecodeContinuation(token)
+	if err != nil || state.Scope != "repository" || state.Query != queryDigest || state.SearchView != viewDigest || state.Projection != projectionDigest {
+		return "", kernel.Fail(kernel.ErrPreconditionFailed, "continuation does not match this SearchView")
+	}
+	return state.Position, nil
+}
+
 func applySearchGuarantees(plan RetrievalPlan, result *retrieval.SearchResult) (bool, error) {
 	needsResidual := false
 	if err := applyCapabilityGuarantee(plan.Composition, &needsResidual, result); err != nil {
@@ -371,6 +387,32 @@ func applySearchGuarantees(plan RetrievalPlan, result *retrieval.SearchResult) (
 		}
 	}
 	return needsResidual, nil
+}
+
+// applyDeclarationCoverage keeps an unfielded MATCH honest: it spans every
+// declared text member, so a member that is declared but not ready makes the
+// result partial and is named with its reason instead of a complete zero hit.
+// Fielded clauses on such a member already fail CAPABILITY_UNSATISFIED.
+func applyDeclarationCoverage(resolved retrieval.SearchRequest, spec retrieval.AccessSpec, result *retrieval.SearchResult) {
+	unfielded := false
+	for _, clause := range retrieval.SearchClauses(resolved) {
+		if clause.Op == retrieval.OpMatch && clause.Field == nil && clause.Path == "" {
+			unfielded = true
+			break
+		}
+	}
+	if !unfielded {
+		return
+	}
+	for _, status := range spec.UnreadyTextMembers() {
+		result.Completeness = retrieval.CompletenessPartial
+		result.Stats.MarkPartial("unsupported")
+		label := string(status.Member.ObjectID)
+		if status.Member.MemberKey != "" {
+			label += "#" + status.Member.MemberKey
+		}
+		result.Claims = append(result.Claims, fmt.Sprintf("text member %s %s: %s", label, status.Status, status.Reason))
+	}
 }
 
 func applyCapabilityGuarantee(capability ports.Capability, needsResidual *bool, result *retrieval.SearchResult) error {

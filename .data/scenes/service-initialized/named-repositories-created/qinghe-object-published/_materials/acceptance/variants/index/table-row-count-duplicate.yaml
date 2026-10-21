@@ -4,6 +4,7 @@ aspect_name: index
 member_key: table-row-count-text
 kind: Member
 schema_ref: schema/core/index-declaration/v1
+path_hint: indexes/sales-search/table-row-count-text.yaml
 ---
 catalog: declarative-index/opensearch@2026-10
 inputs:

@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"strings"
 
 	"kc/kernel"
 	"kc/liveaccess"
@@ -77,17 +76,6 @@ func tokenPrefix(prefix, tokens []string) bool {
 	return true
 }
 
-func pointerOf(tokens []string) string {
-	parts := make([]string, len(tokens))
-	for i, token := range tokens {
-		parts[i] = strings.ReplaceAll(strings.ReplaceAll(token, "~", "~0"), "/", "~1")
-	}
-	if len(parts) == 0 {
-		return ""
-	}
-	return "/" + strings.Join(parts, "/")
-}
-
 func replaceSelectedUnit(raw objectmodel.FederatedValue, address objectmodel.Address, value any, failure bool) (any, error) {
 	if raw.Locator == "" {
 		if raw.Address == address && !objectmodel.IsEntityBlob(raw.Address) {
@@ -104,7 +92,7 @@ func replaceSelectedUnit(raw objectmodel.FederatedValue, address objectmodel.Add
 		if failure {
 			return value, nil
 		}
-		return objectmodel.SelectPointer(value, pointerOf(selected[len(unit):]))
+		return objectmodel.SelectPointer(value, objectmodel.FormatPointer(selected[len(unit):]))
 	}
 	if !tokenPrefix(selected, unit) {
 		return raw.Value, nil

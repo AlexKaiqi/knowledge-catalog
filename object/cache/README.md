@@ -48,7 +48,8 @@ key 包含 Repository、显式非空 Commit、ObjectID，以及地址读取的 K
 
 新 commit 以新的 key 填充：即使只变更未索引字段，也能预热新正文；旧 pin 的内容在容量允许时
 继续可用。成功只说明这一小批热点已尝试读取，不代表全仓或查询投影 READY。删除对象不会用
-旧版本补齐，错误交给维护控制器重试；取消在同步回源调用之间检查。
+旧版本补齐，错误交给维护控制器重试；支持 context 绑定的仓将取消传递到进行中的远程读取，
+其余仓仍在同步回源调用之间检查取消。
 
 `ColdStart: true` 时，无热点的仓可以使用 `SnapshotObjectPager` 的首个有界身份页，最多
 `min(WarmLimit, 1000)` 个，不追 continuation。同仓同 commit 的成功冷预热在无正文可驻留时

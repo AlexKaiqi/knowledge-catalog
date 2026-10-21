@@ -37,6 +37,10 @@ func (w *rawWriter) SetStamp(as, requestID, ruleID string) {
 	w.ruleID = ruleID
 }
 
+func (w *rawWriter) ForRequest(observer WriteObserver, as, requestID, ruleID string) RawWriter {
+	return &rawWriter{store: w.store, commands: w.commands, observer: observer, author: as, requestID: requestID, ruleID: ruleID}
+}
+
 func (w *rawWriter) Lookup(commandID string) (TreeChangeSet, Receipt, bool) {
 	entry, ok := w.commands.Lookup(commandID)
 	if !ok || entry.Status != StatusApplied || entry.Request.Kind != RawWriteSurface || len(entry.Request.TreeChangeSet) == 0 || !hasCommandReceipt(entry.Receipt) {

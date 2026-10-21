@@ -86,7 +86,7 @@ func (d *exampleDeployment) checkDeliveredSchema(t *testing.T, principal, datase
 		}
 	})
 	t.Run("object", func(t *testing.T) {
-		result := asMap(t, body(t, d.as(t, principal, "read", reference, "--dataset", dataset, "--commit", commit)))
+		result := asMap(t, body(t, d.as(t, principal, "read", reference, "--dataset", dataset, "--revision", strconv.Itoa(revision), "--commit", commit)))
 		definition := asMap(t, result["value"])
 		fields := asMap(t, definition["fields"])
 		if result["reference"] != reference || definition["pattern"] != pattern || len(fields) == 0 {
@@ -94,7 +94,7 @@ func (d *exampleDeployment) checkDeliveredSchema(t *testing.T, principal, datase
 		}
 	})
 	t.Run("describe", func(t *testing.T) {
-		reports, ok := body(t, d.as(t, principal, "schema", "describe", "--dataset", dataset, "--object", id)).([]any)
+		reports, ok := body(t, d.as(t, principal, "schema", "describe", "--dataset", dataset, "--revision", strconv.Itoa(revision), "--object", id)).([]any)
 		if !ok || len(reports) != 1 {
 			t.Fatalf("Dataset describe must select one Schema source: %#v", reports)
 		}

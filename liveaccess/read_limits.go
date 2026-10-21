@@ -39,6 +39,19 @@ func ContextWithReadLimits(ctx context.Context, limits ReadLimits) context.Conte
 	return context.WithValue(ctx, readLimitsKey{}, budget)
 }
 
+// WithoutReadBudget keeps each unit's own limit but releases the shared budget
+// of a consumer read. Index preparation observes under the service identity;
+// it is maintenance, not a read, so building a projection first must not leave
+// its later observations with an exhausted read budget.
+func WithoutReadBudget(ctx context.Context) context.Context {
+	budget, ok := ctx.Value(readLimitsKey{}).(readBudget)
+	if !ok || budget.deadline.IsZero() {
+		return ctx
+	}
+	budget.deadline = time.Time{}
+	return context.WithValue(ctx, readLimitsKey{}, budget)
+}
+
 // UnitLookupContext bounds one unit by the smaller of its own limit and the
 // request's remaining time. An exhausted request budget fails the unit before
 // any call, so later units report a timeout instead of extending the request.

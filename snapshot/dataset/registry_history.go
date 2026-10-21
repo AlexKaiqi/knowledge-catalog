@@ -7,8 +7,8 @@ import (
 	"kc/snapshot"
 )
 
-func (g *registry) snapshotHistory(limit int, path string) ([]Commit, error) {
-	if g.head == "" {
+func (g *registry) snapshotHistory(head string, limit int, path string) ([]Commit, error) {
+	if head == "" {
 		return []Commit{}, nil
 	}
 	history, ok := snapshot.HistoryStoreOf(g.authority)
@@ -19,7 +19,7 @@ func (g *registry) snapshotHistory(limit int, path string) ([]Commit, error) {
 		limit = 20
 	}
 	readLimit := max(2, min(limit+1, 128))
-	start := kernel.CommitID(g.head)
+	start := kernel.CommitID(head)
 	out := []Commit{}
 	for {
 		ids, err := history.CommitHistory(start, readLimit)

@@ -118,7 +118,7 @@ print_urls() {
 active plane: ${plane}
 
   ttyd (kc CLI)  ${ttyd}
-  console        ${listen}/console
+  console        ${listen}/ui/
   lakeFS API     ${KC_LAKEFS_URL}
   typed API      ${listen}   (browser / is 404)
 

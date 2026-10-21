@@ -12,7 +12,7 @@ import (
 func readmeSchemaJSON(t *testing.T) string {
 	t.Helper()
 	for _, operation := range systemrepo.SystemSchemaOperations() {
-		if operation.Address.ObjectID == objectmodel.CoreReadmeSchemaV1 {
+		if operation.Address.ObjectID == objectmodel.ObjectID("schema/core/readme/v1") {
 			raw, err := json.Marshal(operation.Value)
 			if err != nil {
 				t.Fatal(err)
@@ -46,9 +46,9 @@ func TestCatalogShowRepositoriesStayIdentityAndReadmeIsObject(t *testing.T) {
 		t.Fatalf("System Repository schemaCount: %#v", system)
 	}
 
-	body(t, kc(home, "writer", "put", testObjectReference(t, repo, string(objectmodel.CoreReadmeSchemaV1), ""), "--repo", repo, "--command-id", "readme-schema", "--value", readmeSchemaJSON(t)))
-	body(t, kc(home, "writer", "put", testObjectReference(t, repo, "fixture/payments", testObjectLocator(objectmodel.ReadmeAspect)), "--repo", repo, "--command-id", "readme",
-		"--schema-ref", string(objectmodel.CoreReadmeSchemaV1),
+	body(t, kc(home, "writer", "put", testObjectReference(t, repo, string(objectmodel.ObjectID("schema/core/readme/v1")), ""), "--repo", repo, "--command-id", "readme-schema", "--value", readmeSchemaJSON(t)))
+	body(t, kc(home, "writer", "put", testObjectReference(t, repo, "fixture/payments", testObjectLocator("readme")), "--repo", repo, "--command-id", "readme",
+		"--schema-ref", string(objectmodel.ObjectID("schema/core/readme/v1")),
 		"--value", `{"body":"# Payments warehouse\n\nPublished metrics and tables for payments."}`))
 
 	after := asMap(t, body(t, kc(home, "show")))
@@ -57,7 +57,7 @@ func TestCatalogShowRepositoriesStayIdentityAndReadmeIsObject(t *testing.T) {
 	if present["schemaCount"] != float64(1) {
 		t.Fatalf("schemaCount must count schema/*: %#v", present)
 	}
-	readme := asMap(t, body(t, kc(home, "read", testObjectReference(t, repo, "fixture/payments", testObjectLocator(objectmodel.ReadmeAspect)), "--repo", repo)))
+	readme := asMap(t, body(t, kc(home, "read", testObjectReference(t, repo, "fixture/payments", testObjectLocator("readme")), "--repo", repo)))
 	if asMap(t, readme["value"])["body"] != "# Payments warehouse\n\nPublished metrics and tables for payments." {
 		t.Fatalf("README is an object: %#v", readme)
 	}

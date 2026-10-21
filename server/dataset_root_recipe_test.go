@@ -117,6 +117,12 @@ type rootRecipeWriter struct {
 	responseFailure error
 }
 
+// ForRequest keeps the injected failures on every request view; embedding
+// alone would hand requests the undecorated inner writer.
+func (w *rootRecipeWriter) ForRequest(observer snapshot.WriteObserver, author, requestID, ruleID string) snapshot.RawWriter {
+	return &rootRecipeWriter{RawWriter: w.RawWriter.ForRequest(observer, author, requestID, ruleID), failure: w.failure, responseFailure: w.responseFailure}
+}
+
 func (w *rootRecipeWriter) Commit(command string, changes snapshot.TreeChangeSet) (snapshot.Receipt, error) {
 	if w.failure != nil {
 		return snapshot.Receipt{}, w.failure

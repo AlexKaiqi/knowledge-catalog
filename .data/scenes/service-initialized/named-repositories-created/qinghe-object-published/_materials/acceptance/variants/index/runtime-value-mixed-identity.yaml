@@ -4,6 +4,7 @@ aspect_name: index
 member_key: runtime-value
 kind: Member
 schema_ref: schema/core/index-declaration/v1
+path_hint: indexes/sales-search/runtime-value.yaml
 ---
 # runtime 方面的成员混合三种来源：row-count（shared）、freshness-lag（per-caller）、retention-days（静态）。
 # 整条成员必须标为不支持并列出 freshness-lag，不逐单元跳过。

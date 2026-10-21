@@ -42,9 +42,9 @@ func TestDefaultPathPlacesInstancesUnderTypeDirectories(t *testing.T) {
 	if resource != "resources/resource/mysql-tpch-sql.json" {
 		t.Fatalf("resource: got %s", resource)
 	}
-	readme := DefaultPath(objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "fixture/payments", AspectName: objectmodel.ReadmeAspect}, string(objectmodel.CoreReadmeSchemaV1))
-	if readme != objectmodel.RepositoryReadmePath {
-		t.Fatalf("readme: got %s", readme)
+	readme := DefaultPath(objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "fixture/payments", AspectName: "readme"}, string(objectmodel.ObjectID("schema/core/readme/v1")))
+	if readme != "readmes/fixture/payments/readme.json" {
+		t.Fatalf("readme Aspect takes the ordinary default path, got %s", readme)
 	}
 }
 
@@ -78,12 +78,15 @@ func TestPathHintForIngestPutsSchemaDraftsInOneDirectory(t *testing.T) {
 	}
 }
 
-func TestPathHintForIngestPlacesReadmeAtRepositoryRoot(t *testing.T) {
-	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "fixture/payments", AspectName: objectmodel.ReadmeAspect}
-	if got := PathHintForIngest(address, "", ""); got != objectmodel.RepositoryReadmePath {
-		t.Fatalf("omitted path: got %s", got)
-	}
-	if got := PathHintForIngest(address, "notes/about.md", "notes/about.md"); got != "notes/about.md" {
-		t.Fatalf("declared path: got %s", got)
+func TestPathHintForIngestKeepsReadmeWhereDeclared(t *testing.T) {
+	address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "fixture/payments", AspectName: "readme"}
+	for _, tc := range []struct{ declared, rel, want string }{
+		{"domains/ad/README.md", "domains/ad/README.md", "domains/ad/README.md"},
+		{"", "notes/about.md", "notes/about.md"},
+		{"README.md", "copy/README.md", "README.md"},
+	} {
+		if got := PathHintForIngest(address, tc.declared, tc.rel); got != tc.want {
+			t.Fatalf("declared %q rel %q: got %s want %s", tc.declared, tc.rel, got, tc.want)
+		}
 	}
 }

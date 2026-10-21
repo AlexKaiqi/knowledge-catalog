@@ -13,6 +13,7 @@ import (
 const referenceCommitFlag = "_object-reference-commit"
 const referenceBindingFlag = "_object-reference-binding"
 const referenceHoldingsFlag = "_object-reference-holdings"
+const referencePlannedFlag = "_object-reference-planned"
 
 // The private value proves that coordinates were derived inside the service,
 // rather than supplied as an alternate public selection. Its reference carries
@@ -38,6 +39,9 @@ func NormalizeReferenceFlags(flags map[string]invoke.FlagValue) error {
 		if _, supplied := flags[name]; supplied {
 			return kernel.Fail(kernel.ErrUsageInvalid, "reference already selects content; do not add --%s", name)
 		}
+	}
+	if ref.Locator != "" && invoke.FlagString(flags, "shape") != "" {
+		return kernel.Fail(kernel.ErrUsageInvalid, "reference already selects content; do not add --shape")
 	}
 	workspace := ServingWorkspace(flags)
 	if bound, ok := flags[referenceBindingFlag].(referenceBinding); ok {
@@ -122,7 +126,26 @@ func bindReferenceScope(cx *Invocation, action string) error {
 			candidates[id] = commit
 		}
 	}
-	selection, err := selectReferenceHoldings(cx, bound.reference, candidates, cx.WS.Reader.PlanReference)
+	if err := requireReadableScope(cx, bound.reference, candidates); err != nil {
+		return err
+	}
+	planned, err := planReferenceHoldings(bound.reference, candidates, cx.WS.Reader.PlanReference)
+	if err != nil {
+		return err
+	}
+	selection, err := planned.selectFor(cx, bound.reference)
+	if invoke.FlagString(cx.Flags, "shape") != "" {
+		// A shape decides conflicts and withheld content per selection; the
+		// root plan only binds authorization to one readable holder.
+		holder, ok := planned.firstReadable(cx, bound.reference)
+		if !ok {
+			return err
+		}
+		cx.Flags[referencePlannedFlag] = planned
+		rebindReference(cx.Flags, holder.Repository)
+		cx.Flags["commit"] = string(holder.Commit)
+		return nil
+	}
 	if err != nil {
 		return err
 	}
@@ -132,38 +155,93 @@ func bindReferenceScope(cx *Invocation, action string) error {
 	return nil
 }
 
-// selectReferenceHoldings plans the root object in every candidate Repository
-// at its fixed commit (metadata only) and applies the object identity rule.
-func selectReferenceHoldings(cx *Invocation, reference objectmodel.Reference, candidates map[kernel.RepositoryID]kernel.CommitID, plan func(objectmodel.Reference, kernel.CommitID) ([]objectmodel.Address, error)) (objectmodel.HoldingSelection, error) {
-	ids := make([]kernel.RepositoryID, 0, len(candidates))
+// plannedHoldings is the metadata-only root plan of every candidate
+// Repository. Readability depends on the selected Aspect, so it is decided
+// when one reference is selected.
+type plannedHoldings struct {
+	ids        []kernel.RepositoryID
+	candidates map[kernel.RepositoryID]kernel.CommitID
+	units      map[kernel.RepositoryID][]objectmodel.Address
+}
+
+func planReferenceHoldings(reference objectmodel.Reference, candidates map[kernel.RepositoryID]kernel.CommitID, plan func(objectmodel.Reference, kernel.CommitID) ([]objectmodel.Address, error)) (plannedHoldings, error) {
+	planned := plannedHoldings{candidates: candidates, units: map[kernel.RepositoryID][]objectmodel.Address{}}
 	for id := range candidates {
-		ids = append(ids, id)
+		planned.ids = append(planned.ids, id)
 	}
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-	aspect := ""
-	if tokens, err := objectmodel.PointerTokens(reference.Locator); err == nil && len(tokens) > 0 {
-		aspect = tokens[0]
+	sort.Slice(planned.ids, func(i, j int) bool { return planned.ids[i] < planned.ids[j] })
+	for _, id := range planned.ids {
+		units, err := plan(objectmodel.Reference{Repository: id, Object: reference.Object}, candidates[id])
+		if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved || err == nil && len(units) == 0 {
+			continue
+		}
+		if err != nil {
+			return plannedHoldings{}, err
+		}
+		planned.units[id] = units
 	}
+	return planned, nil
+}
+
+// selectFor applies readability for the reference's Aspect and the identity
+// rule (conflict, withheld) to the planned holdings.
+func (p plannedHoldings) selectFor(cx *Invocation, reference objectmodel.Reference) (objectmodel.HoldingSelection, error) {
+	aspect := referenceAspect(reference)
 	readable := map[kernel.RepositoryID]bool{}
-	for _, id := range ids {
+	for _, id := range p.ids {
 		readable[id] = AllowedRepoAspectRead(cx.Home, cx.Flags, string(id), string(reference.Object), aspect)
 	}
 	if !anyTrue(readable) {
 		return objectmodel.HoldingSelection{}, kernel.Fail(kernel.ErrForbidden, "the caller may not read any Repository in the request scope")
 	}
-	holdings := make([]objectmodel.Holding, 0, len(ids))
-	for _, id := range ids {
-		root := objectmodel.Reference{Repository: id, Object: reference.Object}
-		units, err := plan(root, candidates[id])
-		if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved || err == nil && len(units) == 0 {
-			continue
+	holdings := make([]objectmodel.Holding, 0, len(p.units))
+	for _, id := range p.ids {
+		if units, ok := p.units[id]; ok {
+			holdings = append(holdings, objectmodel.HoldingOf(id, p.candidates[id], readable[id], units))
 		}
-		if err != nil {
-			return objectmodel.HoldingSelection{}, err
-		}
-		holdings = append(holdings, objectmodel.HoldingOf(id, candidates[id], readable[id], units))
 	}
 	return objectmodel.SelectHoldings(reference.Object, reference.Locator, holdings)
+}
+
+func (p plannedHoldings) firstReadable(cx *Invocation, reference objectmodel.Reference) (objectmodel.Holding, bool) {
+	for _, id := range p.ids {
+		if _, held := p.units[id]; held && AllowedRepoRead(cx.Home, cx.Flags, string(id), string(reference.Object)) {
+			return objectmodel.Holding{Repository: id, Commit: p.candidates[id]}, true
+		}
+	}
+	return objectmodel.Holding{}, false
+}
+
+func referenceAspect(reference objectmodel.Reference) string {
+	if tokens, err := objectmodel.PointerTokens(reference.Locator); err == nil && len(tokens) > 0 {
+		return tokens[0]
+	}
+	return ""
+}
+
+// selectReferenceHoldings plans the root object in every candidate Repository
+// at its fixed commit (metadata only) and applies the object identity rule.
+func selectReferenceHoldings(cx *Invocation, reference objectmodel.Reference, candidates map[kernel.RepositoryID]kernel.CommitID, plan func(objectmodel.Reference, kernel.CommitID) ([]objectmodel.Address, error)) (objectmodel.HoldingSelection, error) {
+	if err := requireReadableScope(cx, reference, candidates); err != nil {
+		return objectmodel.HoldingSelection{}, err
+	}
+	planned, err := planReferenceHoldings(reference, candidates, plan)
+	if err != nil {
+		return objectmodel.HoldingSelection{}, err
+	}
+	return planned.selectFor(cx, reference)
+}
+
+// requireReadableScope fails before any planning when the caller may read no
+// candidate Repository for the referenced Aspect.
+func requireReadableScope(cx *Invocation, reference objectmodel.Reference, candidates map[kernel.RepositoryID]kernel.CommitID) error {
+	aspect := referenceAspect(reference)
+	for id := range candidates {
+		if AllowedRepoAspectRead(cx.Home, cx.Flags, string(id), string(reference.Object), aspect) {
+			return nil
+		}
+	}
+	return kernel.Fail(kernel.ErrForbidden, "the caller may not read any Repository in the request scope")
 }
 
 func anyTrue(values map[kernel.RepositoryID]bool) bool {

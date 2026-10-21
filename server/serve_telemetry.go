@@ -183,12 +183,8 @@ func httpRoute(r *http.Request) string {
 	switch {
 	case strings.HasPrefix(path, "/readyz/"):
 		return "/readyz/{surface}"
-	case path == "/", path == "/health", path == "/livez", path == "/readyz", path == "/metrics", path == "/console":
+	case path == "/", path == "/health", path == "/livez", path == "/readyz", path == "/metrics":
 		return path
-	case strings.HasPrefix(path, "/assets/"):
-		return "/assets/{file}"
-	case strings.HasPrefix(path, "/repositories/"):
-		return "/repositories/{repository}"
 	case strings.HasPrefix(path, "/snapshot/v1/"):
 		return "/snapshot/v1/{operation}"
 	case strings.HasPrefix(path, "/object/v1/"):

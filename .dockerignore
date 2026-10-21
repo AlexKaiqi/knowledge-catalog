@@ -1,3 +1,15 @@
 .git
 .venv
 **/.DS_Store
+# Local evidence, materials, caches and untracked bundles never enter the image;
+# the image only compiles Go sources (scripts/deploy/Dockerfile).
+.validation
+.data
+.kc
+.kc-home
+.dsh
+.cursor
+.session_tmps
+.pytest_cache
+webui
+dist

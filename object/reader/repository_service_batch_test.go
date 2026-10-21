@@ -135,14 +135,14 @@ func TestReadManyLoadsOnlyRequestedObjectLocatorsAndUnits(t *testing.T) {
 				t.Fatalf("locator %s reads=%d, want one per batch (%d)", id, got, call)
 			}
 		}
-		if counting.reads[objectmodel.RepositoryReadmePath] != call {
-			t.Fatalf("README convention reads=%d, want one per batch (%d)", counting.reads[objectmodel.RepositoryReadmePath], call)
+		if counting.reads["README.md"] != 0 {
+			t.Fatalf("README.md has no meaning to batch reads, read %d times", counting.reads["README.md"])
 		}
 		if counting.reads[repofile.LocatorManifestPath] != 0 {
 			t.Fatalf("complete locator layout fell back to whole manifest: %#v", counting.reads)
 		}
-		if len(counting.reads) != 8 {
-			t.Fatalf("want three object locators, completeness marker, three unit paths, and README.md, got %#v", counting.reads)
+		if len(counting.reads) != 7 {
+			t.Fatalf("want three object locators, completeness marker, and three unit paths, got %#v", counting.reads)
 		}
 		values["metric/gmv"].Value.(map[string]any)["name"] = "caller mutation"
 	}

@@ -22,6 +22,9 @@ type datasetSpace struct {
 	spec    retrieval.AccessSpec
 	id      kernel.RepositoryID
 	basis   kernel.CommitID
+	// unobserved holds the binding units whose values may not enter this
+	// index; they are never observed for it (see datasetCheck).
+	unobserved map[string]bool
 }
 
 func (idx *Index) openDatasetSpace(lookup reader.MemberLookup, pin reader.DatasetPin) (datasetSpace, error) {
@@ -64,8 +67,13 @@ func (idx *Index) PrepareDataset(ctx context.Context, lookup reader.MemberLookup
 	if err != nil {
 		return ports.IndexSync{}, err
 	}
+	check, units, err := idx.datasetCheck(s)
+	if err != nil {
+		return ports.IndexSync{}, err
+	}
+	s.unobserved = units
 	var values []datasetValue
-	s.spec, values, err = idx.prepareDatasetSpec(ctx, s)
+	s.spec, values, err = idx.prepareDatasetSpec(ctx, s, check)
 	if err != nil {
 		return ports.IndexSync{}, err
 	}
@@ -120,12 +128,19 @@ func (idx *Index) SearchDataset(ctx context.Context, lookup reader.MemberLookup,
 		return retrieval.SearchResult{}, err
 	}
 	defer release()
-	required, err := s.requiresState(req)
+	req, empty, err := retrieval.PruneInapplicable(req, s.spec)
 	if err != nil {
 		return retrieval.SearchResult{}, err
 	}
-	if required {
-		return idx.searchDatasetState(ctx, s, req)
+	if empty {
+		return retrieval.SearchResult{SearchView: retrieval.SearchView{Snapshots: pin.Repositories}, Completeness: retrieval.CompletenessComplete, Hits: []retrieval.ObjectHit{}, Dataset: &retrieval.DatasetBasis{ID: pin.SetID, Revision: pin.Revision}}, nil
+	}
+	external, err := s.stateFields(req)
+	if err != nil {
+		return retrieval.SearchResult{}, err
+	}
+	if len(external) > 0 {
+		return idx.searchDatasetState(ctx, s, req, external)
 	}
 	physical := s.spec
 	physical.Repository = s.id
@@ -163,7 +178,13 @@ func (idx *Index) preparedDataset(ctx context.Context, lookup reader.MemberLooku
 		release()
 		return s, nil, nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Dataset %s revision %d search is not prepared", pin.SetID, pin.Revision)
 	}
-	s.spec, err = retrieval.AccessSpecFromAdoptionsChecked(s.member, pin.Repositories[s.member.ID()], meta.SchemaAdoptions, idx.check)
+	check, units, err := idx.datasetCheck(s)
+	if err != nil {
+		release()
+		return s, nil, nil, err
+	}
+	s.unobserved = units
+	s.spec, err = retrieval.AccessSpecFromAdoptionsChecked(s.member, pin.Repositories[s.member.ID()], meta.SchemaAdoptions, check)
 	if err != nil {
 		release()
 		return s, nil, nil, err

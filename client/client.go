@@ -67,7 +67,7 @@ func New(config Config) (*Client, error) {
 	}
 	httpClient := config.HTTPClient
 	if httpClient == nil {
-		httpClient = &http.Client{Timeout: 30 * time.Second}
+		httpClient = &http.Client{Transport: httpjson.PooledTransport(0), Timeout: 30 * time.Second}
 	}
 	c := &Client{
 		baseURL:       baseURL,

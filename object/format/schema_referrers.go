@@ -105,7 +105,7 @@ func validateSchemaReferrers(entry schemaReferrersEntry, expected objectmodel.Ob
 	for _, address := range entry.Addresses {
 		key := objectmodel.AddressKey(address)
 		if objectmodel.IsSchemaObject(address.ObjectID) || objectmodel.AssertWritable(address) != nil || seen[key] {
-			return kernel.Fail(kernel.ErrPreconditionFailed, "Schema referrer locator has invalid or duplicate Address %s", key)
+			return kernel.Fail(kernel.ErrPreconditionFailed, "Schema referrer locator has invalid or duplicate Address %s", objectmodel.AddressLabel(address))
 		}
 		seen[key] = true
 	}

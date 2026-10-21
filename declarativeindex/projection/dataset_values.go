@@ -3,6 +3,7 @@ package projection
 import (
 	"context"
 	"sort"
+	"time"
 
 	ports "kc/discovery/projection"
 	"kc/discovery/space"
@@ -15,6 +16,25 @@ import (
 type datasetValue struct {
 	value        objectmodel.ObjectValue
 	observations []objectmodel.UnitObservation
+}
+
+// oldestObservation returns the earliest observation time among the values,
+// as written by the source. Observation bases are validated as RFC 3339.
+func oldestObservation(values []datasetValue) string {
+	oldest, oldestRaw := time.Time{}, ""
+	for _, value := range values {
+		for _, observation := range value.observations {
+			raw := observation.Basis.ObservedAt
+			at, err := time.Parse(time.RFC3339Nano, raw)
+			if err != nil {
+				continue
+			}
+			if oldestRaw == "" || at.Before(oldest) {
+				oldest, oldestRaw = at, raw
+			}
+		}
+	}
+	return oldestRaw
 }
 
 func (s datasetSpace) values(ctx context.Context, source ports.ObservationSource) ([]datasetValue, error) {
@@ -34,6 +54,7 @@ func (s datasetSpace) valuesBySource(ctx context.Context, source ports.Observati
 		if err != nil {
 			return nil, nil, err
 		}
+		member = objectmodel.BindContext(ctx, member)
 		if err := maintenance.WalkRepository(member, at, func(raw objectmodel.ObjectValue) error {
 			nonempty[id] = true
 			if objectmodel.IsSchemaObject(raw.Address.ObjectID) {
@@ -43,15 +64,19 @@ func (s datasetSpace) valuesBySource(ctx context.Context, source ports.Observati
 			if source != nil {
 				var observed objectmodel.ObservedValue
 				var err error
+				stripped, changed := s.withoutUnobserved(id, raw)
 				if datasetSource, ok := source.(interface {
 					ObserveDatasetValue(context.Context, *reader.Serving, objectmodel.Repository, objectmodel.ObjectValue) (objectmodel.ObservedValue, error)
 				}); ok {
-					observed, err = datasetSource.ObserveDatasetValue(ctx, s.serving, member, raw)
+					observed, err = datasetSource.ObserveDatasetValue(ctx, s.serving, member, stripped)
 				} else {
-					observed, err = source.ObserveRepositoryValue(ctx, member, raw)
+					observed, err = source.ObserveRepositoryValue(ctx, member, stripped)
 				}
 				if err != nil {
 					return err
+				}
+				if changed {
+					observed.Declarations = restoreDeclarations(raw.Declarations, observed.Declarations)
 				}
 				value = objectmodel.ObjectValue{ObjectRef: observed.ObjectRef, Repository: observed.Repository, Commit: observed.Commit, Address: observed.Address, Value: observed.Value, Provenance: observed.Provenance, Units: observed.Units, Declarations: observed.Declarations}
 				if err := objectmodel.ValidateHydratedObject(id, at, raw.Address.ObjectID, value); err != nil {

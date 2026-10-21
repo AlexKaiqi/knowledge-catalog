@@ -1,6 +1,7 @@
 package projection_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"kc/declarativeindex/internal/testfixture"
@@ -39,7 +40,7 @@ func TestPublishedSchemaTypedSearchPreservesLongTextIntegersAndTime(t *testing.T
 	}
 	head := testfixture.PutAt(t, repo, root, ops)
 	idx := liveIndex(t)
-	if _, err := idx.Ensure(repo, head); err != nil {
+	if _, err := idx.Ensure(context.Background(), repo, head); err != nil {
 		t.Fatal(err)
 	}
 	for _, test := range []struct {
@@ -124,7 +125,7 @@ func TestControlledVocabularyAndProgressiveReadingUseFixedObjectBasis(t *testing
 		}},
 	})
 	idx := liveIndex(t)
-	if _, err := idx.Ensure(repo, head); err != nil {
+	if _, err := idx.Ensure(context.Background(), repo, head); err != nil {
 		t.Fatal(err)
 	}
 	concepts, err := idx.SearchAt(repo, head, retrieval.SearchOf(retrieval.SearchEQ("alias", "退货退款")))

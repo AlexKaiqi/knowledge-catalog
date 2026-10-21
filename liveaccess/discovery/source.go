@@ -25,24 +25,18 @@ func (s Source) ObserveDatasetValue(ctx context.Context, scope *reader.Serving, 
 		return objectmodel.ObservedValue{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "dynamic Dataset projection requires a runtime")
 	}
 	descriptors := liveaccess.ServingDescriptors(scope)
-	shared := make([]objectmodel.UnitDeclaration, 0, len(value.Declarations))
 	for _, unit := range value.Declarations {
 		if !unit.ValueSource.IsBinding() {
-			shared = append(shared, unit)
 			continue
 		}
 		binding, err := liveaccess.ResolveDeclaration(descriptors, value.Repository, value.Commit, unit)
 		if err != nil {
 			return objectmodel.ObservedValue{}, err
 		}
-		// A per-caller value stays out of the shared index. The rest of the
-		// object is still indexed; the live unit is read on demand.
 		if binding.Identity != objectmodel.IdentityShared {
-			continue
+			return objectmodel.ObservedValue{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "unit %s is per-caller and cannot enter a shared Dataset index", objectmodel.AddressLabel(unit.Address))
 		}
-		shared = append(shared, unit)
 	}
-	value.Declarations = shared
 	return liveservice.HydrateRepositoryValue(ctx, repo, value, s.Lookup, s.Request, descriptors)
 }
 

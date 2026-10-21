@@ -114,7 +114,7 @@ func DecodeBindingIndex(raw []byte) ([]BindingCoordinate, error) {
 	for _, coordinate := range coordinates {
 		schemaOK := coordinate.Schema == "" || objectmodel.IsSchemaObject(coordinate.Schema)
 		if !schemaOK || coordinate.Address.ObjectID == "" || (coordinate.Schema == "" && coordinate.Descriptor == "") {
-			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "binding index entry %s names neither an adopted schema nor a descriptor", objectmodel.AddressKey(coordinate.Address))
+			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "binding index entry %s names neither an adopted schema nor a descriptor", objectmodel.AddressLabel(coordinate.Address))
 		}
 	}
 	sortBindingCoordinates(coordinates)

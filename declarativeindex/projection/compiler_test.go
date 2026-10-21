@@ -177,16 +177,16 @@ func TestProjectionCompilerIndexesObjectReferenceAsKeyword(t *testing.T) {
 
 func TestProjectionCompilerIndexesReadmeBodyAsText(t *testing.T) {
 	field := retrieval.AccessField{
-		FieldRef: retrieval.FieldRef{Schema: objectmodel.CoreReadmeSchemaV1, Aspect: objectmodel.ReadmeAspect, Path: "body"},
+		FieldRef: retrieval.FieldRef{Schema: objectmodel.ObjectID("schema/core/readme/v1"), Aspect: "readme", Path: "body"},
 		Type:     "string", Access: []reader.AccessHint{reader.HintText},
 	}
 	body := "# Payments warehouse\n\nPublished metrics."
 	value := objectmodel.ObjectValue{
 		Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "fixture/payments"},
-		Value:   map[string]any{objectmodel.ReadmeAspect: map[string]any{"body": body}},
+		Value:   map[string]any{"readme": map[string]any{"body": body}},
 		Declarations: []objectmodel.UnitDeclaration{{
-			Address:   objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "fixture/payments", AspectName: objectmodel.ReadmeAspect},
-			SchemaRef: string(objectmodel.CoreReadmeSchemaV1),
+			Address:   objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "fixture/payments", AspectName: "readme"},
+			SchemaRef: string(objectmodel.ObjectID("schema/core/readme/v1")),
 		}},
 	}
 	doc, err := compileProjectionDocument(nil, value, retrieval.AccessSpec{Fields: []retrieval.AccessField{field}})

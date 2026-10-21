@@ -1,6 +1,7 @@
 package projection_test
 
 import (
+	"context"
 	"testing"
 
 	indexcli "kc/declarativeindex/capability"
@@ -29,7 +30,7 @@ func TestManifestChangeInvalidatesPhysicalBasisWithIdenticalLogicalSupport(t *te
 	t.Cleanup(func() { _ = idx.Close() })
 	manifest := indexcli.DefaultManifest()
 	idx.SetDeclarationManifest(manifest.Check, manifest.Describe().Digest)
-	first, err := idx.Ensure(s.Repo, commit)
+	first, err := idx.Ensure(context.Background(), s.Repo, commit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +39,7 @@ func TestManifestChangeInvalidatesPhysicalBasisWithIdenticalLogicalSupport(t *te
 	if _, err := idx.CheckSearchProjectionAt(s.Repo, commit); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
 		t.Errorf("old physical basis remains ready after manifest changed: %v", err)
 	}
-	second, err := idx.Ensure(s.Repo, commit)
+	second, err := idx.Ensure(context.Background(), s.Repo, commit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +49,7 @@ func TestManifestChangeInvalidatesPhysicalBasisWithIdenticalLogicalSupport(t *te
 	if _, err := idx.CheckSearchProjectionAt(s.Repo, commit); err != nil {
 		t.Fatal(err)
 	}
-	third, err := idx.Ensure(s.Repo, commit)
+	third, err := idx.Ensure(context.Background(), s.Repo, commit)
 	if err != nil || third.Mode != ports.IndexModeReady || third.PhysicalDigest != second.PhysicalDigest {
 		t.Fatalf("unchanged instance rebuilt again: %#v %v", third, err)
 	}

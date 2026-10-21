@@ -44,7 +44,7 @@ func systemPublicationUnits() []objectmodel.Operation {
 			}
 			rel := strings.TrimPrefix(name, "content/")
 			if rel == "readme.md" {
-				rel = objectmodel.RepositoryReadmePath
+				rel = systemReadmePath
 			}
 			operation, err := decodeSystemPublication(rel, string(raw))
 			if err != nil {
@@ -96,11 +96,16 @@ func SystemSchemaOperations() []objectmodel.Operation {
 	return out
 }
 
-// SystemReadmeOperation is the System Repository description: a README Aspect
-// whose identity lives in markdown frontmatter.
+// systemReadmePath is where the System Repository keeps its own guide. The
+// embedded source is lower-case so the package tree does not mistake it for a
+// package README; the published path carries no protocol meaning.
+const systemReadmePath = "README.md"
+
+// SystemReadmeOperation is the System Repository's guide: an ordinary
+// readme Aspect on entity kc/system.
 func SystemReadmeOperation() objectmodel.Operation {
 	for _, operation := range systemPublicationUnits() {
-		if operation.PathHint == objectmodel.RepositoryReadmePath {
+		if operation.PathHint == systemReadmePath {
 			return cloneSystemOperation(operation)
 		}
 	}

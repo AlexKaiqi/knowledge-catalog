@@ -31,6 +31,19 @@ func AddressKey(a Address) string {
 	return string(a.ObjectID) + addressSep + a.AspectName + addressSep + a.MemberKey
 }
 
+// AddressLabel renders an address for people, as `object#/aspect/member`.
+// AddressKey stays the internal map key and never appears in messages.
+func AddressLabel(a Address) string {
+	label := string(a.ObjectID)
+	if a.AspectName != "" {
+		label += "#/" + a.AspectName
+		if a.MemberKey != "" {
+			label += "/" + a.MemberKey
+		}
+	}
+	return label
+}
+
 func IsEntityBlob(a Address) bool {
 	return a.AspectName == "" && a.MemberKey == ""
 }

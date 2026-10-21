@@ -2,10 +2,11 @@ package object_test
 
 import (
 	"kc/internal/testkit"
-	"kc/systemrepo"
+	"maps"
 	"strings"
 	"testing"
 
+	"kc/kernel"
 	objectmodel "kc/object"
 	repofile "kc/object/format"
 )
@@ -16,22 +17,22 @@ func TestSystemRepositoryPublishesReadmeSchemaAndInstance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	value, err := repo.Read(objectmodel.CoreReadmeSchemaV1, head)
+	value, err := repo.Read(objectmodel.ObjectID("schema/core/readme/v1"), head)
 	if err != nil {
 		t.Fatal(err)
 	}
-	report, err := objectmodel.ParseSchemaDefinition(objectmodel.CoreReadmeSchemaV1, value.Value)
+	report, err := objectmodel.ParseSchemaDefinition(objectmodel.ObjectID("schema/core/readme/v1"), value.Value)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if report.Entity != "Readme" || report.Aspect != objectmodel.ReadmeAspect || report.Pattern != "record" || report.AdditionalProperties || report.Description == "" {
+	if report.Entity != "Readme" || report.Aspect != "readme" || report.Pattern != "record" || report.AdditionalProperties || report.Description == "" {
 		t.Fatalf("%#v", report)
 	}
-	readme, err := repo.Read(objectmodel.SystemReadmeObjectID, head)
+	readme, err := repo.Read(objectmodel.ObjectID("kc/system"), head)
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, ok := objectmodel.ReadmeBody(readme.Value)
+	body, ok := testkit.MarkdownBody(readme.Value)
 	if !ok || !strings.Contains(body, "KC 协议仓") {
 		t.Fatalf("system readme value %#v", readme.Value)
 	}
@@ -39,7 +40,7 @@ func TestSystemRepositoryPublishesReadmeSchemaAndInstance(t *testing.T) {
 	if !ok {
 		t.Fatal("SystemRepository must expose README.md")
 	}
-	raw, err := files.ReadObjectFile(objectmodel.RepositoryReadmePath, head)
+	raw, err := files.ReadObjectFile("README.md", head)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,49 +57,69 @@ func TestSystemRepositoryPublishesReadmeSchemaAndInstance(t *testing.T) {
 	}
 }
 
-func TestAssertReadmeBinding(t *testing.T) {
-	okAddr := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "fixture/payments", AspectName: objectmodel.ReadmeAspect}
-	if err := objectmodel.AssertReadmeBinding(okAddr, objectmodel.CoreReadmeSchemaV1); err != nil {
-		t.Fatal(err)
-	}
-	blob := objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "fixture/payments"}
-	if err := objectmodel.AssertReadmeBinding(blob, objectmodel.CoreReadmeSchemaV1); err == nil {
-		t.Fatal("entity blob must not use the README schema")
-	}
-	other := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "fixture/payments", AspectName: "body"}
-	if err := objectmodel.AssertReadmeBinding(other, objectmodel.CoreReadmeSchemaV1); err == nil {
-		t.Fatal("wrong aspect must not use the README schema")
-	}
-	if err := objectmodel.AssertReadmeBinding(okAddr, ""); err == nil {
-		t.Fatal("readme aspect requires the protocol schema")
-	}
-}
-
 func TestAssertProtocolSchemaPublication(t *testing.T) {
-	var published any
-	for _, operation := range systemrepo.SystemSchemaOperations() {
-		if operation.Address.ObjectID == objectmodel.CoreReadmeSchemaV1 {
-			published = operation.Value
-			break
+	published := map[objectmodel.ObjectID]bool{}
+	for _, operation := range objectmodel.TrustedSchemaOperations() {
+		id := operation.Address.ObjectID
+		published[id] = true
+		t.Run(string(id), func(t *testing.T) {
+			assertProtocolSchemaCopy(t, operation)
+		})
+	}
+	for _, id := range []objectmodel.ObjectID{objectmodel.MetaSchemaV1, objectmodel.IndexDeclarationSchemaV1} {
+		if !published[id] {
+			t.Fatalf("protocol Schema %s is absent from the trust root", id)
 		}
-	}
-	if published == nil {
-		t.Fatal("readme schema is not published")
-	}
-	if err := objectmodel.AssertProtocolSchemaPublication(objectmodel.CoreReadmeSchemaV1, published); err != nil {
-		t.Fatal(err)
 	}
 	drifted := map[string]any{
 		"metaSchema": string(objectmodel.MetaSchemaV1),
-		"entity":     "Other", "aspect": objectmodel.ReadmeAspect, "pattern": "record",
+		"entity":     "Other", "pattern": "record",
 		"additionalProperties": false,
 		"fields":               map[string]any{"body": map[string]any{"type": "string", "required": true}},
 	}
-	err := objectmodel.AssertProtocolSchemaPublication(objectmodel.CoreReadmeSchemaV1, drifted)
-	if err == nil {
+	if err := objectmodel.AssertProtocolSchemaPublication(objectmodel.IndexDeclarationSchemaV1, drifted); err == nil {
 		t.Fatal("drifted protocol schema must fail")
 	}
-	if err := objectmodel.AssertProtocolSchemaPublication(objectmodel.CoreRelationSchemaV1, drifted); err != nil {
+	// readme and relation are ordinary content Schemas: a Repository may
+	// publish its own version under the same object ID.
+	for _, id := range []objectmodel.ObjectID{"schema/core/readme/v1", objectmodel.CoreRelationSchemaV1} {
+		if err := objectmodel.AssertProtocolSchemaPublication(id, drifted); err != nil {
+			t.Fatalf("%s is not a protocol schema: %v", id, err)
+		}
+	}
+}
+
+func assertProtocolSchemaCopy(t *testing.T, operation objectmodel.Operation) {
+	t.Helper()
+	id := operation.Address.ObjectID
+	if err := objectmodel.AssertProtocolSchemaPublication(id, operation.Value); err != nil {
+		t.Fatalf("identical protocol Schema copy was rejected: %v", err)
+	}
+	body, ok := operation.Value.(map[string]any)
+	if !ok {
+		t.Fatalf("protocol Schema has unexpected value %T", operation.Value)
+	}
+	drifted := maps.Clone(body)
+	description, _ := body["description"].(string)
+	drifted["description"] = description + " 本地修改的说明。"
+	previous, err := objectmodel.ParseSchemaDefinition(id, body)
+	if err != nil {
 		t.Fatal(err)
+	}
+	next, err := objectmodel.ParseSchemaDefinition(id, drifted)
+	if err != nil {
+		t.Fatalf("description-only drift must still be a valid Schema: %v", err)
+	}
+	if changes := objectmodel.BreakingSchemaChanges(previous, next); len(changes) != 0 {
+		t.Fatalf("description-only drift must not depend on structural incompatibility: %v", changes)
+	}
+	testkit.ExpectCode(t, objectmodel.AssertProtocolSchemaPublication(id, drifted), kernel.ErrSchemaIncompatible)
+}
+
+func TestReadmeSchemaIsNotInTheTrustRoot(t *testing.T) {
+	for _, operation := range objectmodel.TrustedSchemaOperations() {
+		if operation.Address.ObjectID == "schema/core/readme/v1" {
+			t.Fatal("readme is an ordinary Schema published by the System Repository, not protocol trust root")
+		}
 	}
 }

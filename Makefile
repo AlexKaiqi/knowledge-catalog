@@ -9,7 +9,7 @@ LISTEN ?= 127.0.0.1:7380
 
 DOCS_LISTEN ?= 127.0.0.1:8766
 
-.PHONY: check-docs check-surface quality test test-component test-boundary test-e2e test-race test-cover test-server-web test-taihu-live test-state-runtime-e2e test-kcfs-e2e test-adapters test-docker test-all system-lakefs-up system-lakefs-status system-lakefs-down deploy-local-up deploy-local-status deploy-local-access deploy-local-smoke deploy-local-scenes deploy-local-goto deploy-local-accept deploy-local-down deploy-dev-up deploy-dev-status deploy-dev-access deploy-dev-smoke deploy-dev-down deploy-dev-reset kc typecheck serve docs-serve
+.PHONY: check-docs check-surface quality test test-component test-boundary test-e2e test-race test-cover test-taihu-live test-state-runtime-e2e test-kcfs-e2e test-adapters test-docker test-all system-lakefs-up system-lakefs-status system-lakefs-down deploy-local-up deploy-local-status deploy-local-access deploy-local-smoke deploy-local-scenes deploy-local-goto deploy-local-accept deploy-local-down deploy-dev-up deploy-dev-status deploy-dev-access deploy-dev-smoke deploy-dev-down deploy-dev-reset kc typecheck serve docs-serve
 .PHONY: test-lakefs test-contracts
 .PHONY: quality-webui test-webui
 .PHONY: build package package-all test-package
@@ -80,9 +80,6 @@ test-cover:
 	$(MAKE) check-surface
 	GO=$(GO) ./scripts/testsuite.sh coverage
 
-test-server-web:
-	node --test server/web/repository.test.mjs server/web/console.test.mjs
-
 # Real Taihu introspection. Skips unless KC_LIVE_TAIHU=1 and the env secrets
 # are set; the browser login helper is scripts/live-taihu-auth.sh.
 test-taihu-live:
@@ -105,7 +102,6 @@ test-docker:
 test-all:
 	$(MAKE) check-surface
 	GO=$(GO) ./scripts/testsuite.sh all
-	$(MAKE) test-server-web
 
 
 system-lakefs-up:

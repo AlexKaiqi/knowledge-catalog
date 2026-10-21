@@ -52,7 +52,7 @@ func TestSystemPublicationMatchesCanonicalFilesAndSchemas(t *testing.T) {
 			sourcePath = "readme.md"
 		}
 		authored := filepath.Join(sourceDir, sourcePath)
-		if sourcePath == "_schemas/schema-definition.v1.aspect.yaml" || sourcePath == "_schemas/readme.v1.aspect.yaml" || sourcePath == "_schemas/index-declaration.v1.aspect.yaml" {
+		if sourcePath == "_schemas/schema-definition.v1.aspect.yaml" || sourcePath == "_schemas/index-declaration.v1.aspect.yaml" {
 			authored = filepath.Join(filepath.Dir(sourceDir), "..", "object", "trusted", filepath.Base(sourcePath))
 		}
 		if sourcePath == "object-interfaces/live-access/definition.yaml" || sourcePath == "_schemas/implements.live-access.v1.aspect.yaml" || sourcePath == "_schemas/resource-descriptor.v1.aspect.yaml" {

@@ -57,15 +57,13 @@ CLI 登记与 help 同源生成：`go generate ./cli`。普通测试中的
 由叶子 help 提供；实际启用、就绪与授权向当前服务查询。
 实际仓通过既有 `snapshot.TreeReader` / `DirectoryReader` 提供文件字节和有界目录
 分页，不提供字面写面；精确对象读取不依赖投影。
-README 是 Markdown 对象单元，不是 Dataset 服务 库存的 title/summary。协议 Schema 是
-`schema/core/readme/v1`（Aspect `readme`，字段 `body` 为字符串）。查询能力由采用索引声明 Schema 的 `index` 成员另行声明。人写
-`README.md`：frontmatter 用 `entity` / `aspect` 承载 Address，正文是 markdown。
-身份仍是 Address；`README.md` 只是人写与 git 直推解释用的有界 `path_hint`。
-无 frontmatter 的根 README 不是对象。接入方须在同一仓
-发布与 System 出版物 digest 一致的 Schema 副本（`schema_ref` 不跨仓）。
-领域分类、owner、质量门槛和投影热状态不进入该对象。`catalog/` DTO 与 `kc show`
-的 `repositories` 只列 `{id, schemaCount?}`；读 README 使用对象 URN 的 `/readme` locator，
-SEARCH 按固定范围内选中的索引声明编译 `body` 的文本能力；旧 pin 保留自己的 Schema 和索引声明。
+`readme` 在系统看来是普通方面：方面名不保留，`schema/core/readme/v1` 是 System 仓
+发布的普通内容 Schema（不在协议信任根，各仓可在同一 object ID 下发布自己的版本），
+文件名 `README.md` 也没有协议含义。任意多个对象可各带 `readme` 方面，按各自 `path_hint`
+存放；没有 Writer 维护坐标的 `README.md` 与其它文件一样不是对象。Markdown 单元的规则对所有
+方面相同：`.md` 路径、frontmatter 用 `entity` / `aspect`、值恰为 `{body}`。
+`catalog/` DTO 与 `kc show` 的 `repositories` 只列 `{id, schemaCount?}`；检索能力只来自
+固定范围内选中的索引声明。
 `ParseSchemaDefinition` 与 `ValidateSchemaInstance` 是 Writer/Reader 共用的协议解释。
 Schema 文档可有可选 `description`，说明该实体是什么；不是固定元信息，不是仓 README，
 也不是 Dataset 服务 title/summary。`schemas:list` 可带上这一句。
@@ -94,9 +92,9 @@ Address/pattern、必填与 `additionalProperties` 对每个 `schema/*` 无条�
 
 `object/writer` 接收 Object `ChangeSet`；⓪ `snapshot.Store` 不接收 PUT/REMOVE。Tree provider 在唯一的②→⓪接缝上编译为 `TreeChangeSet`；两条路径共享根包 `units.go` 的唯一 apply/assemble 语义，并由差分 conformance 约束。
 
-批量草稿可直接写成 `*.yaml`、`*.aspect.yaml` 或 `README.md`：frontmatter 声明
+批量草稿可直接写成 `*.yaml`、`*.aspect.yaml` 或 `*.md`：frontmatter 声明
 Address（`object_id`/`aspect_name`，Markdown 也接受 `entity`/`aspect`）与
-`schema_ref`。YAML/JSON 正文是结构化值；README 正文是 `body` 字符串。一个文件
+`schema_ref`。YAML/JSON 正文是结构化值；Markdown 正文是 `body` 字符串。一个文件
 对应一个 Address；`kc writer commit --dir` 对照当前版本求差后进入 Writer。`kc diff --dir` 用同一对照，不写仓。已接入的 tree 仓也可以对 published
 ref 直推：Reader 按文件 frontmatter 解释，live 投影对 HEAD 对账。格式转换不得
 夹带 source key 映射或领域建模逻辑。HTTP Writer 仍收 ChangeSet。

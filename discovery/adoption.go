@@ -238,7 +238,7 @@ func (s *AccessSpec) mergeAccessFields(fields []AccessField) error {
 		}
 		current := &s.Fields[position]
 		if current.Type != field.Type {
-			return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "adopted Schema releases disagree on scalar type for %s", field.FieldRef.Key())
+			return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "adopted Schema releases disagree on scalar type for %s", displayFieldRef(field.FieldRef))
 		}
 		for _, hint := range field.Access {
 			if !current.Has(hint) {
@@ -269,6 +269,7 @@ func accessSpecWithCurrentForms(report reader.SchemaReport, declared declaredAcc
 	spec.Declarations = declared.statuses
 	spec.builds = declared.builds
 	spec.declarationSchemas = declared.schemas
+	spec.inapplicable = declared.inapplicable
 	spec.currentFields = append([]AccessField(nil), spec.Fields...)
 	spec.schemaForms = map[string][]AccessField{}
 	for _, schema := range report.Schemas {

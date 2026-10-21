@@ -1,0 +1,14 @@
+---
+object_id: kc/relation/model-from-materials.uses.schemas
+kind: Relation
+schema_ref: schema/core/relation/v1
+path_hint: relations/model-from-materials.uses.schemas.yaml
+---
+relationId: kc/relation/model-from-materials.uses.schemas
+relationType: uses
+direction: DIRECTED
+endpoints:
+  - role: from
+    object: kc/guide/model-from-materials
+  - role: to
+    object: kc/capability/schemas

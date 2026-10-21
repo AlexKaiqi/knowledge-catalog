@@ -1,0 +1,26 @@
+# kc/cli tests that run under `make test-race`.
+#
+# The whole cli package does not fit a race budget (about 44 minutes under -race); its
+# scene and product journeys run without -race in `make test` / `make test-contracts`.
+# Server-side concurrency is raced in ./server and ./invocation directly.
+#
+# TestRaceScopeCoversCLIConcurrencyTests (cli/race_scope_internal_test.go) fails when a
+# cli test starts goroutines, calls t.Parallel, uses sync.WaitGroup/errgroup or is named
+# *Concurrent* without being listed here, or when a listed name is no longer declared.
+# One top-level test name per line.
+
+TestDatasetConcurrentPublishersCannotOverwriteOrRollBack
+TestDeploymentConcurrentTypedReadsKeepRequestStateIsolated
+TestRemoteCurrentDigestsRunsConcurrently
+TestRemoteCurrentDigestsSkipsUnresolved
+TestRemoteInitialUploadRejectsConcurrentAdvanceWithoutRebase
+TestSceneResultConcurrentWriters
+TestSceneResultConcurrentProcesses
+TestDecodeDatasetFSReadyDoesNotWaitForEOF
+TestDatasetFSRequiresServer
+TestPrepareRemoteDatasetFSUsesGatewayAndKeepsFixedPin
+TestPrepareDatasetFSMakesOneTargetPerRecipePath
+TestShapeCLIProductDelegatesModuleViews
+TestEncodeCLIProductPreservesTransportResults
+TestShapeCLIProductHostCommands
+TestServeSIGTERMCancelsMaintenanceAndRecoversOnRestart

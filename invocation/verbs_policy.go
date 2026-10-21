@@ -25,13 +25,12 @@ func VerbHookAdd(cx *Invocation) (any, error) {
 	if err := hook.ValidateBinding(binding); err != nil {
 		return nil, err
 	}
-	file, err := hook.Read(cx.Home)
+	err = hook.Update(cx.Home, func(file *hook.File) error {
+		binding.ID = hook.NextID(file.Bindings)
+		file.Bindings = append(file.Bindings, binding)
+		return nil
+	})
 	if err != nil {
-		return nil, err
-	}
-	binding.ID = hook.NextID(file.Bindings)
-	file.Bindings = append(file.Bindings, binding)
-	if err := hook.Write(cx.Home, file); err != nil {
 		return nil, err
 	}
 	return binding, nil
@@ -57,16 +56,15 @@ func VerbHookRm(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	file, err := hook.Read(cx.Home)
+	err = hook.Update(cx.Home, func(file *hook.File) error {
+		kept, found := DropByID(file.Bindings, id, func(b hook.Binding) string { return b.ID })
+		if !found {
+			return fmt.Errorf("unknown hook %s", id)
+		}
+		file.Bindings = kept
+		return nil
+	})
 	if err != nil {
-		return nil, err
-	}
-	kept, found := DropByID(file.Bindings, id, func(b hook.Binding) string { return b.ID })
-	if !found {
-		return nil, fmt.Errorf("unknown hook %s", id)
-	}
-	file.Bindings = kept
-	if err := hook.Write(cx.Home, file); err != nil {
 		return nil, err
 	}
 	return map[string]any{"revoked": id}, nil

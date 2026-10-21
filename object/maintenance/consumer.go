@@ -100,7 +100,10 @@ func (c *Coordinator) reconcileConsumer(ctx context.Context, lane *consumerLane)
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		_, head, headErr := c.consumerHead(id)
+		_, head, headErr := c.consumerHead(ctx, id)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if headErr != nil {
 			if err := c.store.failConsumerHead(lane.id, id, headErr); err != nil {
 				return err
@@ -130,7 +133,10 @@ func (c *Coordinator) catchUpConsumer(ctx context.Context, lane *consumerLane) e
 		}
 		// Published HEAD is the authority. A stale queued notice is not permission
 		// to warm a historical or unpublished commit or an unattached repository.
-		repo, head, headErr := c.consumerHead(target.Repository)
+		repo, head, headErr := c.consumerHead(ctx, target.Repository)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if headErr != nil {
 			if err := c.store.failConsumerHead(lane.id, target.Repository, headErr); err != nil {
 				return err
@@ -143,6 +149,9 @@ func (c *Coordinator) catchUpConsumer(ctx context.Context, lane *consumerLane) e
 			}
 		}
 		applyErr := lane.consumer.Reconcile(ctx, repo, head)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if err := c.store.finishConsumer(lane.id, target.Repository, head, applyErr); err != nil {
 			return err
 		}
@@ -150,7 +159,7 @@ func (c *Coordinator) catchUpConsumer(ctx context.Context, lane *consumerLane) e
 	return nil
 }
 
-func (c *Coordinator) consumerHead(id kernel.RepositoryID) (objectmodel.Repository, kernel.CommitID, error) {
+func (c *Coordinator) consumerHead(ctx context.Context, id kernel.RepositoryID) (objectmodel.Repository, kernel.CommitID, error) {
 	if c.lookup == nil {
 		return nil, "", kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Snapshot consumer has no repository lookup")
 	}
@@ -161,6 +170,7 @@ func (c *Coordinator) consumerHead(id kernel.RepositoryID) (objectmodel.Reposito
 	if repo == nil {
 		return nil, "", kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Snapshot consumer requires an object repository")
 	}
+	repo = objectmodel.BindContext(ctx, repo)
 	head, err := repo.Head(snapshot.DefaultRef)
 	if err != nil {
 		return nil, "", err

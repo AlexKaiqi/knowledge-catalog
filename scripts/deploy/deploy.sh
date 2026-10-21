@@ -226,14 +226,14 @@ print_access() {
 
 访问卡（${stack_label}，${bind_note}）
 
-kc 观察台（产品前端：Catalog、成员仓、Dataset、检索投影、Snapshot 权威）
-  http://${url_host}:${KC_DEPLOY_SERVER_PORT}/console
+kc 控制台（Snapshot Store：原仓浏览、Dataset 管理、Repository 元数据）
+  http://${url_host}:${KC_DEPLOY_SERVER_PORT}/ui/
   本地登录用户名          admin
   登记权威                ${registry_id}
   System                  kr://kc/system
-  typed API 根路径        http://${url_host}:${KC_DEPLOY_SERVER_PORT}/  是 404，前端在 /console
+  typed API 根路径        http://${url_host}:${KC_DEPLOY_SERVER_PORT}/  是 404，前端在 /ui/
 
-敲 kc（不是观察台）
+敲 kc（投影、对象检索等观察只走 CLI）
   ttyd                    http://${url_host}:${KC_DEPLOY_TTYD_PORT}/
   ${ttyd_auth}
 

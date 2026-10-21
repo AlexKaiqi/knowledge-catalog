@@ -1,0 +1,8 @@
+---
+object_id: learning/order-service
+kind: Member
+aspect_name: runtime
+member_key: health
+schema_ref: schema/learning.health
+---
+status: healthy

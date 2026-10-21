@@ -1,6 +1,8 @@
 package reader
 
 import (
+	"context"
+
 	"kc/kernel"
 	objectmodel "kc/object"
 )
@@ -14,6 +16,14 @@ type readRepository interface {
 
 type nativeReadRepository struct {
 	readRepository
+}
+
+func (r *nativeReadRepository) WithContext(ctx context.Context) objectmodel.Repository {
+	bound := objectmodel.BindContext(ctx, r.readRepository)
+	if bound == r.readRepository {
+		return r
+	}
+	return &nativeReadRepository{readRepository: bound}
 }
 
 func (r *nativeReadRepository) ReadReference(ref objectmodel.Reference, at kernel.CommitID) (objectmodel.ObjectValue, error) {

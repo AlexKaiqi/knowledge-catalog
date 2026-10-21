@@ -14,7 +14,7 @@ func TestResourceMetadataHelpNamesReachableManagementAndPublication(t *testing.T
 	for _, leaf := range []string{"show", "create"} {
 		text := formatLeafHelp(leaf)
 		for _, boundary := range []string{
-			"/console → Repositories → 目标仓 → Settings → General",
+			"/ui/ → Repositories → 目标仓 → Settings → General",
 			"repository.metadata.read", "repository.metadata.write", "原仓浏览权限",
 			"不随 commit 冻结", "登记账", "不自动继承",
 			"dataset define", "--metadata", "revision", "dataset show --revision",

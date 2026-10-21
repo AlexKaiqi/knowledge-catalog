@@ -27,3 +27,20 @@ probes:
     views:
       - "consumption"
 fixture: "向 table-meta 与 sales-semantic 发布清河业务对象并启动其外部资源访问服务，供 Dataset 路径裁剪与逐规格检索验收复用。"
+evidence:
+  - id: "public-onboarding-delivery"
+    source: "dataset.compose"
+    title: "公开教学导读随新修订交付，旧版与来源仓权限保持"
+    views: ["consumption", "publication"]
+    tests: ["TestPublicOnboardingGuidesPreserveHistoryAndScope"]
+    verifies:
+      - claim: "affordance#U1"
+        detail: "普通消费者经 Server 读取三个导读的文件与对象，二者一致；旧修订无新导读，来源仓直接读取被拒，发布重跑沿原回执恢复。"
+  - id: "public-onboarding-live-exercise"
+    source: "aspect.binding"
+    title: "从公开材料发布静态成员，再接外部值并保留失败与原观察"
+    views: ["consumption", "publication"]
+    tests: ["TestPublicLiveAccessExerciseUsesDownloadedMaterials"]
+    verifies:
+      - claim: "liveaccess#U21"
+        detail: "下载声明和 Python 源，经 Writer 把同一成员从静态改为外部取值；源变化保持声明 commit，失败与拒绝定位到成员，静态方面与旧提交可读，另行获审计权后取得原观察。"

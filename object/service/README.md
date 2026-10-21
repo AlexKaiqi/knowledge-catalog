@@ -15,3 +15,9 @@ Head。过期预期仍由 Writer／Snapshot 的 CAS 拒绝，不改成两种基�
 `DatasetReadExecutor.ReferenceRead` 是必需的逻辑读取接缝：当前授权先于回读，来源必须属于已
 接受的 Dataset，来源版本与范围保持固定。宿主注入逻辑读取实现；Object 服务不解释 Binding
 或调用 State runtime。完整声明先经限定读取，外部观察应用后才提取所选 leaf。
+
+`ShapeReadExecutor` 把 `ShapeReadRequest.Shape`（GraphQL selection set）编译成方面／成员级引用，
+每条经注入的 `Read` 走一次已有的引用读取：先按维护坐标规划，只读所选单元，只为所选单元外部
+取值；字段在单元读出后即裁剪，不先整读对象再删。无权、冲突、缺失按路径进 `errors`，其余失败
+整批拒绝。`AdoptedSchema` 只在 `Schema` 端口给出的请求范围内找所选单元采用的 Schema，找不到
+按开放处理；URN 已带定位符时拒绝形状。

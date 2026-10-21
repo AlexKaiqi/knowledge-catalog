@@ -23,6 +23,12 @@ type observedSnapshot struct {
 	kind    string
 }
 
+// WithContext rewraps the bound authority so cancellation reaches its reads
+// while telemetry and the authority's optional capabilities remain intact.
+func (s *observedSnapshot) WithContext(ctx context.Context) snapshot.Store {
+	return ObserveSnapshotStore(snapshot.BindStoreContext(s.inner, ctx), s.runtime, s.kind)
+}
+
 // Origin forwards the optional authority-instance identity: observation must
 // not hide the coordinate that scopes per-repository state such as retrieval
 // projections. An inner store without the capability stays without it.

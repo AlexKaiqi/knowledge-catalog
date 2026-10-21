@@ -265,7 +265,7 @@ func stateReadOperation(binding ResolvedBinding) (string, string, error) {
 		return "lookup", "lookup", nil
 	}
 	return "", "", kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-		"State Binding at %s must declare a lookup or read operation for ordinary READ", objectmodel.AddressKey(binding.Address))
+		"State Binding at %s must declare a lookup or read operation for ordinary READ", objectmodel.AddressLabel(binding.Address))
 }
 
 // runtimeHTTPError maps one source failure. A source error code that names a

@@ -1,6 +1,7 @@
 package projection_test
 
 import (
+	"context"
 	"kc/declarativeindex/internal/testfixture"
 	retrieval "kc/discovery"
 	ports "kc/discovery/projection"
@@ -525,16 +526,16 @@ func TestSearchAtDoesNotRewindLive(t *testing.T) {
 	})
 	idx := liveIndex(t)
 	t.Cleanup(func() { _ = idx.Close() })
-	if _, err := idx.Ensure(repo, c1); err != nil {
+	if _, err := idx.Ensure(context.Background(), repo, c1); err != nil {
 		t.Fatal(err)
 	}
 	// Operations publishes the task basis even when live currently points to
 	// the same commit; the next live advance must not erase that projection.
-	if _, err := idx.EnsureAt(repo, c1); err != nil {
+	if _, err := idx.EnsureAt(context.Background(), repo, c1); err != nil {
 		t.Fatal(err)
 	}
 	c2 := testfixture.PutAt(t, repo, c1, testkit.PutEntity("policy/P-1", map[string]any{"body": "later live"}, ""))
-	if _, err := idx.Ensure(repo, c2); err != nil {
+	if _, err := idx.Ensure(context.Background(), repo, c2); err != nil {
 		t.Fatal(err)
 	}
 
@@ -578,18 +579,18 @@ func TestIndexSharedPathUntypedObjectKeepsLiveAtHead(t *testing.T) {
 	})
 	idx := liveIndex(t)
 	t.Cleanup(func() { _ = idx.Close() })
-	if _, err := idx.Ensure(repo, c1); err != nil {
+	if _, err := idx.Ensure(context.Background(), repo, c1); err != nil {
 		t.Fatal(err)
 	}
 	c2 := testfixture.PutAt(t, repo, c1, testkit.PutEntity("note/channel", map[string]any{"text": "semantic o_channel"}, ""))
-	if _, err := idx.Ensure(repo, c2); err != nil {
+	if _, err := idx.Ensure(context.Background(), repo, c2); err != nil {
 		t.Fatal(err)
 	}
 	c3 := testfixture.PutAt(t, repo, c2, testkit.PutEntity("metric/idem", map[string]any{"description": "probe", "formula": "1"}, ""))
-	if _, err := idx.Ensure(repo, c3); err != nil {
+	if _, err := idx.Ensure(context.Background(), repo, c3); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := idx.EnsureAt(repo, c2); err != nil {
+	if _, err := idx.EnsureAt(context.Background(), repo, c2); err != nil {
 		t.Fatal(err)
 	}
 	desc, err := idx.Describe(repo)

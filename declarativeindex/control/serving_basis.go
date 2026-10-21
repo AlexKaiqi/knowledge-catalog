@@ -17,6 +17,7 @@ func (c *Controller) PrepareServingBasis(ctx context.Context, repo objectmodel.R
 	if c.index == nil {
 		return nil
 	}
+	repo = objectmodel.BindContext(ctx, repo)
 	report, err := reader.DescribeRepoSchema(repo, commit, "")
 	if err != nil {
 		return err
@@ -35,7 +36,7 @@ func (c *Controller) PrepareServingBasis(ctx context.Context, repo objectmodel.R
 			}
 		}
 	}
-	if _, err := c.index.EnsureAt(repo, commit); err != nil {
+	if _, err := c.index.EnsureAt(ctx, repo, commit); err != nil {
 		return err
 	}
 	// Live observations are not frozen Dataset content. Their authenticated

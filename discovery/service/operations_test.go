@@ -47,11 +47,11 @@ func (p *projectionPort) DescribeAt(objectmodel.Repository, kernel.CommitID) (in
 	p.calls = append(p.calls, "describe")
 	return index.IndexDescriptor{BasisCommit: "fixed"}, nil
 }
-func (p *projectionPort) EnsureAt(objectmodel.Repository, kernel.CommitID) (index.IndexSync, error) {
+func (p *projectionPort) EnsureAt(context.Context, objectmodel.Repository, kernel.CommitID) (index.IndexSync, error) {
 	p.calls = append(p.calls, "ensure-at")
 	return index.IndexSync{}, nil
 }
-func (p *projectionPort) Ensure(objectmodel.Repository, kernel.CommitID) (index.IndexSync, error) {
+func (p *projectionPort) Ensure(context.Context, objectmodel.Repository, kernel.CommitID) (index.IndexSync, error) {
 	p.calls = append(p.calls, "ensure")
 	return index.IndexSync{BasisCommit: "fixed"}, nil
 }

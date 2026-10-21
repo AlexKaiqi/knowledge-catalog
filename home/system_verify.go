@@ -34,7 +34,7 @@ func verifySystemPublication(repo objectmodel.ReadStore, source snapshot.Store, 
 		}
 		actual := objectmodel.Operation{Op: objectmodel.OpPut, Address: current.Address, SchemaRef: resolved.SchemaRef, PathHint: resolved.PathHint, Value: current.Value}
 		if kernel.CanonicalDigest(actual) != kernel.CanonicalDigest(expected) {
-			return kernel.Fail(kernel.ErrPreconditionFailed, "System publication differs from the binary publication at %s", objectmodel.AddressKey(expected.Address))
+			return kernel.Fail(kernel.ErrPreconditionFailed, "System publication differs from the binary publication at %s", objectmodel.AddressLabel(expected.Address))
 		}
 	}
 	tree, ok := snapshot.TreeReaderOf(source)

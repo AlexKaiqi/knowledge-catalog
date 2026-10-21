@@ -33,14 +33,14 @@ func TestParseMarkdownReadmeFrontmatter(t *testing.T) {
 	if unit == nil {
 		t.Fatal("parse returned nil")
 	}
-	if unit.Address.Kind != objectmodel.KindAspect || unit.Address.ObjectID != "payments" || unit.Address.AspectName != objectmodel.ReadmeAspect {
+	if unit.Address.Kind != objectmodel.KindAspect || unit.Address.ObjectID != "payments" || unit.Address.AspectName != "readme" {
 		t.Fatalf("address %#v", unit.Address)
 	}
-	body, ok := objectmodel.ReadmeBody(unit.Value)
-	if !ok || body != "# Payments warehouse\n\nPublished metrics." {
+	body, _ := unit.Value.(map[string]any)["body"].(string)
+	if body != "# Payments warehouse\n\nPublished metrics." {
 		t.Fatalf("body %#v", unit.Value)
 	}
-	encoded, err := Serialize(unit.Address, objectmodel.RepositoryReadmePath, unit.SchemaRef, nil, unit.Value)
+	encoded, err := Serialize(unit.Address, "README.md", unit.SchemaRef, nil, unit.Value)
 	if err != nil {
 		t.Fatal(err)
 	}

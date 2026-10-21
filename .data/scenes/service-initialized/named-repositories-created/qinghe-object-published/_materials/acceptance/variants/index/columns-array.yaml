@@ -4,6 +4,7 @@ aspect_name: index
 member_key: primary-key-refs
 kind: Member
 schema_ref: schema/core/index-declaration/v1
+path_hint: indexes/sales-search/primary-key-refs.yaml
 ---
 catalog: declarative-index/opensearch@2026-10
 inputs:

@@ -26,7 +26,7 @@ var knownFlags = func() map[string]struct{} {
 		operation outcome offset length parent-span-id path path-hint payload phase pin port prefix
 		principal produced-at profile projections-dir query read
 		ref reference relation-type remove repo repos-dir repository request-id revision rerank-model rerank-timeout
-		role root run schema-ref server service-client-id service-client-secret service-principal since sort source source-ref source-revision span-id store to token topic
+		role root run schema-ref server service-client-id service-client-secret service-principal shape since sort source source-ref source-revision span-id store to token topic
 		trace-id until url user value value-source wait dataset-file dataset
 		file-source
 	`)

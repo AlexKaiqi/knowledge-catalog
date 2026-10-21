@@ -746,7 +746,7 @@ func TestForkPublishOnBranchCreatesNewObject(t *testing.T) {
 func readmeSchemaValue(t *testing.T) map[string]any {
 	t.Helper()
 	for _, operation := range systemrepo.SystemSchemaOperations() {
-		if operation.Address.ObjectID == objectmodel.CoreReadmeSchemaV1 {
+		if operation.Address.ObjectID == objectmodel.ObjectID("schema/core/readme/v1") {
 			value, ok := operation.Value.(map[string]any)
 			if !ok {
 				t.Fatalf("readme schema value %T", operation.Value)
@@ -760,63 +760,36 @@ func readmeSchemaValue(t *testing.T) map[string]any {
 
 func TestReadmeAspectIsMarkdownBody(t *testing.T) {
 	s := testkit.NewSetup(t, "")
-	schemaValue := readmeSchemaValue(t)
+	readmeSchema := objectmodel.ObjectID("schema/core/readme/v1")
 	schemaOp := objectmodel.Operation{
-		Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: objectmodel.CoreReadmeSchemaV1},
-		Value: schemaValue,
+		Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: readmeSchema},
+		Value: readmeSchemaValue(t),
 	}
-	instanceAddr := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "fixture/payments", AspectName: objectmodel.ReadmeAspect}
+	instanceAddr := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "fixture/payments", AspectName: "readme"}
 	valid := map[string]any{"body": "# Payments warehouse\n\nPublished metrics and tables for payments."}
+	commit := func(command string, ops ...objectmodel.Operation) (objectmodel.CommitReceipt, error) {
+		return s.Writer.Commit(command, objectmodel.CommitChangeSet{
+			TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
+			BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
+			Operations: ops,
+		})
+	}
 
-	drifted := readmeSchemaValue(t)
-	drifted["entity"] = "Other"
-	_, err := s.Writer.Commit("drift-readme-schema", objectmodel.CommitChangeSet{
-		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
-		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
-		Operations: []objectmodel.Operation{{
-			Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: objectmodel.CoreReadmeSchemaV1},
-			Value: drifted,
-		}},
+	// The readme Schema is an ordinary Schema: its own entity/aspect binding
+	// and closed fields are enforced like any other.
+	_, err := commit("readme-wrong-aspect", schemaOp, objectmodel.Operation{
+		Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "fixture/payments"},
+		SchemaRef: string(readmeSchema), Value: valid,
 	})
-	testkit.ExpectCode(t, err, kernel.ErrSchemaIncompatible)
-
-	_, err = s.Writer.Commit("readme-wrong-aspect", objectmodel.CommitChangeSet{
-		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
-		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
-		Operations: []objectmodel.Operation{schemaOp, {
-			Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "fixture/payments"},
-			SchemaRef: string(objectmodel.CoreReadmeSchemaV1), Value: valid,
-		}},
+	testkit.ExpectCode(t, err, kernel.ErrSchemaInstanceInvalid)
+	_, err = commit("readme-unknown-field", schemaOp, objectmodel.Operation{
+		Op: objectmodel.OpPut, Address: instanceAddr, SchemaRef: string(readmeSchema),
+		Value: map[string]any{"body": "ok", "owner": "payments"},
 	})
 	testkit.ExpectCode(t, err, kernel.ErrSchemaInstanceInvalid)
 
-	_, err = s.Writer.Commit("readme-missing-ref", objectmodel.CommitChangeSet{
-		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
-		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
-		Operations: []objectmodel.Operation{{
-			Op: objectmodel.OpPut, Address: instanceAddr, Value: valid,
-		}},
-	})
-	testkit.ExpectCode(t, err, kernel.ErrSchemaInstanceInvalid)
-
-	_, err = s.Writer.Commit("readme-unknown-field", objectmodel.CommitChangeSet{
-		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
-		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
-		Operations: []objectmodel.Operation{schemaOp, {
-			Op: objectmodel.OpPut, Address: instanceAddr,
-			SchemaRef: string(objectmodel.CoreReadmeSchemaV1),
-			Value:     map[string]any{"body": "ok", "owner": "payments"},
-		}},
-	})
-	testkit.ExpectCode(t, err, kernel.ErrSchemaInstanceInvalid)
-
-	receipt, err := s.Writer.Commit("readme-ok", objectmodel.CommitChangeSet{
-		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
-		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
-		Operations: []objectmodel.Operation{schemaOp, {
-			Op: objectmodel.OpPut, Address: instanceAddr,
-			SchemaRef: string(objectmodel.CoreReadmeSchemaV1), Value: valid,
-		}},
+	receipt, err := commit("readme-ok", schemaOp, objectmodel.Operation{
+		Op: objectmodel.OpPut, Address: instanceAddr, SchemaRef: string(readmeSchema), Value: valid,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -825,8 +798,29 @@ func TestReadmeAspectIsMarkdownBody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, ok := objectmodel.ReadmeBody(got.Value)
+	body, ok := testkit.MarkdownBody(got.Value)
 	if !ok || body != valid["body"] {
 		t.Fatalf("read back %#v", got.Value)
+	}
+}
+
+// Nothing about readme is reserved: a Repository may publish its own
+// version of the readme Schema, and a readme Aspect may carry no schema_ref.
+func TestReadmeIsNotReserved(t *testing.T) {
+	s := testkit.NewSetup(t, "")
+	own := readmeSchemaValue(t)
+	own["entity"] = "Other"
+	if _, err := s.Writer.Commit("own-readme-schema", objectmodel.CommitChangeSet{
+		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
+		BaseCommit: s.RootCommitID, ExpectedTargetCommit: s.RootCommitID,
+		Operations: []objectmodel.Operation{{
+			Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/core/readme/v1"},
+			Value: own,
+		}, {
+			Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "fixture/payments", AspectName: "readme"},
+			Value: map[string]any{"body": "unschemed"},
+		}},
+	}); err != nil {
+		t.Fatalf("readme Schema or Aspect was treated as reserved: %v", err)
 	}
 }

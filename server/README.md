@@ -1,7 +1,7 @@
 # server/
 
 服务接入面：method+pattern 路由闭集、typed handler 注册、授权强制与遥测的宿主。
-CAP-ORG-01 B4 先立契约（`routes.go` 与 `httpsurface.Patterns()` 双向对账）；B6 把 cli 的
+CAP-ORG-01 B4 先立契约（`routes.go` 与导出金样 `routes_golden.txt` 双向对账，原 `httpsurface` 包已由 ROUTE-MANIFEST-01 退役）；B6 把 cli 的
 serve/service_routes/handlers/授权/遥测/就绪探测搬入（B6/B7）。生产 CLI 经模块 SDK 请求
 本服务；KC 应用的 typed handler 由 `invocation` 缝调用所属任务服务（API-01），文件任务
 挂载独立 `snapshot/service`。根 CLI 仅在
@@ -137,7 +137,7 @@ Dataset 和当前服务版，跨范围或发布基点变化后返回 `USAGE_INVA
 授权通过后才由服务私有存储凭据调用未修改的私网 lakeFS；原账号管理入口指向现有认证系统。
 不把原 API 或任意数据路径直接转发给 native 后端。同源入口与网络边界见上述 vendor 文档。
 
-- `routes_anchor_test.go`：与 `httpsurface.Patterns()` 双向对账 + 无重复 + 字面表有序；
+- `routes_anchor_test.go`：与导出金样 `routes_golden.txt` 双向对账 + 无重复 + 字面表有序；`routes_golden.go` 提供包外读取入口；
 - arch：`TestEveryProductionPackageHasAnAllowedLayer`（app 层注册）、
   `TestEveryTopLevelCapabilityHasAReadme`；
 - `make check-surface`、`make test-contracts`、`make test`（B5 起承载行为回归）。

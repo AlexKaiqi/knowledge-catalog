@@ -86,15 +86,6 @@ func validateSchemaRefs(registry snapshot.Registry, target snapshot.Store, cs ob
 		if err != nil {
 			return err
 		}
-		schemaObjectID := objectmodel.ObjectID("")
-		if ref != "" {
-			if parsed, ok := objectmodel.ParseSchemaRef(ref); ok {
-				schemaObjectID = parsed.Object
-			}
-		}
-		if err := objectmodel.AssertReadmeBinding(op.Address, schemaObjectID); err != nil {
-			return err
-		}
 		if ref == "" {
 			continue
 		}
@@ -138,6 +129,7 @@ type schemaResolver struct {
 	at          kernel.CommitID
 	before      map[string]objectmodel.Unit
 	final       map[string]objectmodel.Unit
+	finalByID   map[objectmodel.ObjectID][]objectmodel.Unit
 	definitions map[string]objectmodel.SchemaDefinition
 }
 

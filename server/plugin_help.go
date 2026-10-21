@@ -20,12 +20,15 @@ func (f *httpFacade) pluginHelp(w http.ResponseWriter, r *http.Request) {
 	flags := map[string]FlagValue{"home": f.home, "name": r.PathValue("name")}
 	f.addIdentityFlags(flags, r, identity)
 	addHTTPTraceFlags(flags, r)
-	unlock := f.lockTypedInvocation("inventory.read")
-	defer unlock()
+	release, admitted := f.admitRequest()
+	defer release()
 	run := inv.VerbPluginHelp
-	f.homeMu.Lock()
-	opened := f.readHome
-	f.homeMu.Unlock()
+	var opened *Home
+	if admitted {
+		f.homeMu.Lock()
+		opened = f.readHome
+		f.homeMu.Unlock()
+	}
 	if opened != nil && opened.Plugins != nil {
 		// Borrow the configured Entry's explanation when the serving root is
 		// already assembled. This reads no source and never opens a runtime.

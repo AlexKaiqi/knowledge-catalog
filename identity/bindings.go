@@ -4,10 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 
 	"kc/internal/jsonfile"
 	"kc/kernel"
@@ -30,18 +28,8 @@ type bindingFile struct {
 	Bindings []VerifiedUser `json:"bindings"`
 }
 
-var fileLocks sync.Map
-
 func withFile(path string, action func(string) error) error {
-	absolute, err := filepath.Abs(path)
-	if err != nil {
-		return err
-	}
-	lock, _ := fileLocks.LoadOrStore(absolute, &sync.Mutex{})
-	mu := lock.(*sync.Mutex)
-	mu.Lock()
-	defer mu.Unlock()
-	return action(absolute)
+	return jsonfile.Locked(path, action)
 }
 
 func validateUser(user VerifiedUser) error {

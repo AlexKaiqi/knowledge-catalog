@@ -30,7 +30,7 @@ func constructDeclaredFields(source FieldSet, spec AccessSpec) (FieldSet, error)
 		if build.declaration.Build.Kind == "vector" {
 			text, err := declarationText(build.declaration, values)
 			if err != nil {
-				return FieldSet{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "member %s: %v", member, err)
+				return FieldSet{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "member %s: %v", objectmodel.AddressLabel(build.member), err)
 			}
 			model, _ := build.declaration.Build.Options["model"].(string)
 			if strings.TrimSpace(text) != "" && model != "" {
@@ -41,7 +41,7 @@ func constructDeclaredFields(source FieldSet, spec AccessSpec) (FieldSet, error)
 		if build.declaration.Build.Kind == "text" {
 			text, err := declarationText(build.declaration, values)
 			if err != nil {
-				return FieldSet{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "member %s: %v", member, err)
+				return FieldSet{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "member %s: %v", objectmodel.AddressLabel(build.member), err)
 			}
 			if text == "" {
 				continue

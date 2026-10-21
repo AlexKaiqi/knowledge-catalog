@@ -2,7 +2,7 @@
 
 ⓪ Snapshot authority：字面 path/blob/tree、不可变 commit、ref、expected-old CAS、merge 与 archive。
 
-`Store` 是 Dataset 服务 成员唯一必须满足的接口；它不认识 `object_id`、Aspect、Schema、Binding 或检索。`TreeReader` 是固定 commit 的可选字面路径读能力；`TreeStore` 在其上增加 raw path 写，`TreeChangeSet` 只携带路径与字节。拆分后二者不得用一个模糊的“tree capability”互相代替。另有若干可选加速能力（`DirectoryReader`、`HistoryStore`、`ChangeStore`、`BulkTreeIngester`），经同型 type assertion 与 `XxxOf()` 发现；`BulkTreeIngester` 只换 `TreeChangeSet` 的对象传输原语（批量写通路），CAS 与产出内容与 `TreeStore.ApplyTreeCommit` 完全一致，未提供该能力的介质对显式请求确定性失败关闭。
+`Store` 是 Dataset 服务 成员唯一必须满足的接口；它不认识 `object_id`、Aspect、Schema、Binding 或检索。`TreeReader` 是固定 commit 的可选字面路径读能力；`TreeStore` 在其上增加 raw path 写，`TreeChangeSet` 只携带路径与字节。拆分后二者不得用一个模糊的“tree capability”互相代替。另有若干可选加速能力（`DirectoryReader`、`HistoryStore`、`ChangeStore`、`BulkTreeIngester`），经同型 type assertion 与 `XxxOf()` 发现；`BulkTreeIngester` 只换 `TreeChangeSet` 的对象传输原语（批量写通路），CAS 与产出内容与 `TreeStore.ApplyTreeCommit` 完全一致，未提供该能力的介质对显式请求确定性失败关闭。lakeFS 实现的批量写向隐藏 wip 分支的固定路径写入，因此幂等：传输错误、5xx 与 429 做有限次指数退避重试（每次重发完整正文），其它 4xx 不重试并带回 lakeFS 响应体；已观察的 5xx 来自 lakeFS 容器到对象存储的出站临时端口耗尽。
 
 `command_contract.go` 提供跨写面的 CommandLedger/CommandStore；`write_contract.go` 提供基于 TreeStore 的 RawWriter，负责 CAS 与 Advanced 通知。构造返回接口，具体实现未导出。两者都不解释对象正文。Object PUT/REMOVE 由 `object/writer/` 编排。
 
@@ -13,7 +13,8 @@
 命令在进入写入前耐久预留，同 ID 同 digest 重放已保存回执，异 digest 拒绝。写入错误只有经
 `WriteNotApplied` 显式证明目标未发布才释放预留；未知结果保留 `PENDING`，重开 ledger 也不
 重新执行，须由 `ResolvePending` 或 `AbandonPending` 显式处置。该纯错误包装保留原错误码，
-不按 HTTP 状态或临时错误推断发布结果。`WriteObserver` 接收真实结果，已有领域错误
+并经统一错误信封保留明确未应用的证明；占用释放失败仍保留证明及原 PENDING 占用，
+不能据此自动重试。不按 HTTP 状态或临时错误推断发布结果。`WriteObserver` 接收真实结果，已有领域错误
 原样保留；成功后若留证失败，同时返回记录错误与原 `APPLIED` / `REPLAYED` 回执，命令账
 仍为 `APPLIED`。调用方可据回执核对已成立的提交；重试重放原回执，不重新提交。
 
@@ -27,6 +28,11 @@ fencing token，因此必须维持停写直到恢复结束，不能把该函数�
 `Advanced` 只报告 `{store, from, to}`。上层若需要对象变化集合，必须在②解释固定的两个 commit，不能把 `ObjectID` 塞回⓪事件。
 
 生产后端只有 lakeFS，由 `OpenLakeFS`、`CreateManagedLakeFS`、`OpenManagedLakeFS` 返回 `Store`；私有实现在 `internal/lakefsimpl`。Gitea/filegit 存储接线和旧注册薄壳删除，身份认证不属于存储 adapter。
+
+维护读取通过 `BindStoreContext` 取得可取消视图；lakeFS 的打开阶段用 `OpenLakeFSContext`
+将取消传入首次请求。包装层通过可选 `ContextBoundStore` 继续绑定内部来源，并保留原身份、
+可选能力与只读限制；不能只替换基础 `Store` 而保留未绑定的文件、目录或历史读端口。
+取消只影响该视图，原来源仍可使用。没有绑定能力的来源保持原值，不据此推断它没有网络读取。
 
 lakeFS 返回的 Store 还可经可选接口读写原生仓属性：
 `ReadRepositoryMetadata() (map[string]string, error)` 读取当前属性，
@@ -57,3 +63,8 @@ Snapshot adapter：不持有 ref、不产生 commit，也不扩展 raw path 写�
 客户端入口同归模块，命令仍按用户任务组织为 Dataset、文件与授权等既有路径。`kc` 保留认证上下文、全局入口、部署及跨模块流程；托管仓供给、连接恢复与初始发权属于应用管理，不因接口路径包含 snapshot 就成为底层存储合同。CLI 不读取 KC Home、应用 Invocation 或对象实现，发布、当前授权和文件范围仍由唯一服务执行。
 
 根包使用私有 storecontract 共享纯文件坐标 DTO，避免根构造器与 lakeFS 实现的 Go import 循环；公开别名仅指向这些纯 DTO，不开放具体客户端或实现。
+
+`HistoryStore.CommitHistory` 返回包含给定固定提交的 first-parent 链，最新在前；正数 limit
+是调用者的总上限，通用提供方仍可能返回短批次，调用者从批次最后一个提交继续探测，
+请求至少两个提交却仅得到该起点时才证明到达根提交。lakeFS 实现跟随物理分页以满足请求总量，
+后续页失败或游标无进展时返回错误，不以部分列表冒充完整结果。

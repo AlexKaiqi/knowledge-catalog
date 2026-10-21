@@ -15,7 +15,7 @@ func Ingest(idx *Tree, parsed *Unit, relPath string) error {
 	}
 	key := objectmodel.AddressKey(parsed.Address)
 	if _, ok := idx.Units[key]; ok {
-		return kernel.Fail(kernel.ErrObjectIDConflict, "duplicate address %s", key)
+		return kernel.Fail(kernel.ErrObjectIDConflict, "duplicate address %s", objectmodel.AddressLabel(parsed.Address))
 	}
 	siblings := append(ToObjectUnits(idx.ObjectUnits(parsed.ObjectID)), ToObjectUnits([]Unit{*parsed})...)
 	if _, err := objectmodel.AssembleUnits(siblings); err != nil {

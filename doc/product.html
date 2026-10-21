@@ -160,7 +160,7 @@
         <thead><tr><th>环节</th><th>谁做什么</th><th>留下什么依据</th></tr></thead>
         <tbody>
           <tr><td>准备</td><td>交易组发布服务、处置手册、告警和工具说明；市场组发布活动首日提示</td><td>各自在来源仓形成独立版本</td></tr>
-          <tr><td>交付</td><td>发布者把值班需要的文件选入 <code>store-oncall</code>，取得各来源发布许可，并给值班身份消费权</td><td>一个固定来源版本组合的 Dataset 修订</td></tr>
+          <tr><td>交付</td><td>发布者把值班需要的文件选入 <code>store-oncall</code>，取得各来源发布许可，并给值班身份消费权</td><td>一个固定来源版本组合的 Dataset 版本</td></tr>
           <tr><td>读取</td><td>值班同事或 Agent 固定该修订，读取告警、服务手册和活动提示；有可用索引时也可先搜索</td><td>对象身份、所读方面、来源仓和版本</td></tr>
           <tr><td>判断</td><td>发现活动期间预计流量上升，先核对当前流量、错误率和适用阈值，再提出处置建议</td><td>说明来自交付；当前运行数据须从获准的监控入口另取，带观察时间</td></tr>
           <tr><td>改进</td><td>使用者反馈手册过时；维护者核实、修改并发布，再由发布者交付新修订</td><td>反馈关联旧依据，后续读取可采用新版，已有处理记录保留原依据</td></tr>
@@ -245,15 +245,15 @@ kc login</code></pre></div>
         <p>Taihu 登录若返回授权链接，先在浏览器完成授权，再按返回提示执行 <code>kc login --wait</code>。登录完成后用 <code>kc whoami</code> 核对身份；登录成功不等于已获业务权限。</p>
       </div>
       <div class="step"><span class="step-no">2</span><h3>选一份交付，固定修订再读</h3>
-        <p>用库存了解有哪些交付及其用途，再核对所选 Dataset 的消费权。下面以部署已公开的 <code>store-oncall</code> 第 1 版为例；实际使用时选定修订后，后续读取沿用同一个修订。</p>
+        <p>用库存了解有哪些交付及其用途，再核对所选 Dataset 的消费权。下面以部署已公开的 <code>store-oncall</code> 第 2 版为例，其中已交付更新后的手册与活动首日提示；选定修订后，后续读取沿用同一个修订。</p>
         <div class="code"><div class="code-head"><span>消费方 · 读取同一版</span><button class="copy" type="button">复制</button></div><pre><code>kc help consume
 kc show
-kc dataset show store-oncall --revision 1
-kc files list --dataset store-oncall --revision 1 --path services
-kc read 'urn:kc:object:service/qinghe.order-service#/runbook' --dataset store-oncall --revision 1
-kc read 'urn:kc:object:campaign/qinghe.autumn-2026' --dataset store-oncall --revision 1</code></pre></div>
+kc dataset show store-oncall --revision 2
+kc files list --dataset store-oncall --revision 2 --path services
+kc read 'urn:kc:object:service/qinghe.order-service#/runbook' --dataset store-oncall --revision 2
+kc read 'urn:kc:object:campaign/qinghe.autumn-2026' --dataset store-oncall --revision 2</code></pre></div>
         <p>已知对象可以直接读；想查看原始文件，沿 <code>kc files list</code> 返回的路径使用 <code>kc files read</code>。搜索需要另外确认该 Dataset 的索引能力与就绪状态，见<a href="#v4">按需扩展</a>。</p>
-        <p class="get"><b>核对结果</b>读到所选修订里的手册和活动说明，并保留返回的对象、来源与版本。无权、版本不可用或缺少能力时先处理原因，不把它当成空内容。</p>
+        <p class="get"><b>核对结果</b>读到第 2 版手册和活动说明：先核对首日流量、适用延迟阈值和错误率，不能仅因延迟升高就重启。保留返回的对象、来源与版本；无权、版本不可用或缺少能力时先处理原因，不把它当成空内容。</p>
       </div>
       <div class="step"><span class="step-no">3</span><h3>核对答案与实际读取依据</h3>
         <p>回到告警问题，检查回答是否引用了刚读取的手册与活动说明，并区分静态快照和当前运行数据。交给 Agent 执行时，可使用上一节的<a href="#agent">起始说明</a>；检查标准仍是实际读到的内容与依据。</p>
@@ -326,12 +326,12 @@ kc files read --dataset &lt;your-dataset&gt; --revision 1 --path &lt;entries.pat
       <p class="lead">一次内容更新有三个时刻：来源提交、Dataset 接受新修订、消费者采用新版。把它们分开，才知道别人究竟用到了哪一版。</p>
       <div class="grid3">
         <div class="cell"><b>1. 来源仓发布</b>维护者核实反馈，修改并提交。对象修改经 Writer 校验；基点已经变化时，重新读取和核对，避免覆盖他人的改动。</div>
-        <div class="cell"><b>2. 交付接受新修订</b>发布者把更新后的来源交付成新版，并核对接受结果。来源提交不会改写已有 Dataset 修订。</div>
+        <div class="cell"><b>2. 交付接受新版本</b>发布者把更新后的来源交付成新版，并核对接受结果。来源提交不会改写已有 Dataset 版本。</div>
         <div class="cell"><b>3. 消费者采用</b>不指定修订的新请求使用当前已发布版；已固定修订的读取、已下载的文件或挂载不会因此自动换版，应明确采用更新。</div>
       </div>
       <p>自动跟随的设计也是“产生并接受新修订”，不会改写旧版；是否已在目标部署提供，应先确认。上面的接入流程使用显式发布，不把来源提交成功当成已交付。自动跟随及修订管理的能力进展见<a href="roadmap.md">路线</a>。</p>
       <h3>把问题带着依据交回维护者</h3>
-      <p>反馈应包含对象、方面、所用 Dataset 修订或来源提交，以及具体问题。反馈本身不修改对象；维护者核实后再发布。需要评审时先在工作分支修订，校验和业务审核完成后再合并。</p>
+      <p>反馈应包含对象、方面、所用 Dataset 版本或来源提交，以及具体问题。反馈本身不修改对象；维护者核实后再发布。需要评审时先在工作分支修订，校验和业务审核完成后再合并。</p>
       <h3>复核时区分内容版本和外部观察</h3>
       <p>静态内容按原版本读取，但仍检查当前权限与版本可用性。LiveAccess 的固定版本保存的是取值声明，不会把外部系统冻结在过去；复核当次状态应查原观察与证据，重新查询可能得到新值。证据保留与历史可用范围以部署策略为准。</p>
       <h3>通过访问记录了解使用情况</h3>
@@ -349,7 +349,7 @@ kc help operations audit hitmap</code></pre></div>
       <p>索引声明描述要检索的字段及构建方式，选进哪个 Dataset，就为哪个范围提供检索依据。声明可被解析、插件可用、索引已就绪之后才能搜索；对象登记或 Dataset 发布本身不能代替这些条件。</p>
       <div class="code"><div class="code-head"><span>先读部署提供的插件说明</span><button class="copy" type="button">复制</button></div><pre><code>kc help plugin
 kc help search</code></pre></div>
-      <p>从当前范围的访问概览取得实际插件名称，再用 <code>kc plugin &lt;名称&gt; help</code> 了解该实例支持的声明。搜索和回读应沿用同一个 Dataset 修订。声明形式、能力与交付状态以目标服务说明为准；设计与进展分别见<a href="design/discovery.md">发现</a>和<a href="roadmap.md">路线</a>。</p>
+      <p>从当前范围的访问概览取得实际插件名称，再用 <code>kc plugin &lt;名称&gt; help</code> 了解该实例支持的声明。搜索和回读应沿用同一个 Dataset 版本。声明形式、能力与交付状态以目标服务说明为准；设计与进展分别见<a href="design/discovery.md">发现</a>和<a href="roadmap.md">路线</a>。</p>
       <h3>LiveAccess：按权限读取外部当前值</h3>
       <p>健康状态、表行数等变化频繁的值，可以由方面或成员引用一份取值描述。部署具备相应能力时，平台读取外部系统返回的获准结果，并保留观察依据；某个值失败应单独说明，不能用旧快照冒充当前值。</p>
       <div class="table-scroll"><table>
@@ -380,7 +380,7 @@ kc help search</code></pre></div>
       <details><summary>看得到仓或 Dataset，就能读内容吗？</summary><div class="body"><p>不能这样推断。库存可见与内容可读是不同能力；实际读取仍检查当前授权。部署可以把某些 Dataset 声明为已认证用户默认可读，这不开放来源整仓或写权限。</p></div></details>
       <details><summary>别人怎样把我的内容交付给他的用户？</summary><div class="body"><p>他需要 Dataset 管理权，并取得你对所选来源的发布许可。消费权按整份 Dataset 生效，发布者应先明确哪些文件可以交付，不能依赖来源仓的直读限制来隐藏已经选入的敏感内容。</p></div></details>
       <details><summary>同一个对象的一部分是敏感信息，怎么办？</summary><div class="body"><p>把读者或维护权限不同的方面放到受限仓，发布 Dataset 时只选入允许交付的文件。Dataset 没选入的方面属于范围之外，不会从来源仓自动补齐。按仓范围读取时，无法读取的来源会在结果中说明，具体粒度以返回信息为准。</p></div></details>
-      <details><summary>撤回发布许可，等于收回已交付内容吗？</summary><div class="body"><p>不等于。来源发布许可控制后续发布；已有 Dataset 修订仍按其消费权限服务。要阻止后续读取，还需处理相应消费权限或交付的可用状态。已经下载到客户端的字节不能远程收回。</p></div></details>
+      <details><summary>撤回发布许可，等于收回已交付内容吗？</summary><div class="body"><p>不等于。来源发布许可控制后续发布；已有 Dataset 版本仍按其消费权限服务。要阻止后续读取，还需处理相应消费权限或交付的可用状态。已经下载到客户端的字节不能远程收回。</p></div></details>
       <details><summary>撤销消费权以后，旧版本还能读吗？</summary><div class="body"><p>后续请求重新检查当前权限，旧版本坐标不提供通行权。已下载文件的本地副本与服务端的新读取是两回事。</p></div></details>
       <details><summary>Agent 用谁的身份，外部系统认谁？</summary><div class="body"><p>KC 使用请求携带且经服务验证的身份；共享你的会话时就是你的身份，专用 Agent 身份需另行授权。LiveAccess 按目标规则传递认证，外部系统执行自己的权限。工具绕过 KC 的直接调用也由外部系统负责。</p></div></details>
       <details><summary>谁能查看访问记录，权限又向谁申请？</summary><div class="body"><p>查看访问记录需要对应审计权限。业务申请走组织现有流程；可用 <code>kc admission show</code> 查看自身权限和部署提供的申请入口，平台不代替业务审批。</p></div></details>

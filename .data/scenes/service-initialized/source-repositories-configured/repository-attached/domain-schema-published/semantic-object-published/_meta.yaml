@@ -29,4 +29,36 @@ evidence:
     verifies:
       - claim: "object#U1"
         detail: 实例 priority 类型错误时拒绝整批发布且 HEAD 不移动，改为合法类型后提交成功；空仓同一 ChangeSet 的 Schema 与引用实例使用批内声明校验，错误实例阻断整批并保持 HEAD，合法实例与 Schema 同批提交成功。
+  - id: shaped-read-selects-before-reading
+    title: 形状先按坐标规划，只读并只外部取值所选单元，封闭 Schema 拒绝未声明字段
+    source: snapshot.product
+    views:
+      - consumption
+    tests:
+      - TestShapeReadLoadsOnlySelectedUnitBodies
+      - TestShapeHydratesOnlySelectedBindingAspects
+      - TestShapedReadEnforcesTheAdoptedClosedSchema
+      - TestShapedComposedReadReturnsOnlySelectedPartsWithTheirSources
+      - TestShapedReadDigestDrivesConditionalUpdate
+      - TestShapeInsideDatasetLocatesOutOfScopeAspectWithoutItsBody
+    verifies:
+      - claim: "object#U21"
+        detail: 真实树仓上未选单元正文读取次数为 0 且所选成员保留完整维护摘要；未选 Binding 方面不发生外部调用；采纳 additionalProperties=false 的 Schema 时选未声明字段返回 USAGE_INVALID，开放 Schema 下给 string 字段写子选择同样拒绝；Dataset 组合对象只返回所选方面并只列其来源；形状结果里的单元摘要可直接用于条件更新，单元未选字段变化后旧摘要以 PRECONDITION_FAILED 拒绝；Dataset 未发布的方面在路径上报缺失且正文不出现在结果中。
 fixture: 仓已有符合 Domain Schema 的 Metric definition，关系仓已有指向它的 defines 关系。
+probes:
+  - file: probe-shaped-read.feature
+    source: snapshot.product
+    views:
+      - consumption
+    title: 按 GraphQL 形状只读 Metric definition 的 name 与 unit，缺失方面按路径报错
+    verifies:
+      - claim: "object#U21"
+        detail: 形状 `{ definition { name unit } lineage }` 只返回 name 与 unit，expression、measureKey 与完整 value 不出现；未发布的 lineage 在 errors 中以 OBJECT_REF_UNRESOLVED 定位；来源只列 definition 方面。
+  - file: probe-shaped-read-refusals.feature
+    source: snapshot.product
+    views:
+      - consumption
+    title: URN 已带定位符、形状用了别名或层级与 Schema 不符时整次拒绝，开放 Schema 下未声明字段按路径报缺失
+    verifies:
+      - claim: "object#U21"
+        detail: URN 带 `#/definition` 再给形状、形状使用别名、给 string 字段 name 写子选择，均返回 USAGE_INVALID；Metric definition Schema 未封闭时选 owner 正常返回 name，owner 在 errors 中以 OBJECT_REF_UNRESOLVED 定位。

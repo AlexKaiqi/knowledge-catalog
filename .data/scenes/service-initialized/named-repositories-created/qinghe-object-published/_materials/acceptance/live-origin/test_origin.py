@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import http.client
 import json
 from pathlib import Path
 import threading
@@ -99,6 +100,25 @@ class LiveOriginTest(unittest.TestCase):
         self.assertEqual(calls[0]["headers"]["X-Resource-Principal"], "alice")
         self.call("DELETE", "/control/calls")
         self.assertEqual(self.call("GET", "/control/calls")[1]["calls"], [])
+
+    def test_deny_principals_rejects_only_the_listed_caller(self) -> None:
+        unit = "table/shop.orders#/runtime/freshness-lag"
+        self.call("PUT", unit_path(unit), {"value": {"value": 120}, "denyPrincipals": ["reader-b"]})
+        status, body = self.lookup("table/shop.orders", "runtime", "freshness-lag", principal="reader-b")
+        self.assertEqual((status, body["error"]["code"]), (403, "FORBIDDEN"))
+        status, body = self.lookup("table/shop.orders", "runtime", "freshness-lag", principal="reader-a")
+        self.assertEqual((status, body["value"]), (200, {"value": 120}))
+        status, _ = self.call("PUT", unit_path(unit), {"value": {}, "denyPrincipals": "reader-b"})
+        self.assertEqual(status, 400)
+
+    def test_unreachable_unit_drops_the_connection(self) -> None:
+        unit = "table/shop.orders#/runtime/row-count"
+        self.call("PUT", unit_path(unit), {"behavior": "unreachable"})
+        with self.assertRaises((urllib.error.URLError, ConnectionError, http.client.HTTPException)):
+            self.lookup("table/shop.orders", "runtime", "row-count")
+        self.assertEqual(self.lookup("table/shop.orders", "runtime", "freshness-lag")[0], 200)
+        calls = self.call("GET", "/control/calls")[1]["calls"]
+        self.assertEqual([call["address"] for call in calls], [unit, "table/shop.orders#/runtime/freshness-lag"])
 
     def test_reset_restores_initial_units(self) -> None:
         self.call("DELETE", unit_path("table/shop.orders#/runtime/row-count"))

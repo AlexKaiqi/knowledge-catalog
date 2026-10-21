@@ -1,6 +1,8 @@
 package dataset
 
 import (
+	"slices"
+
 	"kc/kernel"
 	"kc/snapshot"
 )
@@ -11,29 +13,23 @@ type registryMeta struct {
 }
 
 func (c *service) Repositories() []string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.repositoriesList()
+	return c.accepted().repositoriesList()
 }
 
-func (c *service) repositoriesList() []string {
-	out := make([]string, 0, len(c.repositories))
-	for id := range c.repositories {
+func (s *acceptedState) repositoriesList() []string {
+	out := make([]string, 0, len(s.repositories))
+	for id := range s.repositories {
 		out = append(out, id)
 	}
 	return out
 }
 
 func (c *service) HasRepository(repositoryID kernel.RepositoryID) bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	_, ok := c.repositories[string(repositoryID)]
+	_, ok := c.accepted().repositories[string(repositoryID)]
 	return ok
 }
 
 func (c *service) RegisterRepository(repositoryID kernel.RepositoryID) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	if err := c.ensureWritable(); err != nil {
 		return err
 	}
@@ -46,18 +42,18 @@ func (c *service) RegisterRepository(repositoryID kernel.RepositoryID) error {
 			return kernel.Fail(kernel.ErrRepositoryArchived, "repository %s is archived", id)
 		}
 	}
-	next := c.dumpState()
-	if _, ok := c.repositories[id]; !ok {
-		next.Repositories = append(next.Repositories, id)
-	}
 	// Unchanged state still crosses the authority check; persistence does not
 	// create another commit when this handle remains current.
-	return c.persist(next, "register "+id)
+	return c.commit("register "+id, func(s *acceptedState) (State, error) {
+		next := s.dump(c.registry.AuthorityID())
+		if _, ok := s.repositories[id]; !ok {
+			next.Repositories = append(next.Repositories, id)
+		}
+		return next, nil
+	})
 }
 
 func (c *service) UnregisterRepository(repositoryID kernel.RepositoryID) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	if err := c.ensureWritable(); err != nil {
 		return err
 	}
@@ -65,36 +61,32 @@ func (c *service) UnregisterRepository(repositoryID kernel.RepositoryID) error {
 	if id == "" {
 		return kernel.Fail(kernel.ErrUsageInvalid, "repository id is required")
 	}
-	if _, ok := c.repositories[id]; !ok {
-		return kernel.Fail(kernel.ErrDatasetInvalid, "repository %s is not registered in this service", id)
-	}
-	next := c.dumpState()
-	filtered := next.Repositories[:0]
-	for _, repo := range next.Repositories {
-		if repo != id {
-			filtered = append(filtered, repo)
+	return c.commit("unregister "+id, func(s *acceptedState) (State, error) {
+		if _, ok := s.repositories[id]; !ok {
+			return State{}, kernel.Fail(kernel.ErrDatasetInvalid, "repository %s is not registered in this service", id)
 		}
-	}
-	next.Repositories = filtered
-	return c.persist(next, "unregister "+id)
+		next := s.dump(c.registry.AuthorityID())
+		next.Repositories = slices.DeleteFunc(next.Repositories, func(repo string) bool { return repo == id })
+		return next, nil
+	})
 }
 
 func (c *service) RetireDataset(setID string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	if err := c.ensureWritable(); err != nil {
 		return err
 	}
-	if _, ok := c.datasets[setID]; !ok {
-		return kernel.Fail(kernel.ErrDatasetInvalid, "dataset %s is not defined in this service", setID)
-	}
-	next := c.dumpState()
-	for i := range next.Datasets {
-		if next.Datasets[i].SetID == setID {
-			next.Datasets[i].Retired = true
+	return c.commitDataset(setID, "dataset-retire "+setID, func(s *acceptedState) (State, error) {
+		if _, ok := s.datasets[setID]; !ok {
+			return State{}, kernel.Fail(kernel.ErrDatasetInvalid, "dataset %s is not defined in this service", setID)
 		}
-	}
-	return c.persist(next, "dataset-retire "+setID)
+		next := s.dump(c.registry.AuthorityID())
+		for i := range next.Datasets {
+			if next.Datasets[i].SetID == setID {
+				next.Datasets[i].Retired = true
+			}
+		}
+		return next, nil
+	})
 }
 
 func (c *service) ensureWritable() error {

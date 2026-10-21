@@ -21,10 +21,12 @@
 - 产品书：`DEBT-PRODUCT-CLAIMS-01` 审计表中依赖本轮实现的承诺（自动跟随、按 Dataset 修订生效的索引声明、库存按消费权列出、只有共享外部值进索引、成员使用汇总）在本候选上按产品书原预期复核；不以删去承诺代替完成设计目标。
 - 场景缺口：`.data/scenes/_views.yaml` 中 discovery、liveaccess、dataset 登记的缺口逐条关闭或写明仍缺什么。
 - `test-catalog.md` 与 `architecture-invariants.md` 中随本轮改写的行都指向实际存在的测试。
+- 目录与错误码分别核对：`ARCH-LAYOUT-01` 的职责/依赖图、迁移与测试覆盖映射，以及
+  `ARCH-ERROR-CODES-01` 的候选审计和删除/保留结论均对应本候选，不用历史专项通过代替整体验收。
 
 ## 前置
 
-- 实现：`DATASET-REVISION-01`、`DATASET-RETENTION-01`、`DATASET-STORAGE-01`、`INDEX-USAGE-01`、`PUBLICATION-SYNC-01`、`ROUTE-MANIFEST-01`、`ARCH-LAYOUT-01`、`DEBT-INVENTORY-CONSUMPTION-01`。
+- 实现：`DATASET-REVISION-01`、`DATASET-RETENTION-01`、`DATASET-STORAGE-01`、`INDEX-USAGE-01`、`PUBLICATION-SYNC-01`、`ROUTE-MANIFEST-01`、`ARCH-LAYOUT-01`、`ARCH-ERROR-CODES-01`、`DEBT-INVENTORY-CONSUMPTION-01`。
 - 验收执行：`ACCEPT-HARNESS-01`。“规格”一条要求 accept-01 至 accept-13 每条都有执行证据，执行器须先为全部规格接上 probe，且真实测试部署与共享搜索容量健康。
 - 试跑：`ZK-TRIAL-02`。
 

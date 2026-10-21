@@ -1,6 +1,7 @@
 package reader_test
 
 import (
+	"sync"
 	"testing"
 
 	"kc/internal/testkit"
@@ -15,6 +16,7 @@ import (
 type countingRepository struct {
 	snapshot.Store
 	snapshot.TreeStore
+	mu        sync.Mutex
 	listCalls int
 	readCalls int
 }
@@ -38,12 +40,16 @@ func (r *countingRepository) ObjectUnitPaths(objectID objectmodel.ObjectID, comm
 }
 
 func (r *countingRepository) ListFiles(commit kernel.CommitID) ([]string, error) {
+	r.mu.Lock()
 	r.listCalls++
+	r.mu.Unlock()
 	return r.TreeStore.ListFiles(commit)
 }
 
 func (r *countingRepository) ReadFile(path string, commit kernel.CommitID) ([]byte, error) {
+	r.mu.Lock()
 	r.readCalls++
+	r.mu.Unlock()
 	return r.TreeStore.ReadFile(path, commit)
 }
 

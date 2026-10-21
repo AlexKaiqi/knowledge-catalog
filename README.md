@@ -149,8 +149,7 @@ make deploy-local-scenes  # 独立真实 lakeFS 部署场景；需先显式准�
 make test-contracts       # 原组件/架构/application/HTTP 合同组合，显式运行
 make quality              # gofmt/tidy/vet/staticcheck + 复杂度/文件体积/重复门禁
 make test-state-runtime-e2e # 独立 Docker runtime + OpenSearch；HTTP index-sync/search 动态旅程
-make test-server-web      # Server 浏览器登录与 Web 入口测试
-make test-all             # 夹具、真实 lakeFS 部署、混合合同、Server Web 与其它 adapter/FUSE；需 local 测试栈
+make test-all             # 夹具、真实 lakeFS 部署、混合合同与其它 adapter/FUSE；需 local 测试栈
 make build                # 当前平台二进制：dist/bin/<os>_<arch>/kc
 make package              # 当前平台安装包；全部四目标：make package-all（macOS 主机）
 go run ./cmd/kc -- help

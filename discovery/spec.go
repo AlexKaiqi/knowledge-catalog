@@ -94,7 +94,7 @@ func (s AccessSpec) Bind(refs []string) AccessSpec {
 	if len(want) == 0 {
 		return s
 	}
-	out := AccessSpec{Repository: s.Repository, Commit: s.Commit, Fields: []AccessField{}, Schemas: []objectmodel.ObjectID{}, AccessDigest: s.AccessDigest, Declarations: s.Declarations, schemaForms: s.schemaForms, currentFields: s.currentFields, adoptions: s.adoptions, builds: s.builds, declarationSchemas: s.declarationSchemas}
+	out := AccessSpec{Repository: s.Repository, Commit: s.Commit, Fields: []AccessField{}, Schemas: []objectmodel.ObjectID{}, AccessDigest: s.AccessDigest, Declarations: s.Declarations, schemaForms: s.schemaForms, currentFields: s.currentFields, adoptions: s.adoptions, builds: s.builds, declarationSchemas: s.declarationSchemas, inapplicable: s.inapplicable}
 	seen := map[objectmodel.ObjectID]struct{}{}
 	for _, field := range s.Fields {
 		if _, ok := want[field.Schema]; !ok {
@@ -127,6 +127,7 @@ type AccessSpec struct {
 	adoptions          []SchemaAdoption
 	builds             []declarationBuild
 	declarationSchemas map[objectmodel.ObjectID]bool
+	inapplicable       []declarationBuild
 }
 
 func AccessSpecFromReport(report reader.SchemaReport) AccessSpec {
@@ -171,6 +172,10 @@ func (s AccessSpec) ResolveField(ref FieldRef) (AccessField, error) {
 		}
 	}
 	if len(matches) == 0 {
+		if unready := s.unreadyDeclarers(ref); len(unready) > 0 {
+			return AccessField{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+				"field %s is declared only by members that did not compile to ready: %s", displayFieldRef(ref), strings.Join(unready, "; "))
+		}
 		return AccessField{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "field %s is not in AccessSpec", displayFieldRef(ref))
 	}
 	if len(matches) > 1 {
@@ -195,6 +200,31 @@ func qualifiedFieldChoices(matches []AccessField) string {
 		choices[i] = string(field.Schema) + "::" + field.Aspect + "::" + field.Path
 	}
 	return strings.Join(choices, ", ")
+}
+
+// unreadyDeclarers names the non-ready members whose inputs carry ref, so a
+// caller learns why a declared field has no searchable face instead of being
+// told it is absent.
+func (s AccessSpec) unreadyDeclarers(ref FieldRef) []string {
+	var out []string
+	for _, status := range s.Declarations {
+		if status.Status == DeclarationReady {
+			continue
+		}
+		for _, input := range status.Inputs {
+			if input.Path != ref.Path || ref.Schema != "" && input.Schema != ref.Schema ||
+				ref.Aspect != "" && input.Aspect != "" && input.Aspect != ref.Aspect {
+				continue
+			}
+			label := objectmodel.AddressLabel(status.Member) + " (" + status.Status
+			if status.Reason != "" {
+				label += ": " + status.Reason
+			}
+			out = append(out, label+")")
+			break
+		}
+	}
+	return out
 }
 
 func displayFieldRef(ref FieldRef) string {

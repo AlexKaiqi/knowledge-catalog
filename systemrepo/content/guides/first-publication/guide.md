@@ -37,6 +37,10 @@ kc read 'urn:kc:object:product/qinghe.osmanthus-oolong#/definition' --repo <your
 
 保留本次 command-id；响应丢失先查原回执，不换身份重发。提交接受回执的 `result.newCommit` 是上述读回使用的 `<new-commit>`；查询回执时取 `receipt.result.newCommit`。原样复用练习与公开例子持有相同对象身份，读回显式限定自己的仓，不能用无范围读取来判断本次发布。
 
-成功证据是同一接受版本中的 Schema 能解释实例，内容、身份和来源均可复核；`diff` 不替代 Writer 校验。系统仓不能作为业务写目标，已有系统 Schema 的副本须保持与出版物一致。需要搜索时另行发布索引声明；需要实时访问时发布取值描述与引用声明。对象发布、插件安装和投影就绪分别核对。需要向同事交付时继续 [向消费者交付 Dataset](../share-a-dataset/guide.md)。
+成功证据是同一接受版本中的 Schema 能解释实例，内容、身份和来源均可复核；`diff` 不替代 Writer 校验。
+系统仓不能作为业务写目标。Meta Schema 与索引声明 Schema 的副本须保持与出版物一致；
+其余类型遵守普通兼容规则，边界见 [Schema](../../concepts/schema/definition.md)。
+需要搜索时另行发布索引声明；需要实时访问时发布取值描述与引用声明。对象发布、插件安装和投影就绪分别核对。
+需要向同事交付时继续 [向消费者交付 Dataset](../share-a-dataset/guide.md)。
 
 所需能力：[理解对象类型](../../capabilities/schemas/definition.md)、[发布与修订对象](../../capabilities/publish-object/definition.md)、[精确读取与复核](../../capabilities/read-object/definition.md)。

@@ -59,6 +59,16 @@ type DatasetSchemaPage struct {
 // faces the Dataset's own declarations give each field. Declarations outside
 // the Dataset do not appear: the scoped member cannot read them.
 func describeDatasetSchemas(cx *Invocation, serving *reader.Serving, objectID objectmodel.ObjectID) ([]DatasetSchemaReport, error) {
+	return describeDatasetSchemasWithReadiness(cx, serving, objectID, true)
+}
+
+// describeDatasetSchemasWithReadiness skips the per-member search-readiness
+// check when readiness is false. `schema list` only needs the declaration
+// annotations; asking the index whether each member's fixed commit can be
+// searched now (engine handle, one Meta read, projection state) is describe
+// work whose result the list rows never carry, and every page redid it.
+// Declaration compilation itself stays: the rows' uses come from it.
+func describeDatasetSchemasWithReadiness(cx *Invocation, serving *reader.Serving, objectID objectmodel.ObjectID, readiness bool) ([]DatasetSchemaReport, error) {
 	reports, err := serving.DescribeSchema(objectID)
 	if err != nil {
 		return nil, err
@@ -99,7 +109,9 @@ func describeDatasetSchemas(cx *Invocation, serving *reader.Serving, objectID ob
 		}
 		described.SchemaReport = annotateReport(report, spec)
 		described.Search.Declarations = declarationsFor(report, spec, objectID == "")
-		described.Search.State, described.Search.Reason = memberReadiness(cx, member, report.Commit)
+		if readiness {
+			described.Search.State, described.Search.Reason = memberReadiness(cx, member, report.Commit)
+		}
 		out = append(out, described)
 	}
 	return out, nil
@@ -177,7 +189,7 @@ type schemaPageCursor struct {
 // continuation is bound to the frozen pin; a page from another revision is
 // rejected rather than silently mixed.
 func browseDatasetSchemas(cx *Invocation, serving *reader.Serving, limit int) (DatasetSchemaPage, error) {
-	reports, err := describeDatasetSchemas(cx, serving, "")
+	reports, err := describeDatasetSchemasWithReadiness(cx, serving, "", false)
 	if err != nil {
 		return DatasetSchemaPage{}, err
 	}

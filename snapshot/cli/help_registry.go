@@ -13,7 +13,7 @@ const helpShow = `kc show
   JSON 库存含 repositories 与 datasets；Dataset 摘要含身份、发布版、成员及可选元数据/退役状态。
   Repository 可附带宿主提供的 schemaCount 等描述；库存可见不表示来源文件可读、Dataset 可消费或资源可管理。
   当前 kc show 不读取 Repository 自定义元数据表；它是 lakeFS 原仓维护的可选字符串键值属性，不随 commit 冻结。
-  查看或编辑原仓属性：打开本服务 /console → Repositories → 目标仓 → Settings → General 的“Repository 自定义元数据”。
+  查看或编辑原仓属性：打开本服务 /ui/ → Repositories → 目标仓 → Settings → General 的“Repository 自定义元数据”。
   读取需 repository.metadata.read，新增/更新键或删除键需 repository.metadata.write；进入页面仍受原仓浏览权限检查。
  Dataset metadata 由 dataset define 的 --metadata 或输入配方随 revision 完整发布；dataset show --revision 回读历史属性。
 后果：

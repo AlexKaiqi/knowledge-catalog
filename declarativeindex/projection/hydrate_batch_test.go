@@ -1,6 +1,7 @@
 package projection_test
 
 import (
+	"context"
 	"kc/declarativeindex/internal/testfixture"
 	ports "kc/discovery/projection"
 	"testing"
@@ -80,7 +81,7 @@ func TestSearchHydratesCandidatePageThroughObjectBatchReader(t *testing.T) {
 	}
 	idx := liveIndex(t)
 	t.Cleanup(func() { _ = idx.Close() })
-	if _, err := idx.Ensure(repo, commit); err != nil {
+	if _, err := idx.Ensure(context.Background(), repo, commit); err != nil {
 		t.Fatal(err)
 	}
 	wrapped := &batchCountingRepository{Repository: repo}

@@ -179,6 +179,7 @@ func hostEnvironmentHelpEntries() map[string]helpEntry {
   用法与参数：
     --name 与 --url 互斥。--name 是平台供给空仓；--url 是连接已有仓。
     多个托管 Store 时用 --store 选择；连接模式必须给 --credential-file，不能带 --store。
+    凭证文件须为普通文本文件，最多 64 KiB；去掉首尾空白后只有一条非空凭证，不含内嵌换行。
     LakeFS 上 --name 就是仓 ID，与 lakeFS 仓库名相同。
     kc create 不接受 --metadata，也不设置原仓属性；该参数只用于 dataset define 的可选 Dataset 属性。
   条件：
@@ -192,7 +193,7 @@ func hostEnvironmentHelpEntries() map[string]helpEntry {
     初始权限只按部署明确策略应用一次；相同请求恢复原结果，不补回已撤销的权限。
     创建或连接不自动登记到服务库存；登记使用 kc attach。
     Repository 自定义元数据由 lakeFS 原仓按字符串键值维护，不随 commit 冻结，KC 不复制到登记账；Dataset 不自动继承来源属性。
-    创建/连接后需查看或设置属性时，打开本服务 /console → Repositories → 目标仓 → Settings → General 的“Repository 自定义元数据”。
+    创建/连接后需查看或设置属性时，打开本服务 /ui/ → Repositories → 目标仓 → Settings → General 的“Repository 自定义元数据”。
     读取需 repository.metadata.read，新增/更新键或删除键需 repository.metadata.write；进入页面仍受原仓浏览权限检查。
    Dataset 属性另用 dataset define --metadata 或输入配方随 revision 发布，历史属性用 dataset show --revision 回读。
   风险与成本：
@@ -215,7 +216,7 @@ func hostEnvironmentHelpEntries() map[string]helpEntry {
   用法与参数：
     --config 为已初始化部署配置；--listen 覆盖配置监听地址，均未声明时为 127.0.0.1:7380。
     认证方式来自配置，可显式 --auth 与 --auth-url；密钥由部署环境注入。
-    这是 typed API，浏览器打开根路径会 404，不是敲 kc 的页面。浏览器控制台入口为 /console。
+    这是 typed API，浏览器打开根路径会 404，不是敲 kc 的页面。浏览器控制台入口为 /ui/。
   条件：
     已有部署状态、身份和授权账完整，实际 system 仓与当前出版物匹配，
     配置的权威、认证器及启用的运行能力可用；先由 deployment init 完成首次初始化。

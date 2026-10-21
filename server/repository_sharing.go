@@ -104,22 +104,8 @@ func createRepositoryShareWithPolicy(cx *inv.Invocation, request kcclient.Reposi
 	if request.Principal == cx.Flag("as") {
 		return result, kernel.Fail(kernel.ErrUsageInvalid, "repository sharing requires a different recipient")
 	}
-	file, err := inv.ReadAllow(cx.Home)
-	if err != nil {
-		return result, err
-	}
 	if len(request.Actions) == 0 {
 		return result, kernel.Fail(kernel.ErrUsageInvalid, "share requires explicit consumption actions")
-	}
-	seen := map[string]bool{}
-	for _, action := range request.Actions {
-		if !slices.Contains(policy, action) || !wholeRepositoryActionAllowed(file.Rules, cx.Flag("as"), cx.Flag("repo"), action) {
-			return result, kernel.Fail(kernel.ErrForbidden, "cannot share action %s beyond deployment policy and current whole-repository permission", action)
-		}
-		if seen[action] {
-			return result, kernel.Fail(kernel.ErrUsageInvalid, "share actions must be unique")
-		}
-		seen[action] = true
 	}
 	var random [16]byte
 	if _, err := rand.Read(random[:]); err != nil {
@@ -127,8 +113,21 @@ func createRepositoryShareWithPolicy(cx *inv.Invocation, request kcclient.Reposi
 	}
 	id := "share-" + hex.EncodeToString(random[:])
 	rule := inv.AllowRule{ID: id, ShareID: id, SharedBy: cx.Flag("as"), Principal: request.Principal, Repo: cx.Flag("repo"), Actions: slices.Clone(request.Actions)}
-	file.Rules = append(file.Rules, rule)
-	if err := inv.WriteAllow(cx.Home, file); err != nil {
+	err := inv.UpdateAllow(cx.Home, func(file *inv.AllowFile) error {
+		seen := map[string]bool{}
+		for _, action := range request.Actions {
+			if !slices.Contains(policy, action) || !wholeRepositoryActionAllowed(file.Rules, cx.Flag("as"), cx.Flag("repo"), action) {
+				return kernel.Fail(kernel.ErrForbidden, "cannot share action %s beyond deployment policy and current whole-repository permission", action)
+			}
+			if seen[action] {
+				return kernel.Fail(kernel.ErrUsageInvalid, "share actions must be unique")
+			}
+			seen[action] = true
+		}
+		file.Rules = append(file.Rules, rule)
+		return nil
+	})
+	if err != nil {
 		return result, err
 	}
 	return shareRule(rule), nil
@@ -142,24 +141,23 @@ func VerbRepositoryShareRemove(cx *inv.Invocation) (any, error) {
 }
 
 func removeRepositoryShare(cx *inv.Invocation) (any, error) {
-	file, err := inv.ReadAllow(cx.Home)
-	if err != nil {
-		return nil, err
-	}
-	kept := make([]inv.AllowRule, 0, len(file.Rules))
-	found := false
-	for _, rule := range file.Rules {
-		if rule.Repo == cx.Flag("repo") && rule.ShareID != "" && rule.ShareID == cx.Flag("id") && rule.SharedBy != "" {
-			found = true
-			continue
+	err := inv.UpdateAllow(cx.Home, func(file *inv.AllowFile) error {
+		kept := make([]inv.AllowRule, 0, len(file.Rules))
+		found := false
+		for _, rule := range file.Rules {
+			if rule.Repo == cx.Flag("repo") && rule.ShareID != "" && rule.ShareID == cx.Flag("id") && rule.SharedBy != "" {
+				found = true
+				continue
+			}
+			kept = append(kept, rule)
 		}
-		kept = append(kept, rule)
-	}
-	if !found {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "no share with this ID in this repository")
-	}
-	file.Rules = kept
-	if err := inv.WriteAllow(cx.Home, file); err != nil {
+		if !found {
+			return kernel.Fail(kernel.ErrUsageInvalid, "no share with this ID in this repository")
+		}
+		file.Rules = kept
+		return nil
+	})
+	if err != nil {
 		return nil, err
 	}
 	return map[string]any{"repository": cx.Flag("repo"), "revoked": cx.Flag("id")}, nil

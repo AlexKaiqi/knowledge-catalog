@@ -9,8 +9,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-
-	"kc/httpsurface"
 )
 
 func TestInventoryCountsDeclarationsWithoutClaimingExecution(t *testing.T) {
@@ -94,10 +92,14 @@ func TestInventoryIncludesModuleAndServerProductionRoutes(t *testing.T) {
 		}
 		routes = append(routes, found...)
 	}
-	if owners["server"] != 62 || owners["snapshot/service"] != 28 || len(routes) != 90 {
+	if owners["server"] != 58 || owners["snapshot/service"] != 29 || len(routes) != 87 {
 		t.Fatalf("production routes omitted or assigned to stale owners: counts=%v, total=%d", owners, len(routes))
 	}
-	if err := validateRouteInventory(routes, httpsurface.Patterns()); err != nil {
+	patterns, err := goldenRoutesFrom(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateRouteInventory(routes, patterns); err != nil {
 		t.Fatal(err)
 	}
 	for _, route := range routes {

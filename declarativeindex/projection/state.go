@@ -19,6 +19,10 @@ type stateProjection struct {
 	accessDigest      kernel.Digest
 	observationDigest kernel.Digest
 	store             *stateServingStore
+	// oldestObservedAt is the earliest observation time among the values a
+	// Dataset revision was indexed from; results report it beside each
+	// condition answered from external values.
+	oldestObservedAt string
 }
 
 // RequiresState reports whether the request touches AccessSpec fields supplied
@@ -106,6 +110,7 @@ func (idx *Index) HasStateBindings(repo objectmodel.Repository, commit kernel.Co
 }
 
 func (idx *Index) refreshState(ctx context.Context, repo objectmodel.Repository, commit kernel.CommitID, source ports.ObservationSource, objectIDs []objectmodel.ObjectID) (ports.StateSync, error) {
+	repo = objectmodel.BindContext(ctx, repo)
 	idx.stateBuildMu.Lock()
 	defer idx.stateBuildMu.Unlock()
 	if source == nil {

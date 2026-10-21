@@ -65,7 +65,7 @@ func ExtractFields(repo objectmodel.Repository, value objectmodel.ObjectValue, o
 			// version (unit plus ResourceDescriptor digest).
 			if observation.DeclarationCommit == "" || observation.DeclarationCommit != observationDeclarationCommit(value, unit) || observation.DeclarationDigest != unit.DeclarationDigest {
 				return FieldSet{}, kernel.Fail(kernel.ErrPreconditionFailed,
-					"observation basis does not match Binding declaration at %s", objectmodel.AddressKey(unit.Address))
+					"observation basis does not match Binding declaration at %s", objectmodel.AddressLabel(unit.Address))
 			}
 			unitObserved = true
 		}
@@ -104,7 +104,7 @@ func ExtractFields(repo objectmodel.Repository, value objectmodel.ObjectValue, o
 				}
 				cell := FieldValue{Field: field, Value: normalized, form: form}
 				if err != nil {
-					return FieldSet{}, kernel.Fail(kernel.ErrUsageInvalid, "projection %s unit %s field %s: %v", value.Address.ObjectID, objectmodel.AddressKey(unit.Address), key, err)
+					return FieldSet{}, kernel.Fail(kernel.ErrUsageInvalid, "projection %s unit %s field %s: %v", value.Address.ObjectID, objectmodel.AddressLabel(unit.Address), displayFieldRef(field.FieldRef), err)
 				}
 				identity := cell.Field.FieldRef.Key() + "\x00" + form + "\x00" + cell.Value + "\x00" + fmt.Sprint(cell.Field.Access)
 				if _, duplicate := seenCells[identity]; duplicate {

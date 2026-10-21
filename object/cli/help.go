@@ -8,7 +8,7 @@ type helpEntry struct {
 var leafHelp = map[string]helpEntry{
 	"read": {
 		Description: "按固定声明依据读取对象或 URN 指定的数据",
-		Usage: `kc read <object-urn[#/json/pointer]> [--repo <id> | --dataset <id> [--revision <N>]] [--commit <id> | --ref <name>]
+		Usage: `kc read <object-urn[#/json/pointer]> [--shape '<graphql>'] [--repo <id> | --dataset <id> [--revision <N>]] [--commit <id> | --ref <name>]
 
 用途：
   读取来源对象的完整内容或指定数据；同一个引用可随后交给 writer put/remove 维护完整单元。
@@ -16,6 +16,9 @@ var leafHelp = map[string]helpEntry{
   位置参数接受对象 URN；# 后是 JSON Pointer，空 locator 选整个对象。
   /columns/order_id 选 Member；/columns/order_id/constraints/nullable 选其中的字段；/tags/0 选数组首项。
   键中的 / 写 ~1，~ 写 ~0；不支持通配、过滤或把点当层级。深层读取不会新增写粒度。
+  --shape 用 GraphQL selection set 写出要的结果形状：顶层是方面，方面上 keys:["k"] 选成员，下层是字段；
+  不写子选择返回该处完整值。只做投影，别名、fragment、directive、变量一律拒绝；URN 带 # 时不能再加 --shape。
+  每个所选方面或成员先按维护坐标规划、只读所选单元并只为它们取外部值，字段在单元读出后即裁剪。
   --dataset 限制统一引用的交付范围；此时 --commit 须匹配发布版中的来源 commit，不接受 --ref。
   --revision <N> 固定 Dataset 的已发布修订，与 search/relations/traverse/schema 沿用同一个 N 时各步看到同一组来源 commit；省略时用当前修订。
   省略 --repo 与 --dataset 时，在你可读的全部仓里按 ID 解析：多个仓各持有不同方面时组合返回，同一方面来自两个仓时报 OBJECT_ID_CONFLICT，无权的仓列在 withheld。
@@ -27,6 +30,8 @@ var leafHelp = map[string]helpEntry{
  Dataset 选中 Bound State 时，沿既有 logical READ 通路，还需相应 Runtime 可用并允许实际源访问。
 结果：
   统一引用的 JSON 保留 reference/locator/repository/objectId/commit/value、sources/withheld、维护 Address/digest 和逐单元 declarations/provenance。
+  --shape 返回 data 与 errors：缺失、无权、冲突或范围外的位置为 null，并按 path 给出错误码；合法 null 没有错误条目。
+  采用封闭 Schema 时选了未声明字段整批拒绝；declarations 里每个所读单元的 digest 仍是完整维护摘要。
   适用的 digest 属于已保存的完整维护单元，可作写入条件；叶值为 null 与定位不存在分别处理。
  Dataset 的动态值另保留 observations：commit 固定声明依据，源观察及其版本不能当作该 commit 的固定正文。
 后果：
@@ -43,6 +48,7 @@ var leafHelp = map[string]helpEntry{
   例：kc read 'urn:kc:object:table/orders#/columns/order_id/constraints/nullable'
   例：kc read 'urn:kc:object:table/orders#/columns/order_id' --dataset scene-set
   例：kc read 'urn:kc:object:table/orders' --dataset scene-set --revision 2
+  例：kc read 'urn:kc:object:table/orders' --shape '{ definition columns(keys: ["order_id"]) { type } }'
   例：kc read 'urn:kc:object:kc/system#/readme'
   例：kc read 'urn:kc:object:kc/concept/object#/definition'
   系统对象示例仅在该服务已出版相应对象且当前主体有读取权时可用；理解本地 kc help 不需要这个前提。
@@ -113,8 +119,8 @@ var leafHelp = map[string]helpEntry{
   --object 是对象 id，不接受 --aspect 或 --member；--limit 默认 50、最大 200。
   单仓可用 --commit 或 --ref 指定历史起点；Dataset 可加 --revision <N>；--continuation 续页时保持对象和来源依据。
 条件：
-  已认证；单仓需 object.history.read，命名 Dataset 以其 file.read 准入，不另要求来源仓 history/read 动作。
- Dataset 须通过所需对象与选择范围的完整读取检查，不能借历史越过交付切片；另行解析 pin 需 dataset.resolve。
+  已认证；每个来源仓均需 object.history.read，Dataset 另需其 file.read；消费权或正文读权不替代来源历史权。
+ Dataset 须通过所需对象与选择范围的完整读取检查，文件切片不提供来源历史；每次续页重新检查来源历史权。另行解析 pin 需 dataset.resolve。
   来源须支持修订历史读取。
 结果：
   JSON logs 按来源给出对象修订和 commit，并返回适用的续页游标。
@@ -177,7 +183,7 @@ var leafHelp = map[string]helpEntry{
 结果：
   JSON 给出 repository/commit、Schema objectId、规范化 definition 和字段 path/type；fields 是数组。
  Dataset 下按成员仓各给一份报告，另有 dataset/revision；fields[].access 是选入 Dataset 的索引声明给该字段的用途：text 供 --query，filter 供 --eq 等条件，sort 供 --sort。同一 path 跨 Schema 或方面时，条件写成 schema::<aspect>::<path>=value。
-  search.state 为 ready 或 unavailable（附 reason，如投影未就绪或无索引插件）；search.declarations 逐条给出声明的 status（ready/unsupported/invalid）、reason、inputs 与 uses。
+  search.state 为 ready 或 unavailable（附 reason，如投影未就绪或无索引插件）；search.declarations 逐条给出声明的 status（ready/unsupported/invalid/inapplicable，后者表示输入 Schema 不在本范围、范围内没有适用对象，查询它得到完整零命中）、reason、inputs 与 uses。
   这是供理解的规范化展示，不能把 definition 或整个响应直接当作 Schema 发布输入；原始 fields 必须是对象映射。
   要复用原始 Schema，用 kc read 读取相同 objectId 与 commit，取返回的 value，而非整个读取信封。
   也可经 kc files list / kc files read 从 Dataset 取得含文件头的 Schema 原文件，列目录与读取固定同一 revision。
@@ -221,6 +227,7 @@ var leafHelp = map[string]helpEntry{
   风险与成本：
     完整替换可能丢掉未提供的字段，需要网络写入与校验；不要把 --command-id 改成自动随机重试。
     网络中断可能已经提交，客户端只查询原回执，默认等待最多十分钟，不自动再次提交。
+    服务端明确证明未应用时立即返回原错误，不查询回执。
   失败恢复：
     先 kc writer receipt 查询原 --command-id；同 id 异请求为 IDEMPOTENCY_CONFLICT。
     NON_FAST_FORWARD 要重新核对基点并构造新请求；Schema/权限拒绝先修正原因。
@@ -251,6 +258,7 @@ var leafHelp = map[string]helpEntry{
   风险与成本：
     新的读者会失去该单元，历史读取仍需当前权限；多条命令中前条成功不会被后条失败回滚。
     网络中断不表示删除未发生，客户端默认只轮询原回执最多十分钟。
+    服务端明确证明未应用时立即返回原错误，不轮询、不自动重发。
   失败恢复：
     用原 command-id 查 writer receipt；同 id 换内容会冲突，结果未明先对账。
     并发冲突先重新读取，Schema 仍被引用先处理依赖；恢复内容需要一次新的明确 PUT，不倒退历史。

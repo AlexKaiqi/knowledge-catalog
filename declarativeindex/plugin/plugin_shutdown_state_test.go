@@ -100,7 +100,7 @@ func TestIndexPluginsCloseCancelsBackgroundStateBeforeDrainingCatchUp(t *testing
 	// Declared faces are read from a ready projection's retained declaration
 	// members; without one the query side fails closed. Prepare the actual
 	// Snapshot projection so the pre-check sees the maintained declaration.
-	if _, err := queries.EnsureAt(repo, commit.Result.NewCommit); err != nil {
+	if _, err := queries.EnsureAt(context.Background(), repo, commit.Result.NewCommit); err != nil {
 		t.Fatal(err)
 	}
 	if required, err := plugins.RequiresState(repo, commit.Result.NewCommit, query); err != nil || !required {

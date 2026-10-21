@@ -219,6 +219,25 @@ func VerbRead(cx *Invocation) (any, error) {
 	if err := NormalizeReferenceFlags(cx.Flags); err != nil {
 		return nil, err
 	}
+	if reference, err = referenceFromFlags(cx.Flags); err != nil {
+		return nil, err
+	}
+	if shape := cx.Flag("shape"); shape != "" {
+		return readShape(cx, *reference, shape)
+	}
+	observed, err := readOneReference(cx, *reference)
+	if err != nil {
+		return nil, err
+	}
+	if !ServingWorkspace(cx.Flags) && len(observed.Observations) == 0 && len(observed.Failures) == 0 {
+		return observedObject(observed), nil
+	}
+	return observed, nil
+}
+
+// readOneReference is the single URN#Pointer read in the bound scope. Shaped
+// reads call it once per selection so each plans and reads only its units.
+func readOneReference(cx *Invocation, reference objectmodel.Reference) (objectmodel.ObservedValue, error) {
 	if ServingWorkspace(cx.Flags) {
 		values, err := (objectservice.DatasetReadExecutor{
 			Authorize: func(context.Context) error { return Authorize(cx.Home, "object.read", cx.Flags, nil, cx.WS) },
@@ -228,30 +247,37 @@ func VerbRead(cx *Invocation) (any, error) {
 			Deliver: func(_ context.Context, values []objectmodel.ObservedValue) ([]objectmodel.ObservedValue, error) {
 				return FilterObjectServingReads(cx.Home, cx.Flags, nil, values), nil
 			},
-		}).Execute(cx.Context, objectservice.DatasetReadRequest{Reference: *reference})
+		}).Execute(cx.Context, objectservice.DatasetReadRequest{Reference: reference})
 		if err != nil {
-			return nil, err
+			return objectmodel.ObservedValue{}, err
 		}
 		if len(values) != 1 {
-			return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "Reference did not select one published source object")
+			return objectmodel.ObservedValue{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "Reference did not select one published source object")
 		}
 		return values[0], nil
 	}
 	selection, scoped := cx.Flags[referenceHoldingsFlag].(objectmodel.HoldingSelection)
+	if planned, ok := cx.Flags[referencePlannedFlag].(plannedHoldings); ok {
+		var err error
+		if selection, err = planned.selectFor(cx, reference); err != nil {
+			return objectmodel.ObservedValue{}, err
+		}
+		scoped = true
+	}
 	if !scoped {
 		_, commitID, err := PinCommit(cx.WS, cx.Flags)
 		if err != nil {
-			return nil, err
+			return objectmodel.ObservedValue{}, err
 		}
 		selection = objectmodel.HoldingSelection{Selected: []objectmodel.Holding{{Repository: reference.Repository, Commit: commitID}}}
 	}
 	reads := make([]objectmodel.ObservedValue, 0, len(selection.Selected))
 	for _, holding := range selection.Selected {
-		member := *reference
+		member := reference
 		member.Repository = holding.Repository
 		observed, err := readRepositoryObserved(cx, objectservice.ReadRequest{Reference: member, Commit: holding.Commit})
 		if err != nil {
-			return nil, err
+			return objectmodel.ObservedValue{}, err
 		}
 		if scoped {
 			observed.Sources = []objectmodel.SourceBasis{{Repository: holding.Repository, Commit: holding.Commit, Aspects: holding.Aspects}}
@@ -260,16 +286,13 @@ func VerbRead(cx *Invocation) (any, error) {
 	}
 	observed := reads[0]
 	if len(reads) > 1 {
-		composed, err := composeObserved(*reference, reads)
+		composed, err := composeObserved(reference, reads)
 		if err != nil {
-			return nil, err
+			return objectmodel.ObservedValue{}, err
 		}
 		observed = composed
 	}
 	observed.Withheld = selection.Withheld
-	if len(observed.Observations) == 0 && len(observed.Failures) == 0 {
-		return observedObject(observed), nil
-	}
 	return observed, nil
 }
 
@@ -437,9 +460,10 @@ func VerbLog(cx *Invocation) (any, error) {
 				return nil, err
 			}
 			id := objectmodel.ObjectID(objectID)
-			return (objectservice.ObjectLogExecutor{Allow: func(repo kernel.RepositoryID, id objectmodel.ObjectID) bool {
-				return AllowedRepoRead(cx.Home, cx.Flags, string(repo), string(id))
-			}, ReadLog: func(repositoryID kernel.RepositoryID, commitID kernel.CommitID, query objectmodel.ObjectLogQuery) ([]objectmodel.ObjectRevision, error) {
+			return (objectservice.ObjectLogExecutor{ReadLog: func(repositoryID kernel.RepositoryID, commitID kernel.CommitID, query objectmodel.ObjectLogQuery) ([]objectmodel.ObjectRevision, error) {
+				if err := authorizeRepositoryHistory(cx, repositoryID, id); err != nil {
+					return nil, err
+				}
 				allowed, err := serving.Contains(repositoryID, id)
 				if err != nil || !allowed {
 					return nil, err
@@ -458,9 +482,10 @@ func VerbLog(cx *Invocation) (any, error) {
 			}
 			id := objectmodel.ObjectID(objectID)
 			pin := map[kernel.RepositoryID]kernel.CommitID{repositoryID: commitID}
-			return (objectservice.ObjectLogExecutor{Allow: func(repo kernel.RepositoryID, id objectmodel.ObjectID) bool {
-				return AllowedRepoRead(cx.Home, cx.Flags, string(repo), string(id))
-			}, ReadLog: func(member kernel.RepositoryID, commit kernel.CommitID, query objectmodel.ObjectLogQuery) ([]objectmodel.ObjectRevision, error) {
+			return (objectservice.ObjectLogExecutor{ReadLog: func(member kernel.RepositoryID, commit kernel.CommitID, query objectmodel.ObjectLogQuery) ([]objectmodel.ObjectRevision, error) {
+				if err := authorizeRepositoryHistory(cx, member, id); err != nil {
+					return nil, err
+				}
 				return cx.WS.Reader.Log(member, id, commit, query)
 			}}).Execute(cx.Context, objectservice.ObjectLogRequest{Object: id, Pin: pin, Limit: limit, Continuation: cx.Flag("continuation")})
 		})
@@ -526,15 +551,6 @@ func OpenCompleteServing(cx *Invocation, object string) (*reader.Serving, datase
 		return nil, nil, err
 	}
 	return serving, cat, nil
-}
-
-func AspectSelectorFrom(flags map[string]invoke.FlagValue) *objectmodel.AspectSelector {
-	include := invoke.FlagStrings(flags, "include")
-	exclude := invoke.FlagStrings(flags, "exclude")
-	if len(include) == 0 && len(exclude) == 0 {
-		return nil
-	}
-	return &objectmodel.AspectSelector{Include: include, Exclude: exclude}
 }
 
 func FilterObjectServingReads(home string, flags map[string]invoke.FlagValue, _ dataset.Service, values []objectmodel.ObservedValue) []objectmodel.ObservedValue {

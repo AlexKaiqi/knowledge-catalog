@@ -38,7 +38,7 @@ func (r *treeRepository) addressUnit(address objectmodel.Address, commit kernel.
 		}
 		return units[0], true, nil
 	}
-	return r.readmeAddressUnit(address, commit, paths)
+	return repofile.Unit{}, false, nil
 }
 
 func (r *treeRepository) ReadAddressAtPaths(address objectmodel.Address, commit kernel.CommitID, paths []string) (objectmodel.ObjectValue, error) {

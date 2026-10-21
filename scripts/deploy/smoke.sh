@@ -52,7 +52,7 @@ grafana_has_dashboard() {
 }
 
 wait_for "kc-server /readyz" curl -fsS "${server}/readyz"
-wait_for "kc console" curl -fsS "${server}/console"
+wait_for "kc console" curl -fsS "${server}/ui/"
 wait_for "lakeFS health" curl -fsS "${lakefs}/_health"
 wait_for "OpenSearch" curl -fsS "${opensearch}/_cluster/health"
 wait_for "OpenSearch Dashboards" curl -fsS "$opensearch_dashboards"

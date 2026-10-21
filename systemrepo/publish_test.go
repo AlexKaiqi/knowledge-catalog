@@ -77,7 +77,7 @@ func TestPublishSystemSeedsEmptyTreeAndRefusesOverwrite(t *testing.T) {
 			t.Fatalf("unexpected file in system publication: %s", file)
 		}
 		expectedFiles[file] = true
-		if file == objectmodel.RepositoryReadmePath {
+		if file == "README.md" {
 			hasReadme = true
 			continue
 		}

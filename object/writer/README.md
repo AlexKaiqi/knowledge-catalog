@@ -31,6 +31,11 @@ PUT 替换一个完整 Address 单元，可携带 `schema_ref`、provenance 与 
 
 `Ingest` / `Reconcile` 只产生 ChangeSet 预览，不是采集框架，也不是 ingestion control（面 3 只追 published HEAD 的派生投影）。产品 CLI 的目录写入是 `writer commit --dir`；一次性接入大量文件时可加 `--bulk` 显式请求介质的批量写通路——只换对象传输原语，CAS 与 commit 语义不变，介质未提供该能力时整条确定性拒绝；可选 `kc diff --dir` 看同一对照，不把 ChangeSet 交给调用方。HTTP Writer 仍收 ChangeSet（含 `bulkIngest`）。PROPOSAL 只推进 candidate Ref；ControlPlane merge 才推进发布 Ref。人在自有 git 上改 frontmatter 不经过本 CLI 时，进 published 的对象发布仍须过与 COMMIT 相同的校验（CI 代发或只验不写，见 `tasks/done/WRITE-VALIDATE.md`，方向在 `doc/roadmap.md` 的“未到”）；本包本轮不新增 validate-only 命令。部署发布 `systemrepo/content` 完整出版物由 `systemrepo.PublishSystem` 聚合并调用专用 Writer：只写入空的实际 `kr://kc/system` Snapshot，已有内容、Address、Schema 绑定和路径必须与当前版本一致，额外或缺失内容文件拒绝。运行时 Writer 保持拒绝系统仓写入。
 
+目录输入（`Ingest`）可以是目录，也可以是 `.tar` / `.tar.gz` / `.tgz` 归档，用 `archive//子目录`
+指定归档内充当仓根的目录。归档按顺序流式读取，文件由有界并发读取并解析，第一个错误按文件顺序报告，
+结果与读取同一棵目录树逐字节一致。归档中的越界路径、符号链接等非常规文件、重复条目、空子目录拒绝；
+隐藏文件/目录与目录输入一样不参与。大仓目录中逐个打开小文件是本机文件系统往返的主要成本，归档输入把它降为一次顺序读取。
+
 首次上传的空树快路自动生效：Writer 通过可选 `DirectoryReader` 独立确认固定 `BaseCommit`
 的根目录为空，对这一不可变基点的规划读取直接返回缺失，省去逐对象旧值读取。任何已有条目
 （包括 `.kc`）都使基点按非空处理；不具备目录读取能力时保留原流程，读取失败则拒绝。
@@ -38,6 +43,12 @@ Schema、同批路径冲突、操作前置条件、CAS 和命令摘要仍完整�
 应用层 writer head 响应的 `empty` 是同一 `commit` 的可选布尔信息：已确认为空才为 true，
 非空为 false，能力未知省略。CLI 仅在未显式指定 `--base` 且该信息为 true 时跳过逐对象对照；
 ChangeSet 无需声明“首次上传”，服务端不信任客户端的空树提示。
+
+非空基点同样不重复付费：一次命令内 Schema 规划、tree codec 与路径准入共用同一不可变
+基点读取视图，每个 `(commit, path)` 至多读 authority 一次（缺失结果同样复用，传输失败不缓存）；
+相互独立的 locator、unit 与目标路径点读以有界并发预取，消费仍按原顺序进行，错误语义与串行一致。
+写入集合中与基点字节完全相同的文件（典型为更新时不变的 locator 与完成标记）不再发送给 authority；
+全部未变时保留原写入集合，空变更语义不变。
 
 幂等规则：同 command_id 同 digest 返回原 Receipt（REPLAYED）；同 id 异 digest 是 `IDEMPOTENCY_CONFLICT`。Snapshot CAS 过期是 `NON_FAST_FORWARD`。带 `schema_ref` 的 PUT 必须在 target commit 可解析。DERIVATION 必须携带固定 inputWorkspaceVersionRef 和 algorithm。
 
@@ -47,6 +58,11 @@ ChangeSet 无需声明“首次上传”，服务端不信任客户端的空树�
 
 Relation PUT 可以引用其他仓的对象；仅校验 `CanonicalRelation` 的结构化信封，不读取或写入端点仓，不为端点发权。单仓 target、CAS、幂等与失败原子性不变。端点是否存在和是否允许读取留给消费上下文处理。
 
+已证明未发布的失败，经错误信封保留 `writeOutcome: "NOT_APPLIED"`；
+客户端立即返回原错误，不查不存在的回执，也不自动重发。命令占用释放失败时证明仍保留，
+但账本保持 PENDING 和摘要保护，须显式处置，不能把未发布当作已释放占用。
+无法确定的发布、原结果无法读取或接受后回执保存失败不附加该证明，保留原恢复边界。
+
 账本先持久化 `PENDING` 再触碰 authority。提交后回执丢失时不得重放；运维以原 digest
 `ResolvePending` 写回已核对回执，或以 `AbandonPending` 明确放弃。`Prune` 只删除超过部署
 保留窗口的 `APPLIED`/`ABANDONED`，永不推断 `PENDING`；Bolt 实现游标删除，不在启动时加载
@@ -55,8 +71,12 @@ Relation PUT 可以引用其他仓的对象；仅校验 `CanonicalRelation` 的�
 每个 `schema/*` PUT 先按 System Meta Schema 归一化；未知逻辑 type、字段 `access` 或错误
 形状返回 `SCHEMA_UNSUPPORTED`。复用同一 Schema object ID 时先做兼容性 diff；字段删除、
 改类型、新增必填、归属/模式变化或约束收紧返回 `SCHEMA_INCOMPATIBLE`，接入方必须发布新
-major。`schema/core/readme/v1` 是平台 README Aspect：副本必须与 System 出版物 digest 一致，
-实例必须是 Aspect `readme`，正文为 markdown `body`。兼容的文档变化还必须对固定 basis 上全部引用实例成立：Writer 经有界
+major。`TrustedSchemaOperations` 定义的 Meta Schema（`schema/meta/schema-definition/v1`）与
+索引声明 Schema（`schema/core/index-declaration/v1`）是不可演进的内置协议数据，副本必须与其
+System 出版物 digest 一致。其余系统出版的 Schema 按普通兼容规则演进，包括 `schema/core/readme/v1`、
+`schema/core/relation/v1`；方面名 `readme` 也是普通内容，不保留、不改址。
+副本一致性与实例解析是两项规则：只有索引声明 Schema 可经 `ProtocolTrustRootSchema` 免仓内副本解析。
+兼容的文档变化还必须对固定 basis 上全部引用实例成立：Writer 经有界
 `SchemaReferrerLocator` 取回引用者并逐个校验，失配返回 `SCHEMA_INSTANCE_INVALID`；同批
 PUT/REMOVE 的 Address 由本批结果承担。REMOVE 一个仍被引用的 `schema/*` 返回
 `SCHEMA_INCOMPATIBLE`。带 `schema_ref` 的实例 PUT 使用同批 Schema 草稿或目标仓固定 basis
@@ -85,5 +105,5 @@ Writer 检查声明形状及输入定位符在所引用 Schema 上能否解析�
 由实例能力清单核对。删除或收窄索引成员不改变值结构，旧 pin 保留旧声明。
 `CheckIndexDeclaration` 复用 COMMIT 的结构和 Schema 校验并返回按输入顺序解析的字段，
 不写 Snapshot、回执账本或 evidence；它不预判存储路径准入或未来 CAS，也不判断实例能力。
-字段删除、改类型、新增必填、归属/模式和引用约束等结构守卫保持；平台 Schema 副本
-仍须精确匹配系统出版物。仅名为 `index` 而未采用声明 Schema 的业务内容不产生查询能力。
+字段删除、改类型、新增必填、归属/模式和引用约束等结构守卫保持；上述两份内置协议 Schema
+副本仍须精确匹配系统出版物。仅名为 `index` 而未采用声明 Schema 的业务内容不产生查询能力。

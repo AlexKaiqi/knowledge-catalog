@@ -1,6 +1,7 @@
 package plugin_test
 
 import (
+	"context"
 	consumerplugin "kc/discovery/plugin"
 	"testing"
 
@@ -30,7 +31,7 @@ func TestIndexPluginsRejectTypedNilContributionsAndReleaseActualResources(t *tes
 					if err != nil {
 						return contribution, err
 					}
-					if _, err := contribution.Queries.Ensure(repo, testkit.MustHead(t, repo, snapshot.DefaultRef)); err != nil {
+					if _, err := contribution.Queries.Ensure(context.Background(), repo, testkit.MustHead(t, repo, snapshot.DefaultRef)); err != nil {
 						return contribution, err
 					}
 				}

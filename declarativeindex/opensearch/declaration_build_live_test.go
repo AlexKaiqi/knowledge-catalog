@@ -1,6 +1,7 @@
 package opensearch_test
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -67,7 +68,7 @@ func TestOpenSearchDeclaredTemplateNormalizerAndMissingPolicies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := idx.Ensure(repo, updated); err != nil {
+	if _, err := idx.Ensure(context.Background(), repo, updated); err != nil {
 		t.Fatal(err)
 	}
 	result, err := idx.SearchAt(repo, updated, retrieval.SearchOf(retrieval.SearchMATCH("fixedprefix")))

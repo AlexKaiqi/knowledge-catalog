@@ -5631,5 +5631,3725 @@
       }
     ],
     "notes": "The maintenance branch removes one member after revision 1 publication. Search, readback and access overview remain frozen until explicit revision 2 publication. The second publication reuses the mutated declaration branch rather than restoring the original fixture."
+  },
+  {
+    "id": "accept-search-unsupported-member-isolated",
+    "steps": [
+      {
+        "indexDataset": {},
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 1,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "writer": "$materials/acceptance/variants/index/table-name-unsupported-analyzer.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "dataset",
+          "define",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "2",
+          "--source",
+          "table-meta=$branch@tables@tables",
+          "--source",
+          "table-meta=$branch@_schemas/table-meta@_schemas",
+          "--source",
+          "sales-semantic=$branch@metrics@metrics",
+          "--file-source",
+          "sales-semantic=$branch@_schemas/$prefixmetric.properties.aspect.yaml@_schemas/sales-semantic/metric.properties.aspect.yaml",
+          "--file-source",
+          "sales-semantic=$branch@_schemas/$prefixmetric.definition.aspect.yaml@_schemas/sales-semantic/metric.definition.aspect.yaml",
+          "--source",
+          "sales-analysis=$branch@indexes@indexes"
+        ],
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 2,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--dataset",
+          "$dataset",
+          "--principal",
+          "reader",
+          "--action",
+          "dataset.resolve,file.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "operations",
+          "access-spec",
+          "describe",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "2"
+        ],
+        "as": "reader",
+        "expect": {
+          "find": [
+            {
+              "in": "specs",
+              "where": {
+                "repository": "sales-analysis"
+              },
+              "expect": {
+                "find": [
+                  {
+                    "in": "declarations",
+                    "where": {
+                      "member": {
+                        "memberKey": "table-name"
+                      },
+                      "status": "unsupported"
+                    },
+                    "expect": {
+                      "contains": {
+                        "reason": [
+                          "analyzer"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "in": "declarations",
+                    "where": {
+                      "member": {
+                        "memberKey": "metric-text"
+                      },
+                      "status": "ready"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "save": "overview"
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "2",
+          "--query",
+          "discount"
+        ],
+        "as": "reader",
+        "expect": {
+          "has": {
+            "dataset.revision": 2,
+            "completeness": "partial"
+          },
+          "find": [
+            {
+              "in": "hits",
+              "where": {
+                "objectId": "metric/shop.gmv"
+              }
+            }
+          ],
+          "contains": {
+            "claims.0": [
+              "table-name",
+              "unsupported",
+              "analyzer"
+            ]
+          }
+        },
+        "save": "discount"
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "2",
+          "--query",
+          "orders"
+        ],
+        "as": "reader",
+        "expect": {
+          "has": {
+            "dataset.revision": 2,
+            "completeness": "partial"
+          },
+          "count": {
+            "hits": 0,
+            "claims": 1
+          },
+          "contains": {
+            "claims.0": [
+              "table-name",
+              "unsupported",
+              "analyzer"
+            ]
+          }
+        },
+        "save": "orders"
+      }
+    ]
+  },
+  {
+    "id": "accept-index-catalog-version-ahead",
+    "steps": [
+      {
+        "indexDataset": {},
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 1,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "trial": "$materials/acceptance/variants/index/catalog-version-ahead.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "count": {
+            "members": 1
+          },
+          "has": {
+            "members.0.status": "unsupported"
+          },
+          "contains": {
+            "members.0.reason": [
+              "2027-01",
+              "2026-10"
+            ]
+          }
+        }
+      },
+      {
+        "writer": "$materials/acceptance/variants/index/catalog-version-ahead.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "dataset",
+          "define",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "2",
+          "--source",
+          "table-meta=$branch@tables@tables",
+          "--source",
+          "table-meta=$branch@_schemas/table-meta@_schemas",
+          "--source",
+          "sales-semantic=$branch@metrics@metrics",
+          "--file-source",
+          "sales-semantic=$branch@_schemas/$prefixmetric.properties.aspect.yaml@_schemas/sales-semantic/metric.properties.aspect.yaml",
+          "--file-source",
+          "sales-semantic=$branch@_schemas/$prefixmetric.definition.aspect.yaml@_schemas/sales-semantic/metric.definition.aspect.yaml",
+          "--source",
+          "sales-analysis=$branch@indexes@indexes"
+        ],
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 2,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--dataset",
+          "$dataset",
+          "--principal",
+          "reader",
+          "--action",
+          "dataset.resolve,file.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "operations",
+          "access-spec",
+          "describe",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "2"
+        ],
+        "as": "reader",
+        "expect": {
+          "find": [
+            {
+              "in": "specs",
+              "where": {
+                "repository": "sales-analysis"
+              },
+              "expect": {
+                "find": [
+                  {
+                    "in": "declarations",
+                    "where": {
+                      "member": {
+                        "memberKey": "metric-unit"
+                      },
+                      "status": "unsupported"
+                    },
+                    "expect": {
+                      "contains": {
+                        "reason": [
+                          "2027-01",
+                          "2026-10"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "in": "declarations",
+                    "where": {
+                      "member": {
+                        "memberKey": "metric-text"
+                      },
+                      "status": "ready"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "2",
+          "--eq",
+          "schema/metric.definition::definition::unit=CNY"
+        ],
+        "as": "reader",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "CAPABILITY_UNSATISFIED"
+          },
+          "contains": {
+            "error.message": [
+              "unit"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--eq",
+          "schema/metric.definition::definition::unit=CNY"
+        ],
+        "as": "reader",
+        "expect": {
+          "has": {
+            "completeness": "complete"
+          },
+          "count": {
+            "hits": 2
+          },
+          "find": [
+            {
+              "in": "hits",
+              "where": {
+                "objectId": "metric/shop.gmv"
+              }
+            },
+            {
+              "in": "hits",
+              "where": {
+                "objectId": "metric/shop.sales.gmv"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "notes": "Revision 1 keeps the 2026-10 metric-unit and filters normally; revision 2 declares 2027-01, which the instance must report as unsupported instead of rebuilding under 2026-10."
+  },
+  {
+    "id": "accept-index-writer-accepts-unsupported",
+    "steps": [
+      {
+        "indexDataset": {},
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 1,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "sales-analysis"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "beforeHead"
+      },
+      {
+        "writer": "$materials/acceptance/variants/index/table-name-unsupported-analyzer.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "writer",
+          "head",
+          "--repo",
+          "sales-analysis"
+        ],
+        "expect": {
+          "nonempty": [
+            "commit"
+          ]
+        },
+        "save": "afterHead"
+      },
+      {
+        "assert": {
+          "actual": "$saved.afterHead.commit",
+          "different": "$saved.beforeHead.commit"
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:index/sales-search#/index/table-name",
+          "--repo",
+          "sales-analysis"
+        ],
+        "expect": {
+          "has": {
+            "value.build.analyzer": "not-in-catalog",
+            "value.build.kind": "text"
+          }
+        }
+      },
+      {
+        "trial": "$materials/acceptance/variants/index/table-name-unsupported-analyzer.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "count": {
+            "members": 1
+          },
+          "has": {
+            "members.0.status": "unsupported"
+          },
+          "contains": {
+            "members.0.reason": [
+              "analyzer",
+              "not-in-catalog"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "dataset",
+          "define",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "2",
+          "--source",
+          "table-meta=$branch@tables@tables",
+          "--source",
+          "table-meta=$branch@_schemas/table-meta@_schemas",
+          "--source",
+          "sales-semantic=$branch@metrics@metrics",
+          "--file-source",
+          "sales-semantic=$branch@_schemas/$prefixmetric.properties.aspect.yaml@_schemas/sales-semantic/metric.properties.aspect.yaml",
+          "--file-source",
+          "sales-semantic=$branch@_schemas/$prefixmetric.definition.aspect.yaml@_schemas/sales-semantic/metric.definition.aspect.yaml",
+          "--source",
+          "sales-analysis=$branch@indexes@indexes"
+        ],
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 2,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--dataset",
+          "$dataset",
+          "--principal",
+          "reader",
+          "--action",
+          "dataset.resolve,file.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "operations",
+          "access-spec",
+          "describe",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "2"
+        ],
+        "as": "reader",
+        "expect": {
+          "find": [
+            {
+              "in": "specs",
+              "where": {
+                "repository": "sales-analysis"
+              },
+              "expect": {
+                "find": [
+                  {
+                    "in": "declarations",
+                    "where": {
+                      "member": {
+                        "memberKey": "table-name"
+                      },
+                      "status": "unsupported"
+                    },
+                    "expect": {
+                      "contains": {
+                        "reason": [
+                          "analyzer",
+                          "not-in-catalog"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-interp-unmapped-catalog",
+    "steps": [
+      {
+        "indexDataset": {},
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 1,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "writer": "$materials/acceptance/variants/index/unmapped-catalog.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "dataset",
+          "define",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "2",
+          "--source",
+          "table-meta=$branch@tables@tables",
+          "--source",
+          "table-meta=$branch@_schemas/table-meta@_schemas",
+          "--source",
+          "sales-semantic=$branch@metrics@metrics",
+          "--file-source",
+          "sales-semantic=$branch@_schemas/$prefixmetric.properties.aspect.yaml@_schemas/sales-semantic/metric.properties.aspect.yaml",
+          "--file-source",
+          "sales-semantic=$branch@_schemas/$prefixmetric.definition.aspect.yaml@_schemas/sales-semantic/metric.definition.aspect.yaml",
+          "--source",
+          "sales-analysis=$branch@indexes@indexes"
+        ],
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 2,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--dataset",
+          "$dataset",
+          "--principal",
+          "reader",
+          "--action",
+          "dataset.resolve,file.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "operations",
+          "access-spec",
+          "describe",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "2"
+        ],
+        "as": "reader",
+        "expect": {
+          "find": [
+            {
+              "in": "specs",
+              "where": {
+                "repository": "sales-analysis"
+              },
+              "expect": {
+                "find": [
+                  {
+                    "in": "declarations",
+                    "where": {
+                      "member": {
+                        "memberKey": "table-name-elastic"
+                      },
+                      "status": "unsupported"
+                    },
+                    "expect": {
+                      "contains": {
+                        "reason": [
+                          "declarative-index/elastic@2026-01"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "in": "declarations",
+                    "where": {
+                      "member": {
+                        "memberKey": "table-name"
+                      },
+                      "status": "ready"
+                    }
+                  },
+                  {
+                    "in": "declarations",
+                    "where": {
+                      "member": {
+                        "memberKey": "metric-text"
+                      },
+                      "status": "ready"
+                    }
+                  },
+                  {
+                    "in": "declarations",
+                    "where": {
+                      "member": {
+                        "memberKey": "table-row-count"
+                      },
+                      "status": "ready"
+                    }
+                  },
+                  {
+                    "in": "declarations",
+                    "where": {
+                      "member": {
+                        "memberKey": "metric-unit"
+                      },
+                      "status": "ready"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "2",
+          "--query",
+          "orders"
+        ],
+        "as": "reader",
+        "expect": {
+          "has": {
+            "dataset.revision": 2,
+            "completeness": "partial"
+          },
+          "contains": {
+            "claims.0": [
+              "table-name-elastic"
+            ]
+          },
+          "find": [
+            {
+              "in": "hits",
+              "where": {
+                "objectId": "table/shop.orders"
+              },
+              "expect": {
+                "find": [
+                  {
+                    "in": "evidence.0.members",
+                    "where": {
+                      "member": {
+                        "memberKey": "table-name"
+                      },
+                      "role": "text"
+                    }
+                  },
+                  {
+                    "in": "evidence.0.members",
+                    "where": {
+                      "member": {
+                        "memberKey": "table-name-elastic"
+                      }
+                    },
+                    "count": 0
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "notes": "The unmapped member cannot be interpreted, so free text names it as a partial claim instead of handing it to the opensearch instance."
+  },
+  {
+    "id": "accept-index-array-input",
+    "steps": [
+      {
+        "indexDataset": {},
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 1,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "writer": "$materials/acceptance/variants/index/columns-array.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "dataset",
+          "define",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "2",
+          "--source",
+          "table-meta=$branch@tables@tables",
+          "--source",
+          "table-meta=$branch@_schemas/table-meta@_schemas",
+          "--source",
+          "sales-semantic=$branch@metrics@metrics",
+          "--file-source",
+          "sales-semantic=$branch@_schemas/$prefixmetric.properties.aspect.yaml@_schemas/sales-semantic/metric.properties.aspect.yaml",
+          "--file-source",
+          "sales-semantic=$branch@_schemas/$prefixmetric.definition.aspect.yaml@_schemas/sales-semantic/metric.definition.aspect.yaml",
+          "--source",
+          "sales-analysis=$branch@indexes@indexes"
+        ],
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 2,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--dataset",
+          "$dataset",
+          "--principal",
+          "reader",
+          "--action",
+          "dataset.resolve,file.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "operations",
+          "access-spec",
+          "describe",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "2"
+        ],
+        "as": "reader",
+        "expect": {
+          "find": [
+            {
+              "in": "specs",
+              "where": {
+                "repository": "sales-analysis"
+              },
+              "expect": {
+                "find": [
+                  {
+                    "in": "declarations",
+                    "where": {
+                      "member": {
+                        "memberKey": "primary-key-refs"
+                      },
+                      "status": "ready"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "2",
+          "--eq",
+          "schema/table.schema::schema::primaryKeyColumnRefs=column/shop.orders.order_id"
+        ],
+        "as": "reader",
+        "expect": {
+          "has": {
+            "completeness": "complete"
+          },
+          "count": {
+            "hits": 1
+          },
+          "find": [
+            {
+              "in": "hits",
+              "where": {
+                "objectId": "table/shop.orders"
+              },
+              "expect": {
+                "find": [
+                  {
+                    "in": "evidence.0.members",
+                    "where": {
+                      "member": {
+                        "memberKey": "primary-key-refs"
+                      },
+                      "role": "filter"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-index-ambiguous-field",
+    "steps": [
+      {
+        "indexDataset": {},
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 1,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "writer": "$materials/acceptance/variants/index/table-row-count-duplicate.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "dataset",
+          "define",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "2",
+          "--source",
+          "table-meta=$branch@tables@tables",
+          "--source",
+          "table-meta=$branch@_schemas/table-meta@_schemas",
+          "--source",
+          "sales-semantic=$branch@metrics@metrics",
+          "--file-source",
+          "sales-semantic=$branch@_schemas/$prefixmetric.properties.aspect.yaml@_schemas/sales-semantic/metric.properties.aspect.yaml",
+          "--file-source",
+          "sales-semantic=$branch@_schemas/$prefixmetric.definition.aspect.yaml@_schemas/sales-semantic/metric.definition.aspect.yaml",
+          "--source",
+          "sales-analysis=$branch@indexes@indexes"
+        ],
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 2,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "kc": [
+          "operations",
+          "projection",
+          "sync",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "2"
+        ],
+        "expect": {
+          "has": {
+            "revision": 2
+          },
+          "nonempty": [
+            "state.revision"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--dataset",
+          "$dataset",
+          "--principal",
+          "reader",
+          "--action",
+          "dataset.resolve,file.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "operations",
+          "access-spec",
+          "describe",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "2"
+        ],
+        "as": "reader",
+        "expect": {
+          "find": [
+            {
+              "in": "specs",
+              "where": {
+                "repository": "sales-analysis"
+              },
+              "expect": {
+                "find": [
+                  {
+                    "in": "declarations",
+                    "where": {
+                      "member": {
+                        "memberKey": "table-row-count"
+                      },
+                      "status": "ready"
+                    }
+                  },
+                  {
+                    "in": "declarations",
+                    "where": {
+                      "member": {
+                        "memberKey": "table-row-count-text"
+                      },
+                      "status": "ready"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "save": "overview"
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "2",
+          "--eq",
+          "schema/table.live-stats::live-stats::rowCount=6"
+        ],
+        "as": "reader",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "USAGE_INVALID"
+          },
+          "contains": {
+            "error.message": [
+              "ambiguous",
+              "table-row-count",
+              "table-row-count-text"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "2",
+          "--gte",
+          "schema/table.live-stats::live-stats::rowCount=5"
+        ],
+        "as": "reader",
+        "expect": {
+          "has": {
+            "completeness": "complete"
+          },
+          "count": {
+            "hits": 1
+          },
+          "find": [
+            {
+              "in": "hits",
+              "where": {
+                "objectId": "table/shop.orders"
+              },
+              "expect": {
+                "find": [
+                  {
+                    "in": "evidence.0.members",
+                    "where": {
+                      "member": {
+                        "memberKey": "table-row-count"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-search-undeclared-condition",
+    "steps": [
+      {
+        "indexDataset": {},
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 1,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--dataset",
+          "$dataset",
+          "--principal",
+          "reader",
+          "--action",
+          "dataset.resolve,file.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--eq",
+          "schema/table.properties::properties::nativeKind=TABLE"
+        ],
+        "as": "reader",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "CAPABILITY_UNSATISFIED"
+          },
+          "contains": {
+            "error.message": [
+              "nativeKind"
+            ]
+          }
+        }
+      }
+    ],
+    "notes": "The missing-demand usage record belongs to INDEX-USAGE, which is deferred; this probe covers the explicit rejection."
+  },
+  {
+    "id": "accept-search-cross-aspect-text",
+    "steps": [
+      {
+        "indexDataset": {},
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 1,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--dataset",
+          "$dataset",
+          "--principal",
+          "reader",
+          "--action",
+          "dataset.resolve,file.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--query",
+          "discount"
+        ],
+        "as": "reader",
+        "expect": {
+          "has": {
+            "completeness": "complete"
+          },
+          "find": [
+            {
+              "in": "hits",
+              "where": {
+                "objectId": "metric/shop.gmv"
+              },
+              "expect": {
+                "find": [
+                  {
+                    "in": "evidence.0.members",
+                    "where": {
+                      "member": {
+                        "memberKey": "metric-text"
+                      },
+                      "role": "text"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--query",
+          "merchandise"
+        ],
+        "as": "reader",
+        "expect": {
+          "has": {
+            "completeness": "complete"
+          },
+          "find": [
+            {
+              "in": "hits",
+              "where": {
+                "objectId": "metric/shop.gmv"
+              },
+              "expect": {
+                "find": [
+                  {
+                    "in": "evidence.0.members",
+                    "where": {
+                      "member": {
+                        "memberKey": "metric-text"
+                      },
+                      "role": "text"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:metric/shop.gmv#/definition",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1"
+        ],
+        "as": "reader",
+        "expect": {
+          "has": {
+            "value.expression": "SUM(qty * unit_price * (1 - discount))"
+          }
+        },
+        "save": "viaDataset"
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:metric/shop.gmv#/definition",
+          "--repo",
+          "sales-semantic"
+        ],
+        "expect": {
+          "has": {
+            "value.expression": "SUM(qty * unit_price * (1 - discount))"
+          }
+        },
+        "save": "direct"
+      },
+      {
+        "assert": {
+          "actual": "$saved.viaDataset.value",
+          "equals": "$saved.direct.value"
+        }
+      }
+    ],
+    "notes": "Every default metric carries a definition aspect; the missing-skip branch is covered by accept-index-missing-exclude."
+  },
+  {
+    "id": "accept-search-live-value-indexed",
+    "steps": [
+      {
+        "indexDataset": {},
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 1,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "kc": [
+          "operations",
+          "projection",
+          "sync",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1"
+        ],
+        "expect": {
+          "has": {
+            "revision": 1
+          },
+          "nonempty": [
+            "state.revision"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--dataset",
+          "$dataset",
+          "--principal",
+          "reader",
+          "--action",
+          "dataset.resolve,file.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--gte",
+          "schema/table.live-stats::live-stats::rowCount=5"
+        ],
+        "as": "reader",
+        "expect": {
+          "has": {
+            "completeness": "complete",
+            "hits.0.objectId": "table/shop.orders"
+          },
+          "count": {
+            "hits": 1
+          },
+          "includes": {
+            "hits.0.evidence.0.members": [
+              {
+                "member": {
+                  "memberKey": "table-row-count"
+                },
+                "role": "filter"
+              }
+            ]
+          },
+          "nonempty": [
+            "hits.0.indexObservations",
+            "hits.0.version.observations"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--exists",
+          "schema/table.live-stats::live-stats::rowCount",
+          "--sort",
+          "schema/table.live-stats::live-stats::rowCount:desc"
+        ],
+        "as": "reader",
+        "expect": {
+          "has": {
+            "completeness": "complete",
+            "hits.0.objectId": "table/shop.orders"
+          },
+          "count": {
+            "hits": 3
+          },
+          "includes": {
+            "hits.0.evidence.0.members": [
+              {
+                "member": {
+                  "memberKey": "table-row-count"
+                },
+                "role": "sort"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "origin": {
+          "name": "live",
+          "method": "PUT",
+          "path": "/control/units/table%2Fshop.products%23%2Flive-stats",
+          "body": {
+            "behavior": "error",
+            "errorCode": "TEMPORARY_UNAVAILABLE"
+          }
+        },
+        "expect": {}
+      },
+      {
+        "kc": [
+          "operations",
+          "projection",
+          "sync",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1"
+        ],
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "TEMPORARY_UNAVAILABLE"
+          }
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--gte",
+          "schema/table.live-stats::live-stats::rowCount=0"
+        ],
+        "as": "reader",
+        "expect": {
+          "has": {
+            "completeness": "partial"
+          },
+          "count": {
+            "hits": 2,
+            "claims": 1
+          },
+          "contains": {
+            "claims.0": [
+              "table/shop.products#/live-stats",
+              "TEMPORARY_UNAVAILABLE"
+            ]
+          },
+          "excludes": {
+            "hits": [
+              "table/shop.products"
+            ]
+          },
+          "find": [
+            {
+              "in": "hits",
+              "where": {
+                "objectId": "table/shop.orders"
+              }
+            },
+            {
+              "in": "hits",
+              "where": {
+                "objectId": "table/shop.customers"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-index-missing-exclude",
+    "steps": [
+      {
+        "kc": [
+          "writer",
+          "remove",
+          "urn:kc:object:metric/shop.sales.orders#/definition",
+          "--repo",
+          "sales-semantic",
+          "--command-id",
+          "$command"
+        ],
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "indexDataset": {},
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 1,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--dataset",
+          "$dataset",
+          "--principal",
+          "reader",
+          "--action",
+          "dataset.resolve,file.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--query",
+          "order count"
+        ],
+        "as": "reader",
+        "expect": {
+          "has": {
+            "completeness": "complete"
+          },
+          "absent": [
+            "claims"
+          ],
+          "find": [
+            {
+              "in": "hits",
+              "where": {
+                "objectId": "metric/shop.sales.orders"
+              },
+              "expect": {
+                "find": [
+                  {
+                    "in": "evidence.0.members",
+                    "where": {
+                      "member": {
+                        "memberKey": "metric-text"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "writer": "$materials/acceptance/variants/index/metric-text-missing-exclude.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "dataset",
+          "define",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "2",
+          "--source",
+          "table-meta=$branch@tables@tables",
+          "--source",
+          "table-meta=$branch@_schemas/table-meta@_schemas",
+          "--source",
+          "sales-semantic=$branch@metrics@metrics",
+          "--file-source",
+          "sales-semantic=$branch@_schemas/$prefixmetric.properties.aspect.yaml@_schemas/sales-semantic/metric.properties.aspect.yaml",
+          "--file-source",
+          "sales-semantic=$branch@_schemas/$prefixmetric.definition.aspect.yaml@_schemas/sales-semantic/metric.definition.aspect.yaml",
+          "--source",
+          "sales-analysis=$branch@indexes@indexes"
+        ],
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 2,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "2",
+          "--query",
+          "order count"
+        ],
+        "as": "reader",
+        "expect": {
+          "has": {
+            "completeness": "complete"
+          },
+          "absent": [
+            "claims"
+          ],
+          "find": [
+            {
+              "in": "hits",
+              "where": {
+                "objectId": "metric/shop.sales.orders"
+              },
+              "count": 0
+            }
+          ]
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "2",
+          "--query",
+          "Sales mart GMV"
+        ],
+        "as": "reader",
+        "expect": {
+          "has": {
+            "completeness": "complete"
+          },
+          "find": [
+            {
+              "in": "hits",
+              "where": {
+                "objectId": "metric/shop.sales.gmv"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-index-declared-no-objects",
+    "steps": [
+      {
+        "indexDataset": {},
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 1,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "kc": [
+          "dataset",
+          "define",
+          "--dataset",
+          "$dataset-metrics",
+          "--revision",
+          "1",
+          "--source",
+          "sales-semantic=$branch@metrics@metrics",
+          "--file-source",
+          "sales-semantic=$branch@_schemas/$prefixmetric.properties.aspect.yaml@_schemas/sales-semantic/metric.properties.aspect.yaml",
+          "--file-source",
+          "sales-semantic=$branch@_schemas/$prefixmetric.definition.aspect.yaml@_schemas/sales-semantic/metric.definition.aspect.yaml",
+          "--source",
+          "sales-analysis=$branch@indexes@indexes"
+        ],
+        "expect": {
+          "has": {
+            "revision": 1,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--dataset",
+          "$dataset-metrics",
+          "--principal",
+          "reader",
+          "--action",
+          "dataset.resolve,file.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset-metrics",
+          "--revision",
+          "1",
+          "--query",
+          "orders"
+        ],
+        "as": "reader",
+        "expect": {
+          "has": {
+            "completeness": "complete"
+          },
+          "count": {
+            "hits": 0
+          },
+          "excludes": {
+            "claims": [
+              "not declared",
+              "undeclared",
+              "unsupported"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset-metrics",
+          "--revision",
+          "1",
+          "--gte",
+          "schema/table.live-stats::live-stats::rowCount=5"
+        ],
+        "as": "reader",
+        "expect": {
+          "has": {
+            "completeness": "complete"
+          },
+          "count": {
+            "hits": 0
+          },
+          "excludes": {
+            "claims": [
+              "not declared",
+              "undeclared",
+              "unsupported"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-search-unselected-path",
+    "steps": [
+      {
+        "indexDataset": {},
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 1,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "kc": [
+          "dataset",
+          "define",
+          "--dataset",
+          "$dataset-orders",
+          "--revision",
+          "1",
+          "--file-source",
+          "table-meta=$branch@tables/orders.properties.yaml@tables/orders.properties.yaml",
+          "--source",
+          "table-meta=$branch@_schemas/table-meta@_schemas",
+          "--source",
+          "sales-analysis=$branch@indexes@indexes"
+        ],
+        "expect": {
+          "has": {
+            "revision": 1,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--dataset",
+          "$dataset-orders",
+          "--principal",
+          "reader",
+          "--action",
+          "dataset.resolve,file.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset-orders",
+          "--revision",
+          "1",
+          "--query",
+          "customers"
+        ],
+        "as": "reader",
+        "expect": {
+          "has": {
+            "completeness": "complete"
+          },
+          "count": {
+            "hits": 0
+          }
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset-orders",
+          "--revision",
+          "1",
+          "--query",
+          "orders"
+        ],
+        "as": "reader",
+        "expect": {
+          "has": {
+            "completeness": "complete",
+            "hits.0.objectId": "table/shop.orders"
+          },
+          "count": {
+            "hits": 1
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-search-only-selected-declarations",
+    "steps": [
+      {
+        "indexDataset": {},
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 1,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "indexDataset": {
+          "name": "$dataset-plain",
+          "declarations": false
+        },
+        "expect": {
+          "has": {
+            "revision": 1,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--dataset",
+          "$dataset",
+          "--principal",
+          "reader",
+          "--action",
+          "dataset.resolve,file.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--dataset",
+          "$dataset-plain",
+          "--principal",
+          "reader",
+          "--action",
+          "dataset.resolve,file.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "operations",
+          "access-spec",
+          "describe",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1"
+        ],
+        "as": "reader",
+        "expect": {
+          "find": [
+            {
+              "in": "specs",
+              "where": {
+                "repository": "sales-analysis"
+              },
+              "expect": {
+                "count": {
+                  "declarations": 4
+                },
+                "find": [
+                  {
+                    "in": "declarations",
+                    "where": {
+                      "member": {
+                        "memberKey": "table-name"
+                      }
+                    }
+                  },
+                  {
+                    "in": "declarations",
+                    "where": {
+                      "member": {
+                        "memberKey": "metric-text"
+                      }
+                    }
+                  },
+                  {
+                    "in": "declarations",
+                    "where": {
+                      "member": {
+                        "memberKey": "table-row-count"
+                      }
+                    }
+                  },
+                  {
+                    "in": "declarations",
+                    "where": {
+                      "member": {
+                        "memberKey": "metric-unit"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "kc": [
+          "operations",
+          "access-spec",
+          "describe",
+          "--dataset",
+          "$dataset-plain",
+          "--revision",
+          "1"
+        ],
+        "as": "reader",
+        "expect": {
+          "excludes": {
+            "specs": [
+              "table-name",
+              "metric-text",
+              "table-row-count",
+              "metric-unit"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--query",
+          "orders"
+        ],
+        "as": "reader",
+        "expect": {
+          "has": {
+            "completeness": "complete"
+          },
+          "find": [
+            {
+              "in": "hits",
+              "where": {
+                "objectId": "table/shop.orders"
+              },
+              "expect": {
+                "find": [
+                  {
+                    "in": "evidence.0.members",
+                    "where": {
+                      "member": {
+                        "memberKey": "table-name"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset-plain",
+          "--revision",
+          "1",
+          "--query",
+          "orders"
+        ],
+        "as": "reader",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "CAPABILITY_UNSATISFIED"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-cross-hit-recheck",
+    "steps": [
+      {
+        "origin": {
+          "name": "live",
+          "method": "PUT",
+          "path": "/control/units/table%2Fshop.orders%23%2Flive-stats",
+          "body": {
+            "value": {
+              "table": "orders",
+              "rowCount": 1200
+            }
+          }
+        },
+        "expect": {}
+      },
+      {
+        "indexDataset": {},
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 1,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "kc": [
+          "operations",
+          "projection",
+          "sync",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1"
+        ],
+        "expect": {
+          "has": {
+            "revision": 1
+          },
+          "nonempty": [
+            "state.revision"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--dataset",
+          "$dataset",
+          "--principal",
+          "reader",
+          "--action",
+          "dataset.resolve,file.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--gte",
+          "schema/table.live-stats::live-stats::rowCount=1000"
+        ],
+        "as": "reader",
+        "expect": {
+          "has": {
+            "completeness": "complete",
+            "hits.0.objectId": "table/shop.orders",
+            "externalConditions.0.field.path": "rowCount"
+          },
+          "count": {
+            "hits": 1,
+            "externalConditions": 1
+          },
+          "nonempty": [
+            "hits.0.indexObservations",
+            "externalConditions.0.oldestObservedAt"
+          ]
+        }
+      },
+      {
+        "origin": {
+          "name": "live",
+          "method": "PUT",
+          "path": "/control/units/table%2Fshop.orders%23%2Flive-stats",
+          "body": {
+            "value": {
+              "table": "orders",
+              "rowCount": 800
+            }
+          }
+        },
+        "expect": {}
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--gte",
+          "schema/table.live-stats::live-stats::rowCount=1000"
+        ],
+        "as": "reader",
+        "expect": {
+          "has": {
+            "completeness": "complete",
+            "dataset.revision": 1,
+            "externalConditions.0.field.path": "rowCount"
+          },
+          "count": {
+            "hits": 0
+          },
+          "nonempty": [
+            "externalConditions.0.oldestObservedAt"
+          ],
+          "excludes": {
+            "hits": [
+              "table/shop.orders"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--gte",
+          "schema/table.live-stats::live-stats::rowCount=1000"
+        ],
+        "as": "reader",
+        "expect": {
+          "has": {
+            "dataset.revision": 1
+          },
+          "count": {
+            "hits": 0
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-cross-shared-only-indexed",
+    "steps": [
+      {
+        "writer": "$materials/acceptance/variants/index/runtime-value-mixed-identity.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "indexDataset": {},
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 1,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "kc": [
+          "operations",
+          "projection",
+          "sync",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1"
+        ],
+        "expect": {
+          "has": {
+            "revision": 1
+          },
+          "nonempty": [
+            "state.revision"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--dataset",
+          "$dataset",
+          "--principal",
+          "reader",
+          "--action",
+          "dataset.resolve,file.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "operations",
+          "access-spec",
+          "describe",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1"
+        ],
+        "as": "reader",
+        "expect": {
+          "find": [
+            {
+              "in": "specs",
+              "where": {
+                "repository": "sales-analysis"
+              },
+              "expect": {
+                "find": [
+                  {
+                    "in": "declarations",
+                    "where": {
+                      "member": {
+                        "memberKey": "table-row-count"
+                      },
+                      "status": "ready"
+                    }
+                  },
+                  {
+                    "in": "declarations",
+                    "where": {
+                      "member": {
+                        "memberKey": "runtime-value"
+                      },
+                      "status": "unsupported"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--gte",
+          "schema/table.live-stats::live-stats::rowCount=5"
+        ],
+        "as": "reader",
+        "expect": {
+          "has": {
+            "completeness": "complete",
+            "hits.0.objectId": "table/shop.orders"
+          },
+          "count": {
+            "hits": 1
+          }
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--gte",
+          "schema/table.runtime::runtime::value=0"
+        ],
+        "as": "reader",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "CAPABILITY_UNSATISFIED"
+          },
+          "contains": {
+            "error.message": [
+              "runtime-value",
+              "unsupported",
+              "per-caller"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-search-consume-vs-repo-read",
+    "steps": [
+      {
+        "indexDataset": {},
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 1,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--dataset",
+          "$dataset",
+          "--principal",
+          "carol",
+          "--action",
+          "dataset.resolve,file.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--repo",
+          "table-meta",
+          "--principal",
+          "dave",
+          "--action",
+          "object.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--query",
+          "orders"
+        ],
+        "expect": {
+          "has": {
+            "completeness": "complete",
+            "hits.0.objectId": "table/shop.orders"
+          },
+          "count": {
+            "hits": 1
+          }
+        },
+        "remember": {
+          "adminCommit": {
+            "path": "hits.0.commit"
+          },
+          "adminRepository": {
+            "path": "hits.0.repository"
+          }
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--query",
+          "orders"
+        ],
+        "as": "carol",
+        "expect": {
+          "has": {
+            "completeness": "complete",
+            "hits.0.objectId": "table/shop.orders",
+            "hits.0.commit": "$saved.adminCommit",
+            "hits.0.repository": "$saved.adminRepository"
+          },
+          "count": {
+            "hits": 1
+          }
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1"
+        ],
+        "as": "carol",
+        "expect": {
+          "has": {
+            "objectId": "table/shop.orders"
+          },
+          "nonempty": [
+            "value"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders",
+          "--repo",
+          "table-meta"
+        ],
+        "as": "dave",
+        "expect": {
+          "nonempty": [
+            "value"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--query",
+          "orders"
+        ],
+        "as": "dave",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "FORBIDDEN"
+          },
+          "contains": {
+            "error.message": [
+              "file.read"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-search-revoke-mid-pagination",
+    "steps": [
+      {
+        "indexDataset": {},
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 1,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "kc": [
+          "operations",
+          "projection",
+          "sync",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1"
+        ],
+        "expect": {
+          "has": {
+            "revision": 1
+          },
+          "nonempty": [
+            "state.revision"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--dataset",
+          "$dataset",
+          "--principal",
+          "carol",
+          "--action",
+          "dataset.resolve,file.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        },
+        "save": "grant"
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--gte",
+          "schema/table.live-stats::live-stats::rowCount=0",
+          "--sort",
+          "schema/table.live-stats::live-stats::rowCount",
+          "--limit",
+          "1"
+        ],
+        "as": "carol",
+        "expect": {
+          "has": {
+            "completeness": "complete"
+          },
+          "count": {
+            "hits": 1
+          },
+          "nonempty": [
+            "continuation"
+          ]
+        },
+        "save": "first"
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--gte",
+          "schema/table.live-stats::live-stats::rowCount=0",
+          "--sort",
+          "schema/table.live-stats::live-stats::rowCount",
+          "--limit",
+          "1",
+          "--continuation",
+          "$saved.first.continuation"
+        ],
+        "as": "carol",
+        "expect": {
+          "count": {
+            "hits": 1
+          }
+        },
+        "remember": {
+          "secondObject": {
+            "path": "hits.0.objectId"
+          }
+        }
+      },
+      {
+        "assert": {
+          "actual": "$saved.secondObject",
+          "different": "$saved.first.hits.0.objectId"
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "remove",
+          "--id",
+          "$saved.grant.id"
+        ],
+        "expect": {
+          "has": {
+            "revoked": "$saved.grant.id"
+          }
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--gte",
+          "schema/table.live-stats::live-stats::rowCount=0",
+          "--sort",
+          "schema/table.live-stats::live-stats::rowCount",
+          "--limit",
+          "1",
+          "--continuation",
+          "$saved.first.continuation"
+        ],
+        "as": "carol",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "FORBIDDEN"
+          },
+          "absent": [
+            "hits"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-retire-repository-scoped-search",
+    "steps": [
+      {
+        "go": {
+          "package": "./internal/arch",
+          "tests": [
+            "TestPublishedAndSceneSchemasCarryNoFieldAccess",
+            "TestSchemaFieldAccessScanFindsNestedDeclarations"
+          ]
+        },
+        "expect": {
+          "count": {
+            "tests": 2
+          },
+          "includes": {
+            "tests": [
+              {
+                "name": "TestPublishedAndSceneSchemasCarryNoFieldAccess",
+                "status": "pass"
+              },
+              {
+                "name": "TestSchemaFieldAccessScanFindsNestedDeclarations",
+                "status": "pass"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "indexDataset": {},
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 1,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--repo",
+          "table-meta",
+          "--query",
+          "orders"
+        ],
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "USAGE_INVALID"
+          },
+          "contains": {
+            "error.message": [
+              "--dataset"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--repo",
+          "table-meta",
+          "--query",
+          "orders"
+        ],
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "USAGE_INVALID"
+          }
+        }
+      },
+      {
+        "kc": [
+          "relations",
+          "urn:kc:object:table/shop.orders",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "USAGE_INVALID"
+          }
+        }
+      },
+      {
+        "kc": [
+          "operations",
+          "projection",
+          "describe",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "USAGE_INVALID"
+          }
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--repo",
+          "table-meta",
+          "--principal",
+          "dave",
+          "--action",
+          "file.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--query",
+          "orders"
+        ],
+        "as": "dave",
+        "expect": {
+          "exit": 1,
+          "has": {
+            "error.code": "FORBIDDEN"
+          }
+        }
+      },
+      {
+        "kc": [
+          "schema",
+          "describe",
+          "--repo",
+          "table-meta",
+          "--object",
+          "schema/table.properties"
+        ],
+        "expect": {
+          "has": {
+            "schemas.0.objectId": "schema/table.properties"
+          },
+          "nonempty": [
+            "schemas.0.fields"
+          ],
+          "forEach": {
+            "schemas.0.fields": {
+              "absent": [
+                "access"
+              ],
+              "nonempty": [
+                "path"
+              ]
+            }
+          },
+          "absent": [
+            "search"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "help",
+          "schema",
+          "describe"
+        ],
+        "expect": {
+          "contains": {
+            "text": [
+              "Schema 只描述结构",
+              "kc plugin declarative-index help"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-live-member-failure-isolated",
+    "steps": [
+      {
+        "origin": {
+          "name": "live",
+          "method": "PUT",
+          "path": "/control/units/table%2Fshop.orders%23%2Fruntime%2Ffreshness-lag",
+          "body": {
+            "behavior": "error",
+            "errorCode": "TEMPORARY_UNAVAILABLE"
+          }
+        },
+        "expect": {}
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.row-count.value": 6,
+            "value.retention-days.value": 365,
+            "value.freshness-lag.error.code": "TEMPORARY_UNAVAILABLE"
+          },
+          "count": {
+            "value.freshness-lag": 1,
+            "failures": 1,
+            "observations": 1
+          },
+          "absent": [
+            "value.freshness-lag.value",
+            "value.freshness-lag.metric"
+          ],
+          "find": [
+            {
+              "in": "failures",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "freshness-lag"
+                },
+                "code": "TEMPORARY_UNAVAILABLE"
+              },
+              "expect": {
+                "nonempty": [
+                  "message"
+                ]
+              }
+            },
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "row-count"
+                }
+              },
+              "expect": {
+                "nonempty": [
+                  "basis.observedAt",
+                  "basis.sourceRevision"
+                ]
+              }
+            },
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "freshness-lag"
+                }
+              },
+              "count": 0
+            }
+          ],
+          "nonempty": [
+            "value.freshness-lag.error.message"
+          ]
+        }
+      },
+      {
+        "origin": {
+          "name": "live",
+          "method": "GET",
+          "path": "/control/calls"
+        },
+        "expect": {
+          "count": {
+            "calls": 2
+          },
+          "includes": {
+            "calls": [
+              {
+                "address": "table/shop.orders#/runtime/row-count"
+              },
+              {
+                "address": "table/shop.orders#/runtime/freshness-lag"
+              }
+            ]
+          },
+          "find": [
+            {
+              "in": "calls",
+              "where": {
+                "address": "table/shop.orders#/runtime/retention-days"
+              },
+              "count": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-live-observation-beside-value",
+    "steps": [
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "count": {
+            "observations": 2,
+            "value.row-count": 4,
+            "value.freshness-lag": 4,
+            "value.retention-days": 4
+          },
+          "nonempty": [
+            "value.row-count.metric",
+            "value.row-count.value",
+            "value.row-count.unit",
+            "value.row-count.status",
+            "value.freshness-lag.metric",
+            "value.freshness-lag.value",
+            "value.freshness-lag.unit",
+            "value.freshness-lag.status"
+          ],
+          "absent": [
+            "failures.0"
+          ],
+          "excludes": {
+            "value": [
+              "observedAt",
+              "sourceRevision",
+              "bindingGeneration",
+              "basis"
+            ]
+          },
+          "find": [
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "row-count"
+                }
+              },
+              "expect": {
+                "nonempty": [
+                  "basis.observedAt",
+                  "basis.sourceRevision",
+                  "declarationDigest"
+                ]
+              }
+            },
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "freshness-lag"
+                }
+              },
+              "expect": {
+                "nonempty": [
+                  "basis.observedAt",
+                  "basis.sourceRevision",
+                  "declarationDigest"
+                ]
+              }
+            },
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "memberKey": "retention-days"
+                }
+              },
+              "count": 0
+            }
+          ]
+        },
+        "save": "first",
+        "remember": {
+          "firstRevision": {
+            "in": "observations",
+            "where": {
+              "address": {
+                "memberKey": "row-count"
+              }
+            },
+            "path": "basis.sourceRevision"
+          },
+          "firstObservedAt": {
+            "in": "observations",
+            "where": {
+              "address": {
+                "memberKey": "row-count"
+              }
+            },
+            "path": "basis.observedAt"
+          }
+        }
+      },
+      {
+        "origin": {
+          "name": "live",
+          "method": "PUT",
+          "path": "/control/units/table%2Fshop.orders%23%2Fruntime%2Frow-count",
+          "body": {
+            "value": {
+              "metric": "row_count",
+              "value": 6,
+              "unit": "rows",
+              "status": "ok"
+            }
+          }
+        },
+        "expect": {
+          "nonempty": [
+            "revision"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "count": {
+            "observations": 2
+          }
+        },
+        "save": "second",
+        "remember": {
+          "secondRevision": {
+            "in": "observations",
+            "where": {
+              "address": {
+                "memberKey": "row-count"
+              }
+            },
+            "path": "basis.sourceRevision"
+          },
+          "secondObservedAt": {
+            "in": "observations",
+            "where": {
+              "address": {
+                "memberKey": "row-count"
+              }
+            },
+            "path": "basis.observedAt"
+          }
+        }
+      },
+      {
+        "assert": {
+          "actual": "$saved.secondRevision",
+          "different": "$saved.firstRevision"
+        }
+      },
+      {
+        "assert": {
+          "actual": "$saved.secondObservedAt",
+          "different": "$saved.firstObservedAt"
+        }
+      },
+      {
+        "assert": {
+          "actual": "$saved.second.value",
+          "equals": "$saved.first.value"
+        }
+      },
+      {
+        "assert": {
+          "actual": "$saved.second.declarations",
+          "equals": "$saved.first.declarations"
+        }
+      }
+    ]
+  },
+  {
+    "id": "accept-live-null-failure-nocapability",
+    "steps": [
+      {
+        "origin": {
+          "name": "live",
+          "method": "PUT",
+          "path": "/control/units/table%2Fshop.orders%23%2Fruntime%2Frow-count",
+          "body": {
+            "behavior": "null"
+          }
+        },
+        "expect": {}
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "has": {
+            "value.row-count": null,
+            "value.freshness-lag.value": 120,
+            "value.retention-days.value": 365
+          },
+          "find": [
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "row-count"
+                }
+              },
+              "expect": {
+                "nonempty": [
+                  "basis.observedAt",
+                  "basis.bindingGeneration",
+                  "declarationDigest"
+                ]
+              }
+            },
+            {
+              "in": "failures",
+              "where": {
+                "address": {
+                  "memberKey": "row-count"
+                }
+              },
+              "count": 0
+            }
+          ]
+        }
+      },
+      {
+        "origin": {
+          "name": "live",
+          "method": "PUT",
+          "path": "/control/units/table%2Fshop.orders%23%2Fruntime%2Frow-count",
+          "body": {
+            "behavior": "slow",
+            "delayMs": 1500,
+            "value": {
+              "metric": "row_count",
+              "value": 6,
+              "unit": "rows",
+              "status": "ok"
+            }
+          }
+        },
+        "expect": {}
+      },
+      {
+        "deployment": {
+          "has": {
+            "liveaccess.lookupTimeout": "1s",
+            "liveaccess.readTimeout": "600ms"
+          }
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "maxSeconds": 1.4,
+          "has": {
+            "value.retention-days.value": 365
+          },
+          "nonempty": [
+            "value.row-count.error.code"
+          ],
+          "absent": [
+            "value.row-count.value"
+          ],
+          "find": [
+            {
+              "in": "failures",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "row-count"
+                }
+              },
+              "expect": {
+                "contains": {
+                  "message": [
+                    "time"
+                  ]
+                },
+                "nonempty": [
+                  "code"
+                ]
+              }
+            },
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "memberKey": "row-count"
+                }
+              },
+              "count": 0
+            }
+          ]
+        }
+      },
+      {
+        "deployment": {
+          "absent": [
+            "liveaccess"
+          ]
+        }
+      }
+    ],
+    "notes": "Variant C needs a test deployment without the LiveAccess plugin; on the standard local deployment the precondition step reports the missing variant instead of passing."
+  },
+  {
+    "id": "accept-live-origin-unreachable",
+    "steps": [
+      {
+        "origin": {
+          "name": "live",
+          "method": "PUT",
+          "path": "/control/units/table%2Fshop.orders%23%2Fruntime%2Frow-count",
+          "body": {
+            "behavior": "unreachable"
+          }
+        },
+        "expect": {}
+      },
+      {
+        "origin": {
+          "name": "live",
+          "method": "PUT",
+          "path": "/control/units/table%2Fshop.orders%23%2Fruntime%2Ffreshness-lag",
+          "body": {
+            "behavior": "unreachable"
+          }
+        },
+        "expect": {}
+      },
+      {
+        "origin": {
+          "name": "live",
+          "method": "PUT",
+          "path": "/control/units/table%2Fshop.orders%23%2Flive-stats",
+          "body": {
+            "behavior": "unreachable"
+          }
+        },
+        "expect": {}
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders",
+          "--repo",
+          "table-meta"
+        ],
+        "expect": {
+          "maxSeconds": 3,
+          "nonempty": [
+            "value.properties",
+            "value.runtime.row-count.error.code",
+            "value.runtime.freshness-lag.error.code"
+          ],
+          "has": {
+            "value.runtime.retention-days.value": 365
+          },
+          "count": {
+            "failures": 3
+          },
+          "find": [
+            {
+              "in": "failures",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "row-count"
+                }
+              },
+              "expect": {
+                "nonempty": [
+                  "code",
+                  "message"
+                ]
+              }
+            },
+            {
+              "in": "failures",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "freshness-lag"
+                }
+              },
+              "expect": {
+                "nonempty": [
+                  "code",
+                  "message"
+                ]
+              }
+            },
+            {
+              "in": "failures",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "live-stats"
+                }
+              },
+              "expect": {
+                "nonempty": [
+                  "code",
+                  "message"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "origin": {
+          "name": "live",
+          "method": "GET",
+          "path": "/control/calls"
+        },
+        "expect": {
+          "count": {
+            "calls": 3
+          }
+        }
+      }
+    ],
+    "notes": "unreachable units close the connection without an HTTP response, the transport failure a stopped live-origin produces, without stopping the shared deployment's process or erasing other runs' call records."
+  },
+  {
+    "id": "accept-cross-per-caller-not-searchable",
+    "steps": [
+      {
+        "origin": {
+          "name": "live",
+          "method": "PUT",
+          "path": "/control/units/table%2Fshop.orders%23%2Fruntime%2Ffreshness-lag",
+          "body": {
+            "value": {
+              "metric": "freshness_lag",
+              "value": 120,
+              "unit": "seconds",
+              "status": "ok"
+            },
+            "denyPrincipals": [
+              "reader-b"
+            ]
+          }
+        },
+        "expect": {
+          "nonempty": [
+            "revision"
+          ]
+        }
+      },
+      {
+        "writer": "$materials/acceptance/variants/index/runtime-value-mixed-identity.yaml",
+        "repo": "sales-analysis",
+        "expect": {
+          "nonempty": [
+            "result.newCommit"
+          ]
+        }
+      },
+      {
+        "indexDataset": {},
+        "expect": {
+          "has": {
+            "setId": "$dataset",
+            "revision": 1,
+            "disposition": "APPLIED"
+          }
+        }
+      },
+      {
+        "kc": [
+          "operations",
+          "projection",
+          "sync",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1"
+        ],
+        "expect": {
+          "has": {
+            "revision": 1
+          },
+          "nonempty": [
+            "state.revision"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--dataset",
+          "$dataset",
+          "--principal",
+          "reader-a",
+          "--action",
+          "dataset.resolve,file.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "grant",
+          "add",
+          "--dataset",
+          "$dataset",
+          "--principal",
+          "reader-b",
+          "--action",
+          "dataset.resolve,file.read"
+        ],
+        "expect": {
+          "nonempty": [
+            "id"
+          ]
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1"
+        ],
+        "as": "reader-a",
+        "expect": {
+          "has": {
+            "value.freshness-lag.value": 120,
+            "value.row-count.value": 6,
+            "value.retention-days.value": 365
+          },
+          "absent": [
+            "failures.0"
+          ],
+          "find": [
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "memberKey": "freshness-lag"
+                }
+              },
+              "expect": {
+                "nonempty": [
+                  "basis.observedAt"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "kc": [
+          "read",
+          "urn:kc:object:table/shop.orders#/runtime",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1"
+        ],
+        "as": "reader-b",
+        "expect": {
+          "has": {
+            "value.row-count.value": 6,
+            "value.retention-days.value": 365,
+            "value.freshness-lag.error.code": "FORBIDDEN"
+          },
+          "absent": [
+            "value.freshness-lag.value"
+          ],
+          "excludes": {
+            "": [
+              "freshness_lag"
+            ]
+          },
+          "find": [
+            {
+              "in": "failures",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "freshness-lag"
+                },
+                "code": "FORBIDDEN"
+              },
+              "expect": {
+                "has": {
+                  "code": "FORBIDDEN"
+                },
+                "nonempty": [
+                  "message"
+                ]
+              }
+            },
+            {
+              "in": "observations",
+              "where": {
+                "address": {
+                  "objectId": "table/shop.orders",
+                  "aspectName": "runtime",
+                  "memberKey": "freshness-lag"
+                }
+              },
+              "count": 0
+            }
+          ],
+          "nonempty": [
+            "value.freshness-lag.error.message"
+          ],
+          "count": {
+            "value.freshness-lag": 1,
+            "failures": 1,
+            "observations": 1
+          }
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--query",
+          "120"
+        ],
+        "as": "reader-a",
+        "expect": {
+          "has": {
+            "dataset.revision": 1,
+            "completeness": "complete"
+          },
+          "count": {
+            "hits": 0
+          },
+          "excludes": {
+            "": [
+              "freshness_lag",
+              "freshness-lag"
+            ]
+          }
+        }
+      },
+      {
+        "kc": [
+          "search",
+          "--dataset",
+          "$dataset",
+          "--revision",
+          "1",
+          "--query",
+          "120"
+        ],
+        "as": "reader-b",
+        "expect": {
+          "has": {
+            "dataset.revision": 1,
+            "completeness": "complete"
+          },
+          "count": {
+            "hits": 0
+          },
+          "excludes": {
+            "": [
+              "freshness_lag",
+              "freshness-lag"
+            ]
+          }
+        }
+      }
+    ]
   }
 ]

@@ -1,6 +1,7 @@
 package opensearch_test
 
 import (
+	"context"
 	"fmt"
 	"kc/declarativeindex/internal/testfixture"
 	ports "kc/discovery/projection"
@@ -212,7 +213,7 @@ func liveOpenSearch(t *testing.T) *index.Index {
 	idx := index.NewIndexEngine("", opensearch.Open(opensearch.Config{URL: os.Getenv("KC_TEST_OPENSEARCH_URL"), PrimaryShards: 1}))
 	t.Cleanup(func() { _ = idx.Close() })
 	probe := testkit.MakeRepository(t, uniqueESRepo(t, "ping"))
-	if _, err := idx.Ensure(probe, testkit.MustHead(t, probe, "refs/heads/main")); err != nil {
+	if _, err := idx.Ensure(context.Background(), probe, testkit.MustHead(t, probe, "refs/heads/main")); err != nil {
 		t.Skip(err)
 	}
 	return idx

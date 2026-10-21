@@ -15,6 +15,10 @@ const (
 	DeclarationReady       = "ready"
 	DeclarationUnsupported = "unsupported"
 	DeclarationInvalid     = "invalid"
+	// DeclarationInapplicable marks a selected member whose input Schema is
+	// not in this scope: no object here can carry the field, so a query on it
+	// is a complete miss rather than an unsupported or undeclared condition.
+	DeclarationInapplicable = "inapplicable"
 )
 
 // DeclarationStatus is one index declaration member as compiled against a
@@ -51,6 +55,9 @@ type declaredAccess struct {
 	statuses []DeclarationStatus
 	builds   []declarationBuild
 	schemas  map[objectmodel.ObjectID]bool
+	// inapplicable keeps selected members whose input Schema is outside the
+	// scope, with their input locators, so queries on them miss completely.
+	inapplicable []declarationBuild
 }
 
 // declarationBuild is execution metadata retained only for ready members.
@@ -132,6 +139,9 @@ func compileDeclarationMembers(repo objectmodel.Repository, commit kernel.Commit
 				status.Status, status.Reason = DeclarationUnsupported, reason
 			}
 		}
+		if status.Status == DeclarationInapplicable {
+			out.inapplicable = append(out.inapplicable, declarationBuild{member: address, declaration: declaration, inputs: locatorInputs(declaration)})
+		}
 		if status.Status == DeclarationReady {
 			out.builds = append(out.builds, declarationBuild{member: address, declaration: declaration, inputs: inputs})
 			for _, input := range inputs {
@@ -172,8 +182,15 @@ func compileDeclaration(address objectmodel.Address, value any, release schemaRe
 			return status, nil, declaration, err
 		}
 		if !exists {
+			if ref.Repository == "" && ref.Commit == "" {
+				// The scope's own Schema namespace does not hold it, so no
+				// object in scope can carry this field (discovery 完整性).
+				status.Status, status.Reason = DeclarationInapplicable,
+					fmt.Sprintf("input %s names a Schema not in this scope; no object here can match", input.From)
+				return status, nil, declaration, nil
+			}
 			status.Status, status.Reason = DeclarationUnsupported,
-				fmt.Sprintf("input %s names a Schema outside this repository", input.From)
+				fmt.Sprintf("input %s names a Schema release outside this scope", input.From)
 			return status, nil, declaration, nil
 		}
 		field, found := schemaField(schema, input.Locator.Path)
@@ -260,6 +277,35 @@ func (d declaredAccess) annotateRelease(report reader.SchemaReport, commit kerne
 // Statuses lists every index declaration member compiled into this spec.
 func (s AccessSpec) Statuses() []DeclarationStatus {
 	return append([]DeclarationStatus(nil), s.Declarations...)
+}
+
+// UnreadyTextMembers returns the declared text members that did not compile to
+// ready. An unfielded MATCH covers every declared text member, so these are the
+// members such a query silently cannot reach.
+func (s AccessSpec) UnreadyTextMembers() []DeclarationStatus {
+	var members []DeclarationStatus
+	for _, status := range s.Declarations {
+		if status.Status == DeclarationReady || status.Status == DeclarationInapplicable {
+			continue
+		}
+		for _, use := range status.Uses {
+			if use == objectmodel.IndexUseText {
+				members = append(members, status)
+				break
+			}
+		}
+	}
+	return members
+}
+
+// locatorInputs names an inapplicable member's inputs by their locators; no
+// Schema release in scope describes them.
+func locatorInputs(declaration objectmodel.IndexDeclaration) []DeclarationInput {
+	inputs := make([]DeclarationInput, 0, len(declaration.Inputs))
+	for _, input := range declaration.Inputs {
+		inputs = append(inputs, DeclarationInput{Field: FieldRef{Schema: input.Locator.Schema.Object, Path: input.Locator.Path}})
+	}
+	return inputs
 }
 
 // SemanticMembers returns the ready vector declarations selected by this scope.

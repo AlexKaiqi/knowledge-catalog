@@ -263,8 +263,11 @@ func (l *commandLedger) Execute(commandID, digest string, request CommandRequest
 		}
 		if l.store != nil {
 			if releaseErr := l.store.Delete(commandID); releaseErr != nil {
-				return CommandEntry{}, false, kernel.Fail(kernel.ErrTemporaryUnavailable,
-					"release unapplied command %s in idempotency ledger: %v", commandID, releaseErr)
+				// Claim cleanup failure does not undo the provider's proof that
+				// publication never happened. Retain PENDING and its digest, but
+				// preserve that proof so clients do not await a receipt.
+				return CommandEntry{}, false, storecontract.WriteNotApplied(kernel.Fail(kernel.ErrTemporaryUnavailable,
+					"release unapplied command %s in idempotency ledger: %v", commandID, releaseErr))
 			}
 		}
 		l.mu.Lock()

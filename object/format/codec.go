@@ -69,28 +69,30 @@ func SerializeWithSource(address objectmodel.Address, pathHint, schemaRef string
 }
 
 func markdownAspectBody(address objectmodel.Address, pathHint, schemaRef string, value any) (bool, string) {
-	if !objectmodel.IsReadmeAddress(address, schemaRef) {
-		if !strings.HasSuffix(strings.ToLower(pathHint), ".md") {
-			return false, ""
-		}
-		// A path alone cannot reinterpret a scalar or discard other fields.
-		// Generic Markdown units explicitly carry the single body field.
-		record, ok := value.(map[string]any)
-		if !ok || len(record) != 1 {
-			return false, ""
-		}
-		if _, ok := record["body"].(string); !ok {
-			return false, ""
-		}
+	if !strings.HasSuffix(strings.ToLower(pathHint), ".md") {
+		return false, ""
 	}
-	body, ok := objectmodel.ReadmeBody(value)
-	if !ok {
+	// A path alone cannot reinterpret a scalar or discard other fields.
+	// Markdown units carry exactly one non-blank string field `body`.
+	record, ok := value.(map[string]any)
+	if !ok || len(record) != 1 {
+		return false, ""
+	}
+	body, ok := record["body"].(string)
+	if !ok || strings.TrimSpace(body) == "" {
 		return false, ""
 	}
 	return true, body
 }
 
 func Parse(content string) *Unit {
+	return ParseAt(content, "")
+}
+
+// ParseAt parses a unit read from tree path rel. A Markdown unit is a `.md`
+// file whose frontmatter uses `entity`; the declared path_hint decides, and
+// the file's own path stands in when the author declared none.
+func ParseAt(content, rel string) *Unit {
 	lines := strings.Split(content, "\n")
 	if len(lines) == 0 || lines[0] != "---" {
 		return nil
@@ -156,7 +158,7 @@ func Parse(content string) *Unit {
 	var value any
 	if valueSource != nil && body == "" {
 		// An external unit's header is its whole content.
-	} else if objectmodel.IsReadmeSchema(schemaRef) || (obj["entity"] != "" && strings.HasSuffix(strings.ToLower(obj["path_hint"]), ".md")) {
+	} else if obj["entity"] != "" && strings.HasSuffix(strings.ToLower(markdownHint(obj["path_hint"], rel)), ".md") {
 		value = map[string]any{"body": body}
 	} else if kernel.UnmarshalJSON([]byte(body), &value) != nil && looksLikeStructuredYAML(body) {
 		// Object drafts are commonly authored as YAML. Decode the
@@ -217,4 +219,11 @@ func looksLikeStructuredYAML(body string) bool {
 		return strings.HasPrefix(trimmed, "- ") || strings.Contains(trimmed, ":")
 	}
 	return false
+}
+
+func markdownHint(declared, rel string) string {
+	if declared != "" {
+		return declared
+	}
+	return rel
 }

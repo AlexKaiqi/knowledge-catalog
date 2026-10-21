@@ -11,8 +11,8 @@ import (
 //go:embed trusted/*.yaml
 var trustedSchemaFS embed.FS
 
-// TrustedSchemaOperations contains the immutable Meta Schema and README
-// protocol data. Basic object read/write never imports the system publication.
+// TrustedSchemaOperations contains the immutable Meta Schema and index
+// declaration protocol data. Basic object read/write never imports the system publication.
 func TrustedSchemaOperations() []Operation {
 	entries, err := trustedSchemaFS.ReadDir("trusted")
 	if err != nil {
@@ -42,6 +42,22 @@ func TrustedSchemaOperations() []Operation {
 		out = append(out, Operation{Op: OpPut, Address: Address{Kind: KindEntity, ObjectID: declaration.ID}, PathHint: declaration.Path, Value: value})
 	}
 	return out
+}
+
+// AssertProtocolSchemaPublication refuses drifted copies of every protocol
+// Schema in TrustedSchemaOperations. Repositories may republish those documents
+// unchanged; other Schema IDs retain ordinary compatible evolution.
+func AssertProtocolSchemaPublication(objectID ObjectID, value any) error {
+	for _, operation := range TrustedSchemaOperations() {
+		if operation.Address.ObjectID == objectID {
+			if kernel.CanonicalDigest(value) != kernel.CanonicalDigest(operation.Value) {
+				return kernel.Fail(kernel.ErrSchemaIncompatible,
+					"protocol schema %s must match the System Repository publication", objectID)
+			}
+			return nil
+		}
+	}
+	return nil
 }
 
 func SystemMetaSchemaDigest() kernel.Digest {

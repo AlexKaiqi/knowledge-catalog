@@ -79,22 +79,18 @@ func (c *service) DefineDataset(setID string, revision int, sources []DatasetSou
 
 // PrepareDataset freezes a candidate without changing the serving version.
 // Upper layers may prepare derived capabilities before PublishDataset.
+// It reads one accepted version and takes no lock, so freezing sources never
+// delays readers or other writers.
 func (c *service) PrepareDataset(setID string, revision int, sources []DatasetSource) (Dataset, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
 	if err := c.ensureWritable(); err != nil {
 		return Dataset{}, err
 	}
-	if err := c.checkNextRevision(setID, revision); err != nil {
+	accepted := c.accepted()
+	if err := accepted.checkNextRevision(setID, revision); err != nil {
 		return Dataset{}, err
 	}
-	seen := map[kernel.RepositoryID]struct{}{}
 	for _, src := range sources {
-		if _, ok := seen[src.Repository]; ok {
-			continue
-		}
-		seen[src.Repository] = struct{}{}
-		if _, ok := c.repositories[string(src.Repository)]; !ok {
+		if _, ok := accepted.repositories[string(src.Repository)]; !ok {
 			return Dataset{}, kernel.Fail(kernel.ErrDatasetInvalid, "repository %s is not registered in this service", src.Repository)
 		}
 	}
@@ -119,11 +115,11 @@ func (c *service) PrepareDataset(setID string, revision int, sources []DatasetSo
 	return def, nil
 }
 
-func (c *service) checkNextRevision(setID string, revision int) error {
+func (s *acceptedState) checkNextRevision(setID string, revision int) error {
 	if strings.TrimSpace(setID) == "" || revision <= 0 {
 		return kernel.Fail(kernel.ErrDatasetInvalid, "dataset identity and a positive revision are required")
 	}
-	if existing, ok := c.datasets[setID]; ok {
+	if existing, ok := s.datasets[setID]; ok {
 		if existing.Retired {
 			return kernel.Fail(kernel.ErrDatasetInvalid, "dataset %s is retired", setID)
 		}
@@ -136,28 +132,21 @@ func (c *service) checkNextRevision(setID string, revision int) error {
 
 // PublishDataset atomically retains an immutable release and advances
 // latest. No object/index dependency belongs in this file-level boundary.
+// Source freezing and file validation read immutable commits outside any lock;
+// only the in-memory recheck and the registry commit are serialized, and
+// readers keep the previous version until the commit is accepted.
 func (c *service) PublishDataset(def Dataset) (Dataset, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	if err := c.ensureWritable(); err != nil {
 		return Dataset{}, err
 	}
-	if err := c.checkNextRevision(def.SetID, def.Revision); err != nil {
+	if err := c.checkPublication(c.accepted(), def); err != nil {
 		return Dataset{}, err
-	}
-	if len(def.Sources) == 0 {
-		return Dataset{}, kernel.Fail(kernel.ErrDatasetInvalid, "dataset requires sources")
 	}
 	if err := validateMountPaths(def.Sources); err != nil {
 		return Dataset{}, err
 	}
 	if err := validateSourceCoordinates(def.Sources); err != nil {
 		return Dataset{}, err
-	}
-	for _, src := range def.Sources {
-		if _, ok := c.repositories[string(src.Repository)]; !ok || src.Commit == "" {
-			return Dataset{}, kernel.Fail(kernel.ErrDatasetInvalid, "dataset publication requires registered, frozen sources")
-		}
 	}
 	frozen, err := c.freezeSources(def.Sources)
 	if err != nil {
@@ -174,26 +163,49 @@ func (c *service) PublishDataset(def Dataset) (Dataset, error) {
 		return Dataset{}, err
 	}
 	def = Dataset{SetID: def.SetID, Revision: def.Revision, Sources: frozen, Items: items, Metadata: maps.Clone(def.Metadata), Dependencies: maps.Clone(def.Dependencies)}
-	next := c.dumpState()
-	next.Datasets = slices.DeleteFunc(next.Datasets, func(existing Dataset) bool { return existing.SetID == def.SetID })
-	next.Datasets = append(next.Datasets, cloneDataset(def))
-	next.DatasetVersions = append(next.DatasetVersions, cloneDataset(def))
-	if err := c.persist(next, "dataset-define "+def.SetID); err != nil {
+	err = c.commitDataset(def.SetID, "dataset-define "+def.SetID, func(s *acceptedState) (State, error) {
+		// The accepted version may have advanced since validation.
+		if err := c.checkPublication(s, def); err != nil {
+			return State{}, err
+		}
+		next := s.dump(c.registry.AuthorityID())
+		next.Datasets = slices.DeleteFunc(next.Datasets, func(existing Dataset) bool { return existing.SetID == def.SetID })
+		next.Datasets = append(next.Datasets, cloneDataset(def))
+		next.DatasetVersions = append(next.DatasetVersions, cloneDataset(def))
+		return next, nil
+	})
+	if err != nil {
 		return Dataset{}, err
 	}
 	return cloneDataset(def), nil
 }
 
+// checkPublication is the registry-state half of publication validity: the
+// revision advances and every source is registered and frozen.
+func (c *service) checkPublication(s *acceptedState, def Dataset) error {
+	if err := s.checkNextRevision(def.SetID, def.Revision); err != nil {
+		return err
+	}
+	if len(def.Sources) == 0 {
+		return kernel.Fail(kernel.ErrDatasetInvalid, "dataset requires sources")
+	}
+	for _, src := range def.Sources {
+		if _, ok := s.repositories[string(src.Repository)]; !ok || src.Commit == "" {
+			return kernel.Fail(kernel.ErrDatasetInvalid, "dataset publication requires registered, frozen sources")
+		}
+	}
+	return nil
+}
+
 // DatasetVersion resolves a published version while honoring current retirement.
 // Repository registration and current authorization are checked at consumption.
 func (c *service) DatasetVersion(setID string, revision int) (Dataset, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	current, ok := c.datasets[setID]
+	accepted := c.accepted()
+	current, ok := accepted.datasets[setID]
 	if !ok || current.Retired {
 		return Dataset{}, kernel.Fail(kernel.ErrDatasetInvalid, "dataset %s is absent or retired", setID)
 	}
-	def, ok := c.versions[setID][revision]
+	def, ok := accepted.versions[setID][revision]
 	if !ok {
 		return Dataset{}, kernel.Fail(kernel.ErrVersionUnresolved, "dataset %s v%d was not published", setID, revision)
 	}
@@ -245,9 +257,7 @@ func memberPathLabel(value string) string {
 }
 
 func (c *service) Set(setID string) (Dataset, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	def, ok := c.datasets[setID]
+	def, ok := c.accepted().datasets[setID]
 	if !ok {
 		return Dataset{}, kernel.Fail(kernel.ErrDatasetInvalid, "dataset %s is not defined in this service", setID)
 	}

@@ -30,7 +30,11 @@ func TestT7Ingest(t *testing.T) {
 	if len(preview.Files) != 2 || len(preview.ChangeSet.Operations) != 2 {
 		t.Fatalf("%#v", preview)
 	}
-	if preview.ChangeSet.Provenance == nil || preview.ChangeSet.Provenance.OriginKind != objectmodel.OriginSource {
+	// Directory publication no longer invents a provenance envelope from the
+	// caller's local path; a declared origin comes from the shared origin
+	// flags (covered by TestIngestDoesNotRecordLocalDirectoryInProvenance and
+	// the CLI origin-flag regressions).
+	if preview.ChangeSet.Provenance != nil {
 		t.Fatal(preview.ChangeSet.Provenance)
 	}
 	if preview.ChangeSet.Operations[0].Op != objectmodel.OpPut {
@@ -57,13 +61,13 @@ func TestIngestMarkdownReadmeFrontmatter(t *testing.T) {
 		t.Fatalf("%#v", preview.ChangeSet.Operations)
 	}
 	op := preview.ChangeSet.Operations[0]
-	if op.Address.Kind != objectmodel.KindAspect || op.Address.ObjectID != "payments" || op.Address.AspectName != objectmodel.ReadmeAspect {
+	if op.Address.Kind != objectmodel.KindAspect || op.Address.ObjectID != "payments" || op.Address.AspectName != "readme" {
 		t.Fatalf("%#v", op.Address)
 	}
-	if op.PathHint != objectmodel.RepositoryReadmePath {
+	if op.PathHint != "README.md" {
 		t.Fatalf("path hint %#v", op.PathHint)
 	}
-	got, ok := objectmodel.ReadmeBody(op.Value)
+	got, ok := testkit.MarkdownBody(op.Value)
 	if !ok || !strings.Contains(got, "Payments warehouse") {
 		t.Fatalf("value %#v", op.Value)
 	}

@@ -67,7 +67,7 @@ func (p *IndexPlugins) PrepareDatasetScope(ctx context.Context, lookup reader.Me
 		if err != nil {
 			return err
 		}
-		if _, err := p.EnsureAt(member, pin.Repositories[id]); err != nil {
+		if _, err := p.EnsureAt(ctx, member, pin.Repositories[id]); err != nil {
 			return err
 		}
 	}

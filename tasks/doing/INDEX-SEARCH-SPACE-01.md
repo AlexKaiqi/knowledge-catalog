@@ -47,9 +47,11 @@
 
 2026-10-16 动画交付调用仓库质量检查时，`make check-docs` 通过；`make quality` 在 `cli/catalog_dataset_scope_internal_test.go:60` 报 `ObjectSearchRequest.InventoryDiscovery` 已不存在。此断言处于本任务已列出的检索范围与旧入口替换工作中，随同批测试收口，剩余验收仍为本任务的 `make quality` 及受影响合同。动画任务未修改该测试或产品实现。
 
-## 并入
+## 接管（2026-10-16）
 
-- `DEBT-LIVE-RERANK-RETIRED-GRANT-01`：`cli/rerank_http_test.go` 的 `TestLiveHTTPSearchRerankWithLuna`（当前第 335 行）仍申请退休的 `object.search,object.rerank`，显式启用付费 live 验证后会在授权夹具阶段被拒绝。仅将该夹具迁到既有 Dataset `file.read` 与独立 `object.rerank`；保留真实模型排序、完整候选证据、提供方和模型断言，随后在下一次已授权的 live rerank 验收中执行，并跑受影响合同、`make check-docs`、`make quality`。本次未修改 live 源码、未执行付费试跑，原债按同批文件规则归并关闭。
+- 停滞判定：本线 `discovery/`、`declarativeindex/` 范围最后实质改动 11:49（`dataset_state.go`），任务文件最后更新 17:02，至 19:30+ 无修改、无提交、无在跑进程，超过 20 分钟停滞阈值，按接管规则由 Codex 接管。
+- 接管内容：复核 `DEBT-INDEX-OBSERVATION-PUBLISH-RACE-01` 的“最后校验与 session.Commit 原子边界”剩余验收。结论：观察期间发布的窗口已有守卫覆盖（`TestDatasetRevisionPublishedDuringObservationPreservesOldGeneration`，红绿证据 `.validation/runs/20261016-index-search-space/revision-publication-{red,green}.txt`）；真正未闭合的是锁内复查返回“当前”后、引擎 Commit 执行期间权威发布新修订的进程外窗口。曾尝试并发反例测试（发布钩子注入 Commit 窗口）：夹具钩子无法从包外注入，包内构造 Dataset 材料过重；且引擎 Commit 成功即 `retireGeneration` 删除旧代际，事后撤回需公开新引擎形状。按“不扩大公开形状”与三出口规则，登记为 `DEBT-DATASET-STATE-ACCEPT-ATOMIC-01`，不在本轮硬修。工作区源码改动已全部撤销（`git diff` 对 `declarativeindex/`、`liveaccess/discovery/` 干净），草稿测试文件已删除。
+- 环境事实：共享部署栈 OpenSearch 分片已满（1000/1000，其中 `kc-proj-*` 残留 781 个），本轮改用 `scripts/opensearch_auto.py` 独占临时实例完成测试探测；未清理任何未确权残留索引。
 
 - `DEBT-INDEX-UNUSED-IMPORT-01`：2026-10-16 动画交付复用仓库质量检查时，`invocation/verbs_index.go:13` 的 `kc/discovery` 导入别名 `retrieval` 未使用，阻塞编译与 `make quality`。这是本任务进行中文件的工作区快照；随本任务收口复核并修复，剩余验收为 `make quality` 通过。动画任务未修改该产品文件；原债按归并关闭。
 
@@ -57,7 +59,7 @@
 
 - `DEBT-INDEX-CONTRACT-GATES-01`：`FILE-ACCESS-01` 复验发现 typed 守卫仍要求旧 `SearchExecutor`（实际 Dataset 搜索已转 `DatasetSearchExecutor`），`test-catalog.md:507` 的两项 ProjectionNotify 引用已不解析，以及 `discovery/space` 新单元、传播成本 14.09%/基线 14.01% 与 `discovery/datasets` 不稳定度 0.50→0.57 的质量门禁。原债已按同批文件规则归并；保留执行器守卫风险、旧用例替代关系与依赖图解释后，复验 `make quality`、验证库存及受影响合同。typed 定向证据 `.validation/runs/20261016T033623Z-4d171c1a0e4e/`，quality 证据 `.validation/runs/20261016T033529Z-ce304d1b84dd/`，两次 sourceChanged=false。本轮未改本任务的产品实现、守卫或质量基线。
 
-- `DEBT-INDEX-OBSERVATION-PUBLISH-RACE-01`：`declarativeindex/projection/dataset_state.go` 在构建锁后和物理接受前复查当前修订，覆盖观察期间发布新修订的拒绝与原代保持；最后校验与 `session.Commit` 仍未同 Dataset 当前修订权威建立原子条件边界。剩余验收为在最后校验后推进修订的并发反例拒绝旧观察接受，原观察代不变。
+- `DEBT-INDEX-OBSERVATION-PUBLISH-RACE-01`：`declarativeindex/projection/dataset_state.go` 在构建锁后和物理接受前复查当前修订，覆盖观察期间发布新修订的拒绝与原代保持；最后校验与 `session.Commit` 仍未同 Dataset 当前修订权威建立原子条件边界。剩余验收为在最后校验后推进修订的并发反例拒绝旧观察接受，原观察代不变。2026-10-16 复核细化：观察期间发布的窗口已被 `TestDatasetRevisionPublishedDuringObservationPreservesOldGeneration` 覆盖；未覆盖的是锁内复查返回“当前”后、引擎 `Commit` 执行期间权威发布新修订的进程外窗口，且引擎 Commit 成功即删除旧代际、无法事后撤回。该缺口登记为 `DEBT-DATASET-STATE-ACCEPT-ATOMIC-01`，原债按归并关闭。
 
 ## 2026-10-16 实现与定向验证快照
 

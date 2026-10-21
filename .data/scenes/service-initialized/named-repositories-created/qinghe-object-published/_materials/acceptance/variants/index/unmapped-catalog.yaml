@@ -4,6 +4,7 @@ aspect_name: index
 member_key: table-name-elastic
 kind: Member
 schema_ref: schema/core/index-declaration/v1
+path_hint: indexes/sales-search/table-name-elastic.yaml
 ---
 catalog: declarative-index/elastic@2026-01
 inputs:

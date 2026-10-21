@@ -63,41 +63,65 @@ func MatchedRuleID(home, command string, flags map[string]invoke.FlagValue) stri
 	return rule.ID
 }
 
+// ObserveHome stamps a Home this process opened for one command. A Home shared
+// by concurrent requests is never stamped in place; use ObserveRequest.
 func ObserveHome(ws *kchome.Home, command string, flags map[string]invoke.FlagValue) {
 	if ws == nil {
 		return
 	}
-	req, err := RequestIDFrom(flags)
-	if err != nil {
+	stamp, ok := requestStamp(ws.Dir, command, flags)
+	if !ok {
 		return
 	}
-	identity, err := IdentityContextFrom(flags)
-	if err != nil {
-		return
-	}
-	trace, err := TraceContextFrom(flags)
-	if err != nil {
-		return
-	}
-	as := identity.Principal
-	rule := MatchedRuleID(ws.Dir, command, flags)
-	ws.SetJournal(journal.WithContext(ws.Journal, journal.Stamp{
-		Principal: as, OnBehalfOf: identity.OnBehalfOf, RequestID: req,
-		TraceID: trace.TraceID, SpanID: trace.SpanID, ParentSpanID: trace.ParentSpanID,
-		RuleID: rule,
-	}))
+	ws.SetJournal(journal.WithContext(ws.Journal, stamp))
 	if ws.Writer != nil {
-		ws.Writer.SetStamp(as, req, rule)
+		ws.Writer.SetStamp(stamp.Principal, stamp.RequestID, stamp.RuleID)
 	}
 	if ws.TreeWriter != nil {
-		ws.TreeWriter.SetStamp(as, req, rule)
+		ws.TreeWriter.SetStamp(stamp.Principal, stamp.RequestID, stamp.RuleID)
 	}
 	{
 		cat := ws.Datasets
 		if cat != nil {
-			cat.SetStamp(as, req, rule)
+			cat.SetStamp(stamp.Principal, stamp.RequestID, stamp.RuleID)
 		}
 	}
+}
+
+// ObserveRequest returns a request view of a shared Home carrying this
+// request's journal and stamps. The shared Home is left untouched, so
+// concurrent requests cannot observe each other's identity or evidence and
+// need no process-wide lock. Invalid identity flags yield an unstamped view
+// rather than inheriting another request's stamp.
+func ObserveRequest(ws *kchome.Home, command string, flags map[string]invoke.FlagValue) *kchome.Home {
+	if ws == nil {
+		return nil
+	}
+	stamp, ok := requestStamp(ws.Dir, command, flags)
+	if !ok {
+		return ws.RequestView(ws.Journal, "", "", "")
+	}
+	return ws.RequestView(journal.WithContext(ws.Journal, stamp), stamp.Principal, stamp.RequestID, stamp.RuleID)
+}
+
+func requestStamp(home, command string, flags map[string]invoke.FlagValue) (journal.Stamp, bool) {
+	req, err := RequestIDFrom(flags)
+	if err != nil {
+		return journal.Stamp{}, false
+	}
+	identity, err := IdentityContextFrom(flags)
+	if err != nil {
+		return journal.Stamp{}, false
+	}
+	trace, err := TraceContextFrom(flags)
+	if err != nil {
+		return journal.Stamp{}, false
+	}
+	return journal.Stamp{
+		Principal: identity.Principal, OnBehalfOf: identity.OnBehalfOf, RequestID: req,
+		TraceID: trace.TraceID, SpanID: trace.SpanID, ParentSpanID: trace.ParentSpanID,
+		RuleID: MatchedRuleID(home, command, flags),
+	}, true
 }
 
 // RequestHomeJournal starts from the durable journal sink, never a previous

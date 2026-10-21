@@ -4,6 +4,7 @@ aspect_name: index
 member_key: metric-fulltext
 kind: Member
 schema_ref: schema/core/index-declaration/v1
+path_hint: indexes/sales-search/metric-fulltext.yaml
 ---
 catalog: declarative-index/opensearch@2026-10
 inputs:

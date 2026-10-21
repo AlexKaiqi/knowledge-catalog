@@ -37,10 +37,6 @@ func summarizeManagedRepository(item apphome.ManagedRepositoryResult) ManagedRep
 }
 
 func (f *httpFacade) registerRepositoryRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /repositories/{repository}", f.repositoryPage)
-	mux.HandleFunc("GET /assets/repository.js", f.repositoryScript)
-	mux.HandleFunc("GET /console", f.consolePage)
-	mux.HandleFunc("GET /assets/console.js", f.consoleScript)
 	mux.HandleFunc("POST /snapshot/v1/connections", f.namedRepositoryCreate)
 	mux.HandleFunc("GET /snapshot/v1/connections", f.myRepositories)
 	mux.HandleFunc("GET /snapshot/v1/connections/{repository}", f.ownedRepository)

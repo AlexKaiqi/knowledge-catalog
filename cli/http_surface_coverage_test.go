@@ -29,8 +29,8 @@ var routeRegistration = regexp.MustCompile(`mux\.Handle(?:Func)?\("(GET|POST|PUT
 // not share the CLI command table: HTTP is an independent typed protocol.
 func TestEveryPublicHTTPRouteIsRegisteredWithOnlyItsDeclaredMethod(t *testing.T) {
 	routes := registeredHTTPRoutes(t)
-	if len(routes) != 90 {
-		t.Fatalf("public HTTP route count changed from the reviewed 90 to %d; review the new protocol surface", len(routes))
+	if len(routes) != 87 {
+		t.Fatalf("public HTTP route count changed from the reviewed 87 to %d; review the new protocol surface", len(routes))
 	}
 
 	handler := serv.HTTPHandlerWithOptions(testkit.TempDir(t), serv.HTTPServerOptions{})
@@ -287,7 +287,7 @@ func concreteHTTPPath(pattern string) string {
 }
 
 func allowedHTTPPath(path string) bool {
-	for _, exact := range []string{"/health", "/livez", "/readyz", "/readyz/{surface}", "/metrics", "/repositories/{repository}", "/assets/repository.js", "/console", "/assets/console.js", "/ui/"} {
+	for _, exact := range []string{"/health", "/livez", "/readyz", "/readyz/{surface}", "/metrics", "/ui", "/ui/"} {
 		if path == exact {
 			return true
 		}

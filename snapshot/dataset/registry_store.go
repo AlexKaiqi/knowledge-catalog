@@ -22,8 +22,8 @@ func OpenSnapshotRegistry(store snapshot.Store, ref string) (Registry, error) {
 	if head == "" {
 		return nil, kernel.Fail(kernel.ErrVersionUnresolved, "registry authority ref does not exist")
 	}
-	reg.head = string(head)
-	state, err := reg.load()
+	reg.accept(string(head))
+	state, err := reg.loadAt(reg.acceptedHead())
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +52,7 @@ func CreateSnapshotRegistry(store snapshot.Store, ref string) (Registry, error) 
 	if err != nil {
 		return nil, err
 	}
-	reg.head = string(head)
+	reg.accept(string(head))
 	if err := reg.Save(State{AuthorityID: reg.AuthorityID()}, "init "+reg.AuthorityID(), "", "", ""); err != nil {
 		return nil, err
 	}
@@ -79,8 +79,8 @@ func snapshotRegistry(store snapshot.Store, ref string) (*registry, error) {
 // An empty current tree is not evidence of an uninitialized authority: an
 // accepted registry may have been erased. Only the empty, parentless initial
 // Snapshot can precede explicit creation, using the same authority's history.
-func (g *registry) requireVirginAuthority() error {
-	commit := kernel.CommitID(g.head)
+func (g *registry) requireVirginAuthority(head string) error {
+	commit := kernel.CommitID(head)
 	paths, err := g.tree.ListFiles(commit)
 	if err != nil {
 		return err
@@ -102,11 +102,11 @@ func (g *registry) requireVirginAuthority() error {
 	return nil
 }
 
-func (g *registry) snapshotYAML() (map[string][]byte, error) {
-	if g.head == "" {
+func (g *registry) snapshotYAML(head string) (map[string][]byte, error) {
+	if head == "" {
 		return map[string][]byte{}, nil
 	}
-	commit := kernel.CommitID(g.head)
+	commit := kernel.CommitID(head)
 	paths, err := g.tree.ListFiles(commit)
 	if err != nil {
 		return nil, err
@@ -125,8 +125,10 @@ func (g *registry) snapshotYAML() (map[string][]byte, error) {
 	return out, nil
 }
 
+// saveSnapshot runs under writeMu, so the accepted head cannot move here.
 func (g *registry) saveSnapshot(state State, message, author, requestID, ruleID string) error {
-	current, err := g.load()
+	accepted := g.acceptedHead()
+	current, err := g.loadAt(accepted)
 	if err != nil {
 		return err
 	}
@@ -139,8 +141,8 @@ func (g *registry) saveSnapshot(state State, message, author, requestID, ruleID 
 	if err != nil {
 		return err
 	}
-	if string(actual) != g.head {
-		return kernel.Fail(kernel.ErrNonFastForward, "registry authority moved: expected %s, actual %s", g.head, actual)
+	if string(actual) != accepted {
+		return kernel.Fail(kernel.ErrNonFastForward, "registry authority moved: expected %s, actual %s", accepted, actual)
 	}
 	if kernel.CanonicalDigest(current) == kernel.CanonicalDigest(next) {
 		return nil
@@ -152,7 +154,7 @@ func (g *registry) saveSnapshot(state State, message, author, requestID, ruleID 
 	if err != nil {
 		return err
 	}
-	existing, err := g.snapshotYAML()
+	existing, err := g.snapshotYAML(accepted)
 	if err != nil {
 		return err
 	}
@@ -163,7 +165,7 @@ func (g *registry) saveSnapshot(state State, message, author, requestID, ruleID 
 	if len(changes) == 0 {
 		return nil
 	}
-	head := kernel.CommitID(g.head)
+	head := kernel.CommitID(accepted)
 	candidate, err := g.tree.ApplyTreeCommit(snapshot.TreeChangeSet{
 		TargetRepository:     g.authority.ID(),
 		TargetRef:            g.ref,
@@ -178,7 +180,7 @@ func (g *registry) saveSnapshot(state State, message, author, requestID, ruleID 
 	if err != nil {
 		return err
 	}
-	g.head = string(candidate)
+	g.accept(string(candidate))
 	return nil
 }
 

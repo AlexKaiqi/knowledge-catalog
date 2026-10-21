@@ -77,7 +77,7 @@ func (e ProjectionSyncExecutor) Execute(ctx context.Context, request ProjectionS
 			defer done()
 		}
 	}
-	if _, err := e.Projection.EnsureAt(repo, request.Commit); err != nil {
+	if _, err := e.Projection.EnsureAt(ctx, repo, request.Commit); err != nil {
 		return ProjectionSyncResult{}, err
 	}
 	if e.Controller != nil {
@@ -88,7 +88,7 @@ func (e ProjectionSyncExecutor) Execute(ctx context.Context, request ProjectionS
 			return ProjectionSyncResult{}, err
 		}
 	}
-	snapshotSync, err := e.Projection.Ensure(repo, request.Commit)
+	snapshotSync, err := e.Projection.Ensure(ctx, repo, request.Commit)
 	if err != nil {
 		return ProjectionSyncResult{}, err
 	}

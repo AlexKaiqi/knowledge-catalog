@@ -36,6 +36,9 @@ func shapeCLIReadObject(value any) any {
 	if !ok {
 		return value
 	}
+	if _, shaped := obj["shape"]; shaped {
+		return obj
+	}
 	out := map[string]any{}
 	for _, key := range []string{"reference", "locator", "address", "digest", "declarations", "provenance", "sources", "withheld", "observations", "failures"} {
 		if v, exists := obj[key]; exists {

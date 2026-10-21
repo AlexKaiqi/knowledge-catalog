@@ -1,7 +1,7 @@
 package server
 
 // Typed invocation plumbing for the service facade: shared execution entry,
-// invocation locking, identity resolution and request-body decoding. Route
+// shutdown admission, identity resolution and request-body decoding. Route
 // registration and per-route handlers stay in service_routes.go.
 
 import (
@@ -53,8 +53,8 @@ func (f *httpFacade) executeTyped(w http.ResponseWriter, r *http.Request, name, 
 	flags["home"] = f.home
 	f.addIdentityFlags(flags, r, identity)
 	addHTTPTraceFlags(flags, r)
-	unlock := f.lockTypedInvocation(action)
-	defer unlock()
+	release := f.enterRequest()
+	defer release()
 	opened, err := f.readHomeForRequest()
 	if err != nil {
 		invoke.WriteInvoke(w, inv.ErrorResult(err))
@@ -76,24 +76,28 @@ func (f *httpFacade) executeTyped(w http.ResponseWriter, r *http.Request, name, 
 	invoke.WriteInvoke(w, inv.InvokeApplicationWithTelemetryAtHome(ctx, f.runtime, name, action, operation, flags, observeStateLookup(access, f.runtime), opened))
 }
 
-// lockTypedInvocation decides the invocation lock from the facade's serving
-// mode. Deployment serving runs read-only actions on an immutable per-request
-// view (executeApplicationOperation builds ws.ReadView with a private request
-// journal), so independent fixed-basis reads may share the read lock.
-// Component/fixture serving retains the legacy adoption path where every
-// invocation installs its request journal on the shared Home (observeHome →
-// SetJournal fans out to Writer, Reader and registry);
-// concurrent reads there would race on that shared state and could observe
-// another request's stamp, so fixture-mode reads serialize with mutations.
-// This is a process-safety boundary, not a Repository locking protocol;
-// distributed writers still rely on authority CAS.
-func (f *httpFacade) lockTypedInvocation(action string) func() {
-	if f.deployment != nil && inv.TypedInvocationReadOnly(action) {
-		f.invoke.RLock()
-		return f.invoke.RUnlock
+// admitRequest registers one in-flight request so shutdown can wait for it
+// before closing the adapters the request borrows. It is a lifecycle barrier,
+// not a mutual exclusion: requests never wait for each other here. Concurrent
+// writers are decided by authority CAS, the command ledger and the Dataset
+// Registry's expected head; per-request stamps live on request views.
+// Once shutdown has begun nothing is admitted and the returned release is a
+// no-op; readHomeForRequest then reports the closed runtime.
+func (f *httpFacade) admitRequest() (release func(), admitted bool) {
+	f.homeMu.Lock()
+	defer f.homeMu.Unlock()
+	if f.closed {
+		return func() {}, false
 	}
-	f.invoke.Lock()
-	return f.invoke.Unlock
+	f.inflight.Add(1)
+	return f.inflight.Done, true
+}
+
+// enterRequest is admitRequest for callers whose next step already rejects a
+// closed runtime.
+func (f *httpFacade) enterRequest() func() {
+	release, _ := f.admitRequest()
+	return release
 }
 
 func (f *httpFacade) serviceIdentity(w http.ResponseWriter, r *http.Request) (kcidentity.HTTPIdentity, bool) {

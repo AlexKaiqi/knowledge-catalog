@@ -17,7 +17,7 @@ func validateBindingOperation(op objectmodel.Operation) error {
 	if body, ok := op.Value.(map[string]any); ok {
 		if _, nested := body["valueSource"]; nested {
 			return kernel.Fail(kernel.ErrUsageInvalid,
-				"%s body contains valueSource; declare it on the unit, not inside the value", objectmodel.AddressKey(op.Address))
+				"%s body contains valueSource; declare it on the unit, not inside the value", objectmodel.AddressLabel(op.Address))
 		}
 	}
 	if !op.ValueSource.IsBinding() {
@@ -29,11 +29,11 @@ func validateBindingOperation(op objectmodel.Operation) error {
 	}
 	if op.Address.Kind != objectmodel.KindAspect && op.Address.Kind != objectmodel.KindMember {
 		return kernel.Fail(kernel.ErrUsageInvalid,
-			"valueSource is declared on an Aspect or Member, not on %s %s", op.Address.Kind, objectmodel.AddressKey(op.Address))
+			"valueSource is declared on an Aspect or Member, not on %s %s", op.Address.Kind, objectmodel.AddressLabel(op.Address))
 	}
 	if op.Value != nil {
 		return kernel.Fail(kernel.ErrUsageInvalid,
-			"%s declares a binding valueSource and must not carry a Snapshot value", objectmodel.AddressKey(op.Address))
+			"%s declares a binding valueSource and must not carry a Snapshot value", objectmodel.AddressLabel(op.Address))
 	}
 	return nil
 }

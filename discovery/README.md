@@ -55,6 +55,11 @@ Provider 仍逐叶子 `Probe`；显式表达式还必须实现 `index.Expression
 
 命中后的 Snapshot 回读必须使用请求开始时钉死的 commit，不能改读 HEAD。纯 Snapshot 查询使用 Snapshot projection；涉及 State Binding 字段时使用独立动态 projection，并从其同 revision Serving State 回读。`SearchView` 只携带紧凑 projection revision，每个命中的 observation basis 放在 `ObjectVersion.observations`，避免结果信封随全库规模增长。
 
+Dataset 检索中按外部值回答的条件逐条列在结果的 `externalConditions`：字段与建索引时最旧的观察
+时间；命中仍按当前观察回读补判。选入 Dataset 的声明若输入 Schema 不在该范围，状态为
+`inapplicable`：范围内不可能有带该字段的对象，只碰到它的条件得到完整零命中（`All` 中任一如此即
+整体为空，`Any` 中剔除），不当作未声明或不支持；同一请求里的其它条件照常校验。
+
 每次实际执行 `SEARCH` 或一跳 `RELATION` 后，应用层在 access evidence 之后追加通用
 `retrieval.jsonl`：保存逻辑请求、固定 SearchView、最终候选 Ref/rank、provider lane、回读 basis、
 候选/ hydrate/丢弃计数、完整性与错误，不复制完整对象正文。成功结果返回 `retrievalEvidenceId`；

@@ -36,7 +36,7 @@ func TestManagedProductCreateNeedsOnlyName(t *testing.T) {
 				t.Errorf("caller supplied forbidden field %s: %#v", forbidden, body)
 			}
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"repositoryId": "kr://kaiqidong/one", "name": "数据说明", "owner": "kaiqidong", "managementURL": "https://kc.example/repositories/one", "status": "APPLIED"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"repositoryId": "kr://kaiqidong/one", "name": "数据说明", "owner": "kaiqidong", "managementURL": "https://kc.example/ui/repositories/one", "status": "APPLIED"})
 	}))
 	defer srv.Close()
 	r := Run([]string{"create", "--name", "数据说明", "--server", srv.URL, "--as", "kaiqidong"})
@@ -50,7 +50,7 @@ func TestManagedProductMyRepositoriesAvoidsInventoryDiscovery(t *testing.T) {
 		if r.Method != http.MethodGet || r.URL.Path != "/snapshot/v1/connections" {
 			t.Errorf("requires broad Catalog discovery: %s %s", r.Method, r.URL.Path)
 		}
-		_, _ = w.Write([]byte(`{"repositories":[{"repositoryId":"kr://kaiqidong/one","managementURL":"https://kc.example/repositories/one"}]}`))
+		_, _ = w.Write([]byte(`{"repositories":[{"repositoryId":"kr://kaiqidong/one","managementURL":"https://kc.example/ui/repositories/one"}]}`))
 	}))
 	defer srv.Close()
 	client, err := kcclient.New(kcclient.Config{BaseURL: srv.URL, HTTPClient: srv.Client()})

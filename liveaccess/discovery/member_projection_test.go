@@ -277,17 +277,31 @@ func newMemberProjectionFixture(t *testing.T, mode string) memberProjectionFixtu
 	address := objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: "sensor/one", AspectName: "readings", MemberKey: "primary"}
 	descriptor := bindingfixture.Descriptor(runtime.URL)
 	descriptor["identity"] = "shared"
-	receipt, err := w.Commit("publish-live-member", objectmodel.ChangeSet{TargetRepository: raw.ID(), TargetRef: snapshot.DefaultRef,
-		BaseCommit: root, ExpectedTargetCommit: root, Operations: []objectmodel.Operation{
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/sensor.readings"}, Value: map[string]any{
-				"entity": "Sensor", "aspect": "readings", "pattern": "keyed_collection",
+	operations := []objectmodel.Operation{
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/sensor.readings"}, Value: map[string]any{
+			"entity": "Sensor", "aspect": "readings", "pattern": "keyed_collection",
+			"fields": map[string]any{"value": map[string]any{"type": "number", "required": true}},
+		}},
+		testkit.IndexField("schema/sensor.readings", "value", "number", "filter", "sort"),
+		bindingfixture.PutDescriptor("resource/sensor-readings", descriptor),
+		bindingfixture.Bind(address, "schema/sensor.readings", "resource/sensor-readings"),
+		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: address.ObjectID, AspectName: "definition"}, Value: map[string]any{"owner": "fixed"}},
+	}
+	if mode == "mixed" {
+		// The same object also carries a unit whose descriptor states no
+		// identity, so it is per-caller and may never enter the index.
+		operations = append(operations,
+			objectmodel.Operation{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "schema/sensor.private"}, Value: map[string]any{
+				"entity": "Sensor", "aspect": "private", "pattern": "keyed_collection",
 				"fields": map[string]any{"value": map[string]any{"type": "number", "required": true}},
 			}},
-			testkit.IndexField("schema/sensor.readings", "value", "number", "filter", "sort"),
-			bindingfixture.PutDescriptor("resource/sensor-readings", descriptor),
-			bindingfixture.Bind(address, "schema/sensor.readings", "resource/sensor-readings"),
-			{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: address.ObjectID, AspectName: "definition"}, Value: map[string]any{"owner": "fixed"}},
-		}})
+			testkit.IndexField("schema/sensor.private", "value", "number", "filter", "sort"),
+			bindingfixture.PutDescriptor("resource/sensor-private", bindingfixture.Descriptor(runtime.URL)),
+			bindingfixture.Bind(privateMemberAddress, "schema/sensor.private", "resource/sensor-private"),
+		)
+	}
+	receipt, err := w.Commit("publish-live-member", objectmodel.ChangeSet{TargetRepository: raw.ID(), TargetRef: snapshot.DefaultRef,
+		BaseCommit: root, ExpectedTargetCommit: root, Operations: operations})
 	if err != nil {
 		t.Fatal(err)
 	}

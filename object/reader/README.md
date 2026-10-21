@@ -82,10 +82,9 @@ tree-backed authority 的 Writer 在同一 commit 写入每对象的维护坐标
 命名空间目录。它们只保存身份及单元坐标，用于有界读取，不含 Relation endpoint/type/role、
 正文或过滤字段，因此不是检索投影。旧 `.kc/object-units.index` 保持固定读取兼容，
 目录升级通过显式维护完成，消费请求不读正文推导缺失目录。业务直推 published
-ref 时，Reader 仍按文件 frontmatter 解释（仓根 `README.md` 是有界约定路径）；增量投影用
-`ChangedPaths` 上的单元路径 hydrate，不要求该 commit 先有 Writer locator。两种 authority 由同一 Reader/Writer conformance 验收。
-合法 README 的精确 Address 与内部字段引用也沿这一个固定路径读取；先检查发表路径，
-再核对该 commit 的实际 Schema 和 Address。此入口不补推普通单元坐标，也不吞掉定位元数据错误。
+ref 时，增量投影用 `ChangedPaths` 上的单元路径 hydrate，不要求该 commit 先有 Writer
+locator。两种 authority 由同一 Reader/Writer conformance 验收。没有任何文件名或方面名有
+特殊读取路径：仓根 `README.md` 与其它文件一样，只有经维护坐标找到时才是对象单元。
 
 索引在 **Repository 之上**，实现在独立包 `discovery/projection/`（不进 Writer / Dataset 服务 核心）。逻辑查询与结果合同在 `discovery/`；OpenSearch provider 逐 clause Probe 再返回 CandidateRef，命中后回读这次解开的 Canonical。未配置 provider 时只保留精确读取能力。完整边界见 `discovery/README.md` 与 `discovery/projection/README.md`。
 
@@ -152,6 +151,9 @@ DIFF             两个 pinned commit 上这个对象的值差是什么？     �
 GET_PROVENANCE   这个对象在该 commit 上各单元贴了什么信封？     → ProvenanceTrace.chain
 ```
 
+应用层查询 LOG 单独检查来源仓的 `object.history.read`，每页重新授权；Dataset 文件消费权不能替代它，
+即使 Dataset 交付整个仓。文件切片的 Repository 视图仍拒绝 LOG，不把固定提交的文件交付扩成历史交付。
+
 `GET_PROVENANCE` 不做 PROV 推理。Application 若要沿 `sourceRefs` / `evidence_refs` 再读，必须另发 `RESOLVE` / `READ` / `GET_PROVENANCE`。
 
 `kc catalog audit` 是登记表 git 历史（`Dataset 服务.Log`），不是成员 `LOG`。Dataset 服务 当前态是 `kc show`。
@@ -204,3 +206,9 @@ kc schema describe --dataset delivery --revision 1 --object schema/job.io
 复核对象身份、Address 合法性、选取交集、重复与表示冲突；拒绝凭未选或其它对象的坐标
 取得 Aspect 授权。整对象中的同名 JSON 字段不构成 Aspect。Dataset 包装只保留固定来源
 坐标，真正取值仍逐所需路径核对已接受的发表范围。
+
+对象 LOG 分块遍历固定 first-parent 链，不再以最近 10000 个提交作为历史终点。
+相邻等状态（值与声明）只在观察到更老的不同状态，或证明真实链终点后，才输出引入提交。
+链起点之前的缺失不输出为删除；被后续删除遮住的早期存在仍参与 REMOVED 判定。
+修订条数达到请求上限后停止正文读取，后续页错误不返回部分成功。
+这仍是现有按修订分页的入口；扫描预算、跨页未完成状态段和独立复用固定依据的新增接口尚未实现。

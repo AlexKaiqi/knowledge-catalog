@@ -1,6 +1,7 @@
 package opensearchimpl
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -125,7 +126,7 @@ func TestLiveOpenSearchNamespacesIsolateSameRepositoryAndContinuations(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := left.Ensure(repo, b); err != nil {
+	if _, err := left.Ensure(context.Background(), repo, b); err != nil {
 		t.Fatal(err)
 	}
 	for _, state := range []struct {

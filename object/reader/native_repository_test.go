@@ -115,7 +115,7 @@ func TestNativeReadViewRejectsMissingBoundedPort(t *testing.T) {
 		t.Fatal(err)
 	}
 	at := testkit.MustHead(t, raw, snapshot.DefaultRef)
-	if _, err := view.(objectmodel.UnitLocator).ObjectUnitPaths(objectmodel.SystemReadmeObjectID, at); kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
+	if _, err := view.(objectmodel.UnitLocator).ObjectUnitPaths(objectmodel.ObjectID("kc/system"), at); kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
 		t.Fatalf("native provider without unit locator must fail explicitly: %v", err)
 	}
 }
@@ -138,7 +138,7 @@ func TestNativeReferenceSelectionWithoutPlanningPortDoesNotLoadObject(t *testing
 	}
 	rd := reader.NewReader(registry)
 	at := testkit.MustHead(t, raw, snapshot.DefaultRef)
-	ref := objectmodel.Reference{Repository: raw.ID(), Object: objectmodel.SystemReadmeObjectID}
+	ref := objectmodel.Reference{Repository: raw.ID(), Object: objectmodel.ObjectID("kc/system")}
 	value, err := rd.ReadReference(ref, at)
 	if err != nil || value.Commit != at || value.Digest != kernel.CanonicalDigest(value.Value) || raw.reads != 1 {
 		t.Fatalf("native root read changed fixed object: %#v reads=%d err=%v", value, raw.reads, err)

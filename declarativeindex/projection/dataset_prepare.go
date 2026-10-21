@@ -12,9 +12,9 @@ import (
 // An empty source can predate Object metadata. Only explicit preparation may
 // prove the selected object set empty through its existing maintenance port;
 // consumption keeps verifying the retained exact declaration witnesses.
-func (idx *Index) prepareDatasetSpec(ctx context.Context, s datasetSpace) (retrieval.AccessSpec, []datasetValue, error) {
+func (idx *Index) prepareDatasetSpec(ctx context.Context, s datasetSpace, check retrieval.DeclarationCheck) (retrieval.AccessSpec, []datasetValue, error) {
 	at := s.pin.Repositories[s.member.ID()]
-	spec, err := idx.specAtCommit(s.member, at)
+	spec, err := retrieval.AccessSpecForRepositoryChecked(s.member, at, check)
 	if kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
 		return spec, nil, err
 	}
@@ -33,7 +33,7 @@ func (idx *Index) prepareDatasetSpec(ctx context.Context, s datasetSpace) (retri
 	if err != nil {
 		return retrieval.AccessSpec{}, nil, err
 	}
-	spec, err = idx.specAtCommit(member, at)
+	spec, err = retrieval.AccessSpecForRepositoryChecked(member, at, check)
 	return spec, values, err
 }
 

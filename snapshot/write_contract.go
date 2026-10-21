@@ -12,6 +12,9 @@ type WriteObserver func(surface string, refs map[string]any, err error) error
 type RawWriter interface {
 	SetObserver(WriteObserver)
 	SetStamp(author, requestID, ruleID string)
+	// ForRequest shares the authority and command ledger and owns only one
+	// request's observer and stamp.
+	ForRequest(observer WriteObserver, author, requestID, ruleID string) RawWriter
 	Lookup(string) (TreeChangeSet, Receipt, bool)
 	// Commit may return an APPLIED or REPLAYED receipt with an observer error.
 	// Such an error does not mean the authoritative write was unapplied.

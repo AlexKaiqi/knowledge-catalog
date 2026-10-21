@@ -10,7 +10,8 @@ import (
 // Warm refreshes a bounded set of retained hot object/address reads at the exact
 // commit supplied by the maintenance controller. Successful completion means
 // only that this small work set was attempted; it never asserts whole-repository
-// readiness. Cancellation is checked between synchronous authority calls.
+// readiness. Remote authority reads are bound to ctx; repositories without
+// context binding retain cancellation checks between synchronous calls.
 func (c *Cache) Warm(ctx context.Context, repo objectmodel.Repository, commit kernel.CommitID) (err error) {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -18,6 +19,7 @@ func (c *Cache) Warm(ctx context.Context, repo objectmodel.Repository, commit ke
 	if err := validateRequest(repo, commit); err != nil {
 		return err
 	}
+	repo = objectmodel.BindContext(ctx, repo)
 	c.warmMu.Lock()
 	defer c.warmMu.Unlock()
 	if err := ctx.Err(); err != nil {

@@ -27,7 +27,7 @@ usage() {
     '  component   component contracts against an ephemeral OpenSearch' \
     '  boundary    architecture, layering, terminology, and surface guards' \
     '  e2e         CLI/HTTP/Catalog journeys on ephemeral OpenSearch; every public kc verb required' \
-    '  race        concurrency-sensitive local packages under the race detector' \
+    '  race        concurrency-sensitive packages and listed cli tests under the race detector' \
     '  coverage    short suite with an explicit statement-coverage floor' \
     '  taihu-live  real Taihu introspection (KC_LIVE_TAIHU=1 + secrets)' \
     '  opensearch  live OpenSearch projection/search contract' \
@@ -101,8 +101,28 @@ run_e2e() {
   KC_ASSERT_E2E_COVERAGE=1 run_go_test -short -count=1 -timeout=60m ./cli ./snapshot/dataset
 }
 
+race_cli_tests() {
+  local name names=()
+  while IFS= read -r name; do
+    name="${name%%#*}"
+    name="${name//[[:space:]]/}"
+    [[ -n "$name" ]] && names+=("$name")
+  done < ./scripts/race-cli-tests.txt
+  if [[ ${#names[@]} -eq 0 ]]; then
+    printf 'FAIL: scripts/race-cli-tests.txt lists no cli tests\n' >&2
+    return 1
+  fi
+  local IFS='|'
+  printf '^(%s)$' "${names[*]}"
+}
+
 run_race() {
-  run_go_test -short -race -count=1 -timeout=30m ./snapshot ./hook ./object/reader ./object/cache ./object/maintenance ./discovery/projection ./declarativeindex/projection ./declarativeindex/control ./declarativeindex/plugin ./home ./cli
+  run_go_test -short -race -count=1 -timeout=30m ./snapshot ./hook ./object/reader ./object/cache ./object/maintenance ./discovery/projection ./declarativeindex/projection ./declarativeindex/control ./declarativeindex/plugin ./home ./server ./invocation
+  # The full cli package exceeds any race budget; its listed concurrent tests run here and
+  # TestRaceScopeCoversCLIConcurrencyTests keeps the list complete.
+  local pattern
+  pattern="$(race_cli_tests)"
+  run_go_test -short -race -count=1 -timeout=15m -run "$pattern" ./cli
 }
 
 run_coverage() {

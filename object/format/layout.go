@@ -16,9 +16,6 @@ func ObjectPath(rel string) bool {
 }
 
 func DefaultPath(address objectmodel.Address, schemaRef string) string {
-	if objectmodel.IsReadmeAddress(address, schemaRef) {
-		return objectmodel.RepositoryReadmePath
-	}
 	if objectmodel.IsSchemaObject(address.ObjectID) && address.AspectName == "" && address.MemberKey == "" {
 		return DefaultSchemaPath(address.ObjectID)
 	}
@@ -70,8 +67,6 @@ func pluralizeType(entity string) string {
 		return "relations"
 	case "resource-descriptor":
 		return "resources"
-	case "readme":
-		return "readmes"
 	}
 	if strings.HasSuffix(entity, "s") {
 		return entity
@@ -106,21 +101,10 @@ func isSchemaVersionSegment(value string) bool {
 }
 
 // PathHintForIngest chooses the stored tree path for one ingested unit.
-// schema/* always lands in the single _schemas/ directory. A readme aspect
-// with no declared path lands at the repository root; an explicit path is kept.
+// schema/* always lands in the single _schemas/ directory.
 func PathHintForIngest(address objectmodel.Address, declared, rel string) string {
 	if objectmodel.IsSchemaObject(address.ObjectID) {
 		return DefaultSchemaPath(address.ObjectID)
-	}
-	if address.Kind == objectmodel.KindAspect && address.AspectName == objectmodel.ReadmeAspect && address.MemberKey == "" {
-		hint := strings.TrimSpace(declared)
-		if hint == "" {
-			hint = strings.TrimSpace(rel)
-		}
-		if hint == "" {
-			return objectmodel.RepositoryReadmePath
-		}
-		return hint
 	}
 	hint := strings.TrimSpace(declared)
 	if hint == "" {

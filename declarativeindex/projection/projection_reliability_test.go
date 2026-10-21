@@ -1,6 +1,7 @@
 package projection
 
 import (
+	"context"
 	"kc/declarativeindex/internal/testfixture"
 	ports "kc/discovery/projection"
 	"reflect"
@@ -126,7 +127,7 @@ func TestIncrementalProjectionSkipsUnchangedDocumentsAndMatchesRebuild(t *testin
 		t.Fatal(err)
 	}
 	counted := &projectionBatchRepository{ObjectRepository: repo}
-	result, err = idx.apply(engine, counted, second, third, spec, []objectmodel.ObjectID{"article/a", "article/b", "article/a"}, ports.IndexCauseContent)
+	result, err = idx.apply(context.Background(), engine, counted, second, third, spec, []objectmodel.ObjectID{"article/a", "article/b", "article/a"}, ports.IndexCauseContent)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +138,7 @@ func TestIncrementalProjectionSkipsUnchangedDocumentsAndMatchesRebuild(t *testin
 		t.Fatalf("compare only changed identities in same-basis batches: reads=%d batches=%v", counted.reads, counted.batches)
 	}
 	rebuilt := &testfixture.StateEngine{}
-	if _, err := idx.rebuild(rebuilt, repo, third, spec, ports.IndexCauseContent); err != nil {
+	if _, err := idx.rebuild(context.Background(), rebuilt, repo, third, spec, ports.IndexCauseContent); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(engine.Docs, rebuilt.Docs) {

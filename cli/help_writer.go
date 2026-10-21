@@ -36,6 +36,7 @@ func hostWriterHelpEntries() map[string]helpEntry {
     把目录中声明的正文变更作为一次单仓发布；不把未出现在目录中的对象当成删除。
   用法与参数：
     --dir 是期望正文。Client 对照当前版本求差后提交。--command-id 由你本次提供，Client 不代填。
+    --dir 也可指向 .tar / .tar.gz / .tgz 归档，用 archive.tar.gz//子目录 指定归档内充当仓根的目录；归档在本机流式读取并并发解析，拒绝越界、符号链接、重复条目和空子目录。
     --ref 默认 refs/heads/main；可用 --base 固定基点，省略时读取当前 HEAD；隐藏文件/目录不参与。
     首次上传到空仓时自动省去逐对象旧值查询；目录直接生成提交，无需手写 ChangeSet。
     也可用 --changeset <file> 提交明确 ChangeSet，与 --dir 互斥；目标、操作和前置条件来自该文件。
@@ -47,7 +48,7 @@ func hostWriterHelpEntries() map[string]helpEntry {
     Schema 原始 fields 是按字段名组织的对象映射；schema describe 的 fields 数组是规范化展示，不能作为输入。
     优先从公开 Dataset 下载已有 Schema 与对象文件复用格式，入口见 kc help write。
     path_hint 是仓内相对路径，不是对象身份；普通单元省略时采用目录中的相对路径，目录名不替代文件头。
-    Schema 固定放入 _schemas/ 规范路径，readme 方面固定放入仓根 README.md，不由 path_hint 改址。
+    Schema 固定放入 _schemas/ 规范路径；其它单元（包括任意多个 readme 方面）按各自 path_hint 存放。
     Markdown 说明方面用 entity / aspect，正文直接写 Markdown，不包 JSON；以下是 drafts/README.md 的完整内容，复制时去掉四格缩进。
     该示例复用系统 schema/core/readme/v1；准备自己的说明时换 entity，引用的 Schema 必须可解析。
     ---
@@ -74,6 +75,7 @@ func hostWriterHelpEntries() map[string]helpEntry {
   风险与成本：
     目录全量读取、校验和远端写入，时间与内存随参与内容增长；非空基点仍逐 Address 对照。
     网络中断后客户端只轮询原回执，默认最多十分钟；同 id 异摘要为 IDEMPOTENCY_CONFLICT。
+    服务端明确证明未应用时立即返回原错误，不轮询、不自动重发。
   失败恢复：
     先按原 command-id 查询回执；等待结束或 PENDING 不能解释为未提交，保留原请求供对账。
     并发冲突重新 diff 并选择新基点；内容变化后的新发布使用新 id，不能借旧 id 提交另一份目录。

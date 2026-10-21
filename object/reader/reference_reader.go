@@ -131,22 +131,6 @@ func (r *treeRepository) selectedReferenceUnits(ref objectmodel.Reference, commi
 	}
 	selected, err := selectReferenceLocations(locations, tokens, paths)
 	if err != nil {
-		if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved && len(tokens) > 0 && tokens[0] == objectmodel.ReadmeAspect {
-			for _, location := range locations {
-				prefix := unitTokens(location.Address)
-				if tokenPrefix(prefix, tokens) || tokenPrefix(tokens, prefix) {
-					return nil, err
-				}
-			}
-			address := objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: ref.Object, AspectName: objectmodel.ReadmeAspect}
-			unit, found, readmeErr := r.readmeAddressUnit(address, commit, paths)
-			if readmeErr != nil {
-				return nil, readmeErr
-			}
-			if found {
-				return []repofile.Unit{unit}, nil
-			}
-		}
 		return nil, err
 	}
 	return r.readLocatedUnits(selected, ref.Object, commit)

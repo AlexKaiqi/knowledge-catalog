@@ -10,6 +10,7 @@ import (
 	"fmt"
 	discoveryservice "kc/discovery/service"
 	kchome "kc/home"
+	"kc/internal/jsonfile"
 	liveservice "kc/liveaccess/service"
 	objectmodel "kc/object"
 	"kc/snapshot"
@@ -125,13 +126,20 @@ func RequireRepo(ws *kchome.Home, repositoryID string) (snapshot.Store, error) {
 }
 
 // ensureManagedRepositoryGrant applies a deployment-approved creation policy
-// exactly once. The HTTP application write lock serializes this with normal
-// grant/revoke operations. The receipt and rule share one durable policy write;
-// a crash after this write cannot make a retry undo an intervening revocation.
+// exactly once. The policy file's read-modify-write lock serializes this with
+// grant, revoke and share updates. The receipt and rule share one durable
+// policy write; a crash after this write cannot make a retry undo an
+// intervening revocation.
 func EnsureManagedRepositoryGrant(dir string, g kchome.ManagedRepositoryGrant) error {
 	if g.AllocationID == "" || g.Principal == "" || g.RepositoryID == "" || len(g.Actions) == 0 {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "managed repository initial policy is incomplete")
 	}
+	return jsonfile.Locked(AllowPath(dir), func(string) error {
+		return ensureManagedRepositoryGrantLocked(dir, g)
+	})
+}
+
+func ensureManagedRepositoryGrantLocked(dir string, g kchome.ManagedRepositoryGrant) error {
 	if info, err := os.Stat(AllowPath(dir)); err != nil || !info.Mode().IsRegular() {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "durable authorization policy is unavailable")
 	}

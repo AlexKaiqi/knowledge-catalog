@@ -11,44 +11,52 @@ import (
 	"kc/object/reader"
 )
 
-func (s datasetSpace) requiresState(request retrieval.SearchRequest) (bool, error) {
+// stateFields lists the request's condition fields whose values come from a
+// binding, that is the conditions answered from external observations.
+func (s datasetSpace) stateFields(request retrieval.SearchRequest) ([]retrieval.FieldRef, error) {
 	resolved, err := retrieval.ResolveSearch(request, s.spec)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	bound := map[objectmodel.ObjectID]bool{}
 	for id, at := range s.pin.Repositories {
 		member, err := space.Member(s.lookup, s.pin, id)
 		if err != nil {
-			return false, err
+			return nil, err
 		}
 		locator := member.(objectmodel.BindingLocator)
 		ids, err := locator.BindingSchemaObjectIDs(at)
 		if err != nil {
-			return false, err
+			return nil, err
 		}
 		for _, schema := range ids {
 			bound[schema] = true
 		}
 	}
+	var fields []retrieval.FieldRef
+	seen := map[string]bool{}
+	add := func(field retrieval.FieldRef) {
+		if bound[field.Schema] && !seen[field.Key()] {
+			seen[field.Key()] = true
+			fields = append(fields, field)
+		}
+	}
 	for _, clause := range retrieval.SearchClauses(resolved) {
 		if clause.Op == retrieval.OpMatch && clause.Path == "" && clause.Field == nil {
 			for _, field := range s.spec.Fields {
-				if bound[field.Schema] && field.Has(reader.HintText) {
-					return true, nil
+				if field.Has(reader.HintText) {
+					add(field.FieldRef)
 				}
 			}
 			continue
 		}
 		field, err := s.spec.ResolveClauseField(clause)
 		if err != nil {
-			return false, err
+			return nil, err
 		}
-		if bound[field.Schema] {
-			return true, nil
-		}
+		add(field.FieldRef)
 	}
-	return false, nil
+	return fields, nil
 }
 
 // RefreshDatasetState prepares the observation space of one Dataset revision.
@@ -92,6 +100,7 @@ func (idx *Index) RefreshDatasetState(ctx context.Context, lookup reader.MemberL
 		}
 	}()
 	records := map[objectmodel.ObjectID]stateRecord{}
+	oldest := oldestObservation(values)
 	for _, value := range values {
 		doc, err := compileProjectionDocumentObserved(s.member, value.value, value.observations, s.spec)
 		if err != nil {
@@ -107,7 +116,7 @@ func (idx *Index) RefreshDatasetState(ctx context.Context, lookup reader.MemberL
 	if err != nil {
 		return ports.StateSync{}, err
 	}
-	next := &stateProjection{store: store, accessDigest: s.spec.AccessDigest, observationDigest: digest, revision: string(digest)}
+	next := &stateProjection{store: store, accessDigest: s.spec.AccessDigest, observationDigest: digest, revision: string(digest), oldestObservedAt: oldest}
 	eng, err := idx.stateEngineAt(s.id, s.basis)
 	if err != nil {
 		return ports.StateSync{}, err
@@ -131,20 +140,29 @@ func (idx *Index) RefreshDatasetState(ctx context.Context, lookup reader.MemberL
 		_ = session.Abort(err)
 		return ports.StateSync{}, err
 	}
-	idx.stateMu.Lock()
-	if err := idx.requireCurrentDataset(pin); err != nil {
-		idx.stateMu.Unlock()
-		_ = session.Abort(err)
+	// Engine commit and the serving swap happen inside the revision fence, so
+	// a publication of this Dataset cannot land between the last check and
+	// the generation switch; it waits and replaces the revision afterwards.
+	var previous *stateProjection
+	attempted := false
+	accept := func() error {
+		attempted = true
+		idx.stateMu.Lock()
+		defer idx.stateMu.Unlock()
+		if err := session.Commit(); err != nil {
+			return err
+		}
+		previous = idx.states[key]
+		idx.states[key] = next
+		keep = true
+		return nil
+	}
+	if err := idx.withCurrentDataset(pin, accept); err != nil {
+		if !attempted {
+			_ = session.Abort(err)
+		}
 		return ports.StateSync{}, err
 	}
-	if err := session.Commit(); err != nil {
-		idx.stateMu.Unlock()
-		return ports.StateSync{}, err
-	}
-	previous := idx.states[key]
-	idx.states[key] = next
-	keep = true
-	idx.stateMu.Unlock()
 	if previous != nil {
 		_ = previous.store.CloseAndRemove()
 	}
@@ -152,20 +170,31 @@ func (idx *Index) RefreshDatasetState(ctx context.Context, lookup reader.MemberL
 }
 
 func (idx *Index) requireCurrentDataset(pin reader.DatasetPin) error {
-	if idx.currentDatasetRevision == nil {
-		return nil
-	}
-	revision, err := idx.currentDatasetRevision(pin.SetID)
-	if err != nil {
-		return err
-	}
-	if revision != pin.Revision {
-		return kernel.Fail(kernel.ErrPreconditionFailed, "only the current Dataset revision may refresh external observations")
-	}
-	return nil
+	return idx.withCurrentDataset(pin, nil)
 }
 
-func (idx *Index) searchDatasetState(ctx context.Context, s datasetSpace, request retrieval.SearchRequest) (retrieval.SearchResult, error) {
+func (idx *Index) withCurrentDataset(pin reader.DatasetPin, accept func() error) error {
+	if idx.datasetRevisionFence == nil {
+		if accept == nil {
+			return nil
+		}
+		return accept()
+	}
+	ran := false
+	err := idx.datasetRevisionFence(pin.SetID, pin.Revision, func() error {
+		ran = true
+		if accept == nil {
+			return nil
+		}
+		return accept()
+	})
+	if err != nil && !ran && kernel.CodeOf(err) == kernel.ErrPreconditionFailed {
+		return kernel.Fail(kernel.ErrPreconditionFailed, "only the current Dataset revision may refresh external observations: %v", err)
+	}
+	return err
+}
+
+func (idx *Index) searchDatasetState(ctx context.Context, s datasetSpace, request retrieval.SearchRequest, external []retrieval.FieldRef) (retrieval.SearchResult, error) {
 	idx.stateMu.RLock()
 	defer idx.stateMu.RUnlock()
 	state := idx.states[stateStoreKey(s.id, s.basis)]
@@ -197,6 +226,9 @@ func (idx *Index) searchDatasetState(ctx context.Context, s datasetSpace, reques
 	})
 	if err == nil {
 		result.Dataset = &retrieval.DatasetBasis{ID: s.pin.SetID, Revision: s.pin.Revision}
+		for _, field := range external {
+			result.ExternalConditions = append(result.ExternalConditions, retrieval.ExternalCondition{Field: field, OldestObservedAt: state.oldestObservedAt})
+		}
 	}
 	return result, err
 }
@@ -233,11 +265,28 @@ func (s datasetSpace) appendStatePage(ctx context.Context, state *stateProjectio
 		}
 		evidence[0].Members = members
 		hit := retrieval.ObjectHit{Object: record.Value, Version: version, Evidence: evidence, IndexObservations: record.Observations}
-		hit, checked, err := ports.RecheckCandidate(ctx, hit)
+		hit, failures, checked, err := ports.RecheckCandidate(ctx, hit)
 		if err != nil {
 			return err
 		}
 		if checked {
+			conditional, err := s.conditionUnitFailed(request, failures)
+			if err != nil {
+				return err
+			}
+			// A failed reread is neither a match nor a business miss
+			// (discovery#U1): every failed unit is named beside the result.
+			for _, failure := range failures {
+				out.Claims = append(out.Claims, retrieval.UnitFailureClaim(failure))
+			}
+			if conditional {
+				// The match itself is undecided: the candidate leaves the page
+				// and the answer can no longer claim to be complete.
+				out.Stats.Dropped++
+				out.Completeness = retrieval.CompletenessPartial
+				out.Stats.MarkPartial("hydrate")
+				continue
+			}
 			matched, err := retrieval.MatchesResidual(s.member, hit.Object, hit.Version.Observations, request, s.spec, verifier)
 			if err != nil {
 				return err
@@ -253,4 +302,38 @@ func (s datasetSpace) appendStatePage(ctx context.Context, state *stateProjectio
 		}
 	}
 	return nil
+}
+
+// conditionUnitFailed reports whether a reread failure touches an aspect the
+// request's conditions read; a failure elsewhere cannot change the match.
+func (s datasetSpace) conditionUnitFailed(request retrieval.SearchRequest, failures []objectmodel.UnitReadFailure) (bool, error) {
+	if len(failures) == 0 {
+		return false, nil
+	}
+	resolved, err := retrieval.ResolveSearch(request, s.spec)
+	if err != nil {
+		return false, err
+	}
+	aspects := map[string]bool{}
+	for _, clause := range retrieval.SearchClauses(resolved) {
+		if clause.Op == retrieval.OpMatch && clause.Path == "" && clause.Field == nil {
+			for _, field := range s.spec.Fields {
+				if field.Has(reader.HintText) {
+					aspects[field.Aspect] = true
+				}
+			}
+			continue
+		}
+		field, err := s.spec.ResolveClauseField(clause)
+		if err != nil {
+			return false, err
+		}
+		aspects[field.Aspect] = true
+	}
+	for _, failure := range failures {
+		if aspects[failure.Address.AspectName] {
+			return true, nil
+		}
+	}
+	return false, nil
 }

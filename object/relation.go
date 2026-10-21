@@ -37,7 +37,7 @@ type CanonicalRelation struct {
 // COMMIT.
 func DecodeRelation(address Address, value any) (CanonicalRelation, error) {
 	if address.Kind != KindRelation {
-		return CanonicalRelation{}, kernel.Fail(kernel.ErrUsageInvalid, "address %s is not a Relation", AddressKey(address))
+		return CanonicalRelation{}, kernel.Fail(kernel.ErrUsageInvalid, "address %s is not a Relation", AddressLabel(address))
 	}
 	body, ok := value.(map[string]any)
 	if !ok {

@@ -434,7 +434,7 @@ func TestSceneSystemSchemaMaterialsMatchEmbed(t *testing.T) {
 		"schema-definition.v1.aspect.yaml":   "object/trusted/schema-definition.v1.aspect.yaml",
 		"resource-descriptor.v1.aspect.yaml": "liveaccess/contract/trusted/resource-descriptor.v1.aspect.yaml",
 		"relation.v1.aspect.yaml":            "systemrepo/content/_schemas/relation.v1.aspect.yaml",
-		"readme.v1.aspect.yaml":              "object/trusted/readme.v1.aspect.yaml",
+		"readme.v1.aspect.yaml":              "systemrepo/content/_schemas/readme.v1.aspect.yaml",
 	}
 	sceneDir := filepath.Join(scenesRoot(), "service-initialized", "_materials", "system")
 	for name, source := range files {

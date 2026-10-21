@@ -13,6 +13,7 @@ import (
 	"time"
 
 	kcclient "kc/client"
+	"kc/internal/httpjson"
 	"kc/invoke"
 	"kc/kernel"
 )
@@ -226,8 +227,12 @@ func verifyTokenPrincipal(ctx context.Context, server, token string) (string, er
 	return identity.Principal, nil
 }
 
+// remoteTransport is shared by every authenticated session client of this
+// process so concurrent preflight resolves reuse connections.
+var remoteTransport = httpjson.PooledTransport(diffPreflightConcurrency)
+
 func credentialHTTPClient() *http.Client {
-	return &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	return &http.Client{Transport: remoteTransport, Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 }
 
 func normalizeLoginServer(server string) string {

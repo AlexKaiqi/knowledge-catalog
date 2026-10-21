@@ -36,6 +36,7 @@ var snapshotFactoryResults = map[string]string{
 	"kc/snapshot.OpenBoltCommandStore":            "CommandStore",
 	"kc/snapshot.NewRawWriter":                    "RawWriter",
 	"kc/snapshot.OpenLakeFS":                      "Store",
+	"kc/snapshot.OpenLakeFSContext":               "Store",
 	"kc/snapshot.CreateManagedLakeFS":             "Store",
 	"kc/snapshot.OpenManagedLakeFS":               "Store",
 	"kc/snapshot/dataset.NewService":              "Service",
@@ -457,6 +458,20 @@ func TestSnapshotPublicSurfaceGuardDetectsIndirectLeaks(t *testing.T) {
 		{"upper-layer-signature", `import objectmodel "kc/object"; type FileRef struct{ Value object.Object }`, "unselected signature dependency"},
 		{"selected-data-and-ports", `import contracts "kc/snapshot/internal/storecontract"; type FileRef struct{Path string}; type TreeChange = contracts.TreeChange; type WriteObserver func(string) error; type TreeReader interface {ReadFile(string) ([]byte,error)}; const Driver = contracts.DefaultRef`, ""},
 		{"capability-interface-discovery", `type TreeReader interface { ReadFile(string) ([]byte,error) }; func TreeReaderOf(store any) (TreeReader,bool) { reader,ok := store.(TreeReader); return reader,ok }`, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assertSnapshotSurface(t, "kc/snapshot", tc.source, tc.signal)
+		})
+	}
+}
+
+func TestSnapshotContextFactoryPreservesInterfaceBoundary(t *testing.T) {
+	for _, tc := range []struct{ name, source, signal string }{
+		{"store-interface", `import ("context"; "kc/kernel"); type Store interface{}; func OpenLakeFSContext(ctx context.Context, id kernel.RepositoryID, dsn, credential string) (Store,error) { return nil,nil }`, ""},
+		{"private-result", `import "context"; type Store interface{}; type repository struct{}; func OpenLakeFSContext(context.Context) (*repository,error) { return nil,nil }`, "selected interface Store"},
+		{"private-backend-result", `import ("context"; "kc/snapshot/internal/lakefsimpl"); type Store interface{}; func OpenLakeFSContext(context.Context) (*lakefsimpl.Repository,error) { return nil,nil }`, "unselected signature dependency"},
+		{"concrete-store", `import "context"; type Store struct{}; func OpenLakeFSContext(context.Context) (Store,error) { return Store{},nil }`, "must be a declared interface"},
+		{"unselected-factory", `import "context"; type Store interface{}; func OpenOtherContext(context.Context) (Store,error) { return nil,nil }`, "unselected public factory"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			assertSnapshotSurface(t, "kc/snapshot", tc.source, tc.signal)

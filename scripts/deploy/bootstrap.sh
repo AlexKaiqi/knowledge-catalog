@@ -82,7 +82,9 @@ if [[ ! -f "$deployment_config" ]]; then
     --lakefs-repo "kr://kc/system=${lakefs_url}/kc-system" \
     --managed-lakefs-dsn "${lakefs_url}" \
     --managed-lakefs-namespace s3://kc-authority/tianqiong \
-    --managed-public-url "${KC_PUBLIC_URL:-http://127.0.0.1:7381}"
+    --managed-public-url "${KC_PUBLIC_URL:-http://127.0.0.1:7381}" \
+    --live-lookup-timeout "${KC_LIVE_LOOKUP_TIMEOUT:-1s}" \
+    --live-read-timeout "${KC_LIVE_READ_TIMEOUT:-600ms}"
 fi
 
 kc deployment init --config "$deployment_config"

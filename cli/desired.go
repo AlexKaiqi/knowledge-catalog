@@ -29,8 +29,9 @@ func parseResolution(raw any) (objectmodel.Resolution, error) {
 
 // diffPreflightConcurrency bounds the concurrent resolve fan-out of the
 // remote diff preflight. On a 53k object first import the serial loop spent
-// one HTTP round trip per address before the commit POST even started.
-const diffPreflightConcurrency = 16
+// one HTTP round trip per address before the commit POST even started. It
+// matches the server's own basis fan-out so neither side is the narrow end.
+const diffPreflightConcurrency = 32
 
 // remoteCurrentDigests resolves the current digest of each operation's address
 // at the fixed base commit. Resolution fan-out is bounded and concurrent; the

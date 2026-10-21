@@ -146,14 +146,14 @@ func managedHumanJourney(t *testing.T) {
 		t.Fatalf("create did not allocate a human-owned repository: %#v", created)
 	}
 	management, _ := created["managementURL"].(string)
-	if !strings.HasPrefix(management, server.URL+"/repositories/") {
+	if !strings.HasPrefix(management, server.URL+"/ui/repositories/") {
 		t.Fatalf("management address is not delivered by this service: %s", management)
 	}
 	parsed, err := url.Parse(management)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, err := url.PathUnescape(strings.TrimPrefix(parsed.EscapedPath(), "/repositories/")); err != nil || got != repository {
+	if got, err := url.PathUnescape(strings.TrimPrefix(parsed.EscapedPath(), "/ui/repositories/")); err != nil || got != repository {
 		t.Fatalf("management address lost repository identity: %s %v", got, err)
 	}
 	resp, err := http.Get(management)

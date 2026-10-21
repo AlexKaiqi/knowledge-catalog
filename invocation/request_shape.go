@@ -153,8 +153,11 @@ func SearchRequestFromFlags(flags map[string]invoke.FlagValue) (retrieval.Search
 	}
 	if raw := invoke.FlagString(flags, "sort"); raw != "" {
 		path, order := raw, "asc"
+		// Field locators contain "::"; only a trailing asc/desc is a direction.
 		if i := strings.LastIndexByte(raw, ':'); i >= 0 {
-			path, order = raw[:i], raw[i+1:]
+			if suffix := strings.ToLower(raw[i+1:]); suffix == "asc" || suffix == "desc" {
+				path, order = raw[:i], suffix
+			}
 		}
 		clauses = append(clauses, SearchFieldClause(retrieval.SearchSORT(path, order), path))
 	}

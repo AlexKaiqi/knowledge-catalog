@@ -1,6 +1,8 @@
 package reader
 
 import (
+	"context"
+
 	"kc/kernel"
 	objectmodel "kc/object"
 	repofile "kc/object/format"
@@ -24,6 +26,14 @@ func (r *datasetRepository) StoreDigest() kernel.Digest {
 		return identified.StoreDigest()
 	}
 	return ""
+}
+
+func (r *datasetRepository) WithContext(ctx context.Context) objectmodel.Repository {
+	bound := objectmodel.BindContext(ctx, r.Repository)
+	if bound == r.Repository {
+		return r
+	}
+	return &datasetRepository{Repository: bound, serving: r.serving, commit: r.commit}
 }
 
 func (r *datasetRepository) check(id objectmodel.ObjectID, at kernel.CommitID) error {

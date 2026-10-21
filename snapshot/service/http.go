@@ -77,6 +77,12 @@ func (h *handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH /api/v1/repositories/{repository}/pulls/{pull}", h.nativeAPI)
 
 	mux.Handle("GET /ui/", console.Handler())
+	// The slash-less UI root is an explicit redirect, not the ServeMux's
+	// implicit subtree redirect: Go 1.23 answers it with 301 and later
+	// toolchains with 307, so the route pins the status itself (DEBT-UI-REDIRECT-STATUS-01).
+	mux.HandleFunc("GET /ui", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/ui/", http.StatusTemporaryRedirect)
+	})
 	mux.HandleFunc("GET /identity/v1/auth", h.identityAuth)
 	mux.HandleFunc("GET /identity/v1/whoami", h.identityWhoAmI)
 	mux.HandleFunc("GET /identity/v1/admission", h.admissionShow)

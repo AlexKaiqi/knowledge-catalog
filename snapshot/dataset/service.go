@@ -5,6 +5,7 @@ package dataset
 import (
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"kc/kernel"
 	"kc/snapshot"
@@ -31,19 +32,40 @@ import (
 // object_id is not a service concern. Consumer Read lives in object/reader;
 // AccessSpec lives in retrieval/.
 type service struct {
-	mu           sync.RWMutex
-	store        snapshot.Registry
-	registry     *registry
-	registryHead string
+	*registryState
+	// Request context: one service value per request carries its own evidence
+	// observer and stamp; the accepted registry state is shared. ctxMu guards
+	// only these fields on a value that is stamped after construction.
+	readOnly  bool
+	ctxMu     sync.Mutex
+	observer  Observer
+	as        string
+	requestID string
+	ruleID    string
+}
+
+// registryState is the accepted registry shared by every request view of one
+// authority. Readers load the current immutable version and never wait:
+// a write prepares and validates outside any lock, then commit serializes only
+// the read-modify-persist of the single registry document (persist also checks
+// the expected registry head) and swaps the accepted version.
+type registryState struct {
+	writeMu  sync.Mutex
+	store    snapshot.Registry
+	registry *registry
+	current  atomic.Pointer[acceptedState]
+	hooks    []Hook
+	fence    revisionFence
+}
+
+// acceptedState is one accepted registry version. It is never modified after
+// it is published; a write builds a successor and swaps the pointer, so a
+// reader holding it keeps reading the old version.
+type acceptedState struct {
+	head         string
 	datasets     map[string]Dataset
 	versions     map[string]map[int]Dataset
 	repositories map[string]struct{}
-	readOnly     bool
-	observer     Observer
-	as           string
-	requestID    string
-	ruleID       string
-	hooks        []Hook
 }
 
 func NewService(store snapshot.Registry, source Registry) (Service, error) {
@@ -51,18 +73,12 @@ func NewService(store snapshot.Registry, source Registry) (Service, error) {
 	if !ok || registry == nil {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "service registry is required")
 	}
-	c := &service{
-		store:        store,
-		registry:     registry,
-		datasets:     map[string]Dataset{},
-		repositories: map[string]struct{}{},
-	}
+	c := &service{registryState: &registryState{store: store, registry: registry}}
 	state, head, err := registry.loadSnapshot()
 	if err != nil {
 		return nil, err
 	}
-	c.LoadState(state)
-	c.registryHead = head
+	c.current.Store(newAcceptedState(state, head))
 	if store != nil {
 		store.OnAdvanced(func(ev snapshot.Advanced) {
 			c.NotifySnapshot(Snapshot{
@@ -75,62 +91,70 @@ func NewService(store snapshot.Registry, source Registry) (Service, error) {
 	return c, nil
 }
 
+// accepted is the registry version this value serves: the latest accepted
+// version for the shared service and request views, the frozen one for a
+// read view.
+func (c *service) accepted() *acceptedState { return c.current.Load() }
+
 // DumpState snapshots the registry maps. Not a dump of those Repositories' objects.
 func (c *service) DumpState() State {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.dumpState()
+	return c.accepted().dump(c.registry.AuthorityID())
 }
 
-func (c *service) dumpState() State {
-	workspaces := make([]Dataset, 0, len(c.datasets))
-	for _, workspace := range c.datasets {
+func (s *acceptedState) dump(authorityID string) State {
+	workspaces := make([]Dataset, 0, len(s.datasets))
+	for _, workspace := range s.datasets {
 		workspaces = append(workspaces, cloneDataset(workspace))
 	}
 	return State{
 		Datasets:        workspaces,
-		DatasetVersions: c.datasetVersions(),
-		Repositories:    c.repositoriesList(),
-		AuthorityID:     c.registry.AuthorityID(),
+		DatasetVersions: s.datasetVersions(),
+		Repositories:    s.repositoriesList(),
+		AuthorityID:     authorityID,
 	}
 }
 
-// LoadState replaces the maps from registry bytes. Called at construct.
+// LoadState replaces the in-memory version from registry bytes without
+// persisting it; the accepted registry head is kept.
 func (c *service) LoadState(state State) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.loadState(state)
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	c.current.Store(newAcceptedState(state, c.accepted().head))
 }
 
-func (c *service) loadState(state State) {
-	c.datasets = map[string]Dataset{}
-	c.versions = map[string]map[int]Dataset{}
-	c.repositories = map[string]struct{}{}
+func newAcceptedState(state State, head string) *acceptedState {
+	s := &acceptedState{
+		head:         head,
+		datasets:     map[string]Dataset{},
+		versions:     map[string]map[int]Dataset{},
+		repositories: map[string]struct{}{},
+	}
 	for _, id := range state.Repositories {
-		c.repositories[id] = struct{}{}
+		s.repositories[id] = struct{}{}
 	}
 	for _, workspace := range state.Datasets {
-		c.datasets[workspace.SetID] = cloneDataset(workspace)
+		s.datasets[workspace.SetID] = cloneDataset(workspace)
 		// Existing registries have only the current release. Preserve that
 		// accepted release on the first write; never invent older versions.
-		c.loadVersion(workspace)
+		s.loadVersion(workspace)
 	}
 	for _, version := range state.DatasetVersions {
-		c.loadVersion(version)
+		s.loadVersion(version)
 	}
+	return s
 }
 
-func (c *service) loadVersion(def Dataset) {
-	if c.versions[def.SetID] == nil {
-		c.versions[def.SetID] = map[int]Dataset{}
+func (s *acceptedState) loadVersion(def Dataset) {
+	if s.versions[def.SetID] == nil {
+		s.versions[def.SetID] = map[int]Dataset{}
 	}
 	def.Retired = false // retirement is current policy, not versioned content
-	c.versions[def.SetID][def.Revision] = cloneDataset(def)
+	s.versions[def.SetID][def.Revision] = cloneDataset(def)
 }
 
-func (c *service) datasetVersions() []Dataset {
+func (s *acceptedState) datasetVersions() []Dataset {
 	var out []Dataset
-	for _, versions := range c.versions {
+	for _, versions := range s.versions {
 		for _, def := range versions {
 			out = append(out, cloneDataset(def))
 		}
@@ -138,30 +162,48 @@ func (c *service) datasetVersions() []Dataset {
 	return normalizeDatasetVersions(out)
 }
 
-func (c *service) persist(state State, message string) error {
+// commit is the only mutual exclusion a registry write takes. mutate derives
+// the next state from the latest accepted version and must stay in memory:
+// remote reads and validation belong before commit, so neither readers nor
+// other writers wait on them. The registry head CAS still rejects a version
+// another process advanced.
+func (c *service) commit(message string, mutate func(*acceptedState) (State, error)) error {
 	if c.readOnly {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "a service read view cannot persist changes")
 	}
-	head, err := c.registry.saveExpected(c.registryHead, state, message, c.as, c.requestID, c.ruleID)
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	current := c.accepted()
+	next, err := mutate(current)
+	if err != nil {
+		return err
+	}
+	as, requestID, ruleID, observer := c.requestContext()
+	head, err := c.registry.saveExpected(current.head, next, message, as, requestID, ruleID)
 	if err == nil {
-		c.registryHead = head
-		c.loadState(state)
+		c.current.Store(newAcceptedState(next, head))
 	}
 	cmd, _, _ := strings.Cut(strings.TrimSpace(message), " ")
 	if cmd == "" {
 		cmd = "persist"
 	}
-	return observe(c.observer, cmd, map[string]any{
+	return observe(observer, cmd, map[string]any{
 		"authorityId": c.registry.AuthorityID(),
 		"message":     message,
 	}, err)
 }
 
-func (c *service) SetObserver(j Observer) { c.mu.Lock(); defer c.mu.Unlock(); c.observer = j }
+func (c *service) requestContext() (string, string, string, Observer) {
+	c.ctxMu.Lock()
+	defer c.ctxMu.Unlock()
+	return c.as, c.requestID, c.ruleID, c.observer
+}
+
+func (c *service) SetObserver(j Observer) { c.ctxMu.Lock(); defer c.ctxMu.Unlock(); c.observer = j }
 
 func (c *service) SetStamp(as, requestID, ruleID string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.ctxMu.Lock()
+	defer c.ctxMu.Unlock()
 	c.as = as
 	c.requestID = requestID
 	c.ruleID = ruleID
@@ -174,12 +216,13 @@ func (c *service) note(cmd string, refs map[string]any, err error) error {
 	if _, ok := refs["authorityId"]; !ok && c.registry != nil {
 		refs["authorityId"] = c.registry.AuthorityID()
 	}
-	return observe(c.observer, cmd, refs, err)
+	_, _, _, observer := c.requestContext()
+	return observe(observer, cmd, refs, err)
 }
 
 // RecordCreated writes registry.yaml so service.Log has a birth commit (empty registry is otherwise only git "root").
 func (c *service) RecordCreated() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.persist(c.dumpState(), "init "+c.registry.AuthorityID())
+	return c.commit("init "+c.registry.AuthorityID(), func(s *acceptedState) (State, error) {
+		return s.dump(c.registry.AuthorityID()), nil
+	})
 }

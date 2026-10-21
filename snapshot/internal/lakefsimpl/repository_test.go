@@ -35,7 +35,7 @@ func TestCredentialNeverAppearsInRepositoryString(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	repo := &Repository{id: "kr://acme/object", ep: endpoint, client: client}
+	repo := &Repository{id: "kr://acme/object", ep: endpoint, client: client, repoState: &repoState{}}
 	if strings.Contains(repo.String(), "very-secret") || strings.Contains(repo.String(), "access") {
 		t.Fatalf("repository string leaked credentials: %s", repo)
 	}
