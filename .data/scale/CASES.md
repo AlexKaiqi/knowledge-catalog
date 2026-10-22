@@ -35,7 +35,6 @@ environment-bound/                        # 环境配置绑定 + readiness（根
       ├─ probe-storage-accounting         # 存储容量账
       ├─ probe-workspace-combine-curve    # 多仓组合读
       ├─ dataset-published/               # 交付 Dataset 已发布（整前缀冻结）
-      │  └─ probe-clone-delivery-curve    # dataset clone 物化吞吐与分页曲线
       ├─ history-aged/ [gap]              # 真实历史到档（生成器历史未实现）
       │  └─ probe-history-degradation-curve
       └─ projection-synced/               # 投影追平固定 HEAD

@@ -15,7 +15,7 @@ import urllib.parse
 import uuid
 
 from accept import (ATTACHED, ContractFailure, HarnessError, QINGHE, REPO, ROOT,
-                    check, get_json, lookup, material_path, subset)
+                    CLUSTER_CAPACITY_MARKERS, check, get_json, lookup, material_path, subset)
 from goto import parse_feature, split_command, match_has, match_includes, GotoError
 from tree import load_yaml_file
 
@@ -253,8 +253,14 @@ class World:
             wanted_status = expected.pop('exit', 0)
             if (status != 0) != (wanted_status != 0):
                 error = value.get('error', value) if isinstance(value, dict) else {}
+                message = str(error.get('message', ''))
+                if CLUSTER_CAPACITY_MARKERS.search(message):
+                    # The shared cluster refused a new index because it is out of
+                    # shards. That is an environment limit, not a missing product
+                    # capability, so it must not be reported as a product fail.
+                    raise HarnessError(f'{self.command_label(args)}: shared search capacity exhausted: {message}')
                 raise ContractFailure(f'exit {status}; expected {wanted_status}; '
-                                      f'{error.get("code", "unknown")}: {error.get("message", "")}')
+                                      f'{error.get("code", "unknown")}: {message}')
             check(value, expected)
         except ContractFailure as exc:
             raise ContractFailure(self.command_label(args)+': '+str(exc)) from exc

@@ -317,7 +317,7 @@ discover 不在核心里封装。核心提供访问原语，并把调用方的�
 | 已有 | 索引声明是 `index` 方面成员，Schema 不再带 `access`，Writer 拒绝旧写法；Writer 查形状与定位符，按固定 Schema 版本解析；能力清单按实例公开（`kc plugin declarative-index describe`），试运行逐成员给出无效、不支持或支持及是否需重建，与 Writer 判断一致 |
 | 已有 | 消费最小闭环：read、schema list/describe、search、relations、traverse、access-spec describe 在 Dataset 下可用 `--revision` 固定已发布版本；Dataset 下的 describe 在字段上标出选入声明给出的用途，并给出声明成员状态与检索就绪；检索因缺少用途被拒时指向 describe；`text` 构建可取多个输入，各自按字段建文本单元 |
 | 近期 | 索引声明选进 Dataset 才生效；搜索只以 Dataset 为范围，去掉按仓与跨仓按类型搜索 |
-| 近期 | 细粒度声明在 Dataset 内按成员构建与准备；跨仓 Schema 输入在 Dataset 级编译 |
+| 近期 | 细粒度声明在 Dataset 内按成员构建与准备 |
 | 近期 | 查询结果证据记录参与的声明成员及角色；反馈可对回读的命中表示采纳或不采纳；按成员汇总并公开使用数据 |
 | 近期 | 检索空间按 Dataset 版本：来源前进自动发布并准备索引；解释规则连续时多版本共用物理索引；按保留策略回收旧版本检索 |
 | 未到 | 跨 Dataset 复用索引分段；按对象的能力和用途发现；分面与总数；事件窗口查询；规模下的延迟与追赶实测 |

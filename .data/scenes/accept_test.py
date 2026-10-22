@@ -4,6 +4,7 @@ import copy
 import io
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -26,6 +27,84 @@ def load():
 
 
 class AcceptTest(unittest.TestCase):
+    def test_preflight_reserves_shards_for_every_executable_probe(self):
+        # The batch reserves headroom for every executable probe, so a cluster
+        # with 100 free shards must reject a run that needs more instead of
+        # letting it start and then fail mid-batch on a real index creation.
+        runner = load()
+        with tempfile.TemporaryDirectory() as temp:
+            (Path(temp)/'compose.env').write_text('')
+            env = {'KC_DEPLOY_HOME': temp, 'KC_DEPLOY_PROFILE': 'local',
+                   'KC_SERVER_URL': 'http://server', 'KC_ACCEPT_LAKEFS_URL': 'http://lakefs',
+                   'KC_ACCEPT_OPENSEARCH_URL': 'http://search', 'KC_ACCEPT_ORIGIN_URL': 'http://origin',
+                   'KC_ACCEPT_UNTRUSTED_ORIGIN_URL': 'http://untrusted', 'KC_ACCEPT_ALT_ORIGIN_URL': 'http://alt'}
+            def response(request, timeout=5):
+                url = request.full_url
+                if url == 'http://lakefs/_health':
+                    return io.BytesIO(b'OK')
+                value = {'role': 'live-origin', 'status': 'ready'}
+                if '/_cluster/settings' in url:
+                    value = {'defaults': {'cluster.max_shards_per_node': '1000'}}
+                elif '/_nodes' in url:
+                    value = {'nodes': {'data': {'roles': ['data']}}}
+                elif '/_all/_settings' in url:
+                    # 100 primaries with 8 replicas occupy 900 of the 1000 limit.
+                    value = {'occupied': {'settings': {'index': {
+                        'number_of_shards': '100', 'number_of_replicas': '8'}}}}
+                return io.BytesIO(json.dumps(value).encode())
+            with patch.dict(os.environ, env), patch('urllib.request.urlopen', side_effect=response):
+                with self.assertRaisesRegex(runner.HarnessError, 'requires at least 120\\b'):
+                    runner.preflight(120)
+                # The same cluster satisfies a reservation it can honour, so the
+                # rejection above came from the budget and not from a broken probe.
+                runner.preflight(100)
+
+    def test_reservation_converts_indices_into_the_shards_capacity_compares(self):
+        # capacity() compares shard counts. Reserving the index estimate directly
+        # understated the need by the shard factor, which let a run start on a
+        # nearly full cluster and then be reported as a product failure.
+        runner = load()
+        self.assertEqual(runner.reservation(51), 51 * runner.SHARDS_PER_PROBE)
+        self.assertGreater(runner.reservation(51), 51, 'one shard per probe is not enough headroom')
+        self.assertEqual(runner.SHARDS_PER_PROBE, runner.INDICES_PER_PROBE * runner.SHARDS_PER_INDEX)
+
+    def test_reservation_matches_the_product_projection_shard_default(self):
+        # The reservation is only correct while a projection is the product's
+        # default single index. Read the declared default so a shard-count change
+        # fails here instead of silently under-reserving a shared cluster.
+        runner = load()
+        source = (HERE.parents[1]/'declarativeindex/opensearch/internal/opensearchimpl/config.go').read_text()
+        match = re.search(r'defaultPrimaryShards\s*=\s*(\d+)', source)
+        self.assertIsNotNone(match, 'projection primary shard default is no longer declared')
+        self.assertEqual(int(match.group(1)), runner.SHARDS_PER_INDEX)
+        self.assertNotRegex(source, r'defaultReplicas\s*=\s*[1-9]',
+                            'a replicated projection would need more than SHARDS_PER_INDEX per index')
+
+    def test_exhausted_shared_capacity_is_an_environment_error(self):
+        from accept_world import World
+        accept = load()
+        world = World({})
+        world.dataset = 'probe'
+        message = ('opensearch create generation: {"error":{"type":"validation_exception",'
+                   '"reason":"Validation Failed: 1: this action would add [8] total shards, '
+                   'but this cluster currently has [995]/[1000] maximum shards open;"}}')
+        with patch.object(world, 'call', lambda args, principal: (1, {'error': {
+                'code': 'USAGE_INVALID', 'message': message}})):
+            with self.assertRaises(accept.HarnessError) as raised:
+                world.execute(['dataset', 'define', '--dataset', 'probe'], 'admin', {})
+        self.assertIn('shared search capacity exhausted', str(raised.exception))
+        self.assertNotIsInstance(raised.exception, accept.ContractFailure)
+
+    def test_ordinary_command_rejection_stays_a_product_failure(self):
+        from accept_world import World
+        accept = load()
+        world = World({})
+        world.dataset = 'probe'
+        with patch.object(world, 'call', lambda args, principal: (1, {'error': {
+                'code': 'USAGE_INVALID', 'message': 'unknown flag --nope'}})):
+            with self.assertRaises(accept.ContractFailure):
+                world.execute(['dataset', 'define'], 'admin', {})
+
     def test_probe_assertions_use_typed_operator_containers(self):
         def check_assertion(expected):
             for operator in ('has', 'includes', 'count', 'contains', 'excludes', 'forEach'):
@@ -457,10 +536,10 @@ class AcceptTest(unittest.TestCase):
                     value = {}
                 return io.BytesIO(json.dumps(value).encode())
             with patch.dict(os.environ, env), patch('urllib.request.urlopen', side_effect=response):
-                runner.preflight()
+                runner.preflight(8)
                 failed[0] = True
                 with self.assertRaisesRegex(runner.HarnessError, 'lakefs/_health: HTTP 503'):
-                    runner.preflight()
+                    runner.preflight(8)
             self.assertTrue(rejected[0].closed)
 
     def test_precise_range_spec_keeps_fragment_and_last_no_call_assertion(self):

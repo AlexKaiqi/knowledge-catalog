@@ -10,7 +10,7 @@ schema_ref: schema/system/capability-entrypoints/v1
     {
       "action": "writer.preview",
       "command": "kc diff",
-      "description": "对照当前发布版本，列出这个目录会改哪些对象",
+      "description": "比较固定对象版本，或预览目录发布差异",
       "help": "kc help diff"
     },
     {

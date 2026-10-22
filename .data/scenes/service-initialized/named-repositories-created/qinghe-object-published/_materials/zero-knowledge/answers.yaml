@@ -18,7 +18,7 @@ capability_map:   # zk-env-capability-map。每项写作“用途｜前提｜入
     发布: "把目录里的对象写进仓｜写权｜kc help write"
     组合 Dataset: "固定一组来源版本给消费方｜组合与发权权限｜kc help dataset"
     插件操作: "对象声明的外部操作｜插件已部署｜kc plugin <名称> help / kc invoke"
-    文件视图: "按文件消费 Dataset 交付树｜Dataset 文件消费权｜kc help files（files list / files read / dataset clone），或 kcfs"
+    文件视图: "按文件消费 Dataset 交付树｜Dataset 文件消费权｜kc help files（files list / files read），或 kcfs"
     反馈: "对用过的内容提出问题，供维护者修订｜feedback.write、Dataset 读权与原访问 trace｜kc operations feedback record --trace-id <id> --dataset <id> --outcome ... --message ..."
   fail_if: 把搜索当读取；把固定修订里的内容当当前值；列出环境里不存在的能力
 

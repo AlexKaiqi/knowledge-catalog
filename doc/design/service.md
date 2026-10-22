@@ -116,7 +116,7 @@
 | `identity/` | 认证器注册表与请求认证判定、具体认证器子包、身份绑定 |
 | `delivery/` | 结果交付链：把对象内容变成调用方可见的形式 |
 | `observability/` | 访问证据、检索与反馈记录 |
-| `client/` | 调用方 SDK 与会话 |
+| `client/` | 模块 SDK 组合；`auth/` 拥有认证运输与身份 SDK；`session/` 拥有持久登录、逐请求重读与刷新；地址与路径算法共享 `internal/clientconfig` |
 
 ## 进度
 

@@ -119,19 +119,7 @@ families:
         unit: bytes/s
         dims: [scaleProfile, concurrency]
         collect: client-timer
-        note: 逐文件交付与 clone 路径；交付动词与 dataset clone 均已公开（DATASET-03 已收口）
-      read.file_delivery.clone_wall_time:
-        title: dataset clone 物化整棵交付树墙钟
-        unit: ms
-        dims: [deliveredObjectCount, scaleProfile]
-        collect: client-timer
-        quantiles: [P50, P95, P99]
-      read.file_delivery.page_requests:
-        title: clone 物化过程 Gateway 分页请求数
-        unit: count
-        dims: [deliveredObjectCount]
-        collect: client-timer
-        note: 随交付文件数验证分页行为；单文件请求数增长即判 INVALID
+        note: 逐文件交付路径；交付动词已公开（DATASET-03 已收口）
       read.cache_hit_ratio:
         title: 缓存命中率（冷/热分组分开报告）
         unit: ratio

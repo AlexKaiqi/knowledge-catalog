@@ -23,10 +23,13 @@ make test           # 默认：lakeFS HTTP 夹具的普通/索引场景 + 真实
 make deploy-local-scenes # 独立真实 lakeFS 部署场景；需已有 local 测试栈
 make test-contracts # 显式旧混合套件：component + boundary + 应用/transport 合同
 make quality        # gofmt/tidy/vet/staticcheck + 复杂度/文件体积/重复门禁
+make env-doctor     # 只读环境体检：工具链一致性、容器、固定端口、搜索夹具租约、worktree、证据体积
 make test-e2e       # 共享应用语义 + typed Client/HTTP/登记空间 边界
 make test-race      # command log / hook / Reader / Index / Server / 调用并发路径；cli 只跑 scripts/race-cli-tests.txt 所列并发用例
 make test-cover     # 文档/surface + short suite + statement coverage 最低阈值
 make validation-inventory # 只生成声明库存 JSON，不跑测试或启动外部服务
+make validation-prune # 证据保留策略预演；KEEP= 与 SCOPE= 可选，APPLY=--apply 才删除，被引用 run 保留
+make leases-prune   # 清理已消失 Docker daemon 的租约文件；默认预演，APPLY=--apply 才删除
 make check-validation # 文档/脚本/库存/结果工具回归，不启动外部服务
 make test-taihu-live # 真实 Taihu introspection；需 KC_LIVE_TAIHU=1 与资源方密钥 / Bearer
 make test-adapters  # OpenSearch
@@ -189,13 +192,31 @@ HTTP routes 和 Agent 任务互不相加；bundle 是任务导航，不是 DFS �
 
 每次显式运行保存在被忽略的 `.validation/runs/<run-id>/`：`manifest.json` 绑定开始时间、
 命令、scope、Git revision/dirty、已跟踪与未忽略源文件的内容指纹，以及工具/系统和白名单选择项；
-`inventory.json` 是这次声明库存，`output.log` 保留原输出，`go-test.jsonl` 保留收到的 Go 原始事件，
+`inventory.json` 是这次声明库存的摘要（计数、限制与全量库存的 digest），`output.log` 保留原输出，
 `report.json` 记录结束时间、退出码、package/test 的 pass/fail/skip、重复执行编号和产物摘要。
 `executionStatus` 只表示命令退出；`status` 区分含跳过、源码变化与中断，`verification` 给出
 事件计数和未观测的声明库存，任何一个字段都不是全产品完成率。
 `exitCode` 保留子命令原始退出码；`runnerExitCode` 是验证入口的实际退出码。即使子命令成功，
 检测到失败事件或执行期间源码变化仍返回非零，避免 CI 假绿；跳过与未选项继续显式区分。
 coverage 组保存 profile，CLI 进程另写逐命令断言报告；scene 按 run/test/node 保存结果。
+
+产物按“权威事实、可重建派生、原始输出”分层，只有第一类是必须长期可读的：
+
+- 权威事实是 `manifest.json` 与 `report.json`。判定、源码指纹、事件计数都在这里，删掉就无法回答这次运行是什么。
+- 可重建派生是 `inventory.json`。全量库存是源码指纹的确定性函数，逐 run 复制一份没有增量信息，
+  所以只留计数与 digest；需要明细时用 `make validation-inventory` 按当前源码重新生成并比对 digest。
+- 原始输出是 `output.log`。`report.json` 的 `tests`/`packages` 已把事件解析成结构化终态，
+  Go 原始事件行只是同一份输出的另一种编码，因此不再单独存 `go-test.jsonl`。
+
+保留策略由 `make validation-prune` 执行，默认只预演不删除，按 scope 各保留最近 `KEEP`（默认 20）次。
+被跟踪文件（如 `tasks/`、`doc/`）点名引用的 run 一律保留，因为那是后续读者真要打开的；
+其余同步删除。删除只作用于带 `manifest.json` 的 runner 目录，混入 `runs/` 的其它内容不动。
+
+不动的部分必须可见。手工写进 `runs/` 的证据目录没有 `manifest.json`，任何保留窗口都描述不到它们，
+`prune` 也不会删；但报告里的 kept/deleted 只统计计划看得见的对象，于是这部分磁盘占用在汇总里完全
+不可见——本仓正是在这种情况下累积到 112 个目录、2426M。因此 `prune` 现在单独报告这类目录的数量与
+体积，让“计划管不到的部分”有明确数字，而不是靠人去 `du`。
+
 
 判读规则：
 
@@ -314,7 +335,7 @@ Repository 归档与 Dataset 固定 pin 分别指向公开 `SnapshotService.Arch
 | C-17 | 两仓已有普通文件，消费者仅获 Dataset 读权 | 经 Server 发布三个来源片段，按新目录枚举并读取同名文件 | 三个目标路径各自返回准确字节、原仓与固定版本；未选中内容不出现在列表，原路径与开头的向上路径读取拒绝 | 已定位 | `TestDatasetDirectoryDeliveryReorganizesMultipleRepositories` |
 | C-18 | C-17 已发布并打开旧视图 | 更新一个源仓，随后调整目录并发布新版 | 源 HEAD 前进不改变服务版；新请求采用新路径与字节，旧 pin 继续旧路径与字节，两版路径不串用 | 已定位 | `TestDatasetDirectoryDeliveryRepublishKeepsOldLayoutAndBytes` |
 | C-19 | C-17 已发布 | 尝试相同或嵌套目标路径，再以合法布局重试该 revision | 冲突候选拒绝，当前布局、pin 与内容不变；失败不占用 revision，修正后可发布 | 已定位 | `TestDatasetDirectoryDeliveryRejectsConflictsWithoutReplacingRelease` |
-| C-20 | 多仓中各有若干文件 | 逐文件挑选、改名并混排到同一目标目录 | 只交付选中文件，枚举、读取与授权范围一致，目标冲突拒绝 | 已定位 | `TestDatasetFileDeliveryServesRenamedAndMixedEntries` / `TestDatasetCloneMaterializesDeliveredTree` / `TestDatasetCloneJourney` |
+| C-20 | 多仓中各有若干文件 | 逐文件挑选、改名并混排到同一目标目录 | 只交付选中文件，枚举、读取与授权范围一致，目标冲突拒绝 | 已定位 | `TestDatasetFileDeliveryServesRenamedAndMixedEntries` |
 | C-21 | C-17 已发布，选中子树之外有兄弟文件 | 从交付目录读取或枚举带中部上跳的相对路径 | 在访问来源前拒绝路径逃逸，不返回范围外字节或目录项 | 已定位 | `TestDatasetDirectoryDeliveryRejectsTraversalInsideRelativePaths` |
 
 C-17–C-19、C-21 位于 `cli/dataset_directory_delivery_test.go`，C-20 位于
@@ -442,7 +463,7 @@ U14 的一次任务完整选用、资源归属与退出复用[共同插件验收
 | R-08 | W3 | 退役的 Object LIST | 公开入口拒绝；维护 scan 不作为消费枚举 | frozen | `TestRemovedCommandsAreRejected` |
 | R-09 | 有 `schema/*` | `schema describe` | AccessHints；非 schema 对象忽略 | 已定位 | `object/reader/schema_test.go` |
 | R-10 | 多 Aspect | `read --aspect` / `readAddress` | 单单元 | 已定位 | S5 |
-| R-11 | 有 permissions Aspect | READ 使用 `AspectSelector` exclude；SEARCH 只按 schema access hints | Canonical 仍在；Reader 不持第二套投影 | 已定位 | T8 |
+| R-11 | 有 permissions Aspect | READ 只取所选 Address 单元，不在整对象上裁剪；SEARCH 只按 schema access hints | Canonical 仍在；Reader 不持第二套投影 | 已定位 | T8 |
 | R-12 | W4 | `--dataset` 兼 `--repo`/`--commit`/`--ref` | 拒绝组合 | 已定位 | consume_flow |
 
 ### 2.6 V 消费 Serving（只 `--dataset`）
@@ -550,7 +571,7 @@ I-21 已收口 notice → 控制器 pull；I-34..I-39 仍只对账 Snapshot HEAD
 | P-01 | 正式 Client 缺身份 | 业务命令 | 必须显式 principal；测试夹具 owner 不能成为产品默认授权 | 已定位 | `TestRemoteCLIRejectsHomeAndMissingPrincipal` |
 | P-02 | 空 allow | `--as bot put` | `FORBIDDEN`；七列不动 | 已定位 | write errors / LifecycleAndAllow |
 | P-03 | 只 allow `read-workspace` | `--as` member consumption | `FORBIDDEN` | 已定位 | `TestDatasetAuthorizationCoverageIsHonest` |
-| P-04 | 已配置多个服务的客户端 | 各服务的登录与授权上下文 | 不继承另一服务的身份、政策或业务操作范围 | 已定位 | Client session isolation contracts |
+| P-04 | 已配置多个服务的客户端 | 各服务的登录与授权上下文 | 不继承另一服务的身份、政策或业务操作范围 | 已定位 | `client/session` 存储与请求回归；CLI argv / broker / kcfs 集成 |
 | P-05 | pre `writer put` hook 非 0 | `writer put` | `HOOK_DENIED`；无 commit | 已定位 | `TestPrePutDeniedLeavesNoCommit` |
 | P-06 | REPLAYED | hook | 不打 | 已定位 | `TestReplayedSkipsHook` |
 | P-07 | post hook | 成功写 | payload 只有指针，无正文 | 已定位 | `TestPostPutPointersOnly` |

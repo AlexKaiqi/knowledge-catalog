@@ -7,6 +7,7 @@ import datetime
 import importlib.util
 import json
 import os
+import re
 import signal
 from pathlib import Path
 import sys
@@ -41,6 +42,14 @@ class RunInterrupted(BaseException):
 
 class HarnessError(Exception):
     """A fixture, environment, unknown command shape or executor is unavailable."""
+
+
+# OpenSearch rejects a new index when the cluster is out of shards. The message
+# names the limit explicitly; matching it keeps that condition an environment
+# error instead of a product capability failure.
+CLUSTER_CAPACITY_MARKERS = re.compile(
+    r'maximum shards open|this action would add \[\d+\] total shards|no space left on device',
+    re.IGNORECASE)
 
 
 def now():
@@ -243,7 +252,7 @@ def read_endpoint(url, method, body, decode):
         raise HarnessError(f'deployment endpoint unavailable: {url}: {exc}') from exc
 
 
-def preflight():
+def preflight(required_shards):
     if os.environ.get('KC_DEPLOY_PROFILE', 'local') != 'local':
         raise HarnessError('acceptance runs only on the local test deployment')
     home = Path(os.environ.get('KC_DEPLOY_HOME', '/tmp/kc-deploy-local'))
@@ -265,10 +274,35 @@ def preflight():
     module = importlib.util.module_from_spec(module_spec)
     module_spec.loader.exec_module(module)
     try:
-        module.capacity(os.environ['KC_ACCEPT_OPENSEARCH_URL'])
+        # The budget covers every executable probe at the shard level, so a run
+        # that cannot fit is refused here with a diagnosis instead of starting
+        # and then failing on a real index creation.
+        module.capacity(os.environ['KC_ACCEPT_OPENSEARCH_URL'], required_shards)
     except (OSError, ValueError) as exc:
         raise HarnessError(str(exc)) from exc
 
+
+
+# Every executable probe may create its own Dataset generation, and a probe that
+# compares two revisions creates one more. The last complete run created 71
+# projections for 51 executed probes, so two indices per probe is the observed
+# upper bound.
+INDICES_PER_PROBE = 2
+
+# One projection is one physical index, created with the product's default
+# primary shard count and no replica. capacity() reserves *shards*, so an index
+# estimate must be converted; reserving 71 for 71 indices understated the need by
+# the shard factor and let a run start on a nearly full cluster only to be
+# rejected by OpenSearch mid-batch, which surfaced as a product failure.
+# TestReservationMatchesProductShardDefault keeps this in step with the default.
+SHARDS_PER_INDEX = 8
+
+SHARDS_PER_PROBE = INDICES_PER_PROBE * SHARDS_PER_INDEX
+
+
+def reservation(executable_probes):
+    """Return the shards a batch must have free before it starts writing."""
+    return executable_probes * SHARDS_PER_PROBE
 
 
 # accept-06/07 specifications that need a Dataset revision to be prepared,
@@ -384,9 +418,11 @@ def main():
     for signum in (signal.SIGINT, signal.SIGTERM):
         previous_handlers[signum] = signal.signal(signum, interrupt)
     cleanup_error = None
+    budget = reservation(len(callbacks))
     try:
         try:
-            report = batch(specs, callbacks, preflight=guarded(preflight), construct=guarded(world.construct))
+            report = batch(specs, callbacks, preflight=guarded(lambda: preflight(budget)),
+                           construct=guarded(world.construct))
         finally:
             # Cleanup is already bounded by World and owns this invocation's
             # resources. Record signals here; do not abort or restart cleanup.

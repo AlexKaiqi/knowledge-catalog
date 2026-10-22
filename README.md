@@ -274,7 +274,7 @@ kc serve --config deployment.yaml # auth: taihu / authURL / bootstrapPrincipal �
 | T5 | 已退役：底座没有 APPEND/Stream surface；state/stream 通过 Aspect Binding 声明 |
 | T6 Authority Store | lakeFS 的版本身份、CAS、pinned read 与 provider-neutral conformance；夹具与真实服务证据分开 |
 | T7 Ingestion/Grounding | ingest 扫描、reconcile 对账、groundingCitation |
-| T8 Retrieval Projection | `discovery/projection/` 通用执行合同与 `declarativeindex/projection/` 可重建投影定位 + Canonical 回读；非权威、basis/lag；`AspectSelector` 只裁显式 READ |
+| T8 Retrieval Projection | `discovery/projection/` 通用执行合同与 `declarativeindex/projection/` 可重建投影定位 + Canonical 回读；非权威、basis/lag；显式 READ 用坐标读取只取所选单元 |
 | T9 Maintenance Loop | 工作分支写入、合并前对象校验、快进合并更新源仓；重新发布 Dataset 后新请求可见 |
 | T10 Refine | SEM_FILTER 三值；SEM_RERANK 单次 listwise Provider、Ref-preserving RankGroup、fixed-basis/lane evidence、输入字节预算；Responses-compatible Luna 可选实测 |
 | T11 登记空间 |Dataset Registry、不可变发布记录、故障传播、来源不覆盖、固定已发布版本 |

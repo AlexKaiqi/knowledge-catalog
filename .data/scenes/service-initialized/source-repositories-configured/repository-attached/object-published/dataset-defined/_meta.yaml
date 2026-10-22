@@ -48,12 +48,6 @@ evidence:
         detail: "源 HEAD 前进后旧 pin 按旧路径与字节继续服务，新发布被接受后新请求采用新布局；重叠交付路径的候选以 DATASET_INVALID 拒绝，已接受版本与 revision 不被失败候选占用。"
       - claim: "dataset#U9"
         detail: "调整交付路径发布新版后，已打开的旧视图继续按旧路径工作，新旧布局与字节不串用。"
-  - source: "dataset.compose"
-    views:
-      - "consumption"
-    tests:
-      - "TestDatasetCloneJourney"
-    title: "kc dataset clone 经公开 argv 把交付目录树物化为普通本地目录，非空目标被拒绝"
   - id: "snapshot-cli-published-file-consumption"
     title: "公开 CLI 发现 Dataset、分页枚举与读取固定发布，并区分历史版和当前版"
     source: "dataset.files"
@@ -114,23 +108,22 @@ evidence:
       - "consumption"
       - "access-control"
     tests:
-      - "TestDatasetDeliveryFiltersUnauthorizedSourcesBeforeClone"
-    title: "Repository 与 Dataset 联合授权按交集裁剪交付树，clone 不落盘无权来源"
+      - "TestDatasetDeliveryFiltersUnauthorizedSourcesBeforeFileRead"
+    title: "Repository 与 Dataset 联合授权按交集裁剪交付树，无权来源不可枚举读取"
     verifies:
       - claim: "dataset#U1"
-        detail: "两仓目录和逐文件混排发布后，解析权保持，只授一个来源在该 Dataset 的文件读权；已接受 pin 不变，可交付目录及本地 clone 只包含获准来源的准确文件和字节，另一主体仍能读另一来源。"
+        detail: "两仓目录和逐文件混排发布后，解析权保持，只授一个来源在该 Dataset 的文件读权；已接受 pin 不变，可交付目录只包含获准来源的准确文件，另一来源路径枚举与读取均拒绝，另一主体仍能读另一来源。"
   - source: "dataset.compose"
     views:
       - "consumption"
     tests:
       - "TestDatasetFileDeliveryServesRenamedAndMixedEntries"
       - "TestDatasetFileDeliveryRejectsContentConflicts"
-      - "TestDatasetCloneMaterializesDeliveredTree"
     id: "dataset-file-delivery-mixed-entries-and-conflicts"
-    title: "逐文件挑选、改名与跨仓混排交付同一目标目录；目标冲突拒绝；clone 物化交付树"
+    title: "逐文件挑选、改名与跨仓混排交付同一目标目录；目标冲突拒绝"
     verifies:
       - claim: "dataset#U10"
-        detail: "从不同仓逐文件挑选并分别指定目标名，只枚举与读取选中文件，交付路径不扩大范围（含 ../ 上跳拒绝），旧 pin 重放仍读已接受交付树；同目标内容冲突以 DATASET_INVALID 拒绝且不被枚举；kc dataset clone 物化交付树并拒绝非空目标。"
+        detail: "从不同仓逐文件挑选并分别指定目标名，只枚举与读取选中文件，交付路径不扩大范围（含 ../ 上跳拒绝），旧 pin 重放仍读已接受交付树；同目标内容冲突以 DATASET_INVALID 拒绝且不被枚举。"
   - source: "projection.index"
     views:
       - "publication"
