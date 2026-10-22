@@ -306,30 +306,12 @@ func (r *Repository) publishBranch(name string, candidate, expected kernel.Commi
 		}
 	}()
 	lock := r.publicationLock(name)
-	if err := r.createBranch(lock, candidate, true); err != nil {
-		if statusOf(err) != http.StatusConflict {
-			return err
-		}
-		current, found, readErr := r.getBranch(name)
-		if readErr != nil {
-			return readErr
-		}
-		if !found {
-			return kernel.Fail(kernel.ErrVersionUnresolved, "ref refs/heads/%s does not exist", name)
-		}
-		lockHead, _, lockErr := r.getBranch(lock)
-		if lockErr != nil {
-			return lockErr
-		}
-		if current == candidate {
-			return nil
-		}
-		if current != expected {
-			return kernel.Fail(kernel.ErrNonFastForward,
-				"ref refs/heads/%s moved: expected commit %s, actual %s", name, expected, current)
-		}
-		return kernel.Fail(kernel.ErrTemporaryUnavailable,
-			"lakefs publication lock for refs/heads/%s is held (target %s, candidate %s); stop all publishers before RecoverLakeFSPublication", name, current, lockHead)
+	acquired, err := r.acquirePublicationLock(name, candidate, expected, true)
+	if err != nil {
+		return err
+	}
+	if !acquired {
+		return nil
 	}
 	defer r.deleteBranch(lock)
 
@@ -426,7 +408,11 @@ func (r *Repository) Archive() error {
 }
 
 func (r *Repository) denyIfArchived() error {
-	if r.Archived() {
+	_, archived, err := r.getBranch(archivedBranch)
+	if err != nil {
+		return err
+	}
+	if archived {
 		return kernel.Fail(kernel.ErrRepositoryArchived, "repository %s is archived", r.id)
 	}
 	return nil
@@ -570,7 +556,7 @@ func (r *Repository) ReadDirectory(request storecontract.DirectoryRequest) (stor
 	return out, nil
 }
 
-func (r *Repository) Origin() string { return r.ep.Origin }
+func (r *Repository) Origin() string { return r.ep.Origin + "/" + url.PathEscape(r.ep.Repository) }
 
 func (r *Repository) String() string {
 	return fmt.Sprintf("lakefs repository %s at %s", r.id, r.ep.Origin)

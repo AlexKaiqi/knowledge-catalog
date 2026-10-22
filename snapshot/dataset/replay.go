@@ -9,12 +9,16 @@ import (
 
 // ReplayPublished treats a pin only as a selector for an accepted release.
 // Neither its repository commits nor its file list can grant new scope.
-func (c *service) ReplayPublished(pin ResolvedDataset) (ResolvedDataset, error) {
+func (c *service) ReplayPublished(pin ResolvedDataset) (resolved ResolvedDataset, err error) {
+	defer c.finishSourceRead(&err)
+	if err := c.sourceReadError(); err != nil {
+		return ResolvedDataset{}, err
+	}
 	def, err := c.DatasetVersion(pin.SetID, pin.Revision)
 	if err != nil {
 		return ResolvedDataset{}, err
 	}
-	resolved, err := ReplayDefinition(def, pin)
+	resolved, err = ReplayDefinition(def, pin)
 	if err != nil {
 		return ResolvedDataset{}, err
 	}

@@ -38,8 +38,6 @@ func (e *executor) Execute(ctx context.Context, path string, flags map[string]an
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Snapshot CLI requires an authenticated HTTP client")
 	}
 	switch {
-	case path == "dataset clone":
-		return runRemoteDatasetClone(ctx, e.client, flags, options)
 	case strings.HasPrefix(path, "dataset "):
 		return e.dataset(ctx, path, flags, options)
 	case strings.HasPrefix(path, "files "):

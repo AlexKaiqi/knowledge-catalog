@@ -31,10 +31,31 @@ func (s *boltCommandStore) Ready() error {
 	if err := os.MkdirAll(filepath.Dir(s.file), 0o755); err != nil {
 		return err
 	}
-	return s.update(func(tx *bolt.Tx) error {
+	db, err := bolt.Open(s.file, 0o600, &bolt.Options{Timeout: time.Second})
+	if err != nil {
+		return err
+	}
+	err = db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists(commandBucket)
 		return err
 	})
+	closeErr := db.Close()
+	if err != nil {
+		return err
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	dir, err := os.Open(filepath.Dir(s.file))
+	if err != nil {
+		return err
+	}
+	err = dir.Sync()
+	closeErr = dir.Close()
+	if err != nil {
+		return err
+	}
+	return closeErr
 }
 
 func (s *boltCommandStore) Get(commandID string) (CommandEntry, bool, error) {
@@ -144,12 +165,36 @@ func (s *boltCommandStore) view(fn func(*bolt.Tx) error) error {
 }
 
 func (s *boltCommandStore) update(fn func(*bolt.Tx) error) error {
-	db, err := bolt.Open(s.file, 0o600, &bolt.Options{Timeout: time.Second})
+	options := &bolt.Options{Timeout: time.Second, OpenFile: func(name string, flags int, mode os.FileMode) (*os.File, error) {
+		file, err := os.OpenFile(name, flags&^os.O_CREATE, mode)
+		if err != nil {
+			return nil, err
+		}
+		info, err := file.Stat()
+		if err == nil && info.Size() == 0 {
+			err = errors.New("durable command ledger is empty")
+		}
+		if err != nil {
+			_ = file.Close()
+			return nil, err
+		}
+		return file, nil
+	}}
+	db, err := bolt.Open(s.file, 0o600, options)
 	if err != nil {
 		return err
 	}
-	defer db.Close()
-	return db.Update(fn)
+	err = db.Update(func(tx *bolt.Tx) error {
+		if tx.Bucket(commandBucket) == nil {
+			return errors.New("durable command ledger bucket is missing")
+		}
+		return fn(tx)
+	})
+	closeErr := db.Close()
+	if err != nil {
+		return err
+	}
+	return closeErr
 }
 
 // OpenBoltCommandStore reopens a durable ledger without initializing, migrating, or

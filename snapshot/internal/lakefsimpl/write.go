@@ -105,6 +105,30 @@ func (r *Repository) applyTreeCommit(cs storecontract.TreeChangeSet, write objec
 			err = storecontract.WriteNotApplied(err)
 		}
 	}()
+	targetBranch, err := r.checkTreeWriteTarget(cs)
+	if err != nil {
+		return "", err
+	}
+	wip := r.nextWIP(cs)
+	if err := r.createBranch(wip, cs.BaseCommit, true); err != nil {
+		return "", err
+	}
+	defer r.deleteBranch(wip)
+	if err := r.applyChanges(wip, cs.Changes, write); err != nil {
+		return "", err
+	}
+	candidate, err := r.commit(wip, cs)
+	if err != nil {
+		return "", err
+	}
+	publicationStarted = true
+	if err := r.publishBranch(targetBranch, candidate, cs.ExpectedTargetCommit); err != nil {
+		return "", err
+	}
+	return candidate, nil
+}
+
+func (r *Repository) checkTreeWriteTarget(cs storecontract.TreeChangeSet) (string, error) {
 	if err := r.denyIfArchived(); err != nil {
 		return "", err
 	}
@@ -136,23 +160,7 @@ func (r *Repository) applyTreeCommit(cs storecontract.TreeChangeSet, write objec
 		return "", kernel.Fail(kernel.ErrNonFastForward,
 			"ref %s moved: expected commit %s, actual %s", target, cs.ExpectedTargetCommit, current)
 	}
-	wip := r.nextWIP(cs)
-	if err := r.createBranch(wip, cs.BaseCommit, true); err != nil {
-		return "", err
-	}
-	defer r.deleteBranch(wip)
-	if err := r.applyChanges(wip, cs.Changes, write); err != nil {
-		return "", err
-	}
-	candidate, err := r.commit(wip, cs)
-	if err != nil {
-		return "", err
-	}
-	publicationStarted = true
-	if err := r.publishBranch(targetBranch, candidate, cs.ExpectedTargetCommit); err != nil {
-		return "", err
-	}
-	return candidate, nil
+	return targetBranch, nil
 }
 
 // applyChanges writes the literal tree changes onto the wip branch through the

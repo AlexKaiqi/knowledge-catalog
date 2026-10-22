@@ -132,7 +132,7 @@ const DatasetPage: React.FC = () => {
                 {!opened && !readError && !error && <Spinner animation="border" />}
                 {opened && <DeliveryTree key={`${opened.pin.revision}:${opened.pin.pinId}`} dataset={datasetId} pin={opened.pin} />}
                 {opened && <details className="mb-3"><summary>保存本次版本依据</summary><p className="text-muted mt-2">记录仅包含版本、来源和范围；后续使用仍检查当前权限。</p><pre style={{ maxHeight: 280, overflow: 'auto' }}>{JSON.stringify(opened.pin, null, 2)}</pre></details>}
-                <Alert variant="light">交付到本地目录：在 KC 客户端连接本服务后执行 Dataset clone（采用执行时的当前版本）。</Alert>
+          <Alert variant="light">交付到本地目录：在 KC 客户端连接本服务后执行 kcfs mount（采用执行时的当前版本）。</Alert>
                 {detail && (confirming ? <Alert variant="warning"><p>确认退役当前 Dataset？发布记录和来源仍保留，后续消费停止。</p>
                     <Button variant="danger" disabled={busy} onClick={() => { void retire(); }}>{busy ? '正在退役…' : '确认退役'}</Button>
                     <Button variant="link" disabled={busy} onClick={() => setConfirming(false)}>取消</Button></Alert> :

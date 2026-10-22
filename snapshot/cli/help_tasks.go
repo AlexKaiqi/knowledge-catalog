@@ -4,7 +4,7 @@ const guideComposition = `从来源仓选择文件，发布为可消费的 Datas
 Repository 拥有来源文件和 commit 历史；Dataset 保存固定来源的引用及交付路径，另有自己的 revision，不是新的可写仓。
 
 开始前先取得来源身份、相对路径和引用，见 kc help repository / kc help versions。
-服务已连接来源后 attach 登记；define 选择文件并发布；授权管理者另行发消费权；消费者用 files list/read 或 clone 取文件。
+服务已连接来源后 attach 登记；define 选择文件并发布；授权管理者另行发消费权；消费者用 files list/read 取文件。
 创建/连接、登记、发布与发权是独立步骤，各自的成功不推导下一步已完成。
 
 完整发布与消费旅程：kc help compose。
@@ -21,7 +21,7 @@ const guideDataset = `Dataset 是命名、版本化的文件交付范围，保�
   本机试配方用 overlay；停止全部版本的后续消费用 retire，保留发布记录。
 消费者：
   show 找 Dataset → dataset show 核对 revision/来源/属性 → files list 选路径 → files read 读字节。
-  clone 可把整个当前交付树复制到空目录，失败可留部分产物；需要历史版用 files list/read 明确 revision。
+  需要历史版用 files list/read 明确 revision。
 
 资源与版本关系：kc help snapshot / kc help versions。
 完整旅程：kc help compose / kc help files；可复制输入：kc help recipe。
@@ -52,11 +52,10 @@ const guideFiles = `按仓和固定 commit 下载原始文件，或消费 Datase
 成功获得什么：
   list 的 entries.path 是交付路径，revision 是采用的发布版；下钻目录继续 list，文件交给 read。
   read 不带 --out 返回含 base64 content 的字节块；--out 完整下载单文件，目标必须不存在。
-  要整个当前树用 kc dataset clone delivery ./delivery-copy，目标须不存在或为空；clone 不提供历史 revision 选择。
 
-下载后的普通文件不会持续同步。单文件读取失败不发布成功目标；clone 中途失败可留部分树，重试前核对残留。
+下载后的普通文件不会持续同步。单文件读取失败不发布成功目标；中途失败重试前核对残留。
 旧版也检查当前权限，已拿到的字节无法通过撤权追回。
-详细分页、下载与恢复：kc help files list / kc help files read / kc help dataset clone。
+详细分页、下载与恢复：kc help files list / kc help files read。
 需要来源、交付位置与固定版本的概念：kc help snapshot / kc help versions。`
 
 const guideGrant = `授权是主体、动作和资源范围的显式规则，不会因登记、发布或持有版本坐标而自动获得。

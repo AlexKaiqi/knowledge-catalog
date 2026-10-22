@@ -1,6 +1,7 @@
 package dataset
 
 import (
+	"context"
 	"maps"
 	"slices"
 	"strings"
@@ -62,8 +63,8 @@ type Dataset struct {
 	// strings; neither metadata nor its absence changes the delivered file scope.
 	Metadata map[string]string `json:"metadata,omitempty" yaml:"metadata,omitempty"`
 	// Dependencies are the Repository versions frozen with this revision only
-	// to interpret references (Schema, ResourceDescriptor) held outside the
-	// selected sources. The file layer stores them as opaque coordinates: they
+	// to interpret references (Schema, ResourceDescriptor), including candidate
+	// versions used to prove unique ownership. The file layer stores opaque coordinates: they
 	// are not sources, deliver no files and grant no read. Following does not
 	// watch them; the next revision freezes them again (doc/design/dataset.md).
 	Dependencies map[kernel.RepositoryID]kernel.CommitID `json:"dependencies,omitempty" yaml:"dependencies,omitempty"`
@@ -136,6 +137,13 @@ func (s *acceptedState) checkNextRevision(setID string, revision int) error {
 // only the in-memory recheck and the registry commit are serialized, and
 // readers keep the previous version until the commit is accepted.
 func (c *service) PublishDataset(def Dataset) (Dataset, error) {
+	return c.publishDataset(context.Background(), def, nil)
+}
+
+func (c *service) publishDataset(ctx context.Context, def Dataset, admit func(context.Context, PublicationAdmission) error) (Dataset, error) {
+	if ctx != nil && ctx.Err() != nil {
+		return Dataset{}, ctx.Err()
+	}
 	if err := c.ensureWritable(); err != nil {
 		return Dataset{}, err
 	}
@@ -163,7 +171,36 @@ func (c *service) PublishDataset(def Dataset) (Dataset, error) {
 		return Dataset{}, err
 	}
 	def = Dataset{SetID: def.SetID, Revision: def.Revision, Sources: frozen, Items: items, Metadata: maps.Clone(def.Metadata), Dependencies: maps.Clone(def.Dependencies)}
-	err = c.commitDataset(def.SetID, "dataset-define "+def.SetID, func(s *acceptedState) (State, error) {
+	var admitted *PublicationAuthority
+	var receipt *PublicationReceipt
+	if admit != nil {
+		current := c.accepted()
+		if err := c.checkPublication(current, def); err != nil {
+			return Dataset{}, err
+		}
+		admission, err := c.registry.publicationAdmission(current.head)
+		if err != nil {
+			return Dataset{}, err
+		}
+		if err := ctx.Err(); err != nil {
+			return Dataset{}, err
+		}
+		receipt = &PublicationReceipt{Version: 1, PublicationLookup: PublicationLookup{SetID: def.SetID, Revision: def.Revision}, Admission: admission.ID, Definition: kernel.CanonicalDigest(def), Authority: admission.PublicationAuthority}
+		if err := c.registry.preparePublicationReceipt(ctx, *receipt); err != nil {
+			return Dataset{}, err
+		}
+		if err := admit(ctx, admission); err != nil {
+			return Dataset{}, err
+		}
+		admitted = &admission.PublicationAuthority
+	}
+	err = c.commitDatasetReceiptContext(ctx, def.SetID, "dataset-define "+def.SetID, receipt, func(s *acceptedState) (State, error) {
+		if admitted != nil {
+			if err := c.checkAdmittedAuthority(s.head, *admitted); err != nil {
+				return State{}, err
+			}
+		}
+
 		// The accepted version may have advanced since validation.
 		if err := c.checkPublication(s, def); err != nil {
 			return State{}, err

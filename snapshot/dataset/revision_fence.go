@@ -1,6 +1,7 @@
 package dataset
 
 import (
+	"context"
 	"sync"
 
 	"kc/kernel"
@@ -47,10 +48,22 @@ func (c *service) WithCurrentRevision(setID string, revision int, fn func() erro
 // commitDataset is commit for a write that can move or retire the current
 // revision of setID; it waits for WithCurrentRevision holders of that Dataset.
 func (c *service) commitDataset(setID, message string, mutate func(*acceptedState) (State, error)) error {
+	return c.commitDatasetContext(context.Background(), setID, message, mutate)
+}
+
+func (c *service) commitDatasetContext(ctx context.Context, setID, message string, mutate func(*acceptedState) (State, error)) error {
+	return c.commitDatasetReceiptContext(ctx, setID, message, nil, mutate)
+}
+
+func (c *service) commitDatasetReceiptContext(ctx context.Context, setID, message string, receipt *PublicationReceipt, mutate func(*acceptedState) (State, error)) error {
 	if c.readOnly {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "a service read view cannot persist changes")
 	}
-	unlock := c.fence.lock(setID)
+	value, _ := c.fence.locks.LoadOrStore(setID, &sync.Mutex{})
+	unlock, err := lockForContext(ctx, value.(*sync.Mutex))
+	if err != nil {
+		return err
+	}
 	defer unlock()
-	return c.commit(message, mutate)
+	return c.commitReceiptContext(ctx, message, receipt, mutate)
 }

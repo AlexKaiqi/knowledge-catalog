@@ -102,33 +102,6 @@ const helpDatasetShow = `kc dataset show <id> [--revision <n>] [--limit <n>] [--
   kc dataset show delivery --revision 2 --limit 10
   kc dataset show delivery --revision 2 --limit 10 --continuation '<上页游标>'`
 
-const helpDatasetClone = `kc dataset clone <dataset> <dir>
-
-用途：
-  把 Dataset 当前服务版的交付文件物化到一个普通本地目录，供现有文件工具使用。
-用法与参数：
-  kc dataset clone <dataset> <dir>
- Dataset 与目标目录必须明确；本入口采用当前版，不提供选择历史版的 revision 或 pin 参数。
-条件：
-  已认证，持有该 Dataset 的 dataset.resolve 和 file.read；来源版本仍保留，Dataset 未退役且成员未移除。
-  <dir> 必须不存在或为空，父路径可写，本机有足够磁盘容量。
-结果：
-  成功 JSON 含 dataset、revision、pinId、dir、files、bytes、mounts 与 fileEntries，目录来源列出 Repository 与 commit。
-  不写 manifest 文件；本机保留原始文件字节，包括零字节文件，空目录不独立物化。
-后果：
-  解析一次当前发布，逐目录分页、逐文件分块写入目标；不挂载、不持续同步，也不改来源或共享发布。
-风险与成本：
-  读取整棵交付树，网络请求、传输量与本机占用随目录和文件规模增长；超过可支持的目录深度会停止。
-  开始时拒绝非空目标，但不提供整树原子完成或回滚；中途失败可留下部分目录、完整文件或部分文件。
-  运行时不要并发修改目标；已下载字节无法由撤权追回，后续服务访问仍按当前权限检查。
-失败恢复：
-  目标非空时换专用空目录；网络、权限或来源失败后先检查残留，再自行清理本次专用目标或换新空目录重试。
-  每次重试重新选择当时的当前版；需要精确历史材料时用 files list/read 显式沿用 revision，不能把两次 clone 当作同一版。
-  需要独立空目录时自行建立，不把文件已复制的回执当作全部目录占位已创建。
-示例：
-  kc dataset clone delivery ./delivery-copy
-  kc files list --dataset delivery --revision 2 --path reference`
-
 const helpDatasetRetire = `kc dataset retire <id>
 
 用途：

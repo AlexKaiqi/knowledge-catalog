@@ -139,7 +139,11 @@ func (c *service) ResolveDefinition(def Dataset) (ResolvedDataset, error) {
 	return c.ResolveDefinitionOverlay(def, nil)
 }
 
-func (c *service) ResolveDefinitionOverlay(def Dataset, overlay map[kernel.RepositoryID]kernel.CommitID) (ResolvedDataset, error) {
+func (c *service) ResolveDefinitionOverlay(def Dataset, overlay map[kernel.RepositoryID]kernel.CommitID) (resolved ResolvedDataset, err error) {
+	defer c.finishSourceRead(&err)
+	if err := c.sourceReadError(); err != nil {
+		return ResolvedDataset{}, err
+	}
 	if def.Retired {
 		return ResolvedDataset{}, kernel.Fail(kernel.ErrDatasetInvalid, "workspace %s is retired", def.SetID)
 	}
@@ -270,7 +274,15 @@ func (c *service) checkResolvedItems(resolved ResolvedDataset, repositoryID kern
 	return issues
 }
 
-func (c *service) checkResolvedRepository(repositoryID kernel.RepositoryID, commit kernel.CommitID) []DatasetIssue {
+func (c *service) checkResolvedRepository(repositoryID kernel.RepositoryID, commit kernel.CommitID) (issues []DatasetIssue) {
+	defer func() {
+		if c.readContext != nil && c.readContext.Err() != nil {
+			issues = []DatasetIssue{{Repository: repositoryID, Code: kernel.ErrTemporaryUnavailable, Message: c.readContext.Err().Error()}}
+		}
+	}()
+	if err := c.sourceReadError(); err != nil {
+		return []DatasetIssue{{Repository: repositoryID, Code: kernel.ErrTemporaryUnavailable, Message: err.Error()}}
+	}
 	if !c.HasRepository(repositoryID) {
 		return []DatasetIssue{{Repository: repositoryID, Code: kernel.ErrDatasetInvalid, Message: "repository is not registered in this service"}}
 	}

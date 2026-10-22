@@ -1,6 +1,7 @@
 package dataset
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 
@@ -90,12 +91,23 @@ func (g *registry) Save(state State, message, author, requestID, ruleID string) 
 }
 
 func (g *registry) saveExpected(expected string, state State, message, author, requestID, ruleID string) (string, error) {
-	g.writeMu.Lock()
-	defer g.writeMu.Unlock()
+	return g.saveExpectedContext(context.Background(), expected, state, message, author, requestID, ruleID)
+}
+
+func (g *registry) saveExpectedContext(ctx context.Context, expected string, state State, message, author, requestID, ruleID string) (string, error) {
+	return g.saveReceiptExpectedContext(ctx, expected, state, message, author, requestID, ruleID, nil)
+}
+
+func (g *registry) saveReceiptExpectedContext(ctx context.Context, expected string, state State, message, author, requestID, ruleID string, receipt *PublicationReceipt) (string, error) {
+	unlock, err := lockForContext(ctx, &g.writeMu)
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
 	if head := g.acceptedHead(); expected != head {
 		return "", kernel.Fail(kernel.ErrNonFastForward, "service authority moved: expected %s, actual %s", expected, head)
 	}
-	err := g.saveSnapshot(state, message, author, requestID, ruleID)
+	err = g.saveSnapshotReceiptContext(ctx, state, message, author, requestID, ruleID, receipt)
 	return g.acceptedHead(), err
 }
 

@@ -2,6 +2,8 @@ package dataset
 
 import (
 	"bytes"
+	"context"
+	"reflect"
 	"strings"
 
 	"kc/kernel"
@@ -127,8 +129,20 @@ func (g *registry) snapshotYAML(head string) (map[string][]byte, error) {
 
 // saveSnapshot runs under writeMu, so the accepted head cannot move here.
 func (g *registry) saveSnapshot(state State, message, author, requestID, ruleID string) error {
+	return g.saveSnapshotContext(context.Background(), state, message, author, requestID, ruleID)
+}
+
+func (g *registry) saveSnapshotContext(ctx context.Context, state State, message, author, requestID, ruleID string) error {
+	return g.saveSnapshotReceiptContext(ctx, state, message, author, requestID, ruleID, nil)
+}
+
+func (g *registry) saveSnapshotReceiptContext(ctx context.Context, state State, message, author, requestID, ruleID string, receipt *PublicationReceipt) error {
+	io, err := g.boundIO(ctx)
+	if err != nil {
+		return err
+	}
 	accepted := g.acceptedHead()
-	current, err := g.loadAt(accepted)
+	current, err := io.loadAt(accepted)
 	if err != nil {
 		return err
 	}
@@ -137,14 +151,14 @@ func (g *registry) saveSnapshot(state State, message, author, requestID, ruleID 
 	}
 	next := NormalizeState(state)
 	next.AuthorityID = g.AuthorityID()
-	actual, err := g.authority.Head(g.ref)
+	actual, err := io.authority.Head(g.ref)
 	if err != nil {
 		return err
 	}
 	if string(actual) != accepted {
 		return kernel.Fail(kernel.ErrNonFastForward, "registry authority moved: expected %s, actual %s", accepted, actual)
 	}
-	if kernel.CanonicalDigest(current) == kernel.CanonicalDigest(next) {
+	if receipt == nil && kernel.CanonicalDigest(current) == kernel.CanonicalDigest(next) {
 		return nil
 	}
 	if message == "" {
@@ -154,7 +168,7 @@ func (g *registry) saveSnapshot(state State, message, author, requestID, ruleID 
 	if err != nil {
 		return err
 	}
-	existing, err := g.snapshotYAML(accepted)
+	existing, err := io.snapshotYAML(accepted)
 	if err != nil {
 		return err
 	}
@@ -162,11 +176,18 @@ func (g *registry) saveSnapshot(state State, message, author, requestID, ruleID 
 		return err
 	}
 	changes := treeDiff(existing, desired)
+	if receipt != nil {
+		change, err := io.publicationReceiptChange(*receipt, next, kernel.CommitID(accepted))
+		if err != nil {
+			return err
+		}
+		changes = append(changes, change)
+	}
 	if len(changes) == 0 {
 		return nil
 	}
 	head := kernel.CommitID(accepted)
-	candidate, err := g.tree.ApplyTreeCommit(snapshot.TreeChangeSet{
+	candidate, err := io.tree.ApplyTreeCommit(snapshot.TreeChangeSet{
 		TargetRepository:     g.authority.ID(),
 		TargetRef:            g.ref,
 		BaseCommit:           head,
@@ -179,6 +200,9 @@ func (g *registry) saveSnapshot(state State, message, author, requestID, ruleID 
 	})
 	if err != nil {
 		return err
+	}
+	if candidate == "" || candidate == head {
+		return kernel.Fail(kernel.ErrTemporaryUnavailable, "registry commit did not confirm a new immutable authority version")
 	}
 	g.accept(string(candidate))
 	return nil
@@ -199,4 +223,38 @@ func treeDiff(existing, desired map[string][]byte) []snapshot.TreeChange {
 		changes = append(changes, snapshot.TreeChange{Path: path, Remove: true})
 	}
 	return changes
+}
+
+// boundIO carries only immutable authority coordinates, never mutexes or cached
+// accepted state. Acceptance always updates the original registry handle.
+func (g *registry) boundIO(ctx context.Context) (*registry, error) {
+	if ctx == nil || ctx.Done() == nil {
+		return g, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	authority := snapshot.BindStoreContext(g.authority, ctx)
+	tree, ok := snapshot.TreeStoreOf(authority)
+	if !ok {
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "context-bound registry authority lost tree capabilities")
+	}
+	// Legacy authorities without context rebinding retain the same handle;
+	// no instance switch occurred. Protected publication still requires Origin.
+	if reflect.TypeOf(authority) == reflect.TypeOf(g.authority) && reflect.ValueOf(authority).Comparable() && authority == g.authority {
+		return g, nil
+	}
+	view := &registry{authority: authority, tree: tree, ref: g.ref}
+	before, err := g.publicationBinding()
+	if err != nil {
+		return nil, err
+	}
+	after, err := view.publicationBinding()
+	if err != nil {
+		return nil, err
+	}
+	if authority.ID() != g.authority.ID() || before != after {
+		return nil, kernel.Fail(kernel.ErrPreconditionFailed, "context-bound publication authority changed its instance binding")
+	}
+	return view, nil
 }

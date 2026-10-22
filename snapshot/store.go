@@ -28,7 +28,7 @@ type Store interface {
 
 // StoreOrigin is the optional authority-instance identity: one stable,
 // non-secret coordinate of the concrete deployment that backs the store (for
-// example the lakeFS endpoint origin). Two deployments of the same logical
+// example a canonical lakeFS repository DSN). Two deployments of the same logical
 // repository id must stay distinguishable, so upper layers that cache or name
 // per-repository state assert this capability and fold the origin into their
 // identity.
@@ -48,6 +48,14 @@ type TreeReader interface {
 type TreeStore interface {
 	TreeReader
 	ApplyTreeCommit(cs TreeChangeSet) (kernel.CommitID, error)
+}
+
+// TreeWriteVerifier performs the same write admission and final authoritative
+// ref condition as a tree commit, without creating a commit or moving the
+// target. It may use isolated staging and the publication lock. Callers prove
+// separately that every planned tree effect equals the immutable basis.
+type TreeWriteVerifier interface {
+	VerifyTreeWrite(changes TreeChangeSet, bulk bool) error
 }
 
 // DirectoryReader is the optional lazy tree capability used by host mounts

@@ -49,7 +49,6 @@ func TestSnapshotHelpPreservesDistinctWriteAndConsumptionGuarantees(t *testing.T
 		"registry audit":  {"registry.audit.read", "当前入口不返回续页游标", "不是完整历史"},
 		"dataset define":  {"可在发布前", "recipeSkipped", "不回滚已完成的配方写回", "NON_FAST_FORWARD"},
 		"dataset show":    {"servingRevision", "单页不是全部历史", "游标失效"},
-		"dataset clone":   {"包括零字节文件", "空目录不独立物化", "中途失败可留下", "每次重试重新选择", "不提供整树原子完成"},
 		"dataset retire":  {"没有取消退役", "同名 Dataset", "保留发布记录"},
 		"dataset overlay": {"无需登录", "会覆盖已有文件", "不提供原子替换", "不能解释成已接受发布版"},
 		"files list":      {"续页必须显式沿用返回的 revision", "空页带 continuation", "不承诺来源端"},

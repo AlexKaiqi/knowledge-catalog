@@ -22,6 +22,7 @@ var (
 	_ Store                = (*lakefsimpl.Repository)(nil)
 	_ StoreOrigin          = (*lakefsimpl.Repository)(nil)
 	_ TreeStore            = (*lakefsimpl.Repository)(nil)
+	_ TreeWriteVerifier    = (*lakefsimpl.Repository)(nil)
 	_ DirectoryReader      = (*lakefsimpl.Repository)(nil)
 	_ HistoryStore         = (*lakefsimpl.Repository)(nil)
 	_ ChangeStore          = (*lakefsimpl.Repository)(nil)

@@ -66,7 +66,6 @@ const guideVersions = `区分可移动来源引用与固定交付版本：
 消费时：
   按仓读取单文件必须提供 --repo 与 --commit；采用文件地址所指的资源版本，不自动采用对象说明的 commit 或分支当前值。
   files list/read 可显式选已接受的 Dataset revision；第一次默认当前版后，续页和后续读取沿用返回版号。
-  dataset clone 只消费本次解析的当前版，重试可能采用更晚发布；需要历史材料用 files list/read。
   固定版本不冻结权限。pin 的含义见 kc help pin；完整配方写法见 kc help recipe。
 按词查说明也可使用 kc help selector / kc help ref / kc help commit；三者沿用这里的同一份版本关系与选源规则。`
 
@@ -75,7 +74,6 @@ const guidePin = `pin 是服务将一次 Dataset 选择解析为固定来源版�
 
 使用者不需要先创建 pin 文件，产品命令也不接收 --pin。
 files list/read 会解析并核对发布依据；续页沿用返回的 revision、目录和 continuation，后续读取使用同一 revision。
-dataset clone 解析当前发布一次，整个复制期间沿用这份依据；一次新的 clone 会重新选择当前版。
 pin 不授予权限，旧 pin 也不能绕过退役、成员移除或当前撤权。
 
 下一步：kc help files / kc help versions / kc help dataset show。`

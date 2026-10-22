@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"kc/kernel"
-	"kc/snapshot/internal/storecontract"
 )
 
 type retentionStore interface {
@@ -39,6 +38,7 @@ func (l *commandLedger) ResolvePending(commandID, digest string, receipt any) (C
 		return CommandEntry{}, kernel.Fail(kernel.ErrIdempotencyConflict,
 			"command %s pending digest does not match", commandID)
 	}
+	expected := prior
 	raw, err := json.Marshal(receipt)
 	if err != nil {
 		return CommandEntry{}, err
@@ -49,15 +49,9 @@ func (l *commandLedger) ResolvePending(commandID, digest string, receipt any) (C
 	prior.Status = StatusApplied
 	prior.Receipt = raw
 	prior.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	if l.store != nil {
-		if err := l.store.Put(prior); err != nil {
-			return CommandEntry{}, kernel.Fail(kernel.ErrTemporaryUnavailable,
-				"resolve pending command %s: %v", commandID, err)
-		}
+	if err := l.replaceCommand(&expected, &prior); err != nil {
+		return CommandEntry{}, commandStorageError("resolve pending command", commandID, err)
 	}
-	l.mu.Lock()
-	l.entries[commandID] = prior
-	l.mu.Unlock()
 	return prior, nil
 }
 
@@ -80,17 +74,12 @@ func (l *commandLedger) AbandonPending(commandID, digest string) (CommandEntry, 
 		return CommandEntry{}, kernel.Fail(kernel.ErrIdempotencyConflict,
 			"command %s pending digest does not match", commandID)
 	}
+	expected := prior
 	prior.Status = StatusAbandoned
 	prior.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	if l.store != nil {
-		if err := l.store.Put(prior); err != nil {
-			return CommandEntry{}, kernel.Fail(kernel.ErrTemporaryUnavailable,
-				"abandon pending command %s: %v", commandID, err)
-		}
+	if err := l.replaceCommand(&expected, &prior); err != nil {
+		return CommandEntry{}, commandStorageError("abandon pending command", commandID, err)
 	}
-	l.mu.Lock()
-	l.entries[commandID] = prior
-	l.mu.Unlock()
 	return prior, nil
 }
 
@@ -143,16 +132,10 @@ func (l *commandLedger) Prune(before time.Time) (int, error) {
 		}
 		if ok && current.Digest == candidate.Digest && current.UpdatedAt == candidate.UpdatedAt &&
 			(current.Status == StatusApplied || current.Status == StatusAbandoned) {
-			if l.store != nil {
-				if err := l.store.Delete(candidate.CommandID); err != nil {
-					unlockCommand()
-					return removed, kernel.Fail(kernel.ErrTemporaryUnavailable,
-						"prune command %s: %v", candidate.CommandID, err)
-				}
+			if err := l.replaceCommand(&current, nil); err != nil {
+				unlockCommand()
+				return removed, commandStorageError("prune command", candidate.CommandID, err)
 			}
-			l.mu.Lock()
-			delete(l.entries, candidate.CommandID)
-			l.mu.Unlock()
 			removed++
 		}
 		unlockCommand()
@@ -191,20 +174,17 @@ func (l *commandLedger) Lookup(commandID string) (CommandEntry, bool) {
 }
 
 func (l *commandLedger) lookup(commandID string) (CommandEntry, bool, error) {
+	if l.store != nil {
+		entry, found, err := l.store.Get(commandID)
+		if err == nil && found && entry.CommandID != commandID {
+			return CommandEntry{}, false, kernel.Fail(kernel.ErrPreconditionFailed, "command entry changed its identity")
+		}
+		return entry, found, err
+	}
 	l.mu.Lock()
+	defer l.mu.Unlock()
 	entry, ok := l.entries[commandID]
-	l.mu.Unlock()
-	if ok || l.store == nil {
-		return entry, ok, nil
-	}
-	entry, ok, err := l.store.Get(commandID)
-	if err != nil || !ok {
-		return CommandEntry{}, false, err
-	}
-	l.mu.Lock()
-	l.entries[commandID] = entry
-	l.mu.Unlock()
-	return entry, true, nil
+	return entry, ok, nil
 }
 
 func (l *commandLedger) Entries() []CommandEntry {
@@ -222,78 +202,8 @@ func (l *commandLedger) Entries() []CommandEntry {
 // Execute returns the stored entry with replayed=true when commandID already
 // owns the same digest. A different digest fails before apply is called. Calls
 // sharing a commandID serialize; unrelated command IDs may apply concurrently.
-func (l *commandLedger) Execute(commandID, digest string, request CommandRequest, apply func() (any, error)) (entry CommandEntry, replayed bool, err error) {
-	unlockCommand := l.lockCommand(commandID)
-	defer unlockCommand()
-
-	prior, ok, lookupErr := l.lookup(commandID)
-	if lookupErr != nil {
-		return CommandEntry{}, false, kernel.Fail(kernel.ErrTemporaryUnavailable,
-			"read command %s from idempotency ledger: %v", commandID, lookupErr)
-	}
-	if ok {
-		if prior.Digest != digest {
-			return CommandEntry{}, false, kernel.Fail(kernel.ErrIdempotencyConflict,
-				"command %s reused with different payload", commandID)
-		}
-		if prior.Status != StatusApplied || !hasCommandReceipt(prior.Receipt) {
-			return CommandEntry{}, false, kernel.Fail(kernel.ErrPreconditionFailed,
-				"command %s has an unresolved prior outcome; inspect the target ref before retrying", commandID)
-		}
-		return prior, true, nil
-	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-	// Persist the command claim before touching the authoritative repository.
-	// If the process dies after apply but before the receipt is saved, restart
-	// sees this pending entry and fails closed instead of applying twice.
-	pending := CommandEntry{CommandID: commandID, Digest: digest, Status: StatusPending, CreatedAt: now, UpdatedAt: now, Request: request}
-	if l.store != nil {
-		if err := l.store.Put(pending); err != nil {
-			return CommandEntry{}, false, kernel.Fail(kernel.ErrTemporaryUnavailable,
-				"reserve command %s in idempotency ledger: %v", commandID, err)
-		}
-	}
-	l.mu.Lock()
-	l.entries[commandID] = pending
-	l.mu.Unlock()
-	receipt, err := apply()
-	if err != nil {
-		if !storecontract.IsWriteNotApplied(err) {
-			return CommandEntry{}, false, err
-		}
-		if l.store != nil {
-			if releaseErr := l.store.Delete(commandID); releaseErr != nil {
-				// Claim cleanup failure does not undo the provider's proof that
-				// publication never happened. Retain PENDING and its digest, but
-				// preserve that proof so clients do not await a receipt.
-				return CommandEntry{}, false, storecontract.WriteNotApplied(kernel.Fail(kernel.ErrTemporaryUnavailable,
-					"release unapplied command %s in idempotency ledger: %v", commandID, releaseErr))
-			}
-		}
-		l.mu.Lock()
-		delete(l.entries, commandID)
-		l.mu.Unlock()
-		return CommandEntry{}, false, err
-	}
-	raw, err := json.Marshal(receipt)
-	if err != nil {
-		return CommandEntry{}, false, err
-	}
-	if !hasCommandReceipt(raw) {
-		return CommandEntry{}, false, kernel.Fail(kernel.ErrPreconditionFailed, "command %s apply omitted its receipt", commandID)
-	}
-	entry = CommandEntry{CommandID: commandID, Digest: digest, Status: StatusApplied, CreatedAt: now,
-		UpdatedAt: time.Now().UTC().Format(time.RFC3339Nano), Receipt: raw, Request: request}
-	if l.store != nil {
-		if err := l.store.Put(entry); err != nil {
-			return CommandEntry{}, false, kernel.Fail(kernel.ErrTemporaryUnavailable,
-				"persist command %s receipt: %v", commandID, err)
-		}
-	}
-	l.mu.Lock()
-	l.entries[commandID] = entry
-	l.mu.Unlock()
-	return entry, false, nil
+func (l *commandLedger) Execute(commandID, digest string, request CommandRequest, apply func() (any, error)) (CommandEntry, bool, error) {
+	return l.executeCommand(commandID, digest, request, false, func(CommandAttempt) (any, error) { return apply() })
 }
 
 // lockCommand keeps the per-command critical section while it has owners or

@@ -21,7 +21,11 @@ type History struct {
 	Commits      []Commit `json:"commits"`
 }
 
-func (c *service) Log(query LogQuery) (History, error) {
+func (c *service) Log(query LogQuery) (result History, err error) {
+	defer c.finishSourceRead(&err)
+	if err := c.sourceReadError(); err != nil {
+		return History{}, err
+	}
 	path := ""
 	if query.Dataset != "" {
 		path = DatasetYAML(query.Dataset)

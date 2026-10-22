@@ -45,7 +45,11 @@ func (c *service) ReadVirtualFileOf(def Dataset, path string) (VirtualFile, erro
 // ReadVirtualFileAt reads against a caller-supplied command pin. This is the
 // VFS equivalent of reader.Open over a ResolvedDataset: repeated remote
 // filesystem calls can share one snapshot instead of re-following selectors.
-func (c *service) ReadVirtualFileAt(def Dataset, resolved ResolvedDataset, path string) (VirtualFile, error) {
+func (c *service) ReadVirtualFileAt(def Dataset, resolved ResolvedDataset, path string) (result VirtualFile, err error) {
+	defer c.finishSourceRead(&err)
+	if err := c.sourceReadError(); err != nil {
+		return VirtualFile{}, err
+	}
 	route, err := RouteDatasetFile(resolved.Items, path)
 	if err != nil {
 		if kernel.CodeOf(err) == kernel.ErrObjectRefUnresolved {

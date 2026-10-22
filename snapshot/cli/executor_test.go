@@ -79,8 +79,8 @@ func TestSnapshotHelpHasNoRemoteOrLocalSideEffects(t *testing.T) {
 	}
 	dir := t.TempDir()
 	entries := snapshotcli.Commands()
-	if len(entries) != 15 {
-		t.Fatalf("help must cover all 15 module leaves, got %d", len(entries))
+	if len(entries) != 14 {
+		t.Fatalf("help must cover all 14 module leaves, got %d", len(entries))
 	}
 	for _, command := range entries {
 		t.Run(command.Path, func(t *testing.T) {
@@ -97,8 +97,6 @@ func TestSnapshotHelpHasNoRemoteOrLocalSideEffects(t *testing.T) {
 				flags["file"], flags["expected-file"] = filepath.Join(dir, "missing-replacement"), filepath.Join(dir, "missing-observed-rule")
 			case "files read":
 				flags["out"] = filepath.Join(dir, "download.bin")
-			case "dataset clone":
-				flags["dir"] = filepath.Join(dir, "clone")
 			}
 			value, err := snapshotcli.New(sdk, snapshotcli.Context{}).Execute(context.Background(), command.Path, flags, client.RequestOptions{})
 			want := command.Description + "\n\n" + command.Usage
@@ -134,15 +132,15 @@ func TestSnapshotDeclarationOwnsHelpAndRestrictedFlags(t *testing.T) {
 		if command.Path == "files read" {
 			command.Flags[0] = "mutated"
 		}
-		if command.Path == "dataset clone" {
-			if !reflect.DeepEqual(command.Operands, []string{"dataset", "dir"}) || !reflect.DeepEqual(command.Groups, []string{"composition", "dataset", "files"}) {
-				t.Fatalf("clone lost its declared operands or task groups: %#v", command)
+		if command.Path == "dataset show" {
+			if !reflect.DeepEqual(command.Operands, []string{"dataset"}) || !reflect.DeepEqual(command.Groups, []string{"composition", "dataset", "files"}) {
+				t.Fatalf("dataset show lost its declared operands or task groups: %#v", command)
 			}
-			command.Operands[0], command.Operands[1] = "mutated", "also-mutated"
+			command.Operands[0] = "mutated"
 			command.Groups[0], command.Groups[1], command.Groups[2] = "mutated", "also-mutated", "third-mutated"
 		}
 	}
-	if seen["create"] || len(seen) != 15 {
+	if seen["create"] || len(seen) != 14 {
 		t.Fatalf("module absorbed host provisioning or lost leaves: %#v", seen)
 	}
 	if err := snapshotcli.New(nil, snapshotcli.Context{}).Validate("files read", map[string]any{"dataset": "d", "path": "file", "server": "url"}); err != nil {
@@ -152,7 +150,7 @@ func TestSnapshotDeclarationOwnsHelpAndRestrictedFlags(t *testing.T) {
 		t.Fatalf("module ignored its declared flag boundary: %v", err)
 	}
 	for _, command := range snapshotcli.Commands() {
-		if command.Path == "dataset clone" && (!reflect.DeepEqual(command.Operands, []string{"dataset", "dir"}) || !reflect.DeepEqual(command.Groups, []string{"composition", "dataset", "files"})) {
+		if command.Path == "dataset show" && (!reflect.DeepEqual(command.Operands, []string{"dataset"}) || !reflect.DeepEqual(command.Groups, []string{"composition", "dataset", "files"})) {
 			t.Fatalf("returned slices mutated the formal operand/group declarations: %#v", command)
 		}
 	}

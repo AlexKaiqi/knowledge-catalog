@@ -3,6 +3,7 @@
 package dataset
 
 import (
+	"context"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -36,12 +37,13 @@ type service struct {
 	// Request context: one service value per request carries its own evidence
 	// observer and stamp; the accepted registry state is shared. ctxMu guards
 	// only these fields on a value that is stamped after construction.
-	readOnly  bool
-	ctxMu     sync.Mutex
-	observer  Observer
-	as        string
-	requestID string
-	ruleID    string
+	readOnly    bool
+	readContext context.Context
+	ctxMu       sync.Mutex
+	observer    Observer
+	as          string
+	requestID   string
+	ruleID      string
 }
 
 // registryState is the accepted registry shared by every request view of one
@@ -168,18 +170,29 @@ func (s *acceptedState) datasetVersions() []Dataset {
 // other writers wait on them. The registry head CAS still rejects a version
 // another process advanced.
 func (c *service) commit(message string, mutate func(*acceptedState) (State, error)) error {
+	return c.commitContext(context.Background(), message, mutate)
+}
+
+func (c *service) commitContext(ctx context.Context, message string, mutate func(*acceptedState) (State, error)) error {
+	return c.commitReceiptContext(ctx, message, nil, mutate)
+}
+
+func (c *service) commitReceiptContext(ctx context.Context, message string, receipt *PublicationReceipt, mutate func(*acceptedState) (State, error)) error {
 	if c.readOnly {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "a service read view cannot persist changes")
 	}
-	c.writeMu.Lock()
-	defer c.writeMu.Unlock()
+	unlock, err := lockForContext(ctx, &c.writeMu)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	current := c.accepted()
 	next, err := mutate(current)
 	if err != nil {
 		return err
 	}
 	as, requestID, ruleID, observer := c.requestContext()
-	head, err := c.registry.saveExpected(current.head, next, message, as, requestID, ruleID)
+	head, err := c.registry.saveReceiptExpectedContext(ctx, current.head, next, message, as, requestID, ruleID, receipt)
 	if err == nil {
 		c.current.Store(newAcceptedState(next, head))
 	}

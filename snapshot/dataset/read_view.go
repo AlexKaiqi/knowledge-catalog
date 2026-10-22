@@ -10,6 +10,7 @@ func (c *service) ReadView(j Observer) Service {
 		registryState: &registryState{store: c.store, registry: c.registry},
 		observer:      j,
 		readOnly:      true,
+		readContext:   c.readContext,
 	}
 	view.current.Store(c.accepted())
 	return view
@@ -23,6 +24,7 @@ func (c *service) RequestView(j Observer, as, requestID, ruleID string) Service 
 	return &service{
 		registryState: c.registryState,
 		readOnly:      c.readOnly,
+		readContext:   c.readContext,
 		observer:      j,
 		as:            as,
 		requestID:     requestID,

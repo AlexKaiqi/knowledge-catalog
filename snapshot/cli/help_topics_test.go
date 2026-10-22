@@ -70,7 +70,7 @@ func TestSnapshotHelpTopicsExplainResourceVersionAndAuthorityBoundaries(t *testi
 		"metadata":    {"可选", "字符串键值", "原生元数据", "不随 commit 冻结", "repository.metadata.read", "repository.metadata.write", "{} 清空", "随 revision 固定", "不会自动继承"},
 		"composition": {"Repository", "Dataset", "revision", "独立步骤", "授权", "files list/read"},
 		"dataset":     {"只选一个仓", "多个仓", "不是新的可写 Repository", "旧版不可覆盖", "来源随后提交不改变", "当前权限", "退役"},
-		"files":       {"--path 是交付树", "直接子项", "revision/path", "dataset.resolve", "file.read", "base64", "目标必须不存在", "clone 中途失败可留部分树"},
+		"files":       {"--path 是交付树", "直接子项", "revision/path", "dataset.resolve", "file.read", "base64", "目标必须不存在", "单文件读取失败不发布成功目标"},
 		"grant":       {"主体", "动作", "资源范围", "当前权限", "其它规则也可能继续放行", "规则说明和当前权限不是同一份保证", "不能追回"},
 		"registry":    {"每套服务只有一个", "登记不会", "最近一段", "登记历史不是来源正文提交历史", "不提供历史续页", "保留来源文件/历史"},
 	}

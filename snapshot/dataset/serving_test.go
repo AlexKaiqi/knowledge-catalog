@@ -39,7 +39,7 @@ func TestOpenDatasetDoesNotFollowLaterCommitUntilRepublish(t *testing.T) {
 	if serving.Pin().SetID != "v" {
 		t.Fatal(serving.Pin().SetID)
 	}
-	reads, err := serving.Read("policy/P-103", nil)
+	reads, err := serving.Read("policy/P-103")
 	if err != nil || len(reads) != 2 {
 		t.Fatal(reads, err)
 	}
@@ -94,7 +94,7 @@ func TestOpenDatasetDoesNotFollowLaterCommitUntilRepublish(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	republished, err := nextServing.Read("policy/P-103", nil)
+	republished, err := nextServing.Read("policy/P-103")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestOpenDatasetDoesNotFollowLaterCommitUntilRepublish(t *testing.T) {
 	if nextServing.Pin().Repositories["kr://acme/public/core"] != later {
 		t.Fatal(nextServing.Pin().Repositories["kr://acme/public/core"], later)
 	}
-	missing, err := serving.Read("absent", nil)
+	missing, err := serving.Read("absent")
 	if err != nil || len(missing) != 0 {
 		t.Fatal(missing, err)
 	}
@@ -138,7 +138,7 @@ func TestOpenedDatasetPinDoesNotMoveWithLaterCommit(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	reads, err := serving.Read("policy/P-103", nil)
+	reads, err := serving.Read("policy/P-103")
 	if err != nil || reads[0].Value.(map[string]any)["statement"] != "public v1" {
 		t.Fatal(reads, err)
 	}
@@ -149,7 +149,7 @@ func TestOpenedDatasetPinDoesNotMoveWithLaterCommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	later, err := next.Read("policy/P-103", nil)
+	later, err := next.Read("policy/P-103")
 	if err != nil || later[0].Value.(map[string]any)["statement"] != "public v1" {
 		t.Fatal("re-resolve must stay on the published commit until republish", later, err)
 	}
