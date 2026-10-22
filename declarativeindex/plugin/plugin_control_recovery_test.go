@@ -217,8 +217,8 @@ func TestIndexControlColdStateRecoveryUsesAcceptedDeclarationAfterHeadChanges(t 
 	if err := runtime.plugins.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if files := f.stateFiles(t); files != 0 {
-		t.Fatalf("actual Close did not remove old Serving State media: %d files", files)
+	if files := f.stateFiles(t); files == 0 {
+		t.Fatal("Close removed durable accepted observation values")
 	}
 	evidence := f.accepted(t)
 	lookup.status, lookup.revision = "new-observation", "r2"
@@ -231,15 +231,10 @@ func TestIndexControlColdStateRecoveryUsesAcceptedDeclarationAfterHeadChanges(t 
 	if err := reopened.plugins.CatchUp(context.Background()); err != nil {
 		t.Errorf("cold maintenance failed: %v", err)
 	}
-	if len(lookup.requests) == beforeCalls {
-		t.Error("accepted fixed State declaration was not observed during cold maintenance")
+	if len(lookup.requests) != beforeCalls {
+		t.Errorf("cold recovery re-observed an accepted fixed observation: before=%d after=%d", beforeCalls, len(lookup.requests))
 	}
-	for _, request := range lookup.requests[beforeCalls:] {
-		if request.Binding.Repository != source.RepositoryID || request.Binding.DeclarationCommit != a || request.Binding.Address != (objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "job/control", AspectName: "runtime"}) || request.Binding.DeclarationDigest == "" || request.SchemaRef != "schema/job.runtime" || request.Origin != "https://old-state.example" || request.Identity.Principal != "index-control-worker" || request.RequestID != "index-control-recovery" {
-			t.Errorf("cold maintenance changed fixed Binding or independent background identity: %#v", request)
-		}
-	}
-	assertControlState(t, f, reopened, lookup, a, "new-observation", "a-owner", "r2")
+	assertControlState(t, f, reopened, lookup, a, "old-observation", "a-owner", "r1")
 	f.assertAccepted(t, evidence)
 }
 

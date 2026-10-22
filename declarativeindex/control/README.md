@@ -23,6 +23,10 @@ Snapshot 工作，并逐一恢复固定版本与 State。HEAD 不可读时仍尝
 一个仓或版本失败仍继续其他项，返回的聚合错误保留原错误供 `errors.Is` 核验。
 `Reconcile` 只核对需求和 HEAD、登记必要工作，不构建投影。
 
+全实例 `CatchUp` 在需求与投影工作后还调用实现提供的可选 `RecoverResources(ctx)`；
+READY 工作账不会省略资源恢复。错误加入本轮维护诊断，不把已 READY 的对象目标改写成失败。
+仓范围 CatchUp 不运行全实例回收；只读 `Reconcile` 同样不运行。取消继续传播到物理恢复请求。
+
 `PrepareServingBasis(ctx, repo, commit)` 在明确固定版本上准备 Snapshot 投影，供上层
 Dataset 发布前调用。它不推进 HEAD，不改变登记发布记录，也不借空身份访问动态来源。
 `Targets` 返回 HEAD 工作进度；进度完成不证明物理投影仍存在，周期维护仍核对实际状态。
@@ -30,7 +34,7 @@ Dataset 发布前调用。它不推进 HEAD，不改变登记发布记录，也�
 ## State 与通知
 
 State 按有效 HEAD 和固定 Dataset 声明分别维护。`StateView` 只表示本进程保存的观察
-版本；`StateProjectionReady` 只读核对本地观察和实际提供方依据。媒体缺失时重新准备；
+版本；`StateProjectionReady` 只读核对本地观察和实际提供方依据，并可恢复持久化且与提供方精确匹配的不可变值。冷启动恢复不重新外呼；媒体缺失时重新准备；
 真实读取故障保留原错误，不伪装成空结果。后台变化通知作用于各有效声明版本，不把旧
 Dataset 的 Binding 换成当前 HEAD。失去需求的旧通知不会再触发外部取值。
 HEAD 依据暂时不可读时保留通知；固定版本观察成功不代表整条通知完成，HEAD 恢复后无需重发。

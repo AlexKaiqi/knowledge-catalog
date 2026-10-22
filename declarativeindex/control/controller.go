@@ -175,7 +175,17 @@ func (c *Controller) catchUp(ctx context.Context, only kernel.RepositoryID) erro
 		return refreshErr
 	}
 	heads, reconcileErr := c.reconcile(ctx, only)
-	return errors.Join(refreshErr, reconcileErr, c.applyPending(ctx, heads), c.catchUpFixed(ctx, only), c.catchUpState(ctx, heads, only))
+	return errors.Join(refreshErr, reconcileErr, c.applyPending(ctx, heads), c.catchUpFixed(ctx, only), c.catchUpState(ctx, heads, only), c.recoverResources(ctx, only))
+}
+
+func (c *Controller) recoverResources(ctx context.Context, only kernel.RepositoryID) error {
+	if only != "" {
+		return nil // A repository-scoped catch-up must not touch other engines.
+	}
+	if recovery, ok := c.index.(interface{ RecoverResources(context.Context) error }); ok {
+		return recovery.RecoverResources(ctx)
+	}
+	return nil
 }
 
 // Reconcile discovers current HEAD demand without building physical state.

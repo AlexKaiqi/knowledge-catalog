@@ -2,7 +2,9 @@
 package plugin
 
 import (
+	"context"
 	"path/filepath"
+	"time"
 
 	indexcapability "kc/declarativeindex/capability"
 	"kc/declarativeindex/control"
@@ -12,6 +14,7 @@ import (
 	index "kc/discovery/projection"
 	"kc/kernel"
 	objectmodel "kc/object"
+	"kc/object/reader"
 	"kc/snapshot/dataset"
 )
 
@@ -24,8 +27,10 @@ type Options struct {
 	RegisteredModels []string
 	Directory        string
 	Engine           func(string) index.EngineOpener
+	Resources        func(string) (index.ResourceCoordinator, error)
 	Lookup           func(kernel.RepositoryID) (objectmodel.Repository, error)
 	Datasets         dataset.Service
+	DatasetPin       func(dataset.ResolvedDataset) reader.DatasetPin
 	Hydrator         objectmodel.Hydrator
 	// Manifest is this instance's capability manifest; nil uses the compiled
 	// default with the validated RegisteredModels.
@@ -57,12 +62,23 @@ func Entry(options Options) indexplugins.IndexPluginEntry {
 		if options.Datasets != nil {
 			idx.SetDatasetRevisionFence(options.Datasets.WithCurrentRevision)
 		}
+		var resources index.ResourceCoordinator
+		if options.Resources != nil {
+			var err error
+			resources, err = options.Resources(namespace)
+			if err != nil {
+				return indexplugins.IndexContribution{}, err
+			}
+			if resources != nil {
+				scope.Own(resources.Close)
+			}
+		}
 		repositories := append([]kernel.RepositoryID(nil), scope.Repositories...)
 		allowed := map[kernel.RepositoryID]bool{}
 		for _, id := range repositories {
 			allowed[id] = true
 		}
-		controller, err := control.NewController(idx, control.NewTargetStore(filepath.Join(directory, "controller.db")), func(id kernel.RepositoryID) (objectmodel.Repository, error) {
+		lookup := func(id kernel.RepositoryID) (objectmodel.Repository, error) {
 			admitted := allowed[id]
 			if scope.ContainsRepository != nil {
 				admitted = scope.ContainsRepository(id)
@@ -71,7 +87,29 @@ func Entry(options Options) indexplugins.IndexPluginEntry {
 				return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Repository is outside this plugin instance")
 			}
 			return options.Lookup(id)
-		})
+		}
+		if authority, ok := options.Datasets.(dataset.PublicationCoordinator); ok {
+			publication := discoverydatasets.PublicationRecovery{Authority: authority, Definitions: options.Datasets}
+			resolve := publication.Resolve
+			referenced := publication.Referenced
+			if references, ok := options.Datasets.(dataset.RevisionReferenceCoordinator); ok {
+				observations := datasetObservationAuthority{references: references, publications: authority, owner: "declarative-index/" + scope.Name + "/" + scope.Instance + "/observations", now: time.Now}
+				idx.SetDatasetObservationPublication(observations.begin, observations.evidence)
+				resolve = routeResourceAuthority(observations.resolve, publication.Resolve)
+				referenced = routeResourceAuthority(observations.referenced, publication.Referenced)
+			}
+			idx.SetResourceRecovery(resources, resolve)
+			idx.SetPublicationReferenceLookup(referenced)
+			idx.SetDatasetPublicationLookup(publication.Evidence)
+			if options.DatasetPin != nil {
+				idx.SetPublishedDatasetRecovery(func(ctx context.Context, setID string, revision int) error {
+					return recoverPublishedDatasets(ctx, idx, options, publication, lookup, dataset.PublicationLookup{SetID: setID, Revision: revision})
+				})
+			}
+		} else {
+			idx.SetResourceRecovery(resources, nil)
+		}
+		controller, err := control.NewController(idx, control.NewTargetStore(filepath.Join(directory, "controller.db")), lookup)
 		if err != nil {
 			return indexplugins.IndexContribution{}, err
 		}

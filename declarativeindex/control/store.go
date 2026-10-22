@@ -77,6 +77,12 @@ func (s *TargetStore) List() ([]index.ProjectionTarget, error) {
 func (s *TargetStore) failHead(repository kernel.RepositoryID, fault error) error {
 	return s.update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(projectionTargetBucket)
+		if bucket == nil {
+			// The journal was reinitialized under a live worker. Recording the
+			// fault is best effort: there is no target row to fail, and writing
+			// one would invent a demand nobody asked for.
+			return nil
+		}
 		target := index.ProjectionTarget{Repository: repository}
 		if raw := bucket.Get([]byte(repository)); raw != nil {
 			if err := json.Unmarshal(raw, &target); err != nil {

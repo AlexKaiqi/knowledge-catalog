@@ -17,6 +17,7 @@ import (
 	retrieval "kc/discovery"
 	index "kc/discovery/projection"
 	"kc/discovery/service"
+	"kc/internal/datasetbridge"
 	"kc/internal/testkit"
 	"kc/kernel"
 	liveservice "kc/liveaccess/service"
@@ -202,7 +203,7 @@ func TestIndexPluginsExecuteRealSourceContributionsAndKeepDatasetMappings(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	value, err := f.reader.Read(objectmodel.ObjectRef{Repository: plain.RepositoryID, Object: "article/source-3"}, at, nil)
+	value, err := f.reader.Read(objectmodel.ObjectRef{Repository: plain.RepositoryID, Object: "article/source-3"}, at)
 	if err != nil || value.Value.(map[string]any)["body"] != "runbook source 3 at a" {
 		t.Fatalf("unconfigured source lost basic reads: %#v %v", value, err)
 	}
@@ -222,11 +223,7 @@ func TestIndexPluginsExecuteRealSourceContributionsAndKeepDatasetMappings(t *tes
 }
 
 func pluginDatasetPin(resolved dataset.ResolvedDataset) reader.DatasetPin {
-	pin := reader.DatasetPin{SetID: resolved.SetID, Revision: resolved.Revision, Repositories: resolved.Repositories}
-	for _, item := range resolved.Items {
-		pin.Items = append(pin.Items, reader.DatasetItem{Target: item.Target, Repository: item.Repository, Commit: item.Commit, Kind: item.Kind, Prefix: item.Prefix, File: item.File})
-	}
-	return pin
+	return datasetbridge.Pin(resolved)
 }
 
 func TestIndexPluginsPreserveFixedBasisWhenSourceAdvancesDuringCandidateRead(t *testing.T) {
