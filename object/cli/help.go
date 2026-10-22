@@ -8,7 +8,7 @@ type helpEntry struct {
 var leafHelp = map[string]helpEntry{
 	"read": {
 		Description: "按固定声明依据读取对象或 URN 指定的数据",
-		Usage: `kc read <object-urn[#/json/pointer]> [--shape '<graphql>'] [--repo <id> | --dataset <id> [--revision <N>]] [--commit <id> | --ref <name>]
+		Usage: `kc read <object-urn[#/json/pointer]> [--basis <reference> | --repo <id> | --dataset <id> [--revision <N>]] [--shape '<graphql>'] [--commit <id> | --ref <name>]
 
 用途：
   读取来源对象的完整内容或指定数据；同一个引用可随后交给 writer put/remove 维护完整单元。
@@ -23,6 +23,8 @@ var leafHelp = map[string]helpEntry{
   --revision <N> 固定 Dataset 的已发布修订，与 search/relations/traverse/schema 沿用同一个 N 时各步看到同一组来源 commit；省略时用当前修订。
   省略 --repo 与 --dataset 时，在你可读的全部仓里按 ID 解析：多个仓各持有不同方面时组合返回，同一方面来自两个仓时报 OBJECT_ID_CONFLICT，无权的仓列在 withheld。
   --repo 只读该仓，可加 --commit 或 --ref；省略时读取 refs/heads/main（published）的当前 commit。
+  --basis 复用先前读取返回的耐久依据；不能再给仓、Dataset、修订、commit 或 ref，也不能改变原对象与选择范围。
+  省略 --shape 时沿用依据内的原形状；依据每次重新鉴权，固定来源或解释依赖不可用时明确失败，不跟随最新。
   对象身份只由 URN 指定，内容只由 locator 选择；sources 记录每个方面来自哪个仓、哪个 commit。
 条件：
   已认证；单仓需 object.read，命名 Dataset 按 file.read 解释发布版清单内材料。
@@ -30,6 +32,7 @@ var leafHelp = map[string]helpEntry{
  Dataset 选中 Bound State 时，沿既有 logical READ 通路，还需相应 Runtime 可用并允许实际源访问。
 结果：
   统一引用的 JSON 保留 reference/locator/repository/objectId/commit/value、sources/withheld、维护 Address/digest 和逐单元 declarations/provenance。
+  basis 是可回读的不透明依据引用；state 按完整所选单元给出本地状态算法、逻辑范围、完整性和适用的摘要，不替代维护 digest。
   --shape 返回 data 与 errors：缺失、无权、冲突或范围外的位置为 null，并按 path 给出错误码；合法 null 没有错误条目。
   采用封闭 Schema 时选了未声明字段整批拒绝；declarations 里每个所读单元的 digest 仍是完整维护摘要。
   适用的 digest 属于已保存的完整维护单元，可作写入条件；叶值为 null 与定位不存在分别处理。
@@ -111,28 +114,31 @@ var leafHelp = map[string]helpEntry{
 	},
 	"log": {
 		Description: "分页读取对象修订历史",
-		Usage: `kc log (--repo <id> | --dataset <id>) --object <object-id> [--limit <n>] [--continuation <cursor>]
+		Usage: `kc log (--repo <id> | --dataset <id>) --object <object-id> [--limit <n>]
+       kc log --continuation <cursor> [--limit <n>]
 
 用途：
   查看对象的固定内容在哪些仓版本发生修订，为回读旧版本或核对发布提供依据。
 用法与参数：
   --object 是对象 id，不接受 --aspect 或 --member；--limit 默认 50、最大 200。
-  单仓可用 --commit 或 --ref 指定历史起点；Dataset 可加 --revision <N>；--continuation 续页时保持对象和来源依据。
+  单仓可用 --commit 或 --ref 指定历史起点；Dataset 可加 --revision <N>；--continuation 独立恢复原对象、范围、ref 和固定来源，不继承客户端默认 Dataset；附带坐标须与原依据一致。
 条件：
   已认证；每个来源仓均需 object.history.read，Dataset 另需其 file.read；消费权或正文读权不替代来源历史权。
  Dataset 须通过所需对象与选择范围的完整读取检查，文件切片不提供来源历史；每次续页重新检查来源历史权。另行解析 pin 需 dataset.resolve。
   来源须支持修订历史读取。
 结果：
-  JSON logs 按来源给出对象修订和 commit，并返回适用的续页游标。
+  JSON logs 仅给出已证明引入点的修订，scanned 报告本页检查提交数，complete 明确是否结束。
+  complete:false 必有已推进的耐久 continuation；logs 可以连续多页为空，仍须继续到 complete:true。
   limit 分别限制每个仓的修订数，Dataset 总条数可能超过 limit；不是跨仓全局时间排序。
 后果：
   读取版本历史，不回滚对象、不恢复已删除内容，也不生成新的仓版本。
 风险与成本：
-  后端需要查版本历史，成本随历史深度和来源数量增长；页大小只限制返回修订，不保证固定查询成本。
+  扫描提交预算与时间预算独立于页大小，由服务端约束；成本仍随参与单元大小和来源数量增长。
   这是对象内容修订史，不是每条 Git 提交、库存登记审计或 Bound State 的观察历史；空结果不能证明对象从未存在。
 失败恢复：
   历史能力或授权缺失时请相应维护者处理，不以当前正文替代历史结果。
-  游标与当前依据不符时重新查询；单仓保存并显式复用起点 commit，避免 published 推进后混页。
+  游标缺失、损坏、来源绑定改变、固定 commit 不可用或授权撤销时明确失败，不改用最新版本。
+  旧的修订边界游标不作为完整扫描证明接入新接口；需要从明确的原范围重新开始。
 示例：
   例：kc log --repo kr://scene/object --object example/report
   例：kc log --dataset scene-set --object example/report`,
@@ -221,8 +227,10 @@ var leafHelp = map[string]helpEntry{
     系统仓与登记权威不能作为普通 Writer 目标，Dataset 不能作为写入目标。
   结果：
     返回耐久 Writer 回执和 oldCommit/newCommit；首次为 APPLIED，同命令同请求重放为 REPLAYED。
+    result.changed 为 true 表示仓变化，false 表示已接受的无变化；旧回执缺字段时保持未知。
   后果：
-    发布该单元并推进目标 ref；省略 --schema-ref 时继承并校验已有声明。
+    有实际效果时发布该单元并推进目标 ref；省略 --schema-ref 时继承并校验已有声明。
+    全部效果相同且 authority 支持验证时，完整校验后保存无变化回执，不推进 ref、不发推进通知。
     回执与来源提交已接受后，次级证据或派生维护失败不撤销发布；检索可能尚未服务新版本。
   风险与成本：
     完整替换可能丢掉未提供的字段，需要网络写入与校验；不要把 --command-id 改成自动随机重试。

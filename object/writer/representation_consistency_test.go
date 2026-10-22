@@ -90,7 +90,7 @@ func TestWriterRejectsConflictingFinalAspectRepresentation(t *testing.T) {
 					t.Fatal(err)
 				}
 				before = receipt.Result.NewCommit
-				original, err = f.reader.Read(objectmodel.ObjectRef{Repository: f.store.ID(), Object: representationObjectID}, before, nil)
+				original, err = f.reader.Read(objectmodel.ObjectRef{Repository: f.store.ID(), Object: representationObjectID}, before)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -120,7 +120,7 @@ func TestWriterRejectsConflictingFinalAspectRepresentation(t *testing.T) {
 				t.Errorf("rejected representation is replayable as an accepted Writer receipt: disposition=%s commit=%s", entry.Receipt.Disposition, entry.Receipt.Result.NewCommit)
 			}
 
-			actual, readErr := f.reader.Read(objectmodel.ObjectRef{Repository: f.store.ID(), Object: representationObjectID}, after, nil)
+			actual, readErr := f.reader.Read(objectmodel.ObjectRef{Repository: f.store.ID(), Object: representationObjectID}, after)
 			if len(tc.initial) == 0 {
 				if kernel.CodeOf(readErr) != kernel.ErrObjectRefUnresolved {
 					t.Errorf("rejected creation must leave object absent, got value=%#v error=%v", actual, readErr)
@@ -167,7 +167,7 @@ func TestWriterAllowsExplicitAspectRepresentationConversion(t *testing.T) {
 			if head != receipt.Result.NewCommit || head == seed.Result.NewCommit {
 				t.Fatalf("successful conversion did not publish its receipt: head=%s receipt=%#v", head, receipt)
 			}
-			actual, err := f.reader.Read(objectmodel.ObjectRef{Repository: f.store.ID(), Object: representationObjectID}, head, nil)
+			actual, err := f.reader.Read(objectmodel.ObjectRef{Repository: f.store.ID(), Object: representationObjectID}, head)
 			if err != nil {
 				t.Fatalf("converted final representation must be readable: %v", err)
 			}

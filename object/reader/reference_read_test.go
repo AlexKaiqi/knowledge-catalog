@@ -214,9 +214,9 @@ func TestReferenceReadKeepsRootAndCompleteMaintenanceBasis(t *testing.T) {
 	if oldLeaf.Value != false || newLeaf.Value != false || oldLeaf.Digest == newLeaf.Digest || oldLeaf.Address != newLeaf.Address || newLeaf.Commit != updated.Result.NewCommit {
 		t.Fatalf("unchanged leaf hid another field's maintenance change: old=%#v new=%#v", oldLeaf, newLeaf)
 	}
-	trimmed, err := rd.Read(objectmodel.ObjectRef{Repository: guard.ID(), Object: "table/orders"}, before, &objectmodel.AspectSelector{Include: []string{"description"}})
-	if err != nil || trimmed.Digest != kernel.CanonicalDigest(wantRoot) || !reflect.DeepEqual(trimmed.Value, map[string]any{"description": "订单表"}) {
-		t.Fatalf("legacy selected READ lost the complete object precondition: %#v %v", trimmed, err)
+	trimmed, err := rd.ReadAddress(guard.ID(), objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: "table/orders", AspectName: "description"}, before)
+	if err != nil || trimmed.Digest != kernel.CanonicalDigest(wantRoot["description"]) || !reflect.DeepEqual(trimmed.Value, "订单表") {
+		t.Fatalf("coordinate READ lost its complete unit basis: %#v %v", trimmed, err)
 	}
 	unit, err := rd.ReadAddress(guard.ID(), oldLeaf.Address, before)
 	if err != nil || unit.Digest != oldLeaf.Digest {

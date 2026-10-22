@@ -114,3 +114,33 @@ func TestMaintenanceRecoveryRejectsAnotherCommandsReceipt(t *testing.T) {
 		t.Fatal("returned another command's result as the original mutation")
 	}
 }
+
+func TestComparisonCarriesIndependentFixedViewsAndFragmentInJSON(t *testing.T) {
+	remote, err := New(Config{BaseURL: "https://example.test", Transport: transportFunc(func(_ context.Context, _ string, r *http.Request) (*http.Response, error) {
+		if r.Method != "POST" || r.URL.Path != "/object/v1/objects:diff" || r.URL.Fragment != "" || r.Header.Get("X-Kc-Request-Id") != "compare-request" {
+			t.Fatalf("comparison transport: %#v", r)
+		}
+		var request ComparisonRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatal(err)
+		}
+		if request.Reference != "urn:kc:object:table/orders#/columns/id/type" || request.From.Basis != "original" || request.To.Dataset != "published" || request.To.Revision != 7 {
+			t.Fatalf("comparison coordinates changed: %#v", request)
+		}
+		return response(`{"equal":true}`), nil
+	})})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out any
+	request := ComparisonRequest{Reference: "urn:kc:object:table/orders#/columns/id/type"}
+	request.From.Basis = "original"
+	request.To.Dataset = "published"
+	request.To.Revision = 7
+	if err := remote.Compare(context.Background(), request, RequestOptions{RequestID: "compare-request"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.(map[string]any)["equal"] != true {
+		t.Fatalf("comparison response: %#v", out)
+	}
+}

@@ -48,7 +48,7 @@ func TestReaderKeepsSameObjectIDInDifferentRepositoriesIndependent(t *testing.T)
 	assertRead := func(repository kernel.RepositoryID, commit kernel.CommitID, want map[string]any) {
 		t.Helper()
 		ref := objectmodel.ObjectRef{Repository: repository, Object: objectID}
-		got, err := rd.Read(ref, commit, nil)
+		got, err := rd.Read(ref, commit)
 		if err != nil {
 			t.Fatal(err)
 		}

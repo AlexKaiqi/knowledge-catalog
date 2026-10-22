@@ -48,7 +48,7 @@ ChangeSet 无需声明“首次上传”，服务端不信任客户端的空树�
 基点读取视图，每个 `(commit, path)` 至多读 authority 一次（缺失结果同样复用，传输失败不缓存）；
 相互独立的 locator、unit 与目标路径点读以有界并发预取，消费仍按原顺序进行，错误语义与串行一致。
 写入集合中与基点字节完全相同的文件（典型为更新时不变的 locator 与完成标记）不再发送给 authority；
-全部未变时保留原写入集合，空变更语义不变。
+可验证无变化路径另按下文处理；未提供该能力的介质保留原写入行为。
 
 幂等规则：同 command_id 同 digest 返回原 Receipt（REPLAYED）；同 id 异 digest 是 `IDEMPOTENCY_CONFLICT`。Snapshot CAS 过期是 `NON_FAST_FORWARD`。带 `schema_ref` 的 PUT 必须在 target commit 可解析。DERIVATION 必须携带固定 inputWorkspaceVersionRef 和 algorithm。
 
@@ -107,3 +107,29 @@ Writer 检查声明形状及输入定位符在所引用 Schema 上能否解析�
 不写 Snapshot、回执账本或 evidence；它不预判存储路径准入或未来 CAS，也不判断实例能力。
 字段删除、改类型、新增必填、归属/模式和引用约束等结构守卫保持；上述两份内置协议 Schema
 副本仍须精确匹配系统出版物。仅名为 `index` 而未采用声明 Schema 的业务内容不产生查询能力。
+
+具备 `TreeWriteVerifier`、稳定 authority 绑定与条件阶段账本时，COMMIT 在完整 Schema、
+单元代数、路径、provenance 及前置校验后，逐项核对计划树效果与原固定基点的字节。
+全部相同才先耐久限定为无变化处理，再请求 authority 完成写入准入与最后 ref 条件检查。
+验证成功且最终回执已可靠保存才返回 `result.changed:false`；oldCommit/newCommit 均为原基点，
+不创建 commit、不发 `Advanced`。字段投影、本地状态 digest 或当前正文相同都不是替代判据。
+
+lakeFS 仍通过所选的普通或 bulk 数据通路在隔离 wip 检查实际写入权限，再持有原发布锁复核
+原 ref、存在性、归档与 expected 条件；不会因 candidate 等于 expected 而借用别人的锁。
+这个验证会产生暂存 I/O，不能把“不提交”描述成“不访问写入介质”。原生或其它介质未提供
+等价验证时不虚构无变化成功；其既有写入路径和已知／未知结果保持原合同。
+
+正常提交在调用 authority 前记录可能开始提交的阶段。只有无变化阶段允许重进原请求，恢复
+再次校验原基准，不能换成新 head；变化路径或来源绑定不符拒绝。最终回执未保存前的内存
+判定不算成功，保存后响应丢失才重放原结果。无变化命令各有独立 ReceiptRef，旧回执缺少
+changed 保持未知；Go 使用 `object.ChangeState` 保留可比较的三态，JSON 仍为可选 Boolean。
+MERGE 按实际目标 commit 是否推进报告 changed，内容树相同也不能抹去评审版本的推进。
+目录发布提交完整原始操作，不在客户端按正文摘要过滤；服务端 `CommitIntent` 首次固定基点，
+重试沿原坐标核对全部意图。显式不同基点、缺失原请求材料与未知提交结果均拒绝；
+真正空目录仍不构成合法操作集。旧客户端已过滤的请求仍只能按其原完整摘要重放，
+不从旧增量请求推断未曾保存的完整目录意图。
+
+`Lookup` 对已保存回执返回原结果；对有无变化阶段证明但尚无回执的记录，只返回原请求基准和
+空回执，供 `CommitIntent` 与维护地址解析恢复固定范围。它不把 PENDING 转成成功，普通未知
+结果仍不提供自动重试许可。请求 Hook 区分这次重新判定与已完成回执重放，前者重新执行正常
+前置和成功后置，后者保留既有不重复投递约定。

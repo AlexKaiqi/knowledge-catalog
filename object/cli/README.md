@@ -10,4 +10,16 @@
 
 读取输出保留统一引用、实际 locator、维护坐标、摘要和逐单元来源依据。逻辑 State 结果保留 observations，来源观察不冒充固定对象正文或可写摘要。Schema describe 的完整 Definition 在 Schema 项内，不混入读取信封。resolve、log、provenance 与 Schema 命令按各自既有任务定义输入；本轮不改这些任务。
 
+`read --basis <reference>` 将原结果的不透明耐久引用直接送给 SDK，不在客户端解析或拼装来源。
+回读不能混入仓、Dataset、修订、commit 或 ref；对象和选择由服务端核对，省略形状时沿用原形状。
+输出保留 `basis` 和 `state`：后者比较完整所选 Unit 的本地值与声明，不把字段投影或外部观察当作
+维护条件。每次回读重新鉴权，固定来源、解释依赖或记录不可用时明确失败。
+
 `read`、`resolve`、`log`、`provenance`、`schema list`、`schema describe` 在 `--dataset` 下接受 `--revision <N>`（正整数），固定该 Dataset 已发布修订；无 `--dataset` 或同时给 `--pin` 时本地拒绝。`schema list --dataset` 返回 Dataset 交付的 Schema 页，续页须带首页同一修订。Dataset 下的 describe 视图保留每成员报告的 `dataset`、`revision` 与 `search`（就绪状态、原因与相关声明成员），字段 `access` 来自该 Dataset 选入的索引声明，形状由 `output_test.go` 钉住。
+
+`ComparisonCommand()` 贡献宿主 `diff` 的对象 URN 模式；不加入 `Commands()` 的独占叶清单，
+因为同名目录发布预览仍由宿主拥有。宿主只选模式和组合帮助，位置参数、比较参数校验与 SDK
+调用归本包。`kc diff <urn> --from '<view-json>' --to '<view-json>'` 的每侧 JSON 使用同一
+`object.ComparisonView`：耐久 basis、repository/commit 或 dataset/revision 三选一。
+显式 `--shape` 须与两侧相同；拒绝混入目录或另一套范围参数，不继承默认 Dataset。
+对象模式经认证 SDK 的 `Compare` 请求 Server；`kc diff --repo ... --dir ...` 保持目录预览。

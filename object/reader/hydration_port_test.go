@@ -41,7 +41,7 @@ func TestReaderAndWorkspaceUseInjectedHydrationAtFixedBasis(t *testing.T) {
 	port := &portHydrator{}
 	rd.SetHydrator(port)
 	ref := objectmodel.ObjectRef{Repository: repo.ID(), Object: address.ObjectID}
-	value, err := rd.Read(ref, commit, nil)
+	value, err := rd.Read(ref, commit)
 	if err != nil || value.Commit != commit || port.reads != 1 {
 		t.Fatalf("reader did not use fixed-basis port: %+v %v reads=%d", value, err, port.reads)
 	}
@@ -52,7 +52,7 @@ func TestReaderAndWorkspaceUseInjectedHydrationAtFixedBasis(t *testing.T) {
 		return registry.Require(id, kernel.ErrObjectRefUnresolved)
 	}), reader.DatasetPin{SetID: "fixed", Repositories: map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit}, Items: reader.WholeRepositoryItems(map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit})})
 	s.SetHydrator(port)
-	values, err := s.Read(address.ObjectID, nil)
+	values, err := s.Read(address.ObjectID)
 	if err != nil || len(values) != 1 || values[0].Commit != commit || port.reads != 2 {
 		t.Fatalf("workspace port: %+v %v reads=%d", values, err, port.reads)
 	}

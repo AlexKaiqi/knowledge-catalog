@@ -22,6 +22,8 @@ var surfaceAnchor = surfaceAnchorSuite{
 	"CommitExecutor",
 	"CommitRequest",
 	"Committer",
+	"ComparisonExecutor",
+	"ComparisonRequest",
 	"DatasetReadExecutor",
 	"DatasetReadRequest",
 	"DecodeSchemaPageCursor",

@@ -23,16 +23,10 @@ func walkCommitHistory(history snapshot.HistoryStore, start kernel.CommitID, vis
 		if err != nil {
 			return err
 		}
-		if len(page) == 0 || page[0] != start || len(page) > commitHistoryPageSize {
-			return kernel.Fail(kernel.ErrTemporaryUnavailable, "commit history did not return its requested basis")
+		if err := validateHistoryWindow(page, start, commitHistoryPageSize); err != nil {
+			return err
 		}
-		pageSeen := map[kernel.CommitID]bool{}
-		for _, commit := range page {
-			if commit == "" || pageSeen[commit] {
-				return kernel.Fail(kernel.ErrTemporaryUnavailable, "commit history returned an invalid chain")
-			}
-			pageSeen[commit] = true
-		}
+
 		offset := 0
 		if !first {
 			offset = 1

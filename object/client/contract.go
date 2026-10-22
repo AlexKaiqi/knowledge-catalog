@@ -19,6 +19,7 @@ type RequestOptions struct{ RequestID string }
 
 type Client interface {
 	Read(context.Context, ReadRequest, RequestOptions, any) error
+	Compare(context.Context, ComparisonRequest, RequestOptions, any) error
 	Resolve(context.Context, ResolveRequest, RequestOptions, any) error
 	Log(context.Context, ObjectRequest, RequestOptions, any) error
 	Provenance(context.Context, ObjectRequest, RequestOptions, any) error

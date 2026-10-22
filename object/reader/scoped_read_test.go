@@ -1,13 +1,18 @@
 package reader_test
 
 import (
+	"reflect"
 	"testing"
 
 	"kc/internal/testkit"
+	"kc/kernel"
 	objectmodel "kc/object"
 )
 
-func TestReaderAspectSelectorOnlyShapesCanonicalRead(t *testing.T) {
+// Reading one unit never widens to its siblings, and reading the whole object
+// returns every unit. This replaces the retired aspect selector: narrowing is
+// expressed by reading a coordinate, not by reading everything and trimming.
+func TestReaderReadsEitherOneCoordinateOrTheWholeObject(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	root := testkit.MustHead(t, s.Repo, "")
 	commit, err := s.Repo.ApplyObjectCommit(objectmodel.CommitChangeSet{
@@ -25,11 +30,18 @@ func TestReaderAspectSelectorOnlyShapesCanonicalRead(t *testing.T) {
 	if err != nil || unit.Value.(map[string]any)["pk"].([]any)[0] != "id" {
 		t.Fatalf("%#v %v", unit, err)
 	}
-	assembled, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: "fixture/t"}, commit, &objectmodel.AspectSelector{Exclude: []string{"ownership"}})
+	assembled, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: "fixture/t"}, commit)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := assembled.Value.(map[string]any)["ownership"]; ok {
-		t.Fatalf("%#v", assembled.Value)
+	want := map[string]any{
+		"structure": map[string]any{"pk": []any{"id"}},
+		"ownership": map[string]any{"owner": "alice"},
+	}
+	if !reflect.DeepEqual(assembled.Value, want) {
+		t.Fatalf("whole object read dropped or reshaped a unit: %#v", assembled.Value)
+	}
+	if assembled.Digest != kernel.CanonicalDigest(want) {
+		t.Fatalf("whole object read lost its complete digest: %#v", assembled)
 	}
 }

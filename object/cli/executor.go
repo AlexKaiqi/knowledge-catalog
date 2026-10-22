@@ -23,6 +23,9 @@ func (e *executor) Execute(ctx context.Context, path string, flags map[string]an
 		return nil, err
 	}
 	if flags["help"] == true {
+		if path == "diff" {
+			return comparisonUsage, nil
+		}
 		help := leafHelp[path]
 		return help.Description + "\n\n" + help.Usage, nil
 	}
@@ -53,9 +56,18 @@ func (e *executor) read(ctx context.Context, path string, flags map[string]any, 
 	var output any
 	var err error
 	scope := e.scope(flags)
+	if path == "log" && flagString(flags, "continuation") != "" && flagString(flags, "dataset") == "" {
+		scope.Dataset = ""
+	}
 	switch path {
+	case "diff":
+		request, parseErr := comparisonRequest(flags)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		err = e.client.Compare(ctx, request, options, &output)
 	case "read":
-		err = e.client.Read(ctx, client.ReadRequest{ObjectDatasetIdentity: client.ObjectDatasetIdentity{Dataset: flagString(flags, "dataset"), Revision: scope.Revision}, Reference: flagString(flags, "reference"), Shape: flagString(flags, "shape"), Repository: flagString(flags, "repo"), Commit: flagString(flags, "commit"), Ref: flagString(flags, "ref")}, options, &output)
+		err = e.client.Read(ctx, client.ReadRequest{ObjectDatasetIdentity: client.ObjectDatasetIdentity{Dataset: flagString(flags, "dataset"), Revision: scope.Revision}, Basis: flagString(flags, "basis"), Reference: flagString(flags, "reference"), Shape: flagString(flags, "shape"), Repository: flagString(flags, "repo"), Commit: flagString(flags, "commit"), Ref: flagString(flags, "ref")}, options, &output)
 	case "resolve":
 		err = e.client.Resolve(ctx, client.ResolveRequest{ObjectScope: scope, Object: flagString(flags, "object"), Aspect: flagString(flags, "aspect"), Member: flagString(flags, "member")}, options, &output)
 	case "provenance":

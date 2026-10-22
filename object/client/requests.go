@@ -31,11 +31,19 @@ type ObjectScope struct {
 
 type ReadRequest struct {
 	ObjectDatasetIdentity
+	Basis      string `json:"basis,omitempty"`
 	Reference  string `json:"reference"`
 	Shape      string `json:"shape,omitempty"`
 	Repository string `json:"repository,omitempty"`
 	Commit     string `json:"commit,omitempty"`
 	Ref        string `json:"ref,omitempty"`
+}
+
+type ComparisonRequest struct {
+	Reference string                     `json:"reference"`
+	Shape     string                     `json:"shape,omitempty"`
+	From      objectmodel.ComparisonView `json:"from"`
+	To        objectmodel.ComparisonView `json:"to"`
 }
 
 type ObjectRequest struct {

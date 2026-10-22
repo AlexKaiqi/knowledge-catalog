@@ -43,7 +43,7 @@ func TestReferenceMaintenanceUsesActualUnitModelAndPreservesSiblings(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: "table/orders"}, updated.Result.NewCommit, nil)
+	got, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: "table/orders"}, updated.Result.NewCommit)
 	want := map[string]any{"columns": map[string]any{"id": map[string]any{"type": "string"}, "status": "kept"}, "description": map[string]any{"nested": "whole aspect"}}
 	if err != nil || !reflect.DeepEqual(got.Value, want) {
 		t.Fatalf("reference PUT changed wrong content: got=%#v error=%v", got.Value, err)
@@ -59,7 +59,7 @@ func TestReferenceMaintenanceUsesActualUnitModelAndPreservesSiblings(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	value, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: "table/orders"}, removed.Result.NewCommit, nil)
+	value, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: "table/orders"}, removed.Result.NewCommit)
 	if err != nil || !reflect.DeepEqual(value.Value, map[string]any{"columns": map[string]any{"status": "kept"}, "description": map[string]any{"nested": "whole aspect"}}) {
 		t.Fatalf("same reference REMOVE lost siblings: %#v %v", value, err)
 	}

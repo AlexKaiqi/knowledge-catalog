@@ -71,16 +71,22 @@ type ShapeError struct {
 // shape's structure, errors explain selected nulls, and each read unit keeps
 // its complete maintenance digest for conditional writes.
 type ShapedValue struct {
-	Reference    string                `json:"reference"`
-	Shape        string                `json:"shape"`
-	ObjectID     ObjectID              `json:"objectId"`
-	Data         map[string]any        `json:"data"`
-	Errors       []ShapeError          `json:"errors,omitempty"`
-	Declarations []UnitDeclaration     `json:"declarations,omitempty"`
-	Sources      []SourceBasis         `json:"sources,omitempty"`
-	Withheld     []kernel.RepositoryID `json:"withheld,omitempty"`
-	Observations []UnitObservation     `json:"observations,omitempty"`
-	Failures     []UnitReadFailure     `json:"failures,omitempty"`
+	// LocalIncomplete records failures before complete local units were
+	// obtained. Projection and external observation failures do not set it.
+	// Application delivery uses it to finish the scoped State envelope.
+	LocalIncomplete bool                  `json:"-"`
+	Basis           string                `json:"basis,omitempty"`
+	State           *ReadState            `json:"state,omitempty"`
+	Reference       string                `json:"reference"`
+	Shape           string                `json:"shape"`
+	ObjectID        ObjectID              `json:"objectId"`
+	Data            map[string]any        `json:"data"`
+	Errors          []ShapeError          `json:"errors,omitempty"`
+	Declarations    []UnitDeclaration     `json:"declarations,omitempty"`
+	Sources         []SourceBasis         `json:"sources,omitempty"`
+	Withheld        []kernel.RepositoryID `json:"withheld,omitempty"`
+	Observations    []UnitObservation     `json:"observations,omitempty"`
+	Failures        []UnitReadFailure     `json:"failures,omitempty"`
 }
 
 // ParseShape accepts one anonymous query selection set. Everything beyond

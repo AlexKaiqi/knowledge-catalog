@@ -47,7 +47,7 @@ func newMaintenanceLifecycleSetup(t *testing.T) (testkit.Setup, kernel.CommitID)
 
 func assertMaintenanceObject(t *testing.T, s testkit.Setup, at kernel.CommitID, objectID objectmodel.ObjectID, want any) {
 	t.Helper()
-	value, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: objectID}, at, nil)
+	value, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: objectID}, at)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func TestObjectRemovalDeletesAllUnitsAndPreservesFixedHistory(t *testing.T) {
 	if head := testkit.MustHead(t, s.Repo, snapshot.DefaultRef); head != receipt.Result.NewCommit || head == before {
 		t.Fatalf("accepted removal did not publish its new version: head=%s receipt=%#v", head, receipt)
 	}
-	if value, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: maintenanceID.ObjectID}, receipt.Result.NewCommit, nil); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
+	if value, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: maintenanceID.ObjectID}, receipt.Result.NewCommit); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		t.Errorf("removed object must fail READ rather than return content: value=%#v error=%v", value, err)
 	}
 	for _, address := range []objectmodel.Address{maintenanceDescription, maintenanceID, maintenanceStatus} {

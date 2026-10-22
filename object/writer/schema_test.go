@@ -402,7 +402,7 @@ func TestSchemaRemovalRequiresNoRemainingReferrers(t *testing.T) {
 
 func assertSchemaLifecycleValue(t *testing.T, s testkit.Setup, id objectmodel.ObjectID, commit kernel.CommitID, want any) {
 	t.Helper()
-	value, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: id}, commit, nil)
+	value, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: id}, commit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -709,10 +709,10 @@ func TestForkPublishOnBranchCreatesNewObject(t *testing.T) {
 	if testkit.MustHead(t, pub.Repo, "refs/heads/main") != pubHead {
 		t.Fatal("branch commit moved public main")
 	}
-	if _, err := pub.Reader.Read(objectmodel.ObjectRef{Repository: personal.ID(), Object: "drafts/metric-x"}, draft.Result.CommitID, nil); err != nil {
+	if _, err := pub.Reader.Read(objectmodel.ObjectRef{Repository: personal.ID(), Object: "drafts/metric-x"}, draft.Result.CommitID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pub.Reader.Read(objectmodel.ObjectRef{Repository: pub.RepositoryID, Object: "metrics/x"}, pubHead, nil); err == nil {
+	if _, err := pub.Reader.Read(objectmodel.ObjectRef{Repository: pub.RepositoryID, Object: "metrics/x"}, pubHead); err == nil {
 		t.Fatal("new object leaked onto public main")
 	} else {
 		testkit.ExpectCode(t, err, kernel.ErrObjectRefUnresolved)

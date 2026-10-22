@@ -3,6 +3,7 @@ package writer
 import (
 	"kc/kernel"
 	objectmodel "kc/object"
+	"kc/snapshot"
 )
 
 // COMMIT applies a ChangeSet and CAS-moves the target Ref (default main).
@@ -22,8 +23,17 @@ type CommitIntent struct {
 }
 
 func (w *Writer) CommitIntent(commandID string, intent CommitIntent) (CommitReceipt, error) {
+	if entry, ok := w.commands.Lookup(commandID); ok && entry.Status == snapshot.StatusApplied {
+		request := entry.Request
+		if request.Kind == "" || request.RepositoryID == "" || request.TargetRef == "" || request.BaseCommit == "" || request.ExpectedTargetCommit == "" || request.OperationCount < 1 || len(entry.Receipt) == 0 {
+			return CommitReceipt{}, kernel.Fail(kernel.ErrPreconditionFailed, "command %s has incomplete original write material", commandID)
+		}
+	}
 	if prior, ok := w.Lookup(commandID); ok && prior.Request.Kind == string(objectmodel.SurfaceCommit) {
 		stored := prior.Request
+		if intent.BaseCommit != "" && intent.BaseCommit != stored.BaseCommit || intent.ExpectedTargetCommit != "" && intent.ExpectedTargetCommit != stored.ExpectedTargetCommit {
+			return CommitReceipt{}, kernel.Fail(kernel.ErrIdempotencyConflict, "command %s has a different explicit write basis", commandID)
+		}
 		return w.Commit(commandID, objectmodel.CommitChangeSet{
 			TargetRepository:     intent.TargetRepository,
 			TargetRef:            intent.TargetRef,

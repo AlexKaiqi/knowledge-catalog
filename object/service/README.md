@@ -21,3 +21,20 @@ Head。过期预期仍由 Writer／Snapshot 的 CAS 拒绝，不改成两种基�
 取值；字段在单元读出后即裁剪，不先整读对象再删。无权、冲突、缺失按路径进 `errors`，其余失败
 整批拒绝。`AdoptedSchema` 只在 `Schema` 端口给出的请求范围内找所选单元采用的 Schema，找不到
 按开放处理；URN 已带定位符时拒绝形状。
+
+`ComparisonExecutor` 执行两份独立固定视图的本地 Unit 比较。`ComparisonRequest` 的双侧
+`object.ComparisonView` 分别且仅能指定耐久 basis、仓与 commit、命名 Dataset 与正修订号；
+不接受隐式最新版本。全部输入先校验，再由宿主的 `Open` 逐侧重新鉴权和打开已接受范围，
+复核对象、选择和固定坐标后交给 `CompareLocalReads`。任一侧失败不返回部分比较。
+执行器不访问历史或外部取值；未决解释不冒充本地状态缺失。
+
+`ObjectLogExecutor` 的有界入口消费完整 `Basis`、原 ref、`ReadScan` 与
+`HistoryCheckpointStore`。扫描预算在所有来源间共享，逐页保存未完成等状态段及尚未开始的
+来源；只有真实历史终点才结束。`complete:false` 必有实际推进的 continuation，空 logs
+不能解释为终点。每页重新检查完整候选的当前历史权限、来源绑定及已接受发布范围；
+读取失败、存储失败和取消都不返回部分成功。时间预算分别限制扫描边界和请求 I/O。
+
+既有 Go `ReadLog` 注入口仅保留原修订分页合同，不能提供实际扫描预算或完整持久依据；
+其响应不填充未知的 `scanned` / `complete`。生产 `log:query` 只使用有界入口，不能退回
+修订条数充当工作预算。旧边界游标不迁成新的完整证明；既有 `Reader.Log` 仍可供显式
+选择完整扫描的 Go 调用方使用，折叠规则与有界 Reader 只有一份实现。

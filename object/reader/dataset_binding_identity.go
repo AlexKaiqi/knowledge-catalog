@@ -118,7 +118,7 @@ func (s *Serving) descriptorIdentity(ref objectmodel.ObjectID) (BindingIdentity,
 // resolves at the dependency version frozen with the Dataset revision without
 // entering the consumer-visible scope.
 func (s *Serving) ReadDescriptor(ref objectmodel.ObjectID) (objectmodel.FederatedValue, error) {
-	values, err := s.Read(ref, nil)
+	values, err := s.Read(ref)
 	if err != nil && kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		return objectmodel.FederatedValue{}, err
 	}

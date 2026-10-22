@@ -11,48 +11,65 @@ import (
 
 // applyObjectCommit is the sole ② → ⓪ codec. Snapshot adapters receive
 // only literal path changes and never see Address, Aspect, or PUT/REMOVE.
-func applyObjectCommit(commandID string, target snapshot.Store, cs objectmodel.ChangeSet, basis snapshot.TreeStore) (_ kernel.CommitID, err error) {
+type objectCommitOutcome struct {
+	Commit  kernel.CommitID
+	Changed objectmodel.ChangeState
+}
+
+func applyObjectCommit(commandID string, target snapshot.Store, cs objectmodel.ChangeSet, basis snapshot.TreeStore, attempt snapshot.CommandAttempt) (_ objectCommitOutcome, err error) {
 	writeStarted := false
 	defer func() {
 		if err != nil && !writeStarted {
 			err = snapshot.WriteNotApplied(err)
 		}
 	}()
+	begin := func() error {
+		if attempt != nil {
+			if err := attempt.BeginCommit(); err != nil {
+				return err
+			}
+		}
+		writeStarted = true
+		return nil
+	}
 	if native, ok := target.(objectmodel.ChangeStore); ok {
 		// An omitted path retains the existing unit's location. Only the native
 		// provider knows whether this is a new unit needing a default path.
-		writeStarted = true
-		return native.ApplyObjectChange(commandID, cs)
+		if err := begin(); err != nil {
+			return objectCommitOutcome{}, err
+		}
+		commit, err := native.ApplyObjectChange(commandID, cs)
+		return objectCommitOutcome{Commit: commit}, err
 	}
 	if _, native := target.(objectmodel.NativeRepository); native {
-		return "", kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+		return objectCommitOutcome{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
 			"native repository %s does not provide typed object writes", target.ID())
 	}
 	tree, ok := snapshot.TreeStoreOf(target)
 	if !ok {
-		return "", kernel.Fail(kernel.ErrCapabilityUnsatisfied,
+		return objectCommitOutcome{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
 			"repository %s is mounted as a plain snapshot and cannot accept object changes without tree access", target.ID())
 	}
 	if basis == nil {
 		basis = tree
 	}
 	if err := requireIncrementalLocatorLayout(basis, cs.BaseCommit); err != nil {
-		return "", err
+		return objectCommitOutcome{}, err
 	}
 
 	idx, err := readChangedObjects(basis, cs.BaseCommit, cs.Operations)
 	if err != nil {
-		return "", err
+		return objectCommitOutcome{}, err
 	}
 	toWrite := map[string]string{}
 	toDelete := map[string]struct{}{}
 	beforeRefs := repofile.BuildLocatorManifest(idx).Referrers
 	beforeBindings := repofile.BindingCoordinates(idx)
 	if err := repofile.ApplyOperations(idx, cs.Operations, cs.Provenance, toWrite, toDelete); err != nil {
-		return "", err
+		return objectCommitOutcome{}, err
 	}
 	if err := requireAvailableUnitPaths(basis, cs.BaseCommit, idx, cs.Operations, toWrite); err != nil {
-		return "", err
+		return objectCommitOutcome{}, err
 	}
 	for _, objectID := range changedObjectIDs(cs.Operations) {
 		units := idx.ObjectUnits(objectID)
@@ -63,15 +80,15 @@ func applyObjectCommit(commandID string, target snapshot.Store, cs objectmodel.C
 		}
 		locator, err := encodeUnitLocator(objectID, units)
 		if err != nil {
-			return "", err
+			return objectCommitOutcome{}, err
 		}
 		toWrite[locatorPath] = string(locator)
 	}
 	if err := updateSchemaLocator(basis, cs.BaseCommit, beforeBindings, idx, cs.Operations, toWrite); err != nil {
-		return "", err
+		return objectCommitOutcome{}, err
 	}
 	if err := updateSchemaReferrerLocators(basis, cs.BaseCommit, beforeRefs, idx, cs.Operations, toWrite, toDelete); err != nil {
-		return "", err
+		return objectCommitOutcome{}, err
 	}
 	toWrite[repofile.LocatorCompletePath] = repofile.LocatorCompleteBody
 	toWrite[repofile.LocatorReferrersCompletePath] = repofile.LocatorReferrersCompleteBody
@@ -85,20 +102,45 @@ func applyObjectCommit(commandID string, target snapshot.Store, cs objectmodel.C
 	for path, content := range toWrite {
 		changes = append(changes, snapshot.TreeChange{Path: path, Content: []byte(content)})
 	}
-	changes = dropUnchangedWrites(basis, cs.BaseCommit, changes)
-	sort.Slice(changes, func(i, j int) bool { return changes[i].Path < changes[j].Path })
-
+	var bulk snapshot.BulkTreeIngester
 	if cs.BulkIngest {
-		bulk, ok := snapshot.BulkTreeIngesterOf(target)
-		if !ok {
-			return "", kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-				"repository %s does not provide bulk ingest", target.ID())
+		var ok bool
+		if bulk, ok = snapshot.BulkTreeIngesterOf(target); !ok {
+			return objectCommitOutcome{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "repository %s does not provide bulk ingest", target.ID())
 		}
-		writeStarted = true
-		return bulk.ApplyTreeCommitBulk(treeChangeSet(cs, changes))
 	}
-	writeStarted = true
-	return tree.ApplyTreeCommit(treeChangeSet(cs, changes))
+	sort.Slice(changes, func(i, j int) bool { return changes[i].Path < changes[j].Path })
+	if verifier, ok := target.(snapshot.TreeWriteVerifier); ok && attempt != nil {
+		unchanged, err := treeEffectsUnchanged(basis, cs.BaseCommit, changes)
+		if err != nil {
+			return objectCommitOutcome{}, err
+		}
+		if unchanged {
+			if err := attempt.SelectNoChange(); err != nil {
+				return objectCommitOutcome{}, err
+			}
+			if err := verifier.VerifyTreeWrite(treeChangeSet(cs, changes), cs.BulkIngest); err != nil {
+				return objectCommitOutcome{}, err
+			}
+			changed := objectmodel.ChangeUnchanged
+			return objectCommitOutcome{Commit: cs.BaseCommit, Changed: changed}, nil
+		}
+	}
+	changes = dropUnchangedWrites(basis, cs.BaseCommit, changes)
+	if cs.BulkIngest {
+		if err := begin(); err != nil {
+			return objectCommitOutcome{}, err
+		}
+		commit, err := bulk.ApplyTreeCommitBulk(treeChangeSet(cs, changes))
+		changed := objectmodel.ChangeChanged
+		return objectCommitOutcome{Commit: commit, Changed: changed}, err
+	}
+	if err := begin(); err != nil {
+		return objectCommitOutcome{}, err
+	}
+	commit, err := tree.ApplyTreeCommit(treeChangeSet(cs, changes))
+	changed := objectmodel.ChangeChanged
+	return objectCommitOutcome{Commit: commit, Changed: changed}, err
 }
 
 func encodeUnitLocator(objectID objectmodel.ObjectID, units []repofile.Unit) ([]byte, error) {

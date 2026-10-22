@@ -16,6 +16,7 @@ type MemberLookup func(kernel.RepositoryID) (objectmodel.Repository, error)
 // Dataset service produces the coordinates; this package reads object_id at those commits.
 
 type DatasetPin struct {
+	Temporary    bool                                    `json:"temporary,omitempty"`
 	SetID        string                                  `json:"setId"`
 	Revision     int                                     `json:"revision"`
 	Repositories map[kernel.RepositoryID]kernel.CommitID `json:"repositories"`
@@ -117,7 +118,7 @@ func WholeRepositoryItems(repos map[kernel.RepositoryID]kernel.CommitID) []Datas
 }
 
 func FederatedRead(lookup MemberLookup, pin DatasetPin, objectID objectmodel.ObjectID) ([]objectmodel.FederatedValue, error) {
-	return Open(lookup, pin).Read(objectID, nil)
+	return Open(lookup, pin).Read(objectID)
 }
 
 func (s *Serving) Pin() DatasetPin {
@@ -183,7 +184,7 @@ func (s *Serving) Member(id kernel.RepositoryID) (objectmodel.Repository, error)
 	return &datasetRepository{Repository: repo, serving: s, commit: commit}, nil
 }
 
-func (s *Serving) Read(objectID objectmodel.ObjectID, selector *objectmodel.AspectSelector) ([]objectmodel.FederatedValue, error) {
+func (s *Serving) Read(objectID objectmodel.ObjectID) ([]objectmodel.FederatedValue, error) {
 	out := []objectmodel.FederatedValue{}
 	err := s.eachObject(objectID, func(repositoryID kernel.RepositoryID, commit kernel.CommitID, repo objectmodel.Repository) error {
 		value, err := readHydrated(s.hydrator, repo, objectID, commit)
@@ -193,11 +194,7 @@ func (s *Serving) Read(objectID objectmodel.ObjectID, selector *objectmodel.Aspe
 			}
 			return err
 		}
-		v := value.Value
-		if selector != nil {
-			v = objectmodel.SelectAspects(value.Value, value.Units, selector)
-		}
-		out = append(out, federatedOf(repositoryID, commit, objectID, value, v))
+		out = append(out, federatedOf(repositoryID, commit, objectID, value, value.Value))
 		return nil
 	})
 	return out, err

@@ -23,7 +23,7 @@ func TestEmptyDatasetItemsDoNotAdmitWholeRepository(t *testing.T) {
 	serving := reader.Open(func(id kernel.RepositoryID) (objectmodel.Repository, error) {
 		return s.Repo, nil
 	}, reader.DatasetPin{SetID: "empty", Repositories: map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit}})
-	values, err := serving.Read("policy/A", nil)
+	values, err := serving.Read("policy/A")
 	if err != nil || len(values) != 0 {
 		t.Fatalf("empty Items must not admit the whole repository: %#v %v", values, err)
 	}
@@ -52,11 +52,11 @@ func TestPrefixDatasetItemsExcludeSiblingPaths(t *testing.T) {
 	serving := reader.Open(func(id kernel.RepositoryID) (objectmodel.Repository, error) {
 		return s.Repo, nil
 	}, pin)
-	listed, err := serving.Read("fixture/listed", nil)
+	listed, err := serving.Read("fixture/listed")
 	if err != nil || len(listed) != 1 {
 		t.Fatalf("prefix dataset must read listed files: %#v %v", listed, err)
 	}
-	secret, err := serving.Read("fixture/secret", nil)
+	secret, err := serving.Read("fixture/secret")
 	if err != nil || len(secret) != 0 {
 		t.Fatalf("prefix dataset must not read sibling paths: %#v %v", secret, err)
 	}

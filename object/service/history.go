@@ -22,6 +22,8 @@ type objectLogCursor struct {
 type ObjectLogPage struct {
 	Logs         []reader.ObjectLog `json:"logs"`
 	Continuation string             `json:"continuation,omitempty"`
+	Scanned      *int               `json:"scanned,omitempty"`
+	Complete     *bool              `json:"complete,omitempty"`
 }
 
 func objectLogCursorCheck(cursor objectLogCursor) kernel.Digest {
@@ -93,13 +95,21 @@ type ObjectLogRequest struct {
 	Pin          map[kernel.RepositoryID]kernel.CommitID
 	Limit        int
 	Continuation string
+	Basis        objectmodel.ReadBasis
+	Ref          string
+	Budget       int
 }
 type ObjectLogExecutor struct {
-	Allow   func(kernel.RepositoryID, objectmodel.ObjectID) bool
-	ReadLog func(kernel.RepositoryID, kernel.CommitID, objectmodel.ObjectLogQuery) ([]objectmodel.ObjectRevision, error)
+	Allow       func(kernel.RepositoryID, objectmodel.ObjectID) bool
+	ReadLog     func(kernel.RepositoryID, kernel.CommitID, objectmodel.ObjectLogQuery) ([]objectmodel.ObjectRevision, error)
+	ReadScan    func(context.Context, kernel.RepositoryID, kernel.CommitID, objectmodel.HistoryScanQuery) (objectmodel.HistoryScanPage, error)
+	Checkpoints reader.HistoryCheckpointStore
 }
 
-func (e ObjectLogExecutor) Execute(_ context.Context, request ObjectLogRequest) (ObjectLogPage, error) {
+func (e ObjectLogExecutor) Execute(ctx context.Context, request ObjectLogRequest) (ObjectLogPage, error) {
+	if e.ReadScan != nil {
+		return e.executeBounded(ctx, request)
+	}
 	if e.ReadLog == nil {
 		return ObjectLogPage{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "object log service is unavailable")
 	}

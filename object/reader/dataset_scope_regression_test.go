@@ -46,14 +46,14 @@ func TestDatasetRegressionDatasetMustNotReadOutsideAspect(t *testing.T) {
 	if rows, err := serving.ResolveAddress(publicAddress); err != nil || len(rows) != 1 {
 		t.Fatalf("published exact Address must remain resolvable: %#v %v", rows, err)
 	}
-	if rows, err := serving.Read("service/A", nil); err != nil || len(rows) != 0 {
+	if rows, err := serving.Read("service/A"); err != nil || len(rows) != 0 {
 		t.Fatalf("partial object passed as complete Canonical: %#v %v", rows, err)
 	}
 	if contains, err := serving.Contains(s.RepositoryID, "service/A"); err != nil || contains {
 		t.Fatalf("partial object eligible for search: %v %v", contains, err)
 	}
 	full := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return s.Repo, nil }, reader.DatasetPin{Repositories: map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit}, Items: reader.WholeRepositoryItems(map[kernel.RepositoryID]kernel.CommitID{s.RepositoryID: commit})})
-	if rows, err := full.Read("service/A", nil); err != nil || len(rows) != 1 {
+	if rows, err := full.Read("service/A"); err != nil || len(rows) != 1 {
 		t.Fatalf("complete publication cannot read object: %#v %v", rows, err)
 	}
 }

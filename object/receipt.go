@@ -21,6 +21,7 @@ type CommitReceipt struct {
 }
 
 type CommitResult struct {
+	Changed      ChangeState         `json:"changed,omitempty"`
 	RepositoryID kernel.RepositoryID `json:"repositoryId"`
 	CommitID     kernel.CommitID     `json:"commitId"`
 	TargetRef    string              `json:"targetRef"`

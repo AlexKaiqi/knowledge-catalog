@@ -11,55 +11,6 @@ const (
 	StatusForbidden  ResolutionStatus = "FORBIDDEN"
 )
 
-type AspectSelector struct {
-	Include []string `json:"include,omitempty"`
-	Exclude []string `json:"exclude,omitempty"`
-}
-
-func SelectAspects(value any, units []Address, selector *AspectSelector) any {
-	if selector == nil {
-		return value
-	}
-	hasAspect := false
-	for _, unit := range units {
-		if unit.AspectName != "" {
-			hasAspect = true
-			break
-		}
-	}
-	if !hasAspect {
-		return value
-	}
-	object, ok := value.(map[string]any)
-	if !ok {
-		return value
-	}
-	exclude := map[string]struct{}{}
-	for _, name := range selector.Exclude {
-		exclude[name] = struct{}{}
-	}
-	out := map[string]any{}
-	for name, item := range object {
-		if len(selector.Include) > 0 {
-			found := false
-			for _, include := range selector.Include {
-				if include == name {
-					found = true
-					break
-				}
-			}
-			if !found {
-				continue
-			}
-		}
-		if _, skip := exclude[name]; skip {
-			continue
-		}
-		out[name] = item
-	}
-	return out
-}
-
 // Resolution identifies a fixed maintenance target. Digest is its conditional
 // write/remove basis (MaintenanceDigest or UnitSetMaintenanceDigest), distinct
 // from the content digest returned by READ for a binding declaration.
@@ -77,6 +28,8 @@ type Resolution struct {
 }
 
 type ObjectValue struct {
+	Basis        string              `json:"basis,omitempty"`
+	State        *ReadState          `json:"state,omitempty"`
 	Reference    string              `json:"reference,omitempty"`
 	Locator      string              `json:"locator,omitempty"`
 	Digest       kernel.Digest       `json:"digest,omitempty"`
@@ -102,6 +55,8 @@ type ProvenanceTrace struct {
 }
 
 type FederatedValue struct {
+	Basis        string                `json:"basis,omitempty"`
+	State        *ReadState            `json:"state,omitempty"`
 	Reference    string                `json:"reference,omitempty"`
 	Locator      string                `json:"locator,omitempty"`
 	Digest       kernel.Digest         `json:"digest,omitempty"`

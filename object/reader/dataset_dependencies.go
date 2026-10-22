@@ -10,8 +10,9 @@ import (
 
 // Dataset dependencies (doc/design/dataset.md#发布): a selected binding unit
 // may name a ResourceDescriptor held in a Repository the Dataset did not
-// select. Publication freezes that holder's version with the revision; reads
-// use it only to interpret the reference. A dependency is never a member, so
+// select. Publication freezes all candidate versions used to prove the unique
+// holder, including absence witnesses; reads use them only to interpret the
+// reference. A dependency does not grant membership, so
 // Read, Holds, Contains, the file scope and search stay on pin.Repositories.
 
 // RepositoryInventory lists the Repositories a publication may take a
@@ -23,7 +24,8 @@ type RepositoryInventory func() []kernel.RepositoryID
 // held nowhere in scope is looked up by ID across the other Repositories (a
 // selected Repository at its frozen commit, any other at its DefaultRef head)
 // and must have exactly one holder. No holder or several holders fail the
-// preparation instead of picking one.
+// preparation instead of picking one. Successful external resolution retains
+// the complete tested candidate vector for later replay of uniqueness.
 func (s *Serving) FreezeDependencies(inventory RepositoryInventory) (map[kernel.RepositoryID]kernel.CommitID, error) {
 	refs, err := s.bindingDescriptorRefs()
 	if err != nil {
@@ -38,7 +40,7 @@ func (s *Serving) FreezeDependencies(inventory RepositoryInventory) (map[kernel.
 	}
 	var candidates []kernel.RepositoryID
 	for _, ref := range refs {
-		inScope, err := s.Read(ref, nil)
+		inScope, err := s.Read(ref)
 		if err != nil && kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 			return nil, err
 		}
@@ -64,6 +66,14 @@ func (s *Serving) FreezeDependencies(inventory RepositoryInventory) (map[kernel.
 	}
 	if len(dependencies) == 0 {
 		return nil, nil
+	}
+	// Retain every candidate tested to prove uniqueness, including sources
+	// that contributed no descriptor. A later replay can then reproduce the
+	// absence proof instead of rediscovering current heads.
+	for id, commit := range commits {
+		if id != objectmodel.SystemRepositoryID {
+			dependencies[id] = commit
+		}
 	}
 	return dependencies, nil
 }

@@ -32,6 +32,9 @@ func (c *client) request(ctx context.Context, method, path string, input any, op
 func (c *client) Read(ctx context.Context, r ReadRequest, o RequestOptions, out any) error {
 	return c.request(ctx, "POST", "/object/v1/objects:read", r, o, out)
 }
+func (c *client) Compare(ctx context.Context, r ComparisonRequest, o RequestOptions, out any) error {
+	return c.request(ctx, "POST", "/object/v1/objects:diff", r, o, out)
+}
 func (c *client) Resolve(ctx context.Context, r ResolveRequest, o RequestOptions, out any) error {
 	return c.request(ctx, "POST", "/object/v1/objects:resolve", r, o, out)
 }

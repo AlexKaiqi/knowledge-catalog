@@ -2,7 +2,6 @@ package writer
 
 import (
 	"encoding/json"
-	"strings"
 
 	"kc/internal/journal"
 	"kc/kernel"
@@ -142,6 +141,17 @@ func (w *Writer) applySnapshot(commandID string, surface objectmodel.Surface, cs
 		return CommitReceipt{}, kernel.Fail(kernel.ErrRepositoryArchived, "repository %s is archived", cs.TargetRepository)
 	}
 	digest := string(kernel.CanonicalDigest(cs))
+	staged, hasStages := w.commands.(snapshot.StagedCommandLedger)
+	_, hasVerifier := repo.(snapshot.TreeWriteVerifier)
+	origin, hasOrigin := repo.(snapshot.StoreOrigin)
+	useStages := hasStages && staged.SupportsStages() && hasVerifier && hasOrigin && origin.Origin() != ""
+	var original json.RawMessage
+	if useStages {
+		original, err = json.Marshal(cs)
+		if err != nil {
+			return CommitReceipt{}, err
+		}
+	}
 	if cs.Author == "" {
 		cs.Author = w.author
 	}
@@ -152,11 +162,19 @@ func (w *Writer) applySnapshot(commandID string, surface objectmodel.Surface, cs
 		cs.RuleID = w.ruleID
 	}
 	kind := string(surface)
-	entry, replayed, err := w.commands.Execute(commandID, digest, snapshot.CommandRequest{
+	request := snapshot.CommandRequest{
 		Kind: kind, RepositoryID: string(cs.TargetRepository), TargetRef: cs.TargetRef,
 		BaseCommit: string(cs.BaseCommit), ExpectedTargetCommit: string(cs.ExpectedTargetCommit),
 		OperationCount: len(cs.Operations),
-	}, func() (any, error) {
+	}
+	if useStages {
+		request.ApplicationRequest = original
+		request.Authority = kernel.CanonicalDigest(struct {
+			Repository kernel.RepositoryID
+			Origin     string
+		}{repo.ID(), origin.Origin()})
+	}
+	apply := func(attempt snapshot.CommandAttempt) (any, error) {
 		basis, err := commitReadBasis(repo, cs.BaseCommit)
 		if err != nil {
 			return nil, snapshot.WriteNotApplied(err)
@@ -165,21 +183,20 @@ func (w *Writer) applySnapshot(commandID string, surface objectmodel.Surface, cs
 		if err := validateSchemaRefs(w.store, basis, cs); err != nil {
 			return nil, snapshot.WriteNotApplied(err)
 		}
-		oldCommit, err := repo.Head(cs.TargetRef)
-		if err != nil {
-			return nil, snapshot.WriteNotApplied(err)
-		}
+		oldCommit := cs.ExpectedTargetCommit
 		basisTree, _ := snapshot.TreeStoreOf(basis)
-		commitID, err := applyObjectCommit(commandID, repo, cs, basisTree)
+		outcome, err := applyObjectCommit(commandID, repo, cs, basisTree, attempt)
 		if err != nil {
 			return nil, err
 		}
+		commitID := outcome.Commit
 		applied := CommitReceipt{
-			ReceiptRef:  "receipt:" + strings.ToLower(kind) + ":" + string(commitID),
+			ReceiptRef:  commandReceiptReference(kind, commandID, digest),
 			CommandID:   commandID,
 			Surface:     kind,
 			Disposition: DispositionApplied,
 			Result: CommitResult{
+				Changed:      outcome.Changed,
 				RepositoryID: cs.TargetRepository,
 				CommitID:     commitID,
 				TargetRef:    cs.TargetRef,
@@ -187,11 +204,18 @@ func (w *Writer) applySnapshot(commandID string, surface objectmodel.Surface, cs
 				NewCommit:    commitID,
 			},
 		}
-		if cs.TargetRef == snapshot.DefaultRef {
+		if cs.TargetRef == snapshot.DefaultRef && outcome.Changed != objectmodel.ChangeUnchanged {
 			w.store.NotifyAdvanced(snapshot.Advanced{Store: repo, From: oldCommit, To: commitID})
 		}
 		return applied, nil
-	})
+	}
+	var entry snapshot.CommandEntry
+	var replayed bool
+	if useStages {
+		entry, replayed, err = staged.ExecuteStaged(commandID, digest, request, apply)
+	} else {
+		entry, replayed, err = w.commands.Execute(commandID, digest, request, func() (any, error) { return apply(nil) })
+	}
 	if err != nil {
 		return CommitReceipt{}, err
 	}

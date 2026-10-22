@@ -12,7 +12,7 @@ import (
 )
 
 func TestObjectCLIPublicSurfaceIsClosed(t *testing.T) {
-	want := []string{"BindOperands", "Command", "Commands", "Context", "Executor", "ModelHelp", "New", "ReceiptWaitBudget", "Shape"}
+	want := []string{"BindOperands", "Command", "Commands", "ComparisonCommand", "Context", "Executor", "ModelHelp", "New", "ReceiptWaitBudget", "Shape"}
 	packages, err := parser.ParseDir(token.NewFileSet(), ".", func(info os.FileInfo) bool {
 		return !strings.HasSuffix(info.Name(), "_test.go")
 	}, 0)

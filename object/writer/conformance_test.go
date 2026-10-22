@@ -77,10 +77,10 @@ func TestT2CommitCAS(t *testing.T) {
 	if head := testkit.MustHead(t, s.Repo, "refs/heads/main"); head != accepted.Result.CommitID {
 		t.Fatalf("rejected CAS advanced Ref: got %s, want %s", head, accepted.Result.CommitID)
 	}
-	if _, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: "fixture/b"}, accepted.Result.CommitID, nil); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
+	if _, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: "fixture/b"}, accepted.Result.CommitID); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		t.Fatalf("rejected CAS published b: %v", err)
 	}
-	original, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: "fixture/a"}, accepted.Result.CommitID, nil)
+	original, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: "fixture/a"}, accepted.Result.CommitID)
 	if err != nil || kernel.CanonicalDigest(original.Value) != kernel.CanonicalDigest(1) {
 		t.Fatalf("rejected CAS changed a: %#v, %v", original, err)
 	}

@@ -1,5 +1,28 @@
 # object/reader/
 
+`Serving.ReadBasis` 导出已固定视图的全部候选仓（包含未贡献内容者）、来源实例绑定、文件范围及
+解释依赖；调用前由应用完成所需依赖冻结，不在导出时重新发现来源。缺少稳定实例绑定或固定提交
+时明确失败。`OpenReadBasis` 校验当前绑定与固定提交后重建视图，不读取 head，并在请求内保留
+已核对的实例；依赖仍只用于解释，不加入 Dataset 成员。依据经 JSON 保存后可在新 Reader 上重开，
+不依赖进程缓存或搜索索引。应用须先验证当前授权与权威 Dataset 发布范围，并保证请求对象和选择
+与依据一致；这个底层重开接口本身不是对外授权入口。带未决解释依赖的依据不可精确重开，
+不会在重开时重试发现最新来源；本地状态完整性与解释依赖失败分别处理。
+
+`DatasetPin.Temporary` 区分未发布的临时定义与命名发布版，原样保留到依据及重新打开的视图；
+临时定义的标签和修订号不代表已接受发布，也不能借用同名发布版的授权。
+
+`NewReadBasisStore` 将验证过的向量作为不可变、按内容去重的记录保存在宿主指定的耐久文件；
+`Retain` 在事务与初次建文件的目录同步完成后才返回不透明引用，`Resolve` 只读取原记录，缺失
+不创建、不改用新坐标，损坏不静默修复。记录随安装状态保留，不由搜索代回收；它只保存坐标元数据，
+不保存对象正文、外部观察或许可。Home 负责装配并向借用视图传递同一记录存储；实际回读仍须重新
+核对权威范围、授权、来源绑定及提交可用性。
+
+`NewHistoryCheckpointStore` 独立保存服务器生成的完整范围与未完成扫描段；记录与读取依据
+共用宿主文件的事务持久化机制，使用不同 bucket、版本和引用前缀。读查询不创建文件，
+损坏记录拒绝且不覆盖修复；新页追加不可变记录，不覆盖原页。记录随安装状态保留，
+不保护查询代，也不受索引清理影响。当前位置、状态摘要和修订元数据仍须先重新鉴权
+才能用于来源历史读取；可解析记录不证明仓或提交仍可用。
+
 **Reader 是声明读取面**：在已经钉死的 Snapshot commit 上做 **② 对象解释**。它不写仓、不调用动态 runtime。拼装 Aspect、`object_id`、来源信封与通用 Schema 解释从这里开始；Binding 等能力声明可固定读取，origin、runtime、protocol、操作和 Descriptor 的专属解释由 `liveaccess` 唯一提供。Dataset 服务 `ResolveDataset`（①）只给出 `{repo → commit}`；`reader.Open` 才骑在这次坐标上。面向消费者的逻辑 READ 再由 `liveaccess` 组合本 Reader 与注入的 State runtime；`AccessSpec`、查询和结果合同属于 `discovery/`。
 
 Reader 保留所选 Aspect 或 Member 的固定 `valueSource`、SchemaRef 与声明摘要。
@@ -54,11 +77,11 @@ Reader 不创建仓对象。它产出的是读结果和可丢的访问状态：
 
 | 名称 | 是什么 | 不是什么 |
 |---|---|---|
-| `AspectSelector` | 显式 READ 时对拼装对象的 aspect `include` / `exclude` | 不是 SEARCH 结果形状，不是索引声明。类型在 `object/` |
+| 坐标读取 | 显式 READ 选一个 Address（Aspect 或 Member）时只读该单元 | 不是先整读再按方面名裁剪，不是 SEARCH 结果形状，不是索引声明 |
 | `retrieval.EvaluationProjection` | Refine 时 judge/scorer **可见字段**白名单 | 不是检索文档，不是索引 |
 | Access Projection | 从 pinned commit **可重建**的 lexical 索引 | 不是 Canonical，不是 ObjectRef 来源 |
 
-`READ(ref)` 默认拼 `{ aspectName: value }`；调用方用 `AspectSelector` 裁。`readAddress` 读单维护单元。Entity blob（无 `units`）不受 selector 影响。
+`READ(ref)` 拼 `{ aspectName: value }` 的完整对象；要少读，就改读一个 Address，只取该单元的完整内容。Entity blob（无 `units`）只能整读。
 
 `permissions` 是 SOURCE 对象，与其他 Aspect 同构。需要检索它的明确字段时，另写索引声明并选入 Dataset；Schema 只约束正文结构，不声明 `text` 或 `filter`。SEARCH 命中后仍回读范围内的完整对象，不能靠 selector 或 stored payload 塑造结果。
 
@@ -98,7 +121,7 @@ Reader 包装后的 Repository 实现
 LiveAccess 的处理器合同与实现解析由 `liveaccess/handler`、`liveaccess/dispatch` 消费本 Reader 的固定读口；Reader 不解释取值描述或分派处理器。辅助 Schema 与跨仓引用仍受本次固定范围约束，不因能力声明扩大读取范围。
 
 ```text
-READ(ref, commit, selector?)   → 拼装后按 AspectSelector 裁
+READ(ref, commit)              → 完整拼装对象，digest 覆盖整份内容
 READ(address, commit)          → 单单元 Canonical（digest 是该单元）
 ```
 
@@ -151,6 +174,15 @@ DIFF             两个 pinned commit 上这个对象的值差是什么？     �
 GET_PROVENANCE   这个对象在该 commit 上各单元贴了什么信封？     → ProvenanceTrace.chain
 ```
 
+树型 Reader 的 `HistoryScanner.ScanHistory` 将检查提交数与返回修订数分开限制，保存固定来源绑定、
+扫描位置、状态算法版本与未完成等状态段。算法不兼容时拒绝恢复。预算耗尽可以返回空页，但必须实际推进；只有读到历史起点才将
+最后的存在状态认定为引入点，最早的不存在状态不伪造为删除。取消或读取失败仍返回错误。
+旧 `Log` 复用同一算法继续扫描到修订上限或终点。原生仓缺少有界能力时明确拒绝，不用旧
+无限扫描伪装预算支持；Dataset 文件切片继续拒绝该能力。进度属于服务端可信材料，
+不得把调用方提交的结构当作证明或授权。每页还有独立时间预算，在读取边界保存已推进的位置；完全未推进则报错。显式请求
+绑定有限期限的来源上下文，后端错误或取消不转换成成功空页。公开服务使用独立耐久检查点恢复完整范围、ref 与扫描位置；
+HTTP/CLI 的连续页语义见 [Object 服务](../service/README.md)。
+
 应用层查询 LOG 单独检查来源仓的 `object.history.read`，每页重新授权；Dataset 文件消费权不能替代它，
 即使 Dataset 交付整个仓。文件切片的 Repository 视图仍拒绝 LOG，不把固定提交的文件交付扩成历史交付。
 
@@ -183,7 +215,8 @@ kc schema describe --dataset delivery --revision 1 --object schema/job.io
 `DatasetPin.Dependencies` 是发布时冻结的引用依赖，不是成员：`Read`、`Holds`、文件范围与搜索都看不到它。
 `Serving.FreezeDependencies(inventory)` 在准备阶段收集范围内绑定单元的 `descriptorRef`（只经定位器
 `bindings.index` 元数据发现，不扫描快照），范围内恰好一处持有则跳过，否则在 `RepositoryInventory`
-给出的非系统仓中找唯一持有者并冻结其当时的提交；缺清单、缺元数据口（native 成员）失败关闭。
+给出的非系统仓中找唯一持有者并冻结全部已核对的候选提交，包含未贡献描述符的仓；
+缺清单、缺元数据口（native 成员）失败关闭。
 `Serving.ReadDependency(id)` 只在依赖仓的冻结提交上读该对象，供取值声明解释使用。
 确定唯一持有者时，候选来源的 HEAD 故障或空版本会明确失败，不把无法核对的来源当作没有该对象。
 一次冻结中，每个未选候选仓只固定一次 HEAD；所有引用共用该提交，包括核对先前引用时没有命中的仓，
@@ -211,4 +244,22 @@ kc schema describe --dataset delivery --revision 1 --object schema/job.io
 相邻等状态（值与声明）只在观察到更老的不同状态，或证明真实链终点后，才输出引入提交。
 链起点之前的缺失不输出为删除；被后续删除遮住的早期存在仍参与 REMOVED 判定。
 修订条数达到请求上限后停止正文读取，后续页错误不返回部分成功。
-这仍是现有按修订分页的入口；扫描预算、跨页未完成状态段和独立复用固定依据的新增接口尚未实现。
+公开入口使用有界 Reader 与耐久进度存储，续页恢复原范围而不重新解析最新；
+每页由应用重验当前历史权与发表范围。旧 Go 修订分页入口保持其独立的完整扫描合同。
+
+`ReadComparisonBasis` 为两版比较准备完整所选本地 Unit：先复核当前来源实例和固定提交，
+按只读计划选择实际交付范围内的维护单元，再读完整单元而非字段投影。空候选保留在依据中；
+计划后的正文失败不伪装为空。它不读取来源 head、不打开解释依赖、不调用 hydrator 或外部取值，
+解释依赖不可用与本地完整性分开。应用仍须在调用前核对当前授权、权威 Dataset 范围和原对象选择，
+不得把客户端原样提交的 `ReadBasis` 当成授权。跨仓构成冲突由 `CompareLocalReads` 统一拒绝。
+历史折叠也以完整本地状态判断相邻变化，公开值/声明摘要不因便利重定义；种类变化即使两项
+公开摘要相同也保留真实引入提交。预算及连续历史游标仍按相应合同另行交付。
+
+`Serving.LocalReadBasis` 为本地比较捕获发布范围及固定来源，不要求解释 commit 仍可用。
+可辨认的解释来源保留原实例绑定与 commit；不可解析的解释来源以 `UnresolvedDependencies`
+保留 Repository、尝试的固定 commit 和失败码。它不查 head、不替换依赖。所选正文来源仍须完整
+可用，普通 `OpenReadBasis` 继续拒绝未决或缺失解释，不能以本地比较成功冒充解释回放成功。
+
+`OpenHistoryBasis` 只接受每个候选均具有仓根选择的范围，额外的重复交付路径不缩小已有的
+整仓选择；纯文件/子目录切片不能据此访问历史。它复用固定来源校验，保留全部候选，
+不打开解释依赖、不读取 head。Lookup 由应用先完成当前来源历史授权和发布范围核验。

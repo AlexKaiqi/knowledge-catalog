@@ -1,10 +1,12 @@
 package writer
 
 import (
+	"bytes"
 	"encoding/json"
 
 	"kc/kernel"
 	objectmodel "kc/object"
+	"kc/snapshot"
 )
 
 // IdempotencyEntry is the Object Writer view of the shared command ledger.
@@ -31,7 +33,14 @@ func (w *Writer) Lookup(commandID string) (IdempotencyEntry, bool) {
 		return IdempotencyEntry{}, false
 	}
 	var receipt CommitReceipt
-	if json.Unmarshal(entry.Receipt, &receipt) != nil {
+	raw := bytes.TrimSpace(entry.Receipt)
+	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
+		// Only the constrained no-change phase supplies a recoverable original
+		// basis without a completion receipt. A zero receipt is not success.
+		if entry.Status != snapshot.StatusPending || entry.Phase != snapshot.CommandPhaseNoChange || entry.Execution == "" {
+			return IdempotencyEntry{}, false
+		}
+	} else if json.Unmarshal(raw, &receipt) != nil {
 		return IdempotencyEntry{}, false
 	}
 	return IdempotencyEntry{

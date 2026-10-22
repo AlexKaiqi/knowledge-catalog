@@ -10,7 +10,7 @@ var hostFlags = words("server home as request-id trace-id span-id parent-span-id
 var repeatedFlags = map[string]bool{"source-ref": true, "evidence-ref": true}
 
 func referenceCommand(path string) bool {
-	return path == "read" || path == "writer put" || path == "writer remove"
+	return path == "read" || path == "diff" || path == "writer put" || path == "writer remove"
 }
 
 func (e *executor) ValidateFlags(path string, flags map[string]any) error {
@@ -55,7 +55,7 @@ func (e *executor) ValidateFlags(path string, flags map[string]any) error {
 			return usage("--%s requires a value", name)
 		}
 	}
-	return validateCoordinates(flags)
+	return validateCoordinates(flags, path == "log" && flagString(flags, "continuation") != "")
 }
 
 func (e *executor) Validate(path string, flags map[string]any) error {
@@ -72,7 +72,7 @@ func (e *executor) Validate(path string, flags map[string]any) error {
 		if strings.TrimSpace(reference) == "" {
 			return usage("kc %s requires an object URN as its positional argument", path)
 		}
-	} else if path != "schema list" {
+	} else if path != "schema list" && !(path == "log" && flagString(flags, "continuation") != "") {
 		if _, err := required(flags, "object"); err != nil {
 			return err
 		}
@@ -90,14 +90,18 @@ func (e *executor) Validate(path string, flags map[string]any) error {
 		}
 		return nil
 	}
-	if reference == "" && repo == "" && set == "" && (path == "schema list" || e.context.Dataset == "") {
+	if path == "diff" {
+		_, err := comparisonRequest(flags)
+		return err
+	}
+	if reference == "" && repo == "" && set == "" && (path == "schema list" || e.context.Dataset == "") && !(path == "log" && flagString(flags, "continuation") != "") {
 		return usage("missing --repo or --dataset")
 	}
 	_, err := limitFrom(flags)
 	return err
 }
 
-func validateCoordinates(flags map[string]any) error {
+func validateCoordinates(flags map[string]any, continuedHistory bool) error {
 	reference := flagString(flags, "reference")
 	repo := flagString(flags, "repo")
 	set := flagString(flags, "dataset")
@@ -119,11 +123,11 @@ func validateCoordinates(flags map[string]any) error {
 	if reference == "" && set != "" && flagString(flags, "commit") != "" {
 		return usage("Dataset has its own fixed basis; do not mix --dataset and --commit without an object reference")
 	}
-	if flagString(flags, "commit") != "" && flagString(flags, "ref") != "" {
+	if flagString(flags, "commit") != "" && flagString(flags, "ref") != "" && !continuedHistory {
 		return usage("choose --commit or --ref; do not mix")
 	}
 	if flagString(flags, "revision") != "" {
-		if set == "" {
+		if set == "" && !continuedHistory {
 			return usage("--revision fixes a named Dataset; pass --dataset")
 		}
 		if flagString(flags, "pin") != "" {

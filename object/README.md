@@ -32,6 +32,23 @@ Snapshot 单元沿用内容摘要；Binding 单元没有持久值，采用本单
 RESOLVE 和条件写入须采用相同依据。`Unit.Digest`、`UnitDeclaration.Digest` 和内容 READ 摘要
 继续只描述值；维护 Binding 时取得 RESOLVE 摘要，不能把空值内容摘要当作声明前置条件。
 
+`LocalStateDigest` 是另一种本地状态相等关系，算法标识为 `LocalStateAlgorithm`：按完整所选
+Unit 的完整 Address（包含种类）、值摘要和本地 Schema／取值来源声明排序计算，不含路径、provenance、解释依赖
+版本或外部观察。调用方先证明逻辑范围相同和本地状态完整；未知输入不能按空集合计算。它不更换
+维护条件，不作为读取坐标或索引构建身份。字段投影应继续使用完整所选 Unit 的声明计算摘要。
+
+`ReadBasis` 是可序列化的固定坐标合同，包含编码版本、对象引用与形状、Dataset 发布身份、全部
+候选来源及其实际实例绑定、解释依赖和文件选择。`Validate` 校验坐标形状；`ScopeDigest` 比较
+对象与逻辑选择，不混入来源 commit、发布修订或实际返回的 Unit 集合。依据只表达坐标，不证明
+权限或曾经由服务签发；应用入口必须核对权威发布范围并重新授权，不能把调用方提交的依据直接
+当作原请求的可信记录。公开读取返回不透明 `basis` 引用，SDK `ReadRequest.Basis` 与 CLI
+`read --basis` 解析原耐久记录；不能混入另一套仓、Dataset 或版本坐标，也不能改变对象或原选择。
+每次回读重验当前授权、发布范围、来源绑定与固定提交，原依赖不可用时不跟随最新。
+临时定义通过 `ReadBasis.Temporary` 区分；回读恢复原固定文件选择并重新核验临时交付授权，
+不把空修订号或调用者标签当成命名发布版，也不因为回放依据而取得来源整仓读权。
+`state` 以 `ReadState` 返回算法、逻辑范围、完整性和适用的本地摘要；外部失败和字段投影错误
+不自动使已读取的本地 Unit 状态不完整。依赖版本无法冻结时，记录保留未决依赖，精确回读明确拒绝。
+
 `Repository` 是只读②视图。Tree provider 由 `object/reader` 在 Snapshot `TreeStore` 之上解释。都只提供 Canonical 精确读，Relation 候选必须来自③ exact-basis Retriever。挂载与 Dataset 服务 仍只要求 `snapshot.Store`，由应用装配显式取得② capability。
 
 `Repository` 只提供精确读、历史与分页，不提供 `Search/Probe/Retrieve`。PUT/REMOVE 只进入 Writer；支持 `object.ChangeStore` 的② provider 可增量落行，否则 Writer 使用字面 tree codec。Snapshot adapters 不解释对象或复制检索逻辑。
@@ -128,3 +145,16 @@ system 的 `object-interfaces/` 出版机器合同，`interfaces/` 仍解释 Wri
 `cli/` 拥有对象命令、参数、帮助、结果视图与对象专属的既有命令扩展，通过公开贡献由 KC
 宿主装配；`client/` 拥有独立 Object HTTP SDK，只消费公开类型和注入的认证传输。
 中央 CLI／客户端只装配本模块入口，不复制对象规则。基本 READ／PUT／REMOVE 只用对象 URN＋locator；目录草稿 diff／commit 与回执查询仍由应用流程组织。
+
+`LocalStateAlgorithm` 当前为 `kc-object-local-state/v2`，明确覆盖同坐标 Unit 种类变化；
+旧 v1 摘要不得作为同算法直接比较，现有维护摘要和条件写相等关系不变。
+`CompareLocalReads` 比较双侧完整本地 Unit 与独立固定依据；对象和逻辑选择须一致，范围不同
+不返回整体相等结论。值、声明、种类、来源变化分别报告；单侧 Unit 只有在双侧均交付同一完整
+来源时才判加入/移除，文件切片或来源范围变化只判进入/离开，不能从可见缺失推断源仓删除。
+`ComparisonRead` 是应用已授权读取后的服务端输入，不是调用方可提交的权限证明。
+本地比较不解析 Schema 或外部值；它不表示写入全部业务效果相同，也不是条件写或历史修订身份。
+
+`CommitResult.Changed` 使用可比较的 `ChangeState`：`ChangeUnknown`（零值，旧结果未知）、
+`ChangeUnchanged`、`ChangeChanged`。JSON 仍是可选布尔字段 `result.changed`，缺字段不推断为
+false；新类型不改变 Go 回执的值比较语义。同命令重放保留原判定，回执身份绑定命令与请求，
+不因两条无变化命令共享 commit 而相同。本地状态摘要相同不能推出这个完整写入效果判定。

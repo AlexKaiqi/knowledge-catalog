@@ -143,15 +143,21 @@ func (w *Writer) Merge(commandID string, intent MergeIntent) (receipt CommitRece
 			}
 			return nil, err
 		}
-		if target == snapshot.DefaultRef {
+		changed := expected != commitID
+		if target == snapshot.DefaultRef && changed {
 			w.store.NotifyAdvanced(snapshot.Advanced{Store: repo, From: expected, To: commitID})
 		}
+		changeState := objectmodel.ChangeUnchanged
+		if changed {
+			changeState = objectmodel.ChangeChanged
+		}
 		return CommitReceipt{
-			ReceiptRef:  "receipt:merge:" + string(commitID),
+			ReceiptRef:  commandReceiptReference(mergeKind, commandID, digest),
 			CommandID:   commandID,
 			Surface:     mergeKind,
 			Disposition: DispositionApplied,
 			Result: CommitResult{
+				Changed:      changeState,
 				RepositoryID: intent.TargetRepository,
 				CommitID:     commitID,
 				TargetRef:    target,

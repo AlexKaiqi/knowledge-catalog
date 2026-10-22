@@ -63,6 +63,9 @@ func (e ShapeReadExecutor) readSelection(ctx context.Context, root objectmodel.R
 		if !shapeLocatedFailure(kernel.CodeOf(err)) {
 			return err
 		}
+		if kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
+			acc.out.LocalIncomplete = true
+		}
 		acc.fail(path, kernel.CodeOf(err), err.Error())
 		return nil
 	}

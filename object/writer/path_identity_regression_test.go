@@ -60,11 +60,11 @@ func TestDirectoryIdentityChangeCannotOverwriteUnselectedPathOwner(t *testing.T)
 	if saved, ok := f.writer.Lookup("explicit-identity-without-remove"); ok && saved.Receipt.Disposition == writer.DispositionApplied {
 		t.Errorf("rejected path takeover left an accepted durable receipt: %#v", saved)
 	}
-	original, err := f.reader.Read(objectmodel.ObjectRef{Repository: f.store.ID(), Object: "records/orders"}, before, nil)
+	original, err := f.reader.Read(objectmodel.ObjectRef{Repository: f.store.ID(), Object: "records/orders"}, before)
 	if err != nil || original.Value != "name: orders\n" {
 		t.Fatalf("old fixed commit changed: %#v %v", original, err)
 	}
-	if _, err := f.reader.Read(objectmodel.ObjectRef{Repository: f.store.ID(), Object: "table/orders"}, before, nil); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
+	if _, err := f.reader.Read(objectmodel.ObjectRef{Repository: f.store.ID(), Object: "table/orders"}, before); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 		t.Fatalf("new identity appeared in the old fixed commit: %v", err)
 	}
 	// Updating the same directory identity at its existing path stays legal.
@@ -79,7 +79,7 @@ func TestDirectoryIdentityChangeCannotOverwriteUnselectedPathOwner(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	updated, err := f.reader.Read(objectmodel.ObjectRef{Repository: f.store.ID(), Object: "records/orders"}, accepted.Result.NewCommit, nil)
+	updated, err := f.reader.Read(objectmodel.ObjectRef{Repository: f.store.ID(), Object: "records/orders"}, accepted.Result.NewCommit)
 	if err != nil || updated.Value != "name: revised orders\n" {
 		t.Fatalf("legal same-identity directory update changed behavior: %#v %v", updated, err)
 	}
@@ -125,7 +125,7 @@ func TestExplicitPathOwnerRemovalKeepsFixedIdentityAndDatasetScope(t *testing.T)
 				if err != nil || fixed.Value != at.value || fixed.Commit != at.commit {
 					t.Fatalf("fixed identity not preserved at %s: %#v %v", at.commit, fixed, err)
 				}
-				if _, err := f.reader.Read(objectmodel.ObjectRef{Repository: f.store.ID(), Object: at.absent.ObjectID}, at.commit, nil); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
+				if _, err := f.reader.Read(objectmodel.ObjectRef{Repository: f.store.ID(), Object: at.absent.ObjectID}, at.commit); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 					t.Fatalf("absent identity %s has a locator at %s: %v", at.absent.ObjectID, at.commit, err)
 				}
 				scope := reader.Open(func(id kernel.RepositoryID) (objectmodel.Repository, error) {
@@ -150,7 +150,7 @@ func TestExplicitPathOwnerRemovalKeepsFixedIdentityAndDatasetScope(t *testing.T)
 				if _, err := scope.ReadReference(ref); kernel.CodeOf(err) != kernel.ErrObjectRefUnresolved {
 					t.Fatalf("selected-file Dataset read an unselected sibling: %v", err)
 				}
-				private, err := f.reader.Read(objectmodel.ObjectRef{Repository: f.store.ID(), Object: "private/notes"}, at.commit, nil)
+				private, err := f.reader.Read(objectmodel.ObjectRef{Repository: f.store.ID(), Object: "private/notes"}, at.commit)
 				if err != nil || private.Value != "unselected secret" {
 					t.Fatalf("explicit replacement changed a neighboring object: %#v %v", private, err)
 				}

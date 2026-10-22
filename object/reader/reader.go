@@ -56,7 +56,7 @@ func (r *Reader) Resolve(ref objectmodel.ObjectRef, commitID kernel.CommitID) (r
 	return repo.Resolve(ref.Object, commitID)
 }
 
-func (r *Reader) Read(ref objectmodel.ObjectRef, commitID kernel.CommitID, selector *objectmodel.AspectSelector) (value objectmodel.ObjectValue, err error) {
+func (r *Reader) Read(ref objectmodel.ObjectRef, commitID kernel.CommitID) (value objectmodel.ObjectValue, err error) {
 	defer func() {
 		err = r.note("read", map[string]any{"repositoryId": string(ref.Repository), "object": string(ref.Object), "commit": string(commitID)}, err)
 	}()
@@ -69,10 +69,6 @@ func (r *Reader) Read(ref objectmodel.ObjectRef, commitID kernel.CommitID, selec
 		return objectmodel.ObjectValue{}, err
 	}
 	value.Digest = kernel.CanonicalDigest(value.Value)
-	if selector == nil {
-		return value, nil
-	}
-	value.Value = objectmodel.SelectAspects(value.Value, value.Units, selector)
 	return value, nil
 }
 

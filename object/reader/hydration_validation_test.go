@@ -83,8 +83,8 @@ func TestInjectedHydrationRejectsMalformedReaderAndServingValues(t *testing.T) {
 			}), reader.DatasetPin{SetID: "fixed", Repositories: map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit}, Items: reader.WholeRepositoryItems(map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit})})
 			serving.SetHydrator(hydrator)
 			checks := map[string]func() error{
-				"Reader.Read":  func() error { _, err := rd.Read(ref, commit, nil); return err },
-				"Serving.Read": func() error { _, err := serving.Read(ref.Object, nil); return err },
+				"Reader.Read":  func() error { _, err := rd.Read(ref, commit); return err },
+				"Serving.Read": func() error { _, err := serving.Read(ref.Object); return err },
 			}
 			if !tc.objectOnly {
 				checks["Reader.ReadAddress"] = func() error { _, err := rd.ReadAddress(repo.ID(), address, commit); return err }

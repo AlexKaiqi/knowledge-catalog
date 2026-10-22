@@ -1,6 +1,7 @@
 package reader
 
 import (
+	"context"
 	"sort"
 
 	"kc/kernel"
@@ -10,67 +11,39 @@ import (
 )
 
 func (r *treeRepository) Log(objectID objectmodel.ObjectID, commit kernel.CommitID, query objectmodel.ObjectLogQuery) ([]objectmodel.ObjectRevision, error) {
-	history, ok := snapshot.HistoryStoreOf(r.base)
-	if !ok {
-		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "repository %s has no commit history", r.ID())
-	}
-	limit := query.PageSize()
-
-	var out []objectmodel.ObjectRevision
-	previous := ""
-	var introducing *objectmodel.ObjectRevision
-	skipping := query.After != ""
-	appendRevision := func(revision objectmodel.ObjectRevision) bool {
-		if skipping {
-			if revision.Commit == query.After {
-				skipping = false
-			}
-			return false
-		}
-		out = append(out, revision)
-		return len(out) >= limit
-	}
-	err := walkCommitHistory(history, commit, func(candidate kernel.CommitID) (bool, error) {
-		revision, err := r.objectRevisionAt(objectID, candidate)
+	queryLimit := query.PageSize()
+	out := []objectmodel.ObjectRevision{}
+	var progress *objectmodel.HistoryScanProgress
+	for {
+		page, err := r.scanHistory(context.Background(), objectID, commit, objectmodel.HistoryScanQuery{Limit: queryLimit - len(out), Budget: objectmodel.DefaultHistoryScanBudget, After: query.After, Progress: progress})
 		if err != nil {
-			return false, err
+			return nil, err
 		}
-		key := string(revision.Status) + ":" + string(revision.Digest) + ":" + string(revision.DeclarationDigest)
-		if introducing != nil && key != previous && appendRevision(*introducing) {
-			return true, nil
+		out = append(out, page.Revisions...)
+		if page.Complete || len(out) >= queryLimit {
+			return out, nil
 		}
-		previous = key
-		introducing = &revision
-		return false, nil
-	})
-	if err != nil {
-		return nil, err
+		progress = page.Progress
 	}
-	// An absent oldest state is the time before the first creation, not a
-	// deletion. All intermediate absent states were proved by an older value.
-	if introducing != nil && introducing.Status == objectmodel.StatusResolved && len(out) < limit {
-		appendRevision(*introducing)
-	}
-	return out, nil
 }
 
-func (r *treeRepository) objectRevisionAt(objectID objectmodel.ObjectID, commit kernel.CommitID) (objectmodel.ObjectRevision, error) {
+func (r *treeRepository) objectRevisionAt(objectID objectmodel.ObjectID, commit kernel.CommitID) (objectmodel.ObjectRevision, kernel.Digest, error) {
 	units, err := r.objectUnits(objectID, commit)
 	if err != nil {
-		return objectmodel.ObjectRevision{}, err
+		return objectmodel.ObjectRevision{}, "", err
 	}
 	revision := objectmodel.ObjectRevision{Commit: commit, Status: objectmodel.StatusRemoved}
 	if len(units) == 0 {
-		return revision, nil
+		return revision, objectmodel.LocalStateDigest(nil), nil
 	}
 	value, err := assembleObjectValue(r.ID(), objectID, commit, units)
 	if err != nil {
-		return objectmodel.ObjectRevision{}, err
+		return objectmodel.ObjectRevision{}, "", err
 	}
 	revision.Status = objectmodel.StatusResolved
 	revision.Digest = kernel.CanonicalDigest(value.Value)
 	revision.DeclarationDigest = repofile.TreeDeclarationDigest(units)
-	return revision, nil
+	return revision, objectmodel.LocalStateDigest(objectmodel.DeclareUnits(repofile.ToObjectUnits(units))), nil
 }
 
 func (r *treeRepository) Diff(objectID objectmodel.ObjectID, from, to kernel.CommitID) (objectmodel.ObjectDiff, error) {
