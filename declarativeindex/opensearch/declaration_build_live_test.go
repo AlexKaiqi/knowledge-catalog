@@ -2,20 +2,16 @@ package opensearch_test
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
-	"net/http"
 	"os"
 	"strings"
 	"testing"
 
 	"kc/declarativeindex/capability"
+	"kc/declarativeindex/internal/testfixture"
 	"kc/declarativeindex/opensearch"
 	index "kc/declarativeindex/projection"
 	retrieval "kc/discovery"
 	"kc/internal/testkit"
-	"kc/kernel"
 	objectmodel "kc/object"
 	"kc/snapshot"
 )
@@ -25,12 +21,12 @@ func TestOpenSearchDeclaredTemplateNormalizerAndMissingPolicies(t *testing.T) {
 	if endpoint == "" {
 		t.Fatal("real construction regression requires KC_TEST_OPENSEARCH_URL")
 	}
-	idx := index.NewIndexEngine("", opensearch.Open(opensearch.Config{URL: endpoint, PrimaryShards: 1}))
+	namespace := testfixture.LiveNamespace(t, endpoint)
+	idx := index.NewIndexEngine("", opensearch.Open(opensearch.Config{URL: endpoint, Namespace: namespace, PrimaryShards: 1}))
 	t.Cleanup(func() { _ = idx.Close() })
 	manifest := capability.DefaultManifest()
 	idx.SetDeclarationManifest(manifest.Check, manifest.Describe().Digest)
 	repo := testkit.MakeRepository(t, uniqueESRepo(t, "declaration-build"))
-	t.Cleanup(func() { cleanupDeclaredBuildProjection(t, endpoint, repo.ID()) })
 	text := testkit.IndexMember("metric-text", "text", []string{"text"}, "schema/metric#/fields/name", "schema/metric#/fields/expression")
 	body := text.Value.(map[string]any)
 	body["inputs"].([]any)[1].(map[string]any)["missing"] = "skip"
@@ -81,51 +77,5 @@ func TestOpenSearchDeclaredTemplateNormalizerAndMissingPolicies(t *testing.T) {
 	}
 	if result.Hits[0].Object.Value == nil || !strings.Contains(string(result.Hits[0].Object.Address.ObjectID), "metric/") {
 		t.Fatal("search did not hydrate the original object")
-	}
-}
-
-func cleanupDeclaredBuildProjection(t *testing.T, endpoint string, repository kernel.RepositoryID) {
-	t.Helper()
-	digest := sha256.Sum256([]byte(repository))
-	id := hex.EncodeToString(digest[:])
-	prefix := "kc-proj-" + id[:24] + "-g-"
-	response, err := http.Get(endpoint + "/_cat/indices/" + prefix + "*?format=json&h=index&expand_wildcards=all")
-	if err != nil {
-		t.Errorf("list owned test generations: %v", err)
-		return
-	}
-	defer response.Body.Close()
-	var indices []struct {
-		Index string `json:"index"`
-	}
-	if err := json.NewDecoder(response.Body).Decode(&indices); err != nil {
-		t.Errorf("decode owned test generations: %v", err)
-		return
-	}
-	for _, item := range indices {
-		if !strings.HasPrefix(item.Index, prefix) {
-			t.Errorf("test cleanup returned an unowned index %q", item.Index)
-			continue
-		}
-		deleteDeclaredBuildResource(t, endpoint+"/"+item.Index)
-	}
-	deleteDeclaredBuildResource(t, endpoint+"/kc-projection-control-v1/_doc/"+id+"?refresh=true")
-}
-
-func deleteDeclaredBuildResource(t *testing.T, resource string) {
-	t.Helper()
-	request, err := http.NewRequest(http.MethodDelete, resource, nil)
-	if err != nil {
-		t.Errorf("owned test cleanup request: %v", err)
-		return
-	}
-	response, err := http.DefaultClient.Do(request)
-	if err != nil {
-		t.Errorf("owned test cleanup: %v", err)
-		return
-	}
-	defer response.Body.Close()
-	if response.StatusCode >= 300 && response.StatusCode != 404 {
-		t.Errorf("owned test cleanup HTTP %d", response.StatusCode)
 	}
 }

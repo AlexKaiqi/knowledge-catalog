@@ -3,12 +3,14 @@ package opensearchimpl
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 
 	retrieval "kc/discovery"
@@ -19,22 +21,31 @@ import (
 )
 
 type controlDoc struct {
-	Repository         string                     `json:"repository"`
-	ActiveIndex        string                     `json:"active_index"`
-	Generation         string                     `json:"generation"`
-	ProjectionRevision string                     `json:"projection_revision,omitempty"`
-	State              string                     `json:"state"`
-	Basis              string                     `json:"basis"`
-	AccessDigest       string                     `json:"access_digest"`
-	ObservationDigest  string                     `json:"observation_digest,omitempty"`
-	PhysicalDigest     string                     `json:"physical_digest"`
-	ProviderRevision   string                     `json:"provider_revision"`
-	Mode               string                     `json:"mode"`
-	Cause              string                     `json:"cause"`
-	Coverage           float64                    `json:"coverage"`
-	ObjectCount        int                        `json:"object_count"`
-	SchemaAdoptions    []retrieval.SchemaAdoption `json:"schema_adoptions,omitempty"`
-	LastError          string                     `json:"last_error"`
+	ScopeDemand          *scopeDemand               `json:"scope_demand,omitempty"`
+	QueryLeaseVersion    int                        `json:"query_lease_version,omitempty"`
+	ObservationDeadlines map[string]int64           `json:"observation_deadlines,omitempty"`
+	CursorKey            []byte                     `json:"cursor_key,omitempty"`
+	PublicationVersion   int                        `json:"publication_version,omitempty"`
+	PublicationTicket    string                     `json:"publication_ticket,omitempty"`
+	PublicationEvidence  []byte                     `json:"publication_evidence,omitempty"`
+	RecoveryAfter        string                     `json:"recovery_after,omitempty"`
+	Resource             *generationResource        `json:"resource,omitempty"`
+	Repository           string                     `json:"repository"`
+	ActiveIndex          string                     `json:"active_index"`
+	Generation           string                     `json:"generation"`
+	ProjectionRevision   string                     `json:"projection_revision,omitempty"`
+	State                string                     `json:"state"`
+	Basis                string                     `json:"basis"`
+	AccessDigest         string                     `json:"access_digest"`
+	ObservationDigest    string                     `json:"observation_digest,omitempty"`
+	PhysicalDigest       string                     `json:"physical_digest"`
+	ProviderRevision     string                     `json:"provider_revision"`
+	Mode                 string                     `json:"mode"`
+	Cause                string                     `json:"cause"`
+	Coverage             float64                    `json:"coverage"`
+	ObjectCount          int                        `json:"object_count"`
+	SchemaAdoptions      []retrieval.SchemaAdoption `json:"schema_adoptions,omitempty"`
+	LastError            string                     `json:"last_error"`
 }
 
 type controlVersion struct {
@@ -119,6 +130,12 @@ func encodeDoc(doc index.CompiledDoc, vectors [][]float32) (osDoc, error) {
 	return out, nil
 }
 
+// Resource records preserve READY meaning under lifecycle bookkeeping states.
+func readyResourceMeta(record controlDoc) index.Meta {
+	record.State = index.ProjectionStateReady
+	return metaFromControl(record)
+}
+
 func metaFromControl(control controlDoc) index.Meta {
 	return index.Meta{
 		Basis: kernel.CommitID(control.Basis), AccessDigest: kernel.Digest(control.AccessDigest),
@@ -132,6 +149,11 @@ func metaFromControl(control controlDoc) index.Meta {
 }
 
 func controlFromMeta(repository kernel.RepositoryID, active, generation, state string, meta index.Meta, count int) controlDoc {
+	// The wire omits an empty adoption list. Keep the in-memory intent in the
+	// same form so authoritative readback can prove a lost publication ack.
+	if len(meta.SchemaAdoptions) == 0 {
+		meta.SchemaAdoptions = nil
+	}
 	coverage := meta.Coverage
 	if coverage == 0 {
 		coverage = 1
@@ -152,7 +174,27 @@ func (e *openSearchEngine) loadControl() (controlDoc, *controlVersion, error) {
 }
 
 func (e *openSearchEngine) loadControlContext(ctx context.Context) (controlDoc, *controlVersion, error) {
-	status, body, err := e.readControlResponse(ctx, "/"+e.controlIndexPath()+"/_doc/"+url.PathEscape(e.controlID))
+	if len(e.fixedControl) > 0 {
+		if e.queryProtection != nil {
+			if err := e.queryProtection.status(); err != nil {
+				return controlDoc{}, nil, err
+			}
+		}
+		if err := ctx.Err(); err != nil {
+			return controlDoc{}, nil, err
+		}
+		var control controlDoc
+		if err := json.Unmarshal(e.fixedControl, &control); err != nil {
+			return controlDoc{}, nil, err
+		}
+		version := e.fixedVersion
+		return control, &version, nil
+	}
+	return e.loadControlRecord(ctx, e.controlID)
+}
+
+func (e *openSearchEngine) loadControlRecord(ctx context.Context, id string) (controlDoc, *controlVersion, error) {
+	status, body, err := e.readControlResponse(ctx, "/"+e.controlIndexPath()+"/_doc/"+url.PathEscape(id))
 	if err != nil {
 		return controlDoc{}, nil, err
 	}
@@ -174,13 +216,21 @@ func (e *openSearchEngine) loadControlContext(ctx context.Context) (controlDoc, 
 }
 
 func (e *openSearchEngine) putControl(control controlDoc, expected *controlVersion) (*controlVersion, error) {
-	path := "/" + e.controlIndexPath() + "/_doc/" + url.PathEscape(e.controlID) + "?refresh=true"
+	return e.putControlRecord(e.controlID, control, expected)
+}
+
+func (e *openSearchEngine) putControlRecord(id string, control controlDoc, expected *controlVersion) (*controlVersion, error) {
+	return e.putControlRecordContext(context.Background(), id, control, expected)
+}
+
+func (e *openSearchEngine) putControlRecordContext(ctx context.Context, id string, control controlDoc, expected *controlVersion) (*controlVersion, error) {
+	path := "/" + e.controlIndexPath() + "/_doc/" + url.PathEscape(id) + "?refresh=true"
 	if expected == nil {
 		path += "&op_type=create"
 	} else {
 		path += "&if_seq_no=" + strconv.FormatInt(expected.SeqNo, 10) + "&if_primary_term=" + strconv.FormatInt(expected.PrimaryTerm, 10)
 	}
-	status, body, err := e.do(http.MethodPut, path, control)
+	status, body, err := e.doContext(ctx, http.MethodPut, path, control)
 	if err != nil {
 		return nil, err
 	}
@@ -238,20 +288,37 @@ func (e *openSearchEngine) Rebuild(docs []index.CompiledDoc, meta index.Meta) er
 }
 
 type rebuildSession struct {
-	engine        *openSearchEngine
-	old           controlDoc
-	buildVersion  *controlVersion
-	physicalIndex string
-	generation    string
-	meta          index.Meta
-	expected      int
-	done          bool
-	cold          bool
+	engine              *openSearchEngine
+	old                 controlDoc
+	buildVersion        *controlVersion
+	physicalIndex       string
+	generation          string
+	meta                index.Meta
+	expected            int
+	done                bool
+	cold                bool
+	publicationRejected bool
+	resourceContext     context.Context
+	preparation         *preparedResource
 }
 
 func (e *openSearchEngine) BeginRebuild(meta index.Meta) (index.RebuildSession, error) {
+	if err := e.requireMutableProjection(); err != nil {
+		return nil, err
+	}
 	e.buildMu.Lock()
+	// The control index must exist under its declared mapping before demand is
+	// recorded: a demand write to a missing index lets OpenSearch infer the
+	// mapping dynamically, which then rejects the declared one.
 	if err := e.ensureControlIndex(); err != nil {
+		e.buildMu.Unlock()
+		return nil, err
+	}
+	if err := e.enterDemand(context.Background()); err != nil {
+		e.buildMu.Unlock()
+		return nil, err
+	}
+	if err := e.reconcileCandidates(); err != nil {
 		e.buildMu.Unlock()
 		return nil, err
 	}
@@ -262,27 +329,30 @@ func (e *openSearchEngine) BeginRebuild(meta index.Meta) (index.RebuildSession, 
 		e.buildMu.Unlock()
 		return nil, err
 	}
-	generation := strconv.FormatInt(time.Now().UnixNano(), 36)
-	physicalIndex := e.prefix + "-g-" + generation
-	if err := e.createGeneration(physicalIndex); err != nil {
+	var identity [16]byte
+	if _, err := rand.Read(identity[:]); err != nil {
 		e.buildMu.Unlock()
 		return nil, err
 	}
-	buildVersion := version
-	cold := old.ActiveIndex == ""
-	if cold {
+	generation := hex.EncodeToString(identity[:])
+	physicalIndex := e.prefix + "-g-" + generation
+	session := &rebuildSession{engine: e, old: old, buildVersion: version, physicalIndex: physicalIndex,
+		generation: generation, meta: meta, cold: old.ActiveIndex == ""}
+	if err := session.registerResource(); err != nil {
+		e.buildMu.Unlock()
+		return nil, err
+	}
+	if err := session.resourceIO(func() error { return e.createGeneration(physicalIndex) }); err != nil {
+		return nil, session.Abort(err)
+	}
+	if session.cold {
 		building := controlFromMeta(e.repository, "", generation, index.ProjectionStateBuilding, meta, 0)
-		buildVersion, err = e.putControl(building, version)
+		session.buildVersion, err = e.putControl(building, version)
 		if err != nil {
-			e.dropGeneration(physicalIndex)
-			e.buildMu.Unlock()
-			return nil, err
+			return nil, session.Abort(err)
 		}
 	}
-	return &rebuildSession{
-		engine: e, old: old, buildVersion: buildVersion, physicalIndex: physicalIndex,
-		generation: generation, meta: meta, cold: cold,
-	}, nil
+	return session, nil
 }
 
 func (s *rebuildSession) Append(docs []index.CompiledDoc) error {
@@ -292,7 +362,7 @@ func (s *rebuildSession) Append(docs []index.CompiledDoc) error {
 	if len(docs) == 0 {
 		return nil
 	}
-	if _, err := s.engine.bulk(s.physicalIndex, docs, nil, false); err != nil {
+	if _, err := s.engine.bulkGuarded(s.physicalIndex, docs, nil, false, s.resourceIO); err != nil {
 		return err
 	}
 	s.expected += len(docs)
@@ -303,7 +373,7 @@ func (s *rebuildSession) Commit() error {
 	if s.done {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "OpenSearch rebuild session is closed")
 	}
-	if err := s.engine.refresh(s.physicalIndex); err != nil {
+	if err := s.resourceIO(func() error { return s.engine.refresh(s.physicalIndex) }); err != nil {
 		return s.Abort(err)
 	}
 	count, err := s.engine.countIndex(s.physicalIndex)
@@ -313,19 +383,34 @@ func (s *rebuildSession) Commit() error {
 	if count != s.expected {
 		return s.Abort(fmt.Errorf("opensearch generation count %d does not match compiled count %d", count, s.expected))
 	}
-	ready := controlFromMeta(s.engine.repository, s.physicalIndex, s.generation, index.ProjectionStateReady, s.meta, count)
-	s.engine.mu.Lock()
-	if _, err := s.engine.putControl(ready, s.buildVersion); err != nil {
-		s.engine.mu.Unlock()
+	if err := s.preservePreviousGeneration(); err != nil {
 		return s.Abort(err)
 	}
+	if err := s.resourcePhase(resourcePublishing); err != nil {
+		return s.Abort(err)
+	}
+	ready := controlFromMeta(s.engine.repository, s.physicalIndex, s.generation, index.ProjectionStateReady, s.meta, count)
+	ready.QueryLeaseVersion = 1
+	ready = withObservationDeadlines(s.old, ready, time.Now())
+	if s.preparation != nil {
+		s.preparation.ready = ready
+	}
+	s.engine.mu.Lock()
+	_, publishErr := s.engine.putControl(ready, s.buildVersion)
 	s.engine.mu.Unlock()
+	if publishErr != nil {
+		if kernel.CodeOf(publishErr) == kernel.ErrNonFastForward {
+			s.publicationRejected = true
+			return s.Abort(publishErr)
+		}
+		if err := s.recoverPublication(ready, publishErr); err != nil {
+			return err
+		}
+	}
+	protectErr := s.resourcePhase(resourceAdopted)
 	s.done = true
 	s.engine.buildMu.Unlock()
-	if s.old.ActiveIndex != "" && s.old.ActiveIndex != s.physicalIndex {
-		s.engine.retireGeneration(s.old.ActiveIndex)
-	}
-	return nil
+	return protectErr
 }
 
 func (s *rebuildSession) Abort(buildErr error) error {
@@ -337,13 +422,18 @@ func (s *rebuildSession) Abort(buildErr error) error {
 		failed.LastError = buildErr.Error()
 		_, _ = s.engine.putControl(failed, s.buildVersion)
 	}
-	s.engine.dropGeneration(s.physicalIndex)
+	if err := s.discardResource(); err != nil {
+		buildErr = errors.Join(kernel.Fail(kernel.ErrTemporaryUnavailable, "candidate %s retained for recovery: %v", s.physicalIndex, err), buildErr)
+	}
 	s.done = true
 	s.engine.buildMu.Unlock()
 	return buildErr
 }
 
 func (e *openSearchEngine) Apply(upserts []index.CompiledDoc, deletes []objectmodel.ObjectID, meta index.Meta) error {
+	if err := e.requireMutableProjection(); err != nil {
+		return err
+	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	control, version, err := e.loadControl()
@@ -353,11 +443,20 @@ func (e *openSearchEngine) Apply(upserts []index.CompiledDoc, deletes []objectmo
 	if control.ActiveIndex == "" || control.State != index.ProjectionStateReady {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "opensearch projection is not READY")
 	}
+	return e.updateResource(control, func(guard func(func() error) error) error {
+		return e.applyGeneration(control, version, upserts, deletes, meta, guard)
+	})
+}
+
+func (e *openSearchEngine) applyGeneration(control controlDoc, version *controlVersion, upserts []index.CompiledDoc, deletes []objectmodel.ObjectID, meta index.Meta, guard func(func() error) error) error {
 	updating := control
 	updating.State = index.ProjectionStateUpdating
 	updating.LastError = ""
 	updateVersion, err := e.putControl(updating, version)
 	if err != nil {
+		if kernel.CodeOf(err) == kernel.ErrNonFastForward {
+			return completedPhysical(err)
+		}
 		return err
 	}
 	fail := func(updateErr error) error {
@@ -367,19 +466,21 @@ func (e *openSearchEngine) Apply(upserts []index.CompiledDoc, deletes []objectmo
 		_, _ = e.putControl(failed, updateVersion)
 		return updateErr
 	}
-	delta, err := e.bulk(control.ActiveIndex, upserts, deletes, true)
+	delta, err := e.bulkGuarded(control.ActiveIndex, upserts, deletes, true, guard)
 	if err != nil {
 		return fail(err)
 	}
 	count := control.ObjectCount + delta
 	ready := controlFromMeta(e.repository, control.ActiveIndex, control.Generation, index.ProjectionStateReady, meta, count)
+	ready.QueryLeaseVersion = control.QueryLeaseVersion
+	ready = withObservationDeadlines(control, ready, time.Now())
 	if _, err := e.putControl(ready, updateVersion); err != nil {
 		return fail(err)
 	}
 	return nil
 }
 
-func (e *openSearchEngine) bulk(physicalIndex string, docs []index.CompiledDoc, deletes []objectmodel.ObjectID, waitForRefresh bool) (int, error) {
+func (e *openSearchEngine) bulkGuarded(physicalIndex string, docs []index.CompiledDoc, deletes []objectmodel.ObjectID, waitForRefresh bool, guard func(func() error) error) (int, error) {
 	const batchSize = 500
 	delta := 0
 	for start := 0; start < len(deletes); start += batchSize {
@@ -391,7 +492,7 @@ func (e *openSearchEngine) bulk(physicalIndex string, docs []index.CompiledDoc, 
 		for _, id := range deletes[start:end] {
 			writeNDJSON(&body, map[string]any{"delete": map[string]any{"_index": physicalIndex, "_id": documentID(string(id))}})
 		}
-		batchDelta, err := e.sendBulk(body.Bytes(), waitForRefresh)
+		batchDelta, err := e.sendBulkGuarded(body.Bytes(), waitForRefresh, guard)
 		if err != nil {
 			return 0, err
 		}
@@ -403,7 +504,7 @@ func (e *openSearchEngine) bulk(physicalIndex string, docs []index.CompiledDoc, 
 			end = len(docs)
 		}
 		var body bytes.Buffer
-		vectors, err := e.embedBatch(docs[start:end])
+		vectors, err := e.embedBatchWithCache(docs[start:end], guard)
 		if err != nil {
 			return 0, err
 		}
@@ -417,7 +518,7 @@ func (e *openSearchEngine) bulk(physicalIndex string, docs []index.CompiledDoc, 
 		}
 		// refresh=wait_for covers only shards touched by this bulk request.
 		// Every incremental batch must pass its own visibility barrier before READY.
-		batchDelta, err := e.sendBulk(body.Bytes(), waitForRefresh)
+		batchDelta, err := e.sendBulkGuarded(body.Bytes(), waitForRefresh, guard)
 		if err != nil {
 			return 0, err
 		}
@@ -445,7 +546,7 @@ func (e *openSearchEngine) sendBulk(payload []byte, waitForRefresh bool) (int, e
 		return 0, err
 	}
 	if status >= 400 {
-		return 0, fmt.Errorf("opensearch bulk: %s", body)
+		return 0, completedPhysical(fmt.Errorf("opensearch bulk: %s", body))
 	}
 	var response struct {
 		Errors bool `json:"errors"`
@@ -459,10 +560,17 @@ func (e *openSearchEngine) sendBulk(payload []byte, waitForRefresh bool) (int, e
 		return 0, err
 	}
 	delta := 0
+	var failure error
+	definitive := true
 	for _, item := range response.Items {
 		for action, result := range item {
 			if result.Status >= 400 && !(action == "delete" && result.Status == http.StatusNotFound) {
-				return 0, fmt.Errorf("opensearch bulk %s status %d: %v", action, result.Status, result.Error)
+				failure = errors.Join(failure, fmt.Errorf("opensearch bulk %s status %d: %v", action, result.Status, result.Error))
+				switch result.Status {
+				case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict:
+				default:
+					definitive = false
+				}
 			}
 			if action == "index" && (result.Result == "created" || result.Status == http.StatusCreated) {
 				delta++
@@ -471,6 +579,12 @@ func (e *openSearchEngine) sendBulk(payload []byte, waitForRefresh bool) (int, e
 				delta--
 			}
 		}
+	}
+	if failure != nil {
+		if definitive {
+			failure = completedPhysical(failure)
+		}
+		return 0, failure
 	}
 	return delta, nil
 }
@@ -506,74 +620,4 @@ func (e *openSearchEngine) countIndex(physicalIndex string) (int, error) {
 		return 0, err
 	}
 	return out.Count, nil
-}
-
-func (e *openSearchEngine) dropGeneration(name string) {
-	if !strings.HasPrefix(name, e.prefix+"-g-") {
-		return
-	}
-	_, _, _ = e.do(http.MethodDelete, "/"+name, nil)
-}
-
-// PITs live for two minutes. Retire the old generation only after that window
-// so an online publish does not invalidate continuations already in flight.
-func (e *openSearchEngine) retireGeneration(name string) {
-	const pitGrace = 3 * time.Minute
-	e.retireMu.Lock()
-	defer e.retireMu.Unlock()
-	if e.retired == nil {
-		e.retired = map[string]*time.Timer{}
-	}
-	if _, exists := e.retired[name]; exists {
-		return
-	}
-	e.retired[name] = time.AfterFunc(pitGrace, func() {
-		e.dropGeneration(name)
-		e.retireMu.Lock()
-		delete(e.retired, name)
-		e.retireMu.Unlock()
-	})
-}
-
-// embedBatch embeds only explicitly declared vector member inputs. Text members
-// never create vectors; each configured model must match the instance provider.
-func (e *openSearchEngine) embedBatch(docs []index.CompiledDoc) ([][][]float32, error) {
-	vectors := make([][][]float32, len(docs))
-	type slot struct{ document, member int }
-	texts := []string{}
-	slots := []slot{}
-	for i, doc := range docs {
-		vectors[i] = make([][]float32, len(doc.Semantic))
-		for j, field := range doc.Semantic {
-			if !e.VectorReady() || field.Model != e.vectorModel {
-				return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "vector member %s requires registered model %s", field.Member, field.Model)
-			}
-			texts = append(texts, field.Text)
-			slots = append(slots, slot{i, j})
-		}
-	}
-	if len(texts) == 0 {
-		return vectors, nil
-	}
-	// The provider rejects a request whose combined input exceeds its context.
-	// Each call stays inside that limit and the provider timeout. Order is the
-	// request order; a failed slice is not retried.
-	resultVectors := make([][]float32, 0, len(texts))
-	for _, batch := range embeddingRequests(texts) {
-		result, err := e.embedder.Embed(context.Background(), retrieval.EmbeddingRequest{Texts: batch})
-		if err != nil {
-			return nil, err
-		}
-		if len(result.Vectors) != len(batch) {
-			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "embedding batch returned %d vectors for %d texts", len(result.Vectors), len(batch))
-		}
-		resultVectors = append(resultVectors, result.Vectors...)
-	}
-	for i, vector := range resultVectors {
-		if len(vector) != e.vectorDimension {
-			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "embedding model returned %d dimensions, projection pins %d", len(vector), e.vectorDimension)
-		}
-		vectors[slots[i].document][slots[i].member] = vector
-	}
-	return vectors, nil
 }

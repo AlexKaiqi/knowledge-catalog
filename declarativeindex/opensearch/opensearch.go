@@ -22,5 +22,6 @@ const (
 var (
 	Check                     = opensearchimpl.Check
 	Open                      = opensearchimpl.Open
+	OpenResources             = opensearchimpl.OpenResources
 	ConfiguredEmbeddingModels = opensearchimpl.ConfiguredEmbeddingModels
 )

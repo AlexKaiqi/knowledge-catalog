@@ -24,6 +24,9 @@ const maxResponseBytes = 64 << 20
 
 // openSearchEngine owns one Repository's managed OpenSearch projection.
 type openSearchEngine struct {
+	queryProtection *queryProtection
+	fixedControl    []byte
+	fixedVersion    controlVersion
 	base            string
 	prefix          string
 	controlID       string
@@ -36,8 +39,6 @@ type openSearchEngine struct {
 	repository      kernel.RepositoryID
 	mu              sync.RWMutex
 	buildMu         sync.Mutex
-	retireMu        sync.Mutex
-	retired         map[string]*time.Timer
 	primaryShards   int
 	replicas        int
 	refreshInterval string
@@ -49,8 +50,12 @@ type openSearchEngine struct {
 	vectorModel     string
 	// denseVector is set when the cluster rejects OpenSearch knn settings and
 	// serves Elasticsearch dense_vector plus /_pit instead.
-	denseVector atomic.Bool
-	vectorKnown atomic.Bool
+	denseVector               atomic.Bool
+	vectorKnown               atomic.Bool
+	computationCacheDirectory string
+	computationCacheAuthority string
+	embeddingIdentity         string
+	embeddingCacheIdentity    string
 }
 
 // VectorReady reports whether this engine derives a k-NN vector surface.
@@ -59,11 +64,8 @@ func (e *openSearchEngine) VectorReady() bool {
 }
 
 func (e *openSearchEngine) Close() error {
-	e.retireMu.Lock()
-	defer e.retireMu.Unlock()
-	for name, timer := range e.retired {
-		timer.Stop()
-		delete(e.retired, name)
+	if e.queryProtection != nil {
+		return e.queryProtection.close()
 	}
 	return nil
 }
@@ -75,7 +77,7 @@ func (e *openSearchEngine) ProviderRevision() string {
 func (e *openSearchEngine) PhysicalDigest() kernel.Digest {
 	identity := map[string]any{
 		"provider": e.ProviderID(), "revision": e.ProviderRevision(),
-		"mapping": "typed-cells-v4-access-faces", "compiler": "object-units-v4-member-construction",
+		"mapping": "typed-cells-v4-access-faces", "compiler": "object-units-v5-member-construction-semantic-state",
 		"primaryShards": e.primaryShards, "replicas": e.replicas, "refreshInterval": e.refreshInterval,
 	}
 	if e.namespace != "" {
@@ -85,6 +87,9 @@ func (e *openSearchEngine) PhysicalDigest() kernel.Digest {
 		identity["embeddingModel"], identity["embeddingDimensions"] = e.vectorModel, e.vectorDimension
 		// The knn versus dense_vector choice is learned from the cluster while
 		// a generation is created, after this digest has already been fixed.
+		if e.embeddingIdentity != "" {
+			identity["embeddingImplementation"] = e.embeddingIdentity
+		}
 	}
 	return kernel.CanonicalDigest(identity)
 }
@@ -115,6 +120,10 @@ func documentID(objectID string) string {
 }
 
 func (e *openSearchEngine) ensureControlIndex() error {
+	return e.ensureControlIndexContext(context.Background())
+}
+
+func (e *openSearchEngine) ensureControlIndexContext(ctx context.Context) error {
 	mapping := map[string]any{
 		"settings": map[string]any{"index": map[string]any{"number_of_shards": 1}},
 		"mappings": map[string]any{
@@ -122,7 +131,7 @@ func (e *openSearchEngine) ensureControlIndex() error {
 			"properties": controlProperties(),
 		},
 	}
-	status, body, err := e.do(http.MethodPut, "/"+e.controlIndexPath(), mapping)
+	status, body, err := e.doContext(ctx, http.MethodPut, "/"+e.controlIndexPath(), mapping)
 	if err != nil {
 		return err
 	}
@@ -130,7 +139,7 @@ func (e *openSearchEngine) ensureControlIndex() error {
 		return fmt.Errorf("opensearch create control index: %s", body)
 	}
 	if status >= 400 {
-		status, body, err = e.do(http.MethodPut, "/"+e.controlIndexPath()+"/_mapping", map[string]any{"properties": controlProperties()})
+		status, body, err = e.doContext(ctx, http.MethodPut, "/"+e.controlIndexPath()+"/_mapping", map[string]any{"properties": controlProperties()})
 		if err != nil {
 			return err
 		}
@@ -143,22 +152,35 @@ func (e *openSearchEngine) ensureControlIndex() error {
 
 func controlProperties() map[string]any {
 	return map[string]any{
-		"repository":          map[string]any{"type": "keyword"},
-		"active_index":        map[string]any{"type": "keyword"},
-		"generation":          map[string]any{"type": "keyword"},
-		"projection_revision": map[string]any{"type": "keyword"},
-		"state":               map[string]any{"type": "keyword"},
-		"basis":               map[string]any{"type": "keyword"},
-		"access_digest":       map[string]any{"type": "keyword"},
-		"observation_digest":  map[string]any{"type": "keyword"},
-		"physical_digest":     map[string]any{"type": "keyword"},
-		"provider_revision":   map[string]any{"type": "keyword"},
-		"mode":                map[string]any{"type": "keyword"},
-		"cause":               map[string]any{"type": "keyword"},
-		"coverage":            map[string]any{"type": "double"},
-		"object_count":        map[string]any{"type": "long"},
-		"last_error":          map[string]any{"type": "keyword", "ignore_above": 4096},
-		"schema_adoptions":    map[string]any{"type": "object", "enabled": false},
+		"scope_demand": map[string]any{"type": "object", "dynamic": "strict", "properties": map[string]any{
+			"version": map[string]any{"type": "integer"},
+			"epoch":   map[string]any{"type": "keyword"},
+			"phase":   map[string]any{"type": "keyword"},
+		}},
+		"cursor_key":            map[string]any{"type": "binary"},
+		"query_lease_version":   map[string]any{"type": "integer"},
+		"observation_deadlines": map[string]any{"type": "object", "enabled": false},
+		"repository":            map[string]any{"type": "keyword"},
+		"active_index":          map[string]any{"type": "keyword"},
+		"generation":            map[string]any{"type": "keyword"},
+		"projection_revision":   map[string]any{"type": "keyword"},
+		"state":                 map[string]any{"type": "keyword"},
+		"basis":                 map[string]any{"type": "keyword"},
+		"access_digest":         map[string]any{"type": "keyword"},
+		"observation_digest":    map[string]any{"type": "keyword"},
+		"physical_digest":       map[string]any{"type": "keyword"},
+		"provider_revision":     map[string]any{"type": "keyword"},
+		"mode":                  map[string]any{"type": "keyword"},
+		"cause":                 map[string]any{"type": "keyword"},
+		"coverage":              map[string]any{"type": "double"},
+		"object_count":          map[string]any{"type": "long"},
+		"last_error":            map[string]any{"type": "keyword", "ignore_above": 4096},
+		"schema_adoptions":      map[string]any{"type": "object", "enabled": false},
+		"resource":              resourceProperties(),
+		"publication_version":   map[string]any{"type": "integer"},
+		"publication_ticket":    map[string]any{"type": "keyword"},
+		"publication_evidence":  map[string]any{"type": "binary"},
+		"recovery_after":        map[string]any{"type": "keyword"},
 	}
 }
 
@@ -234,7 +256,7 @@ func (e *openSearchEngine) createGeneration(name string) error {
 		}
 	}
 	if status >= 400 {
-		return fmt.Errorf("opensearch create generation: %s", body)
+		return completedPhysical(fmt.Errorf("opensearch create generation: %s", body))
 	}
 	return nil
 }
@@ -274,7 +296,7 @@ func (e *openSearchEngine) refresh(name string) error {
 		return err
 	}
 	if status >= 400 {
-		return fmt.Errorf("opensearch refresh generation: %s", body)
+		return completedPhysical(fmt.Errorf("opensearch refresh generation: %s", body))
 	}
 	var response struct {
 		Shards *shardResponse `json:"_shards"`
@@ -282,7 +304,7 @@ func (e *openSearchEngine) refresh(name string) error {
 	if err := decodeJSON(body, &response); err != nil {
 		return err
 	}
-	return response.Shards.check("refresh")
+	return completedPhysical(response.Shards.check("refresh"))
 }
 
 // Incremental publication holds the write lock while awaiting shard refresh.
@@ -334,6 +356,15 @@ func (e *openSearchEngine) doBytes(method, path string, body []byte, contentType
 }
 
 func (e *openSearchEngine) doBytesContext(ctx context.Context, method, path string, body []byte, contentType string) (int, []byte, error) {
+	if protection := e.protectionForContext(ctx); protection != nil {
+		protected, release, err := protection.context(ctx)
+		if err != nil {
+			return 0, nil, err
+		}
+		defer release()
+		ctx = protected
+	}
+
 	var rdr io.Reader
 	if len(body) > 0 {
 		rdr = bytes.NewReader(body)

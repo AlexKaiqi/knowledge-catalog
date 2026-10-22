@@ -31,6 +31,11 @@ func (e *openSearchEngine) RetrieveRelationsContext(ctx context.Context, req ret
 	if err != nil {
 		return retrieval.RelationCandidatePage{}, err
 	}
+	ctx, release, err := e.protectRootQuery(ctx, control, version, req.Continuation)
+	if err != nil {
+		return retrieval.RelationCandidatePage{}, err
+	}
+	defer release()
 	state := pitContinuation{}
 	if req.Continuation == "" {
 		state = pitContinuation{
@@ -46,6 +51,11 @@ func (e *openSearchEngine) RetrieveRelationsContext(ctx context.Context, req ret
 		state = decoded
 		if state.Basis != req.Basis || state.Repository != req.Repository || state.Namespace != namespaceDigest(e.namespace) || state.Query != string(retrieval.RelationQueryDigest(req.Query)) || state.Generation != control.Generation {
 			return retrieval.RelationCandidatePage{}, kernel.Fail(kernel.ErrPreconditionFailed, "OpenSearch relation continuation does not match instance, repository, basis, query, or generation")
+		}
+	}
+	if req.Continuation != "" {
+		if err := e.checkContinuationProtection(ctx, state); err != nil {
+			return retrieval.RelationCandidatePage{}, err
 		}
 	}
 	pit, err := e.openStablePITContext(ctx, control, version)
@@ -75,6 +85,9 @@ func (e *openSearchEngine) RetrieveRelationsContext(ctx context.Context, req ret
 	state.Sort = sortValues
 	state.Rank += len(ids)
 	state.PIT = ""
+	if err := e.protectContinuation(ctx, &state); err != nil {
+		return retrieval.RelationCandidatePage{}, err
+	}
 	page.Continuation = encodePITContinuation(state)
 	return page, nil
 }

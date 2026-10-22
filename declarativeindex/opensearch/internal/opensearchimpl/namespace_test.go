@@ -27,8 +27,12 @@ func TestOpenSearchNamespacePreservesLegacyIdentity(t *testing.T) {
 	if legacy.prefix != "kc-proj-a26b3166e88592411679ac5f" || legacy.controlID != "a26b3166e88592411679ac5f03e8842fcc4dcec86920dfb72820592d48da154c" || legacy.controlIndexPath() != controlIndexName {
 		t.Fatalf("empty namespace changed existing physical coordinates: %#v", legacy)
 	}
-	if digest := legacy.PhysicalDigest(); digest != "405f92cdf8187b3209c6eaded766ae0971955cdba48e152e5d54b8a9d07a672d" {
-		t.Fatalf("empty namespace changed the declared v6 physical identity: %s", digest)
+	if digest := legacy.PhysicalDigest(); digest != "18e051f3c1b81db71b668eb2b5ca04a0503acaf106ebff92ca9b71e75ca0a875" {
+		t.Fatalf("empty namespace changed the declared semantic-aware compiler identity: %s", digest)
+	}
+	// The new semantic-aware document digest must not silently adopt v4 corpora.
+	if legacy.PhysicalDigest() == "405f92cdf8187b3209c6eaded766ae0971955cdba48e152e5d54b8a9d07a672d" {
+		t.Fatal("semantic-aware compiler reused the old compiler identity")
 	}
 	left, right, reopened := open("a", "dir-a"), open("b", "dir-b"), open("a", "another-dir")
 	if left.prefix == right.prefix || left.controlIndexPath() == right.controlIndexPath() || left.PhysicalDigest() == right.PhysicalDigest() {

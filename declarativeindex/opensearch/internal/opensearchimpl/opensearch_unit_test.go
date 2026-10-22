@@ -182,7 +182,11 @@ func TestOpenSearchWarmRebuildKeepsReadyGenerationQueryable(t *testing.T) {
 	}
 	var mu sync.Mutex
 	controlWrites := 0
+	var resources resourceControlFixture
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if resources.serve(w, r) {
+			return
+		}
 		switch {
 		case r.Method == http.MethodPut && r.URL.Path == "/"+controlIndexName:
 			w.WriteHeader(http.StatusBadRequest)
@@ -251,7 +255,12 @@ func TestOpenSearchIncrementalApplyAvoidsGlobalCountAndForcedRefresh(t *testing.
 	var forbidden []string
 	var bulkWaitFor bool
 	seq := int64(7)
+	var resourceRecords resourceControlFixture
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if resourceRecords.serve(w, r) {
+			return
+		}
+
 		switch {
 		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/_doc/"):
 			_ = json.NewEncoder(w).Encode(map[string]any{"_source": control, "_seq_no": seq, "_primary_term": 1})

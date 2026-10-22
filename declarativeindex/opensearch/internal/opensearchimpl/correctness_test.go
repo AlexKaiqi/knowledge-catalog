@@ -127,7 +127,12 @@ func TestOpenSearchApplyWaitsForEveryTouchedShard(t *testing.T) {
 	control := controlDoc{Repository: "repo", ActiveIndex: "generation", Generation: "g1", State: index.ProjectionStateReady, Basis: "c1"}
 	dirty := map[int]bool{}
 	batch := 0
+	var resourceRecords resourceControlFixture
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if resourceRecords.serve(w, r) {
+			return
+		}
+
 		switch {
 		case r.Method == http.MethodGet:
 			_ = json.NewEncoder(w).Encode(map[string]any{"_source": control, "_seq_no": 1, "_primary_term": 1})
@@ -410,7 +415,11 @@ func TestOpenSearchObjectReferencesUseExactKeywordCells(t *testing.T) {
 
 func TestOpenSearchOpenDefersNetworkAndControlMaintenance(t *testing.T) {
 	calls, controlCreated := 0, false
+	var resources resourceControlFixture
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if resources.serve(w, r) {
+			return
+		}
 		calls++
 		switch {
 		case r.Method == http.MethodPut && r.URL.Path == "/"+controlIndexName:

@@ -89,7 +89,10 @@ func TestLiveOpenSearchControllerRecoversGenerationLossWithReadyControl(t *testi
 			records := media.records(t)
 			var lost generationControl
 			for _, record := range records {
-				if record.Source.Basis == string(commit) && strings.HasSuffix(record.Source.Repository, "#state") == (lane == "state") {
+				if record.Source.State == ports.ProjectionStateReady && record.Source.Basis == string(commit) && strings.HasSuffix(record.Source.Repository, "#state") == (lane == "state") {
+					if lost.ID != "" {
+						t.Fatalf("multiple READY control pointers for the same fixed lane: %#v", records)
+					}
 					lost = record
 				}
 			}

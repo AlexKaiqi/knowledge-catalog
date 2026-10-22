@@ -18,6 +18,8 @@ import (
 )
 
 type pitContinuation struct {
+	Lease      string              `json:"lease,omitempty"`
+	Until      int64               `json:"until,omitempty"`
 	PIT        string              `json:"pit,omitempty"`
 	Basis      kernel.CommitID     `json:"basis"`
 	Repository kernel.RepositoryID `json:"repository,omitempty"`
@@ -86,6 +88,11 @@ func (e *openSearchEngine) RetrieveContext(ctx context.Context, req index.Retrie
 	if err != nil {
 		return index.CandidatePage{}, err
 	}
+	ctx, release, err := e.protectRootQuery(ctx, control, version, req.Continuation)
+	if err != nil {
+		return index.CandidatePage{}, err
+	}
+	defer release()
 	state := pitContinuation{}
 	if req.Continuation == "" {
 		state = pitContinuation{
@@ -102,6 +109,11 @@ func (e *openSearchEngine) RetrieveContext(ctx context.Context, req index.Retrie
 		if state.Basis != req.Spec.Commit || state.Repository != req.Spec.Repository || state.Namespace != namespaceDigest(e.namespace) ||
 			state.Query != string(retrieval.SearchQueryDigest(req.Search)) || state.Generation != control.Generation {
 			return index.CandidatePage{}, kernel.Fail(kernel.ErrPreconditionFailed, "OpenSearch continuation does not match instance, repository, basis, query, or generation")
+		}
+	}
+	if req.Continuation != "" {
+		if err := e.checkContinuationProtection(ctx, state); err != nil {
+			return index.CandidatePage{}, err
 		}
 	}
 	pit, err := e.openStablePITContext(ctx, control, version)
@@ -152,6 +164,9 @@ func (e *openSearchEngine) RetrieveContext(ctx context.Context, req index.Retrie
 	state.Sort = sortValues[len(sortValues)-1]
 	state.Rank += len(candidates)
 	state.PIT = ""
+	if err := e.protectContinuation(ctx, &state); err != nil {
+		return index.CandidatePage{}, err
+	}
 	page.Continuation = encodePITContinuation(state)
 	return page, nil
 }
@@ -598,7 +613,7 @@ func (e *openSearchEngine) SemanticWindowContext(ctx context.Context, req index.
 		return index.CandidatePage{}, err
 	}
 	defer e.mu.RUnlock()
-	control, _, err := e.loadControlContext(ctx)
+	control, version, err := e.loadControlContext(ctx)
 	if err != nil {
 		return index.CandidatePage{}, err
 	}
@@ -608,6 +623,11 @@ func (e *openSearchEngine) SemanticWindowContext(ctx context.Context, req index.
 	if len(queryVector) != e.vectorDimension { // re-check under the lock
 		return index.CandidatePage{}, kernel.Fail(kernel.ErrUsageInvalid, "query vector dimension does not match the projection")
 	}
+	ctx, release, err := e.protectRootQuery(ctx, control, version, "")
+	if err != nil {
+		return index.CandidatePage{}, err
+	}
+	defer release()
 	payload := map[string]any{
 		"size": size, "_source": []string{"object_id", "source_repository", "source_commit"}, "track_total_hits": false,
 		"query": e.semanticQuery(req, queryVector, size),

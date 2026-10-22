@@ -25,17 +25,32 @@ func (e *openSearchEngine) VerifyResidualMatch(text, query string, mode retrieva
 
 // VerifyResidualMatchContext checks new observations with the same analyzer as
 // the published text fields. Analysis is read-only; it never indexes a value.
-func (e *openSearchEngine) VerifyResidualMatchContext(ctx context.Context, text, query string, mode retrieval.MatchMode) (bool, error) {
+func (e *openSearchEngine) VerifyResidualMatchContext(ctx context.Context, text, query string, mode retrieval.MatchMode) (matched bool, err error) {
 	if mode != "" && mode != retrieval.MatchAllTerms && mode != retrieval.MatchAnyTerms && mode != retrieval.MatchPhrase {
 		return false, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "unknown residual MATCH mode")
 	}
-	control, _, err := e.loadControlContext(ctx)
+	control, version, err := e.loadControlContext(ctx)
 	if err != nil {
 		return false, err
 	}
 	if control.State != index.ProjectionStateReady || !strings.HasPrefix(control.ActiveIndex, e.prefix+"-g-") {
 		return false, kernel.Fail(kernel.ErrPreconditionFailed, "residual MATCH requires the owned published projection")
 	}
+	ctx, release, err := e.protectRootQuery(ctx, control, version, "")
+	if err != nil {
+		return false, err
+	}
+	defer func() {
+		if contextErr := ctx.Err(); contextErr != nil {
+			matched, err = false, contextErr
+		}
+		if protection := e.protectionForContext(ctx); protection != nil {
+			if protectionErr := protection.status(); protectionErr != nil {
+				matched, err = false, protectionErr
+			}
+		}
+		release()
+	}()
 	wanted, err := e.analyzeResidual(ctx, control.ActiveIndex, query)
 	if err != nil || len(wanted) == 0 {
 		return false, err

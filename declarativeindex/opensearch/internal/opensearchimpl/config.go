@@ -79,34 +79,16 @@ func (c Config) RejectSecrets() error {
 // are resolved at open time so they never enter persisted provider config.
 func Open(cfg Config) index.EngineOpener {
 	cfg = cfg.WithDefaults()
-	return func(_ string, id kernel.RepositoryID) (index.Engine, error) {
-		if err := cfg.RejectSecrets(); err != nil {
+	return func(directory string, id kernel.RepositoryID) (index.Engine, error) {
+		eng, err := openConfiguredClient(cfg)
+		if err != nil {
 			return nil, err
 		}
-		if err := cfg.validateScaleSettings(); err != nil {
-			return nil, err
-		}
-		prefix, controlID := projectionNames(id)
-		controlIndex := controlIndexName
-		if cfg.Namespace != "" {
-			scope := namespaceDigest(cfg.Namespace)
-			prefix = "kc-proj-" + string(scope[:24]) + "-" + controlID[:24]
-			controlIndex += "-" + string(scope[:24])
-		}
-		eng := &openSearchEngine{
-			base:            strings.TrimRight(cfg.URL, "/"),
-			prefix:          prefix,
-			controlID:       controlID,
-			controlIndex:    controlIndex,
-			namespace:       cfg.Namespace,
-			http:            &http.Client{Timeout: 12 * time.Second},
-			user:            cfg.User,
-			pass:            strings.TrimSpace(os.Getenv(EnvPassword)),
-			apiKey:          strings.TrimSpace(os.Getenv(EnvAPIKey)),
-			repository:      id,
-			primaryShards:   cfg.PrimaryShards,
-			replicas:        cfg.Replicas,
-			refreshInterval: cfg.RefreshInterval,
+		owner := eng.resourceScope(id)
+		eng.repository, eng.prefix, eng.controlID = owner.repository, owner.prefix, owner.controlID
+		if directory != "" && eng.namespace != "" {
+			cache := eng.computationCache(directory)
+			eng.computationCacheAuthority, eng.computationCacheDirectory = cache.authority, cache.directory
 		}
 		// The embedding provider is process-level configuration like the
 		// credentials: model identity comes from the environment and never
@@ -126,11 +108,35 @@ func Open(cfg Config) index.EngineOpener {
 			eng.embedder = embedder
 			eng.vectorDimension = dims
 			eng.vectorModel = model
+
+			eng.embeddingIdentity = string(kernel.CanonicalDigest([]any{"llmhttp-embeddings-v1", strings.TrimRight(strings.TrimSpace(os.Getenv("OPENAI_BASE_URL")), "/"), model, dims}))
+			eng.embeddingCacheIdentity = string(kernel.CanonicalDigest([]any{eng.embeddingIdentity, kernel.CanonicalDigest(strings.TrimSpace(os.Getenv("OPENAI_API_KEY")))}))
 		}
 		// Opening a read handle is local. Network I/O is performed by the
 		// context-aware read methods or the explicit maintenance lifecycle.
 		return eng, nil
 	}
+}
+
+// openConfiguredClient carries no logical query scope and performs no IO.
+// Query engines and the instance resource coordinator share these exact
+// namespace and credential coordinates without constructing a fictitious Repo.
+func openConfiguredClient(cfg Config) (*openSearchEngine, error) {
+	cfg = cfg.WithDefaults()
+	if err := cfg.RejectSecrets(); err != nil {
+		return nil, err
+	}
+	if err := cfg.validateScaleSettings(); err != nil {
+		return nil, err
+	}
+	controlIndex := controlIndexName
+	if cfg.Namespace != "" {
+		controlIndex += "-" + string(namespaceDigest(cfg.Namespace))[:24]
+	}
+	return &openSearchEngine{base: strings.TrimRight(cfg.URL, "/"), controlIndex: controlIndex, namespace: cfg.Namespace,
+		http: &http.Client{Timeout: 12 * time.Second}, user: cfg.User,
+		pass: strings.TrimSpace(os.Getenv(EnvPassword)), apiKey: strings.TrimSpace(os.Getenv(EnvAPIKey)),
+		primaryShards: cfg.PrimaryShards, replicas: cfg.Replicas, refreshInterval: cfg.RefreshInterval}, nil
 }
 
 // ConfiguredEmbeddingModels reports only models whose engine configuration can
