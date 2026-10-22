@@ -74,3 +74,17 @@
 
 实现与本轮定向验收完成；完整合同仍有 skip，按任务规则保留在 doing。
 真实部署发布与陌生接入方任务试跑未执行；工作区未创建提交。
+
+## 交付（2026-10-21）
+
+实现范围：系统仓按接入意图导航；建模指南增加字段/成员/独立对象、关系粒度、
+快照/周期发布/LiveAccess、仓与 Dataset 的判断与替代方案；三个公开 Dataset 分别交付
+公开导读与 LiveAccess 练习原件（qinghe-analysis r3、autumn-launch-kit r4、store-oncall r3）。
+
+已验证范围：定向 168 pass / 0 fail；对象与系统仓完整包回归 772 pass / 1 skip；
+`make quality`（含 `make check-docs`）通过；`make test` 0 FAIL / 0 SKIP；
+`make test-contracts` 记录 `20261020T091205Z-9b836fc8167f`，`passed-with-skips`、
+`sourceChanged: false`、5123 pass / 0 fail / 14 skip。
+
+当前源码统一门禁 0 FAIL / 18 SKIP，18 项经逐条核对均为既有环境分级项。
+真实部署发布与陌生接入方任务试跑未执行，属独立入口，按各自合同单独进行。

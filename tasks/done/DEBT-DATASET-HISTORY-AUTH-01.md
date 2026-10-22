@@ -72,3 +72,17 @@ object.history.read；保留文件切片拒绝来源历史的现有合同。
 
 来源历史越权缺陷已修复；任务保留 doing：外部 live 未验范围不冒充无 skip 全验收，
 两份发布版对比尚由 `DEBT-DATASET-VERSION-CONTRACT-01` 承接，不在本轮授权修复中新增接口。
+
+## 交付（2026-10-21）
+
+实现已在工作区落地并经当前源码复核（`object/trusted_schema.go` 的一致性检查覆盖
+`TrustedSchemaOperations()` 完整集合；历史授权每个来源读取前单独检查 `object.history.read`；
+未应用写入证明经统一错误信封传递）。
+
+当前源码统一门禁：`make check-docs` PASS、`make quality` 通过
+（`units=86 propagation=13.69%`，ratchet held）、`make test` 0 FAIL / 0 SKIP、
+`make test-contracts` 0 FAIL / 18 SKIP，e2e `53/53 successful`。
+
+18 项 SKIP 经逐条核对全部为既有环境分级项（lakeFS 独立部署、太湖认证、Luna 重排、
+HTTP state runtime 独立栈、规模与吞吐），不是本项遗留的断言缺口。
+按既定判断，环境分级跳过不计入本项阻塞。

@@ -17,6 +17,21 @@
   按 Pointer 的引用读取表达原有断言（只取部分方面、未选方面不外部取值），不削弱断言。
 - 触发条件：相关调用方文件上的并行改动落定后，或下一次修改 `Reader.Read` / `Service.Read` 签名时。
 
+## 核实（2026-10-21）
+
+本轮逐处复核，债仍然成立，且范围比原记录更清楚：
+
+- 生产代码 15 处、测试代码 20 处引用 `AspectSelector`/`SelectAspects`。
+- 生产调用方确实全部传 `nil`：`liveaccess/handler/implementation.go`、`liveaccess/service/hydrate.go`、
+  `discovery/schema_release.go`。也就是说选择器只剩下签名里的形式参数。
+- 但签名本身被 `object/reader`、`liveaccess/service`、`discovery/service` 三条读通路共用，删参数要同步
+  改 `Reader.Read`、`Serving.Read`、`Service.Read`、`Hydrate`、`HydrateRepositoryRead`、
+  `RepositoryRead.Selector`、`DatasetSearch.Hydrate` 及其全部调用点与测试替身。
+
+判定：这是签名级重构，不是缺陷修复。本轮不改，理由与债的原有判定一致——改动面横跨多个包，与
+`OBJECT-VERSIONING-01`（正在 `doing/`，会改读取通路）的文件范围重叠，按“改动重叠后开的先停”不并行。
+去向：等 `OBJECT-VERSIONING-01` 的读取通路线落定后并入，届时一次删净签名与测试替身，不留半退场状态。
+
 ## 目标
 
 对象读取只剩两种通路：整对象读取，以及按引用或形状先规划再只读所选单元；不再存在先整读再裁剪的选择器。
@@ -40,3 +55,8 @@
 ## 不做
 
 不改变整对象读取与引用读取的返回形状，不新增读取参数。
+
+## 关闭
+
+2026-10-21 并入 `OBJECT-VERSIONING-01`：位置、信号与剩余验收在该任务的“并入”一节继续推进。
+本条已有的核实、交付与守卫保留为历史，不代表验收通过。

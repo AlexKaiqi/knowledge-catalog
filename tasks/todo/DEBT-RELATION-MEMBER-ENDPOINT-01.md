@@ -10,6 +10,17 @@
   同步公开 API、Schema、Reader、关系查询和 Conformance，不能靠删设计或削断言收窄目标。
 - 触发条件：实现成员级关系，或下一次修改关系端点合同前。
 
+## 核实（2026-10-21）
+
+债仍然成立。`object/relation.go:16-21` 的 `RelationEndpoint` 只有 `Role string` 与 `Object ObjectID`，
+没有 Locator；`doc/design/object.md:325` 在进度表里如实写着“关系端点定位到对象内部的方面、成员或字段…
+当前端点尚不表达定位符”。设计与实现在这一项上明说缺口，教学示意没有被当作现行格式。
+
+性质是协议能力缺口而非缺陷：补 Locator 要同步公开 API、Schema、Reader 解析、关系查询与 Conformance，
+并定义身份与定位分离、跨仓与未选入范围不被补读等语义。本轮不改，属新功能。
+
+去向：实现成员级关系时处理；若 `OBJECT-VERSIONING-01` 先动关系端点合同，则按触发条件并入。
+
 ## 目标
 
 关系能按设计引用对象内部单元，身份、定位、范围和权限有一致解释。

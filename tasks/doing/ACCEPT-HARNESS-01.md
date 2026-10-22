@@ -57,6 +57,8 @@ probe。通过一个独立的验收入口，在本机已部署的真实测试栈
 - 不实现任何插件、时钟、配额等产品能力；不为变绿放宽断言，不用 skip。
 - 不清空共享 OpenSearch，不重置已有部署，不安装未经批准的依赖。
 - 不提交。
+- 本轮按用户 2026-10-22 的推进前提，假定一个对象的各个方面在同一仓：同一个 `object_id` 分散在两仓、
+  由组合拼成一个对象的 probe 不在本轮必跑范围。Dataset 多来源、索引声明仓限定引用照常执行。
 
 ## 进展
 
@@ -249,3 +251,57 @@ probe。通过一个独立的验收入口，在本机已部署的真实测试栈
 - 公共门禁：最新候选 component 2888 pass / 0 fail / 6 个显式 live skip，boundary 680 pass / 0 fail / 0 skip，普通场景 18 pass / 0 fail / 0 skip，真实 State 专项 3 pass / 0 fail / 0 skip，质量和文档通过，源码稳定；此前完整合同三段与真实 DFS、真实 Snapshot 专项分别保留各自候选证明。
 - 验收使用独占搜索及独立 Server/CLI；已有部署后续写入与登录改动未被回退。原 80 条缺 probe、两条残缺规格原文、控制时钟/部署变体，以及并入的 `DEBT-TEST-OPENSEARCH-TIMING-01` 原因调查继续保留；本轮生命周期及完整 boundary 未复现该超时，不宣称根因已修复。任务保持 doing。
 - 汇总及逐规格、资源清理和原部署观察记录见 `.validation/runs/20261016-doing-validation/summary.json`。未提交、未安装依赖；没有删规格、加 skip 或降低分片上限。
+
+## 容量预算单位与真实复跑（2026-10-21）
+
+### 缺陷与修复
+
+- 位置：`.data/scenes/accept.py` 的 `preflight` 预算、`SHARDS_PER_PROBE` 常量与 `.data/scenes/accept_world.py` 的失败分类。
+- 信号：真实部署复跑 117 条，10 条 `fail` 全部是 `this action would add [8] total shards, but this cluster currently has [995]/[1000] maximum shards open`。同一轮 `cleanup.search.indices` 为 71，即 51 条可执行 probe 实际创建 71 个投影。
+- 判定：预算单位错。`preflight` 传给搜索辅助器 `capacity(endpoint, required)` 的 `required` 单位是分片，而预算按“索引数 × 2”计算；每个投影索引按产品默认 `defaultPrimaryShards = 8`、无副本落地，实际需要 71 × 8 = 568 个分片，预算只预留 102 个。集群起点近满时预检通过、批量中途被拒，于是产品侧被记成能力缺失。
+- 修复：拆出 `INDICES_PER_PROBE` 与 `SHARDS_PER_INDEX`，由 `reservation(probes)` 返回分片预算；`preflight` 按分片比较。`accept_world` 遇 `CLUSTER_CAPACITY_MARKERS` 时抛 `HarnessError`（环境），不再抛 `ContractFailure`（产品）。两者分工保留：容量不足是环境上限，命令自身被拒不因此变成环境错误。
+
+### 回归
+
+- `test_reservation_converts_indices_into_the_shards_capacity_compares`：预算必须大于 probe 数，且等于索引数与分片因子的乘积。
+- `test_reservation_matches_the_product_projection_shard_default`：直接读 `declarativeindex/opensearch/internal/opensearchimpl/config.go` 的 `defaultPrimaryShards`，产品改分片数时本预算随之失败，不再静默低估；同时拒绝出现非零副本默认值。
+- `test_preflight_reserves_shards_for_every_executable_probe`：伪造 900/1000 已用的集群，120 分片预算被拒、100 分片通过，证明拒绝来自预算而非探测失灵。
+- `test_exhausted_shared_capacity_is_an_environment_error` 与 `test_ordinary_command_rejection_stays_a_product_failure`：容量耗尽归环境错误，普通命令拒绝仍是产品失败。
+- 既有 `test_preflight_accepts_plaintext_lakefs_health_but_rejects_failed_http` 随签名改为传预算，断言语义不变。
+- 结果：`.data/scenes/accept_test.py` 47 条全通过，0 skip；关联回归 89 条全通过
+  （`accept_interruption_test.py` 8 条、`accept_search_test.py`、`accept_capability_test.py`、
+  `scripts/accept_entry_test.py`、`scripts/accept_search_resources_test.py`、
+  `scripts/opensearch_fixture_test.py`）。
+
+### 门禁
+
+- `make check-docs` PASS（21 篇文档可达、无 frontmatter、链接有效）。
+- `make quality` 通过，耦合 `units=86 propagation=13.69%`，ratchet held。
+- `make test` 通过，0 FAIL、0 SKIP（含 `TestProductScenes`、`TestMetricPermissionScenes`）；
+  运行前后共享实例均为 426/1000、空闲 574，未留下新索引。
+
+### 真实复跑
+
+- 修前同规模复跑 `.validation/runs/20261021T133558Z-b3c8e3841ae6/`：49 pass / 10 fail / 68 error，全部 `fail` 均为容量耗尽；`prestate` pass，`cleanupError` 为空。
+- 修后预算生效的直接证据 `.validation/runs/20261021T140213Z-dc518ab68fef/`：预检在写入前拒绝并给出完整诊断 `OpenSearch capacity: 426/1000 open shards, 574 free; this test run requires at least 960`，117 条全部 `error/not_started`，没有任何产品写入，验证要求第 7 条的“容量不足时入口给出明确诊断”成立。
+- 修后可装下规模复跑 `.validation/runs/20261021T140618Z-861ceb8ec650/`：26 条全 `pass`，`fail` 与 `error` 均为 0；清理 15 个本次索引与 15 条控制文档，退 4 个 Dataset、解除 4 个仓，运行前后共享分片均为 426/1000、空闲 574，未删除其它索引、未提高分片上限。
+- 按容量分成两批跑完全部可执行规格，得到完整的红绿清单：
+  - `.validation/runs/20261021T140618Z-861ceb8ec650/`：26 条 `pass`，清理 15 个索引 / 15 条控制文档。
+  - `.validation/runs/20261021T141822Z-9db9937b44d5/`：23 条 `pass`，清理 58 个索引 / 58 条控制文档，退 15 个 Dataset、解除 4 个仓，`cleanupError` 为空。
+  - 合计 49 条可执行规格全 `pass`，`fail` 与 `error` 均为 0；两批运行前后共享实例都是 426/1000、空闲 574，未动其它索引与分片上限。这与修前同规模运行的 49 pass / 10 fail 对照，证明那 10 条 `fail` 全部是容量单位缺陷引起的误分类，不是产品能力缺失。
+- 全量 51 条可执行 probe 现需 960 分片（含比较型 probe 的第二代投影），当前共享实例只有 574 空闲，因此单次全量运行仍被环境容量阻断，不是产品能力红。这是环境上限，不是本任务未实现；分批运行已取得完整红绿。
+
+### 仍未完成
+
+- 60 条规格仍无 probe（本轮 117 条里 57 条报 `no executable probe registered`，另有 4 条孤立 probe 与 3 条变体/前置不符项），逐 ID 清单见本轮报告 `missingProbes` 与 `results[].reason`。
+- 两条规格原文截断仍需权威原意（`DEBT-ACCEPT-SPEC-TRUNCATION-01`）。
+- 全量真实红绿与共享容量上限、陌生读者试跑、deploy 规格未完成。实现与验收分开记录，本任务保留 `doing`。
+
+### 共享实例残留（登记为债）
+
+- 当前共享实例 426/1000 分片里，411 个来自 2026-10-21T12:33Z–12:59Z（本地 20:33–20:59）一次
+  `make test-contracts` 窗口留下的 `kc-proj-*` 单分片索引，全部有控制文档指向、仓库名为测试夹具形状，
+  但该部署只登记 `kr://kc/system`。这不是本执行器造成的：验收每次都用本次前缀精确清理并回到运行前容量
+  （同轮 26 条子集运行前后均为 426/1000）。
+- 归因与非 lakefs 测试组缺少所有权前缀有关，登记为 `DEBT-SHARED-SEARCH-UNOWNED-GROUPS-01` 留在 `todo/`。
+  那 411 个已存在残留需要单独的归属裁决，本任务不删他人资源、不清空共享实例。

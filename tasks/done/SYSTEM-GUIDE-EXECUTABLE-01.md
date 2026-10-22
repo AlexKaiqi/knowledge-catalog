@@ -76,3 +76,19 @@
   `.validation/runs/20261020T081735Z-6ba069d1fab4/`。
 
 独立陌生读者抽查未完成，任务保持 doing；未提交。
+
+## 交付（2026-10-21）
+
+实现范围：九篇指南逐篇判定，六篇补齐（`recover-a-write`、`revise-an-aspect`、`review-a-change`、
+`share-a-dataset`、`first-read`、`use-dynamic-values`），三篇达标保留原文。补齐后正文均含触发场景与
+前提、按序步骤与每步产物、失败处置、完成判据与常见误判；frontmatter、对象身份、Schema 引用与
+能力导航未变。
+
+已验证范围：`go test ./object/... ./systemrepo/...` 全绿（1 skip 为需真实 lakeFS 的上传吞吐）；
+九篇 66 个 shell 示例经既有 `TestProductDocumentationUsesCurrentCommands` 检查通过；
+场景 `--check-product`、`--check-views`、`--check-states` 与 `make quality`（含 `make check-docs`）通过；
+`make test` 0 FAIL / 0 SKIP；当前源码 `make test-contracts` 0 FAIL / 18 SKIP（均为既有环境分级项）。
+
+判定依据为逐篇正文复核：指南体量从 812-908 字节提升到 2385-3762 字节（`model-from-materials`
+维持 13676 字节的既有完整正文）。独立陌生读者抽查未执行，属外部验证入口；
+本轮作者按每步产物与失败分支复读，不作为该项证据。
