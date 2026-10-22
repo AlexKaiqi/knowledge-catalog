@@ -17,7 +17,7 @@ import (
 // federated retrieval, same-scope hydration, and delivery.
 // LogicalHydrator applies the chosen access policy on a fixed scoped value.
 type LogicalHydrator interface {
-	Hydrate(context.Context, objectmodel.FederatedValue, *objectmodel.AspectSelector) (objectmodel.ObservedValue, error)
+	Hydrate(context.Context, objectmodel.FederatedValue) (objectmodel.ObservedValue, error)
 }
 
 type DatasetSearchExecutor struct {
@@ -617,7 +617,7 @@ func HydrateSearchHit(ctx context.Context, logical LogicalHydrator, hit retrieva
 		Provenance: raw.Provenance, Units: raw.Units, Declarations: raw.Declarations,
 		Sources: raw.Sources,
 	}
-	hydrated, err := logical.Hydrate(ctx, federated, nil)
+	hydrated, err := logical.Hydrate(ctx, federated)
 	if err != nil {
 		return retrieval.ObjectHit{}, err
 	}

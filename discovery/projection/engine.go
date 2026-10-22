@@ -170,6 +170,22 @@ type StreamingProjectionMaintainer interface {
 	BeginRebuild(Meta) (RebuildSession, error)
 }
 
+// ResourceRecoveryReport distinguishes confirmed deletion, effective consumer
+// protection, and unknown ownership or physical request completion. Resource names are
+// provider diagnostics, never a query-selection input.
+type ResourceRecoveryReport struct {
+	Protected []string
+	More      bool
+	Deleted   []string
+	Retained  []string
+}
+
+// ResourceMaintainer is the optional background recovery port. Queries and
+// metadata reads must not call it. Recovery must honor the caller's deadline.
+type ResourceMaintainer interface {
+	RecoverResources(context.Context) (ResourceRecoveryReport, error)
+}
+
 type ProviderIdentity interface {
 	ProviderID() string
 	ProviderRevision() string

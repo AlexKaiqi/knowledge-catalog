@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"context"
 	"fmt"
 	"kc/kernel"
 	objectmodel "kc/object"
@@ -42,6 +43,16 @@ type SemanticField struct {
 
 // ExtractFields interprets the actual adopted Schema of each maintained unit.
 func ExtractFields(repo objectmodel.Repository, value objectmodel.ObjectValue, observations []objectmodel.UnitObservation, spec AccessSpec) (FieldSet, error) {
+	return ExtractFieldsWithComputations(context.Background(), repo, value, observations, spec, nil)
+}
+
+// ExtractFieldsWithComputations preserves exact unit interpretation and observed
+// declaration checks before reusing any immutable member construction value.
+func ExtractFieldsWithComputations(ctx context.Context, repo objectmodel.Repository, value objectmodel.ObjectValue, observations []objectmodel.UnitObservation, spec AccessSpec, cache MemberComputations) (FieldSet, error) {
+	if err := ctx.Err(); err != nil {
+		return FieldSet{}, err
+	}
+
 	doc := FieldSet{Kind: fieldObjectKind(value), applicable: map[string]bool{}}
 	eligible := map[string]struct{}{}
 	seenCells := map[string]struct{}{}
@@ -96,16 +107,12 @@ func ExtractFields(repo objectmodel.Repository, value objectmodel.ObjectValue, o
 			if !exists || raw == nil {
 				continue
 			}
-			for _, item := range scalarValues(raw) {
-				normalized, valid := NormalizeScalarValue(field.Type, item)
-				var err error
-				if !valid {
-					err = fmt.Errorf("value %v is not a valid %s scalar", item, field.Type)
-				}
+			values, err := extractFieldValues(ctx, value.Address.ObjectID, unit.Address, field, raw, cache)
+			if err != nil {
+				return FieldSet{}, err
+			}
+			for _, normalized := range values {
 				cell := FieldValue{Field: field, Value: normalized, form: form}
-				if err != nil {
-					return FieldSet{}, kernel.Fail(kernel.ErrUsageInvalid, "projection %s unit %s field %s: %v", value.Address.ObjectID, objectmodel.AddressLabel(unit.Address), displayFieldRef(field.FieldRef), err)
-				}
 				identity := cell.Field.FieldRef.Key() + "\x00" + form + "\x00" + cell.Value + "\x00" + fmt.Sprint(cell.Field.Access)
 				if _, duplicate := seenCells[identity]; duplicate {
 					continue
@@ -135,7 +142,7 @@ func ExtractFields(repo objectmodel.Repository, value objectmodel.ObjectValue, o
 	})
 	doc.Text = strings.Join(textParts, " ")
 	if len(spec.builds) > 0 {
-		return constructDeclaredFields(doc, spec)
+		return constructDeclaredFields(ctx, doc, spec, cache)
 	}
 	return doc, nil
 }

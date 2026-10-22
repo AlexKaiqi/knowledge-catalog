@@ -19,6 +19,11 @@ type Preparation struct {
 	// PrepareDataset prepares the whole frozen candidate. The composition root
 	// adapts its Dataset resolution to the selected provider's reading basis.
 	PrepareDataset func(context.Context, dataset.ResolvedDataset) error
+	// ProtectDataset pins the exact ready resources after successful preparation.
+	ProtectDataset func(context.Context, dataset.ResolvedDataset) (PublicationProtection, error)
+	// PrepareProtectedDataset builds and protects as one continuous operation.
+	// It takes precedence over the separate compatibility callbacks in ExecuteProtected.
+	PrepareProtectedDataset func(context.Context, dataset.ResolvedDataset) (PublicationProtection, error)
 	// Conflicts proves that the frozen candidate takes no Aspect of one object
 	// from two source Repositories. It is required once a candidate has two
 	// sources and does not depend on any plugin being configured.
@@ -35,11 +40,8 @@ type Preparation struct {
 // derived capabilities. It returns the candidate with its dependencies; the
 // sources it was given stay unchanged. Neither check depends on any plugin.
 func (p Preparation) Execute(ctx context.Context, def dataset.Dataset) (dataset.Dataset, error) {
-	def, err := p.freezeDependencies(def)
+	def, err := p.prepareDefinition(def)
 	if err != nil {
-		return dataset.Dataset{}, err
-	}
-	if err := p.checkHoldingConflicts(def); err != nil {
 		return dataset.Dataset{}, err
 	}
 	if !p.Enabled {
@@ -143,4 +145,15 @@ func (d ServingBasisDemand) Bases(repository kernel.RepositoryID) ([]kernel.Comm
 	}
 	sort.Slice(bases, func(i, j int) bool { return bases[i] < bases[j] })
 	return bases, nil
+}
+
+func (p Preparation) prepareDefinition(def dataset.Dataset) (dataset.Dataset, error) {
+	prepared, err := p.freezeDependencies(def)
+	if err != nil {
+		return dataset.Dataset{}, err
+	}
+	if err := p.checkHoldingConflicts(prepared); err != nil {
+		return dataset.Dataset{}, err
+	}
+	return prepared, nil
 }

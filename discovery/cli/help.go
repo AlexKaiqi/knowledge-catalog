@@ -49,6 +49,8 @@ func leafHelpEntries() map[string]helpEntry {
   只选入 Dataset 的声明生效；所用成员与固定修订投影必须支持、有效并就绪。
 结果：
   JSON hits 提供 repository/objectId/commit，dataset 提供 id/revision；命中含来源版本、完整性及续页依据。
+  命中的 basis 可交给 kc read <命中引用> --basis <basis> 原范围回读；state 描述完整所选单元的本地状态。
+  固定回读依据独立于查询索引保留，不能用它延长检索或续页期限；外部观察另按证据合同复核。
   CLI 列出坐标；kc read --dataset <id> --revision <N> <命中引用> 取得范围内完整正文。
 后果：
   查询并留证，不提交对象、不发布 Dataset、不隐式构建或同步投影。

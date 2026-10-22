@@ -140,7 +140,7 @@ const (
 )
 
 // EvaluationProjection is the Refine judge/scorer field whitelist (design 7.3).
-// Not an Access Projection and not AspectSelector.
+// Not an Access Projection, and not a per-aspect selection of a read result.
 type EvaluationProjection struct {
 	Fields []string `json:"fields,omitempty"`
 }

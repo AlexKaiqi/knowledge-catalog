@@ -8,6 +8,7 @@ import (
 	indeximplementation "kc/declarativeindex/projection"
 	retrieval "kc/discovery"
 	index "kc/discovery/projection"
+	"kc/internal/datasetbridge"
 	"kc/internal/testkit"
 	"kc/kernel"
 	liveservice "kc/liveaccess/service"
@@ -125,10 +126,7 @@ func TestDatasetSearchKeepsReleaseWhenPublicationAdvancesBeforeObjectRead(t *tes
 		if err != nil {
 			return nil, err
 		}
-		pin := reader.DatasetPin{SetID: resolved.SetID, Revision: resolved.Revision, Repositories: resolved.Repositories}
-		for _, item := range resolved.Items {
-			pin.Items = append(pin.Items, reader.DatasetItem{Target: item.Target, Repository: item.Repository, Commit: item.Commit, Kind: item.Kind, Prefix: item.Prefix, File: item.File})
-		}
+		pin := datasetbridge.Pin(resolved)
 		return reader.Open(func(id kernel.RepositoryID) (objectmodel.Repository, error) {
 			return sourceReader.Require(id, kernel.ErrObjectRefUnresolved)
 		}, pin), nil

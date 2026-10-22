@@ -57,7 +57,7 @@ func selectedSchemaSource(lookup reader.MemberLookup, pin reader.DatasetPin, ref
 		_, err = member.Read(ref.Object, pin.Repositories[ref.Repository])
 		return objectmodel.FederatedValue{Repository: ref.Repository, Commit: pin.Repositories[ref.Repository]}, err
 	}
-	values, err := scope.Read(ref.Object, nil)
+	values, err := scope.Read(ref.Object)
 	if err != nil {
 		return objectmodel.FederatedValue{}, err
 	}

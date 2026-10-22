@@ -43,7 +43,7 @@ func shapeCLISearch(value any) any {
 		if v := stringField(src, "commit"); v != "" {
 			item["commit"] = v
 		}
-		for _, key := range []string{"reference", "sources"} {
+		for _, key := range []string{"reference", "sources", "basis", "state"} {
 			if value, exists := src[key]; exists {
 				item[key] = value
 			}

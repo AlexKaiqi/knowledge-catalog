@@ -19,6 +19,8 @@ type surfaceAnchorSuite []string
 var surfaceAnchor = surfaceAnchorSuite{
 	"BasisPreparer",
 	"Preparation",
+	"PublicationProtection",
+	"PublicationRecovery",
 	"ServingBasisDemand",
 	"DatasetPublication",
 	"DatasetPublisher",

@@ -1,11 +1,11 @@
 package discovery
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
 
-	"kc/kernel"
 	objectmodel "kc/object"
 	"kc/object/reader"
 )
@@ -17,7 +17,7 @@ func memberFieldKey(field FieldRef, member string) string {
 	return member + "\x1e" + field.Key()
 }
 
-func constructDeclaredFields(source FieldSet, spec AccessSpec) (FieldSet, error) {
+func constructDeclaredFields(ctx context.Context, source FieldSet, spec AccessSpec, cache MemberComputations) (FieldSet, error) {
 	out := FieldSet{Kind: source.Kind}
 	eligible := map[string]bool{}
 	texts := []string{}
@@ -26,12 +26,16 @@ func constructDeclaredFields(source FieldSet, spec AccessSpec) (FieldSet, error)
 		if !applies || excluded {
 			continue
 		}
+		if err := ctx.Err(); err != nil {
+			return FieldSet{}, err
+		}
+		constructed, err := constructMember(ctx, build, values, cache)
+		if err != nil {
+			return FieldSet{}, err
+		}
 		member := objectmodel.AddressKey(build.member)
 		if build.declaration.Build.Kind == "vector" {
-			text, err := declarationText(build.declaration, values)
-			if err != nil {
-				return FieldSet{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "member %s: %v", objectmodel.AddressLabel(build.member), err)
-			}
+			text := constructed.Text
 			model, _ := build.declaration.Build.Options["model"].(string)
 			if strings.TrimSpace(text) != "" && model != "" {
 				out.Semantic = append(out.Semantic, SemanticField{Member: member, Model: model, Text: text})
@@ -39,10 +43,7 @@ func constructDeclaredFields(source FieldSet, spec AccessSpec) (FieldSet, error)
 			continue
 		}
 		if build.declaration.Build.Kind == "text" {
-			text, err := declarationText(build.declaration, values)
-			if err != nil {
-				return FieldSet{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "member %s: %v", objectmodel.AddressLabel(build.member), err)
-			}
+			text := constructed.Text
 			if text == "" {
 				continue
 			}
@@ -69,8 +70,7 @@ func constructDeclaredFields(source FieldSet, spec AccessSpec) (FieldSet, error)
 			if field.Has(reader.HintFilter) {
 				eligible[memberFieldKey(field.FieldRef, member)] = true
 			}
-			for _, value := range values[i] {
-				value = declarationScalar(build.declaration, value)
+			for _, value := range constructed.Values[i] {
 				out.Values = append(out.Values, FieldValue{Field: field, Value: value, Member: member})
 			}
 		}

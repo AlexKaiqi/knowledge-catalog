@@ -134,7 +134,7 @@ func hydrateDatasetCorpusSource(ctx context.Context, member objectmodel.Reposito
 	if err := objectmodel.ValidateHydratedObject(member.ID(), at, id, value); err != nil {
 		return objectmodel.ObservedValue{}, err
 	}
-	return logical.Hydrate(ctx, objectmodel.FederatedValue{Reference: value.Reference, Locator: value.Locator, Digest: value.Digest, ObjectRef: value.ObjectRef, Repository: value.Repository, Commit: value.Commit, ObjectID: id, Address: value.Address, Value: value.Value, Provenance: value.Provenance, Units: value.Units, Declarations: value.Declarations}, nil)
+	return logical.Hydrate(ctx, objectmodel.FederatedValue{Reference: value.Reference, Locator: value.Locator, Digest: value.Digest, ObjectRef: value.ObjectRef, Repository: value.Repository, Commit: value.Commit, ObjectID: id, Address: value.Address, Value: value.Value, Provenance: value.Provenance, Units: value.Units, Declarations: value.Declarations})
 }
 
 type datasetProjectionScope interface {
