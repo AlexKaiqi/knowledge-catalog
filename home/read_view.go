@@ -63,6 +63,8 @@ func (ws *Home) borrow(j journal.Journal) *Home {
 		DatasetPreparation: ws.DatasetPreparation,
 		Hydrator:           ws.Hydrator,
 		ReadCache:          ws.ReadCache,
+		ReadBases:          ws.ReadBases,
+		HistoryCheckpoints: ws.HistoryCheckpoints,
 		Stores:             ws.Stores,
 	}
 	view.Reader = reader.NewReader(ws.Store)

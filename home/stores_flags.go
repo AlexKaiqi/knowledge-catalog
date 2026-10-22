@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"kc/declarativeindex/opensearch"
+	"kc/home/config"
 	"kc/kernel"
 )
 
@@ -17,7 +18,7 @@ func applyDSN(file *StoresFile, driver, dsn string) error {
 	if driver == "" {
 		switch {
 		case strings.HasPrefix(dsn, "postgres://"), strings.HasPrefix(dsn, "postgresql://"):
-			return errUnsupportedDriver("repository", "postgres")
+			return config.ErrUnsupportedDriver("repository", "postgres")
 		case strings.HasPrefix(dsn, "http://"), strings.HasPrefix(dsn, "https://"):
 			driver = "opensearch"
 		default:
@@ -32,9 +33,9 @@ func applyDSN(file *StoresFile, driver, dsn string) error {
 		file.OpenSearch.URL = strings.TrimRight(dsn, "/")
 		return nil
 	}
-	switch normalizeRepoDriver(driver) {
+	switch config.NormalizeRepositoryDriver(driver) {
 	case "postgres":
-		return errUnsupportedDriver("repository", driver)
+		return config.ErrUnsupportedDriver("repository", driver)
 	default:
 		return fmt.Errorf("--dsn is not used for driver %s", driver)
 	}
@@ -53,7 +54,7 @@ func ApplyStoreFlags(file StoresFile, flags map[string]string) (StoresFile, erro
 		return StoresFile{}, fmt.Errorf("store-set requires --driver opensearch|lakefs (or --profile / --repository / --index none|opensearch / layout dirs)")
 	}
 	if strings.EqualFold(strings.TrimSpace(driver), "mysql") {
-		return StoresFile{}, errUnsupportedDriver("store", "mysql")
+		return StoresFile{}, config.ErrUnsupportedDriver("store", "mysql")
 	}
 	if dsn := flagString(flags, "dsn"); dsn != "" {
 		if err := applyDSN(&file, driver, dsn); err != nil {
@@ -75,7 +76,7 @@ func ApplyStoreFlags(file StoresFile, flags map[string]string) (StoresFile, erro
 func applyStoreSelections(file *StoresFile, flags map[string]string) (bool, error) {
 	touched := false
 	if v := flagString(flags, "profile"); v != "" {
-		n, err := normalizeProfile(v)
+		n, err := config.NormalizeProfile(v)
 		if err != nil {
 			return false, err
 		}
@@ -88,9 +89,9 @@ func applyStoreSelections(file *StoresFile, flags map[string]string) (bool, erro
 		touched = true
 	}
 	if v := flagString(flags, "repository"); v != "" {
-		n := normalizeRepoDriver(v)
+		n := config.NormalizeRepositoryDriver(v)
 		if n == "postgres" {
-			return false, errUnsupportedDriver("repository", n)
+			return false, config.ErrUnsupportedDriver("repository", n)
 		}
 		file.Repository = n
 		touched = true
@@ -168,8 +169,8 @@ func applyStoreDriver(file *StoresFile, driver string, endpoint storeEndpoint) e
 		}
 		return nil
 	}
-	normalized := normalizeRepoDriver(driver)
-	if err := rejectNonRepository(normalized); err != nil {
+	normalized := config.NormalizeRepositoryDriver(driver)
+	if err := config.RejectNonRepository(normalized); err != nil {
 		return err
 	}
 	authority, err := authorityFor(normalized)
@@ -183,7 +184,7 @@ func applyStoreDriver(file *StoresFile, driver string, endpoint storeEndpoint) e
 }
 
 func validateStores(file StoresFile) (StoresFile, error) {
-	out := file.withDefaults()
+	out := file.WithDefaults()
 	if err := out.ValidateProfile(); err != nil {
 		return StoresFile{}, err
 	}

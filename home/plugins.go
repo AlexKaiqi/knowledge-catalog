@@ -127,19 +127,15 @@ func (ws *Home) openPlugins(directory string) (*indexplugins.IndexPlugins, *live
 	entry := indexplugin.Entry(indexplugin.Options{Directory: directory,
 		RegisteredModels: models,
 		Engine: func(namespace string) index.EngineOpener {
-			stores := ws.Stores
-			if namespace != "" {
-				if stores.OpenSearch.Namespace != "" {
-					namespace = stores.OpenSearch.Namespace + "/" + namespace
-				}
-				stores.OpenSearch.Namespace = namespace
-			}
-			return indexOpener(ws.File, stores)
+			return indexOpener(ws.File, instanceStores(ws.Stores, namespace))
+		},
+		Resources: func(namespace string) (index.ResourceCoordinator, error) {
+			return indexResourceCoordinator(ws.File, instanceStores(ws.Stores, namespace))
 		},
 		Lookup: func(id kernel.RepositoryID) (objectmodel.Repository, error) {
 			return ws.Reader.Require(id, kernel.ErrCapabilityUnsatisfied)
 		},
-		Datasets: ws.Datasets, Hydrator: ws.Hydrator,
+		Datasets: ws.Datasets, Hydrator: ws.Hydrator, DatasetPin: DatasetPin,
 	})
 	accessEntries := ws.liveAccessEntries
 	if accessEntries == nil {

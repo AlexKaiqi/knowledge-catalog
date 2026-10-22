@@ -7,6 +7,7 @@ import (
 
 	"kc/declarativeindex/opensearch"
 	index "kc/discovery/projection"
+	"kc/home/config"
 	"kc/kernel"
 	objectmodel "kc/object"
 	"kc/snapshot"
@@ -17,18 +18,6 @@ import (
 //
 // The ladder itself is doc/architecture.md. Refusals are as load-bearing as
 // the constructors: derived stores and dynamic runtimes are not repositories.
-
-// rejectNonRepository turns the known category errors into their own message.
-// Each of these is somebody reaching for the wrong layer, not a typo.
-func rejectNonRepository(driver string) error {
-	switch driver {
-	case "mysql":
-		return errUnsupportedDriver("repository", driver)
-	case "postgres":
-		return errUnsupportedDriver("repository", driver)
-	}
-	return nil
-}
 
 // repoDir is where a locally-backed Repository lives under --home.
 func repoDir(stores StoresFile, repositoryID string) string {
@@ -70,8 +59,8 @@ func (ws *Home) attachRepository(spec repoAddRequest) (snapshot.Store, error) {
 	if driver == "" {
 		driver = ws.Stores.Repository
 	}
-	driver = normalizeRepoDriver(driver)
-	if err := rejectNonRepository(driver); err != nil {
+	driver = config.NormalizeRepositoryDriver(driver)
+	if err := config.RejectNonRepository(driver); err != nil {
 		return nil, err
 	}
 	authority, err := authorityFor(driver)
@@ -162,8 +151,8 @@ func openAttachedRepository(home string, repo HomeRepo, stores StoresFile) (snap
 	if err != nil {
 		return nil, err
 	}
-	driver := normalizeRepoDriver(repo.Driver)
-	if err := rejectNonRepository(driver); err != nil {
+	driver := config.NormalizeRepositoryDriver(repo.Driver)
+	if err := config.RejectNonRepository(driver); err != nil {
 		return nil, err
 	}
 	return openAuthority(abs, repo)
@@ -173,14 +162,7 @@ func openAttachedRepository(home string, repo HomeRepo, stores StoresFile) (snap
 // so an unusable index driver fails when something actually indexes, not at Open:
 // reads that never touch the index keep working.
 func indexOpener(file HomeFile, stores StoresFile) index.EngineOpener {
-	driver := stores.Index
-	if driver == "" {
-		driver = file.IndexDriver
-	}
-	if driver == "" {
-		driver = os.Getenv("KC_INDEX_DRIVER")
-	}
-	driver = NormalizeIndexDriver(driver)
+	driver := selectedIndexDriver(file, stores)
 	refuse := func(err error) index.EngineOpener {
 		return func(string, kernel.RepositoryID) (index.Engine, error) { return nil, err }
 	}
@@ -192,4 +174,15 @@ func indexOpener(file HomeFile, stores StoresFile) index.EngineOpener {
 	default:
 		return refuse(fmt.Errorf("unknown index driver %s", driver))
 	}
+}
+
+func selectedIndexDriver(file HomeFile, stores StoresFile) string {
+	driver := stores.Index
+	if driver == "" {
+		driver = file.IndexDriver
+	}
+	if driver == "" {
+		driver = os.Getenv("KC_INDEX_DRIVER")
+	}
+	return NormalizeIndexDriver(driver)
 }

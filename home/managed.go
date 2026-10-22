@@ -1,26 +1,15 @@
 package home
 
 import (
+	"path/filepath"
+	"strings"
+	"sync"
+
+	"kc/home/config"
 	"kc/kernel"
 	objectmodel "kc/object"
 	"kc/snapshot"
-	"kc/snapshot/access"
-	"path/filepath"
-	"slices"
-	"strings"
-	"sync"
 )
-
-// ManagedRepositoryConfig delegates allocation in one deployment-owned pool.
-// It is not a Repository binding; individual allocations live in durable state.
-type ManagedRepositoryConfig struct {
-	Driver         string   `json:"driver" yaml:"driver"`
-	Root           string   `json:"root,omitempty" yaml:"root,omitempty"`
-	DSN            string   `json:"dsn,omitempty" yaml:"dsn,omitempty"`
-	PublicURL      string   `json:"publicURL,omitempty" yaml:"publicURL,omitempty"`
-	CreatorActions []string `json:"creatorActions" yaml:"creatorActions"`
-	ShareActions   []string `json:"shareActions,omitempty" yaml:"shareActions,omitempty"`
-}
 
 type ManagedRepositoryRequest struct {
 	RepositoryID     string
@@ -183,7 +172,7 @@ func (ws *Home) installManagedSource(record managedRecord, source snapshot.Store
 	}
 	ws.inventory.mu.Lock()
 	defer ws.inventory.mu.Unlock()
-	ws.inventory.bindings[record.Binding.ID] = record.Binding.homeRepo()
+	ws.inventory.bindings[record.Binding.ID] = repositoryHomeRepo(record.Binding)
 	return nil
 }
 
@@ -233,67 +222,13 @@ func (ws *Home) verifyManagedBinding(id kernel.RepositoryID) error {
 }
 
 func validateCreatorActions(actions []string) error {
-	allowed := []string{"writer.preview", "writer.commit", "writer.receipt.read", "repository.metadata.read", "repository.shares.manage", "repositories.manage", "writer.branch", "writer.merge", "projection.read", "dataset.resolve", "file.read", "object.read", "object.provenance", "object.history.read", "object.schema.read", "object.relations"}
-	if len(actions) == 0 {
-		return kernel.Fail(kernel.ErrUsageInvalid, "managed repositories require an explicit nonempty creatorActions policy")
-	}
-	seen := map[string]bool{}
-	for _, action := range actions {
-		if (!slices.Contains(allowed, action) && !access.IsRepositoryCreatorAction(action)) || seen[action] {
-			return kernel.Fail(kernel.ErrUsageInvalid, "invalid or duplicate managed creator action %q", action)
-		}
-		seen[action] = true
-	}
-	return nil
-}
-
-func validateManagedConfig(c DeploymentConfig) error {
-	if c.ManagedRepositories != nil && len(c.ManagedStores) != 0 {
-		return kernel.Fail(kernel.ErrUsageInvalid, "configure managedRepositories or managedStores, not both")
-	}
-	for name, pool := range c.ManagedStores {
-		if !validManagedUsername(name) {
-			return kernel.Fail(kernel.ErrUsageInvalid, "managed store name must be a stable nonempty key")
-		}
-		if err := validateManagedPool(pool, c); err != nil {
-			return err
-		}
-	}
-	pool := c.ManagedRepositories
-	if pool == nil {
-		return nil
-	}
-	return validateManagedPool(*pool, c)
-}
-
-func validateManagedPool(pool ManagedRepositoryConfig, c DeploymentConfig) error {
-	if err := validateCreatorActions(pool.CreatorActions); err != nil {
-		return err
-	}
-	if err := validateShareActions(pool.ShareActions); err != nil {
-		return err
-	}
-	driver, err := authorityFor(pool.Driver)
-	if err != nil {
-		return err
-	}
-	if pool.Driver == "" || driver.managedValidate == nil {
-		return kernel.Fail(kernel.ErrUsageInvalid, "managed repositories require an explicit supported driver")
-	}
-	if pool.PublicURL != "" && !validManagedPublicURL(pool.PublicURL) {
-		return kernel.Fail(kernel.ErrUsageInvalid, "managed publicURL must be an http(s) URL without credentials, query or fragment")
-	}
-	return driver.managedValidate(pool, c)
+	return config.ValidateCreatorActions(actions)
 }
 
 func validateShareActions(actions []string) error {
-	allowed := []string{"object.read", "object.schema.read", "object.provenance", "object.history.read", "object.relations", "dataset.resolve", "file.read"}
-	seen := map[string]bool{}
-	for _, action := range actions {
-		if (!slices.Contains(allowed, action) && !access.IsRepositoryReadAction(action)) || seen[action] {
-			return kernel.Fail(kernel.ErrUsageInvalid, "invalid or duplicate managed share action %q", action)
-		}
-		seen[action] = true
-	}
-	return nil
+	return config.ValidateShareActions(actions)
+}
+
+func validManagedUsername(value string) bool {
+	return config.ValidManagedUsername(value)
 }

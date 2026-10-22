@@ -6,7 +6,7 @@ import (
 
 // PublicStores returns endpoints for status/store-ls without env secrets.
 func PublicStores(file StoresFile) map[string]any {
-	file = file.withDefaults()
+	file = file.WithDefaults()
 	secrets := authoritySecretEnvs()
 	secrets["opensearch"] = opensearch.EnvPassword + " or " + opensearch.EnvAPIKey
 	layout := map[string]any{

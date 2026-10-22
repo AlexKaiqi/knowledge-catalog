@@ -20,7 +20,7 @@ func fixtureRegistryBinding(binding RegistryBinding) (RegistryBinding, error) {
 	if err != nil {
 		return RegistryBinding{}, err
 	}
-	if err := driver.validate(binding.homeRepo()); err != nil {
+	if err := driver.validate(registryHomeRepo(binding)); err != nil {
 		return RegistryBinding{}, err
 	}
 	return binding, nil

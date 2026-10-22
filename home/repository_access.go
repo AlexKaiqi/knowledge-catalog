@@ -3,10 +3,9 @@ package home
 import (
 	"os"
 	"path/filepath"
-	"strings"
 
+	"kc/home/config"
 	"kc/internal/jsonfile"
-	"kc/kernel"
 	objectmodel "kc/object"
 )
 
@@ -15,13 +14,12 @@ const (
 	repositoryAccessFile    = "repository-access.json"
 )
 
-// RepositoryAccess is a deployment-declared default for authenticated
-// principals on one Repository. It is not a Registry visibility flag, not a
-// SEARCH filter key, and not a grant to a synthetic principal.
-type RepositoryAccess struct {
-	ID                   string   `json:"id" yaml:"id"`
-	AuthenticatedActions []string `json:"authenticatedActions,omitempty" yaml:"authenticatedActions,omitempty"`
-}
+var (
+	// AuthenticatedRepositoryActions is the closed consume-side action set.
+	AuthenticatedRepositoryActions = config.AuthenticatedRepositoryActions
+	// ValidateAuthenticatedActions is the static action contract.
+	ValidateAuthenticatedActions = config.ValidateAuthenticatedActions
+)
 
 // RepositoryAccessFile is the durable copy of repositoryAccess for a Home
 // or deployment stateDir. Evaluation fail-closes when the file is missing
@@ -29,22 +27,6 @@ type RepositoryAccess struct {
 type RepositoryAccessFile struct {
 	Version      int                `json:"version"`
 	Repositories []RepositoryAccess `json:"repositories"`
-}
-
-// AuthenticatedRepositoryActions is the closed consume-side set a Repository
-// may grant to every authenticated principal. Write, grant, Registry manage
-// and dataset administer stay on explicit allow rules.
-func AuthenticatedRepositoryActions() []string {
-	return []string{
-		"object.read",
-		"object.schema.read",
-		"object.history.read",
-		"object.provenance",
-		"object.relations",
-		"object.access.describe",
-		"file.read",
-		"projection.read",
-	}
 }
 
 // SystemRepositoryAccess is the recommended declaration for the protocol
@@ -57,7 +39,9 @@ func SystemRepositoryAccess() RepositoryAccess {
 	}
 }
 
-func (c DeploymentConfig) RepositoryAllowsAuthenticated(repo, action string) bool {
+// RepositoryAllowsAuthenticated evaluates one declared default. It is a
+// function because DeploymentConfig is owned by home/config.
+func RepositoryAllowsAuthenticated(c DeploymentConfig, repo, action string) bool {
 	return repositoryAccessAllows(c.RepositoryAccess, repo, action)
 }
 
@@ -86,6 +70,9 @@ func repositoryAccessPath(dir string) string {
 	return filepath.Join(dir, repositoryAccessFile)
 }
 
+// ReadRepositoryAccess returns the declared authenticated Repository defaults.
+// A missing declaration means none; an unreadable one is an error so callers
+// fail closed.
 func ReadRepositoryAccess(dir string) (RepositoryAccessFile, error) {
 	path := repositoryAccessPath(dir)
 	if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -102,6 +89,7 @@ func ReadRepositoryAccess(dir string) (RepositoryAccessFile, error) {
 	return file, nil
 }
 
+// WriteRepositoryAccess persists the declaration for a state directory.
 func WriteRepositoryAccess(dir string, file RepositoryAccessFile) error {
 	if file.Repositories == nil {
 		file.Repositories = []RepositoryAccess{}
@@ -132,36 +120,4 @@ func EnsureRepositoryAccess(dir string, items ...RepositoryAccess) error {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
-}
-
-func ValidateAuthenticatedActions(actions []string) error {
-	allowed := map[string]bool{}
-	for _, action := range AuthenticatedRepositoryActions() {
-		allowed[action] = true
-	}
-	for _, action := range actions {
-		action = strings.TrimSpace(action)
-		if action == "" || !allowed[action] {
-			return kernel.Fail(kernel.ErrUsageInvalid, "authenticatedActions cannot include %q", action)
-		}
-	}
-	return nil
-}
-
-func validateRepositoryAccess(items []RepositoryAccess) error {
-	seen := map[string]bool{}
-	for _, item := range items {
-		id, err := NormalizeRepositoryID(item.ID)
-		if err != nil || id != item.ID {
-			return kernel.Fail(kernel.ErrUsageInvalid, "repositoryAccess has invalid identity %q", item.ID)
-		}
-		if seen[id] {
-			return kernel.Fail(kernel.ErrUsageInvalid, "repositoryAccess has duplicate identity %q", id)
-		}
-		seen[id] = true
-		if err := ValidateAuthenticatedActions(item.AuthenticatedActions); err != nil {
-			return err
-		}
-	}
-	return nil
 }

@@ -1,4 +1,4 @@
-package home
+package config
 
 import (
 	"net/url"
@@ -7,9 +7,10 @@ import (
 	"kc/kernel"
 )
 
-// The existing authentication gateway owns session termination. This optional
-// URL is deployment input, never a request-controlled redirect or a KC session.
-func validateAuthLogoutURL(raw string) error {
+// ValidateAuthLogoutURL checks the optional session termination pointer. The
+// existing authentication gateway owns session termination; this URL is
+// deployment input, never a request-controlled redirect or a KC session.
+func ValidateAuthLogoutURL(raw string) error {
 	if raw == "" {
 		return nil
 	}

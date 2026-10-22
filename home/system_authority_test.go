@@ -32,7 +32,7 @@ func TestDeploymentRequiresActualSystemBinding(t *testing.T) {
 func TestDeploymentPublishesAndRestoresActualSystem(t *testing.T) {
 	cfg := deploymentFixture(t)
 	binding, _ := cfg.Binding(objectmodel.SystemRepositoryID)
-	physical, err := openExistingAuthority(binding.homeRepo())
+	physical, err := openExistingAuthority(repositoryHomeRepo(binding))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestDeploymentStartupAndReinitDoNotRepublishMissingSystem(t *testing.T) {
 	}
 	fake := testkit.NewLakeFSFake(t)
 	cfg.Repositories[0].DSN = fake.DSN(fake.NewRepo())
-	physical, err := openExistingAuthority(cfg.Repositories[0].homeRepo())
+	physical, err := openExistingAuthority(repositoryHomeRepo(cfg.Repositories[0]))
 	if err != nil {
 		t.Fatal(err)
 	}

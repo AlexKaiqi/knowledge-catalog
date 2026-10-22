@@ -1,4 +1,4 @@
-package home
+package config
 
 import (
 	"bytes"
@@ -28,7 +28,8 @@ type storesWire struct {
 	HydrationCache *HydrationCacheConfig `yaml:"hydrationCache,omitempty"`
 }
 
-// ReadStores loads layout.yaml + stores.yaml. Missing files yield local defaults.
+// ReadStores loads layout.yaml + stores.yaml. Missing files yield local
+// defaults; a retired stores.json is still honoured so an existing home opens.
 func ReadStores(home string) (StoresFile, error) {
 	engines, legacyLayout, err := readEngineFile(home)
 	if err != nil {
@@ -39,11 +40,11 @@ func ReadStores(home string) (StoresFile, error) {
 		return StoresFile{}, err
 	}
 	out := engines
-	out.Layout = mergeLayout(layout, legacyLayout)
-	if err := out.rejectSecrets(); err != nil {
+	out.Layout = MergeLayout(layout, legacyLayout)
+	if err := out.RejectSecrets(); err != nil {
 		return StoresFile{}, err
 	}
-	out = out.withDefaults()
+	out = out.WithDefaults()
 	if err := out.ValidateProfile(); err != nil {
 		return StoresFile{}, err
 	}
@@ -52,8 +53,8 @@ func ReadStores(home string) (StoresFile, error) {
 
 // WriteStores persists layout.yaml and stores.yaml without secrets.
 func WriteStores(home string, file StoresFile) error {
-	file = file.withDefaults()
-	if err := file.rejectSecrets(); err != nil {
+	file = file.WithDefaults()
+	if err := file.RejectSecrets(); err != nil {
 		return err
 	}
 	if err := file.ValidateProfile(); err != nil {
@@ -67,7 +68,7 @@ func WriteStores(home string, file StoresFile) error {
 	if err := writeYAML(StoresPath(home), file.enginesWire()); err != nil {
 		return err
 	}
-	_ = os.Remove(legacyStoresJSONPath(home))
+	_ = os.Remove(LegacyStoresPath(home))
 	return nil
 }
 
@@ -78,7 +79,7 @@ func readEngineFile(home string) (StoresFile, LayoutFile, error) {
 		if !os.IsNotExist(err) {
 			return StoresFile{}, LayoutFile{}, err
 		}
-		legacy := legacyStoresJSONPath(home)
+		legacy := LegacyStoresPath(home)
 		if _, statErr := os.Stat(legacy); statErr != nil {
 			return StoresFile{}, LayoutFile{}, nil
 		}
@@ -107,7 +108,7 @@ func readLayoutFile(home string, fallback LayoutFile) (LayoutFile, error) {
 	if err := yaml.Unmarshal(body, &layout); err != nil {
 		return LayoutFile{}, err
 	}
-	return mergeLayout(layout, fallback), nil
+	return MergeLayout(layout, fallback), nil
 }
 
 func (d storesDisk) engines() StoresFile {
@@ -116,22 +117,6 @@ func (d storesDisk) engines() StoresFile {
 
 func (d storesDisk) legacyLayout() LayoutFile {
 	return d.Layout
-}
-
-func mergeLayout(primary, fallback LayoutFile) LayoutFile {
-	if primary.Repos == "" {
-		primary.Repos = fallback.Repos
-	}
-	if primary.Registry == "" {
-		primary.Registry = fallback.Registry
-	}
-	if primary.Projections == "" {
-		primary.Projections = fallback.Projections
-	}
-	if primary.Checkouts == "" {
-		primary.Checkouts = fallback.Checkouts
-	}
-	return primary
 }
 
 func (s StoresFile) enginesWire() storesWire {

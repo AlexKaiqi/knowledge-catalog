@@ -38,6 +38,7 @@ POST /identity/v1/authorize:poll
 POST /identity/v1/token
 POST /object/v1/bindings:resolve
 POST /object/v1/log:query
+POST /object/v1/objects:diff
 POST /object/v1/objects:put
 POST /object/v1/objects:read
 POST /object/v1/objects:remove

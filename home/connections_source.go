@@ -145,6 +145,15 @@ func (s *connectedSource) ApplyTreeCommit(changes snapshot.TreeChangeSet) (kerne
 		return tree.ApplyTreeCommit(changes)
 	})
 }
+func (s *connectedSource) VerifyTreeWrite(changes snapshot.TreeChangeSet, bulk bool) error {
+	return connectionDo(s, func(source snapshot.Store) error {
+		verifier, ok := source.(snapshot.TreeWriteVerifier)
+		if !ok {
+			return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "connected authority cannot verify a no-change write")
+		}
+		return verifier.VerifyTreeWrite(changes, bulk)
+	})
+}
 func (s *connectedSource) ApplyTreeCommitBulk(changes snapshot.TreeChangeSet) (kernel.CommitID, error) {
 	return connectionCall(s, func(source snapshot.Store) (kernel.CommitID, error) {
 		bulk, err := requireBulkCapability(source)

@@ -46,6 +46,8 @@ type Home struct {
 	Writer             *writer.Writer
 	TreeWriter         snapshot.RawWriter
 	Reader             *reader.Reader
+	ReadBases          reader.ReadBasisStore
+	HistoryCheckpoints reader.HistoryCheckpointStore
 	Datasets           dataset.Service
 	Registry           dataset.Registry
 	File               HomeFile
@@ -123,6 +125,15 @@ func assemble(home string, file HomeFile, stores StoresFile, store snapshot.Regi
 	tw.SetObserver(rawWriteObserver(sys))
 	rd := reader.NewReader(store)
 	rd.SetJournal(sys)
+	readBases, err := reader.NewReadBasisStore(filepath.Join(home, "read-bases.db"))
+	if err != nil {
+		return nil, err
+	}
+	ws.ReadBases = readBases
+	ws.HistoryCheckpoints, err = reader.NewHistoryCheckpointStore(filepath.Join(home, "read-bases.db"))
+	if err != nil {
+		return nil, err
+	}
 	datasets.SetObserver(datasetObserver(sys))
 	idxDir, err := ResolveStoreDir(home, stores.Layout.Projections, defaultProjectionsDir)
 	if err != nil {
@@ -163,7 +174,7 @@ func assemble(home string, file HomeFile, stores StoresFile, store snapshot.Regi
 		return ws.Reader.Require(id, kernel.ErrCapabilityUnsatisfied)
 	}
 	ws.DatasetPreparation = discoverydatasets.Preparation{Enabled: ws.Plugins.Configured(), Provider: ws.Plugins, Lookup: lookup,
-		PrepareDataset: ws.prepareDataset(lookup), Conflicts: publicationConflicts(lookup), Dependencies: publicationDependencies(lookup, store.IDs)}
+		PrepareDataset: ws.prepareDataset(lookup), ProtectDataset: ws.protectDataset(lookup), PrepareProtectedDataset: ws.prepareProtectedDataset(lookup), Conflicts: publicationConflicts(lookup), Dependencies: publicationDependencies(lookup, store.IDs)}
 	ws.wireSidecars()
 	return ws, nil
 }

@@ -4,7 +4,15 @@
 
 业务 CLI 经 Server 和显式 principal。`kc deployment init --config` 显式初始化；`kc serve --config` 与 `OpenDeployment` 仅恢复。没有公开 `local` 命令或由实例目录扫描得到的部署清单。
 
+Object Reader 的固定读取依据与历史扫描记录由根 Home 在安装状态目录装配，借用请求视图
+共享同一存储端口，关闭请求不删除记录。两类记录只保存元数据，独立于索引代的生命周期；
+存储版本、引用和可用性合同见 [Reader](../object/reader/README.md)。
+
 ## 声明配置
+
+生产部署配置的形状、单文档解析与静态校验归 `home/config`：读取一份部署文档不打开 authority、
+不构造索引引擎、不写部署状态、不启动维护。`home/` 根包保留装配职责——打开来源、恢复资源、
+构造对象图；配置子包不反向依赖根 Home、`server` 或 `invocation`。
 
 `ReadDeployment` 接受单个 YAML 或 JSON 文档，拒绝未知字段。`DeploymentConfig` 是配置合同；部署工具负责版本化和分发配置，服务凭证通过环境注入；用户显式连接凭证遵守下文的私有耐久账合同。
 
@@ -127,7 +135,8 @@ datasetAccess:
 
 | 文件 | 职责 |
 |---|---|
-| `deployment.go` / `deployment_runtime.go` | 声明解析、初始化、恢复、只读接入与持久状态检查 |
+| `config/` | 部署配置形状、单文档解析与静态校验；读取配置不打开来源或引擎 |
+| `deployment.go` / `deployment_runtime.go` | 配置类型的根包别名、初始化、恢复、只读接入与持久状态检查 |
 | `registry_authority.go` | 独立登记表 Snapshot 容器的打开/创建；不进入对象 Store |
 | `home.go` | Store、登记表、Writer、Reader、Index 的共同装配 |
 | `managed.go` / `managed_ledger.go` | 显式托管仓创建、耐久分配账和只读恢复；重试不重新发权 |

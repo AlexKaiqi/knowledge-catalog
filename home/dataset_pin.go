@@ -2,6 +2,8 @@ package home
 
 import (
 	"context"
+	discoverydatasets "kc/discovery/datasets"
+	"kc/internal/datasetbridge"
 	"kc/kernel"
 	objectmodel "kc/object"
 	"kc/object/reader"
@@ -14,17 +16,17 @@ func (ws *Home) prepareDataset(lookup reader.MemberLookup) func(context.Context,
 	}
 }
 
-// DatasetPin is the one conversion from a Dataset service resolution to the
-// object reader's consumer basis.
-func DatasetPin(resolved dataset.ResolvedDataset) reader.DatasetPin {
-	items := make([]reader.DatasetItem, 0, len(resolved.Items))
-	for _, item := range resolved.Items {
-		items = append(items, reader.DatasetItem{
-			Target: item.Target, Repository: item.Repository, Commit: item.Commit,
-			Kind: item.Kind, Prefix: item.Prefix, File: item.File,
-		})
+func (ws *Home) protectDataset(lookup reader.MemberLookup) func(context.Context, dataset.ResolvedDataset) (discoverydatasets.PublicationProtection, error) {
+	return func(ctx context.Context, candidate dataset.ResolvedDataset) (discoverydatasets.PublicationProtection, error) {
+		return ws.Plugins.ProtectDatasetScope(ctx, lookup, DatasetPin(candidate))
 	}
-	return reader.DatasetPin{SetID: resolved.SetID, Revision: resolved.Revision, Repositories: resolved.Repositories, Items: items, Dependencies: resolved.Dependencies}
+}
+
+// DatasetPin is the one conversion from a Dataset service resolution to the
+// object reader's consumer basis. The mapping itself lives in
+// internal/datasetbridge so Home, fixtures and plugin tests cannot drift.
+func DatasetPin(resolved dataset.ResolvedDataset) reader.DatasetPin {
+	return datasetbridge.Pin(resolved)
 }
 
 // publicationDependencies freezes, for a candidate, the versions of the
@@ -43,5 +45,11 @@ func publicationDependencies(lookup func(kernel.RepositoryID) (objectmodel.Repos
 func publicationConflicts(lookup func(kernel.RepositoryID) (objectmodel.Repository, error)) func(dataset.ResolvedDataset) error {
 	return func(candidate dataset.ResolvedDataset) error {
 		return reader.Open(reader.MemberLookup(lookup), DatasetPin(candidate)).CheckHoldingConflicts()
+	}
+}
+
+func (ws *Home) prepareProtectedDataset(lookup reader.MemberLookup) func(context.Context, dataset.ResolvedDataset) (discoverydatasets.PublicationProtection, error) {
+	return func(ctx context.Context, candidate dataset.ResolvedDataset) (discoverydatasets.PublicationProtection, error) {
+		return ws.Plugins.PrepareProtectedDatasetScope(ctx, lookup, DatasetPin(candidate))
 	}
 }

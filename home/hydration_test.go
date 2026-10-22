@@ -50,11 +50,11 @@ func TestHomeWiresCacheAndRecoversWarmupWithoutSearchProvider(t *testing.T) {
 		}
 		id := systemrepo.SystemSchemaOperations()[0].Address.ObjectID
 		ref := objectmodel.ObjectRef{Repository: repo.ID(), Object: id}
-		if _, err := ws.Reader.Read(ref, head, nil); err != nil {
+		if _, err := ws.Reader.Read(ref, head); err != nil {
 			t.Fatal(err)
 		}
 		before := ws.ReadCache.Stats()
-		if _, err := ws.ReadView(nil).Reader.Read(ref, head, nil); err != nil {
+		if _, err := ws.ReadView(nil).Reader.Read(ref, head); err != nil {
 			t.Fatal(err)
 		}
 		after := ws.ReadCache.Stats()

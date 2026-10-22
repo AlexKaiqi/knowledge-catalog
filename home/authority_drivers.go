@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	"kc/home/config"
 	"kc/kernel"
 	"kc/snapshot"
 )
@@ -152,7 +153,7 @@ func authoritySecretEnvs() map[string]string {
 }
 
 func authorityFor(name string) (authorityDriver, error) {
-	name = normalizeRepoDriver(name)
+	name = config.NormalizeRepositoryDriver(name)
 	driver, ok := authorityDrivers[name]
 	if !ok {
 		return authorityDriver{}, kernel.Fail(kernel.ErrUsageInvalid, "unknown repository driver %s", name)
@@ -218,7 +219,7 @@ func openRegistryAuthority(binding RegistryBinding) (snapshot.Store, error) {
 		if driver.openExisting == nil {
 			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "registry authority driver %s cannot open an existing Snapshot", binding.Driver)
 		}
-		return driver.openExisting("", binding.homeRepo())
+		return driver.openExisting("", registryHomeRepo(binding))
 	default:
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "registry %s requires Snapshot driver lakefs", binding.ID)
 	}
@@ -226,8 +227,4 @@ func openRegistryAuthority(binding RegistryBinding) (snapshot.Store, error) {
 
 func managedLakeFSName(name, principal, identity string) (string, error) {
 	return snapshot.ManagedLakeFSName(name, principal, identity)
-}
-
-func validExternalAuthorityName(name string) bool {
-	return snapshot.ValidLakeFSName(name) && !snapshot.PlatformLakeFSName(name)
 }

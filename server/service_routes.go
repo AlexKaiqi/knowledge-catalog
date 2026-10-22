@@ -77,6 +77,7 @@ func (f *httpFacade) registerServiceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /identity/v1/authorize", f.identityAuthorize)
 	mux.HandleFunc("POST /identity/v1/authorize:poll", f.identityAuthorizePoll)
 	mux.HandleFunc("POST /object/v1/objects:read", f.objectRead)
+	mux.HandleFunc("POST /object/v1/objects:diff", f.objectDiff)
 	mux.HandleFunc("POST /object/v1/objects:put", f.objectPut)
 	mux.HandleFunc("POST /object/v1/objects:remove", f.objectRemove)
 	mux.HandleFunc("POST /object/v1/objects:resolve", f.objectResolve)
@@ -119,6 +120,7 @@ type objectScope struct {
 
 type objectReadRequest struct {
 	objectDatasetIdentity
+	Basis      string `json:"basis,omitempty"`
 	Reference  string `json:"reference"`
 	Shape      string `json:"shape,omitempty"`
 	Repository string `json:"repository,omitempty"`
@@ -296,6 +298,9 @@ func objectCoordinateFlags(workspace, repository, commit, ref string, pin json.R
 
 func (request objectReadRequest) Flags() map[string]FlagValue {
 	flags := objectCoordinateFlags(request.Dataset, request.Repository, request.Commit, request.Ref, request.Pin, request.Definition)
+	if request.Basis != "" {
+		flags["basis"] = request.Basis
+	}
 	flags["reference"] = request.Reference
 	if request.Shape != "" {
 		flags["shape"] = request.Shape

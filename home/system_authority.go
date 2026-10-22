@@ -18,9 +18,9 @@ func initializeSystemAuthority(store snapshot.Registry, c DeploymentConfig, init
 	}
 	var source snapshot.Store
 	if initialized {
-		source, err = openExistingAuthority(binding.homeRepo())
+		source, err = openExistingAuthority(repositoryHomeRepo(binding))
 	} else {
-		source, err = openAuthority(binding.Dir, binding.homeRepo())
+		source, err = openAuthority(binding.Dir, repositoryHomeRepo(binding))
 	}
 	if err != nil {
 		return err

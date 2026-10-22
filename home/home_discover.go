@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 
 	"kc/internal/journal"
@@ -68,14 +67,6 @@ func homeRel(home, abs string) string {
 		return filepath.ToSlash(abs)
 	}
 	return filepath.ToSlash(rel)
-}
-
-var unsafeRepoChars = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
-
-// EncodeRepoDir maps a kr:// id to one directory name. Lossy on purpose: the
-// authoritative id is stamped inside the directory, never read back off the path.
-func EncodeRepoDir(repositoryID string) string {
-	return unsafeRepoChars.ReplaceAllString(repositoryID, "_")
 }
 
 // InitHome creates an explicit component registry; production uses deployment init.

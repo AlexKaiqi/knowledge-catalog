@@ -3,13 +3,11 @@ package home
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"net/url"
 	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 
-	"kc/identity"
 	"kc/kernel"
 )
 
@@ -151,14 +149,4 @@ func selectManagedPool(c DeploymentConfig, name string) (ManagedRepositoryConfig
 		return ManagedRepositoryConfig{}, "", kernel.Fail(kernel.ErrUsageInvalid, "unknown managed store %q", name)
 	}
 	return pool, name, nil
-}
-
-func validManagedUsername(value string) bool {
-	_, err := identity.CanonicalUsername(value)
-	return err == nil
-}
-
-func validManagedPublicURL(raw string) bool {
-	u, err := url.Parse(raw)
-	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != "" && u.User == nil && u.RawQuery == "" && u.Fragment == ""
 }

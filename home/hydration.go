@@ -4,17 +4,8 @@ import (
 	readcache "kc/object/cache"
 )
 
-// HydrationCacheConfig controls process-local Snapshot body acceleration.
-// An omitted configuration enables bounded caching and hot-object warmup.
-// Cold-start identity paging is enabled explicitly with ColdStart.
-type HydrationCacheConfig struct {
-	Disabled      bool  `json:"disabled,omitempty" yaml:"disabled,omitempty"`
-	MaxBytes      int64 `json:"maxBytes,omitempty" yaml:"maxBytes,omitempty"`
-	MaxEntries    int   `json:"maxEntries,omitempty" yaml:"maxEntries,omitempty"`
-	WarmLimit     int   `json:"warmLimit,omitempty" yaml:"warmLimit,omitempty"`
-	WarmBatchSize int   `json:"warmBatchSize,omitempty" yaml:"warmBatchSize,omitempty"`
-	ColdStart     *bool `json:"coldStart,omitempty" yaml:"coldStart,omitempty"`
-}
+// HydrationCacheConfig is owned by home/config; this file keeps only the
+// process-local wiring that turns the declaration into a cache.
 
 func (ws *Home) configureHydration() error {
 	cfg := readcache.Config{}

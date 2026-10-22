@@ -370,7 +370,7 @@ func OpenDeployment(c DeploymentConfig) (*Home, error) {
 	}
 	file := HomeFile{}
 	for _, b := range c.Repositories {
-		item := b.homeRepo()
+		item := repositoryHomeRepo(b)
 		file.Repos = append(file.Repos, item)
 		source, err := openExistingAuthority(item)
 		if err != nil {
@@ -403,7 +403,7 @@ func OpenDeployment(c DeploymentConfig) (*Home, error) {
 				closeManagedSource(source)
 				return fail(err)
 			}
-			file.Repos = append(file.Repos, record.Binding.homeRepo())
+			file.Repos = append(file.Repos, repositoryHomeRepo(record.Binding))
 		}
 	}
 	// Restore external handles without requiring working credentials.
@@ -416,7 +416,7 @@ func OpenDeployment(c DeploymentConfig) (*Home, error) {
 			if err := store.Add(&connectedSource{dir: c.StateDir, id: kernel.RepositoryID(record.Binding.ID)}); err != nil {
 				return fail(err)
 			}
-			file.Repos = append(file.Repos, record.Binding.homeRepo())
+			file.Repos = append(file.Repos, repositoryHomeRepo(record.Binding))
 		}
 	}
 	systemSource, _ := store.Get(objectmodel.SystemRepositoryID)
@@ -438,7 +438,7 @@ func OpenDeployment(c DeploymentConfig) (*Home, error) {
 		datasets, registry = cat, reg
 		file.Registry = HomeRegistry{ID: b.ID, Dir: c.RegistryCache(b)}
 	}
-	stores := c.runtimeStores()
+	stores := c.RuntimeStores()
 	if err := stores.ValidateProfile(); err != nil {
 		return fail(err)
 	}
@@ -514,7 +514,7 @@ func PublishDeploymentSystem(c DeploymentConfig) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	repo, err := openAuthority(b.Dir, b.homeRepo())
+	repo, err := openAuthority(b.Dir, repositoryHomeRepo(b))
 	if err != nil {
 		return nil, err
 	}

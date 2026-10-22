@@ -17,7 +17,7 @@ func TestAuthoritySelectionChangesOnlyRepositoryProfileField(t *testing.T) {
 	base.Index = "none"
 	candidate := base
 	candidate.Repository = "lakefs"
-	candidate = candidate.withDefaults()
+	candidate = candidate.WithDefaults()
 	if err := candidate.ValidateProfile(); err != nil {
 		t.Fatal(err)
 	}
@@ -42,9 +42,11 @@ func TestAuthorityDriverNamesComeOnlyFromCompositionRegistry(t *testing.T) {
 }
 
 func TestGenericAuthorityAssemblyHasNoProviderBranches(t *testing.T) {
+	// Store shape and profile validation moved to home/config; the guard follows
+	// the code so generic assembly still cannot branch on a concrete provider.
 	files := []string{
-		"home_mount.go", "home_discover.go", "home.go", "stores_file.go",
-		"stores_flags.go", "stores_profile.go", "stores_public.go",
+		"home_mount.go", "home_discover.go", "home.go", "config/stores.go",
+		"config/stores_file.go", "stores_flags.go", "stores_public.go",
 	}
 	fset := token.NewFileSet()
 	for _, path := range files {

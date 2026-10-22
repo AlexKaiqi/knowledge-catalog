@@ -4,6 +4,7 @@ import (
 	"kc/systemrepo"
 	"strings"
 
+	"kc/home/config"
 	"kc/kernel"
 	objectmodel "kc/object"
 	"kc/snapshot"
@@ -59,7 +60,7 @@ func PublishSystemRepository(home, driver, dsn, dir string) (map[string]any, err
 	if driver == "" {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "system publish requires --driver lakefs")
 	}
-	driver = normalizeRepoDriver(driver)
+	driver = config.NormalizeRepositoryDriver(driver)
 	authority, err := authorityFor(driver)
 	if err != nil {
 		return nil, err
@@ -79,7 +80,7 @@ func PublishSystemRepository(home, driver, dsn, dir string) (map[string]any, err
 		Dir:    strings.TrimSpace(dir),
 	}
 	if existing, ok := systemAuthoritySpec(file); ok {
-		if existing.Driver != "" && normalizeRepoDriver(existing.Driver) != driver {
+		if existing.Driver != "" && config.NormalizeRepositoryDriver(existing.Driver) != driver {
 			return nil, kernel.Fail(kernel.ErrPreconditionFailed,
 				"%s is already published on driver %s", objectmodel.SystemRepositoryID, existing.Driver)
 		}

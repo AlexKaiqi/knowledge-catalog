@@ -10,6 +10,7 @@ import (
 	"kc/declarativeindex/opensearch"
 	discoverydatasets "kc/discovery/datasets"
 	consumerplugin "kc/discovery/plugin"
+	"kc/internal/datasetbridge"
 	"kc/internal/testkit"
 	"kc/kernel"
 	objectmodel "kc/object"
@@ -119,8 +120,8 @@ func (s datasetPreparationSource) mapping() dataset.DatasetSource {
 
 func datasetPreparationPublisher(ws *Home) discoverydatasets.DatasetPublisher {
 	return discoverydatasets.DatasetPublisher{Registry: ws.Datasets,
-		Authorize: func(ctx context.Context, _ discoverydatasets.DatasetPublication) error { return ctx.Err() },
-		Prepare:   ws.DatasetPreparation.Execute,
+		Authorize:        func(ctx context.Context, _ discoverydatasets.DatasetPublication) error { return ctx.Err() },
+		PrepareResources: ws.DatasetPreparation.ExecuteProtected,
 	}
 }
 
@@ -130,10 +131,7 @@ func assertDatasetPreparationReads(t *testing.T, ws *Home, def dataset.Dataset, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	pin := reader.DatasetPin{SetID: resolved.SetID, Revision: resolved.Revision, Repositories: resolved.Repositories}
-	for _, item := range resolved.Items {
-		pin.Items = append(pin.Items, reader.DatasetItem{Target: item.Target, Repository: item.Repository, Commit: item.Commit, Kind: item.Kind, Prefix: item.Prefix, File: item.File})
-	}
+	pin := datasetbridge.Pin(resolved)
 	serving := reader.Open(func(id kernel.RepositoryID) (objectmodel.Repository, error) {
 		return ws.Reader.Require(id, kernel.ErrObjectRefUnresolved)
 	}, pin)

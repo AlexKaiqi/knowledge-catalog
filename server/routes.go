@@ -43,6 +43,7 @@ var routes = []Route{
 	{Method: "POST", Pattern: "/object/v1/bindings:resolve"},
 	{Method: "POST", Pattern: "/object/v1/log:query"},
 	{Method: "POST", Pattern: "/object/v1/objects:read"},
+	{Method: "POST", Pattern: "/object/v1/objects:diff"},
 	{Method: "POST", Pattern: "/object/v1/objects:put"},
 	{Method: "POST", Pattern: "/object/v1/objects:remove"},
 	{Method: "POST", Pattern: "/object/v1/objects:resolve"},

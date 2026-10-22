@@ -101,7 +101,7 @@ func TestHTTPCachedReadRechecksRevocationAndKeepsOldBasis(t *testing.T) {
 	// SEARCH may discover this identity without body read permission. Its
 	// delivery stage must strip only this response, never the shared cache.
 	grant(false)
-	value, err := rd.Read(objectmodel.ObjectRef{Repository: repo.ID(), Object: "policy/a"}, commit, nil)
+	value, err := rd.Read(objectmodel.ObjectRef{Repository: repo.ID(), Object: "policy/a"}, commit)
 	if err != nil {
 		t.Fatal(err)
 	}
