@@ -188,9 +188,96 @@ def run_owned(endpoint, command, required=8, grace_seconds=2):
     return 128+interrupted[-1] if interrupted else status
 
 
+def inventory(endpoint):
+    """Return the open index names this instance currently holds."""
+    rows = request(endpoint, 'GET', '/_cat/indices?format=json&h=index&expand_wildcards=open')
+    return sorted({row['index'] for row in rows})
+
+
+def cleanup_added(endpoint, before):
+    """Delete only indices absent from `before`; never a wildcard, never a survivor.
+
+    Test groups that reuse an instance they do not own cannot carry a prefix, so
+    ownership is expressed as the difference against a snapshot instead. Anything
+    that existed before the run is somebody else's and is left alone, which is
+    what keeps a shared instance usable after a failing group.
+    """
+    added = [name for name in inventory(endpoint) if name not in set(before)]
+    failed = []
+    for name in added:
+        try:
+            request(endpoint, 'DELETE', '/' + urllib.parse.quote(name, safe=''))
+        except OSError as exc:
+            failed.append((name, str(exc)))
+    remaining = inventory(endpoint)
+    leaked = [name for name in added if name in set(remaining)]
+    return {'added': added, 'failed': failed, 'leaked': leaked}
+
+
+def run_guarded(endpoint, command, required=8, grace_seconds=2):
+    """Run a group that has no prefix, then reclaim exactly what it added."""
+    capacity(endpoint, required)
+    before = inventory(endpoint)
+    child = None
+    previous = {}
+    status = 1
+    interrupted = []
+    interruption_time = None
+
+    def forward(signum):
+        if child is not None and child.poll() is None:
+            try:
+                os.killpg(child.pid, signum)
+            except ProcessLookupError:
+                pass
+
+    def interrupt(signum, _frame):
+        nonlocal interruption_time
+        interrupted.append(signum)
+        if interruption_time is None:
+            interruption_time = time.monotonic()
+        forward(signum)
+
+    try:
+        for signum in (signal.SIGINT, signal.SIGTERM):
+            previous[signum] = signal.signal(signum, interrupt)
+        child = subprocess.Popen(command, env=dict(os.environ), start_new_session=True)
+        if interrupted:
+            forward(interrupted[-1])
+        while True:
+            try:
+                status = child.wait(timeout=0.1)
+                break
+            except subprocess.TimeoutExpired:
+                if interruption_time is not None and time.monotonic()-interruption_time >= grace_seconds:
+                    forward(signal.SIGKILL)
+                    status = child.wait(timeout=2)
+                    break
+        if interrupted:
+            status = 128 + interrupted[-1]
+        elif status < 0:
+            status = 128 - status
+    finally:
+        try:
+            result = cleanup_added(endpoint, before)
+            for name, reason in result['failed']:
+                print(f'FAIL: added index {name} was not removed: {reason}', file=sys.stderr)
+            if result['leaked']:
+                print('FAIL: indices added by this run survived cleanup: '
+                      + ', '.join(result['leaked']), file=sys.stderr)
+            if result['failed'] or result['leaked']:
+                status = status or 1
+        except (OSError, ValueError) as exc:
+            print(f'FAIL: added-index cleanup failed: {exc}', file=sys.stderr)
+            status = status or 1
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+    return 128+interrupted[-1] if interrupted else status
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=('run', 'capacity'))
+    parser.add_argument('action', choices=('run', 'guard', 'capacity', 'inventory'))
     parser.add_argument('--endpoint', required=True)
     parser.add_argument('--minimum-free-shards', type=int, default=8)
     args, command = parser.parse_known_args()
@@ -201,8 +288,13 @@ def main():
         if args.action == 'capacity':
             print(json.dumps(capacity(args.endpoint, args.minimum_free_shards)))
             return 0
+        if args.action == 'inventory':
+            print(json.dumps(inventory(args.endpoint)))
+            return 0
         if not command:
-            parser.error('run requires a child command after --')
+            parser.error(f'{args.action} requires a child command after --')
+        if args.action == 'guard':
+            return run_guarded(args.endpoint, command, args.minimum_free_shards)
         require_scene_command(command)
         return run_owned(args.endpoint, command, args.minimum_free_shards)
     except (OSError, ValueError) as exc:

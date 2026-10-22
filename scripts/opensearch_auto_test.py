@@ -74,6 +74,7 @@ class AutoSearchLeaseTest(unittest.TestCase):
             file.write_text(f'#!{sys.executable}\n'+FAKE)
             file.chmod(0o755)
         self.daemon = 'offline-'+uuid.uuid4().hex
+        self.fence_path = self.root/'fence.json'
         self.children = []
         self.addCleanup(self.stop_children)
 
@@ -93,6 +94,7 @@ class AutoSearchLeaseTest(unittest.TestCase):
                    GO=str(self.bins/'go'), KC_VALIDATION_RUN_ID='offline-auto',
                    KC_VALIDATION_RUN_DIR=str(self.root/('evidence-'+token)),
                    KC_TEST_OPENSEARCH_URL='', AUTO_FIXTURE_ROOT=str(self.root),
+                   KC_OPENSEARCH_FENCE=str(self.fence_path),
                    AUTO_FIXTURE_DAEMON=self.daemon, AUTO_FIXTURE_TOKEN=token)
         env.update(changes)
         process = subprocess.Popen(['bash',str(checkout/'scripts/testsuite.sh'),group],
@@ -247,6 +249,95 @@ class AutoSearchLeaseTest(unittest.TestCase):
         self.assertNotEqual(status,0,output)
         self.assertIn('cleanup',output.lower())
         self.assertEqual(len([x for x in self.state()['events']if x['action']=='start']),1)
+
+    def fence_entries(self):
+        path = self.fence_path
+        if not path.exists():
+            return {}
+        with path.open() as stream:
+            raw = stream.read().strip()
+        return json.loads(raw) if raw else {}
+
+    def test_daemon_identity_change_does_not_bypass_an_unresolved_cleanup(self):
+        checkout = self.checkout('a')
+        status, output = self.finish(self.start(checkout, AUTO_FIXTURE_CLEANUP_EXIT='75'))
+        self.assertEqual(status, 1, output)
+        # The container survived, so its cleanup is still unproven.
+        self.assertTrue(self.state()['active'])
+        self.assertEqual(len(self.fence_entries()), 1)
+        # A restarted daemon gets a brand-new, empty per-daemon lease file. The
+        # fence must not be defeated by that identity change.
+        status, output = self.finish(self.start(checkout, 'two',
+            AUTO_FIXTURE_DAEMON=self.daemon + '-restarted'))
+        self.assertNotEqual(status, 0, output)
+        self.assertIn('cleanup', output.lower())
+        self.assertEqual(len([e for e in self.state()['events'] if e['action'] == 'start']), 1)
+
+    def test_fence_entry_is_dropped_once_the_container_is_gone(self):
+        checkout = self.checkout('a')
+        status, output = self.finish(self.start(checkout, AUTO_FIXTURE_CLEANUP_EXIT='75'))
+        self.assertEqual(status, 1, output)
+        self.assertEqual(len(self.fence_entries()), 1)
+        # The owner disposed of the container out of band; its absence settles
+        # the create request, so automatic starts may resume.
+        state = self.state()
+        state['active'] = {}
+        (self.root/'state.json').write_text(json.dumps(state))
+        status, output = self.finish(self.start(checkout, 'two',
+            AUTO_FIXTURE_DAEMON=self.daemon + '-restarted'))
+        self.assertEqual(status, 0, output)
+        self.assertEqual(self.fence_entries(), {})
+
+    def test_confirmed_cleanup_leaves_no_fence_entry(self):
+        status, output = self.finish(self.start(self.checkout('a')))
+        self.assertEqual(status, 0, output)
+        self.assertEqual(self.fence_entries(), {})
+        self.assertFalse(self.state()['active'])
+
+    def test_lease_prune_keeps_current_daemon_live_container_and_held_lease(self):
+        import fcntl, hashlib, importlib.util
+        spec = importlib.util.spec_from_file_location(
+            'opensearch_auto', str(Path(__file__).with_name('opensearch_auto.py')))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        daemon = subprocess.run(['docker', 'info', '--format', '{{.ID}}'],
+                                capture_output=True, text=True).stdout.strip()
+        current = hashlib.sha256(daemon.encode()).hexdigest()
+        directory = self.root/'leases'
+        directory.mkdir()
+        def write(name, value):
+            (directory/('kc-opensearch-auto-'+name+'.lock')).write_text(value)
+        write(current, json.dumps({'pid': 1, 'container': 'kc-local-opensearch-current'}))
+        write('stale', json.dumps({'pid': 2, 'container': 'kc-local-opensearch-gone'}))
+        write('live', json.dumps({'pid': 3, 'container': 'kc-deploy-local-opensearch-1'}))
+        write('empty', '')
+        held = directory/'kc-opensearch-auto-held.lock'
+        held.write_text(json.dumps({'pid': 4, 'container': 'kc-local-opensearch-held'}))
+        handle = os.open(held, os.O_RDWR)
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+            result = module.prune_leases(apply=False, directory=str(directory))
+            # A daemon that no longer exists can never reopen its lease, and its
+            # container is gone, so those files are garbage.
+            self.assertEqual(sorted(result['removed']),
+                             ['kc-opensearch-auto-empty.lock', 'kc-opensearch-auto-stale.lock'])
+            # A live container is described by its lease whatever its daemon was.
+            self.assertEqual(result['kept_exists'],
+                             [('kc-opensearch-auto-live.lock', 'kc-deploy-local-opensearch-1')])
+            # The current daemon may open its lease at any moment: unlinking it
+            # under the lock would let two starts hold different inodes.
+            self.assertEqual(result['kept_current'], ['kc-opensearch-auto-'+current+'.lock'])
+            self.assertEqual(result['kept_busy'], ['kc-opensearch-auto-held.lock'])
+            self.assertTrue((directory/('kc-opensearch-auto-'+current+'.lock')).exists())
+            self.assertTrue(held.exists())
+            applied = module.prune_leases(apply=True, directory=str(directory))
+            self.assertEqual(sorted(applied['removed']), sorted(result['removed']))
+            self.assertEqual(sorted(p.name for p in directory.iterdir()),
+                             sorted(['kc-opensearch-auto-'+current+'.lock',
+                                     'kc-opensearch-auto-live.lock',
+                                     'kc-opensearch-auto-held.lock']))
+        finally:
+            os.close(handle)
 
     def test_explicit_endpoint_never_queries_docker_or_takes_auto_lease(self):
         status,output=self.finish(self.start(self.checkout('a'),

@@ -28,6 +28,44 @@ func TestCheckDocumentationAcceptsTaskBoard(t *testing.T) {
 	}
 }
 
+func TestCheckDocumentationAcceptsExplorations(t *testing.T) {
+	root := taskBoardFixture(t)
+	writeMarkdownFixture(t, root, "tasks/explore/PERM-GATE-01.md", "# PERM-GATE-01 · 权限门禁在各入口是否一致\n\n[设计](../../doc/README.md)\n")
+	if _, err := checkDocumentation(root); err != nil {
+		t.Fatalf("exploration rejected: %v", err)
+	}
+	// An empty explore/ directory is allowed: explorations come and go.
+	removeFixture(t, root, "tasks/explore")
+	if _, err := checkDocumentation(root); err != nil {
+		t.Fatalf("board without explore/ rejected: %v", err)
+	}
+}
+
+func TestCheckDocumentationRejectsBrokenExplorations(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		path  string
+		body  string
+		cause string
+	}{
+		{name: "bad id", path: "tasks/explore/perm-gate.md", body: "# perm-gate\n", cause: "tasks/explore/perm-gate.md is not an exploration file"},
+		{name: "not markdown", path: "tasks/explore/PERM-GATE-01.txt", body: "x\n", cause: "is not an exploration file"},
+		{name: "nested", path: "tasks/explore/group/PERM-GATE-01.md", body: "# PERM-GATE-01\n", cause: "tasks/explore/group is not an exploration file"},
+		{name: "title mismatch", path: "tasks/explore/PERM-GATE-01.md", body: "# PERM-GATE-02 · 别的探索\n", cause: "must start with the title \"# PERM-GATE-01"},
+		{name: "shares task id", path: "tasks/explore/PLUGIN-INTERPRETER-01.md", body: "# PLUGIN-INTERPRETER-01 · 同名\n", cause: "PLUGIN-INTERPRETER-01 is also a task in todo"},
+		{name: "broken link", path: "tasks/explore/PERM-GATE-01.md", body: "# PERM-GATE-01\n\n[缺](../../doc/missing.md)\n", cause: "tasks/explore/PERM-GATE-01.md -> ../../doc/missing.md"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := taskBoardFixture(t)
+			writeMarkdownFixture(t, root, tc.path, tc.body)
+			_, err := checkDocumentation(root)
+			if err == nil || !strings.Contains(err.Error(), tc.cause) {
+				t.Fatalf("expected %q, got %v", tc.cause, err)
+			}
+		})
+	}
+}
+
 func TestCheckDocumentationRejectsBrokenTaskBoard(t *testing.T) {
 	for _, tc := range []struct {
 		name  string

@@ -74,6 +74,12 @@ func checkDocumentation(root string) (int, error) {
 	if err := validateMarkdownLinks(root, files); err != nil {
 		return 0, err
 	}
+	if err := validateVersionSemantics(root, docs); err != nil {
+		return 0, err
+	}
+	if err := validateNoCitedRunIDs(root, docs); err != nil {
+		return 0, err
+	}
 	return len(docs), nil
 }
 

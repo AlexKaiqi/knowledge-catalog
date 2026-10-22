@@ -7,6 +7,8 @@ import json
 import os
 import pathlib
 import platform
+import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -71,6 +73,7 @@ class GoResults:
     def __init__(self):
         self.tests, self.packages = [], []
         self.executions = {}
+        self.no_test_files = set()
 
     def add(self, event):
         package, action = event.get("Package"), event.get("Action")
@@ -78,20 +81,26 @@ class GoResults:
             return
         if action == "start" and not event.get("Test"):
             self.executions[package] = self.executions.get(package, 0) + 1
+        execution = self.executions.get(package, 1)
+        if action == "output" and not event.get("Test") and re.fullmatch(
+                r"\?\s+" + re.escape(package) + r"\s+\[no test files\]", event.get("Output", "").strip()):
+            self.no_test_files.add((package, execution))
         if action not in ("pass", "fail", "skip"):
             return
-        row = {"package": package, "execution": self.executions.get(package, 1),
+        row = {"package": package, "execution": execution,
                "status": action, "time": event.get("Time"), "elapsedSeconds": event.get("Elapsed")}
         if event.get("Test"):
             row["test"] = event["Test"]
             self.tests.append(row)
         else:
+            if action == "skip" and (package, execution) in self.no_test_files:
+                row.update(status="no-tests", goAction=action)
             self.packages.append(row)
 
     def summary(self, declared):
-        def counts(rows):
+        def counts(rows, statuses=("pass", "fail", "skip")):
             return {status: sum(row["status"] == status for row in rows)
-                    for status in ("pass", "fail", "skip")}
+                    for status in statuses}
         observed = {(row["package"], row["test"].split("/")[0]) for row in self.tests}
         not_observed = []
         for entry in declared:
@@ -99,7 +108,7 @@ class GoResults:
             package = "kc" if directory == "." else "kc/" + directory
             if (package, entry["name"]) not in observed:
                 not_observed.append(entry)
-        return {"testEvents": counts(self.tests), "packageEvents": counts(self.packages),
+        return {"testEvents": counts(self.tests), "packageEvents": counts(self.packages, ("pass", "fail", "skip", "no-tests")),
                 "declaredCount": len(declared), "notObservedCount": len(not_observed),
                 "notObservedDeclarations": not_observed,
                 "completeness": "explicit-selection-only; not-observed is not pass or skip"}
@@ -127,6 +136,141 @@ def inventory_data(root):
     value = json.loads(result.stdout)
     value.update({"generatedAt": now(), "source": source_state(root)})
     return value
+
+
+def inventory_summary(snapshot):
+    """Bind a run to its declared inventory without copying the rebuildable payload.
+
+    The full inventory is a deterministic function of the source fingerprint
+    already recorded in manifest.json, so it is regenerated on demand instead of
+    stored per run. The digest is what makes a later regeneration comparable.
+    """
+    canonical = json.dumps(snapshot, ensure_ascii=False, sort_keys=True,
+                           separators=(",", ":")).encode()
+    return {"kind": "declared-inventory-summary", "schemaVersion": 1,
+            "counts": snapshot.get("counts", {}),
+            "limitations": snapshot.get("limitations", []),
+            "generatedAt": snapshot.get("generatedAt"),
+            "digest": hashlib.sha256(canonical).hexdigest(),
+            "digestPolicy": "sha256 of canonical JSON of the full declared inventory",
+            "regenerateWith": "make validation-inventory"}
+
+
+
+def directory_bytes(path):
+    total = 0
+    for entry in path.rglob("*"):
+        try:
+            if entry.is_file():
+                total += entry.stat().st_size
+        except OSError:
+            continue
+    return total
+
+
+def referenced_run_ids(root, candidates):
+    """Return the subset of run ids mentioned by tracked or newly added files.
+
+    Runs cited from tasks or docs are the ones a later reader is expected to
+    open, so retention must not delete them. Ignored evidence is not searched:
+    `.validation/` is ignored, so `--untracked` does not re-find the runs
+    themselves. One grep covers every candidate, because a per-run grep would
+    spawn hundreds of processes on a large history.
+    """
+    if not candidates:
+        return set()
+    pattern = "|".join(re.escape(name) for name in candidates)
+    result = subprocess.run(["git", "grep", "--untracked", "-h", "-o", "-E", "-e", pattern],
+                            cwd=root, capture_output=True, text=True)
+    if result.returncode not in (0, 1):
+        # A non-match exit is normal; anything else means the citation check
+        # cannot be answered, so keep everything rather than guess.
+        raise ValueError(f"citation check failed: {result.stderr.strip()}")
+    return set(result.stdout.split())
+
+
+def prune(args):
+    """Apply the evidence retention policy; deletion requires --apply."""
+    root = args.root.resolve()
+    runs = root / ".validation" / "runs"
+    if not runs.is_dir():
+        print(f"validation prune: {runs} does not exist; nothing to prune")
+        return 0
+    if args.keep < 1:
+        raise ValueError("--keep must be at least 1")
+    by_scope = {}
+    unmanaged = []
+    for path in sorted(runs.iterdir()):
+        # Only directories the runner created carry a manifest. Other content
+        # under runs/ belongs to whoever wrote it and is never pruned here.
+        if not path.is_dir():
+            continue
+        if not (path / "manifest.json").is_file():
+            unmanaged.append(path)
+            continue
+        try:
+            scope = json.loads((path / "manifest.json").read_text()).get("scope")
+        except (OSError, ValueError):
+            scope = None
+        by_scope.setdefault(scope or "(unknown)", []).append(path)
+    # Per-scope retention keeps recent history comparable inside one scope. It
+    # does not bound disk: a history of one-off scopes keeps every run forever,
+    # which is how this repository reached hundreds of scopes with one run each.
+    # So the global window is applied to the union of per-scope survivors rather
+    # than to the leftovers, and it is what actually caps accumulation.
+    considered = [path for scope in sorted(by_scope) if not args.scope or scope in args.scope
+                  for path in sorted(by_scope[scope], reverse=True)]
+    # Per-scope retention keeps recent history comparable inside one scope. It
+    # does not bound disk: a history of one-off scopes keeps every run forever,
+    # which is how this repository reached hundreds of scopes with one run each.
+    # So the global window is applied to the union of per-scope survivors rather
+    # than to the leftovers, and it is what actually caps accumulation.
+    per_scope_kept = {}
+    for scope in sorted(by_scope):
+        if args.scope and scope not in args.scope:
+            continue
+        # Run ids start with a UTC timestamp, so reverse sorting is recency.
+        for index, path in enumerate(sorted(by_scope[scope], reverse=True)):
+            if index < args.keep:
+                per_scope_kept[path] = f"within the last {args.keep} for scope {scope}"
+    everything = sorted(per_scope_kept, key=lambda path: path.name, reverse=True)
+    cited = referenced_run_ids(root, [path.name for path in considered])
+    # A citation is the only reason a run outlives both windows: it is what a
+    # later reader is told to open. Everything else is bounded by the windows.
+    kept = {path: "cited by a tracked file" for path in considered if path.name in cited}
+    windowed = [path for path in everything if path.name not in cited]
+    if args.keep_global > 0:
+        windowed = windowed[:args.keep_global]
+    for path in windowed:
+        kept[path] = per_scope_kept[path]
+    # Everything considered but not kept must be deleted, including runs the
+    # per-scope window already rejected.
+    dropped = [path for path in considered if path not in kept]
+    dropped_bytes = sum(directory_bytes(path) for path in dropped)
+    for path in considered:
+        if not args.quiet and path in kept:
+            print(f"keep   {path.name}  ({kept[path]})")
+    for path in dropped:
+        print(f"{'delete' if args.apply else 'would delete'} {path.name}  ({directory_bytes(path) // 1024}K)")
+    print(f"validation prune: kept {len(kept)}, "
+          f"{'deleted' if args.apply else 'would delete'} {len(dropped)} run(s), "
+          f"{dropped_bytes // 1048576}M reclaimed")
+    # Directories without a manifest were not created by the runner, so no
+    # retention window describes them and none of them are pruned. Reporting the
+    # count keeps them from silently owning most of the disk: the plan wins only
+    # over what it can see.
+    if unmanaged:
+        unmanaged_bytes = sum(directory_bytes(path) for path in unmanaged)
+        print(f"validation prune: {len(unmanaged)} director(y/ies) under runs/ have no "
+              f"manifest and are outside every retention window "
+              f"({unmanaged_bytes // 1048576}M)");
+    if not args.apply:
+        if dropped:
+            print("validation prune: this was a dry run; pass --apply to delete")
+        return 0
+    for path in dropped:
+        shutil.rmtree(path, ignore_errors=True)
+    return 0
 
 
 def run(args):
@@ -160,8 +304,8 @@ def run(args):
         if (root / "scripts" / "validation-inventory").is_dir():
             snapshot = inventory_data(root)
             declared = snapshot["goDeclarations"]
-            write_json(output / "inventory.json", snapshot)
-        with (output / "output.log").open("w") as log, (output / "go-test.jsonl").open("w") as raw_events:
+            write_json(output / "inventory.json", inventory_summary(snapshot))
+        with (output / "output.log").open("w") as log:
             child = subprocess.Popen(command, cwd=root, env=env, stdout=subprocess.PIPE,
                                      stderr=subprocess.STDOUT, text=True, errors="replace",
                                      start_new_session=True)
@@ -173,7 +317,6 @@ def run(args):
                 except ValueError:
                     event = None
                 if isinstance(event, dict) and event.get("Action") and event.get("Package"):
-                    raw_events.write(line)
                     events.add(event)
                     if event.get("Output"):
                         print(event["Output"], end="", flush=True)
@@ -234,9 +377,21 @@ def main():
     execute.add_argument("--scope", required=True)
     execute.add_argument("--output", type=pathlib.Path)
     execute.add_argument("command", nargs=argparse.REMAINDER)
+    trim = sub.add_parser("prune", help="apply the evidence retention policy; dry run unless --apply")
+    trim.add_argument("--root", type=pathlib.Path, default=ROOT)
+    trim.add_argument("--keep", type=int, default=20, help="runs retained per scope (default 20)")
+    trim.add_argument("--keep-global", type=int, default=50,
+                      help="runs retained overall regardless of scope (default 50; 0 disables)")
+    trim.add_argument("--scope", action="append", help="limit to a scope; repeatable")
+    trim.add_argument("--apply", action="store_true", help="delete instead of reporting")
+    trim.add_argument("--quiet", action="store_true", help="omit the per-run keep lines")
     args = parser.parse_args()
     try:
-        return inventory(args.root) if args.mode == "inventory" else run(args)
+        if args.mode == "inventory":
+            return inventory(args.root)
+        if args.mode == "prune":
+            return prune(args)
+        return run(args)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         print(f"validation: {error}", file=sys.stderr)
         return 2

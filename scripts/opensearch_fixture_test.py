@@ -133,6 +133,127 @@ class SearchFixtureTest(unittest.TestCase):
         self.assertEqual(cleaned, [prefix + 'kc-proj-one'])
         self.assertEqual(indices, {'kc-scene-someone-else-kc-proj-one', 'business-data'})
         self.assertEqual([p for method, p in calls if method == 'DELETE'], ['/' + prefix + 'kc-proj-one'])
+
+    def test_guard_reclaims_only_what_the_group_added(self):
+        # Groups without a run-owned prefix cannot be cleaned by name. Their
+        # ownership is the difference against a snapshot, so an index that
+        # existed before the group started is somebody else's and must survive,
+        # including one whose name merely looks like a prefix this run might own.
+        endpoint, prefix, calls, indices = self.server()
+        module = self.load()
+        before = module.inventory(endpoint)
+        self.assertIn(prefix + 'kc-proj-one', before)
+        indices.add('kc-proj-added-by-group')
+        result = module.cleanup_added(endpoint, before)
+        self.assertEqual(result['added'], ['kc-proj-added-by-group'])
+        self.assertEqual(result['failed'], [])
+        self.assertEqual(result['leaked'], [])
+        self.assertEqual(indices, {prefix + 'kc-proj-one',
+                                   'kc-scene-someone-else-kc-proj-one', 'business-data'})
+        deletes = [path for method, path in calls if method == 'DELETE']
+        self.assertEqual(deletes, ['/kc-proj-added-by-group'])
+
+    def test_guard_reports_a_surviving_addition_instead_of_passing(self):
+        # A cleanup that cannot remove what it added must fail the run: silently
+        # leaving the index is the leak this guard exists to prevent.
+        module = self.load()
+        survivor = 'kc-proj-survives'
+        calls = []
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *_):
+                pass
+            def do_GET(self):
+                calls.append(('GET', self.path))
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(json.dumps([{'index': survivor}]).encode())
+            def do_DELETE(self):
+                calls.append(('DELETE', self.path))
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(b'{"error":"refused"}')
+        server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        endpoint = 'http://127.0.0.1:' + str(server.server_port)
+        result = module.cleanup_added(endpoint, [])
+        self.assertEqual(result['added'], [survivor])
+        self.assertEqual(result['leaked'], [survivor])
+        self.assertEqual(len(result['failed']), 1)
+
+    def run_guarded_group(self, group, exit_status):
+        # A group bound to an explicitly configured instance has no owned prefix,
+        # so the suite must re-enter itself through the guard. Both halves matter:
+        # the index it created has to be reclaimed, and its own failure status has
+        # to survive the guard instead of being read as a successful invocation.
+        endpoint, _, calls, indices = self.server()
+        before = set(indices)
+        with tempfile.TemporaryDirectory() as temp:
+            go = Path(temp)/'go'
+            go.write_text(f'#!{sys.executable}\n'+f'''import urllib.request
+request=urllib.request.Request({endpoint!r}+'/kc-proj-group-g-one',method='PUT')
+with urllib.request.urlopen(request) as response: response.read()
+raise SystemExit({exit_status})
+''')
+            go.chmod(0o755)
+            result = subprocess.run(['bash', str(SCRIPT.parent/'testsuite.sh'), group],
+                env=dict(os.environ, GO=str(go), KC_TEST_OPENSEARCH_URL=endpoint,
+                         KC_VALIDATION_RUN_ID='guarded-group-offline'),
+                capture_output=True, text=True, timeout=30)
+        return result, calls, indices, before
+
+    def test_shared_instance_group_is_guarded_and_keeps_its_failure_status(self):
+        result, calls, indices, before = self.run_guarded_group('boundary', 73)
+        self.assertEqual(result.returncode, 73, result.stdout+result.stderr)
+        self.assertNotIn('can only `return', result.stderr)
+        created = [path[1:] for method, path in calls if method == 'PUT']
+        deleted = [path[1:] for method, path in calls if method == 'DELETE']
+        self.assertTrue(created)
+        self.assertEqual(deleted, created)
+        self.assertEqual(indices, before)
+
+    def test_shared_instance_group_reports_success_when_the_group_passes(self):
+        result, calls, indices, before = self.run_guarded_group('boundary', 0)
+        self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+        self.assertIn('kc-proj-group-g-one', [path[1:] for method, path in calls if method == 'DELETE'])
+        self.assertEqual(indices, before)
+
+    def test_contracts_group_runs_every_step_not_only_the_first(self):
+        # contracts is component + boundary + e2e. Passing the three functions as
+        # one list ran only the first and handed the others to it as arguments, so
+        # the group looked green while two thirds never executed. Each step issues
+        # its own go test invocation, so the invocation count is the witness.
+        endpoint, _, calls, indices = self.server()
+        before = set(indices)
+        with tempfile.TemporaryDirectory() as temp:
+            counter = Path(temp)/'invocations'
+            go = Path(temp)/'go'
+            go.write_text(f'#!{sys.executable}\n'+f'''import pathlib,sys,urllib.request
+if sys.argv[1:2]==['list']:
+    print('kc/object'); print('kc/internal/arch'); print('kc/cli')
+    raise SystemExit(0)
+log=pathlib.Path({str(counter)!r})
+log.write_text((log.read_text() if log.exists() else '')+' '.join(sys.argv[3:])+'\\n')
+urllib.request.urlopen(urllib.request.Request({endpoint!r}+'/kc-proj-step-g-one',method='PUT')).read()
+''')
+            go.chmod(0o755)
+            result = subprocess.run(['bash', str(SCRIPT.parent/'testsuite.sh'), 'contracts'],
+                env=dict(os.environ, GO=str(go), KC_TEST_OPENSEARCH_URL=endpoint,
+                         KC_VALIDATION_RUN_ID='contracts-steps-offline'),
+                capture_output=True, text=True, timeout=60)
+            steps = [line for line in counter.read_text().splitlines() if line.strip()]
+            deleted = [path[1:] for method, path in calls if method == 'DELETE']
+        self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+        self.assertEqual(len(steps), 3, 'contracts must run component, boundary and e2e: '+repr(steps))
+        self.assertTrue(any('internal/arch' in step for step in steps), 'boundary step missing: '+repr(steps))
+        self.assertTrue(any('./cli' in step for step in steps), 'e2e step missing: '+repr(steps))
+        self.assertTrue(deleted, 'added indices must be reclaimed')
+        self.assertEqual(indices, before)
+
+    def test_cleanup_refuses_an_incomplete_prefix(self):
+        endpoint, prefix, _, _ = self.server()
+        module = self.load()
         for bad in ('', 'kc-', 'kc-test-*', prefix+'another-'):
             with self.subTest(prefix=bad), self.assertRaises(ValueError):
                 module.cleanup(endpoint, bad)

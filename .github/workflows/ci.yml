@@ -1,15 +1,35 @@
 name: CI
 
+# One commit, one run. `push` is limited to the integration branch because a
+# pull_request event already reports the same commit; running both doubled every
+# gate. `merge_group` keeps the workflow usable behind a merge queue, where the
+# queue synthesises a temporary commit that never appears as a branch push.
 on:
   push:
+    branches: [main]
   pull_request:
+  merge_group:
 
 permissions:
   contents: read
 
+# Superseded pull_request runs are cancelled: a newer commit makes the older
+# result uninteresting, and a cancelled run stops holding the runner. Push and
+# merge_group runs are never cancelled, because their result gates the branch.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Keep the toolchain identical to go.mod's `toolchain` directive so a green
+  # local run and a green CI run mean the same thing.
+  GOTOOLCHAIN: go1.23.6
+  PROMETHEUS_IMAGE: prom/prometheus:v3.5.0
+
 jobs:
   observability-rules:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -19,18 +39,38 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Prepare the pinned rule-test tool
-        run: docker pull prom/prometheus:v3.5.0
+      # The rule tests need the pinned promtool. Cache the image as a tarball so
+      # the default branch does not pay a registry pull on every run.
+      - name: Restore the pinned rule-test image
+        id: prom-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/prometheus-${{ env.PROMETHEUS_IMAGE }}.tar
+          key: promtool-${{ env.PROMETHEUS_IMAGE }}
+      - name: Load the pinned rule-test image
+        run: |
+          set -euo pipefail
+          archive="/tmp/prometheus-${PROMETHEUS_IMAGE}.tar"
+          if [[ -f "$archive" ]]; then
+            docker load --input "$archive"
+          else
+            docker pull "$PROMETHEUS_IMAGE"
+            docker save --output "$archive" "$PROMETHEUS_IMAGE"
+          fi
       - run: python3 scripts/validation.py run --scope ci:observability -- make check-observability
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: validation-observability
-          path: .validation/runs/
-          include-hidden-files: true
+          retention-days: 7
+          path: |
+            .validation/runs/**/manifest.json
+            .validation/runs/**/report.json
+            .validation/runs/**/output.log
 
   validation-contracts:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -46,11 +86,15 @@ jobs:
         if: always()
         with:
           name: validation-contracts
-          path: .validation/runs/
-          include-hidden-files: true
+          retention-days: 7
+          path: |
+            .validation/runs/**/manifest.json
+            .validation/runs/**/report.json
+            .validation/runs/**/output.log
 
   test-and-coverage:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -62,11 +106,15 @@ jobs:
         if: always()
         with:
           name: validation-coverage
-          path: .validation/runs/
-          include-hidden-files: true
+          retention-days: 7
+          path: |
+            .validation/runs/**/manifest.json
+            .validation/runs/**/report.json
+            .validation/runs/**/output.log
 
   race:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -78,5 +126,8 @@ jobs:
         if: always()
         with:
           name: validation-race
-          path: .validation/runs/
-          include-hidden-files: true
+          retention-days: 7
+          path: |
+            .validation/runs/**/manifest.json
+            .validation/runs/**/report.json
+            .validation/runs/**/output.log

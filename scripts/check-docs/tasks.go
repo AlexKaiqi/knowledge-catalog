@@ -16,6 +16,12 @@ const (
 	taskRoot   = "tasks"
 	taskIndex  = "tasks/README.md"
 	taskKeeper = ".gitkeep"
+	// exploreDir holds open questions, not tasks. An exploration has no agreed
+	// deliverable until it is answered, so it cannot sit in todo/ without
+	// pretending to have acceptance criteria. It is not a fourth state: its
+	// files never move between states, they are concluded in place and then
+	// retired, while any confirmed issue becomes a task of its own.
+	exploreDir = "explore"
 )
 
 var (
@@ -50,8 +56,48 @@ func taskDocuments(root string) ([]string, error) {
 			files = append(files, taskRoot+"/"+state+"/"+id+".md")
 		}
 	}
+	explorations, err := exploreDocuments(root)
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range explorations {
+		if previous, dup := seen[id]; dup {
+			return nil, fmt.Errorf("%s/%s: %s is also a task in %s; a confirmed question becomes a new task, it does not share the exploration's ID", taskRoot, exploreDir, id, previous)
+		}
+		seen[id] = exploreDir
+		files = append(files, taskRoot+"/"+exploreDir+"/"+id+".md")
+	}
 	sort.Strings(files)
 	return files, nil
+}
+
+// exploreDocuments returns the exploration IDs in tasks/explore/ after checking
+// that every entry is a Markdown file named after its own title.
+func exploreDocuments(root string) ([]string, error) {
+	dir := filepath.Join(root, taskRoot, exploreDir)
+	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for _, entry := range entries {
+		rel := taskRoot + "/" + exploreDir + "/" + entry.Name()
+		if entry.Name() == taskKeeper && !entry.IsDir() {
+			continue
+		}
+		id := strings.TrimSuffix(entry.Name(), ".md")
+		if entry.IsDir() || id == entry.Name() || !taskID.MatchString(id) {
+			return nil, fmt.Errorf("%s is not an exploration file; name it <ID>.md with an ID like PERM-GATE-01", rel)
+		}
+		if err := validateTaskTitle(root, rel, id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
 }
 
 // validateTaskRoot allows only the board README and the state directories.
@@ -60,7 +106,7 @@ func validateTaskRoot(base string) error {
 	if err != nil {
 		return err
 	}
-	allowed := map[string]bool{"README.md": false}
+	allowed := map[string]bool{"README.md": false, exploreDir: true}
 	for _, state := range taskStates {
 		allowed[state] = true
 	}
@@ -68,7 +114,7 @@ func validateTaskRoot(base string) error {
 	for _, entry := range entries {
 		wantDir, ok := allowed[entry.Name()]
 		if !ok || wantDir != entry.IsDir() {
-			return fmt.Errorf("%s/%s is not allowed; tasks live in %s/{%s}/<ID>.md", taskRoot, entry.Name(), taskRoot, strings.Join(taskStates, ","))
+			return fmt.Errorf("%s/%s is not allowed; tasks live in %s/{%s}/<ID>.md and open questions in %s/%s/<ID>.md", taskRoot, entry.Name(), taskRoot, strings.Join(taskStates, ","), taskRoot, exploreDir)
 		}
 		if entry.Name() == "README.md" {
 			hasIndex = true

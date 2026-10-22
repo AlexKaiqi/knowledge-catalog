@@ -161,14 +161,39 @@ run_lakefs() {
   run_go_test -count=1 -timeout=15m -run '^(TestProductScenes|TestMetricPermissionScenes)$' ./cli
 }
 
-run_contracts() {
+run_adapters() {
+  run_opensearch
+}
+
+# component/boundary/e2e/contracts create their own physical indices but carry no
+# run-owned prefix. On an explicitly configured instance the only safe cleanup is
+# the difference against a snapshot taken before the group starts: without it a
+# failing group left hundreds of indices on the deployment instance and gradually
+# consumed its shard budget until unrelated runs failed on capacity. The group
+# re-enters itself under the guard so each group keeps one definition, the guard
+# sees the whole group as one child, and the child's status stays the exit code.
+#
+# The step has to be a single command: a bare list of function names would run the
+# first one and pass the rest as its arguments, silently dropping the others.
+run_group_on_shared_search() {
+  local group="$1"
+  local step="$2"
+  if [[ -n "${KC_TEST_OPENSEARCH_URL:-}" && -z "${KC_GROUP_GUARD:-}" ]]; then
+    KC_GROUP_GUARD=1 python3 "$repo_root/scripts/opensearch_fixture.py" guard \
+      --endpoint "$KC_TEST_OPENSEARCH_URL" -- "$0" "$group"
+    return
+  fi
+  "$step"
+}
+
+run_contracts_steps() {
   run_component
   run_boundary
   run_e2e
 }
 
-run_adapters() {
-  run_opensearch
+run_contracts() {
+  run_group_on_shared_search contracts run_contracts_steps
 }
 
 run_docker() {
@@ -192,9 +217,9 @@ esac
 case "$group" in
   lakefs) run_lakefs ;;
   contracts) run_contracts ;;
-  component) run_component ;;
-  boundary) run_boundary ;;
-  e2e) run_e2e ;;
+  component) run_group_on_shared_search component run_component ;;
+  boundary) run_group_on_shared_search boundary run_boundary ;;
+  e2e) run_group_on_shared_search e2e run_e2e ;;
   race) run_race ;;
   coverage) run_coverage ;;
   taihu-live) run_taihu_live ;;

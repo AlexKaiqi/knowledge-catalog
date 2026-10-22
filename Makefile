@@ -9,7 +9,11 @@ LISTEN ?= 127.0.0.1:7380
 
 DOCS_LISTEN ?= 127.0.0.1:8766
 
-.PHONY: check-docs check-surface quality test test-component test-boundary test-e2e test-race test-cover test-taihu-live test-state-runtime-e2e test-kcfs-e2e test-adapters test-docker test-all system-lakefs-up system-lakefs-status system-lakefs-down deploy-local-up deploy-local-status deploy-local-access deploy-local-smoke deploy-local-scenes deploy-local-goto deploy-local-accept deploy-local-down deploy-dev-up deploy-dev-status deploy-dev-access deploy-dev-smoke deploy-dev-down deploy-dev-reset kc typecheck serve docs-serve
+.PHONY: check-docs check-surface quality env-doctor test test-component test-boundary test-e2e test-race test-cover test-taihu-live test-state-runtime-e2e test-kcfs-e2e test-adapters test-docker test-all system-lakefs-up system-lakefs-status system-lakefs-down deploy-local-up deploy-local-status deploy-local-access deploy-local-smoke deploy-local-scenes deploy-local-goto deploy-local-accept deploy-local-down deploy-dev-up deploy-dev-status deploy-dev-access deploy-dev-smoke deploy-dev-down deploy-dev-reset kc typecheck serve docs-serve
+
+# Read-only development environment report. Never starts, stops, or removes anything.
+env-doctor:
+	./scripts/env-doctor.sh
 .PHONY: test-lakefs test-contracts
 .PHONY: quality-webui test-webui
 .PHONY: build package package-all test-package
@@ -26,9 +30,18 @@ test-webui: quality-webui
 check-docs:
 	$(GO) run ./scripts/check-docs
 
-.PHONY: validation-inventory check-validation
+.PHONY: validation-inventory validation-prune leases-prune check-validation
 validation-inventory:
 	@GO=$(GO) python3 ./scripts/validation.py inventory
+
+# Dry run by default; pass APPLY=--apply to delete. Runs cited by a tracked file are never pruned.
+validation-prune:
+	@python3 ./scripts/validation.py prune --keep $(or $(KEEP),20) $(if $(SCOPE),--scope $(SCOPE)) $(APPLY)
+
+# Dry run by default; pass APPLY=--apply to delete. A lease is removed only when
+# its Docker daemon is gone, no process holds its lock, and its container is absent.
+leases-prune:
+	@python3 ./scripts/opensearch_auto.py leases $(APPLY)
 
 check-validation:
 	python3 ./scripts/validation_test.py
