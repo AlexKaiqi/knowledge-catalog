@@ -281,7 +281,11 @@ func observeParity(t *testing.T, side *paritySide) parityObservation {
 func normalizeHistory(history []objectmodel.ObjectRevision, commits []kernel.CommitID) []parityRevision {
 	steps := make(map[kernel.CommitID]int, len(commits))
 	for index, commit := range commits {
-		steps[commit] = index
+		if _, recorded := steps[commit]; !recorded {
+			// A no-change command can reuse the prior commit. History names
+			// that version's introduction, not the last command returning it.
+			steps[commit] = index
+		}
 	}
 	out := make([]parityRevision, 0, len(history))
 	for _, revision := range history {

@@ -107,3 +107,35 @@ func TestLakeFSCheckpointFailsClosedOnBranchReadError(t *testing.T) {
 		t.Fatalf("failed branch inventory treated as empty: %v", err)
 	}
 }
+
+func TestFakeCheckpointPreservesPhysicalAuthorityAndImmutableHistory(t *testing.T) {
+	fake := NewLakeFSFake(t)
+	name := fake.NewRepo()
+	home := t.TempDir()
+	stamp := []byte("id: kr://checkpoint/fake\ndriver: lakefs\ndsn: " + fake.DSN(name) + "\n")
+	path := filepath.Join(home, "remote.yaml")
+	if err := os.WriteFile(path, stamp, 0600); err != nil {
+		t.Fatal(err)
+	}
+	restore, err := fake.SnapshotStamps(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake.mu.Lock()
+	repo := fake.repos[name]
+	repo.commits["future"] = lakefsFakeCommit{parent: "c0", files: map[string][]byte{"proof": []byte("retained")}}
+	repo.branches["main"] = "future"
+	fake.mu.Unlock()
+	if err := restore(); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil || string(raw) != string(stamp) {
+		t.Fatalf("authority stamp changed: %s %v", raw, err)
+	}
+	fake.mu.Lock()
+	defer fake.mu.Unlock()
+	if repo.branches["main"] != "c0" || string(repo.commits["future"].files["proof"]) != "retained" {
+		t.Fatal("checkpoint changed physical history instead of refs")
+	}
+}

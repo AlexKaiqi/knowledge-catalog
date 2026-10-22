@@ -398,6 +398,8 @@ func (f *LakeFSFake) serveBranch(w http.ResponseWriter, r *http.Request, repoNam
 		f.staging(w, r, repoName, repo, name)
 	case action == "objects" && r.Method == http.MethodDelete:
 		f.stageDelete(w, r, repo, name)
+	case action == "objects" && r.Method == http.MethodPost:
+		f.uploadObject(w, r, repo, name)
 	default:
 		http.NotFound(w, r)
 	}
@@ -428,11 +430,7 @@ func (f *LakeFSFake) staging(w http.ResponseWriter, r *http.Request, repoName st
 			http.Error(w, "missing upload", http.StatusConflict)
 			return
 		}
-		if repo.staged[branch] == nil {
-			repo.staged[branch] = map[string]*[]byte{}
-		}
-		copyBody := append([]byte(nil), content...)
-		repo.staged[branch][objectPath] = &copyBody
+		stageLakeFSBytes(repo, branch, objectPath, content)
 		writeLakeFSJSON(w, http.StatusOK, map[string]any{
 			"path": objectPath, "path_type": "object", "checksum": "etag",
 			"physical_address": body.Staging.PhysicalAddress, "mtime": 1,

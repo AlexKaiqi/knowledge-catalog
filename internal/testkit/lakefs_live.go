@@ -19,14 +19,15 @@ import (
 // It is a testkit fixture, not a Snapshot adapter. Sequential scene worlds use
 // SnapshotStamps to restore their owned authorities without replaying writes.
 type LakeFSLive struct {
-	origin    string
-	cred      string
-	namespace string
-	prefix    string
-	seq       atomic.Uint64
-	client    *http.Client
-	mu        sync.Mutex
-	created   []string
+	origin               string
+	cred                 string
+	namespace            string
+	prefix               string
+	seq                  atomic.Uint64
+	client               *http.Client
+	mu                   sync.Mutex
+	created              []string
+	checkpointNamespaces map[string]string
 }
 
 // NewLakeFSLive talks to an already running lakeFS. origin is

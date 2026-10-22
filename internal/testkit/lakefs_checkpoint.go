@@ -101,7 +101,11 @@ func (f *LakeFSLive) checkpointNamespace(repository string) (string, error) {
 		Namespace string `json:"storage_namespace"`
 	}
 	err := f.checkpointCall(http.MethodGet, repository, "", nil, &result)
-	if err == nil && (result.ID != repository || result.Namespace != f.namespace+"/"+repository) {
+	expected := f.namespace + "/" + repository
+	if pinned, ok := f.checkpointNamespaces[repository]; ok {
+		expected = pinned
+	}
+	if err == nil && (result.ID != repository || result.Namespace != expected) {
 		err = fmt.Errorf("lakeFS checkpoint repository identity changed: %s", repository)
 	}
 	return result.Namespace, err

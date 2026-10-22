@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"kc/internal/datasetbridge"
 	"kc/kernel"
 	objectmodel "kc/object"
 	repofile "kc/object/format"
@@ -403,19 +404,7 @@ func CommitChange(repoID kernel.RepositoryID, base kernel.CommitID, objectID str
 }
 
 func DatasetPin(resolved dataset.ResolvedDataset) reader.DatasetPin {
-	items := make([]reader.DatasetItem, 0, len(resolved.Items))
-	for _, item := range resolved.Items {
-		items = append(items, reader.DatasetItem{
-			Target: item.Target, Repository: item.Repository, Commit: item.Commit,
-			Kind: item.Kind, Prefix: item.Prefix, File: item.File,
-		})
-	}
-	return reader.DatasetPin{
-		SetID:        resolved.SetID,
-		Revision:     resolved.Revision,
-		Repositories: resolved.Repositories,
-		Items:        items,
-	}
+	return datasetbridge.Pin(resolved)
 }
 
 func OpenDataset(cat dataset.Service, setID string) (*reader.Serving, error) {
@@ -431,7 +420,7 @@ func FederatedRead(cat dataset.Service, setID string, objectID objectmodel.Objec
 	if err != nil {
 		return nil, err
 	}
-	return serving.Read(objectID, nil)
+	return serving.Read(objectID)
 }
 
 func PlanAccess(cat dataset.Service, setID string) (retrieval.AccessPlan, error) {
