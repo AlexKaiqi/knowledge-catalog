@@ -114,9 +114,15 @@ func relationsOnEngine(ctx context.Context, repository kernel.RepositoryID, comm
 		SearchView: retrieval.SearchView{Snapshots: scope.snapshots},
 		Hits:       []retrieval.RelationHit{}, Generation: relationGeneration(meta),
 	}
+	sealer, err := relationSealer(ctx, retriever, request.Continuation != "")
+	if err != nil {
+		return retrieval.RelationPage{}, err
+	}
+	nextPosition := ""
+	emitContinuation := false
 	continuation := ""
 	if request.Continuation != "" {
-		continuation, err = decodeRelationContinuation(request.Continuation, repository, commit, request.Query, out.Generation)
+		continuation, err = decodeRelationContinuation(sealer, request.Continuation, repository, commit, request.Query, out.Generation)
 		if err != nil {
 			return retrieval.RelationPage{}, err
 		}
@@ -125,7 +131,7 @@ func relationsOnEngine(ctx context.Context, repository kernel.RepositoryID, comm
 	budgetStop := func(reason string) {
 		out.Exhausted = false
 		out.Claims = append(out.Claims, "relation execution budget exhausted: "+reason)
-		out.Continuation = encodeRelationContinuation(relationContinuation{Repository: repository, Basis: commit, Query: retrieval.RelationQueryDigest(request.Query), Generation: out.Generation, Position: continuation})
+		nextPosition, emitContinuation = continuation, true
 	}
 	for len(out.Hits) < limit {
 		reserved, finish, reason, err := ports.ReserveSearchPage(ctx, limit-len(out.Hits))
@@ -219,13 +225,13 @@ func relationsOnEngine(ctx context.Context, repository kernel.RepositoryID, comm
 		if page.Exhausted || len(out.Hits) >= limit {
 			out.Exhausted = page.Exhausted
 			if !page.Exhausted && page.Continuation != "" {
-				out.Continuation = encodeRelationContinuation(relationContinuation{
-					Repository: repository, Basis: commit, Query: retrieval.RelationQueryDigest(request.Query),
-					Generation: out.Generation, Position: page.Continuation,
-				})
+				nextPosition, emitContinuation = page.Continuation, true
 			}
 			break
 		}
+	}
+	if emitContinuation {
+		out.Continuation = encodeRelationContinuation(sealer, relationContinuation{Repository: repository, Basis: commit, Query: retrieval.RelationQueryDigest(request.Query), Generation: out.Generation, Position: nextPosition})
 	}
 	sort.Slice(out.Hits, func(i, j int) bool {
 		left, right := out.Hits[i], out.Hits[j]

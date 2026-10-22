@@ -15,6 +15,7 @@ import (
 // stateProjection is Serving State for one published provider revision. It is
 // immutable after publication and is never an Object Repository.
 type stateProjection struct {
+	authority         kernel.RepositoryID
 	revision          string
 	accessDigest      kernel.Digest
 	observationDigest kernel.Digest
@@ -123,22 +124,33 @@ func (idx *Index) refreshState(ctx context.Context, repo objectmodel.Repository,
 	if err != nil {
 		return ports.StateSync{}, err
 	}
+	eng, err := idx.stateEngineAt(authorityEngineID(repo), commit)
+	if err != nil {
+		return ports.StateSync{}, err
+	}
 	key := stateStoreKey(repo.ID(), commit)
+	if err := idx.restoreState(ctx, key, authorityEngineID(repo)); err != nil {
+		return ports.StateSync{}, err
+	}
 	idx.stateMu.RLock()
 	previous := idx.states[key]
 	idx.stateMu.RUnlock()
 	incremental := len(objectIDs) > 0 && previous != nil
-	store, err := openStateServingStore(idx.dir, key, "building")
+	store, err := idx.openObservationStore(key)
 	if err != nil {
 		return ports.StateSync{}, err
 	}
 	keepStore := false
 	defer func() {
 		if !keepStore {
-			_ = store.CloseAndRemove()
+			if store.sealed {
+				_ = store.release()
+			} else {
+				_ = store.CloseAndRemove()
+			}
 		}
 	}()
-	next := &stateProjection{accessDigest: spec.AccessDigest, store: store}
+	next := &stateProjection{authority: authorityEngineID(repo), accessDigest: spec.AccessDigest, store: store}
 	const batchSize = 500
 	records := make(map[objectmodel.ObjectID]stateRecord, batchSize)
 	count := 0
@@ -169,7 +181,7 @@ func (idx *Index) refreshState(ctx context.Context, repo objectmodel.Repository,
 		if err := objectmodel.ValidateHydratedObject(repo.ID(), commit, raw.Address.ObjectID, value); err != nil {
 			return err
 		}
-		doc, err := compileProjectionDocumentObserved(repo, value, hydrated.Observations, spec)
+		doc, err := compileObservedValue(ctx, eng, repo, value, hydrated.Observations, spec)
 		if err != nil {
 			return err
 		}
@@ -228,10 +240,6 @@ func (idx *Index) refreshState(ctx context.Context, repo objectmodel.Repository,
 	}
 	next.revision = string(next.observationDigest)
 
-	eng, err := idx.stateEngineAt(authorityEngineID(repo), commit)
-	if err != nil {
-		return ports.StateSync{}, err
-	}
 	mode := ports.IndexModeRebuild
 	if incremental {
 		mode = ports.IndexModeIncremental
@@ -244,11 +252,17 @@ func (idx *Index) refreshState(ctx context.Context, repo objectmodel.Repository,
 		return ports.StateSync{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
 			"dynamic State projection requires bounded streaming rebuild support")
 	}
+
 	session, err := streaming.BeginRebuild(providerMeta)
 	if err != nil {
 		return ports.StateSync{}, err
 	}
 	if err := store.WalkDocs(batchSize, session.Append); err != nil {
+		_ = session.Abort(err)
+		return ports.StateSync{}, err
+	}
+
+	if err := store.seal(key, authorityEngineID(repo), next); err != nil {
 		_ = session.Abort(err)
 		return ports.StateSync{}, err
 	}
@@ -266,7 +280,7 @@ func (idx *Index) refreshState(ctx context.Context, repo objectmodel.Repository,
 	keepStore = true
 	idx.stateMu.Unlock()
 	if previous != nil {
-		_ = previous.store.CloseAndRemove()
+		_ = previous.store.release()
 	}
 	return ports.StateSync{
 		Repository: repo.ID(), BasisCommit: commit, Revision: next.revision,
@@ -297,6 +311,9 @@ func (idx *Index) StateProjectionReady(ctx context.Context, repo objectmodel.Rep
 	}
 	if commit == "" {
 		return false, kernel.Fail(kernel.ErrUsageInvalid, "State projection readiness requires an explicit fixed commit")
+	}
+	if err := idx.restoreState(ctx, stateStoreKey(repo.ID(), commit), authorityEngineID(repo)); err != nil {
+		return false, err
 	}
 	idx.stateMu.RLock()
 	defer idx.stateMu.RUnlock()

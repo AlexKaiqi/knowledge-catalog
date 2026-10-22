@@ -79,30 +79,49 @@ func (idx *Index) RefreshDatasetState(ctx context.Context, lookup reader.MemberL
 	if err := idx.requireCurrentDataset(pin); err != nil {
 		return ports.StateSync{}, err
 	}
-	s, _, release, err := idx.preparedDataset(ctx, lookup, pin)
+	s, _, release, err := idx.preparedDataset(ctx, lookup, pin, datasetContinuation{})
 	if err != nil {
 		return ports.StateSync{}, err
 	}
 	release()
+	eng, err := idx.stateEngineAt(s.id, s.basis)
+	if err != nil {
+		return ports.StateSync{}, err
+	}
+	var publishObservation func(func() (ports.PreparedResource, error)) error
+	_, managed := eng.(ports.ResourcePreparer)
+	if idx.observationPrepare != nil && !pin.Temporary && managed {
+		publishObservation, err = idx.observationPrepare(ctx, pin.SetID, pin.Revision)
+		if err != nil {
+			return ports.StateSync{}, err
+		}
+		if publishObservation == nil {
+			return ports.StateSync{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Dataset authority returned no observation acceptance")
+		}
+	}
 	values, err := s.values(ctx, source)
 	if err != nil {
 		return ports.StateSync{}, err
 	}
 	key := stateStoreKey(s.id, s.basis)
-	store, err := openStateServingStore(idx.dir, key, "building")
+	store, err := idx.openObservationStore(key)
 	if err != nil {
 		return ports.StateSync{}, err
 	}
 	keep := false
 	defer func() {
 		if !keep {
-			_ = store.CloseAndRemove()
+			if store.sealed {
+				_ = store.release()
+			} else {
+				_ = store.CloseAndRemove()
+			}
 		}
 	}()
 	records := map[objectmodel.ObjectID]stateRecord{}
 	oldest := oldestObservation(values)
 	for _, value := range values {
-		doc, err := compileProjectionDocumentObserved(s.member, value.value, value.observations, s.spec)
+		doc, err := compileObservedValue(ctx, eng, s.member, value.value, value.observations, s.spec)
 		if err != nil {
 			return ports.StateSync{}, err
 		}
@@ -116,11 +135,7 @@ func (idx *Index) RefreshDatasetState(ctx context.Context, lookup reader.MemberL
 	if err != nil {
 		return ports.StateSync{}, err
 	}
-	next := &stateProjection{store: store, accessDigest: s.spec.AccessDigest, observationDigest: digest, revision: string(digest), oldestObservedAt: oldest}
-	eng, err := idx.stateEngineAt(s.id, s.basis)
-	if err != nil {
-		return ports.StateSync{}, err
-	}
+	next := &stateProjection{authority: s.id, store: store, accessDigest: s.spec.AccessDigest, observationDigest: digest, revision: string(digest), oldestObservedAt: oldest}
 	meta := idx.projectionMeta(eng, s.basis, s.spec, ports.IndexModeRebuild, "observation")
 	meta.ObservationDigest = digest
 	meta.Revision = next.revision
@@ -128,6 +143,7 @@ func (idx *Index) RefreshDatasetState(ctx context.Context, lookup reader.MemberL
 	if !ok {
 		return ports.StateSync{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Dataset observations require streaming publication")
 	}
+
 	session, err := streaming.BeginRebuild(meta)
 	if err != nil {
 		return ports.StateSync{}, err
@@ -140,21 +156,47 @@ func (idx *Index) RefreshDatasetState(ctx context.Context, lookup reader.MemberL
 		_ = session.Abort(err)
 		return ports.StateSync{}, err
 	}
-	// Engine commit and the serving swap happen inside the revision fence, so
-	// a publication of this Dataset cannot land between the last check and
-	// the generation switch; it waits and replaces the revision afterwards.
+	if err := store.seal(key, s.id, next); err != nil {
+		_ = session.Abort(err)
+		return ports.StateSync{}, err
+	}
+
+	// A managed publication is accepted by the actual Dataset authority after
+	// preparation protection. The serving swap follows acceptance, never ROOT.
 	var previous *stateProjection
 	attempted := false
-	accept := func() error {
+	prepare := func() (ports.PreparedResource, error) {
 		attempted = true
-		idx.stateMu.Lock()
-		defer idx.stateMu.Unlock()
-		if err := session.Commit(); err != nil {
-			return err
+		if _, managed := eng.(ports.ResourcePreparer); managed {
+			protected, ok := session.(ports.PreparedRebuildSession)
+			if !ok {
+				return nil, session.Abort(kernel.Fail(kernel.ErrCapabilityUnsatisfied, "managed observation build requires continuous resource protection"))
+			}
+			ticket, err := protected.CommitResource()
+			if err == nil && ticket == nil {
+				err = kernel.Fail(kernel.ErrCapabilityUnsatisfied, "managed observation build returned no resource ticket")
+			}
+			return ticket, err
 		}
+		return nil, session.Commit()
+	}
+	accept := func() error {
+		if publishObservation != nil {
+			if err := publishObservation(prepare); err != nil {
+				return err
+			}
+		} else {
+			if err := session.Commit(); err != nil {
+				attempted = true
+				return err
+			}
+			attempted = true
+		}
+		idx.stateMu.Lock()
 		previous = idx.states[key]
 		idx.states[key] = next
 		keep = true
+		idx.stateMu.Unlock()
 		return nil
 	}
 	if err := idx.withCurrentDataset(pin, accept); err != nil {
@@ -164,7 +206,7 @@ func (idx *Index) RefreshDatasetState(ctx context.Context, lookup reader.MemberL
 		return ports.StateSync{}, err
 	}
 	if previous != nil {
-		_ = previous.store.CloseAndRemove()
+		_ = previous.store.release()
 	}
 	return ports.StateSync{Repository: s.id, BasisCommit: s.basis, Revision: next.revision, AccessDigest: s.spec.AccessDigest, ObservationDigest: digest, ObjectCount: len(records), Updated: len(records), Mode: ports.IndexModeRebuild}, nil
 }
@@ -195,15 +237,13 @@ func (idx *Index) withCurrentDataset(pin reader.DatasetPin, accept func() error)
 }
 
 func (idx *Index) searchDatasetState(ctx context.Context, s datasetSpace, request retrieval.SearchRequest, external []retrieval.FieldRef) (retrieval.SearchResult, error) {
-	idx.stateMu.RLock()
-	defer idx.stateMu.RUnlock()
-	state := idx.states[stateStoreKey(s.id, s.basis)]
-	if state == nil {
-		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Dataset %s revision %d observations are not prepared", s.pin.SetID, s.pin.Revision)
-	}
-	eng, err := idx.stateEngineAt(s.id, s.basis)
+	eng, state, release, err := idx.acquireObservation(ctx, stateStoreKey(s.id, s.basis), s.id, request, &s)
 	if err != nil {
 		return retrieval.SearchResult{}, err
+	}
+	defer release()
+	if state == nil {
+		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Dataset %s revision %d observations are not prepared", s.pin.SetID, s.pin.Revision)
 	}
 	meta, err := loadMetaContext(ctx, eng)
 	if err != nil {

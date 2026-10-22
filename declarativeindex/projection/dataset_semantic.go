@@ -15,7 +15,7 @@ func (idx *Index) SemanticDatasetWindow(ctx context.Context, lookup reader.Membe
 	if err := ctx.Err(); err != nil {
 		return retrieval.SearchResult{}, err
 	}
-	s, eng, release, err := idx.preparedDataset(ctx, lookup, pin)
+	s, eng, release, err := idx.preparedDataset(ctx, lookup, pin, datasetContinuation{})
 	if err != nil {
 		return retrieval.SearchResult{}, err
 	}

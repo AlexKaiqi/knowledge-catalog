@@ -21,13 +21,16 @@ func loadMetaContext(ctx context.Context, engine ports.Engine) (ports.Meta, erro
 	return meta, err
 }
 
-func compileValue(repo objectmodel.Repository, value objectmodel.ObjectValue, spec retrieval.AccessSpec) (ports.CompiledDoc, bool, error) {
+func compileValueComputed(ctx context.Context, engine ports.Engine, repo objectmodel.Repository, value objectmodel.ObjectValue, spec retrieval.AccessSpec) (ports.CompiledDoc, bool, error) {
 	if objectmodel.IsSchemaObject(value.Address.ObjectID) {
 		return ports.CompiledDoc{}, false, nil
 	}
-	doc, err := compileProjectionDocument(repo, value, spec)
-	if err != nil {
-		return ports.CompiledDoc{}, false, err
-	}
-	return doc, true, nil
+	computations, _ := engine.(retrieval.MemberComputations)
+	doc, err := compileProjectionDocumentComputed(ctx, repo, value, nil, spec, computations)
+	return doc, err == nil, err
+}
+
+func compileObservedValue(ctx context.Context, engine ports.Engine, repo objectmodel.Repository, value objectmodel.ObjectValue, observations []objectmodel.UnitObservation, spec retrieval.AccessSpec) (ports.CompiledDoc, error) {
+	computations, _ := engine.(retrieval.MemberComputations)
+	return compileProjectionDocumentComputed(ctx, repo, value, observations, spec, computations)
 }

@@ -1,6 +1,7 @@
 package projection
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -23,7 +24,7 @@ func TestSystemPublicationSchemaFieldsSupplyDiscoveryContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		doc, include, err := compileValue(repo, value, spec)
+		doc, include, err := compileValueComputed(context.Background(), nil, repo, value, spec)
 		if err != nil || !include || strings.TrimSpace(doc.Text) == "" {
 			t.Fatalf("published discovery text for %s lost: include=%v text=%q err=%v", id, include, doc.Text, err)
 		}

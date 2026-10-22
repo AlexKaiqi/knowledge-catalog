@@ -3,7 +3,6 @@ package projection
 import (
 	"context"
 	"sort"
-	"time"
 
 	ports "kc/discovery/projection"
 	"kc/discovery/space"
@@ -21,20 +20,11 @@ type datasetValue struct {
 // oldestObservation returns the earliest observation time among the values,
 // as written by the source. Observation bases are validated as RFC 3339.
 func oldestObservation(values []datasetValue) string {
-	oldest, oldestRaw := time.Time{}, ""
+	age := observationTime{}
 	for _, value := range values {
-		for _, observation := range value.observations {
-			raw := observation.Basis.ObservedAt
-			at, err := time.Parse(time.RFC3339Nano, raw)
-			if err != nil {
-				continue
-			}
-			if oldestRaw == "" || at.Before(oldest) {
-				oldest, oldestRaw = at, raw
-			}
-		}
+		age.include(value.observations)
 	}
-	return oldestRaw
+	return age.raw
 }
 
 func (s datasetSpace) values(ctx context.Context, source ports.ObservationSource) ([]datasetValue, error) {

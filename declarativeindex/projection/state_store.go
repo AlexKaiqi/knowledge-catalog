@@ -1,13 +1,14 @@
 package projection
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	ports "kc/discovery/projection"
 	"os"
 	"path/filepath"
-	"strconv"
+	"sync"
 	"time"
 
 	bolt "go.etcd.io/bbolt"
@@ -81,11 +82,21 @@ func (s *stateServingStore) WalkDocs(batchSize int, visit func([]ports.CompiledD
 }
 
 func (s *stateServingStore) Digest(commit kernel.CommitID) (kernel.Digest, error) {
+	return s.DigestContext(context.Background(), commit)
+}
+
+func (s *stateServingStore) DigestContext(ctx context.Context, commit kernel.CommitID) (kernel.Digest, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	hash := sha256.New()
 	_, _ = hash.Write([]byte(commit))
 	err := s.db.View(func(tx *bolt.Tx) error {
 		cursor := tx.Bucket(stateValueBucket).Cursor()
 		for key, raw := cursor.First(); key != nil; key, raw = cursor.Next() {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			_, _ = hash.Write(key)
 			_, _ = hash.Write([]byte{0})
 			_, _ = hash.Write(raw)
@@ -100,10 +111,13 @@ func (s *stateServingStore) Digest(commit kernel.CommitID) (kernel.Digest, error
 }
 
 type stateServingStore struct {
-	db   *bolt.DB
-	file string
-	dir  string
-	temp string
+	db        *bolt.DB
+	file      string
+	dir       string
+	temp      string
+	closeOnce sync.Once
+	closeErr  error
+	sealed    bool
 }
 
 func openStateServingStore(root string, key engineKey, revision string) (*stateServingStore, error) {
@@ -117,21 +131,36 @@ func openStateServingStore(root string, key engineKey, revision string) (*stateS
 		}
 		temp = base
 	}
-	identity := kernel.CanonicalDigest(map[string]any{"repository": key.repo, "commit": key.commit, "lane": key.lane})
-	dir := filepath.Join(base, "state-serving", SanitizeID(string(key.repo))+"-"+string(identity)[:16])
+	dir := stateServingDirectory(base, key)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		if temp != "" {
 			_ = os.RemoveAll(temp)
 		}
 		return nil, err
 	}
+	var candidate *os.File
 	if revision == "building" {
-		revision += "-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+		candidate, err = os.CreateTemp(dir, "building-*.db")
+	} else {
+		candidate, err = os.OpenFile(filepath.Join(dir, revision+".db"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	}
-	file := filepath.Join(dir, revision+".db")
+	if err != nil {
+		if temp != "" {
+			_ = os.RemoveAll(temp)
+		}
+		return nil, err
+	}
+	file := candidate.Name()
+	if err := candidate.Close(); err != nil {
+		_ = os.Remove(file)
+		if temp != "" {
+			_ = os.RemoveAll(temp)
+		}
+		return nil, err
+	}
 	db, err := bolt.Open(file, 0o600, &bolt.Options{Timeout: time.Second})
 	if err != nil {
-		_ = os.Remove(dir)
+		_ = os.Remove(file)
 		if temp != "" {
 			_ = os.RemoveAll(temp)
 		}
@@ -144,12 +173,18 @@ func openStateServingStore(root string, key engineKey, revision string) (*stateS
 	}); err != nil {
 		_ = db.Close()
 		_ = os.Remove(file)
+		if temp != "" {
+			_ = os.RemoveAll(temp)
+		}
 		return nil, err
 	}
 	return store, nil
 }
 
 func (s *stateServingStore) PutBatch(records map[objectmodel.ObjectID]stateRecord) error {
+	if s.sealed {
+		return kernel.Fail(kernel.ErrPreconditionFailed, "published observation values are immutable")
+	}
 	return s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(stateValueBucket)
 		for objectID, record := range records {
@@ -179,13 +214,29 @@ func (s *stateServingStore) Get(objectID objectmodel.ObjectID) (stateRecord, boo
 	return record, found, err
 }
 
+func (s *stateServingStore) Close() error {
+	if s == nil {
+		return nil
+	}
+	s.closeOnce.Do(func() { s.closeErr = s.db.Close() })
+	return s.closeErr
+}
+
+// release retains configured durable storage; anonymous storage has no owner
+// after its Index closes and may be discarded.
+func (s *stateServingStore) release() error {
+	if s != nil && s.temp != "" {
+		return s.CloseAndRemove()
+	}
+	return s.Close()
+}
+
 func (s *stateServingStore) CloseAndRemove() error {
 	if s == nil {
 		return nil
 	}
-	closeErr := s.db.Close()
+	closeErr := s.Close()
 	removeErr := os.Remove(s.file)
-	_ = os.Remove(s.dir)
 	if s.temp != "" {
 		_ = os.RemoveAll(s.temp)
 	}

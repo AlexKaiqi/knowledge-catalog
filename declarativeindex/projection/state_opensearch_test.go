@@ -6,6 +6,7 @@ import (
 	sourcebridge "kc/liveaccess/discovery"
 	"testing"
 
+	index "kc/declarativeindex/projection"
 	retrieval "kc/discovery"
 	"kc/internal/bindingfixture"
 	"kc/internal/testkit"
@@ -54,7 +55,9 @@ func TestLiveOpenSearchStateProjectionRefreshAndSameBasisHydrate(t *testing.T) {
 		bindingfixture.Bind(address, "schema/job.runtime", "resource/scheduler"),
 		{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: address.ObjectID, AspectName: "definition"}, Value: map[string]any{"owner": "data"}, SchemaRef: "schema/job.definition"},
 	})
-	idx := liveIndex(t)
+	directory, opener := t.TempDir(), testfixture.LiveEngineOpener(t)
+	idx := index.NewIndexEngine(directory, opener)
+	t.Cleanup(func() { _ = idx.Close() })
 	lookup := &liveStateLookup{status: "running", revision: "r1"}
 	first, err := idx.RefreshState(context.Background(), repo, commit, sourcebridge.Source{Lookup: lookup})
 	if err != nil {
@@ -71,6 +74,17 @@ func TestLiveOpenSearchStateProjectionRefreshAndSameBasisHydrate(t *testing.T) {
 	}
 	if result.SearchView.ProjectionRevisions[repo.ID()] != first.Revision || len(result.Hits[0].Version.Observations) != 1 {
 		t.Fatalf("SearchView/hit did not retain observation basis: %#v", result)
+	}
+
+	// Closing the actual engine owner must preserve the fixed observed values.
+	if err := idx.Close(); err != nil {
+		t.Fatal(err)
+	}
+	idx = index.NewIndexEngine(directory, opener)
+	lookup.status, lookup.revision = "unexpected-new-value", "unexpected-r2"
+	recovered, err := idx.SearchStateAtRevision(repo, commit, first.Revision, request)
+	if err != nil || len(recovered.Hits) != 1 || recovered.Hits[0].Version.Observations[0].Basis.SourceRevision != "r1" {
+		t.Fatalf("actual OpenSearch restart lost or refreshed the original observation: %#v %v", recovered, err)
 	}
 
 	lookup.status, lookup.revision = "stopped", "r2"

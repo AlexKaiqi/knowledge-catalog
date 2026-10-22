@@ -168,18 +168,19 @@ func (idx *Index) SearchStateAtRevisionContext(ctx context.Context, repo objectm
 	if ctx.Err() != nil && !ports.SearchBudgetExhausted(ctx) {
 		return retrieval.SearchResult{}, ctx.Err()
 	}
-	idx.stateMu.RLock()
-	defer idx.stateMu.RUnlock()
-	state := idx.states[stateStoreKey(repo.ID(), commit)]
+	eng, state, release, err := idx.acquireObservation(ctx, stateStoreKey(repo.ID(), commit), authorityEngineID(repo), req, nil)
+	if err != nil {
+		if req.Continuation == "" && kernel.CodeOf(err) == kernel.ErrCapabilityUnsatisfied {
+			return retrieval.SearchResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "State projection for %s at %s is not prepared: %v", repo.ID(), commit, err)
+		}
+		return retrieval.SearchResult{}, err
+	}
+	defer release()
 	if state == nil {
 		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "State projection for %s at %s is not prepared", repo.ID(), commit)
 	}
 	if revision != "" && state.revision != revision {
 		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "dynamic SearchView revision changed; restart the search")
-	}
-	eng, err := idx.stateEngineAt(authorityEngineID(repo), commit)
-	if err != nil {
-		return retrieval.SearchResult{}, err
 	}
 	view := retrieval.SearchView{
 		Snapshots:           map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit},

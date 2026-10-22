@@ -31,6 +31,32 @@ func (idx *Index) AccessSpecAt(repo objectmodel.Repository, commit kernel.Commit
 	return spec, err
 }
 
+// readyDigestAt reports the access digest of a projection that is already READY
+// at this exact basis, using metadata only.
+//
+// The basis commit is immutable and the access contract is a pure function of
+// that commit plus this instance's declaration manifest, so a projection that
+// is READY at the basis and still matches the running physical configuration
+// (which includes the manifest digest and provider revision) already carries
+// the contract this caller would compute. Recomputing it would resolve one
+// address per referencing declaration; on a large repository that is tens of
+// thousands of reads to answer a question the metadata already settled.
+//
+// A projection that is ahead, behind, not READY, or built against a different
+// physical configuration still returns false and takes the full path.
+func (idx *Index) readyDigestAt(eng ports.Engine, meta ports.Meta, commit kernel.CommitID) (kernel.Digest, bool) {
+	if meta.Basis != commit || meta.AccessDigest == "" {
+		return "", false
+	}
+	// physicalMatches rejects every state other than READY (and accepts an
+	// unset state for metadata written before the field existed), so this
+	// single check carries the readiness predicate as well.
+	if !idx.physicalMatches(eng, meta) {
+		return "", false
+	}
+	return meta.AccessDigest, true
+}
+
 // maintainedAccessSpecAt also reports whether a ready projection supplied the
 // declaration witnesses. Without one the spec is structure only: declared
 // faces are never located on the query side, so the result fails closed.

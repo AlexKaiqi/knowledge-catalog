@@ -18,19 +18,24 @@ func (idx *Index) Ensure(ctx context.Context, repo objectmodel.Repository, commi
 		return ports.IndexSync{}, err
 	}
 	repo = objectmodel.BindContext(ctx, repo)
+	eng, err := idx.engine(authorityEngineID(repo))
+	if err != nil {
+		return ports.IndexSync{}, err
+	}
+	meta, err := loadMetaContext(ctx, eng)
+	if err != nil {
+		return ports.IndexSync{}, err
+	}
+	// Already projected at this commit: answer from metadata rather than
+	// recompiling a contract whose basis cannot have changed.
+	if digest, ready := idx.readyDigestAt(eng, meta, commit); ready {
+		return idx.readySync(repo.ID(), commit, digest, eng)
+	}
 	spec, err := idx.specAtCommit(repo, commit)
 	if err != nil {
 		return ports.IndexSync{}, err
 	}
 	if err := ctx.Err(); err != nil {
-		return ports.IndexSync{}, err
-	}
-	eng, err := idx.engine(authorityEngineID(repo))
-	if err != nil {
-		return ports.IndexSync{}, err
-	}
-	meta, err := eng.LoadMeta()
-	if err != nil {
 		return ports.IndexSync{}, err
 	}
 	if idx.projectionMatches(eng, meta, commit, spec.AccessDigest) {
@@ -67,25 +72,45 @@ func (idx *Index) Ensure(ctx context.Context, repo objectmodel.Repository, commi
 }
 
 // EnsureAt builds a projection at commit without moving the live engine.
+//
+// The ready check runs before any build gate is taken and reads only what the
+// projection already retained, so an already projected basis answers without
+// touching the declaration authority. Only a build that must actually happen
+// serializes, and only against builds of the same basis.
 func (idx *Index) EnsureAt(ctx context.Context, repo objectmodel.Repository, commit kernel.CommitID) (ports.IndexSync, error) {
 	if err := ctx.Err(); err != nil {
 		return ports.IndexSync{}, err
 	}
 	repo = objectmodel.BindContext(ctx, repo)
-	idx.fixedBuildMu.Lock()
-	defer idx.fixedBuildMu.Unlock()
 	if commit == "" {
 		return ports.IndexSync{}, kernel.Fail(kernel.ErrUsageInvalid, "EnsureAt requires a commit")
-	}
-	spec, err := idx.specAtCommit(repo, commit)
-	if err != nil {
-		return ports.IndexSync{}, err
 	}
 	eng, err := idx.engineAt(authorityEngineID(repo), commit)
 	if err != nil {
 		return ports.IndexSync{}, err
 	}
-	meta, err := eng.LoadMeta()
+	meta, err := loadMetaContext(ctx, eng)
+	if err != nil {
+		return ports.IndexSync{}, err
+	}
+	if digest, ready := idx.readyDigestAt(eng, meta, commit); ready {
+		return idx.readySync(repo.ID(), commit, digest, eng)
+	}
+	release, err := idx.enterFixedBuild(ctx, engineKey{repo: authorityEngineID(repo), commit: commit})
+	if err != nil {
+		return ports.IndexSync{}, err
+	}
+	defer release()
+	// The basis may have become READY while this caller waited for the gate, so
+	// re-read instead of paying for a second full build.
+	meta, err = loadMetaContext(ctx, eng)
+	if err != nil {
+		return ports.IndexSync{}, err
+	}
+	if digest, ready := idx.readyDigestAt(eng, meta, commit); ready {
+		return idx.readySync(repo.ID(), commit, digest, eng)
+	}
+	spec, err := idx.specAtCommit(repo, commit)
 	if err != nil {
 		return ports.IndexSync{}, err
 	}
@@ -244,7 +269,7 @@ func (idx *Index) rebuild(ctx context.Context, eng ports.Engine, repo objectmode
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			doc, include, err := compileValue(repo, value, spec)
+			doc, include, err := compileValueComputed(ctx, eng, repo, value, spec)
 			if err != nil {
 				return err
 			}
@@ -279,7 +304,7 @@ func (idx *Index) rebuild(ctx context.Context, eng ports.Engine, repo objectmode
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		doc, ok, err := compileValue(repo, value, spec)
+		doc, ok, err := compileValueComputed(ctx, eng, repo, value, spec)
 		if err != nil {
 			return err
 		}
@@ -331,11 +356,11 @@ func (idx *Index) applyHydrated(ctx context.Context, eng ports.Engine, repo obje
 			return ports.IndexSync{}, err
 		}
 		batch := ids[start:end]
-		before, err := compileProjectionBatch(repo, from, batch, spec, fromPaths)
+		before, err := compileProjectionBatch(ctx, eng, repo, from, batch, spec, fromPaths)
 		if err != nil {
 			return ports.IndexSync{}, err
 		}
-		after, err := compileProjectionBatch(repo, to, batch, spec, toPaths)
+		after, err := compileProjectionBatch(ctx, eng, repo, to, batch, spec, toPaths)
 		if err != nil {
 			return ports.IndexSync{}, err
 		}
@@ -367,7 +392,7 @@ func (idx *Index) applyHydrated(ctx context.Context, eng ports.Engine, repo obje
 	}, nil
 }
 
-func compileProjectionBatch(repo objectmodel.Repository, commit kernel.CommitID, ids []objectmodel.ObjectID, spec retrieval.AccessSpec, paths map[objectmodel.ObjectID][]string) (map[objectmodel.ObjectID]ports.CompiledDoc, error) {
+func compileProjectionBatch(ctx context.Context, eng ports.Engine, repo objectmodel.Repository, commit kernel.CommitID, ids []objectmodel.ObjectID, spec retrieval.AccessSpec, paths map[objectmodel.ObjectID][]string) (map[objectmodel.ObjectID]ports.CompiledDoc, error) {
 	var values map[objectmodel.ObjectID]objectmodel.ObjectValue
 	var err error
 	if hydrator, ok := repo.(objectmodel.UnitPathsHydrator); ok && paths != nil {
@@ -387,7 +412,7 @@ func compileProjectionBatch(repo objectmodel.Repository, commit kernel.CommitID,
 		if value.Repository != repo.ID() || value.Commit != commit || value.Address.ObjectID != id {
 			return nil, kernel.Fail(kernel.ErrPreconditionFailed, "projection input %s does not match its repository and fixed basis", id)
 		}
-		doc, include, err := compileValue(repo, value, spec)
+		doc, include, err := compileValueComputed(ctx, eng, repo, value, spec)
 		if err != nil {
 			return nil, err
 		}

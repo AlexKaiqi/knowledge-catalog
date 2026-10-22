@@ -7,6 +7,7 @@ import (
 	ports "kc/discovery/projection"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"testing"
 
 	retrieval "kc/discovery"
@@ -19,10 +20,11 @@ import (
 
 type statePublicationFailureEngine struct {
 	testfixture.StateEngine
-	commitErr error
-	commits   int
-	candidate ports.Meta
-	appended  int
+	commitErr     error
+	commitApplied bool
+	commits       int
+	candidate     ports.Meta
+	appended      int
 }
 
 func (e *statePublicationFailureEngine) BeginRebuild(meta ports.Meta) (ports.RebuildSession, error) {
@@ -47,6 +49,12 @@ func (s *statePublicationFailureSession) Append(docs []ports.CompiledDoc) error 
 func (s *statePublicationFailureSession) Commit() error {
 	s.engine.commits++
 	if s.engine.commitErr != nil {
+		if s.engine.commitApplied {
+			if err := s.RebuildSession.Commit(); err != nil {
+				return err
+			}
+			return s.engine.commitErr
+		}
 		return s.RebuildSession.Abort(s.engine.commitErr)
 	}
 	return s.RebuildSession.Commit()
@@ -120,8 +128,13 @@ func TestStatePublicationFailurePreservesOriginalObservationUntilRetry(t *testin
 				t.Fatalf("failed candidate revision became addressable: %v", err)
 			}
 			files, err := filepath.Glob(filepath.Join(filepath.Dir(oldStore), "*.db"))
-			if err != nil || !reflect.DeepEqual(files, []string{oldStore}) {
-				t.Fatalf("failed candidate leaked storage or removed serving observation: files=%v error=%v", files, err)
+			// Commit errors cannot prove a physical request was rejected. Keep
+			// both immutable records until resource reconciliation decides;
+			// only independently accepted provider metadata selects one.
+			expectedFiles := []string{oldStore, observationFile(idx.dir, stateStoreKey(repo.ID(), commit), authorityEngineID(repo), failedRevision)}
+			sort.Strings(expectedFiles)
+			if err != nil || !reflect.DeepEqual(files, expectedFiles) {
+				t.Fatalf("uncertain candidate or original observation lost: files=%v want=%v error=%v", files, expectedFiles, err)
 			}
 			engine.commitErr = nil
 			retried, err := refresh()

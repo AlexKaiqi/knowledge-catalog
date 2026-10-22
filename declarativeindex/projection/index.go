@@ -4,6 +4,7 @@ import (
 	"context"
 	retrieval "kc/discovery"
 	ports "kc/discovery/projection"
+	"os"
 	"regexp"
 	"sync"
 
@@ -20,22 +21,38 @@ type Index struct {
 	mu   sync.Mutex
 	// stateBuildMu serializes refresh publishers without blocking searches while
 	// a new warm generation is compiled.
-	stateBuildMu         sync.Mutex
-	fixedBuildMu         sync.Mutex
-	stateMu              sync.RWMutex
-	engs                 map[engineKey]ports.Engine
-	states               map[engineKey]*stateProjection
-	hydrator             objectmodel.Hydrator
-	check                retrieval.DeclarationCheck
-	manifestDigest       kernel.Digest
-	datasetRevisionFence DatasetRevisionFence
+	stateBuildMu sync.Mutex
+	// fixedBuildGate keeps builds of the same projection basis mutually
+	// exclusive. It replaces a plain process-wide mutex because waiting for a
+	// build must observe the caller's own cancellation: a client that already
+	// timed out must not stay queued behind a large repository scan. Deciding
+	// that a projection is READY is read-only and never takes the gate.
+	gateMu                   sync.Mutex
+	fixedBuildGate           map[engineKey]chan struct{}
+	stateMu                  sync.RWMutex
+	engs                     map[engineKey]ports.Engine
+	states                   map[engineKey]*stateProjection
+	stateDirectory           string
+	temporaryStateDirectory  bool
+	hydrator                 objectmodel.Hydrator
+	check                    retrieval.DeclarationCheck
+	manifestDigest           kernel.Digest
+	datasetRevisionFence     DatasetRevisionFence
+	resourceCoordinator      ports.ResourceCoordinator
+	publicationRecovery      func(context.Context, []byte) (bool, error)
+	publicationReference     func(context.Context, []byte) (bool, error)
+	publicationEvidence      func(context.Context, string, int) ([]byte, error)
+	publishedDatasetRecovery func(context.Context, string, int) error
+	publishedRecoveryGate    chan struct{}
+	observationPrepare       func(context.Context, string, int) (func(func() (ports.PreparedResource, error)) error, error)
+	observationEvidence      func(context.Context, string, int) ([]ports.ObservationReference, error)
 }
 
-// DatasetRevisionFence is the publication authority for observation refresh:
+// DatasetRevisionFence orders in-process observation refresh:
 // it runs accept while revision stays the current, unretired revision of the
 // Dataset, and fails with PRECONDITION_FAILED otherwise. Publication of that
-// Dataset waits for accept, so a refresh is never accepted for a revision
-// that was replaced while it committed.
+// Dataset waits for accept in this process. Actual cross-process acceptance
+// additionally requires the injected observation publication authority.
 type DatasetRevisionFence func(setID string, revision int, accept func() error) error
 
 // SetDatasetRevisionFence supplies the publication authority for observation
@@ -51,7 +68,32 @@ func NewIndexEngine(dir string, opener ports.EngineOpener) *Index {
 			return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "index engine opener required (retrieval/opensearch)")
 		}
 	}
-	return &Index{dir: dir, open: opener, engs: map[engineKey]ports.Engine{}, states: map[engineKey]*stateProjection{}}
+	return &Index{dir: dir, stateDirectory: dir, open: opener, engs: map[engineKey]ports.Engine{}, states: map[engineKey]*stateProjection{}, fixedBuildGate: map[engineKey]chan struct{}{}}
+}
+
+// enterFixedBuild acquires the build gate for one projection basis. Waiting
+// honours ctx so a caller whose deadline expired is released instead of
+// blocking on a scan it did not ask for. The returned function releases the
+// gate exactly once.
+//
+// The gate is per projection, not per process: builds of different bases share
+// no state, so making them queue behind each other only spreads one slow
+// scan's latency across unrelated work. Entries are retained for the process
+// lifetime so a waiter and a newcomer always agree on the same channel.
+func (idx *Index) enterFixedBuild(ctx context.Context, key engineKey) (func(), error) {
+	idx.gateMu.Lock()
+	gate := idx.fixedBuildGate[key]
+	if gate == nil {
+		gate = make(chan struct{}, 1)
+		idx.fixedBuildGate[key] = gate
+	}
+	idx.gateMu.Unlock()
+	select {
+	case gate <- struct{}{}:
+		return func() { <-gate }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // AfterSnapshot applies a member snapshot to the working projection.
@@ -69,6 +111,8 @@ func (idx *Index) AfterSnapshot(repo objectmodel.Repository, from, to kernel.Com
 }
 
 func (idx *Index) Close() error {
+	idx.stateBuildMu.Lock()
+	defer idx.stateBuildMu.Unlock()
 	idx.stateMu.Lock()
 	defer idx.stateMu.Unlock()
 	idx.mu.Lock()
@@ -81,12 +125,19 @@ func (idx *Index) Close() error {
 		delete(idx.engs, key)
 	}
 	for key, state := range idx.states {
-		if err := state.store.CloseAndRemove(); err != nil && first == nil {
+		if err := state.store.release(); err != nil && first == nil {
 			first = err
 		}
 		delete(idx.states, key)
 	}
 	idx.states = map[engineKey]*stateProjection{}
+	if idx.temporaryStateDirectory {
+		if err := os.RemoveAll(idx.stateDirectory); err != nil && first == nil {
+			first = err
+		}
+		idx.stateDirectory = ""
+		idx.temporaryStateDirectory = false
+	}
 	return first
 }
 

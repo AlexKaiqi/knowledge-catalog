@@ -24,7 +24,7 @@ func (idx *Index) RelationsDataset(ctx context.Context, lookup reader.MemberLook
 	}
 	ctx, cancel := ports.WithSearchBudget(ctx, ports.SearchBudget{})
 	defer cancel()
-	s, engine, release, err := idx.preparedDataset(ctx, lookup, pin)
+	s, engine, release, err := idx.preparedDataset(ctx, lookup, pin, datasetContinuation{relationToken: request.Continuation})
 	if err != nil {
 		return retrieval.RelationPage{}, err
 	}

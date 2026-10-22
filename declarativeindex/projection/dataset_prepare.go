@@ -4,6 +4,7 @@ import (
 	"context"
 
 	retrieval "kc/discovery"
+	ports "kc/discovery/projection"
 	"kc/discovery/space"
 	"kc/kernel"
 	objectmodel "kc/object"
@@ -56,4 +57,25 @@ func (s *emptyDatasetDeclarationSource) SchemaReferrerAddresses(_ objectmodel.Ob
 		return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "commit is outside the proven empty Dataset source")
 	}
 	return nil, nil
+}
+
+// Publication protection and query consumption validate the same fixed
+// declaration witnesses; neither borrows a READY flag as interpretation proof.
+func (idx *Index) validateDatasetInterpretation(s datasetSpace, eng ports.Engine, meta ports.Meta) (datasetSpace, error) {
+	check, units, err := idx.datasetCheck(s)
+	if err != nil {
+		return s, err
+	}
+	s.unobserved = units
+	s.spec, err = retrieval.AccessSpecFromAdoptionsChecked(s.member, s.pin.Repositories[s.member.ID()], meta.SchemaAdoptions, check)
+	if err != nil {
+		return s, err
+	}
+	if meta.AccessDigest != s.spec.AccessDigest {
+		return s, kernel.Fail(kernel.ErrPreconditionFailed, "Dataset search interpretation changed (declaration basis); prepare the revision again")
+	}
+	if !idx.physicalMatches(eng, meta) {
+		return s, kernel.Fail(kernel.ErrPreconditionFailed, "Dataset search interpretation changed (physical configuration); prepare the revision again")
+	}
+	return s, nil
 }

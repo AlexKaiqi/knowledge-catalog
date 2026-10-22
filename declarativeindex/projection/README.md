@@ -47,6 +47,10 @@ Relation。正式 Dataset 一跳查询只执行一次物理关系查询，遍历
 
 ## 目标边界
 
+`RecoverResources(ctx)` 为维护控制器遍历当前已打开、支持资源恢复端口的引擎；不持有运行时
+锁跨越提供方 IO。各引擎失败仍继续其他项，未决物理保护报告具体资源；查询与打开句柄不隐式
+回收。资源扫描进度与准入由提供方耐久保存，当前接入不代表已实现 Dataset 生命周期的引用释放。
+
 ```text
 discovery                 SearchRequest / SearchResult / SearchView / ObjectVersion
   ↑                       AccessSpec / residual / merge
@@ -126,11 +130,13 @@ Workspace 复用。OpenSearch 多 index、`_msearch` 或按不可变 PinID 建�
 - stale/removed/wrong-basis candidate 返回 `PRECONDITION_FAILED`，不得静默降级为 partial；公开 opaque continuation 绑定 query、SearchView 与 Projection revision，residual false positive、去重或授权过滤消耗候选时继续翻页。
 - AccessDigest 与 PhysicalDigest/ProviderRevision 分开，逻辑声明和物理重建原因可独立解释。
 - `CheckSearchProjectionAt(repo, commit)` 只读校验固定 Snapshot 投影是否满足 `SearchAt` 的 basis、READY、AccessDigest 与 PhysicalDigest/ProviderRevision 前置条件，并返回观察到的 `Meta`。失败时仍返回已读到的生命周期，便于区分构建中、失败、停用和缺失；不会执行查询、hydrate、Ensure 或 rebuild。成功只说明 Snapshot 投影可用，不授予 SEARCH 权限，也不保证某个具体查询或动态 State 的能力。
-- `RefreshState` 对固定 commit 逐 Binding lookup，用 `UnitObservation` 区分 observed null 与未观察；Serving State 落本地有界批次存储，OpenSearch 以 500-doc streaming warm rebuild 发布独立 generation，不保留全量 map 或在响应中返回全量 observations。
+- `RefreshState` 对固定 commit 逐 Binding lookup，用 `UnitObservation` 区分 observed null 与未观察；Serving State 落本地有界批次不可变存储，在发布前写入含来源绑定、声明提交、访问与观察摘要的描述符并同步目录。OpenSearch 以 500-doc streaming warm rebuild 发布独立 generation，不保留全量 map 或在响应中返回全量 observations。
 - `StateProjectionReady(ctx, repo, commit)` 为维护读取已发布的 Serving State 介质和实际 State
   提供方 Meta，核固定依据、READY、access/physical digest、revision 与 observation digest。
   未发布或介质丢失返回未就绪；提供方或本地读取错误保留。它不检索、hydrate、外部取值或重建。
-  `StateView` 仍只返回进程内已发布观察身份，供续页校验，不证明物理就绪。
+  重启后按提供方确认的精确观察身份只读恢复固定值，并校验完整内容摘要；缺文件不创建，不回退最新值或外呼 runtime。
+  `StateView` 只返回进程内已加载观察身份，供查询规划，不证明物理就绪；已有续页由提供方原生游标选择原生成代，不能拿当前进程的最新观察替代。
+- 配置持久目录时，正常关闭只释放不可变值文件的只读句柄，不删除文件。未配置目录时首次构建才创建 Index 自有临时根；旧观察文件在同一 Index 生命周期内保留，关闭时统一释放，不在刷新时逐代删除。提交结果不确定的候选也保留；候选文件存在不代表已发布。观察代截止时间、独立证据、配额与权威回收仍在 `INDEX-PHYSICAL-01` 交付范围，不以本地残留文件作为长期保留判定。
 - State 查询在已有提供方 Meta 读取后、规划和候选读取前，复核同一已发布观察的固定声明依据、
   READY、access/physical digest、revision 与 observation digest。错依据返回 `PRECONDITION_FAILED`，
   不从驻留旧观察补齐另一代候选，也不现场重新取值。
@@ -178,3 +184,98 @@ Workspace 扇出、合并和成员 continuation 属于通用 [discovery](../../d
 | `search.go` | 候选检索、continuation、Canonical hydrate |
 | `state.go` | State Binding 选择、refresh / RefreshStateObjects、Serving State 与动态 projection 发布 |
 | `describe.go` | 固定 basis 的 `IndexDescriptor` |
+
+`ProtectDatasetResource` 只固定已经准备的 Dataset 静态语料，不触发构建或读来源 HEAD；
+核对该完整范围的就绪 `Meta` 后向实际提供方取得保护。无托管资源端口的提供方返回空票据；
+实际托管提供方缺少确权或元数据不符时失败，不能把空票据作为旧资源迁移。
+
+`SetResourceRecovery` 由组合根连接实例资源权威和发布 resolver。后台 `RecoverResources` 先运行
+已接受版本的显式修复/迁移，再对账未决发布和候选；各路径的错误独立报告。具备实例权威时不用缓存查询句柄反推库存，空查询缓存
+也照常恢复；兼容提供方没有该权威时保留原 scope 维护路径。
+
+`SetDatasetPublicationLookup` 注入只读的已接受准备证据。Dataset 查询先打开该固定 scope，
+再绑定已接受生成代，不经移动来源的 live fallback；临时定义不能借用同名 Dataset 的收据。
+旧纯文件版本和无托管资源端口保留固定 scope 兼容读取，已知发布的绑定失败不能走兼容分支。
+查询句柄只属于本次请求，关闭它不关闭缓存 owner。静态查询、静态语义窗口共用这一绑定；
+观察生成代、查询保护和接管后的修复/迁移仍按相应维护合同处理。
+
+`RepairDatasetPublication` 是显式维护入口：按原冻结读取范围强制准备新静态语料，由提供方
+`PublicationRepairer` 观察旧映射版本后接管；健康绑定不调用准备。组合根通过
+`SetPublishedDatasetRecovery` 连接已接受版本盘点与 Dataset 当前资格复核，来源查找沿用
+controller 的实例准入边界。它不新增 Dataset 修订或改写原收据，查询本身仍不执行修复。
+目前盘点未退休的已接受版本；检索保留期限、跨进程清除围栏与旧引用退出仍待生命周期合同交付。
+
+`PrepareLegacyDatasetResource` 为没有准备收据的旧发布按其原固定范围强制重建并取得托管票据。
+它不把旧索引名当归属证明；不支持托管资源的提供方不分配票据。组装层沿同一来源准入与
+DatasetPin 转换调用该入口，再由文件权威原子补收据；旧定义的来源、依赖和版本号保持不变。
+
+静态 Dataset Search 按已经校验外层格式的原提供方续页，调用
+`PublicationContinuationBinder` 选择原受保护生成代，再以其 Meta 复核完整查询和读取范围。
+原续页不借当前映射或活动指针。关系分页先用实际提供方持久签名材料认证外层位置，
+再选择原生成代，执行前继续复核查询、固定范围和生成代；不支持托管签名存储的兼容提供方
+保留原进程签名路径，实际托管存储失败不能回退。观察查询按下述独立接受引用选择固定观察及原续页，不借静态发布映射。
+
+仓观察与未注入 Dataset 权威的观察搜索通过可选 `ObservationBinder` 同时固定生成代与匹配的观察值文件，保留原
+SearchView 和原生续页。旧代按精确提供方元数据只读打开并验证完整值摘要；提供方失败、原文件缺失或
+身份不匹配都失败，不回退当前缓存。文件校验与打开检查请求 context，锁等待受剩余期限约束。
+无该端口的提供方保留原能力边界，不声称支持跨代恢复。
+
+公开交付仍执行当前逻辑 READ 补判及授权：索引观察固定不代表外部值随 Dataset 冻结。结果分别保留
+原索引观察与实际回读观察；最新回读不再匹配的候选被过滤，读取失败仍按单元报告，不能借旧缓存变成命中。
+Dataset 首个观察未准备的缺能力、仓入口既有的未准备前置条件，以及过期游标和权威读取故障分别保留原错误语义。
+
+构建候选使用排他创建的独立文件，不能通过时间戳路径重开另一个构建者的可变 inode；失败清理只删除
+自己的候选文件，不修补已有文件，也不清理其他构建者可能正在使用的共享目录。
+
+`SetDatasetObservationPublication` 为具名 Dataset 注入实际观察接受与只读证据查找。先在外部
+取值之前固定实际权威基点，再由接受闭包同步调用准备。托管提供方通过 `PreparedRebuildSession.CommitResource` 连续完成生成代提交和准备保护，
+返回构建中登记的原 `PreparedResource`，再由装配方准入、原权威基点 CAS 和确认。
+仅接受成功后切换本地服务句柄；确认响应失败仍可能已有接受收据，查询据实际引用恢复，不凭错误撤销。
+临时 Dataset 不借具名引用；非托管提供方保留原合同。进程内修订锁只负责本地串行，不代替实际 CAS。
+
+具名托管观察查询使用 `PublicationBinder` 选择权威当前证据；原续页使用
+`PublicationContinuationBinder` 和仍有效的原接受证据，原生位置保持不变。允许尝试的证据全部来自
+该修订的实际引用，缺失或过期不借活动 ROOT；运输、取消等未知错误不能被其他代的可用性掩盖。
+固定生成代与匹配观察值文件仍走同一只读校验与请求释放路径。
+
+接受证据以 `ObservationReference` 传递原观察截止时间。旧观察续页须由
+`PublicationContinuationDeadlineBinder` 把该时间带入资源 CAS 准入；仅在查找证据时检查时间不足以
+排除跨截止的慢准入。已准入查询仍有独立请求期限，不被观察截止提前结束。
+
+`SetPublicationReferenceLookup` 注入已接受引用的实际资格判定。维护先恢复未决准入，再经可选
+`PublicationReferenceMaintainer` 对账已接受引用，之后继续独立候选回收。实例协调器即使没有打开
+查询引擎也执行对账，存在实例协调器时不重复跑各查询句柄。未知资格保留并报告，不取消其它独立
+维护；接受引用释放不等于物理代、观察文件或独立查询保护已经释放。
+
+静态 `ProtectDatasetResource` 与准备后查询复用同一份固定声明见证核验：按原 pin 解释保留的
+Schema 采用地址，核对访问摘要、提供方版本及实例物理配置，才取得保护。READY/basis 相同不能代替
+完整兼容；不重扫或构建语料，不选择来源 HEAD。托管提供方返回空票据明确拒绝；携带错误返回的
+已分配票据保留给调用方取消/关闭，不丢失句柄所有权。
+
+
+`PrepareDatasetResource` 合并静态准备与票据交接。需要新建的托管语料使用受保护流式提交，不能先
+`Rebuild` 再按移动 ROOT 取票据；缺少该提交能力明确失败。已有兼容语料复用 `ProtectDatasetResource`
+核验完整固定声明见证及实例配置后取得精确保护，READY 本身不是见证。旧发布资源的强制重建与具名观察
+采用同一受保护提交接缝。非托管提供方保留原准备合同，未新增物理引用要求。
+
+
+实例 `RecoverResources` 同时调用可选 `ComputationMaintainer`，传入本 Index 的明确运行目录；
+没有查询句柄也执行，不从打开的语料反推计算库盘点。计算维护错误与其他独立资源的错误合并报告，
+上下文取消时不启动新的维护调用；资源只读视图不能取得此维护权限。
+
+显式 `PrepareDataset` 在建立观察发布检查点前，先对这一已接受修订补做历史准备采用或丢失资源修复；
+尚未发布的候选及临时范围沿原准备路径。该单修订维护与本实例的后台已接受修订维护协调，
+防止后台为同一旧修订写入准备围栏而使前台观察检查点自行过期。维护仍使用实际权威 CAS，
+不把跨进程旧检查点重定基，也不在查询中触发此修复。全实例库存维护与显式单修订维护共用
+同一实现，单修订入口不枚举或修改其他 Dataset。
+
+维护协调的前台等待尊重请求取消；被取消的请求不必等后台实例修复完成，也不进入其准备回调。
+
+显式静态/观察构建和普通增量编译可注入提供方的 `MemberComputations`：字段提取与成员构造只缓存
+不可变值；完整候选范围、当前归因、来源提交和固定读取依据不从缓存借用。未索引字段改动可保持成员
+有效输入不变，单输入或同键模板变更只使对应运算失配。新查询语料仍独立物化，不能以减少计算次数
+报告避免了文档重写。文档内容摘要覆盖语义输入，纯向量文本变化也进入普通增量 upsert。
+
+已发布资源修复向 `PublicationRepairer` 传入当前固定解释及提供方/物理兼容合同；资源可读但编译器
+已不兼容时，同样从原固定来源构建新代并在实际资格复核下 CAS 更新映射。不能把成功读取旧资源当作
+完成配置升级。

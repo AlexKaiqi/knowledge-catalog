@@ -55,50 +55,88 @@ func (idx *Index) openDatasetSpace(lookup reader.MemberLookup, pin reader.Datase
 // PrepareDataset prepares one retrieval space with one corpus and scoring
 // basis. All objects use only the selected declarations, across source repos.
 func (idx *Index) PrepareDataset(ctx context.Context, lookup reader.MemberLookup, pin reader.DatasetPin) (ports.IndexSync, error) {
-	if err := ctx.Err(); err != nil {
-		return ports.IndexSync{}, err
+	if !pin.Temporary {
+		if err := idx.recoverPublishedDatasets(ctx, pin.SetID, pin.Revision); err != nil {
+			return ports.IndexSync{}, err
+		}
 	}
-	idx.fixedBuildMu.Lock()
-	defer idx.fixedBuildMu.Unlock()
+	return idx.prepareDataset(ctx, lookup, pin, false)
+}
+
+func (idx *Index) prepareDataset(ctx context.Context, lookup reader.MemberLookup, pin reader.DatasetPin, force bool) (ports.IndexSync, error) {
+	result, _, err := idx.prepareDatasetProtected(ctx, lookup, pin, force, false)
+	return result, err
+}
+
+// PrepareDatasetResource returns the same protection installed during a managed
+// build, rather than reacquiring whichever generation is current afterward.
+func (idx *Index) PrepareDatasetResource(ctx context.Context, lookup reader.MemberLookup, pin reader.DatasetPin) (ports.PreparedResource, error) {
+	_, ticket, err := idx.prepareDatasetProtected(ctx, lookup, pin, false, true)
+	return ticket, err
+}
+
+func (idx *Index) prepareDatasetProtected(ctx context.Context, lookup reader.MemberLookup, pin reader.DatasetPin, force, protect bool) (ports.IndexSync, ports.PreparedResource, error) {
 	if err := ctx.Err(); err != nil {
-		return ports.IndexSync{}, err
+		return ports.IndexSync{}, nil, err
 	}
 	s, err := idx.openDatasetSpace(lookup, pin)
 	if err != nil {
-		return ports.IndexSync{}, err
+		return ports.IndexSync{}, nil, err
 	}
 	check, units, err := idx.datasetCheck(s)
 	if err != nil {
-		return ports.IndexSync{}, err
+		return ports.IndexSync{}, nil, err
 	}
 	s.unobserved = units
+	eng, err := idx.engineAt(s.id, s.basis)
+	if err != nil {
+		return ports.IndexSync{}, nil, err
+	}
+	// A prepared revision is answered from metadata alone, without the build
+	// gate and without compiling the declaration contract: its corpus is fixed
+	// by the pin, so nothing can move underneath it, and compiling the contract
+	// costs one address resolution per referencing declaration.
+	if !force {
+		meta, err := loadMetaContext(ctx, eng)
+		if err != nil {
+			return ports.IndexSync{}, nil, err
+		}
+		if digest, ready := idx.readyDigestAt(eng, meta, s.basis); ready {
+			return idx.reusePreparedDataset(ctx, lookup, pin, s, eng, digest, protect)
+		}
+	}
 	var values []datasetValue
 	s.spec, values, err = idx.prepareDatasetSpec(ctx, s, check)
 	if err != nil {
-		return ports.IndexSync{}, err
+		return ports.IndexSync{}, nil, err
 	}
-	eng, err := idx.engineAt(s.id, s.basis)
+	release, err := idx.enterFixedBuild(ctx, engineKey{repo: s.id, commit: s.basis})
 	if err != nil {
-		return ports.IndexSync{}, err
+		return ports.IndexSync{}, nil, err
 	}
-	meta, err := eng.LoadMeta()
+	defer release()
+	if err := ctx.Err(); err != nil {
+		return ports.IndexSync{}, nil, err
+	}
+	// Another caller may have finished this same projection while we waited.
+	meta, err := loadMetaContext(ctx, eng)
 	if err != nil {
-		return ports.IndexSync{}, err
+		return ports.IndexSync{}, nil, err
 	}
-	if idx.projectionMatches(eng, meta, s.basis, s.spec.AccessDigest) {
-		return idx.readySync(s.id, s.basis, s.spec.AccessDigest, eng)
+	if !force && idx.projectionMatches(eng, meta, s.basis, s.spec.AccessDigest) {
+		return idx.reusePreparedDataset(ctx, lookup, pin, s, eng, s.spec.AccessDigest, protect)
 	}
 	if values == nil {
 		values, err = s.values(ctx, nil)
 		if err != nil {
-			return ports.IndexSync{}, err
+			return ports.IndexSync{}, nil, err
 		}
 	}
 	docs := make([]ports.CompiledDoc, 0, len(values))
 	for _, value := range values {
-		doc, include, err := compileValue(s.member, value.value, s.spec)
+		doc, include, err := compileValueComputed(ctx, eng, s.member, value.value, s.spec)
 		if err != nil {
-			return ports.IndexSync{}, err
+			return ports.IndexSync{}, nil, err
 		}
 		if include {
 			doc.SourceRepository, doc.SourceCommit = value.value.Repository, value.value.Commit
@@ -107,12 +145,32 @@ func (idx *Index) PrepareDataset(ctx context.Context, lookup reader.MemberLookup
 	}
 	meta = idx.projectionMeta(eng, s.basis, s.spec, ports.IndexModeRebuild, ports.IndexCauseCold)
 	if err := ctx.Err(); err != nil {
-		return ports.IndexSync{}, err
+		return ports.IndexSync{}, nil, err
 	}
-	if err := eng.Rebuild(docs, meta); err != nil {
-		return ports.IndexSync{}, err
+	var ticket ports.PreparedResource
+	if _, managed := eng.(ports.ResourcePreparer); protect && managed {
+		ticket, err = buildDatasetResource(eng, docs, meta)
+	} else {
+		err = eng.Rebuild(docs, meta)
 	}
-	return ports.IndexSync{Repository: s.id, BasisCommit: s.basis, Mode: ports.IndexModeRebuild, Cause: ports.IndexCauseCold, AccessDigest: s.spec.AccessDigest, PhysicalDigest: meta.PhysicalDigest, ObjectCount: len(docs), Updated: len(docs)}, nil
+	if err != nil {
+		return ports.IndexSync{}, ticket, err
+	}
+	return ports.IndexSync{Repository: s.id, BasisCommit: s.basis, Mode: ports.IndexModeRebuild, Cause: ports.IndexCauseCold, AccessDigest: s.spec.AccessDigest, PhysicalDigest: meta.PhysicalDigest, ObjectCount: len(docs), Updated: len(docs)}, ticket, nil
+}
+
+// reusePreparedDataset answers an already prepared revision without rebuilding
+// it, and installs the same resource protection a managed build would have.
+func (idx *Index) reusePreparedDataset(ctx context.Context, lookup reader.MemberLookup, pin reader.DatasetPin, s datasetSpace, eng ports.Engine, digest kernel.Digest, protect bool) (ports.IndexSync, ports.PreparedResource, error) {
+	sync, err := idx.readySync(s.id, s.basis, digest, eng)
+	if err != nil {
+		return sync, nil, err
+	}
+	if _, managed := eng.(ports.ResourcePreparer); protect && managed {
+		ticket, err := idx.ProtectDatasetResource(ctx, lookup, pin)
+		return sync, ticket, err
+	}
+	return sync, nil, nil
 }
 
 // SearchDataset executes one physical query on the already prepared revision.
@@ -123,7 +181,17 @@ func (idx *Index) SearchDataset(ctx context.Context, lookup reader.MemberLookup,
 	}
 	ctx, cancel := ports.WithSearchBudget(ctx, ports.SearchBudget{})
 	defer cancel()
-	s, eng, release, err := idx.preparedDataset(ctx, lookup, pin)
+	nativeContinuation := ""
+	if req.Continuation != "" {
+		cursor, err := retrieval.DecodeContinuation(req.Continuation)
+		if err != nil || cursor.Scope != "repository" {
+			return retrieval.SearchResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "invalid Dataset search continuation")
+		}
+		if cursor.SearchView == retrieval.SearchViewDigest(retrieval.SearchView{Snapshots: pin.Repositories}) {
+			nativeContinuation = cursor.Position
+		}
+	}
+	s, eng, release, err := idx.preparedDataset(ctx, lookup, pin, datasetContinuation{positionToken: nativeContinuation})
 	if err != nil {
 		return retrieval.SearchResult{}, err
 	}
@@ -157,7 +225,7 @@ func (idx *Index) SearchDataset(ctx context.Context, lookup reader.MemberLookup,
 	return result, err
 }
 
-func (idx *Index) preparedDataset(ctx context.Context, lookup reader.MemberLookup, pin reader.DatasetPin) (datasetSpace, ports.Engine, func(), error) {
+func (idx *Index) preparedDataset(ctx context.Context, lookup reader.MemberLookup, pin reader.DatasetPin, continuation datasetContinuation) (datasetSpace, ports.Engine, func(), error) {
 	if err := ctx.Err(); err != nil {
 		return datasetSpace{}, nil, nil, err
 	}
@@ -165,7 +233,7 @@ func (idx *Index) preparedDataset(ctx context.Context, lookup reader.MemberLooku
 	if err != nil {
 		return s, nil, nil, err
 	}
-	eng, release, err := idx.acquireEngineForCommitContext(ctx, s.id, s.basis)
+	eng, release, err := idx.acquireDatasetPublication(ctx, s, continuation)
 	if err != nil {
 		return s, nil, nil, err
 	}
@@ -178,21 +246,12 @@ func (idx *Index) preparedDataset(ctx context.Context, lookup reader.MemberLooku
 		release()
 		return s, nil, nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Dataset %s revision %d search is not prepared", pin.SetID, pin.Revision)
 	}
-	check, units, err := idx.datasetCheck(s)
+	s, err = idx.validateDatasetInterpretation(s, eng, meta)
 	if err != nil {
 		release()
 		return s, nil, nil, err
 	}
-	s.unobserved = units
-	s.spec, err = retrieval.AccessSpecFromAdoptionsChecked(s.member, pin.Repositories[s.member.ID()], meta.SchemaAdoptions, check)
-	if err != nil {
-		release()
-		return s, nil, nil, err
-	}
-	if meta.AccessDigest != s.spec.AccessDigest || !idx.physicalMatches(eng, meta) {
-		release()
-		return s, nil, nil, kernel.Fail(kernel.ErrPreconditionFailed, "Dataset search interpretation changed; prepare the revision again")
-	}
+
 	return s, eng, release, nil
 }
 

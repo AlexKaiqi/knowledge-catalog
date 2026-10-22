@@ -1,6 +1,7 @@
 package projection
 
 import (
+	"context"
 	"fmt"
 	retrieval "kc/discovery"
 	ports "kc/discovery/projection"
@@ -17,7 +18,12 @@ func compileProjectionDocument(repo objectmodel.Repository, value objectmodel.Ob
 	return compileProjectionDocumentObserved(repo, value, nil, spec)
 }
 func compileProjectionDocumentObserved(repo objectmodel.Repository, value objectmodel.ObjectValue, observations []objectmodel.UnitObservation, spec retrieval.AccessSpec) (ports.CompiledDoc, error) {
-	logical, err := retrieval.ExtractFields(repo, value, observations, spec)
+	return compileProjectionDocumentComputed(context.Background(), repo, value, observations, spec, nil)
+}
+
+func compileProjectionDocumentComputed(ctx context.Context, repo objectmodel.Repository, value objectmodel.ObjectValue, observations []objectmodel.UnitObservation, spec retrieval.AccessSpec, computations retrieval.MemberComputations) (ports.CompiledDoc, error) {
+
+	logical, err := retrieval.ExtractFieldsWithComputations(ctx, repo, value, observations, spec, computations)
 	if err != nil {
 		return ports.CompiledDoc{}, err
 	}
@@ -46,7 +52,7 @@ func compileProjectionDocumentObserved(repo objectmodel.Repository, value object
 	}
 	doc.ObjectDigest = kernel.CanonicalDigest(map[string]any{
 		"objectId": doc.ObjectID, "kind": doc.Kind, "eligibleFields": doc.EligibleFields,
-		"cells": doc.Cells, "relation": doc.Relation, "text": doc.Text,
+		"cells": doc.Cells, "relation": doc.Relation, "text": doc.Text, "semantic": doc.Semantic,
 	})
 	return doc, nil
 }
