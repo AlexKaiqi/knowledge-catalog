@@ -615,7 +615,6 @@ func sceneCommandHasFormalGoEvidence(t *testing.T, doc sceneCatalogFile, command
 
 func sceneStateHasFormalGoCommand(t *testing.T, state sceneCatalogState, command string) bool {
 	t.Helper()
-	paths := sceneCLITestFiles(t)
 	for _, process := range state.Processes {
 		if process.Surface != "go-test" {
 			continue
@@ -624,19 +623,9 @@ func sceneStateHasFormalGoCommand(t *testing.T, state sceneCatalogState, command
 			if !strings.HasPrefix(evidence, "Test") || strings.ContainsAny(evidence, "/. ") {
 				continue // A file reference is not a named executable journey.
 			}
-			for _, path := range paths {
-				raw, err := os.ReadFile(path)
-				if err != nil {
-					t.Fatal(err)
-				}
-				prefixes, err := sceneGoTestCommandPrefixes(raw, evidence)
-				if err != nil {
-					continue
-				}
-				for _, prefix := range prefixes {
-					if sceneCLISurface(strings.Fields(prefix)) == command {
-						return true
-					}
+			for _, prefix := range sceneFormalEvidencePrefixes(t, evidence) {
+				if sceneCLISurface(strings.Fields(prefix)) == command {
+					return true
 				}
 			}
 		}
@@ -666,17 +655,35 @@ func sceneGoTestCommandPrefixes(source []byte, name string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	var declaration *ast.FuncDecl
 	for _, item := range file.Decls {
 		fn, ok := item.(*ast.FuncDecl)
 		if ok && fn.Name.Name == name && fn.Recv == nil && strings.HasPrefix(name, "Test") {
-			declaration = fn
-			break
+			return sceneDeclarationCommandPrefixes(fn), nil
 		}
 	}
-	if declaration == nil {
-		return nil, fmt.Errorf("named test %s is absent", name)
+	return nil, fmt.Errorf("named test %s is absent", name)
+}
+
+// sceneFileCommandPrefixes indexes every named test in one file in a single
+// parse. Evidence lookup asks this index instead of re-reading and re-parsing
+// all test files once per evidence name.
+func sceneFileCommandPrefixes(source []byte) (map[string][]string, error) {
+	file, err := parser.ParseFile(token.NewFileSet(), "scene_evidence_test.go", source, 0)
+	if err != nil {
+		return nil, err
 	}
+	index := map[string][]string{}
+	for _, item := range file.Decls {
+		fn, ok := item.(*ast.FuncDecl)
+		if !ok || fn.Recv != nil || !strings.HasPrefix(fn.Name.Name, "Test") {
+			continue
+		}
+		index[fn.Name.Name] = sceneDeclarationCommandPrefixes(fn)
+	}
+	return index, nil
+}
+
+func sceneDeclarationCommandPrefixes(declaration *ast.FuncDecl) []string {
 	var prefixes []string
 	ast.Inspect(declaration.Body, func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
@@ -714,7 +721,33 @@ func sceneGoTestCommandPrefixes(source []byte, name string) ([]string, error) {
 		}
 		return true
 	})
-	return prefixes, nil
+	return prefixes
+}
+
+var (
+	sceneEvidenceOnce  sync.Once
+	sceneEvidenceIndex map[string][]string
+)
+
+func sceneFormalEvidencePrefixes(t *testing.T, name string) []string {
+	t.Helper()
+	sceneEvidenceOnce.Do(func() {
+		sceneEvidenceIndex = map[string][]string{}
+		for _, path := range sceneCLITestFiles(t) {
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				panic(err)
+			}
+			index, err := sceneFileCommandPrefixes(raw)
+			if err != nil {
+				continue
+			}
+			for fn, prefixes := range index {
+				sceneEvidenceIndex[fn] = append(sceneEvidenceIndex[fn], prefixes...)
+			}
+		}
+	})
+	return sceneEvidenceIndex[name]
 }
 
 func TestSceneGoTestEvidenceRequiresNamedPublicRunCalls(t *testing.T) {
@@ -1050,6 +1083,10 @@ func TestSceneGoTestFeaturesDoNotHideSceneProbes(t *testing.T) {
 
 func TestSceneMutatingGrantProbesAreIsolated(t *testing.T) {
 	doc := loadSceneCatalog(t)
+	// One cache freezes each ancestor once and hands every node an independent
+	// clone of it: probes already run on copies, so rebuilding the same
+	// service-initialized spine per node only repeats deployment init.
+	cache := newSceneHomeCache(t)
 	coveredLocal, coveredIndexed := false, false
 	for _, node := range discoverConstructableNodes(t) {
 		if len(node.Probes) < 2 || nodeNeedsWalk(node) || nodeNeedsState(node) || !shouldRunSceneProbes(doc, node.ID) {
@@ -1078,7 +1115,7 @@ func TestSceneMutatingGrantProbesAreIsolated(t *testing.T) {
 			// again. Their initial denial assertions must still hold after
 			// the first run has granted access in its private environment.
 			node.Probes = append(append(append([]string{}, mutating...), remaining...), mutating...)
-			runSceneNode(t, doc, node, newSceneHomeCache(t))
+			runSceneNode(t, doc, node, cache)
 		})
 	}
 	if !coveredLocal || !coveredIndexed {

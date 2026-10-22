@@ -30,7 +30,6 @@ func TestProductCLIRefactorDefinesTheExactPublicSurface(t *testing.T) {
 		"attach",
 		"binding show",
 		"create",
-		"dataset clone",
 		"dataset define",
 		"dataset overlay",
 		"dataset retire",
@@ -244,6 +243,7 @@ func TestRemovedCommandsAreRejected(t *testing.T) {
 		{"pin"},
 		{"pin", "check"},
 		{"pin", "--dataset", "agent"},
+		{"dataset", "clone"},
 	} {
 		result := Run(argv)
 		if result.Status == 0 || !strings.Contains(result.Stdout, "USAGE_INVALID") {

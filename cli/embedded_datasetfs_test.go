@@ -51,11 +51,11 @@ func (p datasetFSProjection) build() (datasetfs.Plan, datasetFSManifest, error) 
 	// Per-file entries (U10) are not projected into the host filesystem yet:
 	// mixing eager files into a lazy directory mount is an unshipped datasetfs
 	// capability. Fail loudly instead of silently shrinking the delivered
-	// tree; use the file gateway or `kc dataset clone` for such datasets.
+	// tree; use the file gateway for such datasets.
 	for _, item := range p.resolved.Items {
 		if item.Kind == dataset.DatasetItemFile {
 			return datasetfs.Plan{}, datasetFSManifest{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-				"dataset %s publishes per-file entries that the file-system projection does not deliver yet; use the file gateway or kc dataset clone", p.dataset)
+				"dataset %s publishes per-file entries that the file-system projection does not deliver yet; use the file gateway", p.dataset)
 		}
 	}
 	plan := datasetfs.Plan{SetID: p.dataset, PinID: p.resolved.PinID, Root: p.root}

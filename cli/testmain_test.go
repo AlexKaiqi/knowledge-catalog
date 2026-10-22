@@ -28,8 +28,24 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	_ = os.Setenv("KC_CONFIG_DIR", config)
+	// Reclaim this run's projection indices. Suites that point every home at one
+	// explicit endpoint adopt that instance's legacy shared resources: each run
+	// leaves hundreds of undeletable indices behind until the cluster refuses
+	// new ones. Ownership is the difference from the inventory taken here.
+	reclaimSearch := testkit.OwnSharedSearchIndices()
 	code := m.Run()
 	cli.CloseComponentFixturesForTest()
+	// Reclaim after every home is closed: a live maintenance worker reconciling
+	// an index that just disappeared fails on a deleted journal, which is a
+	// different defect than the leak this prevents.
+	if reclaimSearch != nil {
+		if err := reclaimSearch(); err != nil {
+			fmt.Fprintf(os.Stderr, "reclaim owned test projection indices: %v\n", err)
+			if code == 0 {
+				code = 1
+			}
+		}
+	}
 	// This package-wide directory protects the developer's real login, but it
 	// must remain read-only to individual tests. Session-mutating tests need
 	// their own t.Setenv(KC_CONFIG_DIR, t.TempDir()) so defaults cannot leak.

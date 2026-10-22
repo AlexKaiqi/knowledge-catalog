@@ -3,7 +3,7 @@ package cli
 func hostWriterHelpEntries() map[string]helpEntry {
 	return map[string]helpEntry{
 		"diff": {
-			Description: "对照当前发布版本，列出这个目录会改哪些对象",
+			Description: "比较固定对象版本，或预览目录发布差异",
 			Usage: `kc diff --repo <id> --dir <drafts>
   用途：
     在发布前查看目录中声明的 Address 相对仓内固定基点有哪些正文差异。
@@ -26,19 +26,19 @@ func hostWriterHelpEntries() map[string]helpEntry {
     想删除 Address 须显式 writer remove，不能依赖删掉本机文件。
   示例：
     例：kc diff --repo kr://scene/object --dir drafts
-    例：kc diff --repo kr://scene/object --dir drafts --base commit-123`,
+    例：kc diff --repo kr://scene/object --dir drafts --base commit-123` + "\n\n" + objectComparisonCLIEntry.Usage,
 		},
 
 		"writer commit": {
 			Description: "把目录里的最终样子发布成仓的新版本",
 			Usage: `kc writer commit --command-id <id> --repo <id> --dir <drafts> [--bulk]
   用途：
-    把目录中声明的正文变更作为一次单仓发布；不把未出现在目录中的对象当成删除。
+    把目录中声明的完整单元意图作为一次单仓发布；不把未出现在目录中的对象当成删除。
   用法与参数：
-    --dir 是期望正文。Client 对照当前版本求差后提交。--command-id 由你本次提供，Client 不代填。
+    --dir 是期望单元目录。Client 完整解析后交服务端校验。--command-id 由你本次提供，Client 不代填。
     --dir 也可指向 .tar / .tar.gz / .tgz 归档，用 archive.tar.gz//子目录 指定归档内充当仓根的目录；归档在本机流式读取并并发解析，拒绝越界、符号链接、重复条目和空子目录。
-    --ref 默认 refs/heads/main；可用 --base 固定基点，省略时读取当前 HEAD；隐藏文件/目录不参与。
-    首次上传到空仓时自动省去逐对象旧值查询；目录直接生成提交，无需手写 ChangeSet。
+    --ref 默认 refs/heads/main；可用 --base 固定基点，省略时由服务端固定当前 HEAD，重试复用原基点；隐藏文件/目录不参与。
+    发布不在客户端逐对象过滤；目录直接生成完整 ChangeSet，无需手写 ChangeSet。
     也可用 --changeset <file> 提交明确 ChangeSet，与 --dir 互斥；目标、操作和前置条件来自该文件。
     --bulk 一次性接入大量文件时走介质批量通路；介质不支持时整条拒绝，不带时行为不变。
   目录文件格式：
@@ -67,13 +67,13 @@ func hostWriterHelpEntries() map[string]helpEntry {
     所有操作须通过 Writer 的 Schema、来源与并发校验；不能写 Dataset、登记权威或 system 仓。
   结果：
     一次 Commit 的耐久回执及 oldCommit/newCommit；同 command-id 同摘要返回原回执。
-    目录正文完全相同时，不创建空提交；已有 id 先按原基点重建请求核对摘要，一致才返回原回执。
+    全部业务效果（含路径、声明、provenance）相同时返回 changed:false，不创建提交；已有 id 核对完整原意图并返回原回执。
   后果：
-    仅发布目录里实际不同的单元，目录外已有对象保留；删除须显式 writer remove 或 ChangeSet REMOVE。
+    服务端校验目录声明的全部单元，目录外已有对象保留；删除须显式 writer remove 或 ChangeSet REMOVE。
     一次请求不自动拆批，--bulk 仅改变介质传输方式，CAS 与单次 commit 语义不变。
     手工分成多次发布时各命令独立，前批成功不会因后批失败撤销；投影维护也不回滚已接受提交。
   风险与成本：
-    目录全量读取、校验和远端写入，时间与内存随参与内容增长；非空基点仍逐 Address 对照。
+    目录全量读取、校验和远端写入，时间与内存随参与内容增长；服务端按固定基点核验完整业务效果。
     网络中断后客户端只轮询原回执，默认最多十分钟；同 id 异摘要为 IDEMPOTENCY_CONFLICT。
     服务端明确证明未应用时立即返回原错误，不轮询、不自动重发。
   失败恢复：

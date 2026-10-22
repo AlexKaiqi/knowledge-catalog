@@ -26,21 +26,32 @@ func UnmarshalWithoutFields(body []byte, dest any, retired ...string) error {
 	return json.Unmarshal(body, dest)
 }
 
-func Write(path string, value any) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+func Write(path string, value any) error { return write(path, value, 0755, ".kc-json-*", true, true) }
+
+// WritePrivate preserves the caller-side credential file format and private
+// parent permissions while sharing the atomic replacement implementation.
+func WritePrivate(path string, value any) error {
+	return write(path, value, 0700, ".kc-session-*", false, false)
+}
+
+func write(path string, value any, parentMode os.FileMode, pattern string, newline, syncDirectory bool) error {
+	if err := os.MkdirAll(filepath.Dir(path), parentMode); err != nil {
 		return err
 	}
 	body, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return err
 	}
-	f, err := os.CreateTemp(filepath.Dir(path), ".kc-json-*")
+	f, err := os.CreateTemp(filepath.Dir(path), pattern)
 	if err != nil {
 		return err
 	}
 	tmp := f.Name()
 	defer os.Remove(tmp)
-	line := append(body, '\n')
+	line := body
+	if newline {
+		line = append(line, '\n')
+	}
 	if n, err := f.Write(line); err != nil {
 		_ = f.Close()
 		return err
@@ -57,6 +68,9 @@ func Write(path string, value any) error {
 	}
 	if err := os.Rename(tmp, path); err != nil {
 		return err
+	}
+	if !syncDirectory {
+		return nil
 	}
 	// Grants, control state and provisioning acknowledgements use this helper.
 	// Their success must include persistence of the rename, not just the bytes.

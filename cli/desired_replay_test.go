@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -21,6 +22,7 @@ import (
 type desiredReplayRemote struct {
 	setup    testkit.Setup
 	commands snapshot.CommandLedger
+	store    snapshot.CommandStore
 	posts    atomic.Int32
 	server   *httptest.Server
 }
@@ -30,7 +32,8 @@ func newDesiredReplayRemote(t *testing.T) *desiredReplayRemote {
 	isolateLoginConfig(t)
 	f := &desiredReplayRemote{setup: testkit.NewSetup(t, initialUploadRepository)}
 	var err error
-	f.commands, err = snapshot.NewCommandLedger(nil)
+	f.store = snapshot.NewBoltCommandStore(filepath.Join(t.TempDir(), "commands.db"))
+	f.commands, err = snapshot.NewCommandLedger(f.store)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +104,7 @@ func (f *desiredReplayRemote) seed(t *testing.T, command, id, body string) {
 	}
 }
 
-func TestRemoteDesiredReplayRebuildsOriginalIncrementalSelection(t *testing.T) {
+func TestRemoteDesiredReplayRetainsOriginalFullSelection(t *testing.T) {
 	f := newDesiredReplayRemote(t)
 	f.seed(t, "existing", "note/item-0", "item-0")
 	dir := initialUploadDirectory(t, 2)
@@ -111,8 +114,8 @@ func TestRemoteDesiredReplayRebuildsOriginalIncrementalSelection(t *testing.T) {
 		t.Fatalf("incremental retry failed: first=%s second=%s", first.Stdout, second.Stdout)
 	}
 	entry, ok := f.commands.Lookup("incremental-retry")
-	if !ok || entry.Request.OperationCount != 1 || f.posts.Load() != 2 || !strings.Contains(second.Stdout, `"REPLAYED"`) {
-		t.Fatalf("retry did not verify the original filtered request: operations=%d posts=%d second=%s", entry.Request.OperationCount, f.posts.Load(), second.Stdout)
+	if !ok || entry.Request.OperationCount != 2 || f.posts.Load() != 2 || !strings.Contains(second.Stdout, `"REPLAYED"`) {
+		t.Fatalf("retry did not verify the original full request: operations=%d posts=%d second=%s", entry.Request.OperationCount, f.posts.Load(), second.Stdout)
 	}
 }
 
@@ -125,52 +128,62 @@ func TestRemoteDesiredReplayRejectsIncompleteOrPendingEvidence(t *testing.T) {
 		"missing ref":        func(e *snapshot.CommandEntry) { e.Request.TargetRef = "" },
 	} {
 		t.Run(name, func(t *testing.T) {
-			f, server := newInitialUploadRemote(t, `{"commit":"current","empty":false}`)
-			f.current["note/item-0"] = kernel.CanonicalDigest(map[string]any{"body": "item-0"})
-			f.entry = snapshot.CommandEntry{CommandID: "unverifiable", Status: snapshot.StatusApplied,
-				Digest: "digest", Receipt: json.RawMessage(`{"commandId":"unverifiable"}`),
-				Request: snapshot.CommandRequest{Kind: "COMMIT", RepositoryID: initialUploadRepository,
-					TargetRef: snapshot.DefaultRef, BaseCommit: "old", ExpectedTargetCommit: "old", OperationCount: 1}}
-			damage(&f.entry)
-			result := runInitialUpload(server, initialUploadDirectory(t, 1), "unverifiable")
-			if result.Status == 0 || !strings.Contains(result.Stdout, string(kernel.ErrPreconditionFailed)) {
-				t.Fatalf("incomplete or uncertain receipt was replayed: %#v", result)
+			f := newDesiredReplayRemote(t)
+			dir := initialUploadDirectory(t, 1)
+			first := runInitialUpload(f.server, dir, "unverifiable")
+			if first.Status != 0 {
+				t.Fatal(first.Stdout)
 			}
-			f.mu.Lock()
-			defer f.mu.Unlock()
-			if len(f.commits) != 0 {
-				t.Fatal("unverifiable request was resubmitted")
+			entry, _ := f.commands.Lookup("unverifiable")
+			damage(&entry)
+			if err := f.store.Put(entry); err != nil {
+				t.Fatal(err)
 			}
+			before := testkit.MustHead(t, f.setup.Repo, snapshot.DefaultRef)
+			result := runInitialUpload(f.server, dir, "unverifiable")
+			code := kernel.ErrPreconditionFailed
+			if result.Status == 0 || !strings.Contains(result.Stdout, string(code)) {
+				t.Fatalf("incomplete or uncertain receipt replayed: %#v", result)
+			}
+			if after := testkit.MustHead(t, f.setup.Repo, snapshot.DefaultRef); after != before {
+				t.Fatal("unverifiable retry advanced authority")
+			}
+
 		})
 	}
 }
 
-func TestRemoteDesiredReplayDoesNotHideReceiptOrHistoricalReadFailure(t *testing.T) {
+// Receipt recovery and historical previews retain their own read failures;
+// publishing a full intent no longer performs either read as a preflight.
+func TestRemoteDesiredReadsDoNotHideReceiptOrHistoricalReadFailure(t *testing.T) {
 	for _, failure := range []string{"receipt permission", "receipt backend", "historical permission"} {
 		t.Run(failure, func(t *testing.T) {
 			f, server := newInitialUploadRemote(t, `{"commit":"current","empty":false}`)
-			f.current["note/item-0"] = kernel.CanonicalDigest(map[string]any{"body": "item-0"})
-			f.entry = snapshot.CommandEntry{CommandID: "blocked", Status: snapshot.StatusApplied,
-				Digest: "digest", Receipt: json.RawMessage(`{"commandId":"blocked"}`),
-				Request: snapshot.CommandRequest{Kind: "COMMIT", RepositoryID: initialUploadRepository,
-					TargetRef: snapshot.DefaultRef, BaseCommit: "old", ExpectedTargetCommit: "old", OperationCount: 1}}
+			remote, err := kcclient.New(kcclient.Config{BaseURL: server.URL})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = remote.Login(context.Background(), kcclient.LoginRequest{Identity: kcclient.Identity{Principal: "agent:supplier"}}); err != nil {
+				t.Fatal(err)
+			}
 			code := kernel.ErrForbidden
-			switch failure {
-			case "receipt permission":
-				f.receiptError = kernel.ErrForbidden
-			case "receipt backend":
-				f.receiptError, code = kernel.ErrTemporaryUnavailable, kernel.ErrTemporaryUnavailable
-			case "historical permission":
+			if failure == "historical permission" {
 				f.resolveErrorAt = "old"
+				_, err = remoteCurrentDigests(context.Background(), remote, initialUploadRepository, "old", []objectmodel.Operation{{Op: objectmodel.OpPut, Address: objectmodel.Address{Kind: objectmodel.KindEntity, ObjectID: "note/item-0"}}}, kcclient.RequestOptions{})
+			} else {
+				f.receiptError = kernel.ErrForbidden
+				if failure == "receipt backend" {
+					f.receiptError = kernel.ErrTemporaryUnavailable
+					code = kernel.ErrTemporaryUnavailable
+				}
+				var entry snapshot.CommandEntry
+				err = remote.WriterService().Receipt(context.Background(), "blocked", kcclient.RequestOptions{}, &entry)
 			}
-			result := runInitialUpload(server, initialUploadDirectory(t, 1), "blocked")
-			if result.Status == 0 || !strings.Contains(result.Stdout, string(code)) {
-				t.Fatalf("replay read failure changed meaning: %#v", result)
-			}
+			testkit.ExpectCode(t, err, code)
 			f.mu.Lock()
 			defer f.mu.Unlock()
 			if len(f.commits) != 0 {
-				t.Fatal("failed recovery submitted a mutation")
+				t.Fatal("failed read submitted a mutation")
 			}
 		})
 	}

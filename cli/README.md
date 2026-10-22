@@ -53,7 +53,8 @@ server/routes_golden.txt  ──测试对账──►  mux 已登记的 method+p
 ### 远程 Client
 
 `remote.go` 与 `remote_*.go` 把公开 CLI 编成 `client/` 调用。`remote_login.go`
-只管理本机登录态；正式环境默认与按 Server 保存的会话由 Client 读取，不设服务端 Session。
+只处理参数与显示/浏览器交互；[client/session](../client/session/README.md) 统一管理本机登录态、
+服务地址选择、逐请求重读与刷新，kc 与 kcfs 复用同一实现，不设服务端 Session。
 
 `kc` 静态装配可独立组合的 [`snapshot/cli`](../snapshot/cli/README.md)。模块经
 [`snapshot/client`](../snapshot/client/README.md) 的 typed SDK 调用 Snapshot HTTP；
@@ -67,7 +68,7 @@ server/routes_golden.txt  ──测试对账──►  mux 已登记的 method+p
 | `declarativeindex/cli/` | 既有投影运维任务及帮助；不持 Index 或 Controller（插件静态 Affordance 与清单在 `declarativeindex/capability/`） |
 | `liveaccess/cli/` | 当前态访问、调用、绑定说明的声明、参数、产品结果与帮助；采用宿主注入的固定范围 |
 | `snapshot/cli/commands.go`、`executor.go` | 库存、仓登记与登记历史、Dataset 发布/详情/退役与同源 help/flags |
-| `snapshot/cli/recipe.go`、`overlay.go`、`clone.go` | 配方输入、本机配方合成与已发布文件树物化 |
+| `snapshot/cli/recipe.go`、`overlay.go` | 配方输入与本机配方合成 |
 | `snapshot/cli/files.go`、`file_read.go` | 交付目录分页、字节块与完整单文件下载 |
 | `snapshot/cli/access.go`、`grant_update.go` | 显式授权管理、规则列表与观察旧规则的原子修改 |
 | `remote_repository.go`、`remote_connections.go`、`flags_managed_repository.go` | KC 仓供给、连接、归属恢复与共享等宿主流程 |

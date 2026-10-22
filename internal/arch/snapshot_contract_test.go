@@ -16,12 +16,18 @@ import (
 // public type requires an explicit ownership decision here.
 var snapshotPublicDTOs = map[string]map[string]bool{
 	"kc/snapshot":         names("Advanced CommandEntry CommandRequest DirectoryCursor FileRef LakeFSEndpoint Receipt ReceiptResult"),
-	"kc/snapshot/dataset": names("Commit History LogQuery State DatasetItem Dataset DatasetCheck DatasetFileMount DatasetIssue DatasetMount DatasetOverlay DatasetRecipe DatasetSource ManagementOptions MountRoute ResolvedDataset Snapshot VirtualFile VirtualMount"),
+	"kc/snapshot/dataset": names("Commit History LogQuery State DatasetItem Dataset DatasetCheck DatasetFileMount DatasetIssue DatasetMount DatasetOverlay DatasetRecipe DatasetSource ManagementOptions MountRoute PublicationAuthority PublicationCheckpoint PublicationAdmission PublicationLookup PublicationReceipt RevisionReference RevisionReferenceCheckpoint ResolvedDataset Snapshot VirtualFile VirtualMount"),
 	"kc/snapshot/access":  names("GrantList Query Rule"),
 	"kc/snapshot/service": names("Authorization Config FileCoordinate FileDirectoryRequest FileDirectoryResponse FileMountsRequest FileMountsResponse FileReadEvidence FileReadRequest FileReadResponse RepositoryFileReadResponse IdentityOptions RequestMetadata Resources ViewOptions"),
 	"kc/snapshot/client":  names("Config RequestOptions DatasetRequest DatasetResolveRequest DatasetShowOptions RepositoryAttachRequest WorkspaceFileCoordinate WorkspaceFileMountsRequest WorkspaceFileDirectoryRequest WorkspaceFileReadRequest WorkspaceFileMountsResponse WorkspaceFileDirectoryResponse WorkspaceFileReadResponse RepositoryFileReadResponse GrantRequest GrantExpected GrantUpdateRequest AdmissionResult AdmissionGrant AdmissionRequest"),
 	"kc/snapshot/cli":     names("Command Context"),
 }
+
+// PublicationAuthority and PublicationCheckpoint are immutable file-registry
+// admission coordinates and a fixed State snapshot. They carry no provider
+// resource, implementation handle, or authority behavior.
+// RevisionReference/Checkpoint likewise carry only exact authority coordinates,
+// a prior pure reference and consumer-opaque bytes; no runtime resource owner.
 
 var snapshotDTOMethods = names("kc/snapshot/dataset.State.IsEmpty kc/snapshot/dataset.DatasetSource.IsFileEntry kc/snapshot/dataset.DatasetRecipe.Sources kc/snapshot/access.Rule.UnmarshalJSON kc/snapshot/service.Resources.OpenFiles")
 var snapshotPureDTOAliases = names("DirectoryRequest DirectoryEntry DirectoryPage TreeChange TreeChangeSet CommitMetadata")
@@ -67,29 +73,26 @@ var snapshotPublicPackages = map[string]bool{
 }
 
 // Include tests and nested modules: neither may reopen a private production API.
+// The boundary is the same source boundary validation uses (tracked plus new,
+// non-ignored files): a local trial dump under .data is not protocol source, and
+// walking it costs more than every parse in this package combined.
 func walkSnapshotBoundary(t *testing.T, visit func(string, *ast.File)) {
 	t.Helper()
 	root := moduleRoot(t)
-	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+	err := walkRepositorySource(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if entry.IsDir() {
-			if entry.Name() == ".git" || entry.Name() == ".validation" || entry.Name() == ".venv" || entry.Name() == ".kc" || entry.Name() == ".session_tmps" || entry.Name() == "node_modules" || entry.Name() == "webapp" || entry.Name() == "dist" {
-				return filepath.SkipDir
-			}
+		if entry.IsDir() || !strings.HasSuffix(path, ".go") {
 			return nil
 		}
-		if !strings.HasSuffix(path, ".go") {
-			return nil
+		file, parseErr := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+		if parseErr != nil {
+			return parseErr
 		}
-		file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(root, path)
-		if err != nil {
-			return err
+		rel, relErr := filepath.Rel(root, path)
+		if relErr != nil {
+			return relErr
 		}
 		visit(filepath.ToSlash(rel), file)
 		return nil
@@ -563,6 +566,35 @@ func TestSnapshotClientEntryGuardsPreserveImplementationHiding(t *testing.T) {
 	} {
 		t.Run(tc.pkg+"/"+tc.signal, func(t *testing.T) {
 			assertSnapshotSurface(t, tc.pkg, tc.source, tc.signal)
+		})
+	}
+}
+
+func TestSnapshotPublicationCoordinationDTOsCannotExposeProviderState(t *testing.T) {
+	for _, fixture := range []struct{ name, source, want string }{
+		{"file-authority-coordinates", `package dataset; type State struct{}; type PublicationAuthority struct{AuthorityID,Binding,Ref,Head string}; type PublicationCheckpoint struct{Authority PublicationAuthority;State State}; type PublicationCoordinator interface{FencePublications()(PublicationCheckpoint,error)}`, ""},
+		{"object-state-leak", `package dataset; import objectmodel "kc/object"; type PublicationCheckpoint struct{Value objectmodel.ObjectValue}`, "unselected signature dependency"},
+		{"receipt-provider-leak", `package dataset; import projection "kc/discovery/projection"; type PublicationReceipt struct{Resource projection.Engine}`, "unselected signature dependency"},
+		{"receipt-authority-behavior", `package dataset; type PublicationReceipt struct{}; func(PublicationReceipt)Confirm(){}`, "adds behavior"},
+		{"authority-behavior-leak", `package dataset; type PublicationAuthority struct{}; func(PublicationAuthority)DeleteResource(){}`, "adds behavior"},
+		{"consumer-reference-data", `package dataset; type RevisionReference struct{Owner,ID string;Value []byte}; type RevisionReferenceCheckpoint struct{Current *RevisionReference}; type RevisionReferenceCoordinator interface{CommitRevisionReference(RevisionReferenceCheckpoint,[]byte)(RevisionReference,error)}`, ""},
+		{"reference-provider-leak", `package dataset; import projection "kc/discovery/projection"; type RevisionReference struct{Resource projection.Engine}`, "unselected signature dependency"},
+		{"reference-behavior", `package dataset; type RevisionReference struct{}; func(RevisionReference)Publish(){}`, "adds behavior"},
+		{"checkpoint-private-state", `package dataset; type RevisionReferenceCheckpoint struct{state bool}`, "private state"},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			file, err := parser.ParseFile(token.NewFileSet(), "fixture.go", fixture.source, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			violations := snapshotSurfaceViolations("kc/snapshot/dataset", []*ast.File{file})
+			message := strings.Join(violations, "\n")
+			if fixture.want == "" && len(violations) > 0 {
+				t.Fatal(message)
+			}
+			if fixture.want != "" && !strings.Contains(message, fixture.want) {
+				t.Fatalf("guard lost rejection %q: %s", fixture.want, message)
+			}
 		})
 	}
 }

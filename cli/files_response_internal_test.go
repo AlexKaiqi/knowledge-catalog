@@ -17,9 +17,7 @@ func TestSnapshotInvalidInputPrecedesLoginRefresh(t *testing.T) {
 		http.Error(w, "login must not refresh", http.StatusInternalServerError)
 	}))
 	defer server.Close()
-	if err := persistTokenLogin(taihuSession{Server: server.URL, Principal: "consumer", AccessToken: "expired", RefreshToken: "refresh", ExpiresAt: time.Now().Add(-time.Minute)}); err != nil {
-		t.Fatal(err)
-	}
+	seedLoginState(t, server.URL, "session-taihu.json", map[string]any{"server": server.URL, "principal": "consumer", "access_token": "expired", "refresh_token": "refresh", "expires_at": time.Now().Add(-time.Minute)})
 	for _, args := range [][]string{
 		{"files", "read", "--dataset", "d", "--path", "x", "--length", "-1"},
 		{"files", "list", "--dataset", "d", "--continuation", "cursor"},

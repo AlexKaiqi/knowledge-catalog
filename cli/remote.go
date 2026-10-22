@@ -3,8 +3,8 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	clientsession "kc/client/session"
 	inv "kc/invocation"
-	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -40,7 +40,11 @@ func runRemoteCLI(ctx context.Context, server, path string, flags map[string]Fla
 		return runRemoteLogin(ctx, server, path, flags)
 	}
 
-	client, err := newRemoteSessionClient(ctx, server, flags)
+	config, err := clientsession.Configure(ctx, server, clientsession.Selection{Principal: invoke.FlagString(flags, "as"), OnBehalfOf: invoke.FlagString(flags, "on-behalf-of")})
+	if err != nil {
+		return inv.ErrorResult(err)
+	}
+	client, err := kcclient.New(config)
 	if err != nil {
 		return inv.ErrorResult(err)
 	}
@@ -126,49 +130,6 @@ func snapshotRef(flags map[string]FlagValue) string {
 		return snapshot.DefaultRef
 	}
 	return ref
-}
-
-// remoteTokenAuthenticator sends only the credential. The server derives the
-// principal from its trusted authenticator and rejects caller-supplied identity
-// headers; the local Identity remains useful for CLI context and audit UX.
-type remoteTokenAuthenticator struct{}
-
-func (remoteTokenAuthenticator) Login(_ context.Context, request kcclient.LoginRequest) (kcclient.Session, error) {
-	return kcclient.Session(request), nil
-}
-
-func (remoteTokenAuthenticator) Logout(context.Context, kcclient.Session) error { return nil }
-
-func (remoteTokenAuthenticator) AuthenticateRequest(_ context.Context, session kcclient.Session, _ string, request *http.Request) error {
-	request.Header.Set("Authorization", session.Authentication.Authorization)
-	return nil
-}
-
-func discoverServerAuth(ctx context.Context, server string) (kcclient.AuthDiscovery, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	client, err := kcclient.New(kcclient.Config{BaseURL: server})
-	if err != nil {
-		return kcclient.AuthDiscovery{}, err
-	}
-	discovery, err := client.IdentityService().Discover(ctx)
-	if err != nil {
-		return kcclient.AuthDiscovery{}, err
-	}
-	if strings.TrimSpace(discovery.Mode) == "" {
-		return kcclient.AuthDiscovery{}, kernel.Fail(kernel.ErrTemporaryUnavailable, "kc server auth discovery omitted mode")
-	}
-	return discovery, nil
-}
-
-func bearerParts(raw string) (header, access string) {
-	raw = strings.TrimSpace(raw)
-	fields := strings.Fields(raw)
-	if len(fields) == 2 && strings.EqualFold(fields[0], "bearer") {
-		return "Bearer " + fields[1], fields[1]
-	}
-	return "Bearer " + raw, raw
 }
 
 // runRemoteLogin handles login/logout against a remote server without

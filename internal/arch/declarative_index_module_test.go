@@ -274,9 +274,11 @@ func declarativeIndexRuntimePackage(pkg string) bool {
 func declarativeIndexDependencySignals(graph depGraph) []string {
 	var signals []string
 	for owner, dependencies := range graph {
-		// Home constructs contributions. Other external production packages use
+		// Home constructs contributions. Its configuration subpackage names the
+		// provider config shape a deployment selects, which is still a
+		// declaration, not an engine. Other external production packages use
 		// the generic ports or owned SDKs, including the HTTP/CLI transports.
-		if owner != "home" && (!deniedMatch("declarativeindex", owner) || deniedMatch("declarativeindex/client", owner) || deniedMatch("declarativeindex/cli", owner) || deniedMatch("declarativeindex/capability", owner)) {
+		if owner != "home" && owner != "home/config" && (!deniedMatch("declarativeindex", owner) || deniedMatch("declarativeindex/client", owner) || deniedMatch("declarativeindex/cli", owner) || deniedMatch("declarativeindex/capability", owner)) {
 			for _, target := range dependencies {
 				if declarativeIndexRuntimePackage(target) {
 					signals = append(signals, fmt.Sprintf("%s directly imports concrete index implementation %s outside assembly", owner, target))

@@ -103,7 +103,7 @@ instrument 专用 attribute 的稳定值域：
 | `kc.vfs.directory.entry.count` | Histogram | `{entry}` | `kc_vfs_directory_entry_count` | `kc.operation`、`kc.outcome` |
 
 `kc.operation` 的公开动词来自 `cli/command.go`，内部操作由 telemetry 词表显式登记。未登记值映射为 `other`。
-Snapshot 内部操作限于 `resolve_ref\|read\|read_many\|list_page\|history\|diff\|commit\|compare_and_swap\|other`；不得将 ref、path 或 Repository 拼入操作名。
+Snapshot 内部操作限于 `resolve_ref\\|read\\|read_many\\|list_page\\|history\\|diff\\|commit\\|verify_write\\|compare_and_swap\\|other`；不得将 ref、path 或 Repository 拼入操作名。
 
 
 OTel 名称是代码/OTLP 名称，Prometheus 名称是 exporter 映射；不得重复注册两套 instrument。属性语义的破坏性变化遵守系统可观测性 owner 的 schema-version 和迁移要求。

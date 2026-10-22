@@ -2,8 +2,8 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,15 +16,14 @@ import (
 
 func TestSnapshotHelpPreservesModuleContentThroughPublicEntry(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("KC_SERVER_URL", "http://snapshot-help.invalid")
+	calls := &countingHandler{}
+	server := httptest.NewServer(calls)
+	t.Cleanup(server.Close)
+	t.Setenv("KC_SERVER_URL", server.URL)
 	t.Setenv("KC_AUTH_TOKEN", "help-must-not-use-authentication")
 	t.Setenv("KC_AS", "help-reader")
 	t.Setenv("KC_HOME", filepath.Join(dir, "home"))
 	t.Setenv("KC_CONFIG_DIR", filepath.Join(dir, "config"))
-	transport := &snapshotHelpRejectingRoundTripper{}
-	originalTransport := http.DefaultTransport
-	http.DefaultTransport = transport
-	t.Cleanup(func() { http.DefaultTransport = originalTransport })
 
 	executor := snapshotcli.New(nil, snapshotcli.Context{})
 	for _, command := range snapshotcli.Commands() {
@@ -56,7 +55,7 @@ func TestSnapshotHelpPreservesModuleContentThroughPublicEntry(t *testing.T) {
 			}
 		})
 	}
-	if calls := transport.calls.Load(); calls != 0 {
+	if calls := calls.count.Load(); calls != 0 {
 		t.Fatalf("public help made %d HTTP requests", calls)
 	}
 	files, err := os.ReadDir(dir)
@@ -75,16 +74,20 @@ func snapshotHelpInputArgs(path, dir string) []string {
 		return []string{"--file", filepath.Join(dir, "missing-replacement"), "--expected-file", filepath.Join(dir, "missing-observed-rule")}
 	case "files read":
 		return []string{"--out", filepath.Join(dir, "download.bin")}
-	case "dataset clone":
-		return []string{"--dir", filepath.Join(dir, "clone")}
 	default:
 		return nil
 	}
 }
 
-type snapshotHelpRejectingRoundTripper struct{ calls atomic.Int32 }
+// countingHandler records every request the help path must never make. Using a
+// real server keeps the assertion observable without touching the package-level
+// http.DefaultTransport, which other cases in this package also use: replacing
+// it made the count depend on package-wide scheduling instead of on this case.
+type countingHandler struct {
+	count atomic.Int32
+}
 
-func (transport *snapshotHelpRejectingRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
-	transport.calls.Add(1)
-	return nil, errors.New("help must not request HTTP")
+func (handler *countingHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	handler.count.Add(1)
+	http.Error(writer, "help must not request HTTP", http.StatusInternalServerError)
 }

@@ -23,7 +23,9 @@ import (
 // authenticatorAssemblyRoots are the only production files allowed to link
 // concrete authenticator packages: the builtin set for kc serve and deployment
 // validation, and the Server's default self-assertion seam (--auth local).
-var authenticatorAssemblyRoots = []string{"server/serve_handler.go", "server/serve_auth.go", "home/deployment.go"}
+// Deployment validation lives in home/config, so that file is the root that
+// must link the builtin set for the names Validate accepts.
+var authenticatorAssemblyRoots = []string{"server/serve_handler.go", "server/serve_auth.go", "home/config/deployment.go"}
 
 // authenticatorNameScopes must not compare against provider names; they hold
 // an identity.HTTPAuthenticator and ask it, not its label.

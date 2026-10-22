@@ -1,16 +1,15 @@
 package cli
 
 import (
-	inv "kc/invocation"
-	"kc/invoke"
-
 	"context"
 	"encoding/json"
 	"fmt"
-
 	"strings"
 
+	"kc/internal/clientconfig"
 	"kc/internal/telemetry"
+	inv "kc/invocation"
+	"kc/invoke"
 	"kc/kernel"
 )
 
@@ -53,7 +52,7 @@ func dispatchCLI(argv []string, runtime *telemetry.Runtime) RunResult {
 	if clientOperationPath(request.path) {
 		return runClientOperationWithTelemetry(context.Background(), runtime, request.path, request.surface.Handler, request.flags)
 	}
-	if server := inv.RemoteServerURL(request.flags); server != "" {
+	if server := clientconfig.ServerURL(invoke.FlagString(request.flags, "server")); server != "" {
 		return encodeCLIProduct(request.path, request.flags, runRemoteCLI(context.Background(), server, request.path, request.flags))
 	}
 	return inv.ErrorResult(kernel.Fail(kernel.ErrUsageInvalid,
@@ -135,6 +134,9 @@ func applyPositionals(command string, flags map[string]FlagValue, args []string)
 	if len(args) == 0 {
 		return nil
 	}
+	if command == "diff" {
+		return bindObjectOperands(objectComparisonCLIEntry, flags, args)
+	}
 	if entry, module := objectCommandByHandler(command); module {
 		return bindObjectOperands(entry, flags, args)
 	}
@@ -169,6 +171,16 @@ func applyPositionals(command string, flags map[string]FlagValue, args []string)
 }
 
 func rejectPublicSurfaceFlags(publicPath string, flags map[string]FlagValue) error {
+	if publicPath == "diff" {
+		if invoke.FlagString(flags, "reference") != "" {
+			return validateObjectFlags(publicPath, flags)
+		}
+		for _, name := range objectComparisonCLIEntry.Flags {
+			if _, supplied := flags[name]; supplied {
+				return kernel.Fail(kernel.ErrUsageInvalid, "kc diff --%s requires an object URN as its positional argument", name)
+			}
+		}
+	}
 	if _, explicitCatalog := flags["catalog"]; explicitCatalog {
 		return kernel.Fail(kernel.ErrUsageInvalid, "%s rejects --catalog; one service has one registration space", publicPath)
 	}

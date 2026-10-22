@@ -171,45 +171,34 @@ func TestRemoteInitialUploadSkipsAddressReadsAtProvenEmptyHead(t *testing.T) {
 			}
 			f.mu.Lock()
 			defer f.mu.Unlock()
-			if len(f.heads) != 1 || f.heads[0] != "refs/heads/import" || len(f.resolves) != 0 || len(f.commits) != 1 {
+			if len(f.heads) != 0 || len(f.resolves) != 0 || len(f.commits) != 1 {
 				t.Fatalf("first upload requests: heads=%v resolves=%d commits=%d", f.heads, len(f.resolves), len(f.commits))
 			}
 			cs := f.commits[0].ChangeSet
-			if cs.BaseCommit != "empty-root" || cs.ExpectedTargetCommit != "empty-root" || cs.TargetRef != "refs/heads/import" || len(cs.Operations) != 8 || cs.BulkIngest != bulk {
+			if cs.BaseCommit != "" || cs.ExpectedTargetCommit != "" || cs.TargetRef != "refs/heads/import" || len(cs.Operations) != 8 || cs.BulkIngest != bulk {
 				t.Fatalf("first upload lost fixed basis, operations or bulk: %#v", cs)
 			}
 		})
 	}
 }
 
-func TestRemoteInitialUploadRetainsDiffWhenHeadNonemptyOrUnknown(t *testing.T) {
+func TestRemoteInitialUploadSendsFullIntentWithoutValueFiltering(t *testing.T) {
 	for _, head := range []string{`{"commit":"existing","empty":false}`, `{"commit":"existing"}`} {
 		t.Run(head, func(t *testing.T) {
 			f, server := newInitialUploadRemote(t, head)
 			f.current["note/item-0"] = kernel.CanonicalDigest(map[string]any{"body": "item-0"})
-			f.current["note/item-1"] = kernel.CanonicalDigest(map[string]any{"body": "old"})
 			result := runInitialUpload(server, initialUploadDirectory(t, 3), "incremental", "--bulk")
 			if result.Status != 0 {
 				t.Fatal(result.Stdout)
 			}
 			f.mu.Lock()
 			defer f.mu.Unlock()
-			if len(f.resolves) != 3 || len(f.commits) != 1 {
-				t.Fatalf("incremental requests: resolves=%d commits=%d", len(f.resolves), len(f.commits))
-			}
-			for _, request := range f.resolves {
-				if request.Repository != initialUploadRepository || request.Commit != "existing" || request.Ref != "" {
-					t.Fatalf("diff was not fixed to the selected commit: %#v", request)
-				}
+			if len(f.heads) != 0 || len(f.resolves) != 0 || len(f.commits) != 1 {
+				t.Fatalf("publication performs client comparison: heads=%d resolves=%d commits=%d", len(f.heads), len(f.resolves), len(f.commits))
 			}
 			cs := f.commits[0].ChangeSet
-			if len(cs.Operations) != 2 || !cs.BulkIngest || cs.BaseCommit != "existing" || cs.ExpectedTargetCommit != "existing" {
-				t.Fatalf("incremental diff lost updates or basis: %#v", cs)
-			}
-			for _, op := range cs.Operations {
-				if op.Address.ObjectID == "note/item-0" {
-					t.Fatal("unchanged unit was submitted")
-				}
+			if len(cs.Operations) != 3 || !cs.BulkIngest || cs.BaseCommit != "" || cs.ExpectedTargetCommit != "" {
+				t.Fatalf("lost full intent or invented basis: %#v", cs)
 			}
 		})
 	}
@@ -223,7 +212,7 @@ func TestRemoteInitialUploadExplicitBaseKeepsHistoricalDiff(t *testing.T) {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if len(f.heads) != 0 || len(f.resolves) != 2 || len(f.commits) != 1 {
+	if len(f.heads) != 0 || len(f.resolves) != 0 || len(f.commits) != 1 {
 		t.Fatalf("explicit base used unrelated HEAD: heads=%v resolves=%d commits=%d", f.heads, len(f.resolves), len(f.commits))
 	}
 	for _, request := range f.resolves {
@@ -255,7 +244,7 @@ func TestRemoteInitialUploadHeadFailureNeverAssumesEmpty(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f, server := newInitialUploadRemote(t, tc.body)
 			f.headStatus = tc.status
-			result := runInitialUpload(server, initialUploadDirectory(t, 1), "rejected-head")
+			result := Run([]string{"--server", server.URL, "--as", "agent:supplier", "diff", "--repo", initialUploadRepository, "--dir", initialUploadDirectory(t, 1)})
 			if result.Status == 0 || (tc.code != "" && !strings.Contains(result.Stdout, tc.code)) {
 				t.Fatalf("head failure changed meaning: %#v", result)
 			}
@@ -277,11 +266,11 @@ func TestRemoteInitialUploadRejectsConcurrentAdvanceWithoutRebase(t *testing.T) 
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if len(f.heads) != 1 || len(f.resolves) != 0 || len(f.commits) != 1 || f.receipts != 0 {
+	if len(f.heads) != 0 || len(f.resolves) != 0 || len(f.commits) != 1 || f.receipts != 0 {
 		t.Fatalf("conflict retried or rebased: heads=%d resolves=%d commits=%d receipts=%d", len(f.heads), len(f.resolves), len(f.commits), f.receipts)
 	}
 	cs := f.commits[0].ChangeSet
-	if cs.BaseCommit != "empty-root" || cs.ExpectedTargetCommit != "empty-root" {
+	if cs.BaseCommit != "" || cs.ExpectedTargetCommit != "" {
 		t.Fatalf("concurrent upload did not pin the empty root: %#v", cs)
 	}
 }
@@ -304,7 +293,7 @@ func TestRemoteInitialUploadSameDirectoryReplaysOriginalReceipt(t *testing.T) {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if len(f.commits) != 2 || f.receipts != 1 || f.commits[1].ChangeSet.BaseCommit != "empty-root" || f.commits[0].ChangeSet.TargetRef != snapshot.DefaultRef {
+	if len(f.commits) != 2 || f.receipts != 0 || f.commits[1].ChangeSet.BaseCommit != "" || f.commits[0].ChangeSet.TargetRef != snapshot.DefaultRef {
 		t.Fatalf("directory retry did not verify the original request: commits=%d receipts=%d", len(f.commits), f.receipts)
 	}
 }

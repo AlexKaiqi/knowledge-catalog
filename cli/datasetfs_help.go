@@ -14,7 +14,7 @@ SIGINT or SIGTERM. Each directory mapping becomes a read-only FUSE mount below
 The default --view repository delivers selected original bytes without
 interpreting their contents. --view semantic is an application extension with
 its own object support requirements. Datasets with per-file entries are not
-supported by this file view; use kc dataset clone or the file gateway instead.
+supported by this file view; use the file gateway instead.
 
 kcfs uses the configured KC Server and the same kc login. It resolves the Dataset
 once at plan/mount time and keeps that commit set for the process. The file

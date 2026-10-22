@@ -32,7 +32,6 @@ func datasetVerbs() map[string]inv.Command {
 	return map[string]inv.Command{
 		"show":           {Stage: invoke.StageGoverned, Run: inv.ReadInventoryState},
 		"dataset-define": {Stage: invoke.StageGoverned, Run: inv.VerbDefineDataset},
-		"dataset-clone":  {Stage: invoke.StageGoverned, Run: inv.VerbDatasetCloneRequiresServer},
 		"dataset-show":   {Stage: invoke.StageHome, Run: snapshotServerRequired},
 		"files-list":     {Stage: invoke.StageHome, Run: snapshotServerRequired},
 		"files-read":     {Stage: invoke.StageHome, Run: snapshotServerRequired},

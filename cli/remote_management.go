@@ -8,7 +8,6 @@ import (
 	"kc/invoke"
 	"kc/kernel"
 	objectcli "kc/object/cli"
-	"kc/object/writer"
 )
 
 func runRemoteWriter(ctx context.Context, client *kcclient.Client, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {
@@ -86,16 +85,12 @@ func runRemoteDesiredCommit(ctx context.Context, client *kcclient.Client, flags 
 	if err != nil {
 		return nil, err
 	}
-	preview, _, current, err := prepareRemoteDesiredIngest(ctx, client, flags, repository, dir, options)
+	preview, err := inv.IngestDesired(flags, dir, repository, snapshotRef(flags), kernel.CommitID(invoke.FlagString(flags, "base")))
 	if err != nil {
 		return nil, err
 	}
-	changeSet, _ := writer.OmitUnchanged(preview.ChangeSet, current)
-	if len(changeSet.Operations) == 0 {
-		return replayRemoteDesired(ctx, client, flags, commandID, preview.ChangeSet, options)
-	}
 	return remoteCommitWithReceiptRecovery(ctx, client, repository,
-		kcclient.CommitRequest{CommandID: commandID, ChangeSet: changeSet}, options, objectcli.ReceiptWaitBudget())
+		kcclient.CommitRequest{CommandID: commandID, ChangeSet: preview.ChangeSet}, options, objectcli.ReceiptWaitBudget())
 }
 
 func runRemoteDesiredDiff(ctx context.Context, client *kcclient.Client, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {

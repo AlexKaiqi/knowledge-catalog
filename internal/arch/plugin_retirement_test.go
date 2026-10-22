@@ -30,17 +30,14 @@ const retiredSceneAccessSelection = "with LiveAccess instance"
 func TestRepositoryPluginSelectionIsRetiredFromCodeAndScenes(t *testing.T) {
 	root := moduleRoot(t)
 	var signals []string
-	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+	err := walkRepositorySource(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		relative := filepath.ToSlash(strings.TrimPrefix(path, root+string(filepath.Separator)))
 		if entry.IsDir() {
-			if name := entry.Name(); path != root && (strings.HasPrefix(name, ".") && name != ".data" || name == "node_modules" || name == "testdata") {
-				return filepath.SkipDir
-			}
 			return nil
 		}
+		relative := filepath.ToSlash(strings.TrimPrefix(path, root+string(filepath.Separator)))
 		switch {
 		case strings.HasSuffix(path, ".go"):
 			file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.SkipObjectResolution)

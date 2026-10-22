@@ -18,6 +18,11 @@ import (
 )
 
 func objectReferenceServer(t *testing.T) (string, string, string) {
+	home, url, repo, _ := objectReferenceServerLifecycle(t)
+	return home, url, repo
+}
+
+func objectReferenceServerLifecycle(t *testing.T) (string, string, string, func()) {
 	t.Helper()
 	isolateClientCredentials(t)
 	t.Setenv("KC_DATASET", "")
@@ -26,13 +31,27 @@ func objectReferenceServer(t *testing.T) (string, string, string) {
 	body(t, kc(home, "local", "init"))
 	seedRepo(t, home, repo)
 	body(t, kc(home, "local", "grant", "bootstrap", "--principal", "operator"))
+	url, stop := serveReferenceHome(t, home)
+	return home, url, repo, stop
+}
+
+func serveReferenceHome(t *testing.T, home string) (string, func()) {
+	t.Helper()
 	handler := serv.HTTPHandlerWithOptions(home, serv.HTTPServerOptions{})
-	if closer, ok := handler.(interface{ Close() error }); ok {
-		t.Cleanup(func() { _ = closer.Close() })
-	}
 	server := httptest.NewServer(handler)
-	t.Cleanup(server.Close)
-	return home, server.URL, repo
+	var once sync.Once
+	stop := func() {
+		once.Do(func() {
+			server.Close()
+			if closer, ok := handler.(interface{ Close() error }); ok {
+				if err := closer.Close(); err != nil {
+					t.Errorf("close reference server: %v", err)
+				}
+			}
+		})
+	}
+	t.Cleanup(stop)
+	return server.URL, stop
 }
 
 func ordersReference(t *testing.T, repo, locator string) string {

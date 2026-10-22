@@ -121,7 +121,19 @@ func TestCatalogRepoWriteFlow(t *testing.T) {
 	if replayed["disposition"] != "REPLAYED" {
 		t.Fatal(replayed)
 	}
-	expectCode(t, kc(h, "commit", "--command-id", "ingest-unchanged", "--repo", core, "--dir", draft), "USAGE_INVALID")
+	unchanged := asMap(t, body(t, kc(h, "commit", "--command-id", "ingest-unchanged", "--repo", core, "--dir", draft)))
+	prior := asMap(t, committed["result"])["newCommit"]
+	unchangedResult := asMap(t, unchanged["result"])
+	if unchanged["disposition"] != "APPLIED" || unchangedResult["changed"] != false || unchangedResult["oldCommit"] != prior || unchangedResult["newCommit"] != prior || unchangedResult["commitId"] != prior {
+		t.Fatalf("no-change directory commit must retain the accepted source version: %#v", unchanged)
+	}
+	if current := asMap(t, body(t, kc(h, "writer", "head", "--repo", core)))["commit"]; current != prior {
+		t.Fatalf("no-change directory commit advanced source: got %v, want %v", current, prior)
+	}
+	unchangedReplay := asMap(t, body(t, kc(h, "commit", "--command-id", "ingest-unchanged", "--repo", core, "--dir", draft)))
+	if unchangedReplay["disposition"] != "REPLAYED" || asMap(t, unchangedReplay["result"])["commitId"] != prior || asMap(t, unchangedReplay["result"])["changed"] != false {
+		t.Fatalf("no-change command replay lost the accepted result: %#v", unchangedReplay)
+	}
 	receipt := asMap(t, body(t, kc(h, "receipt", "--command-id", "ingest-1")))
 	if receipt["commandId"] != "ingest-1" || receipt["digest"] == "" {
 		t.Fatal(receipt)

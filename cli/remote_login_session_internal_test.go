@@ -4,12 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	kcclient "kc/client"
-	kcidentity "kc/identity"
-	"kc/identity/identitytest"
-	"kc/identity/taihu"
-	inv "kc/invocation"
-	serv "kc/server"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -18,7 +12,15 @@ import (
 	"testing"
 	"time"
 
+	kcclient "kc/client"
+	kcidentity "kc/identity"
+	"kc/identity/identitytest"
+	"kc/identity/taihu"
+	"kc/internal/clientconfig"
+	"kc/internal/jsonfile"
+	inv "kc/invocation"
 	"kc/kernel"
+	serv "kc/server"
 )
 
 // testTaihuAuthenticator reports the taihu mode name because the identity-token
@@ -68,7 +70,7 @@ func TestRetiredCatalogUseDoesNotPersistClientContext(t *testing.T) {
 	if use.Status == 0 || !strings.Contains(use.Stdout, "USAGE_INVALID") {
 		t.Fatal(use.Stdout)
 	}
-	if _, err := os.Stat(inv.ServerSessionPath(server.URL, "catalog.json")); !os.IsNotExist(err) {
+	if _, err := os.Stat(clientconfig.SessionPath(server.URL, "catalog.json")); !os.IsNotExist(err) {
 		t.Fatalf("retired selection created context: %v", err)
 	}
 }
@@ -113,39 +115,6 @@ func TestLoginPersistsDefaultServerAndIndependentSessions(t *testing.T) {
 	}
 }
 
-func TestTaihuLoginRequiresVerifiedPersistedIdentity(t *testing.T) {
-	for _, failure := range []string{"whoami", "persistence"} {
-		t.Run(failure, func(t *testing.T) {
-			isolateLoginConfig(t)
-			t.Setenv("KC_SERVICE_CLIENT_SECRET", "fixture-secret")
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path == "/identity/v1/token" {
-					_, _ = io.WriteString(w, `{"accessToken":"token","expiresIn":3600}`)
-					return
-				}
-				if failure == "whoami" {
-					w.WriteHeader(http.StatusUnauthorized)
-					_, _ = io.WriteString(w, `{"error":{"code":"UNAUTHENTICATED","message":"rejected"}}`)
-					return
-				}
-				_, _ = io.WriteString(w, `{"principal":"alice"}`)
-			}))
-			t.Cleanup(server.Close)
-			if failure == "persistence" {
-				blocked := filepath.Join(t.TempDir(), "blocked")
-				if err := os.WriteFile(blocked, []byte("file"), 0600); err != nil {
-					t.Fatal(err)
-				}
-				t.Setenv("KC_CONFIG_DIR", blocked)
-			}
-			result, err := exchangeTaihuCode(&inv.Invocation{Context: context.Background()}, taihuPendingAuth{OAuth2Base: server.URL, Server: server.URL, ClientID: "fixture", CodeVerifier: "verifier"}, "code", "http://localhost/callback")
-			if err == nil {
-				t.Fatalf("LOGIN-VERIFIED-DURABLE: %s failure returned success: %#v", failure, result)
-			}
-		})
-	}
-}
-
 func TestSavedLoginRefreshesWithoutClientSecretAndKeepsServer(t *testing.T) {
 	isolateLoginConfig(t)
 	t.Setenv("KC_SERVICE_CLIENT_SECRET", "must-not-leave-client")
@@ -175,9 +144,7 @@ func TestSavedLoginRefreshesWithoutClientSecretAndKeepsServer(t *testing.T) {
 		}
 	}))
 	t.Cleanup(server.Close)
-	if err := persistTokenLogin(taihuSession{Server: server.URL, Principal: "alice", AccessToken: "old", RefreshToken: "refresh-old", ExpiresAt: time.Now().Add(-time.Minute)}); err != nil {
-		t.Fatal(err)
-	}
+	seedLoginState(t, server.URL, "session-taihu.json", map[string]any{"server": server.URL, "principal": "alice", "access_token": "old", "refresh_token": "refresh-old", "expires_at": time.Now().Add(-time.Minute)})
 	if result := Run([]string{"whoami"}); result.Status != 0 {
 		t.Fatal(result.Stdout)
 	}
@@ -187,18 +154,20 @@ func TestSavedLoginRefreshesWithoutClientSecretAndKeepsServer(t *testing.T) {
 	if refreshCalls != 1 || whoamiCalls != 3 {
 		t.Fatalf("refresh calls=%d whoami=%d", refreshCalls, whoamiCalls)
 	}
-	session, ok, err := readServerTokenSession(server.URL)
-	if err != nil || !ok || session.AccessToken != "fresh" || session.RefreshToken != "refresh-new" {
-		t.Fatalf("refreshed login was not saved: ok=%v error=%v", ok, err)
+	raw, err := os.ReadFile(clientconfig.SessionPath(server.URL, "session-taihu.json"))
+	var saved map[string]any
+	if err == nil {
+		err = json.Unmarshal(raw, &saved)
+	}
+	if err != nil || saved["access_token"] != "fresh" || saved["refresh_token"] != "refresh-new" {
+		t.Fatalf("refreshed login was not saved: error=%v", err)
 	}
 }
 
 func TestExpiredSavedLoginNeverFallsBackToLocal(t *testing.T) {
 	isolateLoginConfig(t)
 	server := loginTestServer(t, "unexpected", func(*http.Request) { t.Error("expired token made a request") })
-	if err := persistTokenLogin(taihuSession{Server: server.URL, Principal: "alice", AccessToken: "expired", ExpiresAt: time.Now().Add(-time.Minute)}); err != nil {
-		t.Fatal(err)
-	}
+	seedLoginState(t, server.URL, "session-taihu.json", map[string]any{"server": server.URL, "principal": "alice", "access_token": "expired", "expires_at": time.Now().Add(-time.Minute)})
 	t.Setenv("KC_AS", "forged-local")
 	result := Run([]string{"whoami"})
 	if result.Status == 0 || !strings.Contains(result.Stdout, "UNAUTHENTICATED") || !strings.Contains(result.Stdout, "kc login") {
@@ -210,6 +179,10 @@ func TestBrowserCodeCompletesThroughBrokerWithoutClientSecret(t *testing.T) {
 	isolateLoginConfig(t)
 	t.Setenv("KC_SERVICE_CLIENT_SECRET", "")
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth2/par/poll" {
+			_, _ = io.WriteString(w, `{"status":"completed","code":"one-time-code","redirect_uri":"http://localhost/callback"}`)
+			return
+		}
 		_, secret, _ := r.BasicAuth()
 		if secret != "server-secret" {
 			t.Error("server did not provide its application secret")
@@ -219,93 +192,22 @@ func TestBrowserCodeCompletesThroughBrokerWithoutClientSecret(t *testing.T) {
 	t.Cleanup(upstream.Close)
 	server := httptest.NewServer(serv.HTTPHandlerWithOptions(t.TempDir(), serv.HTTPServerOptions{Authenticator: testTaihuAuthenticator("kaiqidong"), LoginBroker: taihu.NewBroker(taihu.Application{ClientID: "kc-app", ClientSecret: "server-secret", OAuth2Base: upstream.URL}, nil)}))
 	t.Cleanup(server.Close)
-	result, err := exchangeTaihuCode(&inv.Invocation{Context: context.Background()}, taihuPendingAuth{Server: server.URL, CodeVerifier: strings.Repeat("a", 43)}, "one-time-code", "http://localhost/callback")
-	if err != nil {
-		t.Fatal(err)
+	seedLoginState(t, server.URL, "pending-taihu-auth.json", map[string]any{"request_uri": "urn:test:pending", "code_verifier": strings.Repeat("a", 43), "client_id": "kc-app", "resource": "kc-app", "oauth2_base": upstream.URL, "server": server.URL})
+	result := Run([]string{"login", "--server", server.URL, "--wait"})
+	if result.Status != 0 {
+		t.Fatal(result.Stdout)
 	}
-	raw, _ := json.Marshal(result)
-	if strings.Contains(string(raw), "verified-user-token") || strings.Contains(string(raw), "server-secret") {
+	if strings.Contains(result.Stdout, "verified-user-token") || strings.Contains(result.Stdout, "server-secret") {
 		t.Fatal("login output disclosed a secret")
 	}
+
 	if result := Run([]string{"whoami"}); result.Status != 0 || !strings.Contains(result.Stdout, `"kaiqidong"`) {
 		t.Fatalf("verified browser login did not continue: %s", result.Stdout)
 	}
 }
 
-func TestTaihuSessionPersistRoundTrip(t *testing.T) {
-	isolateLoginConfig(t)
-	const server = "http://localhost:7380"
-	path := inv.ServerSessionPath(server, "session-taihu.json")
-
-	// Not present -> not ok.
-	if _, ok, err := currentServerTokenSession(context.Background(), server); ok || err != nil {
-		t.Fatalf("load of missing session must report ok=false without error: %v", err)
-	}
-
-	sess := taihuSession{
-		Server: server, AccessToken: "test-access-token",
-		RefreshToken: "test-refresh-token", ExpiresAt: time.Now().Add(time.Hour),
-	}
-	if err := persistTokenLogin(sess); err != nil {
-		t.Fatal(err)
-	}
-	got, ok, err := currentServerTokenSession(context.Background(), server)
-	if !ok || err != nil {
-		t.Fatalf("load of persisted session must be ok: %v", err)
-	}
-	if got.Server != sess.Server || got.AccessToken != sess.AccessToken || got.RefreshToken != sess.RefreshToken {
-		t.Fatalf("round-trip mismatch: %#v", got)
-	}
-
-	// An expired credential without a refresh token is not usable.
-	expired := taihuSession{Server: sess.Server, AccessToken: "x", ExpiresAt: time.Now().Add(-time.Minute)}
-	if err := persistTokenLogin(expired); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok, err := currentServerTokenSession(context.Background(), server); ok || kernel.CodeOf(err) != kernel.ErrUnauthenticated {
-		t.Fatalf("expired session must reject authentication: ok=%v err=%v", ok, err)
-	}
-
-	// File permissions are restrictive (0600).
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if perm := info.Mode().Perm(); perm != 0o600 {
-		t.Fatalf("session file must be 0600, got %o", perm)
-	}
-}
-
-func TestLocalSessionPersistRoundTrip(t *testing.T) {
-	isolateLoginConfig(t)
-	t.Setenv("HOME", t.TempDir())
-	if _, ok := loadLocalSession("http://kc-server:7380"); ok {
-		t.Fatal("load of missing local session must report ok=false")
-	}
-	if err := persistLocalSession(localSession{Server: "http://kc-server:7380", Principal: "agent:dsh"}); err != nil {
-		t.Fatal(err)
-	}
-	got, ok := loadLocalSession("http://kc-server:7380/")
-	if !ok {
-		t.Fatal("load of persisted local session must be ok")
-	}
-	if got.Principal != "agent:dsh" {
-		t.Fatalf("principal = %q", got.Principal)
-	}
-	if _, ok := loadLocalSession("http://other:9"); ok {
-		t.Fatal("local session must not apply to a different server")
-	}
-	info, err := os.Stat(inv.ServerSessionPath("http://kc-server:7380", "session-local.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if perm := info.Mode().Perm(); perm != 0o600 {
-		t.Fatalf("session file must be 0600, got %o", perm)
-	}
-}
-
 func TestLegacyTaihuTokenExchangeRequiresClientSecretAndSurfacesError(t *testing.T) {
-	pending := taihuPendingAuth{
+	pending := legacyPendingAuth{
 		ClientID:     "knowledge-catalog",
 		CodeVerifier: "verifier",
 		OAuth2Base:   "http://example.invalid",
@@ -407,9 +309,7 @@ func TestEmbeddedExplicitHomeIgnoresClientDefaultsWithoutChangingProductBoundary
 		w.WriteHeader(500)
 	}))
 	defer server.Close()
-	if err := persistLocalSession(localSession{Server: server.URL, Principal: "agent:remote"}); err != nil {
-		t.Fatal(err)
-	}
+	seedLoginState(t, server.URL, "session-local.json", map[string]any{"server": server.URL, "principal": "agent:remote"})
 	for _, defaultSource := range []string{"saved", "environment"} {
 		t.Run(defaultSource, func(t *testing.T) {
 			if defaultSource == "environment" {
@@ -429,5 +329,16 @@ func TestEmbeddedExplicitHomeIgnoresClientDefaultsWithoutChangingProductBoundary
 				t.Fatalf("explicit server + home was accepted: %s", explicitBoth.Stdout)
 			}
 		})
+	}
+}
+
+// Fixtures use the persisted wire contract without exposing session internals.
+func seedLoginState(t *testing.T, server, name string, state any) {
+	t.Helper()
+	if err := jsonfile.WritePrivate(clientconfig.SessionPath(server, name), state); err != nil {
+		t.Fatal(err)
+	}
+	if err := jsonfile.WritePrivate(filepath.Join(clientconfig.ConfigDir(), "client.json"), map[string]string{"server": strings.TrimRight(server, "/")}); err != nil {
+		t.Fatal(err)
 	}
 }

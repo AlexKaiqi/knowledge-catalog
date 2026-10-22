@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -68,9 +68,9 @@ func TestSnapshotHelpTopicNavigationIsReachableFromRoot(t *testing.T) {
 func TestSnapshotHelpTopicsDoNotRegisterBusinessCommands(t *testing.T) {
 	snapshotTopicHelpEnvironment(t)
 	// The retired projection notice is absent from the exact command contract;
-	// adding static teaching topics must keep the selected 54 leaves unchanged.
-	if got := len(CLICommandsForTest()); got != 54 {
-		t.Fatalf("static teaching topics changed the selected 54-leaf business surface including plugin explanation: %d", got)
+	// adding static teaching topics must keep the selected 53 leaves unchanged.
+	if got := len(CLICommandsForTest()); got != 53 {
+		t.Fatalf("static teaching topics changed the selected 53-leaf business surface including plugin explanation: %d", got)
 	}
 	for topic := range snapshotcli.HelpTopics() {
 		t.Run(topic, func(t *testing.T) {
@@ -114,18 +114,17 @@ func snapshotTopicMenuContains(text, path, description string) bool {
 func snapshotTopicHelpEnvironment(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	t.Setenv("KC_SERVER_URL", "http://snapshot-topics.invalid")
+	calls := &countingHandler{}
+	server := httptest.NewServer(calls)
+	t.Setenv("KC_SERVER_URL", server.URL)
 	t.Setenv("KC_AUTH_TOKEN", "help-must-not-use-authentication")
 	t.Setenv("KC_AS", "help-reader")
 	t.Setenv("KC_HOME", filepath.Join(dir, "home"))
 	t.Setenv("KC_CONFIG_DIR", filepath.Join(dir, "session"))
-	transport := &snapshotHelpRejectingRoundTripper{}
-	originalTransport := http.DefaultTransport
-	http.DefaultTransport = transport
 	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-		if calls := transport.calls.Load(); calls != 0 {
-			t.Errorf("static help/navigation made %d HTTP requests", calls)
+		server.Close()
+		if count := calls.count.Load(); count != 0 {
+			t.Errorf("static help/navigation made %d HTTP requests", count)
 		}
 		files, err := os.ReadDir(dir)
 		if err != nil || len(files) != 0 {

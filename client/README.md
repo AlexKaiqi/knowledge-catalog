@@ -117,3 +117,10 @@ ownership recovery and sharing. Native metadata, Dataset delivery, repository
 registration and explicit grants are owned by the Snapshot SDK. The shared
 internal HTTP JSON transport implements compression, limits and error decoding
 once; neither SDK owns or caches an authorization decision.
+
+认证运输、身份 SDK 与认证/会话存储端口的唯一实现位于 [auth](auth/README.md)；本包保留既有
+公开别名与入口，并组合模块 SDK。[session](session/README.md) 拥有本地持久会话，
+通过运输配置注入 SDK，不使 SDK 聚合根反向依赖会话实现。
+
+地址选择、非秘密端点配置与私有路径推导共用 `internal/clientconfig`，使 Invocation 的旧公开配置入口
+不依赖会话或 SDK；该共享包不含登录、凭据与服务端资源。

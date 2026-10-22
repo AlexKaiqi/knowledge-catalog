@@ -58,8 +58,7 @@ kcfs mount --dataset <id> --root <project>
 位置参数 `<id>` 与 `--dataset` 相同。源仓后来提交不改变既有 Dataset；采用更新需要再次发布。
 目录映射中，一旦任一目录来源声明交付路径，其余目录来源也须声明；逐文件条目使用自己的来源与交付路径。
 `overlay` 是本机 `--file` 底稿加 `--overlay` 补丁，不发表；stdout 交付合成定义，`--out` 写便携配方。
-`clone` 物化当前服务版到空目录或不存在的目录，不覆盖已有内容。解析与文件消费分别需要相应 Dataset 权限。
-`kcfs plan|mount` 在调用时内部冻结本次 ResolvedDataset，产品 argv 不出现 pin 文件；当前宿主投影不支持逐文件条目，改用 clone 或文件网关。
+`kcfs plan|mount` 在调用时内部冻结本次 ResolvedDataset，产品 argv 不出现 pin 文件；当前宿主投影不支持逐文件条目，改用文件网关。
 
 ## Object
 

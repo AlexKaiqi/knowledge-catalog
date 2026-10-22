@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	kcclient "kc/client"
+	"kc/invoke"
 	"kc/kernel"
 )
 
@@ -33,6 +34,9 @@ func runRemoteRequest(ctx context.Context, client *kcclient.Client, path string,
 	case path == "create":
 		return runRemoteRepositoryCreate(ctx, client, flags, options)
 	case path == "diff":
+		if invoke.FlagString(flags, "reference") != "" {
+			return executeObjectCommand(ctx, client, path, flags, options)
+		}
 		return runRemoteDesiredDiff(ctx, client, flags, options)
 	case strings.HasPrefix(path, "writer "):
 		return runRemoteWriter(ctx, client, path, flags, options)

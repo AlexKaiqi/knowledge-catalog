@@ -38,6 +38,11 @@ var forbidden = []struct {
 	{pkg: "object/writer", denied: []string{"liveaccess", "systemrepo"}, why: "basic publication does not require ability execution or complete platform publication"},
 
 	{pkg: "object/service", denied: []string{"liveaccess", "discovery", "declarativeindex", "systemrepo", "home", "cli", "server", "client"}, why: "basic object tasks use fixed read/write and injected delivery ports"},
+	{
+		pkg:    "home/config",
+		denied: []string{"home", "server", "invocation", "invoke", "cli", "client", "delivery", "systemrepo", "hook"},
+		why:    "deployment configuration owns shapes, parsing and static validation; opening authorities, assembling the object graph and serving requests stay in the composition root above it",
+	},
 	{pkg: "liveaccess/handler", denied: []string{"liveaccess/dispatch", "liveaccess/service", "liveaccess/plugin", "liveaccess/cli", "liveaccess/client", "liveaccess/discovery", "discovery", "declarativeindex", "systemrepo", "home", "cli", "server", "client", "object/writer"}, why: "the plugin-internal handler contract and dispatch stay independent of LiveAccess wiring, transports and other plugins"},
 	{pkg: "liveaccess/dispatch", denied: []string{"liveaccess/service", "liveaccess/plugin", "liveaccess/cli", "liveaccess/client", "liveaccess/discovery", "discovery", "declarativeindex", "systemrepo", "home", "cli", "server", "client", "object/writer"}, why: "the plugin call task resolves, authorizes and checks one fixed handler call without source I/O or publication"},
 	{pkg: "discovery/projection", denied: []string{"liveaccess", "systemrepo"}, why: "projection consumes verified observations; the source bridge owns I/O"},
@@ -229,9 +234,13 @@ var forbidden = []struct {
 	},
 	{
 		pkg:    "client",
-		denied: []string{"cli", "home"},
+		denied: []string{"cli", "home", "client/session"},
 		why:    "callers borrow identity/session from the client; the client never knows a transport, a route table, or a deployment",
 	},
+	{pkg: "internal/clientconfig", denied: []string{"client", "cli", "invocation", "invoke", "home", "server", "identity", "snapshot", "object", "discovery", "declarativeindex", "liveaccess"}, why: "client endpoint and private path selection are shared configuration, without credentials, execution or providers"},
+	{pkg: "internal/datasetbridge", denied: []string{"home", "invocation", "invoke", "server", "cli", "client", "identity", "internal/testkit", "discovery/datasets", "discovery/service", "declarativeindex/control", "declarativeindex/plugin", "declarativeindex/opensearch", "snapshot/service"}, why: "the Dataset pin conversion is one pure field mapping between two public shapes; it must not acquire a service handle, a source, or a host that installs it"},
+	{pkg: "client/auth", denied: []string{"cli", "invocation", "invoke", "home", "server", "identity", "client/session", "snapshot", "object", "discovery", "declarativeindex", "liveaccess"}, why: "authentication transport and identity HTTP calls do not assemble module SDKs or select persisted sessions"},
+	{pkg: "client/session", denied: []string{"cli", "invocation", "invoke", "home", "server", "identity", "object/writer", "snapshot/internal", "declarativeindex/opensearch", "declarativeindex/plugin", "declarativeindex/projection"}, why: "caller sessions own login and persistence through SDK ports, never application execution, deployment or concrete providers"},
 	{
 		pkg:    "identity",
 		denied: []string{"snapshot", "object", "discovery", "declarativeindex", "discovery/projection", "hook", "cli", "client", "home"},
@@ -389,7 +398,7 @@ func architectureLayer(pkg string) (string, bool) {
 	switch pkg {
 	case "kernel", "discovery/adoption":
 		return "base", true
-	case "internal/gitdir", "internal/journal", "internal/jsonfile", "internal/treepath", "internal/httpjson":
+	case "internal/gitdir", "internal/journal", "internal/jsonfile", "internal/clientconfig", "internal/treepath", "internal/httpjson":
 		return "infra", true
 	case "invocation":
 		return "app", true
@@ -401,7 +410,11 @@ func architectureLayer(pkg string) (string, bool) {
 		return "object", true
 	case "discovery", "discovery/space", "discovery/llmhttp", "liveaccess", "discovery/projection", "declarativeindex/projection", "declarativeindex/control", "declarativeindex/opensearch", "declarativeindex/opensearch/internal/opensearchimpl":
 		return "discovery", true
-	case "snapshot/service", "snapshot/console", "snapshot/client", "snapshot/cli", "object/client", "object/cli", "discovery/client", "discovery/cli", "declarativeindex/client", "declarativeindex/cli", "declarativeindex/capability", "declarativeindex/plugin", "declarativeindex/internal/testfixture", "liveaccess/service", "liveaccess/discovery", "liveaccess/cli", "liveaccess/client", "liveaccess/plugin", "cli", "client", "cmd/kc", "cmd/kcfs", "invoke", "identity", "identity/local", "identity/taihu", "identity/builtin", "identity/identitytest", "hook", "home", "server", "server/internal/readiness", "internal/telemetry", "internal/testkit", "datasetfs", "delivery", "object/service", "discovery/datasets", "discovery/service", "discovery/plugin", "systemrepo", "observability", "scripts/check-docs", "scripts/docs-serve", "scripts/fixture-deployment", "scripts/validation-inventory", "scripts/coupling", "scripts/export-audit":
+	case "snapshot/service", "snapshot/console", "snapshot/client", "snapshot/cli", "object/client", "object/cli", "discovery/client", "discovery/cli", "declarativeindex/client", "declarativeindex/cli", "declarativeindex/capability", "declarativeindex/plugin", "declarativeindex/internal/testfixture", "liveaccess/service", "liveaccess/discovery", "liveaccess/cli", "liveaccess/client", "liveaccess/plugin", "cli", "client", "client/auth", "client/session", "cmd/kc", "cmd/kcfs", "invoke", "identity", "identity/local", "identity/taihu", "identity/builtin", "identity/identitytest", "hook", "home", "home/config", "server", "server/internal/readiness", "internal/telemetry", "internal/testkit", "datasetfs", "delivery", "object/service", "discovery/datasets", "discovery/service", "discovery/plugin", "systemrepo", "observability", "scripts/check-docs", "scripts/docs-serve", "scripts/fixture-deployment", "scripts/validation-inventory", "scripts/coupling", "scripts/export-audit":
+		return "app", true
+	case "internal/datasetbridge":
+		// It reads one Dataset resolution and one reader pin, so it sits above
+		// both layers; the denylist above keeps it off hosts and providers.
 		return "app", true
 	default:
 		return "", false
@@ -601,8 +614,8 @@ func TestCapabilityConsumerSets(t *testing.T) {
 	allowed := map[string][]string{
 		"delivery":      {"invocation"},
 		"hook":          {"home", "invocation", "invoke"},
-		"identity":      {"cli", "home", "identity/identitytest", "identity/local", "identity/taihu", "invocation", "server", "snapshot/service"},
-		"observability": {"cli", "client", "home", "invocation", "server", "liveaccess/service"},
+		"identity":      {"cli", "home", "home/config", "identity/identitytest", "identity/local", "identity/taihu", "invocation", "server", "snapshot/service"},
+		"observability": {"cli", "client", "home", "home/config", "invocation", "server", "liveaccess/service"},
 	}
 	for capability, consumers := range allowed {
 		for pkg, deps := range graph {
@@ -920,14 +933,11 @@ func TestRetiredHTTPSurfaceStaysAbsent(t *testing.T) {
 			}
 		}
 	}
-	err := filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
-		if walkErr != nil || d.IsDir() {
-			if d != nil && d.IsDir() && (d.Name() == "node_modules" || d.Name() == "vendor" || d.Name() == ".git" || d.Name() == ".validation") {
-				return filepath.SkipDir
-			}
-			return nil
+	err := walkRepositorySource(root, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
 		}
-		if !strings.HasSuffix(path, ".go") {
+		if d.IsDir() || !strings.HasSuffix(path, ".go") {
 			return nil
 		}
 		file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly)

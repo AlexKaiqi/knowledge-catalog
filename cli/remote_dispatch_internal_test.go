@@ -102,7 +102,14 @@ func TestRemoteTypedDispatchRoutesSupportedOperations(t *testing.T) {
 			}
 			flags := remoteDispatchTestFlags()
 			if test.flags != nil {
-				flags = test.flags
+				// remoteDispatchRoutes is package-level: bindObjectOperands writes
+				// a bound operand back into the map, so sharing it would leave the
+				// second repetition of `go test -count=n` holding the first one's
+				// reference flag and failing on it. Copy per case instead.
+				flags = make(map[string]FlagValue, len(test.flags))
+				for name, value := range test.flags {
+					flags[name] = value
+				}
 			}
 			if test.path == "create" {
 				flags = map[string]FlagValue{"name": "repo-A"}

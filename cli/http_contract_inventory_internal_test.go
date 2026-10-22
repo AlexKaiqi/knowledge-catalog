@@ -25,6 +25,7 @@ type httpRouteEvidence struct {
 // matrix. Some are also available through CLI, whose successful production
 // requests and responses are checked by their named journey owner.
 var httpOnlyRouteEvidence = []httpRouteEvidence{
+	{http.MethodPost, "/object/v1/objects:diff", "TestObjectComparisonHTTPUsesFixedViewsAndFullLocalUnits"},
 	{http.MethodPost, "/writer/v1/repositories/kr:%2F%2Fscene%2Fmanaged-object/commits", "TestManagedRepositoryProviderCreatesPublishesAndResumes"},
 	{http.MethodPost, "/object/v1/objects:remove", "TestObjectReferenceCLIUsesOneTargetAcrossReadPutRemove"},
 	{http.MethodGet, "/object/v1/plugins/declarative-index", "TestProductPluginHelpUsesActualServerWithoutRuntimeConstruction"},
@@ -85,7 +86,7 @@ var registeredRoutePattern = regexp.MustCompile(`mux\.Handle(?:Func)?\("((?:GET|
 // HTTP/host journey. Domain semantics stay in their application-level journeys.
 func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 	registered := productionHTTPRoutePatterns(t)
-	if len(registered) != 87 {
+	if len(registered) != 88 {
 		t.Fatalf("public HTTP route count changed to %d; add protocol evidence for the new surface", len(registered))
 	}
 	want := goldenRouteManifest(t)
@@ -97,8 +98,8 @@ func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 			t.Fatalf("golden manifest drifted from production mux at %d: manifest %q mux %q", i, want[i], registered[i])
 		}
 	}
-	if len(remoteDispatchRoutes) != 39 || len(httpOnlyRouteEvidence) != 49 {
-		t.Fatalf("HTTP evidence partition changed: remote=%d direct-journey=%d, want 39+49", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
+	if len(remoteDispatchRoutes) != 39 || len(httpOnlyRouteEvidence) != 50 {
+		t.Fatalf("HTTP evidence partition changed: remote=%d direct-journey=%d, want 39+50", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
 	}
 	tests := httpEvidenceTestFunctions(t)
 

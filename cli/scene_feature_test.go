@@ -653,10 +653,10 @@ func (c *sceneHomeCache) cloneParent(t *testing.T, node sceneTreeNode) (string, 
 		t.Fatalf("parent %s of %s is not constructable", parentID, node.ID)
 	}
 	c.ensureFrozen(t, parent, nil)
-	return c.cloneFrozen(t, parentID)
+	return c.copyFrozen(t, parentID, true)
 }
 
-func (c *sceneHomeCache) cloneFrozen(t *testing.T, id string) (string, map[string]string) {
+func (c *sceneHomeCache) copyFrozen(t *testing.T, id string, independent bool) (string, map[string]string) {
 	t.Helper()
 	c.mu.Lock()
 	src, ok := c.frozen[id]
@@ -672,8 +672,14 @@ func (c *sceneHomeCache) cloneFrozen(t *testing.T, id string) (string, map[strin
 		if err := src.restore(); err != nil {
 			t.Fatalf("restore lakeFS checkpoint for %s: %v", id, err)
 		}
-	} else if err := c.lakefs.ForkStamps(dst); err != nil {
-		t.Fatalf("isolate lakeFS stamps for %s: %v", id, err)
+	}
+	// Sequential worlds reuse the original physical authority so durable
+	// command receipts remain valid. Explicit independent copies additionally
+	// fork those restored refs; their mutable Catalogs must never be shared.
+	if src.restore == nil || independent {
+		if err := c.lakefs.ForkStamps(dst); err != nil {
+			t.Fatalf("isolate lakeFS stamps for %s: %v", id, err)
+		}
 	}
 	return dst, remapSceneIDs(src.ids, src.dir, dst)
 }
@@ -703,7 +709,7 @@ func (c *sceneHomeCache) requiresReplay(sceneTreeNode) bool {
 
 func (c *sceneHomeCache) cloneWorld(t *testing.T, id string) *sceneWorld {
 	t.Helper()
-	home, ids := c.cloneFrozen(t, id)
+	home, ids := c.copyFrozen(t, id, false)
 	world := newSceneWorldAt(t, home, c)
 	world.ids = ids
 	c.mu.Lock()

@@ -16,7 +16,7 @@ import (
 	"testing"
 )
 
-func TestRemoteDirectoryCommitTransmitsBulkAfterFilteringUnchanged(t *testing.T) {
+func TestRemoteDirectoryCommitTransmitsBulkAndFullIntent(t *testing.T) {
 	for _, bulk := range []bool{false, true} {
 		t.Run(map[bool]string{false: "ordinary", true: "bulk"}[bulk], func(t *testing.T) {
 			dir := remoteBulkDirectory(t)
@@ -48,8 +48,8 @@ func TestRemoteDirectoryCommitTransmitsBulkAfterFilteringUnchanged(t *testing.T)
 					if request.ChangeSet.BulkIngest != bulk {
 						t.Errorf("HTTP directory commit bulkIngest=%v, want %v", request.ChangeSet.BulkIngest, bulk)
 					}
-					if len(request.ChangeSet.Operations) != 1 || request.ChangeSet.Operations[0].Address.ObjectID != "notes/changed" {
-						t.Errorf("HTTP commit did not retain only changed directory content: %#v", request.ChangeSet.Operations)
+					if len(request.ChangeSet.Operations) != 2 || request.ChangeSet.Operations[0].Address.ObjectID != "notes/changed" || request.ChangeSet.Operations[1].Address.ObjectID != "notes/same" || request.ChangeSet.BaseCommit != "fixed" || request.ChangeSet.ExpectedTargetCommit != "fixed" {
+						t.Errorf("HTTP commit lost full directory content or fixed basis: %#v", request.ChangeSet.Operations)
 					}
 					_ = json.NewEncoder(w).Encode(map[string]any{"commandId": request.CommandID, "disposition": "APPLIED"})
 				default:

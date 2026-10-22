@@ -16,8 +16,6 @@ func TestSnapshotPositionalsBindModuleDeclarationsWithoutOpeningInputs(t *testin
 		{"dataset-define", []string{"delivery"}, map[string]FlagValue{"dataset": "delivery"}},
 		{"dataset-show", []string{"delivery"}, map[string]FlagValue{"dataset": "delivery"}},
 		{"dataset-retire", []string{"delivery"}, map[string]FlagValue{"dataset": "delivery"}},
-		{"dataset-clone", []string{"delivery", "missing-local-output"}, map[string]FlagValue{"dataset": "delivery", "dir": "missing-local-output"}},
-		{"dataset-clone", []string{"delivery"}, map[string]FlagValue{"dataset": "delivery"}},
 	} {
 		t.Run(row.handler+"/"+row.args[len(row.args)-1], func(t *testing.T) {
 			// Binding is syntactic. No valid recipe, semantic input, client or
@@ -49,14 +47,11 @@ func TestSnapshotPositionalsRejectConflictsAndExtraValuesExactly(t *testing.T) {
 		{"dataset-define", map[string]FlagValue{"dataset": "already-selected"}, []string{"delivery"}, "unexpected argument delivery"},
 		{"dataset-show", map[string]FlagValue{"dataset": "already-selected"}, []string{"delivery"}, "unexpected argument delivery"},
 		{"dataset-retire", map[string]FlagValue{"dataset": "already-selected"}, []string{"delivery"}, "unexpected argument delivery"},
-		{"dataset-clone", map[string]FlagValue{"dataset": "already-selected"}, []string{"delivery", "target"}, "unexpected argument delivery"},
-		{"dataset-clone", map[string]FlagValue{"dir": "already-selected"}, []string{"delivery", "target"}, "unexpected argument target"},
 		{"attach", map[string]FlagValue{}, []string{"repo-A", "extra"}, "unexpected argument extra"},
 		{"detach", map[string]FlagValue{}, []string{"repo-A", "extra"}, "unexpected argument extra"},
 		{"dataset-define", map[string]FlagValue{}, []string{"delivery", "extra"}, "unexpected argument extra"},
 		{"dataset-show", map[string]FlagValue{}, []string{"delivery", "extra"}, "unexpected argument extra"},
 		{"dataset-retire", map[string]FlagValue{}, []string{"delivery", "extra"}, "unexpected argument extra"},
-		{"dataset-clone", map[string]FlagValue{}, []string{"delivery", "target", "extra"}, "unexpected argument extra"},
 		{"files-read", map[string]FlagValue{"dataset": "delivery", "path": "file.bin"}, []string{"extra"}, "unexpected argument extra"},
 	} {
 		t.Run(row.handler+"/"+row.message, func(t *testing.T) {

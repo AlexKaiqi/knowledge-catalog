@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	kcclient "kc/client"
+	"kc/invoke"
 	objectcli "kc/object/cli"
 	objectclient "kc/object/client"
 	"os"
@@ -12,6 +13,7 @@ import (
 // Object contributes its leaves, root model help and result view. The host
 // only binds argv, supplies the authenticated SDK, and composes contributions.
 var objectCLIEntries = objectcli.Commands()
+var objectComparisonCLIEntry = objectcli.ComparisonCommand()
 
 func objectCommandByHandler(handler string) (objectcli.Command, bool) {
 	return moduleCommandByHandler(objectCLIEntries, handler)
@@ -48,6 +50,9 @@ func validateObjectFlags(path string, flags map[string]FlagValue) error {
 	return objectcli.New(nil, objectCaller()).ValidateFlags(path, snapshotFlags(flags))
 }
 func preflightObjectClient(path string, flags map[string]FlagValue) error {
+	if path == "diff" && invoke.FlagString(flags, "reference") == "" {
+		return nil
+	}
 	return objectcli.New(nil, objectCaller()).Validate(path, snapshotFlags(flags))
 }
 func executeObjectCommand(ctx context.Context, remote *kcclient.Client, path string, flags map[string]FlagValue, options kcclient.RequestOptions) (any, error) {

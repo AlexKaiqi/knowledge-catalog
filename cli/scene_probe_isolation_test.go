@@ -98,6 +98,8 @@ func TestSceneCheckpointProbesReuseAuthorityAndGrants(t *testing.T) {
 
 type sceneUncloneableAuthority struct{ sceneLakeFS }
 
+type sceneCloneOnlyAuthority struct{ sceneLakeFS }
+
 func (sceneUncloneableAuthority) ForkStamps(string) error {
 	return errors.New("this authority cannot preserve commit IDs in a physical copy; replay is required")
 }
@@ -156,6 +158,9 @@ Then error FORBIDDEN
 			if replay {
 				cache.replay = true
 				cache.lakefs = sceneUncloneableAuthority{cache.lakefs}
+			}
+			if !checkpoint && !replay {
+				cache.lakefs = sceneCloneOnlyAuthority{cache.lakefs}
 			}
 			runSceneNode(t, doc, root, cache)
 			runSceneNode(t, doc, child, cache)

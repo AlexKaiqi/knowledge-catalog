@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -23,7 +24,7 @@ type legacyTaihuTokenResult struct {
 // This retired direct OAuth exchange is legacy contract material. Current
 // products use client.IdentityService.ExchangeToken through the Server broker;
 // TestBrowserCodeCompletesThroughBrokerWithoutClientSecret verifies that path.
-func legacyExchangeTaihuAccessToken(pending taihuPendingAuth, code, redirectURI, clientSecret string, httpClient *http.Client) (legacyTaihuTokenResult, error) {
+func legacyExchangeTaihuAccessToken(pending legacyPendingAuth, code, redirectURI, clientSecret string, httpClient *http.Client) (legacyTaihuTokenResult, error) {
 	var zero legacyTaihuTokenResult
 	clientSecret = strings.TrimSpace(clientSecret)
 	if clientSecret == "" {
@@ -34,8 +35,8 @@ func legacyExchangeTaihuAccessToken(pending taihuPendingAuth, code, redirectURI,
 	}
 	tokenBody := fmt.Sprintf(
 		"grant_type=authorization_code&code=%s&client_id=%s&client_secret=%s&redirect_uri=%s&code_verifier=%s",
-		urlEncode(code), urlEncode(pending.ClientID), urlEncode(clientSecret),
-		urlEncode(redirectURI), urlEncode(pending.CodeVerifier),
+		url.QueryEscape(code), url.QueryEscape(pending.ClientID), url.QueryEscape(clientSecret),
+		url.QueryEscape(redirectURI), url.QueryEscape(pending.CodeVerifier),
 	)
 	req, err := http.NewRequest(http.MethodPost, strings.TrimRight(pending.OAuth2Base, "/")+"/oauth2/token", strings.NewReader(tokenBody))
 	if err != nil {
@@ -64,3 +65,5 @@ func legacyExchangeTaihuAccessToken(pending taihuPendingAuth, code, redirectURI,
 	}
 	return tokenResult, nil
 }
+
+type legacyPendingAuth struct{ ClientID, CodeVerifier, OAuth2Base string }

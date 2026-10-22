@@ -13,8 +13,8 @@ func TestSnapshotHelpRootNavigation(t *testing.T) {
 		t.Fatal(root)
 	}
 	groups := map[string][]string{
-		"composition": {"show", "create", "attach", "detach", "registry audit", "grant add", "grant list", "grant remove", "dataset define", "dataset clone", "dataset retire", "dataset overlay"},
-		"dataset":     {"show", "grant add", "grant list", "grant remove", "dataset define", "dataset clone", "dataset retire", "dataset overlay"},
+		"composition": {"show", "create", "attach", "detach", "registry audit", "grant add", "grant list", "grant remove", "dataset define", "dataset retire", "dataset overlay"},
+		"dataset":     {"show", "grant add", "grant list", "grant remove", "dataset define", "dataset retire", "dataset overlay"},
 		"files":       {"files list", "files read"},
 		"grant":       {"grant add", "grant list", "grant remove"},
 		"registry":    {"registry audit"},
@@ -98,7 +98,7 @@ func TestSnapshotFileViewHelpDistinguishesPlanAndMount(t *testing.T) {
 	if status := RunDatasetFS([]string{"help"}, &stdout, &stderr); status != 0 {
 		t.Fatalf("file-view help failed: %d %s", status, stderr.String())
 	}
-	for _, claim := range []string{"plan", "exits", "mount", "SIGINT", "per-file", "kc dataset clone", "repository", "original bytes"} {
+	for _, claim := range []string{"plan", "exits", "mount", "SIGINT", "per-file", "file gateway", "repository", "original bytes"} {
 		if !strings.Contains(stdout.String(), claim) {
 			t.Errorf("file-view help omits %q", claim)
 		}

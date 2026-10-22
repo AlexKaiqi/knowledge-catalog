@@ -113,10 +113,9 @@ Repository 保存来源文件和自己的 commit 历史；Dataset 引用其中�
   kc files list --dataset delivery --revision 1 --path reference --limit 20
   kc files read --dataset delivery --revision 1 --path reference/index.md --out ./index.md
   # 假设 handbook/ 中实际存在 index.md；--out 目标必须不存在。
-  # 若要整个当前交付树：kc dataset clone delivery ./delivery-copy（目标不存在或为空）。
 
 发布可能独立保存配方，后续失败不回滚已完成写回；丢响应先查原 revision。
-单文件下载完成后才发布新目标；clone 不保证整树回滚，重试可能采用新当前版。
+单文件下载完成后才发布新目标；失败不会留下成功目标，重试前核对残留。
 阅读每一步的叶帮助核对前提和恢复；分页/历史文件消费详见 kc help files。
 Repository 与 Dataset 的元数据管理边界见 kc help metadata。
 `

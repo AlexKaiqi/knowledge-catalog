@@ -6,10 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-
-	inv "kc/invocation"
-
-	snapshotclient "kc/snapshot/client"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -18,7 +14,9 @@ import (
 
 	kcclient "kc/client"
 	"kc/datasetfs"
+	"kc/internal/clientconfig"
 	"kc/kernel"
+	snapshotclient "kc/snapshot/client"
 	"kc/snapshot/dataset"
 )
 
@@ -119,7 +117,7 @@ func parseDatasetFSConfig(mode string, argv []string, stderr io.Writer) (dataset
 	set.SetOutput(stderr)
 	config := datasetFSConfig{}
 	var pin string
-	set.StringVar(&config.server, "server", inv.RemoteServerURL(nil), "KC service URL for remote lazy reads")
+	set.StringVar(&config.server, "server", clientconfig.ServerURL(""), "KC service URL for remote lazy reads")
 	set.StringVar(&config.dataset, "dataset", "", "dataset id")
 	set.StringVar(&config.root, "root", "", "existing user project root")
 	set.StringVar(&config.principal, "as", "", "principal used for Workspace and repository read grants")
@@ -167,11 +165,7 @@ func prepareDatasetFS(config datasetFSConfig) (datasetfs.Plan, datasetFSManifest
 
 func prepareRemoteDatasetFS(config datasetFSConfig, root string) (datasetfs.Plan, datasetFSManifest, func(), error) {
 	ctx := context.Background()
-	flags := map[string]FlagValue{}
-	if config.principal != "" {
-		flags["as"] = config.principal
-	}
-	client, err := newRemoteSessionClient(ctx, config.server, flags)
+	client, err := NewSessionClient(ctx, config.server, config.principal)
 	if err != nil {
 		return datasetfs.Plan{}, datasetFSManifest{}, func() {}, err
 	}
@@ -188,7 +182,7 @@ func prepareRemoteDatasetFS(config datasetFSConfig, root string) (datasetfs.Plan
 	for _, item := range response.Pin.Items {
 		if item.Kind == dataset.DatasetItemFile {
 			return datasetfs.Plan{}, datasetFSManifest{}, func() {}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-				"dataset %s publishes per-file entries that the file-system projection does not deliver yet; use the file gateway or kc dataset clone", config.dataset)
+				"dataset %s publishes per-file entries that the file-system projection does not deliver yet; use the file gateway", config.dataset)
 		}
 	}
 	pinned, err := json.Marshal(response.Pin)
