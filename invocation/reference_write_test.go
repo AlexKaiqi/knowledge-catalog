@@ -122,7 +122,7 @@ func TestBasicReferenceWritesPreserveSchemaCASAndOriginalReceipts(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	current, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: unit.ObjectID}, updated.Result.NewCommit, nil)
+	current, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: unit.ObjectID}, updated.Result.NewCommit)
 	want := map[string]any{"structure": map[string]any{"name": "new"}, "tag": "kept"}
 	if err != nil || !reflect.DeepEqual(current.Value, want) {
 		t.Fatalf("Reference PUT merged old fields or replaced siblings: %#v %v", current.Value, err)
@@ -143,7 +143,7 @@ func TestBasicReferenceWritesPreserveSchemaCASAndOriginalReceipts(t *testing.T) 
 	} {
 		_, err := call(VerbPut, refusal.command, refusal.flags)
 		at := testkit.MustHead(t, s.Repo, snapshot.DefaultRef)
-		value, readErr := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: unit.ObjectID}, at, nil)
+		value, readErr := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: unit.ObjectID}, at)
 		if kernel.CodeOf(err) != refusal.code || at != updated.Result.NewCommit || readErr != nil || !reflect.DeepEqual(value.Value, want) {
 			t.Fatalf("%s changed accepted content: err=%v head=%s value=%#v read=%v", refusal.command, err, at, value.Value, readErr)
 		}
@@ -161,7 +161,7 @@ func TestBasicReferenceWritesPreserveSchemaCASAndOriginalReceipts(t *testing.T) 
 	if err != nil || replayed.Disposition != objectmodel.DispositionReplayed || replayed.Result != removed.Result || testkit.MustHead(t, s.Repo, snapshot.DefaultRef) != removed.Result.NewCommit {
 		t.Fatalf("Reference REMOVE did not recover after deletion: %#v %v", replayed, err)
 	}
-	remaining, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: unit.ObjectID}, removed.Result.NewCommit, nil)
+	remaining, err := s.Reader.Read(objectmodel.ObjectRef{Repository: s.RepositoryID, Object: unit.ObjectID}, removed.Result.NewCommit)
 	if err != nil || !reflect.DeepEqual(remaining.Value, map[string]any{"tag": "kept"}) {
 		t.Fatalf("Reference REMOVE changed a sibling: %#v %v", remaining.Value, err)
 	}

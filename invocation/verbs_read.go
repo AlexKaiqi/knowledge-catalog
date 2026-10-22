@@ -222,17 +222,36 @@ func VerbRead(cx *Invocation) (any, error) {
 	if reference, err = referenceFromFlags(cx.Flags); err != nil {
 		return nil, err
 	}
+	if cx.readBasis == nil {
+		cx.readBasis = &objectReadBasis{}
+	}
+	if err := validateObjectReadBasis(cx); err != nil {
+		return nil, err
+	}
+	if !ServingWorkspace(cx.Flags) {
+		_, commit, err := PinCommit(cx.WS, cx.Flags)
+		if err != nil {
+			return nil, err
+		}
+		// All selections in a shape use the same source commit even when the
+		// first selection advances the caller's ref before the next callback.
+		cx.Flags["commit"] = string(commit)
+	}
 	if shape := cx.Flag("shape"); shape != "" {
-		return readShape(cx, *reference, shape)
+		value, err := readShape(cx, *reference, shape)
+		if err != nil {
+			return nil, err
+		}
+		return retainObjectReadBasis(cx, *reference, value)
 	}
 	observed, err := readOneReference(cx, *reference)
 	if err != nil {
 		return nil, err
 	}
 	if !ServingWorkspace(cx.Flags) && len(observed.Observations) == 0 && len(observed.Failures) == 0 {
-		return observedObject(observed), nil
+		return retainObjectReadBasis(cx, *reference, observedObject(observed))
 	}
-	return observed, nil
+	return retainObjectReadBasis(cx, *reference, observed)
 }
 
 // readOneReference is the single URN#Pointer read in the bound scope. Shaped
@@ -438,56 +457,6 @@ func VerbDescribeSchema(cx *Invocation) (any, error) {
 		},
 		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
 			return cx.WS.Reader.DescribeSchema(repositoryID, commitID, objectID)
-		})
-}
-
-// VerbLog lists the commits that introduced each digest of one object. Registry
-// history is `kc registry audit`; current combination space is `kc show`.
-func VerbLog(cx *Invocation) (any, error) {
-	if cx.Flag("object") == "" && cx.Flag("repo") == "" {
-	}
-	if cx.Flag("aspect") != "" || cx.Flag("member") != "" {
-		return nil, kernel.Fail(kernel.ErrUsageInvalid, "log is object history; do not pass --aspect or --member")
-	}
-	limit, err := PageLimit(cx.Flags, DefaultHistoryLimit, MaxHistoryPageSize)
-	if err != nil {
-		return nil, err
-	}
-	return OnTarget(cx,
-		func(serving *reader.Serving, _ dataset.Service) (any, error) {
-			objectID, err := cx.Require("object")
-			if err != nil {
-				return nil, err
-			}
-			id := objectmodel.ObjectID(objectID)
-			return (objectservice.ObjectLogExecutor{ReadLog: func(repositoryID kernel.RepositoryID, commitID kernel.CommitID, query objectmodel.ObjectLogQuery) ([]objectmodel.ObjectRevision, error) {
-				if err := authorizeRepositoryHistory(cx, repositoryID, id); err != nil {
-					return nil, err
-				}
-				allowed, err := serving.Contains(repositoryID, id)
-				if err != nil || !allowed {
-					return nil, err
-				}
-				repo, err := serving.Member(repositoryID)
-				if err != nil {
-					return nil, err
-				}
-				return repo.Log(id, commitID, query)
-			}}).Execute(cx.Context, objectservice.ObjectLogRequest{Object: id, Pin: serving.Pin().Repositories, Limit: limit, Continuation: cx.Flag("continuation")})
-		},
-		func(repositoryID kernel.RepositoryID, commitID kernel.CommitID) (any, error) {
-			objectID, err := cx.Require("object")
-			if err != nil {
-				return nil, err
-			}
-			id := objectmodel.ObjectID(objectID)
-			pin := map[kernel.RepositoryID]kernel.CommitID{repositoryID: commitID}
-			return (objectservice.ObjectLogExecutor{ReadLog: func(member kernel.RepositoryID, commit kernel.CommitID, query objectmodel.ObjectLogQuery) ([]objectmodel.ObjectRevision, error) {
-				if err := authorizeRepositoryHistory(cx, member, id); err != nil {
-					return nil, err
-				}
-				return cx.WS.Reader.Log(member, id, commit, query)
-			}}).Execute(cx.Context, objectservice.ObjectLogRequest{Object: id, Pin: pin, Limit: limit, Continuation: cx.Flag("continuation")})
 		})
 }
 

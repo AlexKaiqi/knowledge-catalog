@@ -23,7 +23,7 @@ func TestHotSnapshotCacheKeepsStateObservationsFreshAndDeclarationsUnchanged(t *
 			t.Cleanup(func() { _ = cache.Close() })
 			base.SetHydrator(cache)
 			readSnapshot := func() ([]objectmodel.FederatedValue, error) {
-				return base.Read(address.ObjectID, nil)
+				return base.Read(address.ObjectID)
 			}
 			original, err := readSnapshot()
 			if err != nil || len(original) != 1 || original[0].Commit != commit {
@@ -31,7 +31,7 @@ func TestHotSnapshotCacheKeepsStateObservationsFreshAndDeclarationsUnchanged(t *
 			}
 			// The binding unit's ResourceDescriptor is fixed declaration content
 			// too: warm it so only State lookups remain dynamic.
-			if _, err := base.Read("resource/scheduler", nil); err != nil {
+			if _, err := base.Read("resource/scheduler"); err != nil {
 				t.Fatal(err)
 			}
 			warm := cache.Stats()
@@ -57,7 +57,7 @@ func TestHotSnapshotCacheKeepsStateObservationsFreshAndDeclarationsUnchanged(t *
 				if shape == "address" {
 					results, err = logical.ReadAddress(context.Background(), address)
 				} else {
-					results, err = logical.Read(context.Background(), address.ObjectID, nil)
+					results, err = logical.Read(context.Background(), address.ObjectID)
 				}
 				if err != nil || len(results) != 1 {
 					t.Fatalf("logical read: %+v %v", results, err)

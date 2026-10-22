@@ -16,8 +16,17 @@ func writerReplayed(ws *kchome.Home, flags map[string]invoke.FlagValue) bool {
 	if id == "" {
 		return false
 	}
-	_, ok := ws.Commands.Lookup(id)
-	return ok
+	entry, ok := ws.Commands.Lookup(id)
+	if !ok {
+		return false
+	}
+	receipt := strings.TrimSpace(string(entry.Receipt))
+	if entry.Status == snapshot.StatusPending && entry.Phase == snapshot.CommandPhaseNoChange && entry.Execution != "" && (receipt == "" || receipt == "null") {
+		// This is a new checked decision at the original basis, not a replay
+		// of a completed command. Its normal pre/post hooks still apply.
+		return false
+	}
+	return true
 }
 
 func hookEvent(ws *kchome.Home, command string, flags map[string]invoke.FlagValue) hook.Event {

@@ -111,7 +111,6 @@ func TestRepositoryReadPreservesStaticReferenceAndRejectsConflictingSelection(t 
 		{Reference: &ref},
 		{Commit: commit, Reference: &foreign},
 		{Commit: commit, Reference: &ref, Address: &address},
-		{Commit: commit, Reference: &ref, Selector: &objectmodel.AspectSelector{}},
 		{Commit: commit, Object: "fixture/other", Address: &address},
 		{Commit: commit, Address: &objectmodel.Address{Kind: objectmodel.KindMember, ObjectID: id}},
 	} {

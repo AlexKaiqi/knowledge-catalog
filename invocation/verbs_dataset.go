@@ -1,28 +1,26 @@
 package invocation
 
 import (
-	"encoding/json"
-	"fmt"
-	discoverydatasets "kc/discovery/datasets"
-	journal "kc/internal/journal"
-	objectservice "kc/object/service"
-	"os"
-	"path/filepath"
-	"strings"
-
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 
+	discoverydatasets "kc/discovery/datasets"
 	kchome "kc/home"
+	"kc/internal/clientconfig"
+	journal "kc/internal/journal"
 	"kc/invoke"
 	"kc/kernel"
 	objectmodel "kc/object"
-
+	objectservice "kc/object/service"
 	"kc/snapshot"
 	"kc/snapshot/dataset"
-
-	"strconv"
 )
 
 func ReadInventoryStatePart(part string) Handler {
@@ -143,7 +141,7 @@ func VerbDefineDataset(cx *Invocation) (any, error) {
 		Authorize: func(context.Context, discoverydatasets.DatasetPublication) error {
 			return Authorize(cx.Home, "dataset.manage", cx.Flags, nil)
 		},
-		Prepare: cx.WS.DatasetPreparation.Execute,
+		PrepareResources: cx.WS.DatasetPreparation.ExecuteProtected,
 	}).Execute(cx.Context, discoverydatasets.DatasetPublication{Dataset: setID, Revision: revision, Sources: sources, Metadata: metadata})
 	if err != nil {
 		return nil, err
@@ -489,15 +487,6 @@ func VerbOverlay(cx *Invocation) (any, error) {
 	return out, nil
 }
 
-// VerbDatasetCloneRequiresServer keeps the public verb honest outside a
-// deployment: clone walks the Server File Gateway, so a local kchome.Home without a
-// Server has nothing to consume (the file-system projection and clone are
-// deployment consumption paths).
-func VerbDatasetCloneRequiresServer(cx *Invocation) (any, error) {
-	return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
-		"kc dataset clone consumes a KC Server deployment; pass --server or set KC_SERVER_URL")
-}
-
 func VerbDetach(cx *Invocation) (any, error) {
 	repositoryID, err := cx.Require("repo")
 	if err != nil {
@@ -530,13 +519,7 @@ func EffectiveWorkspace(ws *kchome.Home, home string, cat dataset.Service, setID
 }
 
 func RemoteServerURL(flags map[string]invoke.FlagValue) string {
-	if value := strings.TrimSpace(invoke.FlagString(flags, "server")); value != "" {
-		return value
-	}
-	if server := strings.TrimSpace(os.Getenv("KC_SERVER_URL")); server != "" {
-		return server
-	}
-	return SavedClientServer()
+	return clientconfig.ServerURL(invoke.FlagString(flags, "server"))
 }
 
 // VerbBrowseSchemas names the Schemas a Dataset revision delivers, or the

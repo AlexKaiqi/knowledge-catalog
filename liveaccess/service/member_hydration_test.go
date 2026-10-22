@@ -66,7 +66,7 @@ func TestDeclaredMemberSchemaFailureStaysLocalWithoutPrivateRead(t *testing.T) {
 	lookup := &unitLookup{failure: "source"}
 	collector := evidence.NewCollector()
 	ctx := evidence.WithCollector(context.Background(), collector)
-	values, err := liveservice.Open(scope, lookup, kernel.IdentityContext{Principal: "consumer"}).Read(ctx, id, nil)
+	values, err := liveservice.Open(scope, lookup, kernel.IdentityContext{Principal: "consumer"}).Read(ctx, id)
 	if err != nil || len(values) != 1 || len(values[0].Observations) != 0 || len(lookup.requests) != 0 || guard.schemaReads != 0 {
 		t.Fatalf("Member Schema failure erased siblings or crossed publication scope: %#v calls=%d private=%d %v", values, len(lookup.requests), guard.schemaReads, err)
 	}
@@ -93,7 +93,7 @@ func TestMemberReadAdoptsExternalValueAndKeepsIndependentFailures(t *testing.T) 
 			base, repo, commit, id := memberUnitFixture(t)
 			lookup := &unitLookup{failure: kind}
 			service := liveservice.Open(base, lookup, kernel.IdentityContext{Principal: "consumer"})
-			values, err := service.Read(context.Background(), id, nil)
+			values, err := service.Read(context.Background(), id)
 			if err != nil || len(values) != 1 {
 				t.Fatalf("one Member failure erased its siblings: %#v %v", values, err)
 			}
@@ -133,7 +133,7 @@ func TestRepositoryReadHydratesOnlySelectedMemberShape(t *testing.T) {
 				t.Fatal(err)
 			}
 			lookup := &unitLookup{failure: "source"}
-			result, err := liveservice.HydrateRepositoryRead(context.Background(), repo, raw, lookup, request, &objectmodel.AspectSelector{Include: []string{"readings"}})
+			result, err := liveservice.HydrateRepositoryRead(context.Background(), repo, raw, lookup, request)
 			if err != nil || !reflect.DeepEqual(result.Value, tc.want) || result.Address != address || result.Commit != commit ||
 				result.Reference != raw.Reference || result.Locator != raw.Locator || len(result.Observations) != 1 || len(result.Failures) != 0 || len(lookup.requests) != 1 {
 				t.Fatalf("selected Member read changed shape, basis, or visited siblings: %#v %#v %v", result, lookup.requests, err)
@@ -156,7 +156,7 @@ func TestRepositoryReadHydratesOnlySelectedMemberShape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := liveservice.HydrateRepositoryRead(context.Background(), repo, static, nil, request, nil)
+	result, err := liveservice.HydrateRepositoryRead(context.Background(), repo, static, nil, request)
 	if err != nil || !reflect.DeepEqual(result.Value, static.Value) || result.Digest != static.Digest || len(result.Observations) != 0 || len(result.Failures) != 0 {
 		t.Fatalf("static selected Member changed: %#v %v", result, err)
 	}
@@ -170,7 +170,7 @@ func TestRepositoryReadKeepsSelectedMemberCollectionFailurePositions(t *testing.
 	}
 	lookup := &unitLookup{failure: "source"}
 	result, err := liveservice.HydrateRepositoryRead(context.Background(), repo, raw, lookup,
-		objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "consumer"}}, nil)
+		objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "consumer"}})
 	if err != nil {
 		t.Fatal(err)
 	}

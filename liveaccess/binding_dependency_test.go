@@ -1,6 +1,7 @@
 package liveaccess_test
 
 import (
+	"reflect"
 	"testing"
 
 	"kc/internal/bindingfixture"
@@ -26,8 +27,9 @@ func TestDescriptorInUnselectedRepositoryResolvesAtFrozenDependency(t *testing.T
 		t.Fatalf("without a frozen dependency the unselected descriptor must not resolve, got %v", err)
 	}
 	dependencies, err := selectedOnly.FreezeDependencies(f.registry.IDs)
-	if err != nil || len(dependencies) != 1 || dependencies[f.ops] != f.opsAt {
-		t.Fatalf("publication did not freeze the single descriptor holder: %v %v", dependencies, err)
+	wantDependencies := map[kernel.RepositoryID]kernel.CommitID{f.ops: f.opsAt, f.table: f.tableAt}
+	if err != nil || !reflect.DeepEqual(dependencies, wantDependencies) {
+		t.Fatalf("publication did not freeze the holder and its absence witnesses: %v %v", dependencies, err)
 	}
 
 	scope := reader.Open(f.lookup, f.pin(dependencies))
@@ -50,7 +52,7 @@ func TestDescriptorInUnselectedRepositoryResolvesAtFrozenDependency(t *testing.T
 	}
 
 	// Interpretation only: not a member, not readable, not held.
-	if values, err := scope.Read("ops/warehouse-stats", nil); err != nil || len(values) != 0 {
+	if values, err := scope.Read("ops/warehouse-stats"); err != nil || len(values) != 0 {
 		t.Fatalf("dependency descriptor leaked into the Dataset object read: %#v %v", values, err)
 	}
 	if held, err := scope.Holds("ops/warehouse-stats"); err != nil || held {

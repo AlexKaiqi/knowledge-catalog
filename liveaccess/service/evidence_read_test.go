@@ -30,18 +30,29 @@ func collectedSamples(t *testing.T, collector *evidence.Collector) []evidence.Sa
 }
 
 func TestReadCapturesOnlyAdoptedDynamicUnits(t *testing.T) {
-	base, _, commit, id := mixedUnitFixture(t)
+	base, repo, commit, id := mixedUnitFixture(t)
 	lookup := &unitLookup{failure: "source"}
 	collector := evidence.NewCollector()
 	ctx := evidence.WithCollector(context.Background(), collector)
 	service := liveservice.Open(base, lookup, kernel.IdentityContext{Principal: "consumer"})
-	values, err := service.Read(ctx, id, &objectmodel.AspectSelector{Include: []string{"good", "empty"}})
-	if err != nil || len(values) != 1 || len(lookup.requests) != 2 {
-		t.Fatalf("selector visited or adopted an excluded unit: %#v %#v %v", values, lookup.requests, err)
+	// Two coordinates are read on their own: the unselected "broken" unit must
+	// never be visited, which is what the retired whole-object selector used to
+	// express by trimming after the fact.
+	var values []objectmodel.ObservedValue
+	for _, aspect := range []string{"good", "empty"} {
+		read, err := service.ReadAddress(ctx, objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: id, AspectName: aspect})
+		if err != nil || len(read) != 1 {
+			t.Fatalf("coordinate read %s: %#v %v", aspect, read, err)
+		}
+		values = append(values, read...)
 	}
+	if len(lookup.requests) != 2 {
+		t.Fatalf("coordinate reads visited an unselected unit: %#v", lookup.requests)
+	}
+	_ = repo
 	samples := collectedSamples(t, collector)
 	if len(samples) != 2 {
-		t.Fatalf("selector retained extra or missing units: %#v", samples)
+		t.Fatalf("coordinates retained extra or missing units: %#v", samples)
 	}
 	for _, sample := range samples {
 		if sample.Commit != commit || sample.Outcome != evidence.ValueOutcome || sample.Observation == nil || sample.Failure != nil ||
@@ -52,7 +63,7 @@ func TestReadCapturesOnlyAdoptedDynamicUnits(t *testing.T) {
 			t.Fatalf("observed null was lost from retained results: %#v", sample)
 		}
 	}
-	values[0].Value.(map[string]any)["good"].(map[string]any)["value"] = "caller mutation"
+	values[0].Value.(map[string]any)["value"] = "caller mutation"
 	for _, sample := range collectedSamples(t, collector) {
 		if sample.Address.AspectName == "good" && kernel.CanonicalDigest(sample.Value) != kernel.CanonicalDigest(map[string]any{"value": float64(31)}) {
 			t.Fatalf("caller mutation altered the retained original value: %#v", sample)
@@ -98,8 +109,8 @@ func TestInjectedLookupCredentialsCannotReachResultOrEvidence(t *testing.T) {
 				}
 				return observation, err
 			})
-			values, err := liveservice.Open(base, lookup, kernel.IdentityContext{Principal: "consumer"}).Read(ctx, id,
-				&objectmodel.AspectSelector{Include: []string{"broken"}})
+			values, err := liveservice.Open(base, lookup, kernel.IdentityContext{Principal: "consumer"}).ReadAddress(ctx,
+				objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: id, AspectName: "broken"})
 			code := kernel.ErrCapabilityUnsatisfied
 			if kind == "error" {
 				code = kernel.ErrTemporaryUnavailable
@@ -129,8 +140,8 @@ func TestCaptureFailurePreventsConsumerDelivery(t *testing.T) {
 		observation.Value.(map[string]any)["unencodable"] = func() {}
 		return observation, err
 	})
-	values, err := liveservice.Open(base, lookup, kernel.IdentityContext{Principal: "consumer"}).Read(ctx, id,
-		&objectmodel.AspectSelector{Include: []string{"good"}})
+	values, err := liveservice.Open(base, lookup, kernel.IdentityContext{Principal: "consumer"}).ReadAddress(ctx,
+		objectmodel.Address{Kind: objectmodel.KindAspect, ObjectID: id, AspectName: "good"})
 	if err == nil || values != nil || len(collectedSamples(t, collector)) != 0 {
 		t.Fatalf("failed evidence capture still delivered a consumer result: %#v %v", values, err)
 	}

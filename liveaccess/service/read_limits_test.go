@@ -58,7 +58,7 @@ func TestReadSharesRemainingTimeAcrossExternalUnits(t *testing.T) {
 	// Each unit alone fits its own 1s limit; together they exceed the 300ms the read shares.
 	ctx := liveaccess.ContextWithReadLimits(context.Background(), liveaccess.ReadLimits{Lookup: time.Second, Read: 300 * time.Millisecond})
 	started := time.Now()
-	values, err := service.Read(ctx, id, nil)
+	values, err := service.Read(ctx, id)
 	elapsed := time.Since(started)
 	if err != nil || len(values) != 1 {
 		t.Fatalf("exhausted read budget failed the whole read: %#v %v", values, err)
@@ -99,7 +99,7 @@ func TestUnitLookupLimitFailsOnlyThatUnit(t *testing.T) {
 	service := liveservice.Open(base, lookup, kernel.IdentityContext{Principal: "consumer"})
 	ctx := liveaccess.ContextWithReadLimits(context.Background(), liveaccess.ReadLimits{Lookup: 50 * time.Millisecond})
 	started := time.Now()
-	values, err := service.Read(ctx, id, nil)
+	values, err := service.Read(ctx, id)
 	if err != nil || len(values) != 1 {
 		t.Fatalf("one slow unit failed the whole read: %#v %v", values, err)
 	}
@@ -139,7 +139,7 @@ func TestReadWithoutLimitsKeepsTransportCancellationFatal(t *testing.T) {
 	service := liveservice.Open(base, lookup, kernel.IdentityContext{Principal: "consumer"})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := service.Read(ctx, id, nil); err == nil {
+	if _, err := service.Read(ctx, id); err == nil {
 		t.Fatal("a cancelled request was reported as a partial success")
 	}
 }

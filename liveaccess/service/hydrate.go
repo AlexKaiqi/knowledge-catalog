@@ -49,17 +49,17 @@ func (s *Service) WithDescriptors(descriptors liveaccess.DescriptorScope) *Servi
 // implementations. A nil descriptors scope resolves descriptorRef only inside
 // the same Repository commit.
 func HydrateRepositoryValue(ctx context.Context, repo objectmodel.Repository, value objectmodel.ObjectValue, state liveaccess.StateLookup, request objectmodel.RequestContext, descriptors liveaccess.DescriptorScope) (objectmodel.ObservedValue, error) {
-	return hydrateRepository(ctx, repo, value, state, request, nil, true, descriptors)
+	return hydrateRepository(ctx, repo, value, state, request, true, descriptors)
 }
 
 // HydrateRepositoryRead composes an already read, fixed Repository result with
 // external units. Address and Pointer selections preserve the original shape;
 // one external failure is explained only at that unit's selected position.
-func HydrateRepositoryRead(ctx context.Context, repo objectmodel.Repository, value objectmodel.ObjectValue, state liveaccess.StateLookup, request objectmodel.RequestContext, selector *objectmodel.AspectSelector) (objectmodel.ObservedValue, error) {
-	return hydrateRepository(ctx, repo, value, state, request, selector, false, nil)
+func HydrateRepositoryRead(ctx context.Context, repo objectmodel.Repository, value objectmodel.ObjectValue, state liveaccess.StateLookup, request objectmodel.RequestContext) (objectmodel.ObservedValue, error) {
+	return hydrateRepository(ctx, repo, value, state, request, false, nil)
 }
 
-func hydrateRepository(ctx context.Context, repo objectmodel.Repository, value objectmodel.ObjectValue, state liveaccess.StateLookup, request objectmodel.RequestContext, selector *objectmodel.AspectSelector, strict bool, descriptors liveaccess.DescriptorScope) (objectmodel.ObservedValue, error) {
+func hydrateRepository(ctx context.Context, repo objectmodel.Repository, value objectmodel.ObjectValue, state liveaccess.StateLookup, request objectmodel.RequestContext, strict bool, descriptors liveaccess.DescriptorScope) (objectmodel.ObservedValue, error) {
 	service, err := repositoryService(repo, value.Commit, state, request, strict)
 	if err != nil {
 		return objectmodel.ObservedValue{}, err
@@ -71,7 +71,7 @@ func hydrateRepository(ctx context.Context, repo objectmodel.Repository, value o
 		Provenance: value.Provenance, Units: value.Units, Declarations: value.Declarations,
 		Reference: value.Reference, Locator: value.Locator, Digest: value.Digest,
 	}
-	return service.Hydrate(ctx, raw, selector)
+	return service.Hydrate(ctx, raw)
 }
 
 func repositoryService(repo objectmodel.Repository, commit kernel.CommitID, state liveaccess.StateLookup, request objectmodel.RequestContext, strict bool) (*Service, error) {
@@ -106,14 +106,14 @@ func (s *Service) interpretationRepository(id kernel.RepositoryID) (objectmodel.
 	return s.declarations.Member(id)
 }
 
-func (s *Service) Read(ctx context.Context, objectID objectmodel.ObjectID, selector *objectmodel.AspectSelector) ([]objectmodel.ObservedValue, error) {
-	values, err := s.declarations.Read(objectID, nil)
+func (s *Service) Read(ctx context.Context, objectID objectmodel.ObjectID) ([]objectmodel.ObservedValue, error) {
+	values, err := s.declarations.Read(objectID)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]objectmodel.ObservedValue, 0, len(values))
 	for _, value := range values {
-		result, err := s.Hydrate(ctx, value, selector)
+		result, err := s.Hydrate(ctx, value)
 		if err != nil {
 			return nil, err
 		}
@@ -125,7 +125,7 @@ func (s *Service) Read(ctx context.Context, objectID objectmodel.ObjectID, selec
 // Hydrate upgrades one raw, pinned FederatedValue into the logical consumer
 // value. SEARCH uses this after candidate discovery so exact READ and search
 // hits cannot disagree about State Binding content.
-func (s *Service) Hydrate(ctx context.Context, value objectmodel.FederatedValue, selector *objectmodel.AspectSelector) (objectmodel.ObservedValue, error) {
+func (s *Service) Hydrate(ctx context.Context, value objectmodel.FederatedValue) (objectmodel.ObservedValue, error) {
 	if s.declarations.Pin().Repositories[value.Repository] != value.Commit {
 		return objectmodel.ObservedValue{}, kernel.Fail(kernel.ErrObjectRefUnresolved, "value is outside dataset release")
 	}
@@ -141,15 +141,9 @@ func (s *Service) Hydrate(ctx context.Context, value objectmodel.FederatedValue,
 		return objectmodel.ObservedValue{}, err
 	}
 	for _, declaration := range value.Declarations {
-		if !selected(declaration.Address, selector) {
-			continue
-		}
 		if err := s.adoptUnit(ctx, &result, declaration); err != nil {
 			return objectmodel.ObservedValue{}, err
 		}
-	}
-	if objectmodel.IsEntityBlob(value.Address) && value.Locator == "" {
-		result.Value = objectmodel.SelectAspects(result.Value, result.Units, selector)
 	}
 	if len(result.Observations) > 0 {
 		result.Digest = ""
@@ -251,30 +245,6 @@ func (s *Service) resolveHydrationBinding(repository kernel.RepositoryID, declar
 		return liveaccess.ResolvedBinding{}, err
 	}
 	return liveaccess.ResolveDeclaration(s.descriptors, repository, s.declarations.Pin().Repositories[repository], declaration)
-}
-
-func selected(address objectmodel.Address, selector *objectmodel.AspectSelector) bool {
-	if selector == nil || address.AspectName == "" {
-		return true
-	}
-	if len(selector.Include) > 0 {
-		included := false
-		for _, name := range selector.Include {
-			if name == address.AspectName {
-				included = true
-				break
-			}
-		}
-		if !included {
-			return false
-		}
-	}
-	for _, name := range selector.Exclude {
-		if name == address.AspectName {
-			return false
-		}
-	}
-	return true
 }
 
 func replaceUnit(root any, address objectmodel.Address, value any) (any, error) {

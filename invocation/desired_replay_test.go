@@ -82,7 +82,7 @@ func TestEmbeddedDesiredReplayChecksChangedIntent(t *testing.T) {
 	}
 }
 
-func TestEmbeddedDesiredReplayRetainsOriginalIncrementalRequest(t *testing.T) {
+func TestEmbeddedDesiredReplayRetainsOriginalFullRequest(t *testing.T) {
 	cx, s := desiredReplayInvocation(t)
 	_, err := s.Writer.Commit("existing", objectmodel.CommitChangeSet{
 		TargetRepository: s.RepositoryID, TargetRef: snapshot.DefaultRef,
@@ -105,12 +105,14 @@ func TestEmbeddedDesiredReplayRetainsOriginalIncrementalRequest(t *testing.T) {
 	entry, ok := cx.WS.Commands.Lookup("directory")
 	one := first.(writer.CommitReceipt)
 	two := second.(writer.CommitReceipt)
-	if !ok || entry.Request.OperationCount != 1 || two.Disposition != writer.DispositionReplayed || one.Result.NewCommit != two.Result.NewCommit {
+	if !ok || entry.Request.OperationCount != 2 || two.Disposition != writer.DispositionReplayed || one.Result.NewCommit != two.Result.NewCommit {
 		t.Fatalf("retry changed the original incremental request: operations=%d first=%#v second=%#v", entry.Request.OperationCount, one, two)
 	}
 	cx.Flags["command-id"] = "new-noop"
 	_, err = CommitDesiredDir(cx)
-	testkit.ExpectCode(t, err, kernel.ErrUsageInvalid)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 type desiredReplayEntryLedger struct {
@@ -134,8 +136,13 @@ func TestEmbeddedDesiredReplayRejectsIncompleteTargetMetadata(t *testing.T) {
 			entry, _ := cx.WS.Commands.Lookup(cx.Flag("command-id"))
 			damage(&entry.Request)
 			cx.WS.Commands = desiredReplayEntryLedger{CommandLedger: cx.WS.Commands, entry: entry}
+			var err error
+			cx.WS.Writer, err = writer.NewWriter(s.Store, cx.WS.Commands)
+			if err != nil {
+				t.Fatal(err)
+			}
 			before := testkit.MustHead(t, s.Repo, snapshot.DefaultRef)
-			_, err := CommitDesiredDir(cx)
+			_, err = CommitDesiredDir(cx)
 			testkit.ExpectCode(t, err, kernel.ErrPreconditionFailed)
 			if after := testkit.MustHead(t, s.Repo, snapshot.DefaultRef); after != before {
 				t.Fatalf("incomplete replay metadata advanced target: %s -> %s", before, after)

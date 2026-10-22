@@ -102,7 +102,7 @@ func TestLogicalReferencePreservesStateAndSelectsOnlyExplicitSource(t *testing.T
 	defer runtime.Close()
 	base, ids, commits := newLogicalReferenceFixture(t, runtime.URL)
 	svc := liveservice.Open(base, liveaccess.NewHTTPStateLookup(runtime.Client()), kernel.IdentityContext{Principal: "agent"})
-	old, err := svc.Read(context.Background(), "job/shared", nil)
+	old, err := svc.Read(context.Background(), "job/shared")
 	if err != nil || len(old) != 2 {
 		t.Fatalf("existing logical READ: %#v %v", old, err)
 	}
@@ -221,7 +221,7 @@ func TestLogicalReferenceRejectsStreamBeforeRuntime(t *testing.T) {
 	scope := reader.Open(func(kernel.RepositoryID) (objectmodel.Repository, error) { return native, nil }, reader.DatasetPin{SetID: "stream", Repositories: commits, Items: reader.WholeRepositoryItems(commits)})
 	lookup := &stateLookup{}
 	svc := liveservice.Open(scope, lookup, kernel.IdentityContext{Principal: "agent"})
-	values, err := svc.Read(context.Background(), address.ObjectID, nil)
+	values, err := svc.Read(context.Background(), address.ObjectID)
 	assertFailedUnitRead(t, values, err, address, kernel.ErrCapabilityUnsatisfied)
 	for _, locator := range []string{"", "/runtime/status"} {
 		values, err = readLogicalReference(t, svc, objectmodel.Reference{Repository: id, Object: address.ObjectID, Locator: locator})
@@ -280,7 +280,7 @@ func TestLogicalReferenceHydratesActualSelectedUnitBeforeMissingLeafWithoutRerea
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := liveservice.HydrateRepositoryRead(context.Background(), selectedRepo, raw, lookup, objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "agent"}}, nil)
+	result, err := liveservice.HydrateRepositoryRead(context.Background(), selectedRepo, raw, lookup, objectmodel.RequestContext{Identity: kernel.IdentityContext{Principal: "agent"}})
 	if err != nil || !reflect.DeepEqual(result.Value, lookup.result.Value) || result.Address != address || selectedRepo.wholeReads != 0 || len(lookup.requests) != 2 {
 		t.Fatalf("Repository hydration did not adopt its already read Aspect declaration: %#v whole=%d runtime=%#v %v", result, selectedRepo.wholeReads, lookup.requests, err)
 	}

@@ -16,7 +16,6 @@ type ReadRequest struct {
 	Object    objectmodel.ObjectID
 	Reference *objectmodel.Reference
 	Address   *objectmodel.Address
-	Selector  *objectmodel.AspectSelector
 	Hydrator  objectmodel.Hydrator
 	// Descriptors resolves descriptorRef in the caller's request scope; nil
 	// limits it to the read Repository commit.
@@ -43,7 +42,7 @@ func ReadRepository(ctx context.Context, repo objectmodel.Repository, selection 
 	case selection.Address != nil:
 		values, err = service.ReadAddress(ctx, *selection.Address)
 	default:
-		values, err = service.Read(ctx, selection.Object, selection.Selector)
+		values, err = service.Read(ctx, selection.Object)
 	}
 	if err != nil {
 		return objectmodel.ObservedValue{}, err
@@ -57,7 +56,7 @@ func ReadRepository(ctx context.Context, repo objectmodel.Repository, selection 
 func validateRepositoryRead(repository kernel.RepositoryID, request ReadRequest) error {
 	if request.Reference != nil {
 		ref := *request.Reference
-		if ref.Repository != repository || request.Object != "" && request.Object != ref.Object || request.Address != nil || request.Selector != nil {
+		if ref.Repository != repository || request.Object != "" && request.Object != ref.Object || request.Address != nil {
 			return kernel.Fail(kernel.ErrUsageInvalid, "reference conflicts with separate object selection")
 		}
 		_, err := objectmodel.FormatReference(ref)

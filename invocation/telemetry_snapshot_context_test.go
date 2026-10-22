@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -101,13 +102,25 @@ func TestObservedSnapshotContextCancelsHungLakeFSRead(t *testing.T) {
 }
 
 func TestObservedSnapshotContextPreservesOptionalCapabilities(t *testing.T) {
+	fake := testkit.NewLakeFSFake(t)
+	lakefs, err := snapshot.OpenLakeFS("kr://telemetry/verifying", fake.DSN(fake.NewRepo()), fake.Credential())
+	if err != nil {
+		t.Fatal(err)
+	}
 	for name, inner := range map[string]snapshot.Store{
-		"store only":  &registryLikeStore{id: "kr://telemetry/plain"},
-		"object tree": testkit.MakeTreeStore(t, "kr://telemetry/tree"),
+		"store only":            &registryLikeStore{id: "kr://telemetry/plain"},
+		"object tree":           testkit.MakeTreeStore(t, "kr://telemetry/tree"),
+		"verifying tree":        lakefs,
+		"verifying object tree": &verifyingLocatorFixture{ObjectRepository: testkit.MakeRepository(t, "kr://telemetry/verifying-object")},
 	} {
 		t.Run(name, func(t *testing.T) {
 			runtime := snapshotContextTelemetry(t)
 			observed := ObserveSnapshotStore(inner, runtime, "lakefs")
+			_, hadVerifier := inner.(snapshot.TreeWriteVerifier)
+			_, hasVerifier := observed.(snapshot.TreeWriteVerifier)
+			if hadVerifier != hasVerifier {
+				t.Fatal("observation changed write verification capability")
+			}
 			if got := snapshot.BindStoreContext(observed, nil); got != observed {
 				t.Fatal("nil context changed the observed view")
 			}
@@ -124,6 +137,11 @@ func TestObservedSnapshotContextPreservesOptionalCapabilities(t *testing.T) {
 			head, err := bound.Head(snapshot.DefaultRef)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if fixture, ok := inner.(*verifyingLocatorFixture); ok {
+				if err := bound.(snapshot.TreeWriteVerifier).VerifyTreeWrite(snapshot.TreeChangeSet{}, false); err != nil || fixture.calls.Load() != 1 {
+					t.Fatalf("object verifier did not reach original authority: calls=%d err=%v", fixture.calls.Load(), err)
+				}
 			}
 			if locator, ok := bound.(objectmodel.UnitLocator); ok {
 				before, err := inner.(objectmodel.UnitLocator).ObjectUnitPaths("item/a", head)
@@ -150,7 +168,7 @@ func snapshotContextTelemetry(t *testing.T) *telemetry.Runtime {
 }
 
 type observedSnapshotCapabilities struct {
-	tree, directory, history, changes, origin, locator bool
+	tree, directory, history, changes, origin, locator, verifier bool
 }
 
 func snapshotContextCapabilities(store snapshot.Store) observedSnapshotCapabilities {
@@ -161,6 +179,7 @@ func snapshotContextCapabilities(store snapshot.Store) observedSnapshotCapabilit
 	_, capabilities.changes = store.(snapshot.ChangeStore)
 	_, capabilities.origin = store.(snapshot.StoreOrigin)
 	_, capabilities.locator = store.(objectmodel.UnitLocator)
+	_, capabilities.verifier = store.(snapshot.TreeWriteVerifier)
 	return capabilities
 }
 
@@ -196,4 +215,40 @@ func requireSnapshotContextReadMetric(t *testing.T, runtime *telemetry.Runtime, 
 		}
 	}
 	t.Fatalf("missing observed read counter for outcome %s:\n%s", outcome, recorder.Body.String())
+}
+
+type verifyingLocatorFixture struct {
+	*testkit.ObjectRepository
+	calls atomic.Int32
+}
+
+func (s *verifyingLocatorFixture) VerifyTreeWrite(snapshot.TreeChangeSet, bool) error {
+	s.calls.Add(1)
+	return nil
+}
+
+func TestObservedVerifierPreservesCancellationAndDistinctOperationMetric(t *testing.T) {
+	runtime := snapshotContextTelemetry(t)
+	fake := testkit.NewLakeFSFake(t)
+	repo, err := snapshot.OpenLakeFS("kr://telemetry/verify-cancel", fake.DSN(fake.NewRepo()), fake.Credential())
+	if err != nil {
+		t.Fatal(err)
+	}
+	head, err := repo.Head(snapshot.DefaultRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	observed := ObserveSnapshotStore(repo, runtime, "lakefs")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	bound := snapshot.BindStoreContext(observed, ctx)
+	err = bound.(snapshot.TreeWriteVerifier).VerifyTreeWrite(snapshot.TreeChangeSet{TargetRepository: repo.ID(), TargetRef: snapshot.DefaultRef, BaseCommit: head, ExpectedTargetCommit: head, Changes: []snapshot.TreeChange{{Path: "file.txt", Content: []byte("value")}}}, false)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("verification lost cancellation: %v", err)
+	}
+	recorder := httptest.NewRecorder()
+	runtime.MetricsHandler().ServeHTTP(recorder, httptest.NewRequest("GET", "/metrics", nil))
+	if !strings.Contains(recorder.Body.String(), `kc_operation="verify_write"`) {
+		t.Fatalf("verification counted as commit or other: %s", recorder.Body.String())
+	}
 }

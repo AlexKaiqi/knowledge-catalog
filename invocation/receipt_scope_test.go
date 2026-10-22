@@ -41,3 +41,30 @@ func TestReceiptAuthorizationUsesDurableRepositoryScope(t *testing.T) {
 		t.Fatalf("revocation ignored: %v", err)
 	}
 }
+
+func TestReceiptOmitsPrivateRecoveryMaterial(t *testing.T) {
+	ledger, err := snapshot.NewCommandLedger(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := snapshot.CommandRequest{RepositoryID: "kr://owned/repo", TreeChangeSet: []byte(`{"secret":"literal"}`), ApplicationRequest: []byte(`{"secret":"object"}`), Authority: "private-authority"}
+	if _, _, err := ledger.Execute("private", "digest", request, func() (any, error) { return map[string]bool{"changed": false}, nil }); err != nil {
+		t.Fatal(err)
+	}
+	cx := &Invocation{WS: &apphome.Home{Commands: ledger}, Flags: map[string]invoke.FlagValue{"command-id": "private"}}
+	result, err := VerbReceipt(cx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry := result.(snapshot.CommandEntry)
+	if len(entry.Request.TreeChangeSet) != 0 || len(entry.Request.ApplicationRequest) != 0 || entry.Request.Authority != "" || entry.Execution != "" || entry.Phase != "" {
+		t.Fatalf("private recovery material exposed: %+v", entry)
+	}
+	stored, ok := ledger.Lookup("private")
+	if !ok || string(stored.Request.TreeChangeSet) != string(request.TreeChangeSet) || string(stored.Request.ApplicationRequest) != string(request.ApplicationRequest) || stored.Request.Authority != request.Authority {
+		t.Fatal("receipt projection modified durable recovery material")
+	}
+	if string(entry.Receipt) != `{"changed":false}` {
+		t.Fatalf("receipt result lost: %s", entry.Receipt)
+	}
+}

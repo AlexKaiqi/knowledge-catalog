@@ -14,6 +14,7 @@ const referenceCommitFlag = "_object-reference-commit"
 const referenceBindingFlag = "_object-reference-binding"
 const referenceHoldingsFlag = "_object-reference-holdings"
 const referencePlannedFlag = "_object-reference-planned"
+const referenceCandidatesFlag = "_object-reference-candidates"
 
 // The private value proves that coordinates were derived inside the service,
 // rather than supplied as an alternate public selection. Its reference carries
@@ -117,14 +118,33 @@ func bindReferenceScope(cx *Invocation, action string) error {
 	}
 	ref := snapshot.RefOrDefault(cx.Flag("ref"))
 	candidates := map[kernel.RepositoryID]kernel.CommitID{}
-	for _, id := range cx.WS.Store.IDs() {
-		if string(id) == cx.WS.File.Registry.ID {
-			continue
+	if cx.readBasis != nil && cx.readBasis.fixed != nil {
+		for _, source := range cx.readBasis.fixed.Candidates {
+			candidates[source.Repository] = source.Commit
 		}
-		store, _ := cx.WS.Store.Get(id)
-		if commit, found := store.GetRef(ref); found {
-			candidates[id] = commit
+	} else {
+		for _, id := range cx.WS.Store.IDs() {
+			if string(id) == cx.WS.File.Registry.ID {
+				continue
+			}
+			store, _ := cx.WS.Store.Get(id)
+			if commit, found := store.GetRef(ref); found {
+				candidates[id] = commit
+			}
 		}
+	}
+	cx.Flags[referenceCandidatesFlag] = candidates
+	if cx.Command == "object-comparison-side" && cx.readBasis != nil && cx.readBasis.fixed != nil {
+		// Local comparison also admits a proved empty selection. It validates
+		// all candidate grants before bodies, rather than requiring a holder.
+		for _, source := range cx.readBasis.fixed.Candidates {
+			if AllowedRepoAspectRead(cx.Home, cx.Flags, string(source.Repository), string(bound.reference.Object), referenceAspect(bound.reference)) {
+				rebindReference(cx.Flags, source.Repository)
+				cx.Flags["commit"] = string(source.Commit)
+				return nil
+			}
+		}
+		return kernel.Fail(kernel.ErrForbidden, "comparison selection is not readable")
 	}
 	if err := requireReadableScope(cx, bound.reference, candidates); err != nil {
 		return err

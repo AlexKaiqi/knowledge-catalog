@@ -1,6 +1,7 @@
 package liveaccess_test
 
 import (
+	"reflect"
 	"testing"
 
 	"kc/internal/bindingfixture"
@@ -54,6 +55,7 @@ func TestDescriptorDependencyFreezeUsesOneVersionForEveryReference(t *testing.T)
 			if err != nil {
 				t.Fatal(err)
 			}
+			absentAt := testkit.MustHead(t, absent, snapshot.DefaultRef)
 			moving := &descriptorDependencyMovingRepository{Repository: ops, trigger: first}
 			nonholder := &descriptorDependencyMovingRepository{Repository: missing}
 			var advanced kernel.CommitID
@@ -86,7 +88,8 @@ func TestDescriptorDependencyFreezeUsesOneVersionForEveryReference(t *testing.T)
 				inventoryCalls++
 				return f.registry.IDs()
 			})
-			if err != nil || len(dependencies) != 1 || dependencies[f.ops] != f.opsAt || advanced == "" || advanced == f.opsAt {
+			wantDependencies := map[kernel.RepositoryID]kernel.CommitID{f.ops: f.opsAt, f.table: f.tableAt, absent.ID(): absentAt}
+			if err != nil || !reflect.DeepEqual(dependencies, wantDependencies) || advanced == "" || advanced == f.opsAt {
 				t.Fatalf("preparation mixed descriptor versions: dependencies=%v advanced=%s error=%v", dependencies, advanced, err)
 			}
 			if moving.headCalls != 1 || nonholder.headCalls != 1 || inventoryCalls != 1 {

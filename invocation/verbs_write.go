@@ -167,17 +167,14 @@ func CommitDesiredDir(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	preview, _, current, err := PrepareDesiredIngest(cx, repositoryID, dir)
+	if err := RequireSnapshotRepository(cx, repositoryID); err != nil {
+		return nil, err
+	}
+	preview, err := IngestDesired(cx.Flags, dir, repositoryID, cx.TargetRef("ref"), kernel.CommitID(cx.Flag("base")))
 	if err != nil {
 		return nil, err
 	}
-	changeSet, _ := writer.OmitUnchanged(preview.ChangeSet, current)
-	if len(changeSet.Operations) == 0 {
-		changeSet, err = rebuildDesiredReplay(cx, commandID, preview.ChangeSet)
-		if err != nil {
-			return nil, err
-		}
-	}
+	changeSet := preview.ChangeSet
 	SetTelemetryChangeCounts(cx.Observation, changeSet.Operations)
 	return (objectservice.CommitExecutor{Writer: cx.WS.Writer}).Execute(cx.Context,
 		objectservice.CommitRequest{
@@ -261,6 +258,12 @@ func VerbReceipt(cx *Invocation) (any, error) {
 	if !ok {
 		return nil, fmt.Errorf("unknown command-id %s", commandID)
 	}
+	// Receipt permission exposes command status, not private recovery material.
+	entry.Request.TreeChangeSet = nil
+	entry.Request.ApplicationRequest = nil
+	entry.Request.Authority = ""
+	entry.Execution = ""
+	entry.Phase = ""
 	return entry, nil
 }
 

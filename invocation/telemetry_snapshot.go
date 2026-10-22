@@ -52,12 +52,21 @@ type observedObjectTree struct {
 	locator objectmodel.UnitLocator
 }
 
+type observedVerifyingTree struct {
+	*observedTreeAuthority
+	verifier snapshot.TreeWriteVerifier
+}
+type observedVerifyingObjectTree struct {
+	*observedObjectTree
+	verifier snapshot.TreeWriteVerifier
+}
+
 func ObserveSnapshotStore(store snapshot.Store, runtime *telemetry.Runtime, fallback string) snapshot.Store {
 	if store == nil || runtime == nil {
 		return store
 	}
 	switch store.(type) {
-	case *observedSnapshot, *observedTreeAuthority, *observedObjectTree:
+	case *observedSnapshot, *observedTreeAuthority, *observedObjectTree, *observedVerifyingTree, *observedVerifyingObjectTree:
 		return store
 	}
 	if _, ok := store.(objectmodel.NativeRepository); ok {
@@ -78,7 +87,14 @@ func ObserveSnapshotStore(store snapshot.Store, runtime *telemetry.Runtime, fall
 			changes:          changes,
 		}
 		if hasLocator {
-			return &observedObjectTree{observedTreeAuthority: authority, locator: locator}
+			objectTree := &observedObjectTree{observedTreeAuthority: authority, locator: locator}
+			if verifier, ok := store.(snapshot.TreeWriteVerifier); ok {
+				return &observedVerifyingObjectTree{observedObjectTree: objectTree, verifier: verifier}
+			}
+			return objectTree
+		}
+		if verifier, ok := store.(snapshot.TreeWriteVerifier); ok {
+			return &observedVerifyingTree{observedTreeAuthority: authority, verifier: verifier}
 		}
 		return authority
 	}

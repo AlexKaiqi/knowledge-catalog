@@ -142,7 +142,7 @@ func RepositoryAuthenticatedAllowed(home, as, action, repo string, opened ...*kc
 		return false
 	}
 	if len(opened) > 0 && opened[0] != nil && opened[0].Deployment != nil {
-		if opened[0].Deployment.RepositoryAllowsAuthenticated(repo, action) {
+		if kchome.RepositoryAllowsAuthenticated(*opened[0].Deployment, repo, action) {
 			return true
 		}
 	}

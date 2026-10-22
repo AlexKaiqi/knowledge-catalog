@@ -242,16 +242,17 @@ func (s *memberOrigin) calls() []memberRuntimeRequest {
 }
 
 type memberProjectionFixture struct {
-	repo     objectmodel.Repository
-	reader   *reader.Reader
-	commit   kernel.CommitID
-	address  objectmodel.Address
-	access   *liveservice.Plugins
-	index    *common.IndexPlugins
-	source   sourcebridge.Source
-	pin      reader.DatasetPin
-	datasets dataset.Service
-	origin   *memberOrigin
+	repo         objectmodel.Repository
+	reader       *reader.Reader
+	commit       kernel.CommitID
+	address      objectmodel.Address
+	access       *liveservice.Plugins
+	index        *common.IndexPlugins
+	source       sourcebridge.Source
+	pin          reader.DatasetPin
+	datasets     dataset.Service
+	peerDatasets dataset.Service
+	origin       *memberOrigin
 }
 
 func newMemberProjectionFixture(t *testing.T, mode string) memberProjectionFixture {
@@ -264,6 +265,18 @@ func newMemberProjectionFixture(t *testing.T, mode string) memberProjectionFixtu
 	runtime := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { origin.serve(t, w, r) }))
 	t.Cleanup(runtime.Close)
 	namespace := "liveaccess-u20-" + string(kernel.CanonicalDigest(t.TempDir()))[:16]
+	// The plugin derives one namespace per instance, so ownership is proven on
+	// each derived name rather than on the shared prefix. Registering this
+	// before the index is opened makes it run after the index is closed.
+	var derivedMu sync.Mutex
+	derived := map[string]bool{}
+	t.Cleanup(func() {
+		derivedMu.Lock()
+		defer derivedMu.Unlock()
+		for owner := range derived {
+			testkit.CleanupProjectionNamespace(t, endpoint, owner)
+		}
+	})
 	raw := testkit.MakeTreeStore(t, "kr://liveaccess/"+namespace)
 	registry := snapshot.NewRegistry()
 	if err := registry.Add(raw); err != nil {
@@ -310,8 +323,29 @@ func newMemberProjectionFixture(t *testing.T, mode string) memberProjectionFixtu
 	if err != nil {
 		t.Fatal(err)
 	}
-	cat := testkit.OpenDatasets(t, registry)
+	authorityFake := testkit.NewLakeFSFake(t)
+	authority, err := snapshot.OpenLakeFS("kr://liveaccess/authority", authorityFake.DSN(authorityFake.NewRepo()), authorityFake.Credential())
+	if err != nil {
+		t.Fatal(err)
+	}
+	authorityRegistry, err := dataset.CreateSnapshotRegistry(authority, snapshot.DefaultRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cat, err := dataset.NewService(registry, authorityRegistry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	testkit.RegisterMounted(t, cat, registry)
 	if _, err := cat.DefineDataset("sensor-readings", 1, []dataset.DatasetSource{{Repository: repo.ID(), Selector: snapshot.DefaultRef, BaseRev: string(receipt.Result.NewCommit)}}); err != nil {
+		t.Fatal(err)
+	}
+	peerRegistry, err := dataset.OpenSnapshotRegistry(authority, snapshot.DefaultRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer, err := dataset.NewService(registry, peerRegistry)
+	if err != nil {
 		t.Fatal(err)
 	}
 	config := common.PluginsConfig{
@@ -331,7 +365,11 @@ func newMemberProjectionFixture(t *testing.T, mode string) memberProjectionFixtu
 	entry := indexplugin.Entry(indexplugin.Options{Directory: t.TempDir(), Lookup: func(id kernel.RepositoryID) (objectmodel.Repository, error) {
 		return rd.Require(id, kernel.ErrObjectRefUnresolved)
 	}, Datasets: cat, Engine: func(instance string) ports.EngineOpener {
-		return opensearch.Open(opensearch.Config{URL: endpoint, Namespace: namespace + "/" + instance, PrimaryShards: 1})
+		owner := namespace + "/" + instance
+		derivedMu.Lock()
+		derived[owner] = true
+		derivedMu.Unlock()
+		return opensearch.Open(opensearch.Config{URL: endpoint, Namespace: owner, PrimaryShards: 1})
 	}})
 	index, err := common.OpenIndexPlugins(config, common.PluginScope{Repositories: repositories},
 		map[string]common.IndexPluginEntry{"declarative-index": entry})
@@ -352,7 +390,7 @@ func newMemberProjectionFixture(t *testing.T, mode string) memberProjectionFixtu
 		t.Fatal(err)
 	}
 	return memberProjectionFixture{repo: repo, reader: rd, commit: receipt.Result.NewCommit, address: address, access: access,
-		index: index, origin: origin, pin: pin, datasets: cat, source: sourcebridge.Source{Lookup: access, Request: objectmodel.RequestContext{
+		index: index, origin: origin, pin: pin, datasets: cat, peerDatasets: peer, source: sourcebridge.Source{Lookup: access, Request: objectmodel.RequestContext{
 			Identity: kernel.IdentityContext{Principal: "index-worker"}, RequestID: "member-index-observation",
 		}}}
 }
@@ -463,5 +501,23 @@ func TestFailedLiveAccessMemberCannotPublishStateProjection(t *testing.T) {
 				t.Fatalf("failed index preparation changed fixed source: %s", head)
 			}
 		})
+	}
+}
+
+func TestPeerDatasetPublicationRejectsObservationBeforeRuntime(t *testing.T) {
+	f := newMemberProjectionFixture(t, "valid")
+	if _, err := f.peerDatasets.DefineDataset(f.pin.SetID, 2, []dataset.DatasetSource{{Repository: f.repo.ID(), Selector: snapshot.DefaultRef, BaseRev: string(f.commit)}}); err != nil {
+		t.Fatal(err)
+	}
+	// The production entry still holds the independent service's v1 cache.
+	if current, err := f.datasets.Set(f.pin.SetID); err != nil || current.Revision != 1 {
+		t.Fatalf("fixture did not preserve independent stale cache: %#v %v", current, err)
+	}
+	before := len(f.origin.calls())
+	if _, err := f.index.RefreshState(context.Background(), f.repo, f.commit, f.source); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
+		t.Fatalf("peer-replaced revision reached observation acceptance: %v", err)
+	}
+	if after := len(f.origin.calls()); after != before {
+		t.Fatalf("stale local revision called runtime after actual replacement: before=%d after=%d", before, after)
 	}
 }

@@ -99,7 +99,7 @@ func TestBindingUnitHydratesFromDescriptorOrigin(t *testing.T) {
 	if value["rowCount"] != float64(12) || lookup.requests[0].Origin != "https://stats.example" {
 		t.Fatalf("hydrated aspect %#v requests %#v", results[0], lookup.requests)
 	}
-	assembled, err := service.Read(context.Background(), address.ObjectID, &objectmodel.AspectSelector{Include: []string{"stats"}})
+	assembled, err := service.Read(context.Background(), address.ObjectID)
 	if err != nil || len(assembled) != 1 {
 		t.Fatalf("object read: %#v %v", assembled, err)
 	}
@@ -121,7 +121,7 @@ func TestStateBindingHydratesConsumerReadAndKeepsBothBases(t *testing.T) {
 	identity := observability.IdentityContext{Principal: "agent", OnBehalfOf: "alice"}
 	service := liveservice.Open(base, lookup, identity)
 
-	results, err := service.Read(context.Background(), address.ObjectID, nil)
+	results, err := service.Read(context.Background(), address.ObjectID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,16 +163,19 @@ func TestStateBindingSelectionAvoidsUnrequestedLookup(t *testing.T) {
 		Basis: objectmodel.ObservationBasis{BindingGeneration: "g1", Consistency: objectmodel.ObservationLatestOnly, ObservedAt: "2026-08-27T08:30:00Z"},
 	}}
 	service := liveservice.Open(base, lookup, observability.IdentityContext{Principal: "agent"})
-	results, err := service.Read(context.Background(), address.ObjectID, &objectmodel.AspectSelector{Include: []string{"definition"}})
+	// Selecting the static coordinate instead of the Binding coordinate is what
+	// keeps the runtime out of the request; nothing is read and then trimmed.
+	results, err := service.ReadAddress(context.Background(), objectmodel.Address{
+		Kind: objectmodel.KindAspect, ObjectID: address.ObjectID, AspectName: "definition",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(lookup.requests) != 0 {
-		t.Fatalf("excluded Binding caused a runtime call: %#v", lookup.requests)
+		t.Fatalf("unselected Binding caused a runtime call: %#v", lookup.requests)
 	}
-	value := results[0].Value.(map[string]any)
-	if len(value) != 1 || value["definition"] == nil {
-		t.Fatalf("selector result: %#v", value)
+	if len(results) != 1 || !reflect.DeepEqual(results[0].Value, map[string]any{"owner": "data"}) {
+		t.Fatalf("coordinate result: %#v", results)
 	}
 }
 
@@ -194,7 +197,7 @@ func TestOrdinaryReadRejectsStreamBinding(t *testing.T) {
 			ValueSource: bindingfixture.Source("resource/scheduler-stream"),
 		}},
 	}
-	value, err := service.Hydrate(context.Background(), raw, nil)
+	value, err := service.Hydrate(context.Background(), raw)
 	assertFailedUnitRead(t, []objectmodel.ObservedValue{value}, err, address, kernel.ErrCapabilityUnsatisfied)
 	if len(lookup.requests) != 0 {
 		t.Fatal("ordinary READ must not call a State runtime for a Stream Binding")

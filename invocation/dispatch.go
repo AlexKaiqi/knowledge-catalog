@@ -16,6 +16,7 @@ import (
 	"kc/invoke"
 	"kc/kernel"
 	objectserving "kc/liveaccess"
+	objectmodel "kc/object"
 )
 
 // executeApplicationOperation is the shared application-service boundary.
@@ -25,11 +26,19 @@ func ExecuteApplicationOperation(ctx context.Context, name, action string, cmd C
 	if _, supplied := flags["catalog"]; supplied {
 		return nil, kernel.Fail(kernel.ErrUsageInvalid, "Catalog selection is not supported; this service has one registry")
 	}
+	if name == "object-diff" {
+		return executeObjectComparison(ctx, action, flags, state, opened, home, observation)
+	}
 	if err := NormalizeReferenceFlags(flags); err != nil {
 		return nil, err
 	}
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	if name == "object-log" {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, objectmodel.HistoryScanRequestTimeout)
+		defer cancel()
 	}
 	observation = invoke.NoObservationTelemetry(observation)
 	cx := &Invocation{Command: name, Home: home, WS: opened, Flags: flags, Context: ctx, State: state, Observation: observation}
@@ -61,6 +70,18 @@ func ExecuteApplicationOperation(ctx context.Context, name, action string, cmd C
 		defer ws.Close()
 	}
 	cx.WS = ws
+	if err := prepareObjectReadBasis(cx, action); err != nil {
+		return nil, err
+	}
+	if err := prepareHistoryContinuation(cx, action); err != nil {
+		return nil, err
+	}
+	if name == "object-log" {
+		if err := bindHistoryReadContext(cx); err != nil {
+			return nil, err
+		}
+		ws = cx.WS
+	}
 	if err := bindReferenceScope(cx, action); err != nil {
 		return nil, err
 	}

@@ -4,65 +4,35 @@ package invocation
 // registry operations and the login flows. (CAP-ORG-01 B6.)
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
-	"fmt"
-	discoveryservice "kc/discovery/service"
-	kchome "kc/home"
-	"kc/internal/jsonfile"
-	liveservice "kc/liveaccess/service"
-	objectmodel "kc/object"
-	"kc/snapshot"
-	"os"
-	"path/filepath"
-	"strings"
-
 	"compress/gzip"
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
+	"net/http"
+	"os"
+	"strings"
+
 	"kc/delivery"
+	retrieval "kc/discovery"
+	discoveryservice "kc/discovery/service"
+	kchome "kc/home"
+	"kc/internal/clientconfig"
+	"kc/internal/jsonfile"
 	"kc/invoke"
 	"kc/kernel"
+	liveservice "kc/liveaccess/service"
+	objectmodel "kc/object"
 	reader "kc/object/reader"
-
-	retrieval "kc/discovery"
+	"kc/snapshot"
 	"kc/snapshot/dataset"
-	"net/http"
 )
 
-type ClientEndpoint struct {
-	Server string `json:"server"`
-}
+type ClientEndpoint = clientconfig.Endpoint
 
-func SavedClientServer() string {
-	for _, path := range []string{filepath.Join(ConfigDir(), "client.json"), filepath.Join(ConfigDir(), "session-taihu.json"), filepath.Join(ConfigDir(), "session-local.json")} {
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		var config ClientEndpoint
-		if json.Unmarshal(raw, &config) == nil && NormalizeLoginServer(config.Server) != "" {
-			return NormalizeLoginServer(config.Server)
-		}
-	}
-	return ""
-}
-
-func ConfigDir() string {
-	if dir := strings.TrimSpace(os.Getenv("KC_CONFIG_DIR")); dir != "" {
-		return dir
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return filepath.Join(os.TempDir(), ".kc")
-	}
-	return filepath.Join(home, ".config", "kc")
-}
-
-func NormalizeLoginServer(server string) string {
-	return strings.TrimRight(strings.TrimSpace(server), "/")
-}
+func SavedClientServer() string                 { return clientconfig.SavedServer() }
+func ConfigDir() string                         { return clientconfig.ConfigDir() }
+func NormalizeLoginServer(server string) string { return clientconfig.NormalizeServer(server) }
 
 func RequireRemoteFlag(flags map[string]invoke.FlagValue, name string) (string, error) {
 	value := strings.TrimSpace(invoke.FlagString(flags, name))
@@ -72,32 +42,7 @@ func RequireRemoteFlag(flags map[string]invoke.FlagValue, name string) (string, 
 	return value, nil
 }
 
-func WriteJSONFile(path string, data any) error {
-	raw, err := json.MarshalIndent(data, "", "  ")
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return err
-	}
-	file, err := os.CreateTemp(filepath.Dir(path), ".kc-session-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(file.Name())
-	if _, err := file.Write(raw); err != nil {
-		_ = file.Close()
-		return err
-	}
-	if err := file.Sync(); err != nil {
-		_ = file.Close()
-		return err
-	}
-	if err := file.Close(); err != nil {
-		return err
-	}
-	return os.Rename(file.Name(), path)
-}
+func WriteJSONFile(path string, data any) error { return jsonfile.WritePrivate(path, data) }
 
 func ValidateManagedRepositoryCoordinates(flags map[string]invoke.FlagValue) error {
 	if invoke.FlagString(flags, "name") != "" {
@@ -169,8 +114,7 @@ func ensureManagedRepositoryGrantLocked(dir string, g kchome.ManagedRepositoryGr
 }
 
 func ServerSessionPath(server, filename string) string {
-	digest := sha256.Sum256([]byte(NormalizeLoginServer(server)))
-	return filepath.Join(ConfigDir(), "sessions", hex.EncodeToString(digest[:]), filename)
+	return clientconfig.SessionPath(server, filename)
 }
 
 // DropByID removes one identified rule from a list, reporting whether it was
@@ -267,7 +211,16 @@ func SearchWorkspace(cx *Invocation) (any, error) {
 		},
 		Repositories: cx.WS.Reader, Projection: cx.WS.Index,
 		Deliver: func(_ context.Context, hit retrieval.ObjectHit) (retrieval.ObjectHit, error) {
-			return DeliverSearchHit(cx.Home, cx.Flags, hit)
+			delivered, err := DeliverSearchHit(cx.Home, cx.Flags, hit)
+			if err != nil {
+				return retrieval.ObjectHit{}, err
+			}
+			value, err := retainObjectReadBasis(cx, objectmodel.Reference{Object: delivered.Object.ObjectRef.Object}, delivered.Object)
+			if err != nil {
+				return retrieval.ObjectHit{}, err
+			}
+			delivered.Object = value.(objectmodel.ObjectValue)
+			return delivered, nil
 		},
 	}).Execute(cx.Context, req)
 }
@@ -369,7 +322,9 @@ func OpenServingAt(cx *Invocation, ws *kchome.Home, flags map[string]invoke.Flag
 	if err != nil {
 		return nil, nil, err
 	}
-	serving := reader.Open(ws.Reader.Lookup(cat.Require), kchome.DatasetPin(resolved))
+	pin := kchome.DatasetPin(resolved)
+	pin.Temporary = SuppliedDataset(flags) != nil
+	serving := reader.Open(ws.Reader.Lookup(cat.Require), pin)
 	serving.SetHydrator(ws.Hydrator)
 	return serving, cat, nil
 }

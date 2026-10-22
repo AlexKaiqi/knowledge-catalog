@@ -356,7 +356,11 @@ func allowedDatasetFileRead(home string, flags map[string]invoke.FlagValue, repo
 		Repo:      repository,
 		Dataset:   invoke.DatasetOf(flags),
 	}
-	_, ok := MatchAllow(withDatasetDefaults(home, as, file.Rules), q)
+	rules := withDatasetDefaults(home, as, file.Rules)
+	if definition := SuppliedDataset(flags); definition != nil {
+		return workspaceScopeAllowed(rules, q, definition)
+	}
+	_, ok := MatchAllow(rules, q)
 	return ok
 }
 

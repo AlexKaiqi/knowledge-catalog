@@ -19,6 +19,12 @@ import (
 // and permissions are never reused by a subsequent request.
 func requestDescriptors(cx *Invocation, repository kernel.RepositoryID, commit kernel.CommitID) liveaccess.DescriptorScope {
 	ids := cx.WS.Store.IDs()
+	if cx.readBasis != nil && cx.readBasis.fixed != nil {
+		ids = nil
+		for _, source := range cx.readBasis.fixed.Dependencies {
+			ids = append(ids, source.Repository)
+		}
+	}
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	scope := &requestDescriptorScope{
 		cx: cx, repository: repository, commit: commit, repositories: ids,
@@ -129,6 +135,9 @@ type descriptorProbe struct {
 // after every probe of the resolution has finished.
 func (s *requestDescriptorScope) probe(repository kernel.RepositoryID, id objectmodel.ObjectID) descriptorProbe {
 	if !AllowedRepoRead(s.cx.Home, s.cx.Flags, string(repository), string(id)) {
+		if s.cx.readBasis != nil && s.cx.readBasis.fixed != nil {
+			return descriptorProbe{err: kernel.Fail(kernel.ErrForbidden, "fixed interpretation source is no longer readable")}
+		}
 		return descriptorProbe{}
 	}
 	head, cached := s.heads[repository]
@@ -145,6 +154,13 @@ func (s *requestDescriptorScope) probe(repository kernel.RepositoryID, id object
 }
 
 func (s *requestDescriptorScope) fetchHead(repository kernel.RepositoryID) descriptorHead {
+	if s.cx.readBasis != nil {
+		return s.cx.readBasis.descriptorHead(repository, func() descriptorHead { return s.currentHead(repository) })
+	}
+	return s.currentHead(repository)
+}
+
+func (s *requestDescriptorScope) currentHead(repository kernel.RepositoryID) descriptorHead {
 	store, ok := s.cx.WS.Store.Get(repository)
 	if !ok {
 		return descriptorHead{err: kernel.Fail(kernel.ErrObjectRefUnresolved, "Repository %s is no longer in the request scope", repository)}

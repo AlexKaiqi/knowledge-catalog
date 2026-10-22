@@ -119,7 +119,7 @@ func TestNamedMemberConsumptionTypedReadAndSearch(t *testing.T) {
 				if err != nil {
 					return nil, err
 				}
-				values, err := serving.Read("metric/gmv", nil)
+				values, err := serving.Read("metric/gmv")
 				if err != nil || len(values) != 1 || values[0].Value == nil || values[0].Commit != f.pin.Repositories[f.repos[0].ID()] {
 					t.Fatalf("fixed member read lost body/basis: values=%#v err=%v", values, err)
 				}

@@ -30,7 +30,7 @@ func (s *Service) ReadReference(ctx context.Context, ref objectmodel.Reference) 
 		if err != nil {
 			return nil, err
 		}
-		result, err := s.Hydrate(ctx, values[0], nil)
+		result, err := s.Hydrate(ctx, values[0])
 		if err != nil {
 			return nil, err
 		}

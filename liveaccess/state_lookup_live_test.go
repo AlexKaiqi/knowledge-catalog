@@ -15,6 +15,7 @@ import (
 	indeximplementation "kc/declarativeindex/projection"
 	"kc/internal/bindingfixture"
 	"kc/internal/testkit"
+	"kc/kernel"
 	serving "kc/liveaccess"
 	objectmodel "kc/object"
 	"kc/observability"
@@ -81,7 +82,9 @@ func TestLiveHTTPRuntimeBuildsOpenSearchStateProjection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	idx := indeximplementation.NewIndexEngine("", opensearch.Open(opensearch.Config{URL: opensearchURL, PrimaryShards: 1}))
+	namespace := "live-state-" + string(kernel.CanonicalDigest(t.TempDir()))[:24]
+	t.Cleanup(func() { testkit.CleanupProjectionNamespace(t, opensearchURL, namespace) })
+	idx := indeximplementation.NewIndexEngine("", opensearch.Open(opensearch.Config{URL: opensearchURL, Namespace: namespace, PrimaryShards: 1}))
 	t.Cleanup(func() { _ = idx.Close() })
 	sync, err := idx.RefreshState(context.Background(), setup.Repo, commit, sourcebridge.Source{Lookup: lookup, Request: objectmodel.RequestContext{
 		Identity: observability.IdentityContext{Principal: "agent:docker-test"}, RequestID: "docker-projection-1",

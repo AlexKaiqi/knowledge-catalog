@@ -162,7 +162,7 @@ func TestMixedUnitReadPreservesSnapshotSuccessNullAndLocalFailure(t *testing.T) 
 			base, repo, commit, id := mixedUnitFixture(t)
 			lookup := &unitLookup{failure: kind}
 			service := liveservice.Open(base, lookup, kernel.IdentityContext{Principal: "consumer"})
-			values, err := service.Read(context.Background(), id, nil)
+			values, err := service.Read(context.Background(), id)
 			if err != nil || len(values) != 1 {
 				t.Fatalf("one failed external unit erased the mixed object: %#v %v", values, err)
 			}

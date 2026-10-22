@@ -18,6 +18,8 @@ Repo 与 Dataset 不选择实例。Server 启动时固定配置；没有实例�
 声明摘要组合单元与取值描述两个版本；范围内同一 ID 多处持有为 `OBJECT_ID_CONFLICT`。
 取值描述所在仓没选入 Dataset 时，`ServingDescriptors` 在范围内读不到后改用 `Serving.ReadDependency`，
 按发布时冻结的依赖版本解释；依赖仓不是成员，前进不改变解释，也不进入读取、文件范围与搜索。
+外部依赖解析保留用于证明唯一持有者的完整候选坐标，包括当时没有该描述符的仓；这些坐标
+只用于解释和复核缺失，不把候选仓加入交付范围。
 声明解释不调用来源，不重新读取兄弟单元或改用 HEAD。
 
 业务 `read` 的 Repo/Dataset 入口均采用[逻辑读取](service/README.md)：静态值保留，

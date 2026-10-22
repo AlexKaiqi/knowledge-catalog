@@ -25,13 +25,16 @@ import (
 // struct and its readers are the execution contract shared by the CLI front
 // end and the typed service surface.
 type Invocation struct {
-	Command     string
-	Home        string
-	Flags       map[string]invoke.FlagValue
-	WS          *home.Home
-	Context     context.Context
-	State       objectserving.StateLookup
-	Observation *invoke.ObservationTelemetry
+	Command             string
+	Home                string
+	Flags               map[string]invoke.FlagValue
+	WS                  *home.Home
+	Context             context.Context
+	State               objectserving.StateLookup
+	Observation         *invoke.ObservationTelemetry
+	readBasis           *objectReadBasis
+	historyCheckpoint   *objectmodel.HistoryCheckpoint
+	historyContextBound bool
 }
 
 // Flag reads the flag's effective string value.

@@ -67,7 +67,7 @@ func ResolveObjectInterfaceAt(s *reader.Serving, repository kernel.RepositoryID,
 // DiscoverObjectInterfaces reads the selected object's fixed declarations.
 func DiscoverObjectInterfaces(s *reader.Serving, object objectmodel.ObjectID) ([]ResolvedInterface, error) {
 	out := []ResolvedInterface{}
-	values, err := s.Read(object, nil)
+	values, err := s.Read(object)
 	if err != nil {
 		return nil, err
 	}

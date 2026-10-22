@@ -16,7 +16,7 @@ var knownFlags = func() map[string]struct{} {
 	names := strings.Fields(`
 		action activity-ref actor-ref algorithm-hash algorithm-model algorithm-spec
 		app-name as aspect auth auth-admin auth-hmac-secret auth-login auth-provider auth-subject auth-url
-		base base-rev bulk registry-dir changeset checkouts-dir clear
+		base base-rev basis bulk registry-dir changeset checkouts-dir clear
 		client-id cmd command-id commit config contains content continuation credential-file database dir driver dsn eq
 		recall
 		evidence-id evidence-ref exclude exists expected expected-file file filter-on-behalf-of filter-principal filter-request-id

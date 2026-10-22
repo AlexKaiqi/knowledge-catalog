@@ -127,7 +127,7 @@ func RerankWorkspace(cx *Invocation, request RerankApplicationRequest, reranker 
 		if err != nil {
 			return nil, err
 		}
-		raw, err := cx.WS.Reader.Read(ref, commit, nil)
+		raw, err := cx.WS.Reader.Read(ref, commit)
 		if err != nil {
 			return nil, err
 		}
@@ -369,7 +369,7 @@ func PinnedResourceDescriptor(cx *Invocation) (PinnedDescriptor, error) {
 		return PinnedDescriptor{}, err
 	}
 	result, err := OnTarget(cx, func(declarations *reader.Serving, _ dataset.Service) (any, error) {
-		values, err := declarations.Read(objectmodel.ObjectID(objectID), nil)
+		values, err := declarations.Read(objectmodel.ObjectID(objectID))
 		if err != nil {
 			return nil, err
 		}
@@ -379,7 +379,7 @@ func PinnedResourceDescriptor(cx *Invocation) (PinnedDescriptor, error) {
 		value := values[0]
 		return PinnedDescriptor{Repository: value.Repository, Commit: value.Commit, ObjectID: value.ObjectID, Value: value.Value}, nil
 	}, func(repository kernel.RepositoryID, commit kernel.CommitID) (any, error) {
-		value, err := cx.WS.Reader.Read(objectmodel.ObjectRef{Repository: repository, Object: objectmodel.ObjectID(objectID)}, commit, nil)
+		value, err := cx.WS.Reader.Read(objectmodel.ObjectRef{Repository: repository, Object: objectmodel.ObjectID(objectID)}, commit)
 		return PinnedDescriptor{Repository: value.Repository, Commit: value.Commit, ObjectID: value.Address.ObjectID, Value: value.Value}, err
 	})
 	if err != nil {
