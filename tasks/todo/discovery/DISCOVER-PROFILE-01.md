@@ -9,9 +9,9 @@
 
 ## 依据
 
-- [发现](../../doc/design/discovery.md)：不做什么（分面与总数做成独立能力）、能力清单、进度表“未到”里的分面与总数。
+- [发现](../../../doc/design/discovery.md)：不做什么（分面与总数做成独立能力）、能力清单、进度表“未到”里的分面与总数。
   需在该篇补写画像的范围与完整性说明。
-- [Affordance](../../doc/design/affordance.md)：画像是数据侧的说明，与能力清单并列。
+- [Affordance](../../../doc/design/affordance.md)：画像是数据侧的说明，与能力清单并列。
 
 ## 验收
 

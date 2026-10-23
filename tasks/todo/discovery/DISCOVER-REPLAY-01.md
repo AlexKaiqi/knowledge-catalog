@@ -11,9 +11,9 @@
 
 ## 依据
 
-- [发现](../../doc/design/discovery.md)：索引声明（“调优效果要先试再改”）、使用记录。需在该篇补写回放的
+- [发现](../../../doc/design/discovery.md)：索引声明（“调优效果要先试再改”）、使用记录。需在该篇补写回放的
   语义与边界。
-- [Dataset](../../doc/design/dataset.md)：staging Dataset 只是普通 Dataset。
+- [Dataset](../../../doc/design/dataset.md)：staging Dataset 只是普通 Dataset。
 
 ## 验收
 
@@ -25,7 +25,8 @@
 
 ## 前置
 
-`INDEX-USAGE-01`。意图与会话字段在 `DISCOVER-INTENT-01` 完成后一并带入回放；回放本身不依赖它。
+`DISCOVER-USAGE-01`：回放的输入就是它积累的使用记录。意图与会话字段在 `DISCOVER-INTENT-01` 完成后
+一并带入回放；回放本身不依赖它。
 
 ## 不做
 

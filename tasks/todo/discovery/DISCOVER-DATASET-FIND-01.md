@@ -11,8 +11,8 @@ Dataset 的维护者和库存的维护者：被列出、被选中、在其中得
 
 ## 依据
 
-- [发现](../../doc/design/discovery.md)：找到 Dataset、使用记录、U10。
-- [Dataset](../../doc/design/dataset.md)：用途说明与元数据由维护者维护。
+- [发现](../../../doc/design/discovery.md)：找到 Dataset、使用记录、U10。
+- [Dataset](../../../doc/design/dataset.md)：用途说明与元数据由维护者维护。
 
 ## 验收
 

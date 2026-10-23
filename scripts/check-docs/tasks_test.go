@@ -76,10 +76,14 @@ func TestCheckDocumentationRejectsBrokenTaskBoard(t *testing.T) {
 		{name: "unknown state", path: "tasks/blocked/PLUGIN-INDEX-01.md", body: "# PLUGIN-INDEX-01\n", cause: "tasks/blocked is not allowed"},
 		{name: "loose task", path: "tasks/PLUGIN-INDEX-01.md", body: "# PLUGIN-INDEX-01\n", cause: "tasks/PLUGIN-INDEX-01.md is not allowed"},
 		{name: "bad id", path: "tasks/todo/plugin-index.md", body: "# plugin-index\n", cause: "tasks/todo/plugin-index.md is not a task file"},
-		{name: "not markdown", path: "tasks/todo/PLUGIN-INDEX-01.txt", body: "x\n", cause: "is not a task file"},
-		{name: "nested", path: "tasks/todo/group/PLUGIN-INDEX-01.md", body: "# PLUGIN-INDEX-01\n", cause: "tasks/todo/group is not a task file"},
+		{name: "not markdown", path: "tasks/todo/PLUGIN-INDEX-01.txt", body: "x\n", cause: "tasks/todo/PLUGIN-INDEX-01.txt is not a task file"},
+		{name: "nested group", path: "tasks/todo/object-versioning/inner/PLUGIN-INDEX-01.md", body: "# PLUGIN-INDEX-01\n", cause: "is not a task file; groups do not nest"},
+		{name: "uppercase group", path: "tasks/todo/ObjectVersioning/PLUGIN-INDEX-01.md", body: "# PLUGIN-INDEX-01\n", cause: "tasks/todo/ObjectVersioning is not a task group"},
+		{name: "grouped in done", path: "tasks/done/object-versioning/PLUGIN-INDEX-01.md", body: "# PLUGIN-INDEX-01\n", cause: "done/ is history and stays flat"},
+		{name: "grouped bad id", path: "tasks/todo/object-versioning/plugin-index.md", body: "# plugin-index\n", cause: "tasks/todo/object-versioning/plugin-index.md is not a task file"},
 		{name: "title mismatch", path: "tasks/todo/PLUGIN-INDEX-01.md", body: "# PLUGIN-INDEX-02 · 别的任务\n", cause: "must start with the title \"# PLUGIN-INDEX-01"},
 		{name: "two states", path: "tasks/done/PLUGIN-INTERPRETER-01.md", body: "# PLUGIN-INTERPRETER-01\n", cause: "task PLUGIN-INTERPRETER-01 is also in todo"},
+		{name: "grouped two states", path: "tasks/done/PLUGIN-INTERPRETER-01.md", body: "# PLUGIN-INTERPRETER-01\n", cause: "task PLUGIN-INTERPRETER-01 is also in todo"},
 		{name: "broken link", path: "tasks/todo/PLUGIN-INDEX-01.md", body: "# PLUGIN-INDEX-01\n\n[缺](../../doc/missing.md)\n", cause: "tasks/todo/PLUGIN-INDEX-01.md -> ../../doc/missing.md"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -90,6 +94,22 @@ func TestCheckDocumentationRejectsBrokenTaskBoard(t *testing.T) {
 				t.Fatalf("expected %q, got %v", tc.cause, err)
 			}
 		})
+	}
+}
+
+func TestCheckDocumentationAcceptsTaskGroups(t *testing.T) {
+	root := taskBoardFixture(t)
+	writeMarkdownFixture(t, root, "tasks/doing/object-versioning/README.md", "# 对象版本与读写\n\n按五条使用路径组织。\n")
+	writeMarkdownFixture(t, root, "tasks/doing/object-versioning/READ-BASIS-01.md", "# READ-BASIS-01 · 固定读取依据\n\n[设计](../../../doc/design/object.md)\n")
+	writeMarkdownFixture(t, root, "tasks/todo/object-versioning/COMPARE-01.md", "# COMPARE-01 · 两版比较\n\n[设计](../../../doc/design/object.md)\n")
+	if _, err := checkDocumentation(root); err != nil {
+		t.Fatalf("grouped task board rejected: %v", err)
+	}
+	// A grouped task shares the ID namespace with the flat board: the same task
+	// cannot sit in a group and in a state directory at once.
+	writeMarkdownFixture(t, root, "tasks/todo/COMPARE-01.md", "# COMPARE-01 · 两版比较\n")
+	if _, err := checkDocumentation(root); err == nil || !strings.Contains(err.Error(), "COMPARE-01 is also in todo") {
+		t.Fatalf("expected a duplicate-state error, got %v", err)
 	}
 }
 

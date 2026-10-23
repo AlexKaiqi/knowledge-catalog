@@ -5,9 +5,9 @@
 必交付：生产索引的持久资源保护与回收闭环，以及未变化成员计算产物的复用，包括避免重复向量计算。
 直接共享查询结构为可选扩展，经等价性与成本审查后决定是否纳入；未纳入时继续使用独立 Dataset 语料。
 
-设计依据为[索引物理布局](../../doc/design/index-physical.md)；检索语义、保留与清除、外部观察分别沿用
-[发现](../../doc/design/discovery.md)、[Dataset](../../doc/design/dataset.md)、[LiveAccess](../../doc/design/liveaccess.md)。
-完整固定读取依据与状态比较沿用[对象版本与读写](../../doc/design/object-versioning.md)，不另造对象版本定义。
+设计依据为[索引物理布局](../../../doc/design/index-physical.md)；检索语义、保留与清除、外部观察分别沿用
+[发现](../../../doc/design/discovery.md)、[Dataset](../../../doc/design/dataset.md)、[LiveAccess](../../../doc/design/liveaccess.md)。
+完整固定读取依据与状态比较沿用[对象版本与读写](../../../doc/design/object-versioning.md)，不另造对象版本定义。
 
 ## 现状依据
 
@@ -15,11 +15,11 @@
 
 | 事实 | 重构接缝 |
 |---|---|
-| 有 HEAD、冻结提交和 Dataset 投影身份；冻结需求目前以正向维护为主 | [运行时](../../declarativeindex/projection/runtime.go)、[需求刷新](../../declarativeindex/control/demands.go)、[固定提交准备](../../declarativeindex/control/serving_basis.go)：追踪实际消费者，补反向释放，避免来源可读保留被当作索引保留 |
-| Dataset 按选入单元组合对象，访问摘要或修订变化触发较粗重建 | [组合](../../declarativeindex/projection/dataset_values.go)、[准备](../../declarativeindex/projection/dataset.go)、[同步](../../declarativeindex/projection/sync.go)：识别成员输入依赖，区分计算复用与容器重写 |
-| `CompiledDoc` 保存语义输入，向量在引擎 bulk 中计算；typed cells 与向量随对象整份写入 | [构建产物](../../discovery/projection/engine.go)、[bulk](../../declarativeindex/opensearch/internal/opensearchimpl/projection.go)：只缓存现有产物仍会重复模型调用，固定 mapping 也不证明成员可独立补写 |
-| 全文有聚合表示，多个成员共用文本统计；观察另有发布路径 | [成员构建](../../discovery/declaration_build.go)、[查询](../../declarativeindex/opensearch/internal/opensearchimpl/search.go)、[观察准备](../../declarativeindex/projection/dataset_state.go)：撤下成员须核对统计，静态复用须隔离观察代 |
-| 准备回调只返回错误，随后独立发布 Dataset；引擎另行提交生成代，旧代靠进程内定时器删除 | [准备接口](../../discovery/datasets/prepare.go)、[Dataset 发布](../../discovery/datasets/dataset_publish.go)、[代际提交与退役](../../declarativeindex/opensearch/internal/opensearchimpl/projection.go)：现有成功返回不能直接充当持久引用交接证明 |
+| 有 HEAD、冻结提交和 Dataset 投影身份；冻结需求目前以正向维护为主 | [运行时](../../../declarativeindex/projection/runtime.go)、[需求刷新](../../../declarativeindex/control/demands.go)、[固定提交准备](../../../declarativeindex/control/serving_basis.go)：追踪实际消费者，补反向释放，避免来源可读保留被当作索引保留 |
+| Dataset 按选入单元组合对象，访问摘要或修订变化触发较粗重建 | [组合](../../../declarativeindex/projection/dataset_values.go)、[准备](../../../declarativeindex/projection/dataset.go)、[同步](../../../declarativeindex/projection/sync.go)：识别成员输入依赖，区分计算复用与容器重写 |
+| `CompiledDoc` 保存语义输入，向量在引擎 bulk 中计算；typed cells 与向量随对象整份写入 | [构建产物](../../../discovery/projection/engine.go)、[bulk](../../../declarativeindex/opensearch/internal/opensearchimpl/projection.go)：只缓存现有产物仍会重复模型调用，固定 mapping 也不证明成员可独立补写 |
+| 全文有聚合表示，多个成员共用文本统计；观察另有发布路径 | [成员构建](../../../discovery/declaration_build.go)、[查询](../../../declarativeindex/opensearch/internal/opensearchimpl/search.go)、[观察准备](../../../declarativeindex/projection/dataset_state.go)：撤下成员须核对统计，静态复用须隔离观察代 |
+| 准备回调只返回错误，随后独立发布 Dataset；引擎另行提交生成代，旧代靠进程内定时器删除 | [准备接口](../../../discovery/datasets/prepare.go)、[Dataset 发布](../../../discovery/datasets/dataset_publish.go)、[代际提交与退役](../../../declarativeindex/opensearch/internal/opensearchimpl/projection.go)：现有成功返回不能直接充当持久引用交接证明 |
 
 ## 实施前待定
 
@@ -39,10 +39,9 @@
 
 | 既有任务 | 本任务使用的交付与责任边界 |
 |---|---|
-| `OBJECT-VERSIONING-01` | 共同审查后先交付“固定读取依据交付”，作为本任务生产实现接入的前置；本任务将成员产物、查询代与观察代绑定到该依据。无变化命令、比较和历史继续由对象任务交付，按实际交叉场景在同一候选上联合验证，不要求整项先结束 |
+| `READ-BASIS-01` | 共同审查后先交付“固定读取依据交付”，作为本任务生产实现接入的前置；本任务将成员产物、查询代与观察代绑定到该依据。无变化命令、比较和历史继续由对象任务交付，按实际交叉场景在同一候选上联合验证，不要求整项先结束 |
 | `INDEX-SEARCH-SPACE-01` | 保留其成员增量、成员隔离、语料恢复和观察发布责任；本任务接入产物复用及资源保护。构建版本、统计隔离与发布接缝的重叠修改在同一候选上验证 |
-| `DATASET-RETENTION-01` | 消费其检索保留、退役和续页宽限判定，完成物理引用释放及安全删除；替换固定三分钟删除仍与该任务共同验收，不另设保留策略 |
-| `DATASET-STORAGE-01` | 接入其配额与紧急清除，联合验证共享结构、候选峰值和观察证据清除；来源提交保留归该任务 |
+| `DATASET-LIFECYCLE-01` | 消费其检索保留、退役和续页宽限判定，完成物理引用释放及安全删除，并接入配额；三分钟定时器已由本任务移除，只把“何时可回收”接上退役判定，不另设保留策略；紧急清除同归 `DATASET-LIFECYCLE-01` |
 | `ACCEPT-HARNESS-01` | 测试命名空间与残留由其负责；生产回收只接管已确权资源 |
 
 审查不依赖上述任务全部结束；开工须具备所用接缝，缺失部分由所属任务交付。需要调整归属时同时更新双方
@@ -50,7 +49,7 @@
 
 两个重构先共同确定完整依据的解析与保留接缝，以及读取依据、请求证据和查询资源各自的保护责任。
 索引的消费者分析、资源权威与故障时序审查可先进行；生产实现接入与物理布局切换须等
-`OBJECT-VERSIONING-01` 的“固定读取依据交付”有实现和回归证据，不用临时 pin 或自定义版本模型顶替。
+`READ-BASIS-01` 的“固定读取依据交付”有实现和回归证据，不用临时 pin 或自定义版本模型顶替。
 此后本任务与 Object 剩余不重叠工作可以分别推进，共同接口变化须同步双方实现与联合验收，
 不互以对方整项完成为前置。
 
@@ -58,7 +57,7 @@
 `ARCH-HOME-CONFIG-01` 只有在共同审查后确认无配置重叠，或所需新增持久状态/恢复配置已交付时才可穿插。
 需要修改相同文件时主线批次先稳定，不为迁移暂停未完成的行为设计。
 
-`DEBT-DATASET-STATE-ACCEPT-ATOMIC-01` 已交付同进程的[修订围栏](../../snapshot/dataset/revision_fence.go)，
+`DEBT-DATASET-STATE-ACCEPT-ATOMIC-01` 已交付同进程的[修订围栏](../../../snapshot/dataset/revision_fence.go)，
 本任务复用它，不重新领取观察接受修复；该围栏与 registry CAS 均不能单独证明跨存储的引用交接和删除安全。
 
 ## 实施次序
@@ -105,17 +104,17 @@ Invocation 中比较、无变化写入和历史操作另等 Object 对应批次�
 | 若纳入直接共享：与独立语料对照，并使共享条件失效 | 满足设计中的等价性要求，固定语料不随 HEAD 漂移；不满足共享条件时能独立准备 |
 
 精确、近似检索及预算不足分别按设计的判据验证，不把 ANN 或部分集合逐项相同作为验收条件。
-按[压测合同](../../.data/scale/CASES.md)记录环境与规模，分别覆盖 Writer 无变化命令、Dataset 幂等重放、新修订但成员输入未变、
+按[压测合同](../../../.data/scale/CASES.md)记录环境与规模，分别覆盖 Writer 无变化命令、Dataset 幂等重放、新修订但成员输入未变、
 单对象变化、单成员新增/修改/退役、连续观察刷新及共享来源，
 测量成员计算、模型调用、写入对象与字节、稳定和峰值空间、索引与分片数、发布耗时与查询延迟，按审查确定
 的阈值判断收益。复制全部旧值只能证明减少重算，不能报告避免全量物化。
 
-共同门禁按[任务约定](../README.md)执行；另须有目标 OpenSearch 实例上的排序、写入量、重启和回收证据，
+共同门禁按[任务约定](../../README.md)执行；另须有目标 OpenSearch 实例上的排序、写入量、重启和回收证据，
 夹具不能代替真实引擎结论。生命周期联合验收仍走对应任务的真实部署入口。
 
 ### 与对象版本重构的联合验收
 
-本表由本任务维护，`OBJECT-VERSIONING-01` 共同执行。本任务验证复用、模型调用、检索依据与回收；
+本表由本任务维护，`READ-BASIS-01` 与 `COMPARE-01`、`HISTORY-01` 共同执行。本任务验证复用、模型调用、检索依据与回收；
 对象任务验证本地状态、完整回读、命令结果及历史，两边使用同一组来源与变更。证据复核按 LiveAccess
 合同执行；涉及保留、退役或清除时共同接入对应生命周期任务。
 
@@ -1044,7 +1043,7 @@ Home 的受保护发布回调合并构建与保护，依赖冻结和冲突检查
 NON_FAST_FORWARD；TestSceneProbesRestoreAbsentProjection 的两个重建分支无法取得已接受绑定；
 TestHTTPDatasetSemanticRecallServesMemberVectorWindows 在同步后因解释摘要变化而拒绝检索。
 这些由本任务继续修复，保留真实入口断言，不通过重试、跳过或移出套件消除失败。
-TestCatalogRepoWriteFlow 的无变化 COMMIT 旧拒绝断言由 OBJECT-VERSIONING-01 按新合同更新；
+TestCatalogRepoWriteFlow 的无变化 COMMIT 旧拒绝断言由 `NO-CHANGE-01` 按新合同更新（目录零差异分支归 `ZERO-DIFF-01`）；
 14 项外部 live 跳过仍不记通过。随后重跑完整联合门禁。
 
 最小组合复现 `20261021T013807Z-7a60556c4db4`，sourceChanged=false：图片用例单选通过；
@@ -1171,3 +1170,18 @@ make quality 已通过且耦合仍 84 units / 13.58%；最终说明更新后继�
 二是把退役绑定到一个真实的生命周期事件（如仓注销完成），当前实现还没有该入口。
 在这项决定落地前，`RetireDemand` 保持只在端口内可调，不用维护控制器的视图缺失替代判定，
 也不把「看起来没需求」写成已停止。
+
+## 时序前提已被反转（2026-10-23）
+
+`INDEX-PUBLISH-DECOUPLE-01` 已把本任务依赖的「准备先于提交」反转成「接受 → 登记构建意图 → 后台构建 →
+写就绪事实」。本任务已交付的物理布局结论（每版独立语料、成员构建版本、资源生命周期与历史代回收、
+成员与向量产物复用、查询与续页保护）全部保留，不受影响；受影响的是时序相关的那部分前提：
+
+- `index-physical.md` 原「引擎生成代提交 → Dataset 接受 → 引用保护交接」三提交点已改为「Dataset 权威
+  接受 → 就绪事实登记」，构建意图在接受的同一次权威提交内登记，mermaid 中 `J --> K` 与 `M` 的语义随之改写。
+- 原「Dataset 接受前，检索依据必须已完整、可解析且持续受保护」不再成立：接受一旦成立文件读取即生效，
+  检索停留在上一个就绪版本，直到本版本就绪事实写入。
+- 「未决准入恢复」「发布确认丢失的第一项修复」「采用收据绑定静态查询生成代」等属于提交前移之后的部分，
+  其收据与准入绑定建立在旧顺序上，按新顺序复核一遍，其余资源保护与回收结论不动。
+
+后续交付理由按反转后的顺序描述，不要沿用「先建好再接受」的表述。

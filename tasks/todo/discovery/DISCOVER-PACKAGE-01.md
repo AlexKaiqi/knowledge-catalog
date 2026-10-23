@@ -10,8 +10,8 @@
 
 ## 依据
 
-- [发现](../../doc/design/discovery.md)：发现包（可选）、访问原语、完整性、使用记录。
-- [权限](../../doc/design/permissions.md)：Dataset 消费权限。
+- [发现](../../../doc/design/discovery.md)：发现包（可选）、访问原语、完整性、使用记录。
+- [权限](../../../doc/design/permissions.md)：Dataset 消费权限。
 
 ## 验收
 
