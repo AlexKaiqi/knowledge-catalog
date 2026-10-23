@@ -55,6 +55,14 @@ func (e *executor) Validate(path string, flags map[string]any) error {
 	if _, ok := command(path); !ok || flags["help"] == true {
 		return nil
 	}
+	// `kc index` with no --dataset reports the current catch-up progress; the
+	// prepare and describe paths always name one revision.
+	if path == "index" && flagString(flags, "dataset") == "" {
+		if flagString(flags, "revision") != "" {
+			return kernel.Fail(kernel.ErrUsageInvalid, "--revision fixes a named Dataset; pass --dataset")
+		}
+		return nil
+	}
 	if flagString(flags, "dataset") == "" {
 		return kernel.Fail(kernel.ErrUsageInvalid, "missing --dataset")
 	}
@@ -82,13 +90,18 @@ func (e *executor) Execute(ctx context.Context, path string, flags map[string]an
 	var output any
 	var err error
 	revision, _ := strconv.Atoi(flagString(flags, "revision"))
-	request := client.ProjectionRequest{Dataset: flagString(flags, "dataset"), Revision: revision}
+	request := client.IndexRequest{Dataset: flagString(flags, "dataset"), Revision: revision}
 	switch path {
-	case "operations projection describe":
-		err = e.client.DescribeProjection(ctx, request, options, &output)
-	case "operations projection sync":
-		err = e.client.SyncProjection(ctx, request, options, &output)
-
+	case "index":
+		if request.Dataset == "" {
+			err = e.client.IndexStatus(ctx, options, &output)
+			break
+		}
+		err = e.client.IndexReady(ctx, request, options, &output)
+	case "index prepare":
+		err = e.client.IndexPrepare(ctx, request, options, &output)
+	case "index describe":
+		err = e.client.IndexDescribe(ctx, request, options, &output)
 	}
 	return output, err
 }

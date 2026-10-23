@@ -110,7 +110,9 @@ func TestDatasetProjectionPublicationExplainsExplicitRecovery(t *testing.T) {
 		}
 		value, _ := op.Value.(map[string]any)
 		body, _ := value["body"].(string)
-		if strings.Contains(body, "持续对账保证恢复") || !strings.Contains(body, "显式同步恢复") {
+		// The recovery path is the explicit preparation operation, so the guard
+		// names that operation rather than the retired sync spelling.
+		if strings.Contains(body, "持续对账保证恢复") || !strings.Contains(body, "显式准备恢复") {
 			t.Fatal("Dataset projection guidance promises unavailable automatic recovery")
 		}
 		return

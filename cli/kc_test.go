@@ -259,13 +259,13 @@ func kcClientLocal(args ...string) kcRunResult {
 	return result
 }
 
-// Retrieval is an explicitly maintained projection. Consumer operations never
+// Retrieval is an explicitly maintained index. Consumer operations never
 // build it as a side effect, so journeys that expect SEARCH/RELATIONS first
-// publish the required exact-basis projection.
+// publish the required exact-basis index.
 func syncIndexes(t *testing.T, home string, datasets ...string) {
 	t.Helper()
 	for _, dataset := range datasets {
-		body(t, kc(home, "index-sync", "--dataset", dataset))
+		body(t, kc(home, "index", "prepare", "--dataset", dataset))
 	}
 }
 
@@ -302,8 +302,8 @@ func groupedTestArgs(args []string) []string {
 		"resolve-object": {"resolve"},
 		"put":            {"writer", "put"}, "remove": {"writer", "remove"}, "commit": {"writer", "commit"}, "writer-head": {"writer", "head"}, "receipt": {"writer", "receipt"},
 		"branch": {"writer", "branch"}, "merge": {"writer", "merge"},
-		"describe-index": {"operations", "projection", "describe"}, "index-sync": {"operations", "projection", "sync"}, "index-notify": {"operations", "projection", "notice"}, "describe-access": {"operations", "access-spec", "describe"},
-		"hook-add": {"operations", "hook", "add"}, "hook-ls": {"operations", "hook", "list"}, "hook-rm": {"operations", "hook", "remove"},
+		"describe-access": {"operations", "access-spec", "describe"},
+		"hook-add":        {"operations", "hook", "add"}, "hook-ls": {"operations", "hook", "list"}, "hook-rm": {"operations", "hook", "remove"},
 		"access-log": {"operations", "audit", "access"}, "trace": {"operations", "audit", "trace"}, "hitmap": {"operations", "audit", "hitmap"}, "record-feedback": {"operations", "feedback", "record"},
 	}
 	if path := paths[args[0]]; len(path) > 0 {

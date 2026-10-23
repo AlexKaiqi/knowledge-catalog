@@ -58,7 +58,7 @@ func leafHelpEntries() map[string]helpEntry {
   成本随声明成员、候选和回读增长；semantic 可能调用模型。无命中不说明范围外内容不存在。
   不带 Dataset 或使用 --repo/--commit/--ref 会被拒绝。范围先于候选查询，不能先查范围外对象再遮正文。
 失败恢复：
-  未声明、不支持、失效、未就绪与零命中分别处理；按错误定位修声明或向维护者查 operations projection describe --dataset <id>。
+  未声明、不支持、失效、未就绪与零命中分别处理；按错误定位修声明或向维护者查 kc index describe --dataset <id>。
   续页须保持查询与修订，撤权后下一页拒绝；游标失效时在同一修订重新开始。
 示例：
   kc search --dataset scene-set --revision 1 --query merchandise
@@ -81,7 +81,7 @@ func leafHelpEntries() map[string]helpEntry {
 风险与成本：
   高连接度会产生多页；固定范围的结果不代表全部来源关系图。
 失败恢复：
-  投影故障查 operations projection describe --dataset <id>；游标失效在同一修订重新查询。
+  索引故障查 kc index describe --dataset <id>；游标失效在同一修订重新查询。
 示例：
   kc relations --dataset scene-set --revision 1 --object trade/order-service`,
 		},
@@ -123,7 +123,7 @@ func leafHelpEntries() map[string]helpEntry {
 风险与成本：
   成本随来源和声明数增长；描述不是物理映射或就绪证明。
 失败恢复：
-  核对 Dataset 发布与 Schema、声明选择；就绪另查 operations projection describe --dataset <id>。
+  核对 Dataset 发布与 Schema、声明选择；就绪另查 kc index describe --dataset <id>。
 示例：
   kc operations access-spec describe --dataset scene-set --revision 1`,
 		},

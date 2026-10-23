@@ -86,7 +86,7 @@ func TestStatePublicationFailurePreservesOriginalObservationUntilRetry(t *testin
 			}
 			before, err := idx.SearchStateAtRevision(repo, commit, original.Revision, query("running"))
 			if err != nil || before.Completeness != retrieval.CompletenessComplete || len(before.Hits) != 1 ||
-				before.SearchView.ProjectionRevisions[repo.ID()] != original.Revision || len(before.Hits[0].Version.Observations) != 1 ||
+				before.SearchView.IndexRevisions[repo.ID()] != original.Revision || len(before.Hits[0].Version.Observations) != 1 ||
 				before.Hits[0].Version.Observations[0].Basis.SourceRevision != "r1" {
 				t.Fatalf("initial observation was not served at r1: result=%#v error=%v", before, err)
 			}
@@ -144,7 +144,7 @@ func TestStatePublicationFailurePreservesOriginalObservationUntilRetry(t *testin
 			current, err := idx.SearchStateAtRevision(repo, commit, retried.Revision, query("stopped"))
 			if err != nil || current.Completeness != retrieval.CompletenessComplete || len(current.Hits) != 1 ||
 				current.Hits[0].Object.Value.(map[string]any)["runtime"].(map[string]any)["status"] != "stopped" ||
-				current.Hits[0].Version.Observations[0].Basis.SourceRevision != "r2" || current.SearchView.ProjectionRevisions[repo.ID()] != retried.Revision {
+				current.Hits[0].Version.Observations[0].Basis.SourceRevision != "r2" || current.SearchView.IndexRevisions[repo.ID()] != retried.Revision {
 				t.Fatalf("retry mixed the new candidate and original observation: result=%#v error=%v", current, err)
 			}
 			if _, err := idx.SearchStateAtRevision(repo, commit, original.Revision, query("running")); kernel.CodeOf(err) != kernel.ErrPreconditionFailed {

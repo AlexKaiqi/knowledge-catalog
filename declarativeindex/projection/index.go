@@ -19,6 +19,9 @@ type Index struct {
 	dir  string
 	open ports.EngineOpener
 	mu   sync.Mutex
+	// progress reports in-flight revision builds to maintenance observers. It
+	// is memory-only: a restarted process starts its counters from zero.
+	progress buildProgress
 	// stateBuildMu serializes refresh publishers without blocking searches while
 	// a new warm generation is compiled.
 	stateBuildMu sync.Mutex

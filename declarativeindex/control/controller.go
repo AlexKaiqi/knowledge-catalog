@@ -38,6 +38,7 @@ type Controller struct {
 	lookup            RepositoryLookup
 	inventory         RepositoryInventory
 	servingBases      func(kernel.RepositoryID) ([]kernel.CommitID, error)
+	datasetLane       func(context.Context) error
 	demands           map[kernel.RepositoryID][]kernel.CommitID
 	interval          time.Duration
 	wake              chan struct{}
@@ -81,6 +82,11 @@ func (c *Controller) stateRuntime() index.ObservationSource {
 	defer c.lookupMu.RUnlock()
 	return c.observationSource
 }
+
+// ObservationSource reports the runtime the server injected. Callers that
+// publish observations on behalf of a request ask for it rather than carrying
+// a second copy.
+func (c *Controller) ObservationSource() index.ObservationSource { return c.stateRuntime() }
 
 func (c *Controller) SetReconcileInterval(interval time.Duration) {
 	c.lookupMu.Lock()
@@ -175,7 +181,7 @@ func (c *Controller) catchUp(ctx context.Context, only kernel.RepositoryID) erro
 		return refreshErr
 	}
 	heads, reconcileErr := c.reconcile(ctx, only)
-	return errors.Join(refreshErr, reconcileErr, c.applyPending(ctx, heads), c.catchUpFixed(ctx, only), c.catchUpState(ctx, heads, only), c.recoverResources(ctx, only))
+	return errors.Join(refreshErr, reconcileErr, c.applyPending(ctx, heads), c.catchUpFixed(ctx, only), c.catchUpDatasetLane(ctx), c.catchUpState(ctx, heads, only), c.recoverResources(ctx, only))
 }
 
 func (c *Controller) recoverResources(ctx context.Context, only kernel.RepositoryID) error {
@@ -201,3 +207,13 @@ func (c *Controller) Reconcile(ctx context.Context) error {
 }
 
 func (c *Controller) Targets() ([]index.ProjectionTarget, error) { return c.store.List() }
+
+// CatchUp reports the revision builds this instance is working on right now.
+// An empty slice means no build is running, which is a normal answer rather
+// than an error: the caller asked to observe, not to build.
+func (c *Controller) CatchUpProgress() []index.IndexCatchUp {
+	if reporter, ok := c.index.(interface{ CatchUpProgress() []index.IndexCatchUp }); ok {
+		return reporter.CatchUpProgress()
+	}
+	return nil
+}

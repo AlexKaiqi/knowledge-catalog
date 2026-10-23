@@ -166,23 +166,29 @@ func (f *connectedHandlerFixture) waitForStartedProjection(t *testing.T, handler
 	deadline := time.Now().Add(30 * time.Second)
 	var last string
 	for time.Now().Before(deadline) {
-		response := fileGatewayRequest(t, handler, f.principal, "/operations/v1/projections:describe", map[string]any{
+		response := fileGatewayRequest(t, handler, f.principal, "/operations/v1/indexes:describe", map[string]any{
 			"dataset": "connected-articles", "revision": 1,
 		})
 		last = response.Body.String()
 		var result struct {
 			Dataset  string `json:"dataset"`
 			Revision int    `json:"revision"`
+			Ready    bool   `json:"ready"`
 			Members  []struct {
 				Repository kernel.RepositoryID `json:"repository"`
 				Commit     kernel.CommitID     `json:"commit"`
+				Stage      string              `json:"stage"`
 			} `json:"members"`
-			Snapshot index.IndexDescriptor `json:"snapshot"`
+			Basis *index.IndexBasisFacts `json:"basis"`
 		}
+		// Readiness is the answer the operation reports, and the compiled corpus
+		// is the evidence behind it. A member stage alone would let a build that
+		// never froze a corpus pass for a served basis.
 		if response.Code == http.StatusOK && json.Unmarshal(response.Body.Bytes(), &result) == nil &&
 			result.Dataset == "connected-articles" && result.Revision == 1 && len(result.Members) == 1 &&
 			result.Members[0].Repository == f.canonical.Repository && result.Members[0].Commit == f.canonical.Commit &&
-			result.Snapshot.State == index.ProjectionStateReady {
+			result.Ready && result.Members[0].Stage == index.IndexStageReady &&
+			result.Basis != nil && result.Basis.ObjectCount > 0 {
 			return
 		}
 		time.Sleep(50 * time.Millisecond)

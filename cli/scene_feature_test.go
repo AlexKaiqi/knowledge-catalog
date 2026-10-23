@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -46,22 +47,24 @@ type sceneScenario struct {
 }
 
 type sceneStep struct {
-	line       int
-	kind       string
-	text       string
-	table      [][]string
-	command    string
-	method     string
-	path       string
-	principal  string
-	onBehalfOf string
-	object     string
-	errorCode  string
-	whoami     string
-	material   string
-	fixtureDir string
-	schema     *sceneSchemaSpec
-	instance   *sceneInstanceSpec
+	line         int
+	kind         string
+	text         string
+	table        [][]string
+	command      string
+	method       string
+	path         string
+	principal    string
+	onBehalfOf   string
+	object       string
+	errorCode    string
+	whoami       string
+	material     string
+	fixtureDir   string
+	rememberAs   string
+	rememberPath string
+	schema       *sceneSchemaSpec
+	instance     *sceneInstanceSpec
 }
 
 type sceneSchemaSpec struct {
@@ -1224,6 +1227,8 @@ func (w *sceneWorld) run(step sceneStep) {
 		}
 	case "succeeds":
 		w.thenSucceeds()
+	case "remember":
+		w.rememberValue(step)
 	case "output-has":
 		w.thenOutputHas(step)
 	case "output-includes":
@@ -1308,18 +1313,53 @@ func (w *sceneWorld) expandArg(arg, materials string) (string, error) {
 		}
 		return fmt.Sprint(got), nil
 	}
-	for _, key := range []string{"pinId", "pinFile", "grantId"} {
-		token := "$" + key
-		if !strings.Contains(expanded, token) {
-			continue
+	expanded = w.replaceCaptured(expanded)
+	for _, key := range []string{"pinId", "pinFile", "grantId", "basis", "continuation"} {
+		if strings.Contains(expanded, "$"+key) {
+			return "", fmt.Errorf("$%s not captured from a prior CLI result", key)
 		}
-		val := w.ids[key]
-		if val == "" {
-			return "", fmt.Errorf("%s not captured from a prior CLI result", token)
-		}
-		expanded = strings.ReplaceAll(expanded, token, val)
 	}
 	return expanded, nil
+}
+
+// replaceCaptured substitutes every token this probe has already captured.
+// Longer names go first so a remembered `$first-basis` is never truncated to
+// the live `$basis` the last command happened to return.
+func (w *sceneWorld) replaceCaptured(value string) string {
+	if len(w.ids) == 0 {
+		return value
+	}
+	keys := make([]string, 0, len(w.ids))
+	for key := range w.ids {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if len(keys[i]) != len(keys[j]) {
+			return len(keys[i]) > len(keys[j])
+		}
+		return keys[i] < keys[j]
+	})
+	for _, key := range keys {
+		if captured := w.ids[key]; captured != "" {
+			value = strings.ReplaceAll(value, "$"+key, captured)
+		}
+	}
+	return value
+}
+
+// rememberValue pins one value from the previous CLI output. Later commands in
+// the same probe overwrite the live tokens, so a fixed basis or the commit it
+// named stays addressable only through the name given here.
+func (w *sceneWorld) rememberValue(step sceneStep) {
+	w.t.Helper()
+	if w.lastKind != "cli" {
+		w.t.Fatalf("line %d: I remember requires a prior When I run", step.line)
+	}
+	got, ok := lookupJSONPath(w.lastPayload, step.rememberPath)
+	if !ok || got == nil || fmt.Sprint(got) == "" {
+		w.t.Fatalf("line %d: I remember %s: missing in last CLI output %#v", step.line, step.rememberPath, w.lastPayload)
+	}
+	w.ids[step.rememberAs] = fmt.Sprint(got)
 }
 
 func (w *sceneWorld) captureCLI() {
@@ -1341,6 +1381,14 @@ func (w *sceneWorld) captureCLI() {
 		}
 	}
 	for _, key := range []string{"pinId"} {
+		if v, exists := row[key]; exists && fmt.Sprint(v) != "" {
+			w.ids[key] = fmt.Sprint(v)
+		}
+	}
+	// A read returns an opaque reuse token and a history page may return a
+	// cursor; both are only meaningful if the exact string is carried forward.
+	// Capturing them here keeps probes from inventing their own coordinate.
+	for _, key := range []string{"basis", "continuation"} {
 		if v, exists := row[key]; exists && fmt.Sprint(v) != "" {
 			w.ids[key] = fmt.Sprint(v)
 		}
@@ -1408,16 +1456,7 @@ func (w *sceneWorld) thenOutputIncludes(step sceneStep) {
 // so a Then table can pin a returned path against this trip's home.
 func (w *sceneWorld) expandExpected(value string) string {
 	value = strings.ReplaceAll(value, "$home", w.home)
-	for _, key := range []string{"pinId", "pinFile", "grantId"} {
-		token := "$" + key
-		if !strings.Contains(value, token) {
-			continue
-		}
-		if val := w.ids[key]; val != "" {
-			value = strings.ReplaceAll(value, token, val)
-		}
-	}
-	return value
+	return w.replaceCaptured(value)
 }
 
 func (w *sceneWorld) observedCLI(line int) any {
@@ -2045,6 +2084,22 @@ func classifySceneStep(line int, keyword, rest string, table [][]string) (sceneS
 		step.kind = "succeeds"
 		if len(table) > 0 {
 			return step, fmt.Errorf("Then the command succeeds does not take a table")
+		}
+	case strings.HasPrefix(rest, "I remember "):
+		// `And I remember <json-path> as <name>` pins one opaque value against
+		// later live tokens that the same probe keeps overwriting.
+		target, name, found := strings.Cut(strings.TrimPrefix(rest, "I remember "), " as ")
+		target, name = strings.TrimSpace(target), strings.TrimSpace(name)
+		if !found || target == "" || name == "" {
+			return step, fmt.Errorf("I remember requires '<output path> as <name>'")
+		}
+		if strings.ContainsAny(name, " \t") {
+			return step, fmt.Errorf("remembered name %q must be one token", name)
+		}
+		step.kind = "remember"
+		step.rememberPath, step.rememberAs = target, name
+		if len(table) > 0 {
+			return step, fmt.Errorf("I remember does not take a table")
 		}
 	case rest == "the output has:" || rest == "the output has":
 		if len(table) == 0 {

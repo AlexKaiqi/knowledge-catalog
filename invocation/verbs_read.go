@@ -370,6 +370,9 @@ func VerbRelations(cx *Invocation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := FixReadyRevision(cx); err != nil {
+		return nil, err
+	}
 	serving, _, err := OpenCompleteServing(cx, string(endpoint))
 	if err != nil {
 		return nil, err
@@ -428,6 +431,9 @@ func VerbTraverse(cx *Invocation) (any, error) {
 		return nil, err
 	}
 	request.Query.Start = start
+	if err := FixReadyRevision(cx); err != nil {
+		return nil, err
+	}
 	serving, _, err := OpenCompleteServing(cx, string(start))
 	if err != nil {
 		return nil, err

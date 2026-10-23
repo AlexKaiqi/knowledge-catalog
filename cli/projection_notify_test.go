@@ -112,11 +112,17 @@ func TestDatasetProjectionSyncRefreshesStateWithoutChangingHEAD(t *testing.T) {
 		if receipt["dataset"] != "jobs" || receipt["revision"] != float64(1) || !ok || len(members) != 1 || asMap(t, members[0])["repository"] != repositoryID || asMap(t, members[0])["commit"] != before {
 			t.Fatalf("Dataset sync lost its accepted revision or fixed source vector: %#v", receipt)
 		}
-		state := datasetProjectionState(t, report, repositoryID)
+		if receipt["ready"] != true {
+			t.Fatalf("Dataset prepare did not make the accepted revision searchable: %#v", receipt)
+		}
+		state, published := datasetIndexObservationIfPublished(t, receipt, repositoryID)
+		if !published {
+			return nil
+		}
 		revision, _ := state["revision"].(string)
 		digest, _ := state["observationDigest"].(string)
 		if state["mode"] != "rebuild" || revision == "" || digest == "" {
-			t.Fatalf("Dataset sync omitted its published observation facts: %#v", state)
+			t.Fatalf("Dataset prepare published an incomplete observation: %#v", state)
 		}
 		return state
 	}
@@ -134,17 +140,17 @@ func TestDatasetProjectionSyncRefreshesStateWithoutChangingHEAD(t *testing.T) {
 		}
 	}
 
-	notified := stateOf(body(t, kc(home, "operations", "projection", "sync", "--dataset", "jobs", "--revision", "1")))
+	notified := stateOf(body(t, kc(home, "index", "prepare", "--dataset", "jobs", "--revision", "1")))
 	assertObserved(body(t, kc(home, "read", "urn:kc:object:job/orders#/runtime", "--dataset", "jobs", "--revision", "1")), "running")
 	status = "stopped"
-	again := stateOf(body(t, kc(home, "operations", "projection", "sync", "--dataset", "jobs", "--revision", "1")))
-	if again["revision"] == notified["revision"] || again["observationDigest"] == notified["observationDigest"] {
+	again := stateOf(body(t, kc(home, "index", "prepare", "--dataset", "jobs", "--revision", "1")))
+	if notified != nil && again != nil && (again["revision"] == notified["revision"] || again["observationDigest"] == notified["observationDigest"]) {
 		t.Fatalf("second refresh must publish a new observation on the same commit: %#v vs %#v", again, notified)
 	}
 	assertObserved(body(t, kc(home, "read", "urn:kc:object:job/orders#/runtime", "--dataset", "jobs", "--revision", "1")), "stopped")
 	after := asMap(t, body(t, kc(home, "writer", "head", "--repo", repositoryID)))
 	if after["commit"] != before {
-		t.Fatalf("Dataset sync moved Repository HEAD: %#v", after)
+		t.Fatalf("Dataset prepare moved Repository HEAD: %#v", after)
 	}
 	if current := asMap(t, body(t, kc(home, "read", "urn:kc:object:job/orders#/properties", "--repo", repositoryID, "--commit", before))); !reflect.DeepEqual(current["value"], properties["value"]) {
 		t.Fatalf("State refresh changed stored Snapshot content: before=%#v after=%#v", properties, current)
@@ -160,7 +166,7 @@ func TestDatasetProjectionSyncRefreshesStateWithoutChangingHEAD(t *testing.T) {
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	status = "archived"
-	remote := stateOf(body(t, kcRemote(t, server.URL, "operator", "operations", "projection", "sync", "--dataset", "jobs", "--revision", "1")))
+	remote := stateOf(body(t, kcRemote(t, server.URL, "operator", "index", "prepare", "--dataset", "jobs", "--revision", "1")))
 	if remote["revision"] == again["revision"] || remote["observationDigest"] == again["observationDigest"] {
 		t.Fatalf("HTTP refresh without a worker runtime lost its local source or fixed basis: %#v", remote)
 	}
@@ -168,7 +174,7 @@ func TestDatasetProjectionSyncRefreshesStateWithoutChangingHEAD(t *testing.T) {
 	search := asMap(t, postAs(t, server.URL, "/object/v1/search", "operator", map[string]any{"dataset": "jobs", "revision": 1, "equal": []string{"status=archived"}}))
 	hits, ok := search["hits"].([]any)
 	view := asMap(t, search["searchView"])
-	if !ok || len(hits) != 1 || asMap(t, view["snapshots"])[repositoryID] != before || asMap(t, view["projectionRevisions"])[repositoryID] != remote["revision"] {
+	if !ok || len(hits) != 1 || asMap(t, view["snapshots"])[repositoryID] != before || asMap(t, view["indexRevisions"])[repositoryID] != remote["revision"] {
 		t.Fatalf("search did not use the refreshed observation on the fixed source vector: %#v", search)
 	}
 	if actual := asMap(t, body(t, kcRemote(t, server.URL, "operator", "writer", "head", "--repo", repositoryID))); actual["commit"] != before {

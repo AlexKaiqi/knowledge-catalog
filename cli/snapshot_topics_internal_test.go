@@ -68,9 +68,9 @@ func TestSnapshotHelpTopicNavigationIsReachableFromRoot(t *testing.T) {
 func TestSnapshotHelpTopicsDoNotRegisterBusinessCommands(t *testing.T) {
 	snapshotTopicHelpEnvironment(t)
 	// The retired projection notice is absent from the exact command contract;
-	// adding static teaching topics must keep the selected 53 leaves unchanged.
-	if got := len(CLICommandsForTest()); got != 53 {
-		t.Fatalf("static teaching topics changed the selected 53-leaf business surface including plugin explanation: %d", got)
+	// adding static teaching topics must keep the selected 54 leaves unchanged.
+	if got := len(CLICommandsForTest()); got != 54 {
+		t.Fatalf("static teaching topics changed the selected 54-leaf business surface including plugin explanation: %d", got)
 	}
 	for topic := range snapshotcli.HelpTopics() {
 		t.Run(topic, func(t *testing.T) {

@@ -48,6 +48,7 @@ func TestDatasetRelationContinuationKeepsSignedOriginalCorpusAcrossRepairAndCold
 	if err != nil {
 		t.Fatal(err)
 	}
+	buildDatasetCorpus(t, ws)
 	query := retrieval.RelationQuery{Endpoint: "article/plain", RelationType: "owned-by", Role: "subject"}
 	readPage := func(host *Home, request retrieval.RelationPageRequest) (retrieval.RelationPage, error) {
 		return readDatasetRelationPage(host, def.SetID, plain.id, plain.at, request)

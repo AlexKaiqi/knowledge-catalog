@@ -15,8 +15,8 @@ product_documents:
       U13: 验收规格已定义（qinghe accept-*）；修订对来源提交的保留与 lakeFS 回收规则检查尚无实现与执行入口。
       U14: 验收规格已定义（qinghe accept-*）；按 Dataset 的配额与自动发布最小间隔尚无实现与执行入口。
       U15: 验收规格已定义（qinghe accept-*）；紧急清除（共用索引按对象重写、证据观察值替换为已清除）尚无实现与执行入口。
-      U16: 当前发布仍要求调用方指定 revision，尚无服务端分配版本号、无变化定义不产生新号及请求内固定 latest 的完整用例关联；由 DEBT-DATASET-VERSION-CONTRACT-01 承接。
-      U17: 两个已发布版本的指针与元数据差异查询尚无公开执行入口及验证关联；来源不可用时保留差异并报告状态的路径亦未证明，由 DEBT-DATASET-VERSION-CONTRACT-01 承接。
+      U16: 当前发布仍要求调用方指定 revision，尚无服务端分配版本号、无变化定义不产生新号及请求内固定 latest 的完整用例关联；由 DATASET-REVISION-01 承接。
+      U17: 两个已发布版本的指针与元数据差异查询尚无公开执行入口及验证关联；来源不可用时保留差异并报告状态的路径亦未证明，由 DATASET-REVISION-01 承接。
   service:
     section: 用例
     gaps:

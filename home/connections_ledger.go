@@ -7,6 +7,7 @@ import (
 	"time"
 
 	bolt "go.etcd.io/bbolt"
+	"kc/internal/boltfile"
 	"kc/kernel"
 )
 
@@ -50,7 +51,7 @@ func createConnectionLedger(path string) error {
 	if err = file.Close(); err != nil {
 		return err
 	}
-	db, err := bolt.Open(path, 0600, &bolt.Options{Timeout: time.Second})
+	db, err := boltfile.Open(path, 0600, &bolt.Options{Timeout: time.Second})
 	if err != nil {
 		return err
 	}
@@ -70,8 +71,11 @@ func connectionDB(dir string, write bool, fn func(*bolt.Tx) error) error {
 	if info, err := os.Lstat(path); err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0600 {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "private connection ledger is unavailable; restore durable state with mode 0600")
 	}
-	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: !write, Timeout: time.Second})
+	db, err := boltfile.Open(path, 0600, &bolt.Options{ReadOnly: !write, Timeout: time.Second})
 	if err != nil {
+		if kernel.CodeOf(err) == kernel.ErrTemporaryUnavailable {
+			return err
+		}
 		return kernel.Fail(kernel.ErrPreconditionFailed, "private connection ledger cannot be opened")
 	}
 	defer db.Close()

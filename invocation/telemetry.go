@@ -165,7 +165,7 @@ func RecordDomainTelemetry(ctx context.Context, runtime *telemetry.Runtime, comm
 			payloadBytes = observation.WriterPayloadBytes
 		}
 		runtime.RecordWriter(ctx, surface, outcome, errorType, replayed, puts, removes, payloadBytes, elapsed)
-	case "operations-projection-sync", "operations-projection-notice":
+	case "index-prepare":
 		mode := "unknown"
 		if row, ok := JSONValue(visible).(map[string]any); ok {
 			mode = boundedTelemetryValue(StringValue(row["mode"]), "unknown", "ready", "incremental", "rebuild")

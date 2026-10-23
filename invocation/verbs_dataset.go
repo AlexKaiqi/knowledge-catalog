@@ -141,7 +141,7 @@ func VerbDefineDataset(cx *Invocation) (any, error) {
 		Authorize: func(context.Context, discoverydatasets.DatasetPublication) error {
 			return Authorize(cx.Home, "dataset.manage", cx.Flags, nil)
 		},
-		PrepareResources: cx.WS.DatasetPreparation.ExecuteProtected,
+		Prepare: cx.WS.DatasetPreparation.Execute,
 	}).Execute(cx.Context, discoverydatasets.DatasetPublication{Dataset: setID, Revision: revision, Sources: sources, Metadata: metadata})
 	if err != nil {
 		return nil, err
@@ -177,6 +177,16 @@ func datasetDefineResult(def dataset.Dataset, disposition string, published *Rec
 		}
 	}
 	return out
+}
+
+// indexStatus reports every in-flight revision build. It takes no Dataset
+// coordinate: progress belongs to the instance, and an empty list means
+// nothing is being built.
+func VerbIndexStatus(cx *Invocation) (any, error) {
+	if cx.WS == nil || cx.WS.Plugins == nil || !cx.WS.Plugins.Configured() {
+		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Dataset index plugin is not configured")
+	}
+	return cx.WS.Plugins.CatchUpProgress()
 }
 
 func VerbRegister(cx *Invocation) (any, error) {

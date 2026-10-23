@@ -52,6 +52,7 @@ func TestSceneAccessorRefreshUpdatesSearchIndex(t *testing.T) {
 	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", repositoryID))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "file.read", "--dataset", "agent"))
 	body(t, kc(home, "allow", "--principal", "agent:observer", "--action", "dataset.manage", "--dataset", "agent"))
+	body(t, kc(home, "allow", "--principal", "agent:observer", "--action", "index.manage", "--dataset", "agent"))
 	before := asMap(t, body(t, kc(home, "writer", "head", "--repo", repositoryID)))["commit"]
 
 	lookup := serv.NewHTTPStateLookup(nil)
@@ -69,7 +70,7 @@ func TestSceneAccessorRefreshUpdatesSearchIndex(t *testing.T) {
 		if receipt["dataset"] != "agent" || receipt["revision"] != float64(1) || !ok || len(members) != 1 || asMap(t, members[0])["repository"] != repositoryID || asMap(t, members[0])["commit"] != before {
 			t.Fatalf("refresh lost its accepted Dataset revision or source vector: %#v", receipt)
 		}
-		state := datasetProjectionState(t, receipt, repositoryID)
+		state := datasetIndexObservation(t, receipt, repositoryID)
 		revision, _ := state["revision"].(string)
 		digest, _ := state["observationDigest"].(string)
 		if state["mode"] != "rebuild" || revision == "" || digest == "" {
@@ -78,7 +79,7 @@ func TestSceneAccessorRefreshUpdatesSearchIndex(t *testing.T) {
 		return state
 	}
 	refresh := func() map[string]any {
-		return stateOf(postAs(t, server.URL, "/operations/v1/projections:sync", "agent:observer", map[string]any{
+		return stateOf(postAs(t, server.URL, "/operations/v1/indexes:prepare", "agent:observer", map[string]any{
 			"dataset": "agent", "revision": 1,
 		}))
 	}

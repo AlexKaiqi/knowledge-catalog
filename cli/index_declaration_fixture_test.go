@@ -30,26 +30,54 @@ func seedIndexDeclaration(t *testing.T, home, repository, declarationID, member 
 	body(t, kc(home, args...))
 }
 
-func datasetProjectionSnapshot(t *testing.T, report any, repository string) map[string]any {
+// datasetIndexMember finds the report row for one selected source. Both index
+// commands answer with the fixed source vector, so a missing row means the
+// report stopped describing the Dataset pin.
+func datasetIndexMember(t *testing.T, report any, repository string) map[string]any {
 	t.Helper()
-	for _, member := range asMap(t, report)["members"].([]any) {
+	members, ok := asMap(t, report)["members"].([]any)
+	if !ok {
+		t.Fatalf("Dataset index report has no members: %#v", report)
+	}
+	for _, member := range members {
 		row := asMap(t, member)
 		if row["repository"] == repository {
-			return asMap(t, asMap(t, report)["snapshot"])
+			return row
 		}
 	}
-	t.Fatalf("Dataset projection report omits %s: %#v", repository, report)
+	t.Fatalf("Dataset index report omits %s: %#v", repository, report)
 	return nil
 }
 
-func datasetProjectionState(t *testing.T, report any, repository string) map[string]any {
+// datasetIndexBasis is the corpus a revision froze.
+func datasetIndexBasis(t *testing.T, report any, repository string) map[string]any {
 	t.Helper()
-	for _, member := range asMap(t, report)["members"].([]any) {
-		row := asMap(t, member)
-		if row["repository"] == repository {
-			return asMap(t, asMap(t, report)["state"])
-		}
+	datasetIndexMember(t, report, repository)
+	basis, ok := asMap(t, report)["basis"].(map[string]any)
+	if !ok {
+		t.Fatalf("Dataset index report has no basis: %#v", report)
 	}
-	t.Fatalf("Dataset state projection report omits %s: %#v", repository, report)
-	return nil
+	return basis
+}
+
+// datasetIndexObservation is the observation generation a prepare published.
+func datasetIndexObservation(t *testing.T, report any, repository string) map[string]any {
+	t.Helper()
+	datasetIndexMember(t, report, repository)
+	observation, ok := asMap(t, report)["observation"].(map[string]any)
+	if !ok {
+		t.Fatalf("Dataset index report has no observation: %#v", report)
+	}
+	return observation
+}
+
+// datasetIndexObservationIfPublished reads the observation only when the
+// process published one. Observation publishing needs an injected runtime,
+// which a test server without a service principal does not have, so the
+// absence is a configuration fact rather than a contract failure.
+func datasetIndexObservationIfPublished(t *testing.T, report any, repository string) (map[string]any, bool) {
+	t.Helper()
+	datasetIndexMember(t, report, repository)
+	observation, ok := asMap(t, report)["observation"].(map[string]any)
+	return observation, ok
 }

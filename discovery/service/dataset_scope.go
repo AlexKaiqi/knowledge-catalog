@@ -25,11 +25,20 @@ func (e DatasetSearchExecutor) executeCorpus(ctx context.Context, request retrie
 	queryContext := ports.WithCandidateRecheck(ctx, func(ctx context.Context, hit retrieval.ObjectHit) (retrieval.ObjectHit, []objectmodel.UnitReadFailure, error) {
 		return hydrateDatasetCorpusHit(ctx, serving, logical, hit)
 	})
-	result, err := projection.SearchDataset(queryContext, func(id kernel.RepositoryID) (objectmodel.Repository, error) {
+	lookup := func(id kernel.RepositoryID) (objectmodel.Repository, error) {
 		return e.Repositories.Require(id, kernel.ErrObjectRefUnresolved)
-	}, serving.Pin(), request)
+	}
+	result, err := projection.SearchDataset(queryContext, lookup, serving.Pin(), request)
 	if err != nil {
 		if kernel.CodeOf(err) == kernel.ErrCapabilityUnsatisfied {
+			// Acceptance does not build, so "this revision is not searchable
+			// yet" is an answer, not a declaration shortfall: the build lane
+			// produces that corpus afterwards. Only a prepared revision can be
+			// missing a declared use, so ask before adding that repair hint
+			// (doc/design/dataset.md#发布).
+			if ready, known := datasetCorpusReady(ctx, projection, lookup, serving.Pin()); known && !ready {
+				return retrieval.SearchResult{}, err
+			}
 			return retrieval.SearchResult{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Dataset %s revision %d cannot satisfy SEARCH: %v; an index declaration selected into the dataset must declare the required text/filter/sort use; see kc schema describe --dataset %s --revision %d", serving.Pin().SetID, serving.Pin().Revision, err, serving.Pin().SetID, serving.Pin().Revision)
 		}
 		return retrieval.SearchResult{}, err
@@ -139,6 +148,29 @@ func hydrateDatasetCorpusSource(ctx context.Context, member objectmodel.Reposito
 
 type datasetProjectionScope interface {
 	DatasetMember(reader.MemberLookup, reader.DatasetPin, kernel.RepositoryID) (objectmodel.Repository, error)
+}
+
+// corpusReadiness is the narrow readiness question asked only after a query
+// failed for capability reasons. A projection that cannot answer leaves the
+// failure as it was.
+type corpusReadiness interface {
+	DatasetReadiness(context.Context, reader.MemberLookup, reader.DatasetPin) (ports.IndexReadiness, error)
+}
+
+// datasetCorpusReady reports the revision's readiness and whether it is known.
+// Acceptance does not build, so a failed query on an unbuilt revision says
+// nothing about declarations; the caller keeps the readiness answer instead of
+// adding a repair hint that would send the caller to the wrong place.
+func datasetCorpusReady(ctx context.Context, projection any, lookup reader.MemberLookup, pin reader.DatasetPin) (bool, bool) {
+	query, ok := projection.(corpusReadiness)
+	if !ok {
+		return false, false
+	}
+	result, err := query.DatasetReadiness(ctx, lookup, pin)
+	if err != nil {
+		return false, false
+	}
+	return result.Ready, true
 }
 
 func datasetMember(projection any, lookup reader.MemberLookup, serving *reader.Serving, id kernel.RepositoryID) (objectmodel.Repository, error) {

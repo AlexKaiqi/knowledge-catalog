@@ -29,6 +29,10 @@ type publishedObjectFixture struct {
 	resourceStore, otherStore                               snapshot.Store
 	offlineOrigin                                           string
 	offlineCalls                                            atomic.Int64
+	// indexed records whether this deployment configures an index instance.
+	// An unindexed deployment has no corpus to prepare, so preparation is
+	// skipped rather than attempted against an absent plugin.
+	indexed bool
 }
 
 func publishedObjectMaterials() string {
@@ -39,7 +43,8 @@ func newPublishedObjectFixture(t *testing.T, indexed bool) *publishedObjectFixtu
 	t.Helper()
 	f := &publishedObjectFixture{repository: "kr://test/published-objects/" + strings.ToLower(t.Name()),
 		resourceRepository: "kr://test/object-resources/" + strings.ToLower(t.Name()),
-		otherRepository:    "kr://test/other-resources/" + strings.ToLower(t.Name())}
+		otherRepository:    "kr://test/other-resources/" + strings.ToLower(t.Name()),
+		indexed:            indexed}
 	home := testkit.TempDir(t)
 	body(t, kc(home, "local", "init"))
 	if indexed && strings.TrimSpace(os.Getenv("KC_TEST_OPENSEARCH_URL")) == "" {
@@ -188,6 +193,13 @@ func (f *publishedObjectFixture) prepareSearchDataset(t *testing.T, commit strin
 	t.Helper()
 	body(t, f.govern(t, "dataset", "define", "--dataset", "published-objects", "--revision", "1", "--source", f.repository))
 	body(t, f.govern(t, "grant", "add", "--principal", "agent:object-consumer", "--dataset", "published-objects", "--action", "file.read"))
+	// Acceptance freezes the revision without building it, so discovery needs
+	// one explicit preparation to make the corpus exist (doc/design/dataset.md#发布).
+	// An unindexed deployment has no corpus at all: its assertions are that
+	// search reports a missing capability, so preparation must not be attempted.
+	if f.indexed {
+		body(t, f.govern(t, "index", "prepare", "--dataset", "published-objects", "--revision", "1"))
+	}
 }
 
 func (f *publishedObjectFixture) verifyDiscovery(t *testing.T, kind, object, keyword, commit string, definition map[string]any) {
@@ -208,7 +220,6 @@ func (f *publishedObjectFixture) verifyDiscovery(t *testing.T, kind, object, key
 		t.Fatalf("instance and its declared discovery fields do not share the publication basis: %#v", declaration)
 	}
 	f.prepareSearchDataset(t, commit)
-	body(t, f.govern(t, "operations", "projection", "sync", "--dataset", "published-objects", "--revision", "1"))
 	consumer := productClient(t, f.server, "agent:object-consumer").Objects()
 	for _, query := range [][]string{{"--query", keyword}, {"--eq", "kind=" + kind}} {
 		args := append([]string{"search", "--dataset", "published-objects", "--revision", "1"}, query...)

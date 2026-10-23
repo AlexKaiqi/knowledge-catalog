@@ -3,7 +3,6 @@ package datasets
 import (
 	"context"
 	"errors"
-	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -24,6 +23,32 @@ type datasetBasisRecorder struct {
 func (r *datasetBasisRecorder) PrepareServingBasis(_ context.Context, _ objectmodel.Repository, at kernel.CommitID) error {
 	r.commits = append(r.commits, at)
 	return r.err
+}
+
+// Publication validates the frozen candidate and builds nothing: a source that
+// would take minutes to index cannot hold the publisher open.
+func TestDatasetPublicationValidatesWithoutBuilding(t *testing.T) {
+	basis := &datasetBasisRecorder{}
+	preparation := Preparation{Enabled: true, Provider: basis,
+		Dependencies: func(dataset.ResolvedDataset) (map[kernel.RepositoryID]kernel.CommitID, error) {
+			return map[kernel.RepositoryID]kernel.CommitID{"schema": "s1"}, nil
+		},
+		PrepareDataset: func(context.Context, dataset.ResolvedDataset) error {
+			t.Fatal("publication built a corpus")
+			return nil
+		},
+	}
+	def := dataset.Dataset{SetID: "validated", Revision: 2,
+		Sources: []dataset.DatasetSource{{Repository: "source", Commit: "fixed-source"}},
+		Items:   []dataset.DatasetItem{{Repository: "source", Commit: "fixed-source", Prefix: "selected/"}},
+	}
+	prepared, err := preparation.Execute(context.Background(), def)
+	if err != nil || prepared.Dependencies["schema"] != "s1" || len(basis.commits) != 0 {
+		t.Fatalf("validation built or dropped dependencies: %+v %v %v", prepared, basis.commits, err)
+	}
+	if !reflect.DeepEqual(prepared.Sources, def.Sources) || !reflect.DeepEqual(prepared.Items, def.Items) {
+		t.Fatalf("validation changed the frozen candidate: %#v", prepared)
+	}
 }
 
 // Dataset publication refuses a candidate whose sources hold the same Aspect
@@ -77,52 +102,7 @@ func noDependencies(dataset.ResolvedDataset) (map[kernel.RepositoryID]kernel.Com
 	return nil, nil
 }
 
-func TestDatasetPreparationHandsOneFrozenCandidateToProvider(t *testing.T) {
-	def := dataset.Dataset{SetID: "selected", Revision: 3,
-		Sources: []dataset.DatasetSource{{Repository: "source", Commit: "fixed-source"}},
-		Items:   []dataset.DatasetItem{{Repository: "source", Commit: "fixed-source", Prefix: "selected/"}},
-	}
-	dependencies := map[kernel.RepositoryID]kernel.CommitID{"dependency": "fixed-dependency"}
-	refused := errors.New("corpus preparation refused")
-	for _, failure := range []error{nil, refused} {
-		t.Run(fmt.Sprint(failure), func(t *testing.T) {
-			calls := 0
-			legacy := &datasetBasisRecorder{}
-			prepare := Preparation{Enabled: true, Provider: legacy,
-				Lookup: func(kernel.RepositoryID) (objectmodel.Repository, error) {
-					t.Fatal("whole-candidate preparation entered per-source lookup")
-					return nil, nil
-				},
-				Dependencies: func(dataset.ResolvedDataset) (map[kernel.RepositoryID]kernel.CommitID, error) {
-					return dependencies, nil
-				},
-				PrepareDataset: func(_ context.Context, candidate dataset.ResolvedDataset) error {
-					calls++
-					want := dataset.ResolvedDataset{SetID: def.SetID, Revision: def.Revision,
-						Repositories: map[kernel.RepositoryID]kernel.CommitID{"source": "fixed-source"}, Items: def.Items, Dependencies: dependencies}
-					if !reflect.DeepEqual(candidate, want) {
-						t.Fatalf("provider lost frozen source, selection or dependency: got=%#v want=%#v", candidate, want)
-					}
-					return failure
-				},
-			}
-			result, err := prepare.Execute(context.Background(), def)
-			if !errors.Is(err, failure) || calls != 1 || len(legacy.commits) != 0 {
-				t.Fatalf("whole-candidate preparation calls=%d legacy=%v result=%#v err=%v", calls, legacy.commits, result, err)
-			}
-			if failure == nil {
-				want := def
-				want.Dependencies = dependencies
-				if !reflect.DeepEqual(result, want) {
-					t.Fatalf("prepared candidate changed its frozen identity: got=%#v want=%#v", result, want)
-				}
-			} else if !reflect.DeepEqual(result, dataset.Dataset{}) {
-				t.Fatalf("failed preparation returned an acceptable candidate: %#v", result)
-			}
-		})
-	}
-}
-
+// The accepted release, not the source HEAD, is what a background build reads.
 func TestDatasetRecoveryFollowsServingReleaseNotSourceHead(t *testing.T) {
 	s := testkit.NewSetup(t, "")
 	store := snapshot.NewRegistry()
@@ -152,11 +132,18 @@ func TestDatasetRecoveryFollowsServingReleaseNotSourceHead(t *testing.T) {
 	}
 	prepare := Preparation{Enabled: true, Provider: recorder, Dependencies: noDependencies, Lookup: func(kernel.RepositoryID) (objectmodel.Repository, error) { return s.Repo, nil }}
 	assertDemand([]kernel.CommitID{s.RootCommitID})
-	if _, err := prepare.Execute(context.Background(), cat.DumpState().Datasets[0]); err == nil {
-		t.Fatal("readiness failure was discarded")
+	// Publication validation never builds; only the background pass does.
+	if _, err := prepare.Execute(context.Background(), cat.DumpState().Datasets[0]); err != nil {
+		t.Fatal(err)
+	}
+	if len(recorder.commits) != 0 {
+		t.Fatalf("validation built a corpus: %v", recorder.commits)
+	}
+	if err := prepare.Build(context.Background(), cat.DumpState().Datasets[0]); !errors.Is(err, recorder.err) {
+		t.Fatalf("background build discarded its failure: %v", err)
 	}
 	recorder.err = nil
-	if _, err := prepare.Execute(context.Background(), cat.DumpState().Datasets[0]); err != nil {
+	if err := prepare.Build(context.Background(), cat.DumpState().Datasets[0]); err != nil {
 		t.Fatal(err)
 	}
 	if len(recorder.commits) != 2 || recorder.commits[0] != s.RootCommitID || recorder.commits[1] != s.RootCommitID {
@@ -166,7 +153,7 @@ func TestDatasetRecoveryFollowsServingReleaseNotSourceHead(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertDemand([]kernel.CommitID{latest})
-	if _, err := prepare.Execute(context.Background(), cat.DumpState().Datasets[0]); err != nil {
+	if err := prepare.Build(context.Background(), cat.DumpState().Datasets[0]); err != nil {
 		t.Fatal(err)
 	}
 	if recorder.commits[2] != latest {

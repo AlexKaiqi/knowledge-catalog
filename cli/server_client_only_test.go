@@ -133,7 +133,7 @@ func TestRemoteProviderReadBackAndConsumerDiscovery(t *testing.T) {
 	body(t, governor("dataset", "define", "--dataset", setID, "--revision", "1",
 		"--source", repositoryID))
 	if strings.TrimSpace(os.Getenv("KC_TEST_OPENSEARCH_URL")) != "" {
-		body(t, governor("operations", "projection", "sync", "--dataset", setID))
+		body(t, governor("index", "prepare", "--dataset", setID, "--revision", "1"))
 	}
 
 	// 4. Consumer discovers the composed set, freezes it, then searches or
@@ -354,7 +354,10 @@ func assertInventoryJSON(t *testing.T, home string, payload any) {
 func assertNoOperatorHint(t *testing.T, result kcRunResult) {
 	t.Helper()
 	text := result.Stdout
-	for _, leak := range []string{"operations projection", "operations access", "kc operations", "run operations", "OpenSearch", "Gitea", "--index", "refs/heads", "--home"} {
+	// The retired projection family stays in the list: it must not reappear as
+	// a hint, and its replacement (kc index describe / prepare) is just as much
+	// an operator path that a consumer error must never teach.
+	for _, leak := range []string{"operations projection", "kc index", "index prepare", "index describe", "operations access", "kc operations", "run operations", "OpenSearch", "Gitea", "--index", "refs/heads", "--home"} {
 		if strings.Contains(text, leak) {
 			t.Fatalf("consumer error taught operator internals %q: %s", leak, text)
 		}

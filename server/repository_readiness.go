@@ -49,7 +49,7 @@ func describeRepositoryReadiness(cx *inv.Invocation, item apphome.ManagedReposit
 			out.SchemaCount = &count
 		}
 	}
-	if err := inv.Authorize(cx.Home, "projection.read", map[string]FlagValue{"as": cx.Flag("as"), "repo": item.RepositoryID}, cx.Observation.Authorization); err != nil {
+	if err := inv.Authorize(cx.Home, "index.read", map[string]FlagValue{"as": cx.Flag("as"), "repo": item.RepositoryID}, cx.Observation.Authorization); err != nil {
 		out.Reason = readinessErrorCode(err)
 		if kernel.CodeOf(err) == kernel.ErrForbidden {
 			out.Search = "NOT_AUTHORIZED"

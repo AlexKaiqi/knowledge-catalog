@@ -75,7 +75,7 @@ func systemCapabilityGroup(path, action string) string {
 		return "search-object"
 	case "relations", "traverse":
 		return "explore-relations"
-	case "operations projection describe", "operations projection sync", "operations access-spec describe":
+	case "index", "index prepare", "index describe", "operations access-spec describe":
 		return "projections"
 	}
 	switch {
@@ -99,7 +99,7 @@ func systemCapabilityGroup(path, action string) string {
 		return "resource-access"
 	case strings.HasPrefix(action, "writer."):
 		return "publish-object"
-	case strings.HasPrefix(action, "projection."), action == "object.access.describe":
+	case strings.HasPrefix(action, "index."), action == "object.access.describe":
 		return "projections"
 	case strings.HasPrefix(action, "operations.hooks."):
 		return "extensions"

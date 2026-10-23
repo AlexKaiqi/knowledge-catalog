@@ -41,13 +41,13 @@ func TestProductRepoCommitFreezesObjectAndCurrentPermissions(t *testing.T) {
 	body(t, govern("dataset", "define", "--dataset", "temp-search", "--revision", "1", "--source", repo))
 	searchAvailable := os.Getenv("KC_TEST_OPENSEARCH_URL") != ""
 	if searchAvailable {
-		body(t, govern("operations", "projection", "sync", "--dataset", "temp-search"))
+		body(t, govern("index", "prepare", "--dataset", "temp-search", "--revision", "1"))
 	}
 	body(t, govern("writer", "put", testObjectReference(t, repo, "note/one", ""), "--repo", repo, "--command-id", "temp-second", "--schema-ref", "schema/note", "--value", `{"body":"second"}`))
 	body(t, govern("dataset", "define", "--dataset", "temp-search", "--revision", "2", "--source", repo))
 	before := asMap(t, body(t, govern("show")))
 	if searchAvailable {
-		body(t, govern("operations", "projection", "sync", "--dataset", "temp-search"))
+		body(t, govern("index", "prepare", "--dataset", "temp-search", "--revision", "2"))
 		for _, args := range [][]string{
 			{"search", "--dataset", "temp-search", "--revision", "1", "--query", "first"},
 		} {

@@ -255,9 +255,9 @@ func (idx *Index) searchDatasetState(ctx context.Context, s datasetSpace, reques
 	physical := s.spec
 	physical.Repository = s.id
 	physical.Commit = s.basis
-	view := retrieval.SearchView{Snapshots: s.pin.Repositories, ProjectionRevisions: map[kernel.RepositoryID]string{}}
+	view := retrieval.SearchView{Snapshots: s.pin.Repositories, IndexRevisions: map[kernel.RepositoryID]string{}}
 	for id := range s.pin.Repositories {
-		view.ProjectionRevisions[id] = state.revision
+		view.IndexRevisions[id] = state.revision
 	}
 	result, err := idx.searchEngineAtContext(ctx, nil, eng, s.basis, request, view, nil, searchEngineScope{spec: physical, filter: s.filterCandidates,
 		append: func(page ports.CandidatePage, req retrieval.SearchRequest, residual bool, out *retrieval.SearchResult, verifier retrieval.ResidualMatchVerifier) error {

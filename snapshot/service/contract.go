@@ -58,9 +58,10 @@ type Resources struct {
 	// It must not register a source; membership is accepted by Datasets alone.
 	BeforeAttach  func(context.Context, identity.HTTPIdentity, kernel.RepositoryID) error
 	BeforePublish func(context.Context, identity.HTTPIdentity, dataset.Service, dataset.Dataset) (dataset.Dataset, map[string]any, error)
-	// PreparePublication readies derived capabilities for the frozen candidate
-	// and returns it with any reference dependencies it froze. It may not
-	// change the candidate's identity or sources.
+	// PreparePublication validates the frozen candidate and returns it with any
+	// reference dependencies it froze. It may not change the candidate's
+	// identity or sources, and it must not ready derived capabilities: a
+	// corpus is built after acceptance, as the accepted release's own task.
 	PreparePublication func(context.Context, identity.HTTPIdentity, dataset.Dataset) (dataset.Dataset, error)
 	// EnsureDataset is optional host coordination before named consumption.
 	// KC only confirms an accepted definition. A host that adopts a recipe must

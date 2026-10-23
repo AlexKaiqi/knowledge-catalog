@@ -60,9 +60,9 @@ func verbHelp(cx *inv.Invocation) (any, error) {
 func indexVerbs() map[string]inv.Command {
 	return map[string]inv.Command{
 		"object-search":                   {Stage: invoke.StageGoverned, Run: inv.VerbSearch},
-		"operations-projection-describe":  {Stage: invoke.StageGoverned, Run: inv.VerbDescribeIndex},
-		"operations-projection-sync":      {Stage: invoke.StageGoverned, Run: inv.VerbIndexSync},
-		"operations-projection-notice":    {Stage: invoke.StageGoverned, Run: inv.VerbIndexNotify},
+		"index":                           {Stage: invoke.StageGoverned, Run: inv.VerbIndexReady},
+		"index-prepare":                   {Stage: invoke.StageGoverned, Run: inv.VerbIndexSync},
+		"index-describe":                  {Stage: invoke.StageGoverned, Run: inv.VerbDescribeIndex},
 		"operations-access-spec-describe": {Stage: invoke.StageGoverned, Run: inv.VerbDescribeAccess},
 	}
 }

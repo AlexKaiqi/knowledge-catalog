@@ -479,7 +479,7 @@ U14 的一次任务完整选用、资源归属与退出复用[共同插件验收
 | V-05 | W1 | 未知 Workspace | `DATASET_INVALID` | 已定位 | consume_flow |
 | V-06 | W4 | `search --dataset` | 各仓在**这次 pin** 上 SearchAt，不回绕 live | 已定位 | consume_flow / `TestSearchAtDoesNotRewindLive` |
 | V-07 | W4 仓无显式 mount | Workspace File Gateway `mounts:list` / kcfs | `CAPABILITY_UNSATISFIED`；禁止扫描仓伪造工作树 | 已定位 | `TestObjectOnlyWorkspaceCannotCheckoutByScanning` |
-| V-11 | W4 | `show` + `SnapshotService.ResolveDataset` + `operations access-spec describe` + `operations projection describe --commit` | State + pin + AccessPlan + 钉死 basis 的投影；不是新协议对象 | 已定位 | consume_flow |
+| V-11 | W4 | `show` + `SnapshotService.ResolveDataset` + `operations access-spec describe` + `index describe --commit` | State + pin + AccessPlan + 钉死 basis 的投影；不是新协议对象 | 已定位 | consume_flow |
 | V-12 | W4 | `resolve` / `log --object` / `provenance` / `schema describe --dataset` | RESOLVE 是 status（可打到 Address）；Workspace 缺失为 `[]`、`--repo` 缺失为单条 `UNRESOLVED`；log 是有界页且拒绝 `--aspect`/`--member`；provenance 拒绝 Address 坐标 | 已定位 | consume_flow / S5 / `TestCatalogViewsChecksAndObjectResolve` `TestRemoteProviderReadBackAndConsumerDiscovery` `TestObjectResolveAndObjectLogOverHTTP` |
 | V-14 | W4 | `dataset define` | **不发权**；无 `--repo` allow 不能读成员 | 已定位 | `TestDatasetAuthorizationCoverageIsHonest` |
 
@@ -510,7 +510,7 @@ U14 的一次任务完整选用、资源归属与退出复用[共同插件验收
 | I-04 | 修改选入的索引声明成员或所指 Schema | 发布新修订并准备 | 重新核对受影响成员；结构/构建变化重建，普通内容变更保留增量合同 | 已定位 | `TestIndexDeclarationChangeRebuildsProjectionAndContentRemainsIncremental` `TestIndexSchemaChangeForcesRebuild` |
 | I-05 | Dataset 选入跨来源的声明和对象 | `operations access-spec describe --dataset` | 统一解释修订内的声明；所指 Schema 按固定来源解析，来源仓自身声明不自动生效 | 已定位 | `TestDatasetDeclarationNamespaceCrossesSelectedSourcesOnly` / consume |
 | I-06 | Dataset 未选入所需索引声明 | 编译与查询 | 不从 Schema 或来源仓隐式补能力；已选入声明才提供对应检索角色 | 已定位 | `TestIndexDeclarationMembersAreTheOnlyRetrievalSource` / `TestWorkspaceSearchDoesNotAdoptUnselectedSourceDeclarations` |
-| I-07 | Dataset 修订已冻结 | `operations projection describe --dataset --revision` | 返回修订与每来源的固定 basis、就绪及编译依据；不跟 HEAD、不触发构建 | 已定位 | `TestDescribeIndexShowsCompiledSpec` / consume |
+| I-07 | Dataset 修订已冻结 | `index describe --dataset --revision` | 返回修订与每来源的固定 basis、就绪及编译依据；不跟 HEAD、不触发构建 | 已定位 | `TestDescribeIndexShowsCompiledSpec` / consume |
 | I-08 | 未声明 MATCH 车道 | `search --query` | `CAPABILITY_UNSATISFIED` | 已定位 | index / searchop |
 | I-09 | Hook 失败 | `dataset define` | 配方仍成功（hook 不回滚 ①） | 已定位 | `TestCatalogHookFailureDoesNotFailDefineDataset` |
 | I-10 | 两个 schema/aspect 有同名 path | 裸 path SEARCH | `USAGE_INVALID`；完整 FieldRef 可用 | 已定位 | `TestCheckSearchRejectsAmbiguousBarePath` |
@@ -525,7 +525,7 @@ U14 的一次任务完整选用、资源归属与退出复用[共同插件验收
 | I-19 | State text + typed range + Snapshot filter | OpenSearch SEARCH | 同一完整 object 文档隐式 AND，并从同 revision Serving State hydrate | 已定位 | `TestLiveOpenSearchStateProjectionRefreshAndSameBasisHydrate` |
 | I-20 | 动态 SEARCH | 返回 SearchView/hit | SearchView 仅含紧凑 `projectionRevisions`；逐 hit `ObjectVersion.Observations` 完整 | 已定位 | live OpenSearch + Docker HTTP journey / `TestDynamicProjectionPublicEnvelopesStayCompact` |
 | I-21 | 底层维护通知或 Dataset 管理刷新 | Observer 只发定位；公开命令按 Dataset 修订刷新 | 底层通知不接正文，公开 notice 无写入路由；Dataset 刷新发布新观察且 HEAD 不变 | 已定位 | `TestChangeNoticeRejectsBody` `TestRetiredProjectionNotifyHTTPHasNoMutationRoute` `TestProjectionControllerNoticePullsStateWithoutChangingSnapshot` `TestDatasetProjectionSyncRefreshesStateWithoutChangingHEAD` |
-| I-22 | 独立 runtime + OpenSearch 容器 | HTTP facade operations projection sync/search | 动态字段发现候选、同 basis hydrate、Snapshot 不变 | 已定位 | `make test-state-runtime-e2e` |
+| I-22 | 独立 runtime + OpenSearch 容器 | HTTP facade index prepare/search | 动态字段发现候选、同 basis hydrate、Snapshot 不变 | 已定位 | `make test-state-runtime-e2e` |
 | I-23 | 固定 Workspace + 显式 ObjectRef 候选 | typed RERANK | 逐 Ref 授权、同 pin Canonical 回读、EvaluationProjection 后才调用 Provider；返回 SearchView 与模型/spec/candidate digest 证据 | 已定位 | `TestHTTPRerankReadsAuthorizedCanonicalCandidatesAndProjectsModelFields` |
 | I-24 | Reranker 返回未知、重复、遗漏或不允许的未评判 Ref | 执行 Refine | `PRECONDITION_FAILED` / `CAPABILITY_UNSATISFIED`；Provider 不能生成对象或改写输出合同 | 已定位 | `TestExecuteRerankRejectsDishonestOrIncompleteProviderOutput` / `TestExecuteRerankFailsClosedForUnjudgedWhenContractForbidsIt` |
 | I-25 | SEARCH 命中进入语义重排 | `search:rerank` | 同一 SearchView、真实 lane/originalRank 进入结果证据但不进入模型请求；只调用一次 Provider | 已定位 | `TestHTTPSearchRerankPreservesRetrievalEvidenceAndUsesOneFixedView` |
@@ -780,7 +780,7 @@ kc show
 kc writer commit --command-id u1 --repo kr://acme/public/core --dir ./drafts
 kc dataset define --dataset agent --revision 1 \
   --source kr://acme/public/core
-kc operations projection sync --dataset agent --revision 1
+kc index prepare --dataset agent --revision 1
 kc read 'urn:kc:object:runbooks/oncall' --dataset agent
 kc resolve --dataset agent --object runbooks/oncall
 kc operations access-spec describe --dataset agent                # 治理/运维诊断，不是消费命令

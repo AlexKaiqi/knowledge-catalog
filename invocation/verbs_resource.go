@@ -190,7 +190,7 @@ func RefineEventFromExecution(cx *Invocation, execution retrieval.RerankExecutio
 	event := observability.RefineEvent{
 		Identity: identity, Trace: trace, Action: ActionOf("rerank", cx.Flags), RequestID: requestID, Dataset: workspace,
 		SearchView: observability.RefineSearchView{
-			Snapshots: execution.SearchView.Snapshots, ProjectionRevisions: execution.SearchView.ProjectionRevisions,
+			Snapshots: execution.SearchView.Snapshots, IndexRevisions: execution.SearchView.IndexRevisions,
 		},
 		Spec: observability.RefineSpec{
 			SpecRef: execution.Spec.SpecRef, Revision: execution.Spec.Revision, Operator: string(execution.Spec.Operator),

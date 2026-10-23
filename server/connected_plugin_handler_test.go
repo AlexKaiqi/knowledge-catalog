@@ -44,7 +44,7 @@ func TestConnectedPluginHandlerExplicitStartUsesOneFixedRuntime(t *testing.T) {
 	if f.metadataReads.Load() != metadataBefore {
 		t.Fatal("explicit Start read Repository metadata to choose plugins; the deployment installs them")
 	}
-	response := fileGatewayRequest(t, handler, f.principal, "/operations/v1/projections:sync", map[string]any{
+	response := fileGatewayRequest(t, handler, f.principal, "/operations/v1/indexes:prepare", map[string]any{
 		"dataset": "connected-articles", "revision": 1,
 	})
 	if response.Code != http.StatusOK {

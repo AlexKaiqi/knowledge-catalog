@@ -31,7 +31,10 @@ func (f *httpFacade) registerManagementRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /writer/v1/repositories/{repository}/merges", f.writerMerge)
 
 	mux.HandleFunc("GET /operations/v1/stores", f.observeStores)
-	mux.HandleFunc("POST /operations/v1/projections:describe", f.projectionDescribe)
+	mux.HandleFunc("POST /operations/v1/indexes:ready", f.indexReady)
+	mux.HandleFunc("POST /operations/v1/indexes:prepare", f.indexPrepare)
+	mux.HandleFunc("POST /operations/v1/indexes:describe", f.indexDescribe)
+	mux.HandleFunc("POST /operations/v1/indexes:status", f.indexStatus)
 	mux.HandleFunc("POST /operations/v1/access-specs:describe", f.accessSpecDescribe)
 	mux.HandleFunc("GET /operations/v1/hooks", f.hookList)
 	mux.HandleFunc("POST /operations/v1/hooks", f.hookAdd)
@@ -205,7 +208,7 @@ func (f *httpFacade) observeStores(w http.ResponseWriter, r *http.Request) {
 	f.executeTyped(w, r, "operations-stores", "inventory.read", inv.Command{Stage: invoke.StageHome, Run: inv.VerbObserveStores}, map[string]FlagValue{})
 }
 
-func (f *httpFacade) projectionDescribe(w http.ResponseWriter, r *http.Request) {
+func (f *httpFacade) indexReady(w http.ResponseWriter, r *http.Request) {
 	var q projectionRequest
 	if decodeServiceRequest(w, r, &q) {
 		flags := projectionFlags(q)
@@ -213,7 +216,40 @@ func (f *httpFacade) projectionDescribe(w http.ResponseWriter, r *http.Request) 
 			invoke.WriteInvoke(w, inv.ErrorResult(err))
 			return
 		}
-		f.executeTyped(w, r, "operations-projection-describe", "file.read", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbDescribeIndex}, flags)
+		f.executeTyped(w, r, "index-ready", "index.read", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbIndexReady}, flags)
+	}
+}
+
+func (f *httpFacade) indexPrepare(w http.ResponseWriter, r *http.Request) {
+	var q projectionRequest
+	if decodeServiceRequest(w, r, &q) {
+		flags := projectionFlags(q)
+		if err := inv.RequireDatasetDiscoveryScope(flags); err != nil {
+			invoke.WriteInvoke(w, inv.ErrorResult(err))
+			return
+		}
+		f.executeTyped(w, r, "index-prepare", "index.manage", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbIndexSync}, flags)
+	}
+}
+
+func (f *httpFacade) indexDescribe(w http.ResponseWriter, r *http.Request) {
+	var q projectionRequest
+	if decodeServiceRequest(w, r, &q) {
+		flags := projectionFlags(q)
+		if err := inv.RequireDatasetDiscoveryScope(flags); err != nil {
+			invoke.WriteInvoke(w, inv.ErrorResult(err))
+			return
+		}
+		f.executeTyped(w, r, "index-describe", "index.read", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbDescribeIndex}, flags)
+	}
+}
+
+// indexStatus answers "where is this catch-up" with no Dataset coordinate: it
+// reports every build this instance is running. An empty body means nothing is
+// being built, which is a normal answer rather than an error.
+func (f *httpFacade) indexStatus(w http.ResponseWriter, r *http.Request) {
+	if decodeEmptyServiceRequest(w, r) {
+		f.executeTyped(w, r, "index-status", "index.read", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbIndexStatus}, map[string]FlagValue{})
 	}
 }
 func (f *httpFacade) accessSpecDescribe(w http.ResponseWriter, r *http.Request) {

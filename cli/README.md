@@ -113,7 +113,7 @@ create 只让 KC 能打开该 Repository，不登记来源成员；用户随后�
 `home.ManagedRepositoryResult` 的调用者 command 回执。`GET /repositories/{repository}` 只
 交付不带仓数据的网页外壳，所有内容仍经同源 typed API 认证授权。
 
-`RepositoryReadiness` 分别报告 `publication/publishedCommit`、可查询时的 `schemaCount` 与 `search/searchBasis/reason`。README 是仓内对象，不进入这份就绪结构。检索状态需要另有当前仓的 `projection.read`；只有固定发布版本通过 `index.CheckSearchProjectionAt` 的 READY、AccessDigest 与物理提供方校验，才返回 `READY`。已观察到的 `BUILDING/UPDATING` 表示处理中，`FAILED/RETIRED` 表示失败或停用，`NOT_READY` 表示尚无可用投影；都不改变已经发布的版本。`NOT_CONFIGURED` 表示没有索引实例，`NOT_AUTHORIZED` 只表示明确拒绝，提供方或授权存储异常为 `UNAVAILABLE` 并带错误原因。此只读状态不会触发查询或重建，也不代替具体查询的能力与权限检查。
+`RepositoryReadiness` 分别报告 `publication/publishedCommit`、可查询时的 `schemaCount` 与 `search/searchBasis/reason`。README 是仓内对象，不进入这份就绪结构。检索状态需要另有当前仓的 `index.read`；只有固定发布版本通过 `index.CheckSearchProjectionAt` 的 READY、AccessDigest 与物理提供方校验，才返回 `READY`。已观察到的 `BUILDING/UPDATING` 表示处理中，`FAILED/RETIRED` 表示失败或停用，`NOT_READY` 表示尚无可用投影；都不改变已经发布的版本。`NOT_CONFIGURED` 表示没有索引实例，`NOT_AUTHORIZED` 只表示明确拒绝，提供方或授权存储异常为 `UNAVAILABLE` 并带错误原因。此只读状态不会触发查询或重建，也不代替具体查询的能力与权限检查。
 
 ### 应用操作
 

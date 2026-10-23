@@ -206,3 +206,18 @@ func (p *IndexPlugins) Targets() ([]index.ProjectionTarget, error) {
 	}
 	return out, nil
 }
+
+// CatchUp reports the revision builds running right now across instances. An
+// empty result is a normal answer, not a failure: nothing is being built.
+func (p *IndexPlugins) CatchUpProgress() ([]index.IndexCatchUp, error) {
+	done, err := p.takeAll()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
+	var out []index.IndexCatchUp
+	for _, instance := range p.instances {
+		out = append(out, instance.services.Maintenance.CatchUpProgress()...)
+	}
+	return out, nil
+}

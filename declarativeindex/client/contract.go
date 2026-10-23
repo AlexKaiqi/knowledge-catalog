@@ -14,11 +14,17 @@ type Config struct {
 	Transport Transport
 }
 type RequestOptions struct{ RequestID string }
+
+// Client is the index maintenance surface. Readiness, diagnosis and progress
+// are three questions about the same state and are deliberately separate
+// calls: readiness stays cheap and never carries diagnostic members.
 type Client interface {
-	DescribeProjection(context.Context, ProjectionRequest, RequestOptions, any) error
-	SyncProjection(context.Context, ProjectionRequest, RequestOptions, any) error
+	IndexReady(context.Context, IndexRequest, RequestOptions, any) error
+	IndexPrepare(context.Context, IndexRequest, RequestOptions, any) error
+	IndexDescribe(context.Context, IndexRequest, RequestOptions, any) error
+	IndexStatus(context.Context, RequestOptions, any) error
 }
-type ProjectionRequest struct {
+type IndexRequest struct {
 	Dataset  string `json:"dataset"`
 	Revision int    `json:"revision,omitempty"`
 }

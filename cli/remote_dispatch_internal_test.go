@@ -55,8 +55,9 @@ var remoteDispatchRoutes = []remoteDispatchRouteCase{
 	{path: "grant add", method: http.MethodPost, target: "/admin/v1/grants"},
 	{path: "grant list", method: http.MethodGet, target: "/admin/v1/grants?action=object.read&principal=user%3Aalice"},
 	{path: "grant remove", method: http.MethodDelete, target: "/admin/v1/grants/rule-A"},
-	{path: "operations projection sync", method: http.MethodPost, target: "/operations/v1/projections:sync", flags: map[string]FlagValue{"dataset": "agent", "revision": "1"}},
-	{path: "operations projection describe", method: http.MethodPost, target: "/operations/v1/projections:describe", flags: map[string]FlagValue{"dataset": "agent", "revision": "1"}},
+	{path: "index", method: http.MethodPost, target: "/operations/v1/indexes:ready", flags: map[string]FlagValue{"dataset": "agent", "revision": "1"}},
+	{path: "index prepare", method: http.MethodPost, target: "/operations/v1/indexes:prepare", flags: map[string]FlagValue{"dataset": "agent", "revision": "1"}},
+	{path: "index describe", method: http.MethodPost, target: "/operations/v1/indexes:describe", flags: map[string]FlagValue{"dataset": "agent", "revision": "1"}},
 	{path: "operations access-spec describe", method: http.MethodPost, target: "/operations/v1/access-specs:describe", flags: map[string]FlagValue{"dataset": "agent"}},
 	{path: "operations hook add", method: http.MethodPost, target: "/operations/v1/hooks"},
 	{path: "operations hook list", method: http.MethodGet, target: "/operations/v1/hooks"},
@@ -148,15 +149,15 @@ func TestRemoteTypedDispatchRoutesSupportedOperations(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if test.path == "operations projection sync" || test.path == "operations projection describe" {
-				var payload indexclient.ProjectionRequest
+			if test.path == "index" || test.path == "index prepare" || test.path == "index describe" {
+				var payload indexclient.IndexRequest
 				decoder := json.NewDecoder(bytes.NewReader(capturedBody))
 				decoder.DisallowUnknownFields()
 				if err := decoder.Decode(&payload); err != nil {
 					t.Fatal(err)
 				}
 				if payload.Dataset != "agent" || payload.Revision != 1 {
-					t.Fatalf("projection dispatch lost its Dataset revision contract: %s", capturedBody)
+					t.Fatalf("index dispatch lost its Dataset revision contract: %s", capturedBody)
 				}
 			}
 			if test.path == "pin" {

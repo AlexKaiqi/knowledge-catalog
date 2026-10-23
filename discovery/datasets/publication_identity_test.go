@@ -2,13 +2,16 @@ package datasets
 
 import (
 	"context"
-	"kc/kernel"
-	"kc/snapshot/dataset"
 	"reflect"
 	"testing"
+
+	"kc/kernel"
+	"kc/snapshot/dataset"
 )
 
-func TestDatasetPreparationCannotMutateFrozenCandidateThroughSharedValues(t *testing.T) {
+// Validation may not rewrite the frozen candidate, not even through the slices,
+// pointers and maps it shares with the registry's frozen value.
+func TestDatasetValidationCannotMutateFrozenCandidateThroughSharedValues(t *testing.T) {
 	for _, mutation := range []struct {
 		name   string
 		change func(*dataset.Dataset)
@@ -22,42 +25,40 @@ func TestDatasetPreparationCannotMutateFrozenCandidateThroughSharedValues(t *tes
 		t.Run(mutation.name, func(t *testing.T) {
 			fixture := newPublicationFailureFixture(t)
 			service := guardedPublicationService(t, fixture)
-			ticket := &trackedPublicationProtection{admissionResource: admissionResource{admit: func(context.Context, dataset.Dataset, dataset.PublicationAuthority) error { return nil }}}
 			publisher := DatasetPublisher{Registry: service, Authorize: func(context.Context, DatasetPublication) error { return nil },
-				PrepareResources: func(_ context.Context, def dataset.Dataset) (dataset.Dataset, PublicationProtection, error) {
+				Prepare: func(_ context.Context, def dataset.Dataset) (dataset.Dataset, error) {
 					mutation.change(&def)
-					return def, ticket, nil
+					return def, nil
 				}}
 			_, err := publisher.Execute(context.Background(), DatasetPublication{Dataset: "reading", Revision: 2, Sources: fixture.sources, Metadata: map[string]string{"purpose": "original"}})
 			if kernel.CodeOf(err) != kernel.ErrPreconditionFailed {
 				t.Fatalf("mutated frozen candidate was not rejected before publication: %v", err)
 			}
-			if ticket.admissions != 0 || ticket.confirmations != 0 || ticket.cancellations != 1 || ticket.closes != 1 || fixture.authority.attempts != 0 {
-				t.Fatalf("mutated preparation crossed admission: %+v attempts=%d", ticket, fixture.authority.attempts)
+			if fixture.authority.attempts != 0 {
+				t.Fatalf("mutated validation reached authority CAS: %d", fixture.authority.attempts)
 			}
 			if !reflect.DeepEqual(dataset.NormalizeState(service.DumpState()), fixture.acceptedState) {
-				t.Fatal("preparation mutation changed accepted authority state")
+				t.Fatal("validation mutation changed accepted authority state")
 			}
 		})
 	}
 }
 
-func TestDatasetPreparationCanReturnFrozenDependenciesWithoutChangingCandidate(t *testing.T) {
+// Frozen reference dependencies are the one validation output allowed to reach
+// the accepted release.
+func TestDatasetValidationCanReturnFrozenDependenciesWithoutChangingCandidate(t *testing.T) {
 	fixture := newPublicationFailureFixture(t)
 	service := guardedPublicationService(t, fixture)
-	ticket := &trackedPublicationProtection{admissionResource: admissionResource{admit: func(_ context.Context, def dataset.Dataset, _ dataset.PublicationAuthority) error {
-		if def.Dependencies[fixture.setup.RepositoryID] != fixture.nextCommit {
-			t.Fatal("frozen dependency was not admitted")
-		}
-		return nil
-	}}}
 	publisher := DatasetPublisher{Registry: service, Authorize: func(context.Context, DatasetPublication) error { return nil },
-		PrepareResources: func(_ context.Context, def dataset.Dataset) (dataset.Dataset, PublicationProtection, error) {
+		Prepare: func(_ context.Context, def dataset.Dataset) (dataset.Dataset, error) {
+			if def.Dependencies[fixture.setup.RepositoryID] == fixture.nextCommit {
+				t.Fatal("validation received dependencies it was supposed to freeze")
+			}
 			def.Dependencies = map[kernel.RepositoryID]kernel.CommitID{fixture.setup.RepositoryID: fixture.nextCommit}
-			return def, ticket, nil
+			return def, nil
 		}}
 	result, err := publisher.Execute(context.Background(), DatasetPublication{Dataset: "reading", Revision: 2, Sources: fixture.sources})
-	if err != nil || result.Dependencies[fixture.setup.RepositoryID] != fixture.nextCommit || ticket.admissions != 1 || ticket.confirmations != 1 || ticket.cancellations != 0 || ticket.closes != 1 {
-		t.Fatalf("valid dependency preparation rejected: %#v %+v %v", result, ticket, err)
+	if err != nil || result.Dependencies[fixture.setup.RepositoryID] != fixture.nextCommit || result.Revision != 2 {
+		t.Fatalf("valid dependency validation rejected: %#v %v", result, err)
 	}
 }

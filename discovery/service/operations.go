@@ -200,7 +200,7 @@ type AccessOverview struct {
 	Plugins []consumerplugin.SourcePlugin `json:"plugins"`
 }
 
-func (e AccessDescribeExecutor) Execute(_ context.Context, request AccessDescribeRequest) (AccessOverview, error) {
+func (e AccessDescribeExecutor) Execute(ctx context.Context, request AccessDescribeRequest) (AccessOverview, error) {
 	if e.Repositories == nil {
 		return AccessOverview{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied,
 			"access describe service is unavailable")
@@ -230,7 +230,7 @@ func (e AccessDescribeExecutor) Execute(_ context.Context, request AccessDescrib
 			return retrieval.AccessSpecFromReport(report), nil
 		}
 	}
-	plan, err := retrieval.PlanAccess(e.Repositories, request.Pin, contracts)
+	plan, err := retrieval.PlanAccessContext(ctx, e.Repositories, request.Pin, contracts)
 	if err != nil {
 		return AccessOverview{}, err
 	}

@@ -96,7 +96,7 @@ func TestLiveHTTPRuntimeBuildsOpenSearchStateProjection(t *testing.T) {
 	if err != nil || len(result.Hits) != 1 || len(result.Hits[0].Version.Observations) != 1 {
 		t.Fatalf("cross-container State search: %#v %v", result, err)
 	}
-	if result.SearchView.ProjectionRevisions[setup.RepositoryID] != sync.Revision {
+	if result.SearchView.IndexRevisions[setup.RepositoryID] != sync.Revision {
 		t.Fatalf("SearchView revision: %#v", result.SearchView)
 	}
 	raw, err := setup.Repo.Read(address.ObjectID, commit)

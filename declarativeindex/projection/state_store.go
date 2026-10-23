@@ -12,6 +12,7 @@ import (
 	"time"
 
 	bolt "go.etcd.io/bbolt"
+	"kc/internal/boltfile"
 	"kc/kernel"
 	objectmodel "kc/object"
 )
@@ -111,7 +112,7 @@ func (s *stateServingStore) DigestContext(ctx context.Context, commit kernel.Com
 }
 
 type stateServingStore struct {
-	db        *bolt.DB
+	db        *boltfile.Handle
 	file      string
 	dir       string
 	temp      string
@@ -158,7 +159,7 @@ func openStateServingStore(root string, key engineKey, revision string) (*stateS
 		}
 		return nil, err
 	}
-	db, err := bolt.Open(file, 0o600, &bolt.Options{Timeout: time.Second})
+	db, err := boltfile.Open(file, 0o600, &bolt.Options{Timeout: time.Second})
 	if err != nil {
 		_ = os.Remove(file)
 		if temp != "" {

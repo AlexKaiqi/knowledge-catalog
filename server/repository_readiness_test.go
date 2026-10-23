@@ -75,7 +75,7 @@ func repositoryReadinessFixture(t *testing.T) (*inv.Invocation, kchome.ManagedRe
 	eng.activeCalls = 0
 	eng.metaReads = 0
 	dir := t.TempDir()
-	if err := inv.WriteAllow(dir, inv.AllowFile{Version: inv.AllowVersion, Rules: []inv.AllowRule{{ID: "projection", Principal: "kaiqidong", Repo: string(repo.ID()), Actions: []string{"projection.read"}}}}); err != nil {
+	if err := inv.WriteAllow(dir, inv.AllowFile{Version: inv.AllowVersion, Rules: []inv.AllowRule{{ID: "index", Principal: "kaiqidong", Repo: string(repo.ID()), Actions: []string{"index.read"}}}}); err != nil {
 		t.Fatal(err)
 	}
 	cx := &inv.Invocation{Home: dir, WS: &kchome.Home{Reader: reader.NewReader(store), Index: idx}, Flags: map[string]invoke.FlagValue{"as": "kaiqidong"}, Observation: &invoke.ObservationTelemetry{}}

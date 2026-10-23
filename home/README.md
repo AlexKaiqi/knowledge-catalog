@@ -94,7 +94,7 @@ LakeFS 业务仓的 Graveler 名、协议 `--repo` 和管理入口最后一段�
 ```yaml
 repositoryAccess:
   - id: kr://kc/system
-    authenticatedActions: [object.read, object.schema.read, object.history.read, object.provenance, object.relations, object.access.describe, file.read, projection.read]
+    authenticatedActions: [object.read, object.schema.read, object.history.read, object.provenance, object.relations, object.access.describe, file.read, index.read]
 ```
 
 `datasetAccess` 按 Dataset 声明已认证默认消费动作，闭集为 `dataset.resolve`、`file.read`。`deployment init`/`OpenDeployment` 把声明写入 `stateDir/dataset-access.json`；授权时为当前已认证 principal 派生只作用于该 Dataset 的规则，不写回 `allow.json`、不出现在 `grant list`，也不放行来源仓的 `--repo` 读取、`dataset define` 或写。未列出的 Dataset 仍要 grant。

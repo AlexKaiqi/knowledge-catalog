@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	declarativeindexclient "kc/declarativeindex/client"
 	discoveryclient "kc/discovery/client"
 	"kc/kernel"
 	objectmodel "kc/object"
@@ -133,9 +132,6 @@ type FeedbackRequest struct {
 	IdealGroups         []observability.RefineRankGroup `json:"idealGroups,omitempty"`
 }
 
-func (s OperationsService) DescribeProjection(ctx context.Context, q ProjectionSyncRequest, o RequestOptions, out any) error {
-	return s.client.declarativeIndex.DescribeProjection(ctx, q, declarativeindexclient.RequestOptions{RequestID: o.RequestID}, out)
-}
 func (s OperationsService) DescribeAccessSpec(ctx context.Context, q AccessSpecDescribeRequest, o RequestOptions, out any) error {
 	return s.client.discovery.DescribeAccessSpec(ctx, q, discoveryclient.RequestOptions{RequestID: o.RequestID}, out)
 }

@@ -71,7 +71,15 @@ func TestSearchReadBasisRetainsAllCandidatesAndOutlivesIndexConfiguration(t *tes
 	}
 	body(t, run("writer", "put", testObjectReference(t, other, object, "/extra"), "--repo", other, "--command-id", "search-basis-new-contributor", "--value", `{"note":"new contributor"}`))
 	body(t, run("dataset", "define", "--dataset", "search-basis", "--revision", "2", "--source", repo, "--source", other))
-	second := waitRemoteSearchHits(t, search, 1)
+	// Acceptance is a metadata decision: the new revision has no corpus until it
+	// is prepared, and the default search view keeps serving the newest ready
+	// revision. A contribution the caller expects to search must be prepared by
+	// the revision it belongs to, then queried at that revision
+	// (doc/design/dataset.md#发布).
+	body(t, run("index", "prepare", "--dataset", "search-basis", "--revision", "2"))
+	second := waitRemoteSearchHits(t, func() kcRunResult {
+		return kcRemote(t, url, "consumer", "search", "--dataset", "search-basis", "--revision", "2", "--query", "冻结窗口")
+	}, 1)
 	newHit := asMap(t, second["hits"].([]any)[0])
 	if asMap(t, newHit["state"])["scope"] != asMap(t, hit["state"])["scope"] || asMap(t, newHit["state"])["digest"] == asMap(t, hit["state"])["digest"] {
 		t.Fatalf("new contribution changed scope or preserved state: old=%#v new=%#v", hit, newHit)

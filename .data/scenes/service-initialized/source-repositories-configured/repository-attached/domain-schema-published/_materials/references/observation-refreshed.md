@@ -10,22 +10,22 @@
 
 Hook 是出站，不能冒充这条入站通知。
 
-构建与探：`TestProjectionControllerNoticePullsStateWithoutChangingSnapshot`、`TestChangeNoticeRejectsBody`、`TestProjectionNotifyPullsBoundStateWithoutChangingHEAD`。公开入口是 `operations projection notice` / `POST /operations/v1/projections:notice`。
+构建与探：`TestProjectionControllerNoticePullsStateWithoutChangingSnapshot`、`TestChangeNoticeRejectsBody`、`TestProjectionNotifyPullsBoundStateWithoutChangingHEAD`。仓级公开通知入口 `operations projection notice` / `POST /operations/v1/projections:notice` 已退役；当前维护者入口是按 Dataset 修订显式刷新 `kc index prepare --dataset <id> --revision <N>`，来源内部通知与对账合同保留。
 
-## 原参考 _build/construct.feature
+## 原参考 _build/construct.feature（已退役，仅存档）
 
 ```gherkin
 # observation-refreshed：接入方通知 Bound State 变化；平台按固定 Binding 拉取。
 # 未配置 resource-access/v1 runtime 时 notice 是 CAPABILITY_UNSATISFIED；本节点走 go-test，不在无 runtime 的 live 仓上当 construct。
+# 原命令 kc operations projection notice 已随仓级公开入口退役，下面保存的是历史形状。
 
 Feature: observation-refreshed
 
   Scenario: construct
-    When I run `kc operations projection notice --repo kr://scene/object --object Service:orders --aspect health`
+    When I run `kc index prepare --dataset scene-set --revision 1`
     Then the output has:
-      | repository  | kr://scene/object |
-      | basisCommit | nonempty |
-      | revision    | nonempty |
+      | dataset | scene-set |
+      | ready   | true |
     When I run `kc writer head --repo kr://scene/object`
     Then the output has:
       | repository | kr://scene/object |

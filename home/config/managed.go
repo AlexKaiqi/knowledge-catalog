@@ -80,7 +80,7 @@ func (c DeploymentConfig) validateManagedPool(pool ManagedRepositoryConfig) erro
 
 // ValidateCreatorActions refuses an unknown, duplicated, or empty policy.
 func ValidateCreatorActions(actions []string) error {
-	allowed := []string{"writer.preview", "writer.commit", "writer.receipt.read", "repository.metadata.read", "repository.shares.manage", "repositories.manage", "writer.branch", "writer.merge", "projection.read", "dataset.resolve", "file.read", "object.read", "object.provenance", "object.history.read", "object.schema.read", "object.relations"}
+	allowed := []string{"writer.preview", "writer.commit", "writer.receipt.read", "repository.metadata.read", "repository.shares.manage", "repositories.manage", "writer.branch", "writer.merge", "index.read", "dataset.resolve", "file.read", "object.read", "object.provenance", "object.history.read", "object.schema.read", "object.relations"}
 	if len(actions) == 0 {
 		return kernel.Fail(kernel.ErrUsageInvalid, "managed repositories require an explicit nonempty creatorActions policy")
 	}

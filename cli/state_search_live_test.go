@@ -43,6 +43,7 @@ func TestLiveHTTPDynamicStateSearchJourney(t *testing.T) {
 	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", repositoryID))
 	body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "file.read", "--dataset", "agent"))
 	body(t, kc(home, "allow", "--principal", "agent:maintainer", "--action", "dataset.manage", "--dataset", "agent"))
+	body(t, kc(home, "allow", "--principal", "agent:maintainer", "--action", "index.manage", "--dataset", "agent"))
 	before := asMap(t, body(t, kc(home, "writer", "head", "--repo", repositoryID)))["commit"]
 
 	lookup := serv.NewHTTPStateLookup(nil)
@@ -53,11 +54,11 @@ func TestLiveHTTPDynamicStateSearchJourney(t *testing.T) {
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
-	sync := asMap(t, postAs(t, server.URL, "/operations/v1/projections:sync", "agent:maintainer", map[string]any{
+	sync := asMap(t, postAs(t, server.URL, "/operations/v1/indexes:prepare", "agent:maintainer", map[string]any{
 		"dataset": "agent", "revision": 1,
 	}))
-	if sync["dataset"] != "agent" || sync["revision"] != float64(1) || datasetProjectionState(t, sync, repositoryID)["revision"] == "" {
-		t.Fatalf("index-sync did not publish State projection: %#v", sync)
+	if sync["dataset"] != "agent" || sync["revision"] != float64(1) || datasetIndexObservation(t, sync, repositoryID)["revision"] == "" {
+		t.Fatalf("index prepare did not publish State projection: %#v", sync)
 	}
 	search := asMap(t, postAs(t, server.URL, "/object/v1/search", "agent:http-test", map[string]any{
 		"dataset": "agent", "revision": 1, "query": "healthy",
@@ -74,7 +75,7 @@ func TestLiveHTTPDynamicStateSearchJourney(t *testing.T) {
 		t.Fatalf("dynamic hit lost observation basis: %#v", hit)
 	}
 	view := asMap(t, search["searchView"])
-	if asMap(t, view["snapshots"])[repositoryID] != before || asMap(t, view["projectionRevisions"])[repositoryID] != datasetProjectionState(t, sync, repositoryID)["revision"] {
+	if asMap(t, view["snapshots"])[repositoryID] != before || asMap(t, view["indexRevisions"])[repositoryID] != datasetIndexObservation(t, sync, repositoryID)["revision"] {
 		t.Fatalf("SearchView did not bind provider revision: %#v", view)
 	}
 	// State is an external observation, not a Snapshot health unit. Check the

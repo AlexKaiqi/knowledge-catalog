@@ -1467,7 +1467,9 @@ func nodeNeedsIndex(node sceneTreeNode) bool {
 		if err != nil {
 			continue
 		}
-		if strings.Contains(string(raw), "operations projection sync") {
+		// The only public entry that builds an index is prepare with a fixed
+		// Dataset; a bare usage-error probe must not make its node index-bound.
+		if strings.Contains(string(raw), "index prepare --dataset") {
 			return true
 		}
 	}
@@ -1540,12 +1542,23 @@ func TestSceneWalkLeafIsTwoNamedRepositories(t *testing.T) {
 	}
 }
 
+// nodeNeedsState reports whether building this node runs a live external
+// lookup: a construct that reaches Binding through kc access or invokes a
+// published Resource cannot be built without the State runtime. Probes are
+// excluded on purpose; the fail-closed probes point at a dead origin and must
+// run without a runtime.
 func nodeNeedsState(node sceneTreeNode) bool {
 	raw, err := os.ReadFile(node.Construct)
 	if err != nil {
 		return false
 	}
-	return strings.Contains(string(raw), "operations projection notice")
+	text := string(raw)
+	for _, needle := range []string{"kc access ", "kc invoke "} {
+		if strings.Contains(text, needle) {
+			return true
+		}
+	}
+	return false
 }
 
 func shouldRunSceneProbes(doc sceneCatalogFile, stateID string) bool {

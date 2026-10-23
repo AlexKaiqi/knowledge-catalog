@@ -61,9 +61,13 @@ Discovery 的 `AccessDescribeExecutor` 将它组合到既有 `AccessPlan`；Sche
 解释器报告，不替换声明版本。typed `IndexCapabilities` 只承载清单说明、支持与重建判断，
 没有任意任务名或运行角色字典。试运行的 Writer 校验由 Home 编排，通用登记不依赖 Writer。
 
-`ProtectDatasetScope` 向选定实例取得已准备固定语料的资源票据。票据的本地句柄持有实例借用，
-直到 `Close` 才释放；确认或取消失败不会把耐久保护当作已解除。生产 Dataset 发布经 Home 将此票据
-交给 Discovery 发布执行器，准备、准入与最终权威接受使用同一候选。
+`PrepareProtectedDatasetScope` 是构建侧的票据入口：向选定实例准备固定语料并取得资源票据，
+票据的本地句柄持有实例借用直到 `Close`；确认或取消失败不会把耐久保护当作已解除。
+发布请求不取票据——接受是元数据决定，已接受版本的语料由它自己的后台任务构建，
+届时经 `PublicationRecovery.Adopt` 用同一候选准入。旧无托管资源的提供方沿普通准备路径，不产生票据。
+
+`PrepareDatasetScope` 仍是被显式请求的直接准备路径（试运行与兼容装配），只构建选入文件、
+不读来源 HEAD，也不产生耐久票据。
 
 声明式贡献的资源维护句柄由根实例构造并登记关闭，生命周期独立于查询 scope 缓存；
 宿主把同一 namespace 配置用于 query engine 和资源协调。实例 `CatchUp` 包含未决发布与候选恢复，

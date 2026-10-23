@@ -219,6 +219,12 @@ func TestWorkspaceSearchUnsatisfiedExplainsHowToRecover(t *testing.T) {
 	body(t, kc(h, "put", testObjectReference(t, repo, "note/A", ""), "--repo", repo, "--command-id", "opaque", "--value", `{"body":"runbook"}`))
 	body(t, kc(h, "dataset", "define", "--dataset", "agent", "--revision", "1",
 		"--source", repo+"=refs/heads/main"))
+	if searchAvailable() {
+		// Publication no longer builds, so a search on an unbuilt revision
+		// reports readiness rather than declarations. Preparing first makes the
+		// corpus exist, which is what a declaration shortfall is judged on.
+		syncIndexes(t, h, "agent")
+	}
 
 	expectCode(t, kc(h, "search", "--dataset", "agent", "--query", "runbook"), "CAPABILITY_UNSATISFIED")
 	expectMsg(t, kc(h, "search", "--dataset", "agent", "--query", "runbook"), "cannot satisfy SEARCH")

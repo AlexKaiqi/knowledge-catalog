@@ -45,6 +45,9 @@ func TestProductCLIRefactorDefinesTheExactPublicSurface(t *testing.T) {
 		"grant list",
 		"grant remove",
 		"grant update",
+		"index",
+		"index describe",
+		"index prepare",
 		"invoke",
 		"log",
 		"login",
@@ -57,8 +60,6 @@ func TestProductCLIRefactorDefinesTheExactPublicSurface(t *testing.T) {
 		"operations hook add",
 		"operations hook list",
 		"operations hook remove",
-		"operations projection describe",
-		"operations projection sync",
 		"plugin",
 		"provenance",
 		"read",
@@ -84,18 +85,28 @@ func TestProductCLIRefactorDefinesTheExactPublicSurface(t *testing.T) {
 	}
 }
 
-func TestRetiredProjectionNoticeIsAbsentFromPublicCLI(t *testing.T) {
-	const retired = "operations projection notice"
-	if CLICommandForTest(retired) || slices.Contains(CLICommandsForTest(), retired) {
-		t.Fatal("retired projection notice is still a public command")
+func TestRetiredProjectionCommandFamilyIsAbsentFromPublicCLI(t *testing.T) {
+	for _, retired := range []string{"operations projection describe", "operations projection sync", "operations projection notice"} {
+		if CLICommandForTest(retired) || slices.Contains(CLICommandsForTest(), retired) {
+			t.Fatalf("retired %s is still a public command", retired)
+		}
+		if _, registered := CLICommandActionsForTest()[retired]; registered {
+			t.Fatalf("retired %s still has a public semantic action", retired)
+		}
 	}
-	if _, registered := CLICommandActionsForTest()[retired]; registered {
-		t.Fatal("retired projection notice still has a public semantic action")
-	}
-	for _, argv := range [][]string{{"operations", "projection", "notice"}, {"help", "operations", "projection", "notice"}} {
+	// The index family replaced the projection family outright: no alias, no
+	// transition window, so old argv must fail instead of resolving.
+	for _, argv := range [][]string{
+		{"operations", "projection", "describe"},
+		{"operations", "projection", "sync"},
+		{"operations", "projection", "notice"},
+		{"help", "operations", "projection", "describe"},
+		{"help", "operations", "projection", "sync"},
+		{"help", "operations", "projection", "notice"},
+	} {
 		result := Run(argv)
 		if result.Status == 0 || !strings.Contains(result.Stdout, "USAGE_INVALID") {
-			t.Fatalf("retired projection notice must be rejected: %q %#v", argv, result)
+			t.Fatalf("retired projection argv must be rejected: %q %#v", argv, result)
 		}
 	}
 }

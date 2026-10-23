@@ -309,9 +309,9 @@ func TestDatasetSearchFollowsExplicitRevisionPublication(t *testing.T) {
 	if hits := search2["hits"].([]any); len(hits) != 2 {
 		t.Fatalf("expected 2 after second put, got %#v", search2)
 	}
-	report := asMap(t, body(t, kc(h, "describe-index", "--dataset", "agent", "--revision", "2")))
-	desc := datasetProjectionSnapshot(t, report, core)
-	member := asMap(t, report["members"].([]any)[0])
+	report := asMap(t, body(t, kc(h, "index", "describe", "--dataset", "agent", "--revision", "2")))
+	desc := datasetIndexBasis(t, report, core)
+	member := datasetIndexMember(t, report, core)
 	if report["revision"] != float64(2) || member["commit"] != publishedCommit(t, put2) || desc["objectCount"].(float64) != 3 {
 		t.Fatalf("%#v", desc)
 	}

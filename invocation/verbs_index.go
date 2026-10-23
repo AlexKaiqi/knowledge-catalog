@@ -9,6 +9,7 @@ import (
 	"kc/invoke"
 	"kc/kernel"
 	objectmodel "kc/object"
+	"kc/object/reader"
 
 	"encoding/json"
 	"sort"
@@ -37,25 +38,26 @@ func RequireDatasetDiscoveryScope(flags map[string]invoke.FlagValue) error {
 }
 
 func VerbDescribeIndex(cx *Invocation) (any, error) {
-	return datasetProjectionOperation(cx, false)
+	return datasetIndexOperation(cx, indexOperationDescribe)
 }
 
 func VerbIndexSync(cx *Invocation) (any, error) {
-	return datasetProjectionOperation(cx, true)
+	return datasetIndexOperation(cx, indexOperationPrepare)
 }
 
-// A selected member preserves the Dataset declaration namespace while the
-// operation service uses its existing fixed-source projection contract.
-type datasetProjectionMember struct{ repo objectmodel.Repository }
-
-func (m datasetProjectionMember) Require(id kernel.RepositoryID, _ kernel.ErrorCode) (objectmodel.Repository, error) {
-	if m.repo.ID() != id {
-		return nil, kernel.Fail(kernel.ErrObjectRefUnresolved, "Repository is outside this Dataset member")
-	}
-	return m.repo, nil
+func VerbIndexReady(cx *Invocation) (any, error) {
+	return datasetIndexOperation(cx, indexOperationReady)
 }
 
-func datasetProjectionOperation(cx *Invocation, sync bool) (any, error) {
+type indexOperation int
+
+const (
+	indexOperationReady indexOperation = iota
+	indexOperationPrepare
+	indexOperationDescribe
+)
+
+func datasetIndexOperation(cx *Invocation, operation indexOperation) (any, error) {
 	if err := RequireDatasetDiscoveryScope(cx.Flags); err != nil {
 		return nil, err
 	}
@@ -64,13 +66,38 @@ func datasetProjectionOperation(cx *Invocation, sync bool) (any, error) {
 		return nil, err
 	}
 	pin := serving.Pin()
-	if !sync {
+	if operation != indexOperationPrepare {
 		if err := RequireCompleteWorkspaceRead(cx.Home, cx.Flags, pin, ""); err != nil {
 			return nil, err
 		}
 	}
 	if cx.WS.Plugins == nil || !cx.WS.Plugins.Configured() {
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Dataset index plugin is not configured")
+	}
+	lookup := cx.WS.Reader.Lookup(cat.Require)
+	switch operation {
+	case indexOperationReady:
+		return cx.WS.Plugins.DatasetReadiness(cx.Context, lookup, pin)
+	case indexOperationDescribe:
+		diagnosis, err := cx.WS.Plugins.DatasetDiagnosis(cx.Context, lookup, pin)
+		if err != nil {
+			return nil, err
+		}
+		return datasetIndexReport(pin, diagnosis, nil), nil
+	}
+	return datasetPrepareOperation(cx, lookup, pin)
+}
+
+// datasetIndexReport is the single shape kc index prepare and kc index
+// describe answer with: the fixed source vector, the readiness answer, and the
+// corpus this revision froze. Members keep their source commit, because a pin
+// is a version coordinate rather than a repository HEAD. Prepare adds the
+// observation generation its refresh published; describe adds why the last
+// attempt stopped.
+func datasetIndexReport(pin reader.DatasetPin, diagnosis index.IndexDiagnosis, observation *index.StateSync) map[string]any {
+	stages := make(map[kernel.RepositoryID]index.IndexMemberState, len(diagnosis.Members))
+	for _, member := range diagnosis.Members {
+		stages[member.Repository] = member
 	}
 	ids := make([]kernel.RepositoryID, 0, len(pin.Repositories))
 	for id := range pin.Repositories {
@@ -79,51 +106,67 @@ func datasetProjectionOperation(cx *Invocation, sync bool) (any, error) {
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	members := make([]map[string]any, 0, len(ids))
 	for _, id := range ids {
-		members = append(members, map[string]any{"repository": id, "commit": pin.Repositories[id]})
+		row := map[string]any{"repository": id, "commit": pin.Repositories[id]}
+		if stage, ok := stages[id]; ok {
+			row["stage"], row["objectCount"] = stage.Stage, stage.ObjectCount
+		}
+		members = append(members, row)
 	}
-	if len(ids) == 0 {
+	out := map[string]any{"dataset": diagnosis.Dataset, "revision": diagnosis.Revision,
+		"ready": diagnosis.Ready, "members": members}
+	if diagnosis.Basis != nil {
+		out["basis"] = diagnosis.Basis
+	}
+	if diagnosis.Failure != "" {
+		out["failure"] = diagnosis.Failure
+	}
+	if observation != nil {
+		// The pin already fixes the basis commit, so the refresh reports only
+		// the observation it published, not a member coordinate.
+		if facts, err := datasetProjectionFacts(observation); err == nil {
+			out["observation"] = facts
+		}
+	}
+	return out
+}
+
+// datasetPrepareOperation builds the accepted revision's corpus on request. It
+// is the explicit retry path: publication no longer waits for a build, and the
+// background lane is what normally builds this same corpus. Both run the one
+// build function the instance publishes, so the retry path cannot diverge from
+// the lane (doc/design/dataset.md#发布).
+func datasetPrepareOperation(cx *Invocation, lookup reader.MemberLookup, pin reader.DatasetPin) (any, error) {
+	if len(pin.Repositories) == 0 {
 		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "Dataset has no selected index sources")
 	}
-	repo, err := cx.WS.Plugins.DatasetMember(cx.WS.Reader.Lookup(cat.Require), pin, ids[0])
+	// Explicit preparation is the retry path, so it also republishes the
+	// observation of the revision it just made searchable. A revision whose
+	// corpus only now exists has no observation to report otherwise. The
+	// caller's own runtime stands in when this process has no worker, because
+	// an explicit refresh may observe its own source without a configured
+	// worker (doc/design/discovery.md#观察).
+	runtime, err := ResourceLookup(cx)
 	if err != nil {
 		return nil, err
 	}
-	out := map[string]any{"dataset": pin.SetID, "revision": pin.Revision, "members": members}
-	lookup := datasetProjectionMember{repo: repo}
-	if !sync {
-		description, err := (discoveryservice.ProjectionDescribeExecutor{Repositories: lookup, Projection: cx.WS.Index}).Execute(cx.Context, discoveryservice.ProjectionDescribeRequest{Repository: ids[0], Commit: pin.Repositories[ids[0]]})
-		if err != nil {
-			return nil, err
-		}
-		out["snapshot"], err = datasetProjectionFacts(description)
-		return out, err
+	var stateRequest discoveryservice.ProjectionStateRequest
+	if runtime != nil {
+		stateRequest = func() (objectmodel.RequestContext, error) { return stateRequestContextFrom(cx) }
 	}
-	current, err := cat.Set(string(pin.SetID))
+	prepared, err := (discoveryservice.DatasetPrepareExecutor{Plugins: cx.WS.Plugins}).Execute(cx.Context, discoveryservice.DatasetPrepareRequest{
+		Pin: pin, Lookup: lookup, State: runtime, StateRequest: stateRequest,
+	})
 	if err != nil {
 		return nil, err
 	}
-	var state objectserving.StateLookup
-	if current.Revision == pin.Revision {
-		state, err = ResourceLookup(cx)
-		if err != nil {
-			return nil, err
-		}
-	}
-	// Preparation is maintenance: unit limits still apply, a read's shared
-	// budget does not (doc/design/liveaccess.md: 索引由服务身份准备).
-	prepare := objectserving.WithoutReadBudget(cx.Context)
-	result, err := (discoveryservice.ProjectionSyncExecutor{Repositories: lookup, Projection: cx.WS.Index, Observe: func() func() { return ObserveProjectionExecution(cx) }}).Execute(prepare, discoveryservice.ProjectionSyncRequest{Repository: ids[0], Commit: pin.Repositories[ids[0]], State: state, StateRequest: func() (objectmodel.RequestContext, error) { return stateRequestContextFrom(cx) }})
+	// The caller gets the accepted revision's answer, not a provider
+	// coordinate: what it can search now and what it froze.
+	diagnosis, err := cx.WS.Plugins.DatasetDiagnosis(cx.Context, lookup, pin)
 	if err != nil {
 		return nil, err
 	}
-	out["snapshot"], err = datasetProjectionFacts(result.Snapshot)
-	if err != nil {
-		return nil, err
-	}
-	if result.State != nil {
-		out["state"], err = datasetProjectionFacts(result.State)
-	}
-	return out, err
+	observation := prepared.Observation
+	return datasetIndexReport(pin, diagnosis, &observation), nil
 }
 
 // The Dataset pin is the public authority basis. Provider corpus coordinates
@@ -142,62 +185,6 @@ func datasetProjectionFacts(value any) (map[string]any, error) {
 	}
 	return facts, nil
 
-}
-
-func VerbIndexNotify(cx *Invocation) (any, error) {
-	notice, err := ChangeNoticeFromFlags(cx.Flags)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := RequireRepo(cx.WS, string(notice.Repository)); err != nil {
-		return nil, err
-	}
-	if cx.WS.Plugins == nil {
-		return nil, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "projection controller is not configured")
-	}
-	lookup, err := ResourceLookup(cx)
-	if err != nil {
-		return nil, err
-	}
-	request, err := stateRequestContextFrom(cx)
-	if err != nil {
-		return nil, err
-	}
-	return (discoveryservice.ProjectionNoticeExecutor{
-		Repositories: cx.WS.Reader,
-		Projection:   cx.WS.Index,
-		Controller:   cx.WS.Plugins,
-	}).Execute(cx.Context, discoveryservice.ProjectionNoticeRequest{
-		Notice:  notice,
-		State:   lookup,
-		Request: request,
-	})
-}
-
-func ChangeNoticeFromFlags(flags map[string]invoke.FlagValue) (index.ChangeNotice, error) {
-	repo, err := invoke.RequireFlag(flags, "repo")
-	if err != nil {
-		return index.ChangeNotice{}, err
-	}
-	notice := index.ChangeNotice{
-		Repository:     kernel.RepositoryID(repo),
-		Ref:            invoke.FlagString(flags, "ref"),
-		SourceRevision: invoke.FlagString(flags, "source-revision"),
-	}
-	if object := invoke.FlagString(flags, "object"); object != "" {
-		kind := objectmodel.AddressKind(invoke.FlagString(flags, "kind"))
-		if kind == "" {
-			if invoke.FlagString(flags, "aspect") != "" {
-				kind = objectmodel.KindAspect
-			} else {
-				kind = objectmodel.KindEntity
-			}
-		}
-		notice.Address = &objectmodel.Address{
-			Kind: kind, ObjectID: objectmodel.ObjectID(object), AspectName: invoke.FlagString(flags, "aspect"),
-		}
-	}
-	return notice, index.ValidateChangeNotice(notice)
 }
 
 // VerbDescribeAccess reports one logical AccessSpec per pinned member, or the

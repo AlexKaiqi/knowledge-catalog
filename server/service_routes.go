@@ -92,7 +92,6 @@ func (f *httpFacade) registerServiceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /object/v1/schemas:list", f.objectSchemaPage)
 	mux.HandleFunc("POST /object/v1/bindings:resolve", f.objectBinding)
 	mux.HandleFunc("POST /object/v1/resources:access", f.objectResourceAccess)
-	mux.HandleFunc("POST /operations/v1/projections:sync", f.projectionSync)
 }
 
 // objectDatasetIdentity is the shared dataset-channel identity envelope:
@@ -266,11 +265,6 @@ func (request ObjectSearchRequest) searchRequest() (retrieval.SearchRequest, err
 		return retrieval.SearchRequest{}, err
 	}
 	return result, nil
-}
-
-type projectionSyncRequest struct {
-	Dataset  string `json:"dataset"`
-	Revision int    `json:"revision,omitempty"`
 }
 
 // withRevision carries a named Dataset's accepted revision; invocation turns
@@ -579,17 +573,4 @@ func (f *httpFacade) objectResourceAccess(w http.ResponseWriter, r *http.Request
 		run = inv.VerbResourceInvoke
 	}
 	f.executeTyped(w, r, handler, "resource.access", inv.Command{Stage: invoke.StageGoverned, Run: run}, request.Flags())
-}
-
-func (f *httpFacade) projectionSync(w http.ResponseWriter, r *http.Request) {
-	var request projectionSyncRequest
-	if !decodeServiceRequest(w, r, &request) {
-		return
-	}
-	flags := withRevision(compactFlags(map[string]FlagValue{"dataset": request.Dataset}), request.Revision)
-	if err := inv.RequireDatasetDiscoveryScope(flags); err != nil {
-		invoke.WriteInvoke(w, inv.ErrorResult(err))
-		return
-	}
-	f.executeTyped(w, r, "operations-projection-sync", "dataset.manage", inv.Command{Stage: invoke.StageGoverned, Run: inv.VerbIndexSync}, flags)
 }

@@ -101,7 +101,7 @@ cmd_consumer() {
   kc dataset define --dataset qinghe-ops --revision 1 \
     --source table-meta=refs/heads/main@data-jobs@data-jobs
 
-  kc operations projection sync --dataset qinghe-analysis --revision 1
+  kc index prepare --dataset qinghe-analysis --revision 1
 
   kc grant add --dataset qinghe-analysis --principal "$CONSUMER" --action dataset.resolve,file.read
   kc grant add --dataset qinghe-analysis --principal "$CONSUMER" --action feedback.write
@@ -128,7 +128,7 @@ cmd_supplier() {
 
 cmd_supplier_finish() {
   require_stack
-  kc operations projection sync --dataset "$SHARED_DATASET"
+  kc index prepare --dataset "$SHARED_DATASET"
 }
 
 cmd_check() {

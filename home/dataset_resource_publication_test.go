@@ -15,16 +15,15 @@ import (
 
 func TestDatasetPublicationRetainsExactAcceptedResourceReferenceAcrossHostReopen(t *testing.T) {
 	ws, plain, indexed := newDatasetPreparationHome(t, nil)
-	before, err := ws.Registry.Head()
-	if err != nil {
-		t.Fatal(err)
-	}
 	def, err := datasetPreparationPublisher(ws).Execute(context.Background(), discoverydatasets.DatasetPublication{
 		Dataset: "protected", Revision: 1, Sources: []dataset.DatasetSource{plain.mapping(), indexed.mapping()}, Metadata: map[string]string{"purpose": "resource-handoff"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Acceptance builds nothing, so the static corpus reference belongs to the
+	// release's own build, which adopts the already accepted version.
+	buildDatasetCorpus(t, ws)
 	config := *ws.Deployment
 	if err := ws.Close(); err != nil {
 		t.Fatal(err)
@@ -78,8 +77,12 @@ func TestDatasetPublicationRetainsExactAcceptedResourceReferenceAcrossHostReopen
 				continue
 			}
 			found++
-			if claim.Phase != "ACCEPTED" || proof.Version != 2 || proof.Admission == "" || !reflect.DeepEqual(proof.Definition, def) || string(proof.Authority.Head) != before || proof.Authority.Binding == "" {
+			if claim.Phase != "ACCEPTED" || proof.Version != 2 || proof.Admission == "" || !reflect.DeepEqual(proof.Definition, def) || proof.Authority.Head == "" || proof.Authority.Binding == "" {
 				t.Fatalf("resource reference lost exact adopted candidate or authority: phase=%s proof=%#v expected=%#v", claim.Phase, proof, def)
+			}
+			receipt, err := ws.Datasets.(dataset.PublicationCoordinator).PublicationReceipt(context.Background(), dataset.PublicationLookup{SetID: "protected", Revision: 1})
+			if err != nil || receipt.Admission != proof.Admission || receipt.Authority != proof.Authority || receipt.Definition != kernel.CanonicalDigest(def) {
+				t.Fatalf("build admission is not the one recorded for the accepted release: receipt=%#v proof=%#v err=%v", receipt, proof, err)
 			}
 		}
 	}

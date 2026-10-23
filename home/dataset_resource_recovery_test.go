@@ -104,6 +104,23 @@ func expireDatasetResourceAdmission(t *testing.T, ws *Home) (string, string, str
 	return "", "", ""
 }
 
+// claimAdmission decodes the admission a durable ticket was admitted under, so
+// a retry can be checked against the ticket it actually left behind.
+func claimAdmission(t *testing.T, evidence string) string {
+	t.Helper()
+	raw, err := base64.StdEncoding.DecodeString(evidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var proof struct {
+		Admission string `json:"admission"`
+	}
+	if err := json.Unmarshal(raw, &proof); err != nil {
+		t.Fatal(err)
+	}
+	return proof.Admission
+}
+
 func readDatasetResourceClaims(t *testing.T, path string) ([]any, string) {
 	t.Helper()
 	response, err := http.Get(path)
@@ -129,21 +146,23 @@ func readDatasetResourceClaims(t *testing.T, path string) ([]any, string) {
 }
 
 func TestDatasetResourceRecoveryUsesActualAuthorityAcrossHostReopen(t *testing.T) {
-	for _, beforePublish := range []bool{false, true} {
-		t.Run(fmt.Sprintf("before-publish=%t", beforePublish), func(t *testing.T) {
+	for _, phase := range []string{"confirmation-lost", "admission-lost"} {
+		t.Run(phase, func(t *testing.T) {
 			ws, plain, _ := newDatasetPreparationHome(t, nil)
 			lost := errors.New("handoff response lost after actual durable admission")
-			publisher := datasetPreparationPublisher(ws)
-			publisher.PrepareResources = func(ctx context.Context, def dataset.Dataset) (dataset.Dataset, discoverydatasets.PublicationProtection, error) {
-				prepared, ticket, err := ws.DatasetPreparation.ExecuteProtected(ctx, def)
-				if err != nil || ticket == nil {
-					return prepared, ticket, err
-				}
-				return prepared, loseDatasetResourceHandoff{PublicationProtection: ticket, beforePublish: beforePublish, err: lost}, nil
+			if _, err := datasetPreparationPublisher(ws).Execute(context.Background(), discoverydatasets.DatasetPublication{Dataset: "uncertain", Revision: 1, Sources: []dataset.DatasetSource{plain.mapping()}}); err != nil {
+				t.Fatalf("publication must accept without waiting for a corpus: %v", err)
 			}
-			_, err := publisher.Execute(context.Background(), discoverydatasets.DatasetPublication{Dataset: "uncertain", Revision: 1, Sources: []dataset.DatasetSource{plain.mapping()}})
+			// Acceptance already happened; only the build's admission is lost, so
+			// the release stays accepted and becomes ready on its own retry.
+			err := buildDatasetRelease(ws, dataset.PublicationLookup{SetID: "uncertain", Revision: 1}, func(ticket discoverydatasets.PublicationProtection) discoverydatasets.PublicationProtection {
+				return loseDatasetResourceHandoff{PublicationProtection: ticket, beforePublish: phase == "admission-lost", err: lost}
+			})
 			if !errors.Is(err, lost) {
 				t.Fatalf("did not cross uncertain handoff: %v", err)
+			}
+			if _, err := ws.Datasets.DatasetVersion("uncertain", 1); err != nil {
+				t.Fatalf("lost build admission reverted the accepted release: %v", err)
 			}
 			path, physical, proof := expireDatasetResourceAdmission(t, ws)
 			config := *ws.Deployment
@@ -164,51 +183,53 @@ func TestDatasetResourceRecoveryUsesActualAuthorityAcrossHostReopen(t *testing.T
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !beforePublish {
-				fenceLost := errors.New("actual fence accepted but evidence failed")
-				reopened.Datasets.SetObserver(func(event string, _ map[string]any, prior error) error {
-					if event == "dataset-publication-fence" {
-						return fenceLost
-					}
-					return prior
-				})
-				if err := reopened.Plugins.CatchUp(context.Background()); !errors.Is(err, fenceLost) {
-					t.Fatalf("unknown authority fence was treated as complete: %v", err)
+			fenceLost := errors.New("actual fence accepted but evidence failed")
+			reopened.Datasets.SetObserver(func(event string, _ map[string]any, prior error) error {
+				if event == "dataset-publication-fence" {
+					return fenceLost
 				}
-				claims, phase := readDatasetResourceClaims(t, path)
-				if len(claims) != 1 || phase != "ADMITTED" || claims[0].(map[string]any)["evidence"] != proof {
-					t.Fatalf("unknown authority fence released protection: %#v", claims)
-				}
-				reopened.Datasets.SetObserver(nil)
+				return prior
+			})
+			if err := reopened.Plugins.CatchUp(context.Background()); !errors.Is(err, fenceLost) {
+				t.Fatalf("unknown authority fence was treated as complete: %v", err)
 			}
+			claims, current := readDatasetResourceClaims(t, path)
+			if len(claims) != 1 || current != "ADMITTED" || claims[0].(map[string]any)["evidence"] != proof {
+				t.Fatalf("unknown authority fence released protection: %#v", claims)
+			}
+			reopened.Datasets.SetObserver(nil)
 			if err := reopened.Plugins.CatchUp(context.Background()); err != nil {
 				t.Fatal(err)
 			}
 			if next, err := reopened.Registry.Head(); err != nil || next == oldHead {
 				t.Fatalf("recovery did not establish an authority fence: %s %v", next, err)
 			}
-			claims, phase := readDatasetResourceClaims(t, path)
-			if beforePublish {
-				if len(claims) != 0 {
-					t.Fatalf("authoritatively unadopted ticket retained: %#v", claims)
+			claims, current = readDatasetResourceClaims(t, path)
+			if phase == "admission-lost" {
+				// The acceptance already happened, so the retry adopts the release
+				// under a new admission. The stale claim is released and the new one
+				// settles as ACCEPTED once the corpus exists; what must not happen is
+				// the old ticket surviving beside it.
+				receipt, err := reopened.Datasets.(dataset.PublicationCoordinator).PublicationReceipt(context.Background(), dataset.PublicationLookup{SetID: "uncertain", Revision: 1})
+				if err != nil || receipt.Admission == "" || receipt.Admission == proof {
+					t.Fatalf("retry did not replace the lost admission: %#v %v", receipt, err)
 				}
-				if _, err := reopened.Datasets.DatasetVersion("uncertain", 1); kernel.CodeOf(err) != kernel.ErrDatasetInvalid {
-					t.Fatalf("unaccepted publication appeared: %v", err)
+				if len(claims) != 1 || current != "ACCEPTED" {
+					t.Fatalf("retry did not settle the release's own ticket: %#v", claims)
 				}
-				for _, definitions := range [][]dataset.Dataset{reopened.Datasets.DumpState().Datasets, reopened.Datasets.DumpState().DatasetVersions} {
-					for _, definition := range definitions {
-						if definition.SetID == "uncertain" {
-							t.Fatalf("unaccepted candidate gained a publication record: %#v", definition)
-						}
-					}
+				if claims[0].(map[string]any)["evidence"] == proof {
+					t.Fatalf("stale unadopted ticket survived the retry: %#v", claims)
 				}
-			} else {
-				if len(claims) != 1 || phase != "ACCEPTED" || claims[0].(map[string]any)["evidence"] != proof {
-					t.Fatalf("accepted resource lost its exact durable proof: %#v", claims)
+				if admission := claimAdmission(t, claims[0].(map[string]any)["evidence"].(string)); admission != receipt.Admission {
+					t.Fatalf("retained ticket belongs to another admission: %q != %q", admission, receipt.Admission)
 				}
-				if _, err := reopened.Datasets.DatasetVersion("uncertain", 1); err != nil {
-					t.Fatal(err)
-				}
+				return
+			}
+			if len(claims) != 1 || current != "ACCEPTED" || claims[0].(map[string]any)["evidence"] != proof {
+				t.Fatalf("accepted resource lost its exact durable proof: %#v", claims)
+			}
+			if _, err := reopened.Datasets.DatasetVersion("uncertain", 1); err != nil {
+				t.Fatal(err)
 			}
 			request, _ := http.NewRequest(http.MethodHead, strings.TrimRight(reopened.Stores.OpenSearch.URL, "/")+"/"+physical, nil)
 			response, err := http.DefaultClient.Do(request)
@@ -244,6 +265,9 @@ func (r gateDatasetResourceAdmission) Admit(ctx context.Context, proof []byte) e
 
 func TestEqualDatasetPreparationsRecoverOnlyTheActualAcceptedTicket(t *testing.T) {
 	ws, plain, _ := newDatasetPreparationHome(t, nil)
+	if _, err := datasetPreparationPublisher(ws).Execute(context.Background(), discoverydatasets.DatasetPublication{Dataset: "contended", Revision: 1, Sources: []dataset.DatasetSource{plain.mapping()}}); err != nil {
+		t.Fatal(err)
+	}
 	var proofs [2]chan []byte
 	var release [2]chan struct{}
 	var done [2]chan error
@@ -256,17 +280,10 @@ func TestEqualDatasetPreparationsRecoverOnlyTheActualAcceptedTicket(t *testing.T
 				close(release[i])
 			}
 		})
-		publisher := datasetPreparationPublisher(ws)
-		publisher.PrepareResources = func(ctx context.Context, def dataset.Dataset) (dataset.Dataset, discoverydatasets.PublicationProtection, error) {
-			prepared, ticket, err := ws.DatasetPreparation.ExecuteProtected(ctx, def)
-			if err != nil || ticket == nil {
-				return prepared, ticket, err
-			}
-			return prepared, gateDatasetResourceAdmission{PublicationProtection: ticket, proof: proofs[i], release: release[i]}, nil
-		}
 		go func() {
-			_, err := publisher.Execute(context.Background(), discoverydatasets.DatasetPublication{Dataset: "contended", Revision: 1, Sources: []dataset.DatasetSource{plain.mapping()}})
-			done[i] <- err
+			done[i] <- buildDatasetRelease(ws, dataset.PublicationLookup{SetID: "contended", Revision: 1}, func(ticket discoverydatasets.PublicationProtection) discoverydatasets.PublicationProtection {
+				return gateDatasetResourceAdmission{PublicationProtection: ticket, proof: proofs[i], release: release[i]}
+			})
 		}()
 	}
 	var raw [2][]byte
@@ -289,17 +306,28 @@ func TestEqualDatasetPreparationsRecoverOnlyTheActualAcceptedTicket(t *testing.T
 	if attempts[0].Admission == "" || attempts[0].Admission == attempts[1].Admission || !reflect.DeepEqual(attempts[0].Definition, attempts[1].Definition) {
 		t.Fatalf("fixture did not prepare equal candidates with distinct tickets: %#v", attempts)
 	}
+	// Both attempts fence the authority before admitting, and each admission
+	// carries the head its own fence produced. Whichever attempt commits last
+	// therefore matches the current authority and is the one that settles; the
+	// other one is excluded because its admission names a superseded head. That
+	// makes the winner a property of the interleaving, not of this fixture's
+	// slice order, so the winner is read off the results instead of assumed.
 	close(release[0])
-	if err := <-done[0]; err != nil {
-		t.Fatal(err)
-	}
 	close(release[1])
-	if err := <-done[1]; kernel.CodeOf(err) != kernel.ErrNonFastForward {
-		t.Fatalf("second equal preparation was accepted: %v", err)
+	var failures [2]error
+	for i := range failures {
+		failures[i] = <-done[i]
 	}
-	path, _, loserProof := expireDatasetResourceAdmission(t, ws)
-	if loserProof != base64.StdEncoding.EncodeToString(raw[1]) {
-		t.Fatal("expired ticket was not the failed equal preparation")
+	winner, loser := 0, 1
+	if failures[0] != nil {
+		winner, loser = 1, 0
+	}
+	if failures[winner] != nil || kernel.CodeOf(failures[loser]) != kernel.ErrNonFastForward {
+		t.Fatalf("equal preparations were not settled to exactly one admission: %v / %v", failures[0], failures[1])
+	}
+	path, _, expired := expireDatasetResourceAdmission(t, ws)
+	if expired != base64.StdEncoding.EncodeToString(raw[loser]) {
+		t.Fatalf("expired ticket was not the excluded admission: got=%s want=%s", expired, base64.StdEncoding.EncodeToString(raw[loser]))
 	}
 	config := *ws.Deployment
 	if err := ws.Close(); err != nil {
@@ -316,12 +344,22 @@ func TestEqualDatasetPreparationsRecoverOnlyTheActualAcceptedTicket(t *testing.T
 	if err := reopened.Plugins.CatchUp(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	claims, phase := readDatasetResourceClaims(t, path)
-	if len(claims) != 1 || phase != "ACCEPTED" || claims[0].(map[string]any)["evidence"] != base64.StdEncoding.EncodeToString(raw[0]) {
-		t.Fatalf("equivalent candidate incorrectly retained the loser or released the winner: %#v", claims)
+	claims, _ := readDatasetResourceClaims(t, path)
+	accepted := 0
+	for _, claim := range claims {
+		if claim.(map[string]any)["phase"] != "ACCEPTED" {
+			continue
+		}
+		accepted++
+		if claim.(map[string]any)["evidence"] != base64.StdEncoding.EncodeToString(raw[winner]) {
+			t.Fatalf("equivalent candidate retained the loser or released the winner: %#v", claims)
+		}
+	}
+	if accepted != 1 {
+		t.Fatalf("want exactly one accepted ticket, got %d: %#v", accepted, claims)
 	}
 	receipt, err := reopened.Datasets.(dataset.PublicationCoordinator).PublicationReceipt(context.Background(), dataset.PublicationLookup{SetID: "contended", Revision: 1})
-	if err != nil || receipt.Admission != attempts[0].Admission {
+	if err != nil || receipt.Admission != attempts[winner].Admission {
 		t.Fatalf("actual receipt does not identify the retained ticket: %#v %v", receipt, err)
 	}
 }

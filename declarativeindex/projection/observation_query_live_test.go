@@ -95,7 +95,7 @@ func TestLiveObservationSearchContinuationKeepsOriginalGenerationAndValues(t *te
 				}
 				calls := observed.Calls
 				current, err := search(request)
-				if err != nil || len(current.Hits) != 0 || current.SearchView.ProjectionRevisions[repo.ID()] != replacement.Revision {
+				if err != nil || len(current.Hits) != 0 || current.SearchView.IndexRevisions[repo.ID()] != replacement.Revision {
 					t.Fatalf("new query used old observations: %#v %v", current, err)
 				}
 				if storage == "persistent" {
@@ -111,7 +111,7 @@ func TestLiveObservationSearchContinuationKeepsOriginalGenerationAndValues(t *te
 					nextRequest := request
 					nextRequest.Continuation = token
 					page, err := search(nextRequest)
-					if err != nil || len(page.Hits) != 1 || page.SearchView.ProjectionRevisions[repo.ID()] != original.Revision {
+					if err != nil || len(page.Hits) != 1 || page.SearchView.IndexRevisions[repo.ID()] != original.Revision {
 						t.Fatalf("old observation was not retained: %#v %v", page, err)
 					}
 					hit := page.Hits[0]

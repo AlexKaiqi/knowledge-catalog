@@ -341,9 +341,49 @@ func MakeRegistry(t *testing.T) dataset.Registry {
 	return registry
 }
 
+// MakeBoundRegistry is MakeRegistry for fixtures that exercise coordinated
+// publication. A registry authority without a stable deployment coordinate
+// cannot bind an admission, which is the documented refusal for real
+// deployments too; tests that publish and then build are expected to declare
+// which deployment they are, so they use this instead of the origin-free form.
+func MakeBoundRegistry(t *testing.T) dataset.Registry {
+	t.Helper()
+	registry, err := dataset.CreateSnapshotRegistry(MakeOriginStore(t, "kr://acme/registry-authority"), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return registry
+}
+
+// MakeOriginStore exposes the in-memory medium with the authority-instance
+// identity a real adapter supplies. Repository fixtures must keep using the
+// origin-free MakeTreeStore so the optional capability stays optional.
+func MakeOriginStore(t *testing.T, repositoryID string) snapshot.Store {
+	t.Helper()
+	if repositoryID == "" {
+		repositoryID = "kr://acme/public/core"
+	}
+	return &originStore{memoryStore: newMemoryStore(kernel.RepositoryID(repositoryID)), origin: repositoryID}
+}
+
 func OpenDatasets(t *testing.T, store snapshot.Registry) dataset.Service {
 	t.Helper()
 	cat, err := dataset.NewService(store, MakeRegistry(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	RegisterMounted(t, cat, store)
+	return cat
+}
+
+// OpenBoundDatasets is OpenDatasets for fixtures that accept a release and then
+// have its corpus built. Building adopts a publication, which the authority
+// refuses without a stable deployment coordinate; a fixture that only freezes,
+// reads and serves keeps using OpenDatasets so the optional capability stays
+// optional.
+func OpenBoundDatasets(t *testing.T, store snapshot.Registry) dataset.Service {
+	t.Helper()
+	cat, err := dataset.NewService(store, MakeBoundRegistry(t))
 	if err != nil {
 		t.Fatal(err)
 	}

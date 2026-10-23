@@ -21,7 +21,7 @@ func TestSceneLiveSearchEvidenceUsesAcceptedDatasetRevision(t *testing.T) {
 			ast.Inspect(file, func(node ast.Node) bool {
 				if text, ok := sceneStringLiteral(node); ok {
 					switch text {
-					case "/operations/v1/projections:notice", "projection.manage", "object.search", "read,search":
+					case "/operations/v1/projections:notice", "/operations/v1/projections:sync", "projection.manage", "object.search", "read,search":
 						t.Errorf("live search evidence retains retired positive surface %q", text)
 					}
 				}
@@ -34,7 +34,7 @@ func TestSceneLiveSearchEvidenceUsesAcceptedDatasetRevision(t *testing.T) {
 					return true
 				}
 				route, _ := sceneStringLiteral(call.Args[2])
-				if route != "/operations/v1/projections:sync" && route != "/object/v1/search" {
+				if route != "/operations/v1/indexes:prepare" && route != "/object/v1/search" {
 					return true
 				}
 				operations[route]++
@@ -59,7 +59,7 @@ func TestSceneLiveSearchEvidenceUsesAcceptedDatasetRevision(t *testing.T) {
 				}
 				return true
 			})
-			if operations["/operations/v1/projections:sync"] == 0 || operations["/object/v1/search"] == 0 {
+			if operations["/operations/v1/indexes:prepare"] == 0 || operations["/object/v1/search"] == 0 {
 				t.Fatalf("live journey lost its explicit Dataset refresh or search: %v", operations)
 			}
 		})

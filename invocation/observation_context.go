@@ -160,10 +160,10 @@ func ActionOf(command string, flags map[string]invoke.FlagValue) string {
 		return "object.traverse"
 	case "operations-access-spec-describe":
 		return "object.access.describe"
-	case "operations-projection-describe":
-		return "projection.read"
-	case "operations-projection-sync":
-		return "projection.manage"
+	case "index-describe":
+		return "index.read"
+	case "index-prepare":
+		return "index.manage"
 	}
 	return authorizationAction(command, flags)
 }

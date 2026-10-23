@@ -10,6 +10,7 @@ import (
 	"time"
 
 	bolt "go.etcd.io/bbolt"
+	"kc/internal/boltfile"
 )
 
 var commandBucket = []byte("commands")
@@ -31,7 +32,7 @@ func (s *boltCommandStore) Ready() error {
 	if err := os.MkdirAll(filepath.Dir(s.file), 0o755); err != nil {
 		return err
 	}
-	db, err := bolt.Open(s.file, 0o600, &bolt.Options{Timeout: time.Second})
+	db, err := boltfile.Open(s.file, 0o600, &bolt.Options{Timeout: time.Second})
 	if err != nil {
 		return err
 	}
@@ -156,7 +157,7 @@ func (s *boltCommandStore) PruneBefore(before time.Time) (int, error) {
 }
 
 func (s *boltCommandStore) view(fn func(*bolt.Tx) error) error {
-	db, err := bolt.Open(s.file, 0o600, &bolt.Options{ReadOnly: true, Timeout: time.Second})
+	db, err := boltfile.Open(s.file, 0o600, &bolt.Options{ReadOnly: true, Timeout: time.Second})
 	if err != nil {
 		return err
 	}
@@ -180,7 +181,7 @@ func (s *boltCommandStore) update(fn func(*bolt.Tx) error) error {
 		}
 		return file, nil
 	}}
-	db, err := bolt.Open(s.file, 0o600, options)
+	db, err := boltfile.Open(s.file, 0o600, options)
 	if err != nil {
 		return err
 	}

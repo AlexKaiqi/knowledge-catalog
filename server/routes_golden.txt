@@ -58,8 +58,10 @@ POST /operations/v1/access-specs:describe
 POST /operations/v1/feedback
 POST /operations/v1/hitmap:query
 POST /operations/v1/hooks
-POST /operations/v1/projections:describe
-POST /operations/v1/projections:sync
+POST /operations/v1/indexes:describe
+POST /operations/v1/indexes:prepare
+POST /operations/v1/indexes:ready
+POST /operations/v1/indexes:status
 POST /operations/v1/refine-log:query
 POST /operations/v1/rerank-training:query
 POST /operations/v1/retrieval-log:query

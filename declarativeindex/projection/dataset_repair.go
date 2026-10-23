@@ -41,7 +41,7 @@ func (idx *Index) RepairDatasetPublication(ctx context.Context, lookup reader.Me
 	if err != nil {
 		return err
 	}
-	spec, _, err := idx.prepareDatasetSpec(ctx, s, check)
+	spec, _, _, err := idx.prepareDatasetSpec(ctx, s, check)
 	if err != nil {
 		return err
 	}

@@ -61,13 +61,14 @@ func TestObservationSearchContinuationAcrossRefreshReopenAndCurrentAuthorization
 	body(t, kc(home, "dataset", "define", "--dataset", "agent", "--revision", "1", "--source", repository))
 	grant := asMap(t, body(t, kc(home, "allow", "--principal", "agent:http-test", "--action", "file.read", "--dataset", "agent")))
 	body(t, kc(home, "allow", "--principal", "agent:maintainer", "--action", "dataset.manage", "--dataset", "agent"))
+	body(t, kc(home, "allow", "--principal", "agent:maintainer", "--action", "index.manage", "--dataset", "agent"))
 	before := asMap(t, body(t, kc(home, "writer", "head", "--repo", repository)))["commit"]
 	url, stop := serveReferenceHome(t, home)
 	syncObservation := func() string {
-		synced := asMap(t, postAs(t, url, "/operations/v1/projections:sync", "agent:maintainer", map[string]any{"dataset": "agent", "revision": 1}))
-		value, ok := datasetProjectionState(t, synced, repository)["revision"].(string)
+		synced := asMap(t, postAs(t, url, "/operations/v1/indexes:prepare", "agent:maintainer", map[string]any{"dataset": "agent", "revision": 1}))
+		value, ok := datasetIndexObservation(t, synced, repository)["revision"].(string)
 		if !ok || value == "" {
-			t.Fatalf("sync has no fixed observation: %#v", synced)
+			t.Fatalf("prepare has no fixed observation: %#v", synced)
 		}
 		return value
 	}
@@ -85,7 +86,7 @@ func TestObservationSearchContinuationAcrossRefreshReopenAndCurrentAuthorization
 		t.Fatal("refresh did not replace observation generation")
 	}
 	current := asMap(t, postAs(t, url, "/object/v1/search", "agent:http-test", map[string]any{"dataset": "agent", "revision": 1, "query": "healthy", "limit": 1}))
-	if asMap(t, asMap(t, current["searchView"])["projectionRevisions"])[repository] != secondRevision {
+	if asMap(t, asMap(t, current["searchView"])["indexRevisions"])[repository] != secondRevision {
 		t.Fatalf("fresh query used old observation: %#v", current)
 	}
 	stop()
@@ -98,7 +99,7 @@ func TestObservationSearchContinuationAcrossRefreshReopenAndCurrentAuthorization
 		}
 		page := asMap(t, body(t, kcRemote(t, url, "agent:http-test", "search", "--dataset", "agent", "--revision", "1", "--query", "healthy", "--limit", "1", "--continuation", cursor)))
 		hits := page["hits"].([]any)
-		if len(hits) != 1 || asMap(t, asMap(t, page["searchView"])["projectionRevisions"])[repository] != firstRevision {
+		if len(hits) != 1 || asMap(t, asMap(t, page["searchView"])["indexRevisions"])[repository] != firstRevision {
 			t.Fatalf("CLI continuation changed observation: %#v", page)
 		}
 		hit := asMap(t, hits[0])
@@ -118,7 +119,7 @@ func TestObservationSearchContinuationAcrossRefreshReopenAndCurrentAuthorization
 	// must still eliminate values that no longer satisfy the condition.
 	revision.Store(3)
 	changed := asMap(t, body(t, kcRemote(t, url, "agent:http-test", "search", "--dataset", "agent", "--revision", "1", "--query", "healthy", "--limit", "1", "--continuation", originalCursor)))
-	if changed["completeness"] != "complete" || len(changed["hits"].([]any)) != 0 || asMap(t, asMap(t, changed["searchView"])["projectionRevisions"])[repository] != firstRevision {
+	if changed["completeness"] != "complete" || len(changed["hits"].([]any)) != 0 || asMap(t, asMap(t, changed["searchView"])["indexRevisions"])[repository] != firstRevision {
 		t.Fatalf("old index bypassed current predicate: %#v", changed)
 	}
 	body(t, kcRemote(t, url, "operator", "grant", "remove", "--id", grant["id"].(string)))

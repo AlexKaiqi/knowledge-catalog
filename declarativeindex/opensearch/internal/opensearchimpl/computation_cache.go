@@ -12,6 +12,7 @@ import (
 	"time"
 
 	bolt "go.etcd.io/bbolt"
+	"kc/internal/boltfile"
 	"kc/kernel"
 )
 
@@ -109,7 +110,7 @@ func (c computationCache) globalTransaction(change func(*bolt.Bucket, *bolt.Buck
 			return os.OpenFile(path, flag&^os.O_CREATE, mode)
 		}
 	}
-	db, err := bolt.Open(path, 0600, options)
+	db, err := boltfile.Open(path, 0600, options)
 	if err != nil {
 		return err
 	}

@@ -146,7 +146,7 @@ func TestDatasetRevisionPublishedDuringObservationPreservesOldGeneration(t *test
 	}
 	assertMemberObservation(t, f, retained, old.Revision)
 	replacement, err := f.index.SearchDataset(context.Background(), lookup, f.pin, memberQuery("47"))
-	if err != nil || len(replacement.Hits) != 0 || replacement.SearchView.ProjectionRevisions[f.repo.ID()] != old.Revision {
+	if err != nil || len(replacement.Hits) != 0 || replacement.SearchView.IndexRevisions[f.repo.ID()] != old.Revision {
 		t.Fatalf("rejected refresh changed retained generation or values: %#v %v", replacement, err)
 	}
 }
@@ -168,11 +168,11 @@ func TestDatasetCurrentRevisionObservationRefreshPublishesNewGeneration(t *testi
 		return f.reader.Require(id, kernel.ErrObjectRefUnresolved)
 	}
 	current, err := f.index.SearchDataset(context.Background(), lookup, f.pin, memberQuery("47"))
-	if err != nil || len(current.Hits) != 1 || current.SearchView.ProjectionRevisions[f.repo.ID()] != next.Revision {
+	if err != nil || len(current.Hits) != 1 || current.SearchView.IndexRevisions[f.repo.ID()] != next.Revision {
 		t.Fatalf("new observation generation was not queryable: %#v %v", current, err)
 	}
 	stale, err := f.index.SearchDataset(context.Background(), lookup, f.pin, memberQuery("31"))
-	if err != nil || len(stale.Hits) != 0 || stale.SearchView.ProjectionRevisions[f.repo.ID()] != next.Revision {
+	if err != nil || len(stale.Hits) != 0 || stale.SearchView.IndexRevisions[f.repo.ID()] != next.Revision {
 		t.Fatalf("replaced observation generation remained current: %#v %v", stale, err)
 	}
 }
@@ -404,7 +404,7 @@ func memberQuery(value string) retrieval.SearchRequest {
 func assertMemberObservation(t *testing.T, f memberProjectionFixture, result retrieval.SearchResult, revision string) {
 	t.Helper()
 	if result.Completeness != retrieval.CompletenessComplete || len(result.Hits) != 1 || result.SearchView.Snapshots[f.repo.ID()] != f.commit ||
-		result.SearchView.ProjectionRevisions[f.repo.ID()] != revision {
+		result.SearchView.IndexRevisions[f.repo.ID()] != revision {
 		t.Fatalf("Member query lost its complete fixed observation view: %#v", result)
 	}
 	hit := result.Hits[0]

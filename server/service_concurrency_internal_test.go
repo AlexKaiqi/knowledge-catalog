@@ -61,14 +61,14 @@ func TestTypedInvocationReadOnlyClassification(t *testing.T) {
 		"inventory.read", "registry.audit.read", "object.read", "object.search",
 		"object.relations", "object.provenance", "object.history.read",
 		"object.schema.read", "object.binding.resolve", "dataset.resolve",
-		"writer.receipt.read", "admin.grants.read", "projection.read",
+		"writer.receipt.read", "admin.grants.read", "index.read",
 		"object.access.describe", "operations.hooks.read", "operations.gates.read", "audit.read",
 	} {
 		if !inv.TypedInvocationReadOnly(action) {
 			t.Errorf("%s should be read-only", action)
 		}
 	}
-	for _, action := range []string{"writer.commit", "repositories.create", "dataset.manage", "projection.manage", "feedback.write"} {
+	for _, action := range []string{"writer.commit", "repositories.create", "dataset.manage", "index.manage", "feedback.write"} {
 		if inv.TypedInvocationReadOnly(action) {
 			t.Errorf("%s should not run on the immutable read view", action)
 		}

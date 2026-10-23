@@ -11,6 +11,7 @@ import (
 	index "kc/discovery/projection"
 	"kc/kernel"
 	objectmodel "kc/object"
+	"kc/object/reader"
 )
 
 // IndexQueries retains the existing typed tasks and declaration witnesses.
@@ -22,6 +23,10 @@ type IndexQueries interface {
 	ProjectionSynchronizer
 	AccessSpecAt(objectmodel.Repository, kernel.CommitID) (retrieval.AccessSpec, error)
 	CheckSearchProjectionAt(objectmodel.Repository, kernel.CommitID) (index.Meta, error)
+	// DatasetReadiness and DatasetDiagnosis are the two Dataset-revision
+	// questions a caller may ask. Readiness stays cheap; diagnosis walks members.
+	DatasetReadiness(context.Context, reader.MemberLookup, reader.DatasetPin) (index.IndexReadiness, error)
+	DatasetDiagnosis(context.Context, reader.MemberLookup, reader.DatasetPin) (index.IndexDiagnosis, error)
 }
 
 type IndexMaintenance interface {
@@ -32,7 +37,14 @@ type IndexMaintenance interface {
 	PrepareServingBasis(context.Context, objectmodel.Repository, kernel.CommitID) error
 	ApplyNotice(context.Context, index.ChangeNotice, index.ObservationSource) (index.StateSync, error)
 	SetObservationSource(index.ObservationSource)
+	// ObservationSource reports the injected runtime. Publishing an
+	// observation on behalf of a request reads it here instead of holding a
+	// second copy that could drift from the maintenance loop.
+	ObservationSource() index.ObservationSource
 	Targets() ([]index.ProjectionTarget, error)
+	// CatchUp reports the revision builds running right now. An empty result is
+	// a normal answer: this instance is not catching up.
+	CatchUpProgress() []index.IndexCatchUp
 }
 
 type IndexContribution struct {
@@ -41,6 +53,12 @@ type IndexContribution struct {
 	Capabilities IndexCapabilities
 	Start        func(context.Context) error
 	Stop         func()
+	// DatasetBuild builds and adopts one accepted release's corpus, addressed by
+	// its release coordinate rather than a source HEAD. An explicit prepare runs
+	// this same function instead of a second implementation, so the retry path
+	// and the background lane cannot diverge. A provider that cannot build a
+	// corpus leaves it nil and explicit preparation fails closed.
+	DatasetBuild func(context.Context, string, int) error
 }
 
 type IndexPluginEntry struct {

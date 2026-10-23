@@ -2,13 +2,14 @@ package datasets
 
 import (
 	"context"
+
 	"kc/kernel"
 	objectmodel "kc/object"
 	"kc/snapshot/dataset"
 	"sort"
 )
 
-// Preparation prepares a frozen Dataset basis through the selected provider.
+// BasisPreparer prepares a frozen Dataset basis through the selected provider.
 type BasisPreparer interface {
 	PrepareServingBasis(context.Context, objectmodel.Repository, kernel.CommitID) error
 }
@@ -16,46 +17,49 @@ type Preparation struct {
 	Enabled  bool
 	Lookup   func(kernel.RepositoryID) (objectmodel.Repository, error)
 	Provider BasisPreparer
-	// PrepareDataset prepares the whole frozen candidate. The composition root
+	// PrepareDataset builds the whole frozen candidate. The composition root
 	// adapts its Dataset resolution to the selected provider's reading basis.
+	// Publication never calls it: acceptance is a metadata decision, and the
+	// corpus of an accepted release is built afterwards, when the index
+	// maintenance pass prepares that accepted revision (see
+	// doc/design/dataset.md#发布).
 	PrepareDataset func(context.Context, dataset.ResolvedDataset) error
-	// ProtectDataset pins the exact ready resources after successful preparation.
-	ProtectDataset func(context.Context, dataset.ResolvedDataset) (PublicationProtection, error)
-	// PrepareProtectedDataset builds and protects as one continuous operation.
-	// It takes precedence over the separate compatibility callbacks in ExecuteProtected.
-	PrepareProtectedDataset func(context.Context, dataset.ResolvedDataset) (PublicationProtection, error)
 	// Conflicts proves that the frozen candidate takes no Aspect of one object
 	// from two source Repositories. It is required once a candidate has two
 	// sources and does not depend on any plugin being configured.
 	Conflicts func(dataset.ResolvedDataset) error
 	// Dependencies freezes the versions of unselected Repositories holding
 	// references the selected units make (doc/design/dataset.md#发布). Without
-	// it a candidate cannot be prepared: an unchecked reference would only fail
+	// it a candidate cannot be published: an unchecked reference would only fail
 	// later, at read time.
 	Dependencies func(dataset.ResolvedDataset) (map[kernel.RepositoryID]kernel.CommitID, error)
 }
 
-// Execute freezes reference dependencies, rejects a candidate whose range
-// takes one Aspect of one object from two source Repositories, then prepares
-// derived capabilities. It returns the candidate with its dependencies; the
-// sources it was given stay unchanged. Neither check depends on any plugin.
+// Execute is the publication half of preparation: it freezes reference
+// dependencies and rejects a candidate whose range takes one Aspect of one
+// object from two source Repositories. It returns the candidate with its
+// dependencies; the sources it was given stay unchanged. It builds nothing, so
+// its cost does not depend on how many objects the selected sources hold.
 func (p Preparation) Execute(ctx context.Context, def dataset.Dataset) (dataset.Dataset, error) {
-	def, err := p.prepareDefinition(def)
-	if err != nil {
+	if err := ctx.Err(); err != nil {
 		return dataset.Dataset{}, err
 	}
+	return p.prepareDefinition(def)
+}
+
+// Build is the corpus half of preparation for one accepted candidate. It is
+// the background task of an accepted release and the explicit retry path, and
+// it is never part of publication. It does not change the candidate.
+func (p Preparation) Build(ctx context.Context, def dataset.Dataset) error {
 	if !p.Enabled {
-		return def, nil
+		return ctx.Err()
 	}
+	candidate := dataset.ResolvedDataset{SetID: def.SetID, Revision: def.Revision, Repositories: frozenRepositories(def), Items: def.Items, Dependencies: def.Dependencies}
 	if p.PrepareDataset != nil {
-		candidate := dataset.ResolvedDataset{SetID: def.SetID, Revision: def.Revision, Repositories: frozenRepositories(def), Items: def.Items, Dependencies: def.Dependencies}
-		if err := p.PrepareDataset(ctx, candidate); err != nil {
-			return dataset.Dataset{}, err
-		}
-		return def, nil
+		return p.PrepareDataset(ctx, candidate)
 	}
 	if p.Provider == nil {
-		return def, nil
+		return ctx.Err()
 	}
 	seen := map[kernel.RepositoryID]bool{}
 	for _, source := range def.Sources {
@@ -74,13 +78,13 @@ func (p Preparation) Execute(ctx context.Context, def dataset.Dataset) (dataset.
 		}
 		repo, err := p.Lookup(source.Repository)
 		if err != nil {
-			return dataset.Dataset{}, err
+			return err
 		}
 		if err := p.Provider.PrepareServingBasis(ctx, repo, source.Commit); err != nil {
-			return dataset.Dataset{}, err
+			return err
 		}
 	}
-	return def, nil
+	return ctx.Err()
 }
 
 func (p Preparation) freezeDependencies(def dataset.Dataset) (dataset.Dataset, error) {

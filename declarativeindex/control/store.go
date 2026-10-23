@@ -8,6 +8,7 @@ import (
 
 	bolt "go.etcd.io/bbolt"
 	index "kc/discovery/projection"
+	"kc/internal/boltfile"
 	"kc/kernel"
 )
 
@@ -135,7 +136,7 @@ func (s *TargetStore) finish(repository kernel.RepositoryID, attempted kernel.Co
 }
 
 func (s *TargetStore) view(fn func(*bolt.Tx) error) error {
-	db, err := bolt.Open(s.file, 0o600, &bolt.Options{ReadOnly: true, Timeout: time.Second})
+	db, err := boltfile.Open(s.file, 0o600, &bolt.Options{ReadOnly: true, Timeout: time.Second})
 	if err != nil {
 		return err
 	}
@@ -144,7 +145,7 @@ func (s *TargetStore) view(fn func(*bolt.Tx) error) error {
 }
 
 func (s *TargetStore) update(fn func(*bolt.Tx) error) error {
-	db, err := bolt.Open(s.file, 0o600, &bolt.Options{Timeout: time.Second})
+	db, err := boltfile.Open(s.file, 0o600, &bolt.Options{Timeout: time.Second})
 	if err != nil {
 		return err
 	}

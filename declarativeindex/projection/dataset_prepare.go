@@ -13,15 +13,15 @@ import (
 // An empty source can predate Object metadata. Only explicit preparation may
 // prove the selected object set empty through its existing maintenance port;
 // consumption keeps verifying the retained exact declaration witnesses.
-func (idx *Index) prepareDatasetSpec(ctx context.Context, s datasetSpace, check retrieval.DeclarationCheck) (retrieval.AccessSpec, []datasetValue, error) {
+func (idx *Index) prepareDatasetSpec(ctx context.Context, s datasetSpace, check retrieval.DeclarationCheck) (retrieval.AccessSpec, []datasetValue, int, error) {
 	at := s.pin.Repositories[s.member.ID()]
 	spec, err := retrieval.AccessSpecForRepositoryChecked(s.member, at, check)
 	if kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied {
-		return spec, nil, err
+		return spec, nil, 0, err
 	}
-	values, nonempty, scanErr := s.valuesBySource(ctx, nil)
+	values, nonempty, skipped, scanErr := s.valuesBySource(ctx, nil)
 	if scanErr != nil {
-		return retrieval.AccessSpec{}, nil, scanErr
+		return retrieval.AccessSpec{}, nil, 0, scanErr
 	}
 	lookup := func(id kernel.RepositoryID) (objectmodel.Repository, error) {
 		repo, err := s.lookup(id)
@@ -32,10 +32,10 @@ func (idx *Index) prepareDatasetSpec(ctx context.Context, s datasetSpace, check 
 	}
 	member, err := space.Member(lookup, s.pin, s.member.ID())
 	if err != nil {
-		return retrieval.AccessSpec{}, nil, err
+		return retrieval.AccessSpec{}, nil, 0, err
 	}
 	spec, err = retrieval.AccessSpecForRepositoryChecked(member, at, check)
-	return spec, values, err
+	return spec, values, skipped, err
 }
 
 // This preparation-only view records facts proved by the selected maintenance

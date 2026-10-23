@@ -65,7 +65,7 @@ scheme、host、port 精确比较（缺省端口按 scheme 补齐，host 大小�
 `liveaccess.lookupTimeout` 是单元时限，`liveaccess.readTimeout` 是一次读取中外部取值共用的
 剩余时限（Go duration，须为正）。`ReadLimits` 经 `ContextWithReadLimits` 随请求传入：每个单元取
 两者较小者；预算用尽后其余单元逐个报 `TEMPORARY_UNAVAILABLE` 超时，已取到的值照常返回。
-预算不作为请求 ctx 的 deadline，不截断快照读取与留证。索引准备（`operations projection sync`）
+预算不作为请求 ctx 的 deadline，不截断快照读取与留证。索引准备（`kc index prepare`）
 是服务身份维护而非读取，经 `WithoutReadBudget` 保留单元时限、释放共享读预算。
 
 ## 原结果审计与索引

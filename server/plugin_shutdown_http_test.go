@@ -77,7 +77,7 @@ func exerciseHTTPPluginShutdown(t *testing.T, beginThenDrain bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cat := testkit.OpenDatasets(t, store)
+	cat := testkit.OpenBoundDatasets(t, store)
 	if _, err := cat.DefineDataset("shutdown", 1, []dataset.DatasetSource{{Repository: source.RepositoryID, Selector: snapshot.DefaultRef, BaseRev: string(commit.Result.NewCommit), Path: dataset.MountPath("jobs")}}); err != nil {
 		t.Fatal(err)
 	}
@@ -89,6 +89,11 @@ func exerciseHTTPPluginShutdown(t *testing.T, beginThenDrain bool) {
 	pool := &httpShutdownPool{stores: map[string]*httpShutdownStorage{}}
 	entry := declarative.Entry(declarative.Options{Directory: filepath.Join(t.TempDir(), "projection"),
 		Engine: func(string) index.EngineOpener { return pool.open }, Datasets: cat,
+		// Explicit preparation builds the accepted release, so the assembly has
+		// to be handed the one conversion to a consumer basis that the real
+		// deployment provides; without it the entry installs no build entry at
+		// all and preparation is refused instead of reaching the State refresh.
+		DatasetPin: testkit.DatasetPin,
 		Lookup: func(id kernel.RepositoryID) (objectmodel.Repository, error) {
 			return rd.Require(id, kernel.ErrObjectRefUnresolved)
 		},
@@ -144,7 +149,7 @@ func exerciseHTTPPluginShutdown(t *testing.T, beginThenDrain bool) {
 		t.Fatal("actual Controller did not enter background Bound State lookup")
 	}
 	dir := t.TempDir()
-	if err := inv.WriteAllow(dir, inv.AllowFile{Version: inv.AllowVersion, Rules: []inv.AllowRule{{ID: "sync", Principal: "maintainer", Dataset: "shutdown", Actions: []string{"dataset.manage"}}}}); err != nil {
+	if err := inv.WriteAllow(dir, inv.AllowFile{Version: inv.AllowVersion, Rules: []inv.AllowRule{{ID: "sync", Principal: "maintainer", Dataset: "shutdown", Actions: []string{"dataset.manage", "index.manage"}}}}); err != nil {
 		t.Fatal(err)
 	}
 	runtime, err := telemetry.New(telemetry.Config{ServiceName: "http-plugin-shutdown-test"})
@@ -192,9 +197,9 @@ func exerciseHTTPPluginShutdown(t *testing.T, beginThenDrain bool) {
 		}
 	})
 	body, _ := json.Marshal(map[string]any{"dataset": "shutdown", "revision": 1})
-	request := httptest.NewRequest(http.MethodPost, "/operations/v1/projections:sync", strings.NewReader(string(body))).WithContext(requestContext)
+	request := httptest.NewRequest(http.MethodPost, "/operations/v1/indexes:prepare", strings.NewReader(string(body))).WithContext(requestContext)
 	if network != nil {
-		request, err = http.NewRequestWithContext(requestContext, http.MethodPost, network.URL+"/operations/v1/projections:sync", strings.NewReader(string(body)))
+		request, err = http.NewRequestWithContext(requestContext, http.MethodPost, network.URL+"/operations/v1/indexes:prepare", strings.NewReader(string(body)))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -237,7 +242,7 @@ func exerciseHTTPPluginShutdown(t *testing.T, beginThenDrain bool) {
 	if beginThenDrain {
 		handler.BeginShutdown()
 		denied := httptest.NewRecorder()
-		late := httptest.NewRequest(http.MethodPost, "/operations/v1/projections:sync", strings.NewReader(string(body)))
+		late := httptest.NewRequest(http.MethodPost, "/operations/v1/indexes:prepare", strings.NewReader(string(body)))
 		late.Header.Set("X-Kc-As", "maintainer")
 		handler.ServeHTTP(denied, late)
 		if denied.Code == http.StatusOK || !strings.Contains(denied.Body.String(), string(kernel.ErrPreconditionFailed)) {
@@ -281,7 +286,7 @@ func exerciseHTTPPluginShutdown(t *testing.T, beginThenDrain bool) {
 	if err != nil || len(result.Hits) != 1 || result.Hits[0].Object.Commit != commit.Result.NewCommit || result.Hits[0].Object.Address.ObjectID != "job/shutdown" || len(result.Hits[0].Version.Observations) != 1 || result.Hits[0].Object.Value.(map[string]any)["runtime"].(map[string]any)["status"] != "running" {
 		t.Fatalf("draining HTTP work lost its fixed canonical State query: %#v %v", result, err)
 	}
-	revision := result.SearchView.ProjectionRevisions[repo.ID()]
+	revision := result.SearchView.IndexRevisions[repo.ID()]
 	if revision == "" || result.Dataset == nil || result.Dataset.ID != "shutdown" || result.Dataset.Revision != 1 {
 		t.Fatalf("accepted HTTP sync did not publish its actual Dataset State view: %#v", result)
 	}
@@ -293,14 +298,21 @@ func exerciseHTTPPluginShutdown(t *testing.T, beginThenDrain bool) {
 	var synced struct {
 		Dataset  string `json:"dataset"`
 		Revision int    `json:"revision"`
+		Ready    bool   `json:"ready"`
 		Members  []struct {
 			Repository kernel.RepositoryID `json:"repository"`
 			Commit     kernel.CommitID     `json:"commit"`
 		} `json:"members"`
-		Snapshot index.IndexSync  `json:"snapshot"`
-		State    *index.StateSync `json:"state"`
+		// Basis is the corpus this revision froze. Its mode records how the
+		// corpus was built (rebuild or incremental), so readiness is the
+		// separate top-level answer rather than a word inside the basis.
+		Basis *index.IndexBasisFacts `json:"basis"`
+		// Preparation reports the observation it just published as
+		// "observation": a revision whose corpus only now exists has no other
+		// place for it, and the pin already fixes the basis commit.
+		Observation *index.StateSync `json:"observation"`
 	}
-	if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &synced) != nil || synced.Dataset != "shutdown" || synced.Revision != 1 || len(synced.Members) != 1 || synced.Members[0].Repository != source.RepositoryID || synced.Members[0].Commit != commit.Result.NewCommit || synced.Snapshot.Mode != index.IndexModeReady || synced.Snapshot.AccessDigest == "" || synced.Snapshot.ObjectCount != 3 /* job, its ResourceDescriptor and the index declaration member */ || synced.State == nil || synced.State.Revision != revision || synced.State.ObservationDigest == "" {
+	if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &synced) != nil || synced.Dataset != "shutdown" || synced.Revision != 1 || !synced.Ready || len(synced.Members) != 1 || synced.Members[0].Repository != source.RepositoryID || synced.Members[0].Commit != commit.Result.NewCommit || synced.Basis == nil || synced.Basis.AccessDigest == "" || synced.Basis.ObjectCount != 3 /* job, its ResourceDescriptor and the index declaration member */ || synced.Observation == nil || synced.Observation.Revision != revision || synced.Observation.ObservationDigest == "" {
 		t.Fatalf("accepted sync failed during shutdown: HTTP %d %s", response.Code, response.Body.String())
 	}
 	if beginThenDrain {

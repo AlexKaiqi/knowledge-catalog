@@ -27,9 +27,15 @@ func New(config Config) (Client, error) {
 func (c *client) request(ctx context.Context, path string, input any, options RequestOptions, out any) error {
 	return httpjson.Do(ctx, c.transport, c.baseURL, "POST", path, input, options.RequestID, out)
 }
-func (c *client) DescribeProjection(ctx context.Context, r ProjectionRequest, o RequestOptions, out any) error {
-	return c.request(ctx, "/operations/v1/projections:describe", r, o, out)
+func (c *client) IndexReady(ctx context.Context, r IndexRequest, o RequestOptions, out any) error {
+	return c.request(ctx, "/operations/v1/indexes:ready", r, o, out)
 }
-func (c *client) SyncProjection(ctx context.Context, r ProjectionRequest, o RequestOptions, out any) error {
-	return c.request(ctx, "/operations/v1/projections:sync", r, o, out)
+func (c *client) IndexPrepare(ctx context.Context, r IndexRequest, o RequestOptions, out any) error {
+	return c.request(ctx, "/operations/v1/indexes:prepare", r, o, out)
+}
+func (c *client) IndexDescribe(ctx context.Context, r IndexRequest, o RequestOptions, out any) error {
+	return c.request(ctx, "/operations/v1/indexes:describe", r, o, out)
+}
+func (c *client) IndexStatus(ctx context.Context, o RequestOptions, out any) error {
+	return c.request(ctx, "/operations/v1/indexes:status", struct{}{}, o, out)
 }

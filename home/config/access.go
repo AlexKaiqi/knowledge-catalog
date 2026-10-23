@@ -27,7 +27,7 @@ func AuthenticatedRepositoryActions() []string {
 		"object.relations",
 		"object.access.describe",
 		"file.read",
-		"projection.read",
+		"index.read",
 	}
 }
 

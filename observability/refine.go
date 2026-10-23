@@ -10,8 +10,8 @@ import (
 )
 
 type RefineSearchView struct {
-	Snapshots           map[kernel.RepositoryID]kernel.CommitID `json:"snapshots"`
-	ProjectionRevisions map[kernel.RepositoryID]string          `json:"projectionRevisions,omitempty"`
+	Snapshots      map[kernel.RepositoryID]kernel.CommitID `json:"snapshots"`
+	IndexRevisions map[kernel.RepositoryID]string          `json:"indexRevisions,omitempty"`
 }
 
 type RefineSpec struct {

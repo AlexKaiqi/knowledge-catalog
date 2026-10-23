@@ -139,22 +139,23 @@ func TestConsumeViewFollowsPublishedBranch(t *testing.T) {
 		t.Fatalf("access describe: %#v", access)
 	}
 	if searchAvailable() {
-		pinnedReport := body(t, kc(h, "describe-index", "--dataset", "agent", "--revision", "2"))
-		pinnedIndex := datasetProjectionSnapshot(t, pinnedReport, core)
-		member := asMap(t, asMap(t, pinnedReport)["members"].([]any)[0])
+		pinnedReport := body(t, kc(h, "index", "describe", "--dataset", "agent", "--revision", "2"))
+		pinnedIndex := datasetIndexBasis(t, pinnedReport, core)
+		member := datasetIndexMember(t, pinnedReport, core)
 		if member["commit"] != c2 || asMap(t, pinnedReport)["revision"] != float64(2) {
-			t.Fatalf("projection report lost frozen source coordinate: %#v", pinnedReport)
+			t.Fatalf("index report lost frozen source coordinate: %#v", pinnedReport)
 		}
-		if pinnedIndex["physicalDigest"] == "" || pinnedIndex["state"] != "READY" {
-			t.Fatalf("projection must describe this Dataset commit, not a stale live index: %#v pin %s", pinnedIndex, c2)
+		if asMap(t, pinnedReport)["ready"] != true || pinnedIndex["physicalDigest"] == "" || member["stage"] != "ready" {
+			t.Fatalf("index must describe this Dataset commit, not a stale live index: %#v pin %s", pinnedIndex, c2)
 		}
-		desc := datasetProjectionSnapshot(t, body(t, kc(h, "describe-index", "--dataset", "agent")), core)
+		desc := datasetIndexBasis(t, body(t, kc(h, "index", "describe", "--dataset", "agent")), core)
 		if desc["physicalDigest"] != pinnedIndex["physicalDigest"] {
 			t.Fatalf("live index follows HEAD: %#v", desc)
 		}
-		syncedIndex := datasetProjectionSnapshot(t, body(t, kc(h, "index-sync", "--dataset", "agent", "--revision", "2")), core)
-		if syncedIndex["physicalDigest"] != pinnedIndex["physicalDigest"] || syncedIndex["mode"] != "ready" {
-			t.Fatalf("index-sync must report the requested ready basis: %#v", syncedIndex)
+		synced := asMap(t, body(t, kc(h, "index", "prepare", "--dataset", "agent", "--revision", "2")))
+		syncedIndex := datasetIndexBasis(t, synced, core)
+		if syncedIndex["physicalDigest"] != pinnedIndex["physicalDigest"] || syncedIndex["mode"] != "rebuild" || synced["ready"] != true {
+			t.Fatalf("index prepare must report the requested ready basis: %#v", syncedIndex)
 		}
 	}
 

@@ -5,7 +5,7 @@ Feature: probe usage boundaries
   Scenario: incomplete public argv
     When I run `kc dataset overlay`
     Then error USAGE_INVALID
-    When I run `kc operations projection notice`
+    When I run `kc index prepare`
     Then error USAGE_INVALID
     When I run `kc operations audit trace`
     Then error USAGE_INVALID

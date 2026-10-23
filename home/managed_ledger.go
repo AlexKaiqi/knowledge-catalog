@@ -9,6 +9,7 @@ import (
 	"time"
 
 	bolt "go.etcd.io/bbolt"
+	"kc/internal/boltfile"
 	"kc/kernel"
 )
 
@@ -77,7 +78,7 @@ func createManagedLedger(path string) error {
 	if err := file.Close(); err != nil {
 		return err
 	}
-	db, err := bolt.Open(path, 0600, &bolt.Options{Timeout: time.Second})
+	db, err := boltfile.Open(path, 0600, &bolt.Options{Timeout: time.Second})
 	if err != nil {
 		return err
 	}
@@ -98,7 +99,7 @@ func managedDB(dir string, write bool, fn func(*bolt.Tx) error) error {
 	if info, err := os.Stat(path); err != nil || !info.Mode().IsRegular() {
 		return kernel.Fail(kernel.ErrPreconditionFailed, "managed repository ledger is unavailable; restore durable state")
 	}
-	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: !write, Timeout: time.Second})
+	db, err := boltfile.Open(path, 0600, &bolt.Options{ReadOnly: !write, Timeout: time.Second})
 	if err != nil {
 		return err
 	}

@@ -24,7 +24,7 @@ LiveAccess；Affordance 同时说明对象和系统自身怎样使用。大文�
 | 角色 | 最短闭环 | 入口 |
 |---|---|---|
 | 对象接入方 | Client `create` → `attach --repo` → `writer commit --dir`（或 `writer put <对象URN>`）→ `read <对象URN>`；来源核对走 `provenance` | `kc help write` |
-| 治理方 | `attach --repo <配置源>` → `dataset define --source <repository>` → `grant add`；Dataset 发布准备索引，必要时 `operations projection sync --dataset <id>` | `kc help compose` |
+| 治理方 | `attach --repo <配置源>` → `dataset define --source <repository>` → `grant add`；Dataset 发布先接受版本，索引在后台追，必要时 `index prepare --dataset <id>` | `kc help compose` |
 | 对象消费方 | `连接服务 → show`；已知对象直接 `read <对象URN>`，可加 `--dataset`；未知对象先选择 Dataset，再 `search --dataset <id>`，随后读取命中引用 | `kc help consume` |
 
 Dataset 负责文件范围、组合与版本交付，不是写入源仓的前置条件；普通文件无需对象 Schema，结构校验和声明式检索在对象层提供。
@@ -227,9 +227,9 @@ kc writer put urn:kc:object:runbook/payment-oncall --repo "$REPOSITORY" --comman
   --origin-kind SOURCE --source-ref file:///source/runbooks/payment-oncall.md
 kc read urn:kc:object:runbook/payment-oncall
 
-# 治理方：命名 Dataset、发权。发布时按固定来源与选入声明准备索引；sync 恢复已接受修订的派生投影。
+# 治理方：命名 Dataset、发权。发布只接受版本，索引在后台追；prepare 是显式重试入口。
 kc dataset define agent --revision 1 --source "$REPOSITORY"
-kc operations projection sync --dataset agent --revision 1
+kc index prepare --dataset agent --revision 1
 kc registry audit
 
 # 消费方：同一对象引用限定到已发布 Dataset；精确历史读取保留返回的 commit。

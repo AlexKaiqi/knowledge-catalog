@@ -31,6 +31,7 @@ func TestDatasetContinuationKeepsOriginalCorpusAcrossRepairAndColdReopen(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
+	buildDatasetCorpus(t, ws)
 	search := func(host *Home, token string) retrieval.SearchResult {
 		t.Helper()
 		resolved, err := host.Datasets.ResolveDataset(def.SetID)

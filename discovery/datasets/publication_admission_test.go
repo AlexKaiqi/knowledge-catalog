@@ -3,7 +3,6 @@ package datasets
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"reflect"
 	"testing"
 
@@ -32,62 +31,57 @@ func guardedPublicationService(t *testing.T, fixture publicationFailureFixture) 
 	return service
 }
 
-func TestDatasetPublisherAdmitsFrozenPreparationBeforeAuthorityAccepts(t *testing.T) {
-	for _, reject := range []bool{false, true} {
-		t.Run(map[bool]string{false: "accept", true: "reject"}[reject], func(t *testing.T) {
-			fixture := newPublicationFailureFixture(t)
-			service := guardedPublicationService(t, fixture)
-			var events []string
-			denied := errors.New("resource admission denied")
-			admit := func(_ context.Context, def dataset.Dataset, authority dataset.PublicationAuthority) error {
-				events = append(events, "admit")
-				current, err := service.Set("reading")
-				if err != nil || current.Revision != 1 || authority.Head != kernel.CommitID(fixture.authorityHead) || authority.Binding == "" || authority.Ref != snapshot.DefaultRef ||
-					def.SetID != "reading" || def.Revision != 2 || len(def.Sources) != 1 || def.Sources[0].Commit != fixture.nextCommit {
-					t.Fatalf("admission did not bind frozen preparation to the actual authority: candidate=%#v authority=%#v current=%#v err=%v", def, authority, current, err)
-				}
-				if reject {
-					return denied
-				}
-				return nil
-			}
-			executor := DatasetPublisher{
-				Registry:  service,
-				Authorize: func(context.Context, DatasetPublication) error { events = append(events, "authorize"); return nil },
-				PrepareResources: func(_ context.Context, def dataset.Dataset) (dataset.Dataset, PublicationProtection, error) {
-					events = append(events, "prepare")
-					return def, &admissionResource{admit: admit}, nil
-				},
-			}
-			result, err := executor.Execute(context.Background(), DatasetPublication{Dataset: "reading", Revision: 2, Sources: fixture.sources})
-			if !reflect.DeepEqual(events, []string{"authorize", "prepare", "admit"}) {
-				t.Fatalf("publication order: %v", events)
-			}
-			current, _ := service.Set("reading")
-			if reject {
-				if !errors.Is(err, denied) || current.Revision != 1 || fixture.authority.attempts != 0 {
-					t.Fatalf("rejected admission changed authority: %#v %v", current, err)
-				}
-			} else if err != nil || result.Revision != 2 || current.Revision != 2 || fixture.authority.attempts != 1 {
-				t.Fatalf("admitted publication was not accepted once: %#v %v attempts=%d", result, err, fixture.authority.attempts)
-			}
-		})
+// Acceptance is a metadata decision. It records the release and admits no
+// preparation, so the accepted release has no receipt until its own build
+// adopts it (doc/design/dataset.md#发布).
+func TestDatasetPublicationLeavesNoPreparationReceipt(t *testing.T) {
+	fixture := newPublicationFailureFixture(t)
+	service := guardedPublicationService(t, fixture)
+	var events []string
+	publisher := DatasetPublisher{
+		Registry:  service,
+		Authorize: func(context.Context, DatasetPublication) error { events = append(events, "authorize"); return nil },
+		Prepare: func(_ context.Context, def dataset.Dataset) (dataset.Dataset, error) {
+			events = append(events, "validate")
+			return def, nil
+		},
+	}
+	accepted, err := publisher.Execute(context.Background(), DatasetPublication{Dataset: "reading", Revision: 2, Sources: fixture.sources})
+	if err != nil || accepted.Revision != 2 {
+		t.Fatalf("publication did not accept: %#v %v", accepted, err)
+	}
+	if want := []string{"authorize", "validate"}; !reflect.DeepEqual(events, want) {
+		t.Fatalf("publication order: %v want %v", events, want)
+	}
+	current, err := service.Set("reading")
+	if err != nil || current.Revision != 2 {
+		t.Fatalf("accepted release is not serving: %#v %v", current, err)
+	}
+	receipt, err := service.(dataset.PublicationCoordinator).PublicationReceipt(context.Background(), dataset.PublicationLookup{SetID: "reading", Revision: 2})
+	if err != nil || receipt.Admission != "" {
+		t.Fatalf("acceptance admitted a preparation: %#v %v", receipt, err)
+	}
+	if fixture.authority.attempts != 1 {
+		t.Fatalf("acceptance attempts: %d", fixture.authority.attempts)
 	}
 }
 
-func TestDatasetPublisherRejectsMissingCoordinationBeforePreparingResources(t *testing.T) {
+func TestDatasetPublisherRejectsIncompleteServices(t *testing.T) {
 	var events []string
 	registry := &publicationRegistry{events: &events, accepted: 1}
-	executor := DatasetPublisher{
-		Registry:  registry,
-		Authorize: func(context.Context, DatasetPublication) error { events = append(events, "authorize"); return nil },
-		PrepareResources: func(context.Context, dataset.Dataset) (dataset.Dataset, PublicationProtection, error) {
-			t.Fatal("prepared resources without an authority coordinator")
-			return dataset.Dataset{}, nil, nil
-		},
+	allow := func(context.Context, DatasetPublication) error { events = append(events, "authorize"); return nil }
+	pass := func(_ context.Context, def dataset.Dataset) (dataset.Dataset, error) {
+		events = append(events, "validate")
+		return def, nil
 	}
-	if _, err := executor.Execute(context.Background(), DatasetPublication{Dataset: "notes", Revision: 2}); kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied || !reflect.DeepEqual(events, []string{"authorize"}) {
-		t.Fatalf("missing coordination changed publication order or outcome: %v %v", events, err)
+	for name, executor := range map[string]DatasetPublisher{
+		"registry":  {Authorize: allow, Prepare: pass},
+		"authorize": {Registry: registry, Prepare: pass},
+		"prepare":   {Registry: registry, Authorize: allow},
+	} {
+		if _, err := executor.Execute(context.Background(), DatasetPublication{Dataset: "notes", Revision: 2}); kernel.CodeOf(err) != kernel.ErrCapabilityUnsatisfied || len(events) != 0 || registry.accepted != 1 {
+			t.Fatalf("%s-less publisher changed publication order or outcome: %v %v", name, events, err)
+		}
 	}
 }
 

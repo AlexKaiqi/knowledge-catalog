@@ -168,10 +168,10 @@ func (r *datasetSearchRun) resolveStateMembers() error {
 			return kernel.Fail(kernel.ErrCapabilityUnsatisfied,
 				"State projection for %s is not prepared", member.Repository)
 		}
-		if r.out.SearchView.ProjectionRevisions == nil {
-			r.out.SearchView.ProjectionRevisions = map[kernel.RepositoryID]string{}
+		if r.out.SearchView.IndexRevisions == nil {
+			r.out.SearchView.IndexRevisions = map[kernel.RepositoryID]string{}
 		}
-		r.out.SearchView.ProjectionRevisions[member.Repository] = revision
+		r.out.SearchView.IndexRevisions[member.Repository] = revision
 	}
 	return nil
 }
@@ -244,7 +244,7 @@ func (r *datasetSearchRun) fetchMemberPage(ctx context.Context, cursor *workspac
 	memberReq.Continuation = cursor.position
 	var member retrieval.SearchResult
 	if r.stateMembers[cursor.spec.Repository] {
-		member, err = r.exec.Projection.SearchStateAtRevisionContext(ctx, repo, cursor.spec.Commit, r.out.SearchView.ProjectionRevisions[cursor.spec.Repository], memberReq)
+		member, err = r.exec.Projection.SearchStateAtRevisionContext(ctx, repo, cursor.spec.Commit, r.out.SearchView.IndexRevisions[cursor.spec.Repository], memberReq)
 	} else {
 		member, err = r.exec.Projection.SearchAtContext(ctx, repo, cursor.spec.Commit, memberReq)
 	}

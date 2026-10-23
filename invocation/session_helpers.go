@@ -190,6 +190,12 @@ func DeliverSearchResult(home string, flags map[string]invoke.FlagValue, out ret
 }
 
 func SearchWorkspace(cx *Invocation) (any, error) {
+	// Search can only serve a prepared corpus. With no explicit revision, use
+	// the newest ready one and report it, instead of failing on a newer accepted
+	// version whose corpus is still being built.
+	if err := FixReadyRevision(cx); err != nil {
+		return nil, err
+	}
 	req, err := SearchRequestFromFlags(cx.Flags)
 	if err != nil {
 		return nil, err

@@ -123,6 +123,7 @@ func TestDatasetQueryUsesAcceptedGenerationAfterPointerReplacementAndColdReopen(
 	if err != nil {
 		t.Fatal(err)
 	}
+	buildDatasetCorpus(t, ws)
 
 	assertQueryUsesPublishedSource(t, ws, def, plain)
 	base, bindingID, binding := publicationBindingOnMedium(t, ws, def.SetID)
@@ -203,21 +204,20 @@ func assertQueryUsesPublishedSource(t *testing.T, host *Home, def dataset.Datase
 func TestAcceptedDatasetQueryDoesNotWaitForLostResourceConfirmation(t *testing.T) {
 	ws, plain, _ := newDatasetPreparationHome(t, nil)
 	lost := errors.New("resource confirmation lost after Dataset accepted")
-	publisher := datasetPreparationPublisher(ws)
-	publisher.PrepareResources = func(ctx context.Context, def dataset.Dataset) (dataset.Dataset, discoverydatasets.PublicationProtection, error) {
-		prepared, ticket, err := ws.DatasetPreparation.ExecuteProtected(ctx, def)
-		if err != nil || ticket == nil {
-			return prepared, ticket, err
-		}
-		return prepared, loseDatasetResourceHandoff{PublicationProtection: ticket, err: lost}, nil
-	}
-	_, err := publisher.Execute(context.Background(), discoverydatasets.DatasetPublication{Dataset: "unconfirmed-generation", Revision: 1, Sources: []dataset.DatasetSource{plain.mapping()}})
-	if !errors.Is(err, lost) {
-		t.Fatalf("handoff confirmation was not lost: %v", err)
+	if _, err := datasetPreparationPublisher(ws).Execute(context.Background(), discoverydatasets.DatasetPublication{Dataset: "unconfirmed-generation", Revision: 1, Sources: []dataset.DatasetSource{plain.mapping()}}); err != nil {
+		t.Fatalf("acceptance must not depend on the corpus build: %v", err)
 	}
 	def, err := ws.Datasets.DatasetVersion("unconfirmed-generation", 1)
 	if err != nil {
 		t.Fatal(err)
+	}
+	// The build's confirmation is lost after its durable admission. The release
+	// is already accepted, so the corpus is servable and the query must not wait
+	// for, or perform, publication recovery.
+	if err := buildDatasetRelease(ws, dataset.PublicationLookup{SetID: def.SetID, Revision: def.Revision}, func(ticket discoverydatasets.PublicationProtection) discoverydatasets.PublicationProtection {
+		return loseDatasetResourceHandoff{PublicationProtection: ticket, err: lost}
+	}); !errors.Is(err, lost) {
+		t.Fatalf("handoff confirmation was not lost: %v", err)
 	}
 	base, _, binding := publicationBindingOnMedium(t, ws, def.SetID)
 	digest := sha256.Sum256([]byte(binding["repository"].(string)))

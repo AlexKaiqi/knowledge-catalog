@@ -101,8 +101,8 @@ KC_LIVE_LLM_RERANK=1 go test ./discovery/llmhttp -run '^TestLiveLunaListwiseRera
 go run ./cmd/kc -- search --dataset sales-analysis --query runbook
 go run ./cmd/kc -- search --dataset sales-analysis --revision 1 --eq db=tl --query events
 go run ./cmd/kc -- search --dataset sales-analysis --contains name=order
-go run ./cmd/kc -- operations projection describe --dataset sales-analysis --revision 1
-go run ./cmd/kc -- operations projection sync --dataset sales-analysis
+go run ./cmd/kc -- index describe --dataset sales-analysis --revision 1
+go run ./cmd/kc -- index prepare --dataset sales-analysis
 ```
 
 ## RECALL：请求级召回策略（lexical / semantic / hybrid 闭集）

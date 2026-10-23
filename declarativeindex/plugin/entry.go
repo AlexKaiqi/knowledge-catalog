@@ -50,6 +50,7 @@ func Entry(options Options) indexplugins.IndexPluginEntry {
 	affordance := indexcapability.AffordanceFor(manifest)
 	return indexplugins.IndexPluginEntry{Affordance: affordance, Open: func(scope indexplugins.PluginScope) (indexplugins.IndexContribution, error) {
 		directory, namespace := options.Directory, ""
+
 		// main adopts the previously selected physical resources and validators.
 		if scope.Instance != "main" {
 			directory = filepath.Join(directory, "plugins", scope.Name, scope.Instance)
@@ -88,6 +89,25 @@ func Entry(options Options) indexplugins.IndexPluginEntry {
 			}
 			return options.Lookup(id)
 		}
+		// A release belongs to the instance that admits all of its sources. A
+		// release whose sources straddle instances is owned by none, so it stays
+		// not-ready and search fails closed for it instead of two instances
+		// building competing corpora.
+		owns := func(def dataset.Dataset) bool {
+			if len(def.Sources) == 0 {
+				return false
+			}
+			for _, source := range def.Sources {
+				admitted := allowed[source.Repository]
+				if scope.ContainsRepository != nil {
+					admitted = scope.ContainsRepository(source.Repository)
+				}
+				if !admitted {
+					return false
+				}
+			}
+			return true
+		}
 		if authority, ok := options.Datasets.(dataset.PublicationCoordinator); ok {
 			publication := discoverydatasets.PublicationRecovery{Authority: authority, Definitions: options.Datasets}
 			resolve := publication.Resolve
@@ -120,8 +140,25 @@ func Entry(options Options) indexplugins.IndexPluginEntry {
 			return append([]kernel.RepositoryID(nil), repositories...), nil
 		})
 		controller.SetServingBases(discoverydatasets.ServingBasisDemand{Datasets: options.Datasets}.Bases)
-		return indexplugins.IndexContribution{Queries: idx, Maintenance: controller, Capabilities: manifest,
+		contribution := indexplugins.IndexContribution{Queries: idx, Maintenance: controller, Capabilities: manifest,
 			Start: controller.Start, Stop: controller.Close,
-		}, nil
+		}
+		if options.Datasets != nil {
+			builds := datasetBuild{idx: idx, options: options, lookup: lookup, owns: owns, gate: newBuildGate()}
+			if authority, ok := options.Datasets.(dataset.PublicationCoordinator); ok {
+				builds.publication = discoverydatasets.PublicationRecovery{Authority: authority, Definitions: options.Datasets}
+			}
+			// The lane addresses a release by its accepted coordinates, so a
+			// deployment that cannot turn a resolved release into a pin cannot
+			// build one either. Installing it without that would leave both
+			// entries dereferencing a capability the assembly never provided.
+			if builds.publication.Authority != nil && options.DatasetPin != nil {
+				controller.SetDatasetLane(builds.Demand().CatchUp)
+				// One build implementation serves both entries: the background
+				// lane calls BuildDataset, and explicit preparation calls this.
+				contribution.DatasetBuild = builds.buildAccepted
+			}
+		}
+		return contribution, nil
 	}}
 }

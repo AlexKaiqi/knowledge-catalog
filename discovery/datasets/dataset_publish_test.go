@@ -3,9 +3,11 @@ package datasets
 import (
 	"context"
 	"errors"
-	"kc/snapshot/dataset"
 	"reflect"
 	"testing"
+
+	"kc/kernel"
+	"kc/snapshot/dataset"
 )
 
 type publicationRegistry struct {
@@ -17,53 +19,66 @@ func (r *publicationRegistry) PrepareDataset(id string, rev int, sources []datas
 	*r.events = append(*r.events, "freeze")
 	return dataset.Dataset{SetID: id, Revision: rev, Sources: sources}, nil
 }
+
 func (r *publicationRegistry) PublishDataset(def dataset.Dataset) (dataset.Dataset, error) {
 	*r.events = append(*r.events, "publish")
 	r.accepted = def.Revision
 	return def, nil
 }
-func TestDatasetPublicationSwitchesOnlyAfterCapabilitiesReady(t *testing.T) {
-	for _, fail := range []bool{false, true} {
-		t.Run(map[bool]string{false: "ready", true: "failed"}[fail], func(t *testing.T) {
-			var events []string
-			registry := &publicationRegistry{events: &events, accepted: 1}
-			problem := errors.New("projection unavailable")
-			executor := DatasetPublisher{Registry: registry,
-				Authorize: func(context.Context, DatasetPublication) error { events = append(events, "authorize"); return nil },
-				Prepare: func(_ context.Context, def dataset.Dataset) (dataset.Dataset, error) {
-					events = append(events, "prepare")
-					if registry.accepted != 1 {
-						t.Fatal("switched before ready")
-					}
-					if fail {
-						return dataset.Dataset{}, problem
-					}
-					return def, nil
-				},
+
+// Publication performs no corpus build. Acceptance is a metadata decision, and
+// the accepted release's corpus is built afterwards as its own background task,
+// so the ordering a publisher can observe is authorize → freeze → validate →
+// accept with no build in between.
+func TestDatasetPublicationBuildsNoCorpusBeforeAcceptance(t *testing.T) {
+	var events []string
+	registry := &publicationRegistry{events: &events, accepted: 1}
+	executor := DatasetPublisher{Registry: registry,
+		Authorize: func(context.Context, DatasetPublication) error { events = append(events, "authorize"); return nil },
+		Prepare: func(_ context.Context, def dataset.Dataset) (dataset.Dataset, error) {
+			events = append(events, "validate")
+			if registry.accepted != 1 {
+				t.Fatal("accepted before validating the frozen candidate")
 			}
-			metadata := map[string]string{"custom": "value"}
-			published, err := executor.Execute(context.Background(), DatasetPublication{Dataset: "notes", Revision: 2, Metadata: metadata})
-			want := []string{"authorize", "freeze", "prepare"}
-			if fail {
-				if !errors.Is(err, problem) || registry.accepted != 1 {
-					t.Fatalf("failed publication changed latest: %v", err)
-				}
-			} else {
-				want = append(want, "publish")
-				if err != nil || registry.accepted != 2 {
-					t.Fatal(err)
-				}
-				metadata["custom"] = "caller changed"
-				if published.Metadata["custom"] != "value" {
-					t.Fatalf("accepted metadata lost or aliases caller: %#v", published.Metadata)
-				}
-			}
-			if !reflect.DeepEqual(events, want) {
-				t.Fatalf("order: %v", events)
-			}
-		})
+			return def, nil
+		},
+	}
+	metadata := map[string]string{"custom": "value"}
+	published, err := executor.Execute(context.Background(), DatasetPublication{Dataset: "notes", Revision: 2, Metadata: metadata})
+	if err != nil || registry.accepted != 2 {
+		t.Fatal(err)
+	}
+	if want := []string{"authorize", "freeze", "validate", "publish"}; !reflect.DeepEqual(events, want) {
+		t.Fatalf("publication order: %v want %v", events, want)
+	}
+	metadata["custom"] = "caller changed"
+	if published.Metadata["custom"] != "value" {
+		t.Fatalf("accepted metadata lost or aliases caller: %#v", published.Metadata)
 	}
 }
+
+// A rejected validation never advances the serving version, and it happens
+// before anything durable about the corpus exists.
+func TestDatasetPublicationRejectsInvalidCandidateBeforeAcceptance(t *testing.T) {
+	var events []string
+	registry := &publicationRegistry{events: &events, accepted: 1}
+	problem := kernel.Fail(kernel.ErrObjectIDConflict, "table/orders takes structure from two sources")
+	executor := DatasetPublisher{Registry: registry,
+		Authorize: func(context.Context, DatasetPublication) error { events = append(events, "authorize"); return nil },
+		Prepare: func(_ context.Context, def dataset.Dataset) (dataset.Dataset, error) {
+			events = append(events, "validate")
+			return dataset.Dataset{}, problem
+		},
+	}
+	_, err := executor.Execute(context.Background(), DatasetPublication{Dataset: "notes", Revision: 2})
+	if kernel.CodeOf(err) != kernel.ErrObjectIDConflict || registry.accepted != 1 {
+		t.Fatalf("invalid candidate changed latest: %v", err)
+	}
+	if want := []string{"authorize", "freeze", "validate"}; !reflect.DeepEqual(events, want) {
+		t.Fatalf("rejected publication order: %v want %v", events, want)
+	}
+}
+
 func TestDatasetPublicationDeniedBeforeFreeze(t *testing.T) {
 	var events []string
 	denied := errors.New("denied")

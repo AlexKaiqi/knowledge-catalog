@@ -202,10 +202,10 @@ evidence:
       - consumption
     tests:
       - TestSearchKeepsCandidateBasisWhenWriterAdvancesBeforeObjectRead
-      - TestDatasetPublicationSwitchesOnlyAfterCapabilitiesReady
+      - TestDatasetPublicationRejectsInvalidCandidateBeforeAcceptance
     verifies:
       - claim: "discovery#U4"
-        detail: "单 Repo 实际候选 a 返回后 Writer 推进 b，真实回读仍保留 a 的命中集合、值与声明依据；Dataset 准备失败保留旧发布。不证明完整插件链。"
+        detail: "单 Repo 实际候选 a 返回后 Writer 推进 b，真实回读仍保留 a 的命中集合、值与声明依据；Dataset 校验失败在冻结候选上拒绝，服务版本不推进、旧发布保持。不证明完整插件链。"
   - id: index-bad-result-and-stale-continuation
     title: 错误回读与过期发布代际的续页被拒绝
     source: projection.index

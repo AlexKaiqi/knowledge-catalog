@@ -2,7 +2,7 @@ package home
 
 import (
 	"context"
-	discoverydatasets "kc/discovery/datasets"
+
 	"kc/internal/datasetbridge"
 	"kc/kernel"
 	objectmodel "kc/object"
@@ -10,15 +10,12 @@ import (
 	"kc/snapshot/dataset"
 )
 
+// prepareDataset builds the corpus of one accepted release. It is the
+// background task of acceptance and the explicit retry path, never part of the
+// publication request (doc/design/dataset.md#发布).
 func (ws *Home) prepareDataset(lookup reader.MemberLookup) func(context.Context, dataset.ResolvedDataset) error {
 	return func(ctx context.Context, candidate dataset.ResolvedDataset) error {
 		return ws.Plugins.PrepareDatasetScope(ctx, lookup, DatasetPin(candidate))
-	}
-}
-
-func (ws *Home) protectDataset(lookup reader.MemberLookup) func(context.Context, dataset.ResolvedDataset) (discoverydatasets.PublicationProtection, error) {
-	return func(ctx context.Context, candidate dataset.ResolvedDataset) (discoverydatasets.PublicationProtection, error) {
-		return ws.Plugins.ProtectDatasetScope(ctx, lookup, DatasetPin(candidate))
 	}
 }
 
@@ -45,11 +42,5 @@ func publicationDependencies(lookup func(kernel.RepositoryID) (objectmodel.Repos
 func publicationConflicts(lookup func(kernel.RepositoryID) (objectmodel.Repository, error)) func(dataset.ResolvedDataset) error {
 	return func(candidate dataset.ResolvedDataset) error {
 		return reader.Open(reader.MemberLookup(lookup), DatasetPin(candidate)).CheckHoldingConflicts()
-	}
-}
-
-func (ws *Home) prepareProtectedDataset(lookup reader.MemberLookup) func(context.Context, dataset.ResolvedDataset) (discoverydatasets.PublicationProtection, error) {
-	return func(ctx context.Context, candidate dataset.ResolvedDataset) (discoverydatasets.PublicationProtection, error) {
-		return ws.Plugins.PrepareProtectedDatasetScope(ctx, lookup, DatasetPin(candidate))
 	}
 }

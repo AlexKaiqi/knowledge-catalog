@@ -43,6 +43,7 @@ func TestDatasetPublicationPreparesSelectedSourcesThroughDeployedInstance(t *tes
 			if err != nil {
 				t.Fatalf("Dataset publication failed to prepare its selected sources: %v", err)
 			}
+			buildDatasetCorpus(t, ws)
 			assertDatasetPreparationReads(t, ws, def, row.sources...)
 			resolved, err := ws.Datasets.ResolveDataset(def.SetID)
 			if err != nil {

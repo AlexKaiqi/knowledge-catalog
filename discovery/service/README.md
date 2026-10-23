@@ -8,6 +8,11 @@
 不调用后台来源配置 setter。响应采用这次实际发布的 `StateSync`，不再次跟随 HEAD；
 未提供前台 runtime 的通知继续沿已有后台队列执行。
 
+`DatasetPrepareExecutor` 是显式准备的执行口：先让拥有全部来源的实例构建该已接受修订的
+corpus，再用本次调用方的 runtime 重新发布这次 corpus 的观察。调用方只交出 runtime 与
+请求依据工厂，把 runtime 绑成观察来源只在本包发生，调用层不直接依赖 LiveAccess 的桥接
+适配器。进程已有后台来源时仍用后台来源，前台 runtime 只在没有后台来源时兜底。
+
 已安装的声明式索引实例通过 Dataset corpus 端口执行消费查询，不再按来源仓拼接排名。
 `DatasetSearchExecutor` 先授权，再固定修订；有外部观察的候选在本次逻辑 READ 后、填满
 产品页之前补判。组合对象沿同一版本向量回读各来源的选入方面。索引原观察与 READ 新

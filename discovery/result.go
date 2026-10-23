@@ -33,8 +33,8 @@ type DeclarationParticipation struct {
 }
 
 type SearchView struct {
-	Snapshots           map[kernel.RepositoryID]kernel.CommitID `json:"snapshots"`
-	ProjectionRevisions map[kernel.RepositoryID]string          `json:"projectionRevisions,omitempty"`
+	Snapshots      map[kernel.RepositoryID]kernel.CommitID `json:"snapshots"`
+	IndexRevisions map[kernel.RepositoryID]string          `json:"indexRevisions,omitempty"`
 }
 
 type UnitVersion struct {

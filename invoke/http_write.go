@@ -28,6 +28,10 @@ func WriteInvoke(w http.ResponseWriter, result RunResult) {
 					code = http.StatusNotFound
 				case kernel.ErrTemporaryUnavailable:
 					code = http.StatusServiceUnavailable
+				case kernel.ErrCapabilityUnsatisfied, kernel.ErrUsageInvalid, kernel.ErrDatasetInvalid:
+					// The capability is not available in this deployment or
+					// revision; the request itself was well formed.
+					code = http.StatusBadRequest
 				case kernel.ErrNonFastForward, kernel.ErrIdempotencyConflict, kernel.ErrPreconditionFailed,
 					kernel.ErrEventIDConflict, kernel.ErrCandidateMoved,
 					kernel.ErrRepositoryArchived,

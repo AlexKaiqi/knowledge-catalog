@@ -8,22 +8,28 @@ schema_ref: schema/system/capability-entrypoints/v1
 {
   "commands": [
     {
+      "action": "index.read",
+      "command": "kc index",
+      "description": "查看某个 Dataset 修订能不能搜，或无参查看当前追赶进度",
+      "help": "kc help index"
+    },
+    {
+      "action": "index.read",
+      "command": "kc index describe",
+      "description": "查看某个 Dataset 修订的索引诊断信息",
+      "help": "kc help index describe"
+    },
+    {
+      "action": "index.manage",
+      "command": "kc index prepare",
+      "description": "显式准备某个 Dataset 修订的索引",
+      "help": "kc help index prepare"
+    },
+    {
       "action": "file.read",
       "command": "kc operations access-spec describe",
       "description": "查看 Dataset 选入声明的逻辑访问概览",
       "help": "kc help operations access-spec describe"
-    },
-    {
-      "action": "file.read",
-      "command": "kc operations projection describe",
-      "description": "查看 Dataset 修订的投影状态",
-      "help": "kc help operations projection describe"
-    },
-    {
-      "action": "dataset.manage",
-      "command": "kc operations projection sync",
-      "description": "显式准备 Dataset 固定修订的索引",
-      "help": "kc help operations projection sync"
     }
   ]
 }

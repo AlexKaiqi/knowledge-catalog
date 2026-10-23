@@ -38,8 +38,9 @@ func TestDatasetPreparationUsesCurrentSourcesWithoutReopeningPlugins(t *testing.
 		Dataset: "late-source", Revision: 1, Sources: []dataset.DatasetSource{late.mapping()},
 	})
 	if err != nil {
-		t.Fatalf("active installed instance did not adopt the newly admitted source: %v", err)
+		t.Fatalf("publication of the newly admitted source failed: %v", err)
 	}
+	buildDatasetCorpus(t, ws)
 	assertDatasetPreparationReads(t, ws, def, late)
 	fixed, err := ws.Datasets.ResolveDataset(def.SetID)
 	if err != nil {

@@ -1,6 +1,11 @@
 Feature: Dataset 重新发布后搜索与回读使用服务版本
 
   Scenario: Dataset 重新发布后搜索与回读使用服务版本
+    When I run `kc index prepare --dataset scene-set --revision 1`
+    Then the output has:
+      | dataset | scene-set |
+      | revision | 1 |
+      | ready | true |
     When I run `kc search --dataset scene-set --query merchandise`
     Then 1 hit metric/gmv
     When I run `kc read urn:kc:object:metric/gmv#/definition --dataset scene-set --revision 1`
@@ -13,12 +18,13 @@ Feature: Dataset 重新发布后搜索与回读使用服务版本
       | disposition         | APPLIED |
       | result.repositoryId | kr://scene/object |
       | result.newCommit    | nonempty |
-    When I run `kc operations projection describe --dataset scene-set --revision 1`
+    When I run `kc index describe --dataset scene-set --revision 1`
     Then the output has:
       | dataset | scene-set |
       | revision | 1 |
       | members.1.commit | nonempty |
-      | snapshot.state | READY |
+      | members.1.stage | ready |
+      | basis.mode | rebuild |
     When I run `kc read urn:kc:object:metric/gmv#/definition --dataset scene-set`
     Then the output has:
       | objectId | metric/gmv |
@@ -34,12 +40,18 @@ Feature: Dataset 重新发布后搜索与回读使用服务版本
       | sources.0.commit | nonempty |
       | sources.4.subPath | indexes/metric |
       | sources.5.subPath | indexes/relation |
-    When I run `kc operations projection describe --dataset scene-set --revision 2`
+    When I run `kc index prepare --dataset scene-set --revision 2`
+    Then the output has:
+      | dataset | scene-set |
+      | revision | 2 |
+      | ready | true |
+    When I run `kc index describe --dataset scene-set --revision 2`
     Then the output has:
       | dataset | scene-set |
       | revision | 2 |
       | members.1.commit | nonempty |
-      | snapshot.state | READY |
+      | members.1.stage | ready |
+      | basis.mode | rebuild |
     When I run `kc search --dataset scene-set --query merchandise`
     Then 1 hit metric/gmv
     When I run `kc read urn:kc:object:metric/gmv#/definition --dataset scene-set`

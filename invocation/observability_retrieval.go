@@ -156,7 +156,7 @@ func retrievalObservationSource(result any) any {
 
 func populateSearchRetrievalEvent(event *observability.RetrievalEvent, result retrieval.SearchResult) {
 	event.SearchView = observability.RefineSearchView{
-		Snapshots: result.SearchView.Snapshots, ProjectionRevisions: result.SearchView.ProjectionRevisions,
+		Snapshots: result.SearchView.Snapshots, IndexRevisions: result.SearchView.IndexRevisions,
 	}
 	event.HasMore = result.Continuation != ""
 	event.Completeness = string(result.Completeness)
@@ -190,7 +190,7 @@ func cloneRetrievalSources(sources []objectmodel.SourceBasis) []objectmodel.Sour
 
 func populateRelationRetrievalEvent(event *observability.RetrievalEvent, result retrieval.RelationPage) {
 	event.SearchView = observability.RefineSearchView{
-		Snapshots: result.SearchView.Snapshots, ProjectionRevisions: result.SearchView.ProjectionRevisions,
+		Snapshots: result.SearchView.Snapshots, IndexRevisions: result.SearchView.IndexRevisions,
 	}
 	event.HasMore = result.Continuation != ""
 	event.Completeness = "complete"
@@ -214,7 +214,7 @@ func populateRelationRetrievalEvent(event *observability.RetrievalEvent, result 
 // complete, a budget-paused page is partial.
 func populateTraverseRetrievalEvent(event *observability.RetrievalEvent, result retrieval.TraversePage) {
 	event.SearchView = observability.RefineSearchView{
-		Snapshots: result.SearchView.Snapshots, ProjectionRevisions: result.SearchView.ProjectionRevisions,
+		Snapshots: result.SearchView.Snapshots, IndexRevisions: result.SearchView.IndexRevisions,
 	}
 	event.HasMore = result.Continuation != ""
 	if result.Exhausted {

@@ -37,10 +37,10 @@ var commandActions = map[string]string{
 	"resolve": "dataset.resolve", "resolve-object": "object.read", "resolve-binding": "object.binding.resolve",
 	"read": "object.read", "relations": "object.relations", "describe-schema": "object.schema.read",
 	"search": "file.read", "log": "object.history.read", "provenance": "object.provenance",
-	"describe-index": "projection.read", "index-sync": "projection.manage", "index-notify": "projection.manage", "describe-access": "object.access.describe",
-	"register":       "repositories.manage",
-	"archive-repo":   "repositories.manage",
-	"read-workspace": "file.read", "read-catalog": "inventory.read", "audit": "audit.read",
+	"describe-access": "object.access.describe",
+	"register":        "repositories.manage",
+	"archive-repo":    "repositories.manage",
+	"read-workspace":  "file.read", "read-catalog": "inventory.read", "audit": "audit.read",
 	"vfs-read": "file.read", "vfs-list": "file.read", "vfs-write": "writer.commit",
 }
 

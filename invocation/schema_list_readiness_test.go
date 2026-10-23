@@ -68,6 +68,14 @@ func (p *countingIndexPlugin) CheckSearchProjectionAt(_ objectmodel.Repository, 
 	return index.Meta{}, kernel.Fail(kernel.ErrCapabilityUnsatisfied, "projection is not ready in this fixture")
 }
 
+func (p *countingIndexPlugin) DatasetReadiness(_ context.Context, _ reader.MemberLookup, pin reader.DatasetPin) (index.IndexReadiness, error) {
+	return index.IndexReadiness{Dataset: pin.SetID, Revision: pin.Revision, Ready: false}, nil
+}
+
+func (p *countingIndexPlugin) DatasetDiagnosis(_ context.Context, _ reader.MemberLookup, pin reader.DatasetPin) (index.IndexDiagnosis, error) {
+	return index.IndexDiagnosis{Dataset: pin.SetID, Revision: pin.Revision, Ready: false}, nil
+}
+
 // TestSchemaListDoesNotAskIndexReadiness proves the debt's acceptance: on a
 // Dataset whose projection readiness check fails, schema list still returns
 // the complete summary rows without calling the readiness check, while schema

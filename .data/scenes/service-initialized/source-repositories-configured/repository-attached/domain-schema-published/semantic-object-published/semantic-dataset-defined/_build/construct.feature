@@ -31,6 +31,11 @@ Feature: semantic-dataset-defined
       | datasets[].revision | 1 |
       | repositories[].id | kr://scene/object |
       | repositories[].id | kr://scene/graph |
+    When I run `kc index prepare --dataset scene-set --revision 1`
+    Then the output has:
+      | dataset | scene-set |
+      | revision | 1 |
+      | ready | true |
     When I run `kc read urn:kc:object:metric/gmv --dataset scene-set`
     Then the output has:
       | objectId | metric/gmv |

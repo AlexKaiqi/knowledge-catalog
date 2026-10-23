@@ -160,6 +160,9 @@ func (f *connectedPluginFixture) prepareAndRead(t *testing.T, ws *Home) {
 	if _, err := ws.Datasets.PublishDataset(def); err != nil {
 		t.Fatal(err)
 	}
+	// Acceptance is a metadata decision; the corpus of this release is built
+	// afterwards by the same background lane that builds any accepted release.
+	buildDatasetCorpus(t, ws)
 	f.assertCanonical(t, ws)
 }
 

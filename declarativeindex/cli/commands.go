@@ -3,8 +3,9 @@ package cli
 import "strings"
 
 var commandEntries = []Command{
-	{Path: "operations projection describe", Handler: "operations-projection-describe", Action: "file.read", Flags: strings.Fields("dataset revision"), Groups: []string{"operations"}},
-	{Path: "operations projection sync", Handler: "operations-projection-sync", Action: "dataset.manage", Flags: strings.Fields("dataset revision"), Groups: []string{"operations"}},
+	{Path: "index", Handler: "index", Action: "index.read", Flags: strings.Fields("dataset revision"), Groups: []string{"operations"}},
+	{Path: "index prepare", Handler: "index-prepare", Action: "index.manage", Flags: strings.Fields("dataset revision"), Groups: []string{"operations"}},
+	{Path: "index describe", Handler: "index-describe", Action: "index.read", Flags: strings.Fields("dataset revision"), Groups: []string{"operations"}},
 }
 
 func Commands() []Command {

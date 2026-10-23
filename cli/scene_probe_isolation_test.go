@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	kchome "kc/home"
 	"kc/internal/testkit"
 )
 
@@ -281,11 +282,12 @@ func sceneProjectionProbeOrders(t *testing.T, checkpoint bool) {
 			node.Dir = t.TempDir()
 			node.Probes = nil
 			observe := `
-When I run ` + "`kc operations projection describe --dataset scene-set`" + `
+When I run ` + "`kc index describe --dataset scene-set`" + `
 Then the output has:
   | dataset | scene-set |
   | revision | 1 |
-  | snapshot.state | READY |
+  | members.0.stage | ready |
+  | basis.mode | rebuild |
 When I run ` + "`kc search --dataset scene-set --revision 1 --query merchandise`" + `
 Then 1 hit metric/gmv
 When I run ` + "`kc read urn:kc:object:metric/gmv#/definition --dataset scene-set --revision 1`" + `
@@ -302,11 +304,12 @@ When I run ` + "`" + republish + "`" + `
 Then the output has:
   | setId | scene-set |
   | revision | 2 |
-When I run ` + "`kc operations projection sync --dataset scene-set --revision 2`" + `
+When I run ` + "`kc index prepare --dataset scene-set --revision 2`" + `
 Then the output has:
   | dataset | scene-set |
   | revision | 2 |
-  | snapshot.mode | ready |
+  | ready | true |
+  | basis.mode | rebuild |
 When I run ` + "`kc search --dataset scene-set --revision 2 --query merchandise`" + `
 Then 0 hits
 When I run ` + "`kc read urn:kc:object:metric/gmv#/definition --dataset scene-set --revision 2`" + `
@@ -362,14 +365,14 @@ Then the output has:
 `, map[string]string{
 				"absent": absent,
 				"build": `
-When I run ` + "`kc operations projection sync --dataset isolated-notes --revision 1`" + `
+When I run ` + "`kc index prepare --dataset isolated-notes --revision 1`" + `
 Then the output has:
   | dataset | isolated-notes |
   | revision | 1 |
   | members.0.repository | kr://scene/object |
   | members.0.commit | nonempty |
-  | snapshot.mode | ready |
-  | state.mode | rebuild |
+  | ready | true |
+  | basis.mode | rebuild |
 When I run ` + "`kc relations --dataset isolated-notes --revision 1 --object note/hello`" + `
 Then the output has:
   | hits | [] |
@@ -408,14 +411,63 @@ func TestSceneIndexedWorldDoesNotLeakIntoUnindexedWorld(t *testing.T) {
 func freezeSceneWithoutProjection(t *testing.T, node sceneTreeNode, cache *sceneHomeCache) {
 	t.Helper()
 	cache.ensureFrozen(t, node, nil)
+	// Acceptance no longer builds, so a frozen world holds an accepted revision
+	// without a corpus. Preparation is what creates the media this fixture then
+	// removes, so the absent state is a missing projection rather than an
+	// unbuilt revision (doc/design/dataset.md#发布).
+	prepareFrozenDataset(t, node, cache)
 	media := cache.frozen[node.ID].projection
 	if media == nil || len(media.indices) == 0 {
 		t.Fatal("accepted Dataset did not prepare projection media")
 	}
-	// Publication prepares the Dataset first. Remove only this frozen world's
-	// exact owned media so every probe retains the accepted files and revision
-	// while starting without a projection; no other world's indices are touched.
+	// Remove only this frozen world's exact owned media so every probe retains
+	// the accepted files and revision while starting without a projection; no
+	// other world's indices are touched.
 	media.close()
+}
+
+// prepareFrozenDataset builds the corpus of each Dataset revision the frozen
+// construct accepted. The fixture deletes that media right after, so it is the
+// preparation step itself that this world needs, not the corpus content.
+//
+// The frozen home still names the constructing world's proxy, which is closed
+// by now. Rebinding it to this world's own proxy is a fixture concern: no other
+// world's media and no environment source changes.
+func prepareFrozenDataset(t *testing.T, node sceneTreeNode, cache *sceneHomeCache) {
+	t.Helper()
+	frozen := cache.frozen[node.ID]
+	if frozen.projection != nil {
+		stores, err := kchome.ReadStores(frozen.dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if stores.Index == "opensearch" {
+			stores.OpenSearch.URL = frozen.projection.server.URL
+			if err := kchome.WriteStores(frozen.dir, stores); err != nil {
+				t.Fatal(err)
+			}
+			cache.frozen[node.ID] = frozen
+		}
+	}
+	for _, step := range nodeConstructSteps(t, node) {
+		if step.kind != "run" || !strings.HasPrefix(step.command, "kc dataset define --dataset ") {
+			continue
+		}
+		args := strings.Fields(step.command)
+		var setID, revision string
+		for i := 0; i+1 < len(args); i++ {
+			switch args[i] {
+			case "--dataset":
+				setID = args[i+1]
+			case "--revision":
+				revision = args[i+1]
+			}
+		}
+		if setID == "" || revision == "" {
+			continue
+		}
+		body(t, kc(frozen.dir, "index", "prepare", "--dataset", setID, "--revision", revision))
+	}
 }
 
 func sceneIsolationRepublish(t *testing.T, node sceneTreeNode) string {

@@ -12,7 +12,7 @@ import (
 // fail before authorization, source resolution or any engine operation.
 func TestDatasetDiscoveryHTTPRejectsRetiredScopesBeforeRuntime(t *testing.T) {
 	f := &httpFacade{}
-	for name, handler := range map[string]func(http.ResponseWriter, *http.Request){"search": f.objectSearch, "relations": f.objectRelations, "traverse": f.objectTraverse, "projection-describe": f.projectionDescribe, "projection-sync": f.projectionSync, "access-spec": f.accessSpecDescribe} {
+	for name, handler := range map[string]func(http.ResponseWriter, *http.Request){"search": f.objectSearch, "relations": f.objectRelations, "traverse": f.objectTraverse, "index-ready": f.indexReady, "index-prepare": f.indexPrepare, "index-describe": f.indexDescribe, "access-spec": f.accessSpecDescribe} {
 		for _, scope := range []string{`{}`, `{"repository":"kr://secret"}`, `{"dataset":"public","repository":"kr://secret"}`, `{"pin":{"setId":"forged","repositories":{"kr://secret":"c1"}}}`, `{"dataset":"public","definition":{"revision":1,"sources":[]}}`} {
 			t.Run(name+"/"+scope, func(t *testing.T) {
 				request := httptest.NewRequest("POST", "/", strings.NewReader(scope))

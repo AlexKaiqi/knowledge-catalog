@@ -12,6 +12,7 @@ import (
 
 	bolt "go.etcd.io/bbolt"
 	ports "kc/discovery/projection"
+	"kc/internal/boltfile"
 	"kc/kernel"
 	objectmodel "kc/object"
 )
@@ -101,7 +102,7 @@ func (s *stateServingStore) seal(key engineKey, authority kernel.RepositoryID, s
 	return nil
 }
 
-func readObservationFile(ctx context.Context, file string) (*bolt.DB, stateDescriptor, error) {
+func readObservationFile(ctx context.Context, file string) (*boltfile.Handle, stateDescriptor, error) {
 	var descriptor stateDescriptor
 	// Read-only opens never create a missing candidate or descriptor bucket.
 	if err := ctx.Err(); err != nil {
@@ -114,7 +115,7 @@ func readObservationFile(ctx context.Context, file string) (*bolt.DB, stateDescr
 			return nil, descriptor, context.DeadlineExceeded
 		}
 	}
-	db, err := bolt.Open(file, 0o600, &bolt.Options{ReadOnly: true, Timeout: timeout})
+	db, err := boltfile.Open(file, 0o600, &bolt.Options{ReadOnly: true, Timeout: timeout})
 	if err != nil {
 		if canceled := ctx.Err(); canceled != nil {
 			return nil, descriptor, canceled

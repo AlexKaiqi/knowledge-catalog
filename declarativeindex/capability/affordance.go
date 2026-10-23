@@ -20,7 +20,7 @@ func AffordanceFor(manifest Manifest) PluginAffordance {
 	return PluginAffordance{
 		Name:    "declarative-index",
 		Summary: "解释 Dataset 选入的索引声明，按实例能力清单检查，并维护固定依据投影。",
-		Tasks:   []string{"plugin declarative-index help", "plugin declarative-index describe", "plugin declarative-index trial", "search", "relations", "traverse", "operations projection describe", "operations projection sync"},
+		Tasks:   []string{"plugin declarative-index help", "plugin declarative-index describe", "plugin declarative-index trial", "search", "relations", "traverse", "index", "index describe", "index prepare"},
 		Usage: `声明式索引
 
 声明：
@@ -42,9 +42,9 @@ func AffordanceFor(manifest Manifest) PluginAffordance {
   不支持、未就绪、坏坐标、依据或回读失败明确报错，不能当作完整零命中。
   覆盖、近似或预算限制如实报告 partial。Object 固定读取与基本发布不等待索引。
 维护与恢复：
-  来源提交与 Dataset 发布独立；来源推进不改变已发布修订。当前 Dataset 索引丢失后由维护者显式同步恢复，自动恢复尚未就绪。
-  查询和说明读取不现场建索引；排障用 kc operations projection describe --dataset <id>，有 dataset.manage 的维护者显式 sync 同一修订。
-  新 Dataset 查询版本全部必需准备完成后才接受；失败保留旧发布版。
+  来源提交与 Dataset 发布独立；来源推进不改变已发布修订。当前 Dataset 索引丢失后由维护者显式同步恢复（kc index prepare），自动恢复尚未就绪。
+  查询和说明读取不现场建索引；排障用 kc index describe --dataset <id>，有 dataset.manage 的维护者显式 prepare 同一修订。
+  Dataset 版本接受即对文件读取生效，检索就绪是同一版本上的第二个状态；构建失败只让该版本停在未就绪，不撤销接受。
 边界：
   说明只读，不访问引擎或来源，不发权、不展示实例配置，不代表当前支持或就绪。
   OpenSearch 是物理 driver，业务任务与声明不随 driver 更换改名；每个任务的参数见 kc help <任务>。

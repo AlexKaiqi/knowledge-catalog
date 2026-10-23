@@ -1,4 +1,4 @@
-# dataset-query-principals-granted：三种人已按人配权；声明式投影已准备 Dataset 修订。HTTP 扮演身份是停在本状态上的探。
+# dataset-query-principals-granted：三种人已按人配权；声明的索引已按接受的修订准备。HTTP 扮演身份是停在本状态上的探。
 
 Feature: dataset-query-principals-granted
 
@@ -37,21 +37,29 @@ Feature: dataset-query-principals-granted
       | rules[].principal | taihu:alice |
       | rules[].principal | agent:copilot |
       | rules[].actions.0 | object.read |
-    When I run `kc operations projection sync --dataset scene-set --revision 1`
+    When I run `kc index prepare --dataset scene-set --revision 1`
     Then the output has:
       | dataset | scene-set |
       | revision | 1 |
+      | ready | true |
       | members.0.repository | kr://scene/graph |
       | members.1.repository | kr://scene/object |
       | members.0.commit | nonempty |
       | members.1.commit | nonempty |
-    When I run `kc operations projection describe --dataset scene-set --revision 1`
+    When I run `kc index describe --dataset scene-set --revision 1`
     Then the output has:
       | dataset | scene-set |
       | revision | 1 |
       | members.0.repository | kr://scene/graph |
-      | snapshot.state | READY |
+      | members.0.stage | ready |
+      | basis.mode | rebuild |
       | members.1.repository | kr://scene/object |
+    When I run `kc index --dataset scene-set --revision 1`
+    Then the output has:
+      | dataset | scene-set |
+      | revision | 1 |
+      | ready | true |
+      | objectCount | nonempty |
     When I run `kc search --dataset scene-set --revision 1 --query defines`
     Then 1 hit rel/defines/gmv
     When I run `kc search --dataset scene-set --revision 1 --query merchandise`

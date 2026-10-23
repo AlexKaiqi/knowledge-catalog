@@ -206,8 +206,8 @@ func TestDynamicProjectionPublicEnvelopesStayCompact(t *testing.T) {
 			ObservationDigest: "digest", ObjectCount: 100_000_000,
 		},
 		"view": retrieval.SearchView{
-			Snapshots:           map[kernel.RepositoryID]kernel.CommitID{"kr://acme/public/scale": "c1"},
-			ProjectionRevisions: map[kernel.RepositoryID]string{"kr://acme/public/scale": "r1"},
+			Snapshots:      map[kernel.RepositoryID]kernel.CommitID{"kr://acme/public/scale": "c1"},
+			IndexRevisions: map[kernel.RepositoryID]string{"kr://acme/public/scale": "r1"},
 		},
 	} {
 		raw, err := json.Marshal(value)

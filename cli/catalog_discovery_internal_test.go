@@ -27,7 +27,7 @@ func TestProductCLIRejectsRetiredCatalogBeforeModuleValidation(t *testing.T) {
 		{"log", "--repo", "kr://acme/source", "--object", "note/one"},
 		{"read", "urn:kc:object:note/one"},
 		{"search", "--query", "note"},
-		{"operations", "projection", "sync", "--repo", "kr://acme/source"},
+		{"operations", "audit", "access", "--limit", "1"},
 		{"access", "--repo", "kr://acme/source", "--object", "note/one", "--aspect", "preview"},
 		{"dataset", "define", "--dataset", "agent"},
 	} {

@@ -118,11 +118,49 @@ func (s datasetPreparationSource) mapping() dataset.DatasetSource {
 	return dataset.DatasetSource{Repository: s.id, Selector: snapshot.DefaultRef, BaseRev: string(s.at), Path: dataset.MountPath(s.mount)}
 }
 
+// datasetPreparationPublisher is the publication half only: it accepts an
+// immutable release and builds nothing. Corpus work is the accepted release's
+// own background task, driven through the controller's catch-up lane.
 func datasetPreparationPublisher(ws *Home) discoverydatasets.DatasetPublisher {
 	return discoverydatasets.DatasetPublisher{Registry: ws.Datasets,
-		Authorize:        func(ctx context.Context, _ discoverydatasets.DatasetPublication) error { return ctx.Err() },
-		PrepareResources: ws.DatasetPreparation.ExecuteProtected,
+		Authorize: func(ctx context.Context, _ discoverydatasets.DatasetPublication) error { return ctx.Err() },
+		Prepare:   ws.DatasetPreparation.Execute,
 	}
+}
+
+// buildDatasetCorpus runs the accepted releases' background build to completion,
+// which is how a published Dataset becomes searchable.
+func buildDatasetCorpus(t *testing.T, ws *Home) {
+	t.Helper()
+	if err := ws.Plugins.CatchUp(context.Background()); err != nil {
+		t.Fatalf("accepted release corpus build failed: %v", err)
+	}
+}
+
+// buildDatasetRelease builds one accepted release through the same adoption path
+// the background lane uses, letting a test wrap the build's ticket. wrap may be
+// nil. This is the build half only: the release must already be accepted. It
+// takes no testing handle so a concurrent test may call it from a goroutine.
+func buildDatasetRelease(ws *Home, key dataset.PublicationLookup, wrap func(discoverydatasets.PublicationProtection) discoverydatasets.PublicationProtection) error {
+	authority, ok := ws.Datasets.(dataset.PublicationCoordinator)
+	if !ok {
+		return kernel.Fail(kernel.ErrCapabilityUnsatisfied, "fixture has no publication authority")
+	}
+	lookup := func(id kernel.RepositoryID) (objectmodel.Repository, error) {
+		return ws.Reader.Require(id, kernel.ErrObjectRefUnresolved)
+	}
+	recovery := discoverydatasets.PublicationRecovery{Authority: authority, Definitions: ws.Datasets}
+	return recovery.Adopt(context.Background(), key, func(ctx context.Context, accepted dataset.Dataset) (discoverydatasets.PublicationProtection, error) {
+		resolved, err := ws.Datasets.ResolveDefinition(accepted)
+		if err != nil {
+			return nil, err
+		}
+		ticket, err := ws.Plugins.PrepareProtectedDatasetScope(ctx, lookup, DatasetPin(resolved))
+		if err != nil || ticket == nil || wrap == nil {
+			return ticket, err
+		}
+		return wrap(ticket), nil
+	})
 }
 
 func assertDatasetPreparationReads(t *testing.T, ws *Home, def dataset.Dataset, sources ...datasetPreparationSource) {

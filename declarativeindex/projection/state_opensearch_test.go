@@ -72,7 +72,7 @@ func TestLiveOpenSearchStateProjectionRefreshAndSameBasisHydrate(t *testing.T) {
 	if err != nil || len(result.Hits) != 1 {
 		t.Fatalf("dynamic OpenSearch result: %#v %v", result, err)
 	}
-	if result.SearchView.ProjectionRevisions[repo.ID()] != first.Revision || len(result.Hits[0].Version.Observations) != 1 {
+	if result.SearchView.IndexRevisions[repo.ID()] != first.Revision || len(result.Hits[0].Version.Observations) != 1 {
 		t.Fatalf("SearchView/hit did not retain observation basis: %#v", result)
 	}
 

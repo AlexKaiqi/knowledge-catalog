@@ -183,8 +183,8 @@ func (idx *Index) SearchStateAtRevisionContext(ctx context.Context, repo objectm
 		return retrieval.SearchResult{}, kernel.Fail(kernel.ErrPreconditionFailed, "dynamic SearchView revision changed; restart the search")
 	}
 	view := retrieval.SearchView{
-		Snapshots:           map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit},
-		ProjectionRevisions: map[kernel.RepositoryID]string{repo.ID(): state.revision},
+		Snapshots:      map[kernel.RepositoryID]kernel.CommitID{repo.ID(): commit},
+		IndexRevisions: map[kernel.RepositoryID]string{repo.ID(): state.revision},
 	}
 	return idx.searchEngineAtContext(ctx, repo, eng, commit, req, view, state)
 }

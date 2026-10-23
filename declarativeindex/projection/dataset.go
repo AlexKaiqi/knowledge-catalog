@@ -106,7 +106,8 @@ func (idx *Index) prepareDatasetProtected(ctx context.Context, lookup reader.Mem
 		}
 	}
 	var values []datasetValue
-	s.spec, values, err = idx.prepareDatasetSpec(ctx, s, check)
+	var skipped int
+	s.spec, values, skipped, err = idx.prepareDatasetSpec(ctx, s, check)
 	if err != nil {
 		return ports.IndexSync{}, nil, err
 	}
@@ -127,10 +128,23 @@ func (idx *Index) prepareDatasetProtected(ctx context.Context, lookup reader.Mem
 		return idx.reusePreparedDataset(ctx, lookup, pin, s, eng, s.spec.AccessDigest, protect)
 	}
 	if values == nil {
-		values, err = s.values(ctx, nil)
-		if err != nil {
-			return ports.IndexSync{}, nil, err
+		var scanErr error
+		values, _, skipped, scanErr = s.valuesBySource(ctx, nil)
+		if scanErr != nil {
+			return ports.IndexSync{}, nil, scanErr
 		}
+	}
+	// Progress counts objects, including objects the declarations exclude and
+	// which therefore produce no searchable document. Total is what this build
+	// intends to visit; Done counts finished objects. The row is keyed by the
+	// derived corpus but reports the Dataset revision it belongs to, so whoever
+	// published that revision can recognise its own build.
+	idx.progress.begin(s.id, s.pin.SetID, s.pin.Revision, len(values)+skipped)
+	defer idx.progress.finish(s.id)
+	// Objects the scan visited but cannot compile produce no document, yet the
+	// build did visit them, so they are finished work from the start.
+	for i := 0; i < skipped; i++ {
+		idx.progress.advance(s.id)
 	}
 	docs := make([]ports.CompiledDoc, 0, len(values))
 	for _, value := range values {
@@ -142,6 +156,7 @@ func (idx *Index) prepareDatasetProtected(ctx context.Context, lookup reader.Mem
 			doc.SourceRepository, doc.SourceCommit = value.value.Repository, value.value.Commit
 			docs = append(docs, doc)
 		}
+		idx.progress.advance(s.id)
 	}
 	meta = idx.projectionMeta(eng, s.basis, s.spec, ports.IndexModeRebuild, ports.IndexCauseCold)
 	if err := ctx.Err(); err != nil {

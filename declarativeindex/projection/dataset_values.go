@@ -28,26 +28,34 @@ func oldestObservation(values []datasetValue) string {
 }
 
 func (s datasetSpace) values(ctx context.Context, source ports.ObservationSource) ([]datasetValue, error) {
-	values, _, err := s.valuesBySource(ctx, source)
+	values, _, _, err := s.valuesBySource(ctx, source)
 	return values, err
 }
 
-func (s datasetSpace) valuesBySource(ctx context.Context, source ports.ObservationSource) ([]datasetValue, map[kernel.RepositoryID]bool, error) {
+// valuesBySource returns the objects this build compiles, the sources that
+// actually hold objects, and how many objects the scan visited without
+// compiling them. Schema objects are visited but never produce a document, so
+// the build's object denominator is the compiled objects plus the ones it
+// skipped; that denominator is what progress reports as total
+// (doc/design/discovery.md#索引维护).
+func (s datasetSpace) valuesBySource(ctx context.Context, source ports.ObservationSource) ([]datasetValue, map[kernel.RepositoryID]bool, int, error) {
 	parts := map[objectmodel.ObjectID][]objectmodel.ObjectValue{}
 	observations := map[objectmodel.ObjectID][]objectmodel.UnitObservation{}
 	nonempty := map[kernel.RepositoryID]bool{}
+	skipped := 0
 	for id, at := range s.pin.Repositories {
 		if err := ctx.Err(); err != nil {
-			return nil, nil, err
+			return nil, nil, 0, err
 		}
 		member, err := space.Member(s.lookup, s.pin, id)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, 0, err
 		}
 		member = objectmodel.BindContext(ctx, member)
 		if err := maintenance.WalkRepository(member, at, func(raw objectmodel.ObjectValue) error {
 			nonempty[id] = true
 			if objectmodel.IsSchemaObject(raw.Address.ObjectID) {
+				skipped++
 				return nil
 			}
 			value := raw
@@ -77,7 +85,7 @@ func (s datasetSpace) valuesBySource(ctx context.Context, source ports.Observati
 			parts[raw.Address.ObjectID] = append(parts[raw.Address.ObjectID], value)
 			return ctx.Err()
 		}); err != nil {
-			return nil, nil, err
+			return nil, nil, 0, err
 		}
 	}
 	ids := make([]objectmodel.ObjectID, 0, len(parts))
@@ -91,9 +99,9 @@ func (s datasetSpace) valuesBySource(ctx context.Context, source ports.Observati
 		sort.Slice(values, func(i, j int) bool { return values[i].Repository < values[j].Repository })
 		value, err := objectmodel.ComposeHoldingValues(string(id), values)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, 0, err
 		}
 		out = append(out, datasetValue{value: value, observations: observations[id]})
 	}
-	return out, nonempty, nil
+	return out, nonempty, skipped, nil
 }

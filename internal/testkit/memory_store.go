@@ -36,6 +36,18 @@ func newMemoryStore(id kernel.RepositoryID) *memoryStore {
 	}
 }
 
+// originStore is the same in-memory medium plus the optional authority-instance
+// identity a real adapter provides. Publication coordination refuses to bind
+// without it, because two deployments of one logical registry id must stay
+// distinguishable; a fixture that exercises coordinated publication therefore
+// has to name its deployment instead of leaving the capability absent.
+type originStore struct {
+	*memoryStore
+	origin string
+}
+
+func (s *originStore) Origin() string { return s.origin }
+
 func (s *memoryStore) ID() kernel.RepositoryID { return s.id }
 
 func (s *memoryStore) Head(ref string) (kernel.CommitID, error) {
@@ -339,4 +351,5 @@ var (
 	_ snapshot.HistoryStore    = (*memoryStore)(nil)
 	_ snapshot.ChangeStore     = (*memoryStore)(nil)
 	_ objectmodel.UnitLocator  = (*memoryStore)(nil)
+	_ snapshot.StoreOrigin     = (*originStore)(nil)
 )

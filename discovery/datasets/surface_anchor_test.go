@@ -17,6 +17,7 @@ import (
 type surfaceAnchorSuite []string
 
 var surfaceAnchor = surfaceAnchorSuite{
+	"AcceptedReleaseDemand",
 	"BasisPreparer",
 	"Preparation",
 	"PublicationProtection",

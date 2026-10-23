@@ -24,31 +24,11 @@ func (r *datasetResource) Close() error {
 	return r.err
 }
 
-// ProtectDatasetScope obtains protection from the selected instance and keeps
-// that instance borrowed until the ticket's local handle is closed. Closing the
-// handle never releases durable publication protection.
-func (p *IndexPlugins) ProtectDatasetScope(ctx context.Context, lookup reader.MemberLookup, pin reader.DatasetPin) (ports.PreparedResource, error) {
-	instance, done, err := p.takeDataset(pin)
-	if err != nil {
-		return nil, err
-	}
-	provider, ok := instance.services.Queries.(interface {
-		ProtectDatasetResource(context.Context, reader.MemberLookup, reader.DatasetPin) (ports.PreparedResource, error)
-	})
-	if !ok {
-		done()
-		return nil, nil
-	}
-	ticket, err := provider.ProtectDatasetResource(ctx, lookup, pin)
-	if ticket == nil {
-		done()
-		return nil, err
-	}
-	return &datasetResource{PreparedResource: ticket, done: done}, err
-}
-
 // PrepareProtectedDatasetScope retains one selected instance throughout build
-// and durable ticket handoff. Legacy unmanaged providers keep normal preparation.
+// and durable ticket handoff. It is the adoption path only: publication accepts
+// metadata and holds no ticket, so the accepted release's own build is what
+// acquires protection (doc/design/dataset.md#发布). Legacy unmanaged providers
+// keep normal preparation and hand back no ticket.
 func (p *IndexPlugins) PrepareProtectedDatasetScope(ctx context.Context, lookup reader.MemberLookup, pin reader.DatasetPin) (ports.PreparedResource, error) {
 	instance, done, err := p.takeDataset(pin)
 	if err != nil {

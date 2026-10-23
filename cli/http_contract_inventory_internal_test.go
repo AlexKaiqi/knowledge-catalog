@@ -72,6 +72,7 @@ var httpOnlyRouteEvidence = []httpRouteEvidence{
 	{http.MethodPost, "/operations/v1/retrieval-log:query", "TestTypedRetrievalEvidenceQueryAndTraining"},
 	{http.MethodPost, "/operations/v1/retrieval-training:query", "TestTypedRetrievalEvidenceQueryAndTraining"},
 	{http.MethodPost, "/operations/v1/refine-log:query", "TestRerankEvidenceFeedbackAndTrainingSampleJourney"},
+	{http.MethodPost, "/operations/v1/indexes:status", "TestFormalServiceNamespacesAreExplicitAndRetiredRoutesStayMissing"},
 	{http.MethodPost, "/operations/v1/rerank-training:query", "TestRerankEvidenceFeedbackAndTrainingSampleJourney"},
 	{http.MethodPost, "/snapshot/v1/files/mounts:list", "TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange"},
 	{http.MethodPost, "/snapshot/v1/files/tree:list", "TestWorkspaceFileGatewayPagesDirectChildrenAndReadsFixedRange"},
@@ -86,7 +87,7 @@ var registeredRoutePattern = regexp.MustCompile(`mux\.Handle(?:Func)?\("((?:GET|
 // HTTP/host journey. Domain semantics stay in their application-level journeys.
 func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 	registered := productionHTTPRoutePatterns(t)
-	if len(registered) != 88 {
+	if len(registered) != 90 {
 		t.Fatalf("public HTTP route count changed to %d; add protocol evidence for the new surface", len(registered))
 	}
 	want := goldenRouteManifest(t)
@@ -98,8 +99,8 @@ func TestEveryPublicHTTPRouteHasOwnedProtocolEvidence(t *testing.T) {
 			t.Fatalf("golden manifest drifted from production mux at %d: manifest %q mux %q", i, want[i], registered[i])
 		}
 	}
-	if len(remoteDispatchRoutes) != 39 || len(httpOnlyRouteEvidence) != 50 {
-		t.Fatalf("HTTP evidence partition changed: remote=%d direct-journey=%d, want 39+50", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
+	if len(remoteDispatchRoutes) != 40 || len(httpOnlyRouteEvidence) != 51 {
+		t.Fatalf("HTTP evidence partition changed: remote=%d direct-journey=%d, want 40+51", len(remoteDispatchRoutes), len(httpOnlyRouteEvidence))
 	}
 	tests := httpEvidenceTestFunctions(t)
 
