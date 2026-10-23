@@ -69,7 +69,7 @@ Reader 不创建仓对象。它产出的是读结果和可丢的访问状态：
 | GroundingCitation | `NewGroundingCitation(READ 结果)` | 给 Application/UI，不是仓对象 |
 | Workspace checkout | `WriteCheckout`（内部机制，当前无公开 CLI） | 可丢 grep 树；钉这次 DatasetPin；不是权威 |
 
-联邦读的 `FederatedValue` 由本包产出，字段与 `ObjectValue` 对齐（另保留 `objectId`）。不要把 public 对象拷进 personal；用户看见的是 Dataset 这次固定的来源版本向量。逻辑访问计划用 `kc operations access-spec describe --dataset <id>`，就绪诊断用 `kc operations projection describe --dataset <id>`；两者都经 Server，沿同一发布修订，不是新对象。
+联邦读的 `FederatedValue` 由本包产出，字段与 `ObjectValue` 对齐（另保留 `objectId`）。不要把 public 对象拷进 personal；用户看见的是 Dataset 这次固定的来源版本向量。逻辑访问计划用 `kc operations access-spec describe --dataset <id>`，就绪诊断用 `kc index describe --dataset <id>`；两者都经 Server，沿同一发布修订，不是新对象。
 
 ## 三个易混术语
 

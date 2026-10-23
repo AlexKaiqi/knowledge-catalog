@@ -37,17 +37,12 @@ Feature: probe repo read
       | objectId | note/hello |
       | value.text | hi |
       | commit | nonempty |
-    When I run `kc relations --dataset plain-notes --revision 1 --object note/hello`
-    Then the output has:
-      | hits | [] |
-      | exhausted | true |
-      | generation | nonempty |
-      | continuation | absent |
-    When I run `kc operations projection sync --dataset plain-notes --revision 1`
+    When I run `kc index prepare --dataset plain-notes --revision 1`
     Then the output has:
       | dataset | plain-notes |
       | revision | 1 |
-      | snapshot.mode | ready |
+      | ready | true |
+      | basis.mode | rebuild |
     When I run `kc relations --dataset plain-notes --revision 1 --object note/hello`
     Then the output has:
       | exhausted | true |

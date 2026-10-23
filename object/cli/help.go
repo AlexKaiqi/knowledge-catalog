@@ -203,7 +203,7 @@ var leafHelp = map[string]helpEntry{
   id 未解析时，在 Dataset 内用 schema list --dataset 或 files list 查找已交付的 Schema；有来源仓读取权时也可用 schema list --repo。
   结构约束不符时核对实例与 Schema，需要变更须经 Writer 发布。
   字段没有所需 uses 时搜索会被拒绝：检索能力由独立索引声明决定，请维护者发布并把声明选入 Dataset，不通过修改 Schema 增加查询能力。
-  声明 unsupported/invalid 按原因修声明；就绪问题另查 operations projection describe；原始合同 read 在单仓需 object.read，Dataset 仍按 file.read 清单解释。
+  声明 unsupported/invalid 按原因修声明；就绪问题另查 kc index describe；原始合同 read 在单仓需 object.read，Dataset 仍按 file.read 清单解释。
 示例：
   例：kc schema describe --dataset scene-set --revision 2 --object schema/metric.definition
   例：kc schema describe --repo kr://kc/system --object schema/meta/schema-definition/v1`,

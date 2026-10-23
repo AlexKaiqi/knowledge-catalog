@@ -47,6 +47,34 @@ probes:
       - "publication"
       - "consumption"
     title: "读取已发表对象的正文和历史，固定 Dataset 修订回读并返回精确空关系结果"
+  - file: "probe-read-basis-replay.feature"
+    source: "snapshot.product"
+    views:
+      - "consumption"
+    title: "读取取得固定依据后 HEAD 前进，回读仍按原候选坐标与原状态摘要，新请求采用新值"
+  - file: "probe-compare-two-versions.feature"
+    source: "snapshot.product"
+    views:
+      - "consumption"
+    title: "两版对象按依据与固定 commit 双侧比较，保留双侧坐标与单条值变化，不与目录发布预览混用"
+  - file: "probe-no-change-receipt.feature"
+    source: "writer.snapshot"
+    views:
+      - "publication"
+      - "lifecycle"
+    title: "同值条件写返回无变化回执并保留原 commit，重放按原回执，同 id 换内容被拒"
+  - file: "probe-zero-diff-directory.feature"
+    source: "writer.snapshot"
+    views:
+      - "publication"
+      - "lifecycle"
+    title: "目录零差异发布不创建提交并复用原回执，改动后的意图不能借旧 id 提交"
+  - file: "probe-history-continuation.feature"
+    source: "snapshot.product"
+    views:
+      - "consumption"
+      - "lifecycle"
+    title: "历史首页给游标，HEAD 推进后仅用游标续页仍按原依据推进且拒绝混入坐标"
   - file: "probe-remove.feature"
     source: "writer.snapshot"
     views:

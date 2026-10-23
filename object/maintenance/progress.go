@@ -2,6 +2,7 @@ package maintenance
 
 import (
 	bolt "go.etcd.io/bbolt"
+	"kc/internal/boltfile"
 	"kc/kernel"
 	"os"
 	"path/filepath"
@@ -32,7 +33,7 @@ func (s *ProgressStore) ready() error {
 	return s.update(func(tx *bolt.Tx) error { _, err := tx.CreateBucketIfNotExists(consumerTargetBucket); return err })
 }
 func (s *ProgressStore) update(fn func(*bolt.Tx) error) error {
-	db, err := bolt.Open(s.file, 0600, &bolt.Options{Timeout: time.Second})
+	db, err := boltfile.Open(s.file, 0600, &bolt.Options{Timeout: time.Second})
 	if err != nil {
 		return err
 	}
@@ -40,7 +41,7 @@ func (s *ProgressStore) update(fn func(*bolt.Tx) error) error {
 	return db.Update(fn)
 }
 func (s *ProgressStore) view(fn func(*bolt.Tx) error) error {
-	db, err := bolt.Open(s.file, 0600, &bolt.Options{ReadOnly: true, Timeout: time.Second})
+	db, err := boltfile.Open(s.file, 0600, &bolt.Options{ReadOnly: true, Timeout: time.Second})
 	if err != nil {
 		return err
 	}

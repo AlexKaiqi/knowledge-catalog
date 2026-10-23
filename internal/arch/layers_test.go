@@ -398,7 +398,7 @@ func architectureLayer(pkg string) (string, bool) {
 	switch pkg {
 	case "kernel", "discovery/adoption":
 		return "base", true
-	case "internal/gitdir", "internal/journal", "internal/jsonfile", "internal/clientconfig", "internal/treepath", "internal/httpjson":
+	case "internal/gitdir", "internal/journal", "internal/jsonfile", "internal/clientconfig", "internal/treepath", "internal/httpjson", "internal/boltfile":
 		return "infra", true
 	case "invocation":
 		return "app", true

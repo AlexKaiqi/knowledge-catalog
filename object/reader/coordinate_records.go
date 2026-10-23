@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	bolt "go.etcd.io/bbolt"
+	"kc/internal/boltfile"
 	"kc/kernel"
 	"os"
 	"path/filepath"
@@ -93,7 +94,7 @@ func (s coordinateRecords) get(ctx context.Context, key string) ([]byte, error) 
 	return raw, nil
 }
 
-func openCoordinateRecords(ctx context.Context, path string, readOnly bool) (*bolt.DB, error) {
+func openCoordinateRecords(ctx context.Context, path string, readOnly bool) (*boltfile.Handle, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -108,7 +109,7 @@ func openCoordinateRecords(ctx context.Context, path string, readOnly bool) (*bo
 			timeout = remaining
 		}
 	}
-	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: readOnly, Timeout: timeout})
+	db, err := boltfile.Open(path, 0600, &bolt.Options{ReadOnly: readOnly, Timeout: timeout})
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
